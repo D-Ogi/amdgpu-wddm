@@ -1,5 +1,6 @@
 // BD-289 diagnostic, lab flavour only: is the CPU present blit's source mapping (wddm.c WddmPresentBlitOwned,
-// MmMapIoSpaceEx of the source range) still mapped at each later step of the same present?
+// MmMapIoSpaceEx of the source range) still mapped at each later step of the same present, and do two CPU present
+// blits run at the same time?
 //
 // The crash dump of 2026-11-02 08:24Z (tester.35 KMD 9D4E0C65) shows every PTE of that source mapping zero at the
 // copy, while the mapping call had returned a VA. Between that call and the copy, the only unmap in the same
@@ -20,6 +21,13 @@
 //
 // Only the thread that claimed the probe (Bd289ProbeBegin) writes into it. A remap or a step from another thread
 // while a probe is open is counted as foreign: a concurrent unmap would show there.
+//
+// r3: concurrency of the whole blit (WddmPresentBlit). Arrive/Depart count the blits that are on their way, before
+// any lock; Enter/Leave count the blits inside the section that a lock guards (the connector operation mutex when
+// the connector is enabled, the scan-out mutex of the BD-289 fix in every case). Enter records whether the blit
+// holds a lock. A remap while another blit is inside is counted (remaps-concurrent). Every bd289 line also goes
+// into a ring of its own (32 lines kept from the start of the driver load, 96 rotating), which the summary of
+// `bc250kmd_cli log summary only` writes out with the counters, so that a busy log ring cannot overwrite it.
 // IRQL: PASSIVE_LEVEL, as the present blit (MmIsAddressValid and MmGetPhysicalAddress allow up to DISPATCH_LEVEL).
 #pragma once
 
@@ -52,11 +60,20 @@ BOOLEAN Bd289ProbeStep(ULONG Step);
 // DcnScanoutMapping, before DcnUnmapScanout: the old flip target mapping and the new target. From every thread.
 void Bd289ProbeRemap(_In_opt_ const void* OldMap, ULONGLONG OldPhysical, SIZE_T OldLength,
                      ULONGLONG NewPhysical, SIZE_T NewLength);
-// DcnScanoutMapping, after the new MmMapIoSpaceEx succeeded.
+// DcnScanoutMapping, after the new MmMapIoSpaceEx (NULL when it failed).
 void Bd289ProbeRemapped(_In_opt_ const void* NewMap);
 // Writes the lines and releases the probe. Returns TRUE when the source may be unmapped: every page is still
 // mapped to the physical range this present mapped. FALSE: its PTEs were already released or reused, and a
 // second MmUnmapIoSpace would release PTEs that this present no longer owns.
 BOOLEAN Bd289ProbeEnd(void);
+
+// WddmPresentBlit: Arrive before any lock, Enter after the locks (Locked: the blit holds the connector operation
+// mutex or the scan-out mutex), Leave before the locks are released, Depart after.
+void Bd289BlitArrive(void);
+void Bd289BlitEnter(BOOLEAN Locked);
+void Bd289BlitLeave(void);
+void Bd289BlitDepart(void);
+// WddmSummary: the counters and the bd289 ring, into the summary block. PASSIVE_LEVEL.
+void Bd289ProbeSummary(void);
 
 #endif

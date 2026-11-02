@@ -4034,6 +4034,9 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
         GuardLog("wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)");
         return;
     }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    Bd289ProbeSummary();            // BD-289: the counters and the bd289 ring first, before the block fills
+#endif
     ConnectorLinkLogOpen(Device);
     DcnLogVsyncSnapshot(Device);
     DpmLogSummary(Device);
@@ -9369,9 +9372,21 @@ static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXG
 static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
 {
     BOOLEAN owned=ConnectorIsEnabled(Context->Device) && KeGetCurrentIrql()==PASSIVE_LEVEL;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    Bd289BlitArrive();              // BD-289 r3: blits on their way, before any lock
+#endif
     if (owned) ConnectorOperationAcquire(Context->Device);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    Bd289BlitEnter(owned);          // blits inside, and whether this one holds a lock
+#endif
     WddmPresentBlitOwned(Context,Present);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    Bd289BlitLeave();
+#endif
     if (owned) ConnectorOperationRelease(Context->Device);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    Bd289BlitDepart();
+#endif
 }
 
 // One STATUS_INVALID_PARAMETER of WddmBuildGpuPresent. The lab flavour counts it by the check that returned it; the first
