@@ -3068,10 +3068,10 @@
       "component": "tool",
       "path": "payload/tools/hip/rocm/amdhip64_7.dll",
       "source": "scratch/t36/cand-set/artifacts/release/extra-rocm-release/amdhip64_7.dll",
-      "sha256": "A70666CDE5B5DCA5495C99C44835EE7C825278E895286F16030141F25AECB62B",
+      "sha256": "962FA3C97EAF9BF4AC6E5A6C96CDABD73A3A0856F3969A35C2FD3F4FC0C74196",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "commit": "c434348f41daa358e896483116b486b5bbf9e271",
         "recipe": "compute/hip/build-rocm-payload.ps1",
         "args": [
           "-Kits",
@@ -3109,7 +3109,7 @@
         "output": "rocm/amdhip64_7.dll"
       },
       "size": 360960,
-      "authenticode_sha256": "3C94B5AE6FBF237A092EF2E0AC9D8B476F273397F874EF1D782F380BD0A7A34D",
+      "authenticode_sha256": "5A4B1E4306DFDDE203811BEB7E951A1CCDA42A938DBC6F5A0A7E68A8CC879C9C",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "release"
     },
@@ -3117,10 +3117,10 @@
       "component": "tool",
       "path": "payload/tools/hip/rocm/libhipblaslt.dll",
       "source": "scratch/t36/cand-set/artifacts/release/extra-rocm-release/libhipblaslt.dll",
-      "sha256": "AFA0C451E96F24A181187C1B8F938D926EDBCCD74ECAE8DAC659A5E7753BF238",
+      "sha256": "D6EAC8CDE2AEDF45D03D57B3B70308BACEEFDADF0EF294D71DE01AC7CEA5F130",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "commit": "c434348f41daa358e896483116b486b5bbf9e271",
         "recipe": "compute/hip/build-rocm-payload.ps1",
         "args": [
           "-Kits",
@@ -3157,8 +3157,8 @@
         },
         "output": "rocm/libhipblaslt.dll"
       },
-      "size": 211456,
-      "authenticode_sha256": "8E554647B4D2DFE12726EA7D394EBD034A607EEC542A7CF74BDDFC45020D9B91",
+      "size": 204288,
+      "authenticode_sha256": "9F1B7B86D96345FA9F06967E81818642D87D6D52BF1146DCF3FB10E7C20FF1BE",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "release"
     },
@@ -3169,7 +3169,7 @@
       "sha256": "970D64F06F8F56671B96C21CB0D8C6A57E88B92F43BA7E81F3E63AFE6EC50781",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "commit": "c434348f41daa358e896483116b486b5bbf9e271",
         "recipe": "compute/hip/build-rocm-payload.ps1",
         "args": [
           "-Kits",
@@ -3214,10 +3214,10 @@
       "component": "tool",
       "path": "payload/tools/hip/rocm/payload.json",
       "source": "scratch/t36/cand-set/artifacts/release/extra-rocm-release/payload.json",
-      "sha256": "D886FA04F615F3379952DA32203CF4751B681F07ECFBB1C48BFBBE756DC08808",
+      "sha256": "481064F65E8864F9D5E416A51345DA1D59CAEC35E8DB0F402A62E4773AB20D8F",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "commit": "c434348f41daa358e896483116b486b5bbf9e271",
         "recipe": "compute/hip/build-rocm-payload.ps1",
         "args": [
           "-Kits",
@@ -3265,7 +3265,7 @@
       "sha256": "603E6AE80CC3B05619BF416D89DD59D7F289916A82C08CDBE8E79DACEBC1E53B",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "commit": "c434348f41daa358e896483116b486b5bbf9e271",
         "recipe": "compute/hip/build-rocm-payload.ps1",
         "args": [
           "-Kits",
@@ -3310,10 +3310,10 @@
       "component": "tool",
       "path": "payload/tools/hip/rocm/amdhip64_7.dll",
       "source": "scratch/t36/cand-set/artifacts/lab/extra-rocm-lab/amdhip64_7.dll",
-      "sha256": "6B5C5B9971026855B013AC91899D1566E44F493E732C3041143511FE3627DD48",
+      "sha256": "AA617CF4BD585F74670B26EE7DBE7F2E6582ECFDD690EC40EE8A0BBFE29A672F",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "commit": "c434348f41daa358e896483116b486b5bbf9e271",
         "recipe": "compute/hip/build-rocm-payload.ps1",
         "args": [
           "-Kits",
@@ -3351,7 +3351,7 @@
         "output": "rocm/amdhip64_7.dll"
       },
       "size": 367616,
-      "authenticode_sha256": "7710DA3DD3A41017A49E4BCFE49FF1FAAA783F7E595029C93340731215E4CFEF",
+      "authenticode_sha256": "1FC19CBD7ED33F17EFE6E782A3845F7D67DE3905E74DADA6DF3D4ED55D50D52A",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "lab"
     },
@@ -3359,10 +3359,10 @@
       "component": "tool",
       "path": "payload/tools/hip/rocm/libhipblaslt.dll",
       "source": "scratch/t36/cand-set/artifacts/lab/extra-rocm-lab/libhipblaslt.dll",
-      "sha256": "03EA4760932E77E5C9ECB9553E8A6BCA3E9ABF711F51EF9771D5B8A40CCACBED",
+      "sha256": "A6C28956CCB63E66B934C03524D300D0A92A46FA1A817BB6339AAC69F423833F",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "commit": "c434348f41daa358e896483116b486b5bbf9e271",
         "recipe": "compute/hip/build-rocm-payload.ps1",
         "args": [
           "-Kits",
@@ -3400,7 +3400,7 @@
         "output": "rocm/libhipblaslt.dll"
       },
       "size": 211456,
-      "authenticode_sha256": "38CAE9B13CDEADEF92DCD463B7E887677A9712BD839F0B5682D54E29165344A4",
+      "authenticode_sha256": "B933F84C60CADB37404119AAD5C61EE4B6C376144704C13192B6EABE2A00E4DD",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "lab"
     },
@@ -3411,7 +3411,7 @@
       "sha256": "970D64F06F8F56671B96C21CB0D8C6A57E88B92F43BA7E81F3E63AFE6EC50781",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "commit": "c434348f41daa358e896483116b486b5bbf9e271",
         "recipe": "compute/hip/build-rocm-payload.ps1",
         "args": [
           "-Kits",
@@ -3456,10 +3456,10 @@
       "component": "tool",
       "path": "payload/tools/hip/rocm/payload.json",
       "source": "scratch/t36/cand-set/artifacts/lab/extra-rocm-lab/payload.json",
-      "sha256": "BD06FCCADB025BA8FCF1C2A74442D70B3DC0B32C449B86EB1605B53C960BF7AE",
+      "sha256": "24E10B8CAB2F08199290075AA4C04E178440A28A27091BA56FE0BB3A29D474DD",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "commit": "c434348f41daa358e896483116b486b5bbf9e271",
         "recipe": "compute/hip/build-rocm-payload.ps1",
         "args": [
           "-Kits",
@@ -3507,7 +3507,7 @@
       "sha256": "603E6AE80CC3B05619BF416D89DD59D7F289916A82C08CDBE8E79DACEBC1E53B",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "commit": "c434348f41daa358e896483116b486b5bbf9e271",
         "recipe": "compute/hip/build-rocm-payload.ps1",
         "args": [
           "-Kits",
