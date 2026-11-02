@@ -158,6 +158,32 @@ static const uint32_t kWholeSizes[] = { 12u, 4100u };
 static const uint32_t kWholeOffsets[] = { 0u, 4u };
 static const uint32_t kWholeTails[] = { 1u, 2u, 3u };
 
+/* BD-287: sizes whose num_threads mod workgroup_size(64) == 1 WITHOUT --negative-control, so a
+ * partial workgroup of exactly 1 thread. With dwords_per_thread=2 (copies/updates <= 64 KiB) and
+ * offset 0: ceil(size/8) mod 64 == 1, i.e. size in (512*n, 512*n+8].
+ *   520  -> ceil(520/8) =   65, mod 64 = 1
+ *  1032  -> ceil(1032/8) = 129, mod 64 = 1
+ * 65032  -> ceil(65032/8) = 8129, mod 64 = 1
+ * Compare with 65528 (ceil(65528/8) = 8191, mod 64 = 63) and 65536 (8192, mod 64 = 0): these do
+ * NOT give remainder-of-1 without the shift. With --negative-control (shift=4) on 65536: 8193,
+ * mod 64 = 1. Testing both separates the shift from the partial workgroup. */
+static const uint32_t kPartial1Sizes[] = { 520u, 1032u, 65032u };
+static const uint32_t kPartial1Offsets[] = { 0u, 4u };
+static const uint32_t kPartial1Src[] = { 0u };
+
+/* Copies that exceed 64 KiB (dwords_per_thread=4): ceil(size/16) mod 64 == 1.
+ *  65552  -> ceil(65552/16) = 4097, mod 64 = 1
+ * 131088  -> ceil(131088/16) = 8193, mod 64 = 1 */
+static const uint32_t kPartial1CopySizes[] = { 65552u, 131088u };
+static const uint32_t kPartial1CopyOffsets[] = { 0u };
+static const uint32_t kPartial1CopySrc[] = { 0u };
+
+/* Fills (dwords_per_thread=4): ceil(size/16) mod 64 == 1.
+ *  1040 -> ceil(1040/16) = 65, mod 64 = 1 */
+static const uint32_t kPartial1FillSizes[] = { 1040u, 65552u };
+static const uint32_t kPartial1FillOffsets[] = { 0u, 4u };
+static const uint32_t kPartial1FillSrc[] = { 0u };
+
 #define SPAN(a) a, (uint32_t)(sizeof(a) / sizeof((a)[0]))
 
 static const Group kGroups[] = {
@@ -166,6 +192,12 @@ static const Group kGroups[] = {
     { "dst-align", OPS(OP(OP_COPY)), SPAN(kAlignSizes), SPAN(kAlignOffsets), SPAN(kAlignSrc) },
     { "single-thread", OPS(OP(OP_COPY)), SPAN(kTinySizes), SPAN(kTinyOffsets), SPAN(kTinySrc) },
     { "whole-size", OPS(OP(OP_FILL_WHOLE)), SPAN(kWholeSizes), SPAN(kWholeOffsets), SPAN(kWholeTails) },
+    { "partial-1", OPS(OP(OP_UPDATE) | OP(OP_COPY)),
+      SPAN(kPartial1Sizes), SPAN(kPartial1Offsets), SPAN(kPartial1Src) },
+    { "partial-1-copy-big", OPS(OP(OP_COPY)),
+      SPAN(kPartial1CopySizes), SPAN(kPartial1CopyOffsets), SPAN(kPartial1CopySrc) },
+    { "partial-1-fill", OPS(OP(OP_FILL)),
+      SPAN(kPartial1FillSizes), SPAN(kPartial1FillOffsets), SPAN(kPartial1FillSrc) },
 };
 #define GROUP_COUNT (uint32_t)(sizeof(kGroups) / sizeof(kGroups[0]))
 /* --quick keeps the first two values of each axis of each group: the same shapes, a smoke-sized run. */
