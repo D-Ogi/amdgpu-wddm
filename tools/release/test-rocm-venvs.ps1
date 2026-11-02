@@ -5,6 +5,23 @@
 # and the list folder. It reads and writes nothing in %ProgramData%.
 param([Parameter(Mandatory)][string]$Out)
 $ErrorActionPreference = 'Stop'
+# New-Item -ItemType HardLink or Junction reads [ ] in -Target as a wildcard (gate variable-case, "hardlink").
+# CreateHardLinkW and mklink /J take the path as it is.
+function New-HardLink([string]$Path, [string]$Existing) {
+    if (-not ('Bc250Test.HardLink' -as [type])) {
+        Add-Type -Namespace Bc250Test -Name HardLink -MemberDefinition @'
+[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+public static extern bool CreateHardLinkW(string lpFileName, string lpExistingFileName, IntPtr lpSecurityAttributes);
+'@
+    }
+    if (-not [Bc250Test.HardLink]::CreateHardLinkW($Path, $Existing, [IntPtr]::Zero)) {
+        throw [ComponentModel.Win32Exception]::new([Runtime.InteropServices.Marshal]::GetLastWin32Error(), "no hard link $Path to $Existing")
+    }
+}
+function New-Junction([string]$Path, [string]$Target) {
+    $text = & cmd.exe /d /c "mklink /J `"$Path`" `"$Target`""
+    if ($LASTEXITCODE -ne 0) { throw "mklink /J could not link $Path to $Target (exit $LASTEXITCODE): $text" }
+}
 . (Join-Path $PSScriptRoot 'installer\common.ps1')
 . (Join-Path $PSScriptRoot 'installer\rocm-venvs.ps1')
 $script:checks = 0
@@ -181,14 +198,14 @@ try {
 
     # The list is untrusted: neither a junction nor a hardlinked entry is read as authority.
     $listLink = Join-Path $base 'list-link'
-    New-Item -ItemType Junction -Path $listLink -Target $list2 | Out-Null
+    New-Junction $listLink $list2
     try {
         $r = @(Invoke-RocmVenvDetach -Payload $payload -ListDir $listLink)
         Assert ($r.Count -eq 1 -and $r[0].result -eq 'kept' -and (Test-Ours $e $payload)) 'list junction is refused before child invocation'
     } finally { [IO.Directory]::Delete($listLink) }
     $entryFile = @(Entries $list2)[0].FullName
     $entryAlias = Join-Path $base 'foreign-entry.json'
-    New-Item -ItemType HardLink -Path $entryAlias -Target $entryFile | Out-Null
+    New-HardLink $entryAlias $entryFile
     $entryHash = Sha $entryAlias
     $r = @(Invoke-RocmVenvDetach -Payload $payload -ListDir $list2)
     Assert ($r[0].result -eq 'kept' -and (Sha $entryAlias) -eq $entryHash -and (Test-Ours $e $payload)) 'hardlinked list entry and foreign alias remain unchanged'

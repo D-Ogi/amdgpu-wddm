@@ -323,6 +323,9 @@ RELEASE_COMPILES = {
     'compute/hip/build-runtime.ps1': (('compute/hip/build-runtime.ps1', 'cl'),
                                     ('compute/hip/build-rebuilt-controls.ps1', 'clang'),
                                     ('compute/hipblas/build-hipblas.ps1', 'clang')),
+    # The ROCm payload recipe delegates its two DLLs: the face amdhip64_7.dll and the hipBLASLt front.
+    'compute/hip/build-rocm-payload.ps1': (('compute/hip/build-amd-abi.ps1', 'cl'),
+                                           ('compute/hip/build-blaslt-front.ps1', 'cl')),
     'driver/kmd/build.ps1': (('driver/kmd/build.ps1', 'cl'),),
     'tools/build/build-umd-router.ps1': (('tools/build/build-umd-router.ps1', 'cl'),),
 }

@@ -126,6 +126,9 @@ try {
  Check 'mesa-temp-cleanup-installer' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-mesa-temp-cleanup-installer.ps1" -Out "$Out\mesa-temp-cleanup-installer" }
  # The TheRock venvs of the HIP runtime: the attach step on stand-in venvs (both PowerShell editions), and the
  # uninstaller's detach of each listed venv. Both work in a folder under Out only; neither touches %ProgramData%.
+ # rocm-attach: 86 cases, each starts Windows PowerShell 5.1 or pwsh on a fake TheRock venv. Its deadline is 600 s in
+ # gate-inputs.json, not the 180 s of the manifest: 45 s on the idle development PC, 127 s in a full suite, and one
+ # run past 180 s in a full suite beside a package build (2026-11-02). 600 s is 4.7 times the full suite run.
  Check 'rocm-attach' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\compute\hip\tests\host\test-attach-rocm-venv.ps1" -Work "$Out\rocm-attach-$([Guid]::NewGuid().ToString('N'))" }
  Check 'rocm-venvs-installer' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-rocm-venvs.ps1" -Out (New-Item -ItemType Directory -Force "$Out\rocm-venvs-installer").FullName }
  # This gate uses real ACL/DPAPI storage below Out, with no service, task or registry changes.
