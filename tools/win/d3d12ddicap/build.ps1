@@ -1,6 +1,7 @@
 # Builds d3d12ddicap.exe on the development PC and, unless -NoRun, runs it there on WARP. Nothing here touches unit A.
-# The three ray tracing libraries come from ue426.hlsl through the SDK's dxc (signed by its dxil.dll), into the
-# output directory as headers; the program includes them from there.
+# The three ray tracing libraries of the ue426 cases come from ue426.hlsl, and the two of the vkd3d-deferred case from
+# deferred.hlsl, through the SDK's dxc (signed by its dxil.dll), into the output directory as headers; the program
+# includes them from there.
 param(
     [string]$Kits = "$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path })\toolchain\nuget",
     [string]$Out = "$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path })\scratch\build\d3d12ddicap",
@@ -25,6 +26,11 @@ $env:TEMP = $Out; $env:TMP = $Out
 foreach ($stage in 'RGS', 'MS', 'HIT') {
     $name = $stage.ToLowerInvariant()
     & $dxc -nologo -T lib_6_3 -D $stage -Vn "g_ue426_$name" -Fh (Join-Path $Out "ue426-$name.h") (Join-Path $here 'ue426.hlsl')
+    if ($LASTEXITCODE -ne 0) { throw "dxc $stage failed ($LASTEXITCODE)" }
+}
+foreach ($stage in 'RAYGEN', 'BINDINGS') {
+    $name = $stage.ToLowerInvariant()
+    & $dxc -nologo -T lib_6_3 -D $stage -Vn "g_deferred_$name" -Fh (Join-Path $Out "deferred-$name.h") (Join-Path $here 'deferred.hlsl')
     if ($LASTEXITCODE -ne 0) { throw "dxc $stage failed ($LASTEXITCODE)" }
 }
 
