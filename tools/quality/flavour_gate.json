@@ -4332,6 +4332,8 @@
    "tools/d3d11bench.exe",
    "tools/hip/amdhip64.dll",
    "tools/hip/bc250hipblas.dll",
+   "tools/hip/rocm/amdhip64_7.dll",
+   "tools/hip/rocm/libhipblaslt.dll",
    "tools/hip/vadd.exe",
    "tools/vulkaninfo.exe",
    "vulkan/vulkan_radeon.dll",

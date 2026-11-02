@@ -11,6 +11,23 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# New-Item -ItemType HardLink or Junction reads [ ] in -Target as a wildcard (gate variable-case, "hardlink").
+# CreateHardLinkW and mklink /J take the path as it is.
+function New-HardLink([string]$Path, [string]$Existing) {
+    if (-not ('Bc250Test.HardLink' -as [type])) {
+        Add-Type -Namespace Bc250Test -Name HardLink -MemberDefinition @'
+[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+public static extern bool CreateHardLinkW(string lpFileName, string lpExistingFileName, IntPtr lpSecurityAttributes);
+'@
+    }
+    if (-not [Bc250Test.HardLink]::CreateHardLinkW($Path, $Existing, [IntPtr]::Zero)) {
+        throw [ComponentModel.Win32Exception]::new([Runtime.InteropServices.Marshal]::GetLastWin32Error(), "no hard link $Path to $Existing")
+    }
+}
+function New-Junction([string]$Path, [string]$Target) {
+    $text = & cmd.exe /d /c "mklink /J `"$Path`" `"$Target`""
+    if ($LASTEXITCODE -ne 0) { throw "mklink /J could not link $Path to $Target (exit $LASTEXITCODE): $text" }
+}
 Set-StrictMode -Version 2.0
 if (Test-Path -LiteralPath $Work) { throw "-Work $Work exists; the test makes it and removes it" }
 $attach = (Resolve-Path (Join-Path $PSScriptRoot '..\..\attach-rocm-venv.ps1')).Path
@@ -211,7 +228,7 @@ try {
         $r = Run @()
         foreach ($targetFile in @($liveFace, $keptFace, $liveLt, $keptLt, $record, @(Entries)[0].FullName)) {
             $alias = Join-Path $Work "hardlink-$tag"
-            New-Item -ItemType HardLink -Path $alias -Target $targetFile | Out-Null
+            New-HardLink $alias $targetFile
             $before = State
             $aliasBefore = Sha $alias
             $r = Run @('-Detach')
@@ -241,7 +258,7 @@ try {
         New-Item -ItemType Directory -Force (Join-Path $venvJ 'Lib\site-packages\_rocm_sdk_libraries\bin') | Out-Null
         Copy-Item $amdLtFile (Join-Path $venvJ 'Lib\site-packages\_rocm_sdk_libraries\bin\libhipblaslt.dll')
         $link = Join-Path $venvJ 'Lib\site-packages\_rocm_sdk_core'
-        New-Item -ItemType Junction -Path $link -Target $realCore | Out-Null
+        New-Junction $link $realCore
         $junctions += $link
         foreach ($mode in @(@(), @('-Detach'))) {
             $r = Run $mode $payload $venvJ
@@ -249,7 +266,7 @@ try {
                 -not (Test-Path -LiteralPath (Join-Path $realCore 'bin\amdhip64_7.dll.orig'))) "${tag}: $(if ($mode) { $mode[0] } else { 'attach' }) with a junction inside the venv is refused and changes nothing (exit $($r.code))"
         }
         $venvLink = Join-Path $Work "venv-link-$tag"
-        New-Item -ItemType Junction -Path $venvLink -Target $venv | Out-Null
+        New-Junction $venvLink $venv
         $junctions += $venvLink
         $r = Run @() $payload $venvLink
         Check ($r.code -eq 3 -and $r.text -match 'junction or a link' -and (State) -eq $detached) "${tag}: attach through a venv that is a junction is refused (exit $($r.code))"
