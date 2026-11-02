@@ -4,11 +4,13 @@
 The scripted host exercises ownership and dispatch contracts, not a GPU or the
 public Vulkan instance parser. Rebuild Mesa before running this test.
 
-Two test programs, each case in its own process:
-- radv_wddm2_queue_binding_test.c, compiled with radv_wddm2_cs.c's flags and
-  linked against the DLL's cs/bo objects;
-- radv_wddm2_hosted_sync_test.c (BD-038), when the tree has it, compiled with
+The test programs, each when the tree has it, each case in its own process:
+- radv_wddm2_queue_binding_test.c (the D3D ICD line), compiled with
+  radv_wddm2_cs.c's flags and linked against the DLL's cs/bo objects;
+- radv_wddm2_hosted_sync_test.c (BD-038, the D3D ICD line) and
+  radv_wddm2_fence_slice_test.c (BD-179, the system line), compiled with
   vk_wddm2_monitored_fence.c's flags and linked against the runtime libraries.
+A tree with none of them is an error.
 The cases are every entry of each file's own tests[] table, so a new test runs
 without a change here. Each executable keeps its source's name: the deferred
 destroy witness checks its own module name in the logged stack.
@@ -34,6 +36,9 @@ FENCE_REL = 'src/vulkan/runtime/vk_wddm2_monitored_fence.c'
 WDDM2 = 'src/amd/vulkan/winsys/wddm2'
 QUEUE_TEST = WDDM2 + '/tests/radv_wddm2_queue_binding_test.c'
 SYNC_TEST = WDDM2 + '/tests/radv_wddm2_hosted_sync_test.c'
+# The tests of the CPU fence wait, each when the tree has it: the D3D ICD line has the hosted sync test, the
+# system line has the slice test (BD-179). Both link against the runtime libraries.
+SYNC_TESTS = (SYNC_TEST, WDDM2 + '/tests/radv_wddm2_fence_slice_test.c')
 TIMEOUT = 60
 # The winsys knobs a test must not inherit from the shell; the deferred destroy log and configuration are pointed
 # at files of this run (the configuration at one that does not exist, so no test reads C:\BC250\tmp).
@@ -160,15 +165,20 @@ def main():
     objects = [objdir / ('winsys_wddm2_radv_wddm2_' + k + '.c.obj') for k in ('cs', 'bo')]
     util = [build / p for p in ('src/vulkan/util/libvulkan_util.a', 'src/util/libmesa_util.a',
                                 'src/c11/impl/libmesa_util_c11.a')]
-    programs = [(Path(SRC) / QUEUE_TEST, CS_REL,
-                 [*objects, build / 'src/amd/common/libamd_common.a', *util],
-                 [Path(SRC) / CS_REL, Path(SRC) / WDDM2 / 'radv_wddm2_bo.c'])]
-    if (Path(SRC) / SYNC_TEST).exists():
-        programs.append((Path(SRC) / SYNC_TEST, FENCE_REL,
-                         [build / p for p in ('src/vulkan/runtime/libvulkan_lite_runtime.a',
-                                              'src/vulkan/runtime/libvulkan_instance.a',
-                                              'src/compiler/libcompiler.a')] + util + ['gdi32.lib'],
-                         [Path(SRC) / FENCE_REL]))
+    programs = []
+    if (Path(SRC) / QUEUE_TEST).exists():
+        programs.append((Path(SRC) / QUEUE_TEST, CS_REL,
+                         [*objects, build / 'src/amd/common/libamd_common.a', *util],
+                         [Path(SRC) / CS_REL, Path(SRC) / WDDM2 / 'radv_wddm2_bo.c']))
+    for sync_test in SYNC_TESTS:
+        if (Path(SRC) / sync_test).exists():
+            programs.append((Path(SRC) / sync_test, FENCE_REL,
+                             [build / p for p in ('src/vulkan/runtime/libvulkan_lite_runtime.a',
+                                                  'src/vulkan/runtime/libvulkan_instance.a',
+                                                  'src/compiler/libcompiler.a')] + util + ['gdi32.lib'],
+                             [Path(SRC) / FENCE_REL]))
+    if not programs:
+        raise SystemExit('none of the test programs is in ' + SRC)
     record = {'source_head': subprocess.check_output(
         ['git', '-C', SRC, 'rev-parse', 'HEAD'], text=True).strip(), 'inputs': {}, 'programs': {}}
     # HEAD alone does not identify a modified working tree. Keep exact input hashes.
