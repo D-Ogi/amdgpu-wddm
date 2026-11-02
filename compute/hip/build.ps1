@@ -314,8 +314,11 @@ $testExtra = @{ 'test_pm4.c' = @($kmdEmitter) }
 # test_copy_lifecycle.c includes kmt_memory.c and submit.c whole, with the kernel calls replaced
 # by a fake driver that runs DMA_DATA packets at retirement: the ownership rules of the GPU
 # copy (bc250hsa.h section 5.1, the receipt) through the code that runs on unit A.
+# test_allocation_plan.c and test_aggregate_alloc.c are BD-117: the child plan of an allocation above
+# the VidMm limit of one allocation, and the aggregate path of kmt_memory.c over the same fake driver.
 $tests = @('test_loader.c', 'test_unbundle.c', 'test_kernarg.c', 'test_descriptor.c', 'test_pm4.c',
-    'test_vadd_oracle.c', 'test_submit_journal.c', 'test_copy_lifecycle.c')
+    'test_vadd_oracle.c', 'test_submit_journal.c', 'test_copy_lifecycle.c', 'test_allocation_plan.c',
+    'test_aggregate_alloc.c')
 foreach ($t in $tests) {
     $exe = Join-Path $Out ([IO.Path]::ChangeExtension($t, 'exe'))
     $extra = if ($testExtra.ContainsKey($t)) { $testExtra[$t] } else { @() }
@@ -328,6 +331,9 @@ foreach ($t in $tests) {
 # The step-1 tool.
 Invoke-Cl ($common + @("/Fo$objDir\", "/Fe$Out\hipprobe.exe", (Join-Path $toolDir 'hipprobe.c')) +
     $allObjects + @('/link') + $link + @('gdi32.lib')) 'hipprobe'
+# The lab check of BD-117: one device-local allocation above the VidMm limit of one allocation.
+Invoke-Cl ($common + @("/Fo$objDir\", "/Fe$Out\bigallocprobe.exe", (Join-Path $toolDir 'bigallocprobe.c')) +
+    $allObjects + @('/link') + $link + @('gdi32.lib')) 'bigallocprobe'
 
 if (-not $SkipTests) {
     $failures = 0
@@ -352,6 +358,11 @@ if (-not $SkipTests) {
     & "$Out\hipprobe.exe" --selftest --target-alias gfx1011 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 1) { Write-Host "  FAIL hipprobe --target-alias gfx1011 is not a usage error ($LASTEXITCODE)"; $failures++ }
     & "$Out\hipprobe.exe" --help | Select-Object -First 1 | ForEach-Object { Write-Host "  $_" }
+    $probeHelp = @(& "$Out\bigallocprobe.exe" --help)
+    $probeHelp | Select-Object -First 1 | ForEach-Object { Write-Host "  $_" }
+    if ($LASTEXITCODE -ne 0) { Write-Host "  FAIL bigallocprobe --help ($LASTEXITCODE)"; $failures++ }
+    & "$Out\bigallocprobe.exe" --bytes 4096 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 1) { Write-Host "  FAIL bigallocprobe accepts a size below the child limit ($LASTEXITCODE)"; $failures++ }
 
     # ------------------------------------------------------------------------------------------
     # The negative control of the fake kernel driver (scratch\hip-gpu-copy\CONTRACT.md deviation
@@ -421,7 +432,7 @@ if (-not $SkipTests) {
 }
 
 Write-Host "  artifacts in $Out (bc250hsa.lib's hash belongs to this directory, see above)"
-foreach ($f in (@('bc250hsa.lib', 'hipprobe.exe') + ($tests | ForEach-Object { [IO.Path]::ChangeExtension($_, 'exe') }))) {
+foreach ($f in (@('bc250hsa.lib', 'hipprobe.exe', 'bigallocprobe.exe') + ($tests | ForEach-Object { [IO.Path]::ChangeExtension($_, 'exe') }))) {
     $item = Get-Item (Join-Path $Out $f)
     $hash = (Get-FileHash -Algorithm SHA256 $item.FullName).Hash
     '{0,9}  {1}  sha256 {2}' -f $item.Length, $item.Name, $hash

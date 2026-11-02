@@ -20,8 +20,32 @@
 #include "kmt_blobs.h"
 #include "../../../driver/shim/include/bc250_hip_journal.h"
 
+/* One child of an aggregate allocation (BD-117): one VidMm allocation, mapped at a fixed
+ * place inside the reservation of its parent. Children are never on dev->allocations. */
+typedef struct bc250hsa_alloc_child {
+    D3DKMT_HANDLE handle;     /* 0 when not created, or destroyed */
+    uint32_t      heap;       /* BC250HSA_HEAP_VRAM or BC250HSA_HEAP_GTT */
+    uint64_t      offset;     /* from the logical base of the parent */
+    uint64_t      bytes;      /* the size of this allocation and of its mapping */
+    uint64_t      va;         /* the mapped address (base + offset), 0 when not mapped */
+    void*         host;       /* the Lock2 mapping of this child, or NULL */
+    uint32_t      carve_out;  /* the layout: 1 the carve-out first, 0 system memory only */
+} bc250hsa_alloc_child;
+
+#define BC250HSA_RECORD_SINGLE    0u
+#define BC250HSA_RECORD_AGGREGATE 1u
+
 /* One allocation this device owns. bc250hsa_mem::opaque points here, and the device
- * keeps every record on a list so that bc250hsa_close() frees what the caller left. */
+ * keeps every record on a list so that bc250hsa_close() frees what the caller left.
+ *
+ * An aggregate record (kind BC250HSA_RECORD_AGGREGATE) owns one GPU address reservation and
+ * child_count children that fill it from its logical base without a gap, in the order of their
+ * offsets; their sizes come from bc250hsa_plan_layout and need not be equal. handle and host
+ * stay 0 and NULL: the parent has no VidMm allocation and no contiguous host view of its own.
+ * va and bytes are the logical base and the aligned size. reserve_base and reserve_bytes are
+ * the whole reservation, which can start below va (alignment slack), and it is freed once,
+ * as one range. retiring is set when a free started; a free that failed part way keeps the
+ * record on the list with what it still owns, and the next free continues from there. */
 typedef struct bc250hsa_alloc_record {
     struct bc250hsa_alloc_record* next;
     struct bc250hsa_alloc_record* prev;
@@ -30,6 +54,14 @@ typedef struct bc250hsa_alloc_record {
     uint64_t                      bytes;
     uint32_t                      flags;
     void*                         host;      /* the Lock2 mapping, or NULL */
+    uint32_t                      kind;      /* BC250HSA_RECORD_* */
+    uint32_t                      heap;      /* a single record: the heap of its backing */
+    uint32_t                      retiring;
+    uint32_t                      child_count;
+    uint32_t                      cpu_access;  /* 1: every child has its Lock2 mapping */
+    uint64_t                      reserve_base;  /* 0 when the reservation was freed */
+    uint64_t                      reserve_bytes;
+    bc250hsa_alloc_child*         children;
 } bc250hsa_alloc_record;
 
 #define BC250HSA_RING_SLOTS_DEFAULT      8u

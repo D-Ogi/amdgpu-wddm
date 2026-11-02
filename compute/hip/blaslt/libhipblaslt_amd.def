@@ -1,0 +1,15 @@
+; AMD's hipBLASLt under the name that the attach step gives it (libhipblaslt.dll -> libhipblaslt_amd.dll).
+; build-blaslt-front.ps1 makes the import library of the front from this file. These are the nine AMD
+; functions that hipblaslt_front.cpp wraps and calls by name. Every other export of AMD's DLL reaches AMD
+; through a PE forwarder of the front.
+LIBRARY libhipblaslt_amd.dll
+EXPORTS
+    hipblasLtDestroy
+    hipblasLtMatmul
+    hipblasLtMatmulAlgoGetHeuristic
+    hipblasLtMatmulDescCreate
+    hipblasLtMatmulDescDestroy
+    hipblasLtMatmulDescSetAttribute
+    hipblasLtMatrixLayoutCreate
+    hipblasLtMatrixLayoutDestroy
+    hipblasLtMatrixLayoutSetAttribute

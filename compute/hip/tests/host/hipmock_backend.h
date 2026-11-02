@@ -148,6 +148,19 @@ void bc250hsa_mock_set_lost(int lost);
  * allocator: a freed allocation gives its bytes back only with the whole arena. */
 int bc250hsa_mock_set_host_arena(uint64_t bytes);
 
+/* BD-117, an aggregate allocation as layer 2 sees it. With bytes above 0, every later
+ * allocation made with exactly BC250HSA_MEM_MAPPABLE whose aligned size is at least bytes
+ * behaves as an aggregate of layer 1: host stays NULL, bc250hsa_map refuses it with
+ * BC250HSA_EUNSUPPORTED, bc250hsa_memory_access answers BC250HSA_ACCESS_SCATTER, and the
+ * host-processor calls of section 5 reach it. bc250hsa_mock_cpu_walks counts those calls on such
+ * allocations, so a test sees that layer 2 used them and not a pointer of its own.
+ * bc250hsa_mock_set_free_fail makes the next count frees answer BC250HSA_EOS and leave the
+ * allocation retiring: every call but a second free then refuses it with BC250HSA_EINVAL.
+ * bc250hsa_mock_reset clears all three. */
+void     bc250hsa_mock_set_scatter_min(uint64_t bytes);
+void     bc250hsa_mock_set_free_fail(uint32_t count);
+uint32_t bc250hsa_mock_cpu_walks(void);
+
 /* A delay between the start of a GPU call and its submission, with the lock of the mock
  * released, which bc250hsa_mock_reset clears. It holds the window open in which another thread
  * could free memory the call is about to name. */

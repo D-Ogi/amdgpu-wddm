@@ -77,6 +77,18 @@ void check(bool ok, const char* what) {
     }
 }
 
+// The host view of a directly mapped hipMalloc buffer, which the runtime keeps in its table.
+// A pointer with no such view gives a buffer of zeros, so a compare against it fails loudly.
+const unsigned char* entry_view(const void* ptr) {
+    static const unsigned char none[1u << 17] = {};
+    const auto it = bc250hip::state().by_va.find(
+        static_cast<uint64_t>(reinterpret_cast<uintptr_t>(ptr)));
+    if (it == bc250hip::state().by_va.end() || it->second.mem.host == nullptr) {
+        return none;
+    }
+    return static_cast<const unsigned char*>(it->second.mem.host);
+}
+
 void check_u64(uint64_t got, uint64_t want, const char* what) {
     g_checks++;
     if (got != want) {
@@ -1908,6 +1920,17 @@ int main(int argc, char** argv) {
         bc250hsa_mock_reset();
         bc250hsa_counters_reset();
         check(bc250hsa_mock_set_host_arena(1u << 20) == 1, "BD-123 setup: the mock arena");
+        // A deterministic backend refusal, without exhausting the host. The
+        // following successful allocations and byte comparisons also prove that
+        // this error does not poison the device or consume the arena.
+        void* refused = nullptr;
+        const uint32_t allocations_before_oom = bc250hsa_mock_live_allocations();
+        check(hipMalloc(&refused, 2u << 20) == hipErrorOutOfMemory,
+              "hipMalloc: backend ENOMEM becomes typed HIP out-of-memory");
+        check(refused == nullptr && bc250hsa_mock_live_allocations() == allocations_before_oom,
+              "hipMalloc: refused allocation creates no live resource");
+        check(hipGetLastError() == hipErrorOutOfMemory && hipGetLastError() == hipSuccess,
+              "hipMalloc: typed out-of-memory is reported and cleared once");
         unsigned char* view_a = nullptr;   // hipHostMalloc
         unsigned char* view_b = nullptr;   // hipHostMalloc, its view right after view_a
         unsigned char* device = nullptr;   // hipMalloc
@@ -2052,6 +2075,157 @@ int main(int argc, char** argv) {
         check(hipHostFree(view_a) == hipSuccess, "BD-123: hipHostFree the first view");
         check(bc250hsa_mock_set_host_arena(0) == 1,
               "BD-123: the arena is released once its allocations are freed");
+        bc250hsa_mock_reset();
+        bc250hsa_counters_reset();
+    }
+
+    // ---------------------------------------------------------------------------------------
+    std::printf("test_hip_mock: 16b. an allocation above the VidMm limit of one allocation (BD-117)\n");
+    {
+        // The mock makes every hipMalloc of at least 1 MiB an aggregate of layer 1: one GPU
+        // range, no host view, and the host-processor calls of bc250hsa.h section 5 reach it.
+        const size_t big = (2u << 20) + 4096u;
+        const size_t small = 65536u;
+        std::vector<unsigned char> seed(big);
+        std::vector<unsigned char> readback(big, 0u);
+        for (size_t i = 0; i < big; ++i) {
+            seed[i] = static_cast<unsigned char>((i * 7u) ^ (i >> 11));
+        }
+        bc250hsa_mock_reset();
+        bc250hsa_counters_reset();
+        bc250hsa_mock_set_scatter_min(1u << 20);
+        const uint32_t live_before = bc250hsa_mock_live_allocations();
+        unsigned char* a = nullptr;
+        unsigned char* b = nullptr;
+        unsigned char* tiny = nullptr;
+        check(hipMalloc(reinterpret_cast<void**>(&a), big) == hipSuccess,
+              "BD-117: hipMalloc of a split allocation succeeds");
+        check(bc250hsa_mock_live_allocations() == live_before + 1u,
+              "BD-117: a split allocation is one allocation of layer 1, with no host replacement");
+        const bc250hip::Allocation* entry = nullptr;
+        {
+            const auto it = bc250hip::state().by_va.find(
+                static_cast<uint64_t>(reinterpret_cast<uintptr_t>(a)));
+            if (it != bc250hip::state().by_va.end()) {
+                entry = &it->second;
+            }
+        }
+        check(entry != nullptr && entry->mem.host == nullptr &&
+                  entry->cpu_access == BC250HSA_ACCESS_SCATTER &&
+                  entry->mem.flags == BC250HSA_MEM_MAPPABLE,
+              "BD-117: the table keeps the split allocation as device-local, scatter access, no view");
+        check(hipMalloc(reinterpret_cast<void**>(&b), big) == hipSuccess,
+              "BD-117: hipMalloc of a second split allocation succeeds");
+        check(hipMalloc(reinterpret_cast<void**>(&tiny), small) == hipSuccess,
+              "BD-117: hipMalloc below the split size succeeds");
+        {
+            const auto it = bc250hip::state().by_va.find(
+                static_cast<uint64_t>(reinterpret_cast<uintptr_t>(tiny)));
+            check(it != bc250hip::state().by_va.end() && it->second.mem.host != nullptr &&
+                      it->second.cpu_access == BC250HSA_ACCESS_DIRECT,
+                  "BD-117: an allocation below the split size keeps its direct view");
+        }
+
+        // Host to device and back, through layer 1's walkers and no pointer of layer 2.
+        uint32_t walks = bc250hsa_mock_cpu_walks();
+        check(hipMemcpy(a, seed.data(), big, hipMemcpyHostToDevice) == hipSuccess,
+              "BD-117: hipMemcpy host to device into a split allocation");
+        check(bc250hsa_mock_cpu_walks() > walks, "BD-117: the copy used layer 1's walker");
+        bc250hsa_mock_set_gpu_copy(1, 1);   // every GPU copy refused: the host processor does it
+        walks = bc250hsa_mock_cpu_walks();
+        check(hipMemcpy(readback.data(), a, big, hipMemcpyDeviceToHost) == hipSuccess &&
+                  std::memcmp(readback.data(), seed.data(), big) == 0,
+              "BD-117: hipMemcpy device to host returns every byte of a split allocation");
+        check(bc250hsa_mock_cpu_walks() > walks, "BD-117: the read used layer 1's walker");
+
+        // Device to device between two split allocations, at an offset that crosses the
+        // 1 MiB line, with the GPU copy refused.
+        walks = bc250hsa_mock_cpu_walks();
+        check(hipMemset(b, 0x3C, big) == hipSuccess,
+              "BD-117: hipMemset of a split allocation with the GPU refused");
+        check(bc250hsa_mock_cpu_walks() > walks, "BD-117: the fill used layer 1's walker");
+        const size_t at = (1u << 20) - 333u;
+        const size_t span = 70001u;
+        walks = bc250hsa_mock_cpu_walks();
+        check(hipMemcpy(b + at, a + 17u, span, hipMemcpyDeviceToDevice) == hipSuccess,
+              "BD-117: hipMemcpy device to device between split allocations");
+        check(bc250hsa_mock_cpu_walks() > walks, "BD-117: the device copy used layer 1's walker");
+        std::fill(readback.begin(), readback.end(), 0u);
+        check(hipMemcpy(readback.data(), b, big, hipMemcpyDeviceToHost) == hipSuccess,
+              "BD-117: read the destination back");
+        bool d2d_ok = true;
+        for (size_t i = 0; i < big; ++i) {
+            const unsigned char want =
+                (i >= at && i < at + span) ? seed[i - at + 17u] : static_cast<unsigned char>(0x3C);
+            d2d_ok = d2d_ok && readback[i] == want;
+        }
+        check(d2d_ok, "BD-117: the device copy moved its bytes and no other byte changed");
+
+        // Between a split allocation and a directly mapped one, both ways.
+        check(hipMemcpy(tiny, a + 5000u, small, hipMemcpyDeviceToDevice) == hipSuccess,
+              "BD-117: device to device from a split into a direct allocation");
+        check(std::memcmp(entry_view(tiny), seed.data() + 5000u, small) == 0,
+              "BD-117: the direct allocation holds the bytes of the split one");
+        check(hipMemcpy(b + (1u << 20), tiny, small, hipMemcpyDeviceToDevice) == hipSuccess,
+              "BD-117: device to device from a direct into a split allocation");
+        std::fill(readback.begin(), readback.end(), 0u);
+        check(hipMemcpy(readback.data(), b + (1u << 20), small, hipMemcpyDeviceToHost) ==
+                      hipSuccess &&
+                  std::memcmp(readback.data(), seed.data() + 5000u, small) == 0,
+              "BD-117: the split allocation holds the bytes of the direct one");
+        bc250hsa_mock_set_gpu_copy(1, 0);
+
+        // A GPU copy into a split allocation whose wait fails after the submission: the copy
+        // may still land, so the host processor must not copy as well.
+        {
+            // Only the GPU route gives the wait's timeout; a host-processor copy gives no error.
+            bc250hsa_mock_set_gpu_fault(BC250HSA_MOCK_FAULT_AFTER, BC250HSA_ETIMEOUT);
+            walks = bc250hsa_mock_cpu_walks();
+            const hipError_t failed = hipMemcpy(b, a, big, hipMemcpyDeviceToDevice);
+            (void)hipGetLastError();
+            bc250hsa_mock_set_gpu_fault(BC250HSA_MOCK_FAULT_NONE, BC250HSA_OK);
+            check(failed == hipErrorLaunchTimeOut,
+                  "BD-117: a GPU copy into a split allocation whose wait fails fails hipMemcpy");
+            check(bc250hsa_mock_cpu_walks() == walks,
+                  "BD-117: no host-processor copy follows a GPU copy that may still land");
+            (void)hipDeviceSynchronize();   // the failed copy's value retires in the mock
+            (void)hipGetLastError();
+        }
+
+        // A free that layer 1 cannot finish: the entry stays, retiring, and only a second
+        // hipFree reaches it.
+        bc250hsa_mock_set_free_fail(1u);
+        const hipError_t first = hipFree(a);
+        (void)hipGetLastError();
+        check(first != hipSuccess, "BD-117: a failed release fails hipFree");
+        {
+            const auto it = bc250hip::state().by_va.find(
+                static_cast<uint64_t>(reinterpret_cast<uintptr_t>(a)));
+            check(it != bc250hip::state().by_va.end() && it->second.retiring,
+                  "BD-117: the allocation stays in the table, retiring");
+        }
+        check(bc250hsa_mock_live_allocations() == live_before + 3u,
+              "BD-117: layer 1 still holds the allocation");
+        check(hipMemcpy(a, seed.data(), small, hipMemcpyHostToDevice) ==
+                  hipErrorInvalidDevicePointer,
+              "BD-117: a copy into a retiring allocation is refused");
+        (void)hipGetLastError();
+        check(hipMemset(a, 0, small) == hipErrorInvalidDevicePointer,
+              "BD-117: a fill of a retiring allocation is refused");
+        (void)hipGetLastError();
+        check(bc250hip::find_allocation_ptr(a, 1u, nullptr) == nullptr,
+              "BD-117: no lookup of the runtime finds a retiring allocation");
+        check(hipFree(a) == hipSuccess, "BD-117: a second hipFree finishes the release");
+        check(bc250hip::state().by_va.find(static_cast<uint64_t>(
+                  reinterpret_cast<uintptr_t>(a))) == bc250hip::state().by_va.end(),
+              "BD-117: the finished release leaves the table");
+        check(hipFree(a) == hipErrorInvalidDevicePointer,
+              "BD-117: a third hipFree is the program's double free");
+        (void)hipGetLastError();
+        check(hipFree(b) == hipSuccess && hipFree(tiny) == hipSuccess,
+              "BD-117: free the other two allocations");
+        check(bc250hsa_mock_live_allocations() == live_before,
+              "BD-117: nothing of the section is left in layer 1");
         bc250hsa_mock_reset();
         bc250hsa_counters_reset();
     }

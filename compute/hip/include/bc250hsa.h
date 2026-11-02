@@ -45,7 +45,7 @@ extern "C" {
  * that reports another major value. bc250hsa_abi_version() returns the value that the
  * library was built with. */
 #define BC250HSA_ABI_VERSION_MAJOR 1u
-#define BC250HSA_ABI_VERSION_MINOR 10u  /* 1.1 added section 8.1, batching;
+#define BC250HSA_ABI_VERSION_MINOR 12u  /* 1.1 added section 8.1, batching;
                                          * 1.2 added section 7.1, the AQL dispatch packet
                                          * that ENABLE_SGPR_DISPATCH_PTR needs;
                                          * 1.3 adds fixed-private scratch PM4 environments;
@@ -70,7 +70,14 @@ extern "C" {
                                          * 1.9 adds bc250hsa_memory_budget_read and
                                          * the target alias of section 6,
                                          * bc250hsa_target_alias_set;
-                                         * 1.10 adds bc250hsa_wait_spin_set (section 9) */
+                                         * 1.10 adds bc250hsa_wait_spin_set (section 9);
+                                         * 1.11 adds aggregate device memory:
+                                         * bc250hsa_memory_access,
+                                         * bc250hsa_copy_device_cpu and
+                                         * bc250hsa_fill_device_cpu (section 5);
+                                         * 1.12 adds bc250hsa_memory_part_get, and
+                                         * the parts of a split allocation follow
+                                         * the local budget (section 5) */
 
 uint32_t bc250hsa_abi_version_major(void);
 uint32_t bc250hsa_abi_version_minor(void);
@@ -406,14 +413,64 @@ bc250hsa_status bc250hsa_unmap(bc250hsa_device* dev, bc250hsa_mem* mem);
  * allocation and before the submission that reads it. */
 void bc250hsa_write_barrier(void);
 
-/* Host to device and device to host copies through the host mapping. They refuse an
- * allocation with no mapping, with BC250HSA_EUNSUPPORTED: a copy engine and a copy
- * kernel are later work, named in the design. */
+/* Large device memory (BD-117). VidMm refuses one allocation above 0xFFFF0000 bytes, so a
+ * device-local allocation (BC250HSA_MEM_DEVICE or BC250HSA_MEM_MAPPABLE) above 0xFFFC0000
+ * bytes is several allocations behind one GPU address range. va and bytes describe the whole
+ * range, kernels and the calls of section 5.1 use it as one range, and host stays NULL: there
+ * is no contiguous host view, and bc250hsa_map refuses one with BC250HSA_EUNSUPPORTED. With
+ * BC250HSA_MEM_MAPPABLE the library keeps one host view per part, and the host-processor
+ * calls below reach every byte through them. A host-visible or executable allocation is never
+ * split.
+ *
+ * bc250hsa_memory_access says which host-processor route an allocation has:
+ *   BC250HSA_ACCESS_NONE     none; only the calls of section 5.1 move its bytes
+ *   BC250HSA_ACCESS_DIRECT   the mapping in mem->host (after bc250hsa_alloc or bc250hsa_map)
+ *   BC250HSA_ACCESS_SCATTER  no mapping to hand out, and the host-processor calls of this
+ *                            section work
+ * An allocation whose free started (a bc250hsa_free that failed part way) is refused by every
+ * call of this section with BC250HSA_EINVAL; only a second bc250hsa_free is accepted. */
+#define BC250HSA_ACCESS_NONE    0u
+#define BC250HSA_ACCESS_DIRECT  1u
+#define BC250HSA_ACCESS_SCATTER 2u
+
+bc250hsa_status bc250hsa_memory_access(bc250hsa_device* dev, const bc250hsa_mem* mem,
+                                       uint32_t* access);
+
+/* The parts of an allocation, for diagnostics (1.12). Part `index` of a split allocation is one
+ * VidMm allocation: its offset from mem->va, its size, and 1 in carve_out when it is in the
+ * carve-out, 0 when it is in system memory. The parts are in offset order and fill the range
+ * without a gap; the library sizes them from the local budget, so they need not be equal. An
+ * allocation that is not split has one part. An index past the last part, and an allocation
+ * whose free started, give BC250HSA_EINVAL. */
+typedef struct bc250hsa_memory_part {
+    uint64_t offset;
+    uint64_t bytes;
+    uint32_t carve_out;
+    uint32_t reserved;
+} bc250hsa_memory_part;
+
+bc250hsa_status bc250hsa_memory_part_get(bc250hsa_device* dev, const bc250hsa_mem* mem,
+                                         uint32_t index, bc250hsa_memory_part* out);
+
+/* Host to device and device to host copies through the host mapping or the host views of a
+ * split allocation. They refuse an allocation with neither, with BC250HSA_EUNSUPPORTED: a copy
+ * engine and a copy kernel are later work, named in the design. */
 bc250hsa_status bc250hsa_copy_to_device(bc250hsa_device* dev, const bc250hsa_mem* dst,
                                         uint64_t dst_offset, const void* src, uint64_t bytes);
 bc250hsa_status bc250hsa_copy_from_device(bc250hsa_device* dev, void* dst,
                                           const bc250hsa_mem* src, uint64_t src_offset,
                                           uint64_t bytes);
+
+/* A device-to-device copy and a byte fill with the host processor, through the same views,
+ * for an allocation with BC250HSA_ACCESS_DIRECT or BC250HSA_ACCESS_SCATTER. Each is a flush
+ * point of section 8.1, and the wait for work that reads or writes the ranges stays the
+ * caller's, as for the two copies above. The result of a copy between overlapping ranges is
+ * undefined. */
+bc250hsa_status bc250hsa_copy_device_cpu(bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                         uint64_t dst_offset, const bc250hsa_mem* src,
+                                         uint64_t src_offset, uint64_t bytes);
+bc250hsa_status bc250hsa_fill_device_cpu(bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                         uint64_t dst_offset, uint8_t value, uint64_t bytes);
 
 /* ---------------------------------------------------------------------------------
  * 5.1 The GPU copy and fill

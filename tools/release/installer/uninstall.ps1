@@ -21,6 +21,7 @@ $package = Split-Path -Parent $here
 if ($RestoreSystemTuning -and $KeepSystemTuning) { throw 'Choose either -RestoreSystemTuning or -KeepSystemTuning.' }
 . (Join-Path $here 'components.ps1')
 . (Join-Path $here 'state-lifecycle.ps1')
+. (Join-Path $here 'rocm-venvs.ps1')
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (as install.ps1).
 if ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_DIR) {
@@ -54,6 +55,10 @@ if ($lab.Count) { Write-Warn2 "a development-lab installation ($($lab -join ', '
 # Inventory must succeed before the first change. A failed read is not an empty driver store.
 try { $pkgs = @(Get-OurDriverPackages) }
 catch { Write-Fail "Driver-store inventory could not be read. No removal was started: $($_.Exception.Message)"; exit 6 }
+Write-Step 'TheRock Python environments'
+# Fail before driver or package removal. A refused/unfinished detach still needs the installed runtime.
+$rocmRemoval = @(Invoke-RocmVenvDetach -Payload (Join-Path $root 'tools\hip\rocm'))
+Assert-RocmVenvRemovalComplete $rocmRemoval
 $removalDevice=$null
 if($pkgs.Count -or ($state -and $state.driver_state_removal)) {
     $devices=@(Get-Bc250Device)
@@ -426,6 +431,7 @@ if (Test-Path -LiteralPath $controlData) { Write-Info "kept: $controlData (the c
 Write-Step 'What is left of this release'
 $footprint = @(Get-ReleaseFootprint -InstallRoot $root -State $state -MftKeys @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey))
 $footprint += @(Get-ComponentFootprint $state ([bool]$RemoveModels))
+$footprint += @(Get-RocmVenvFootprint)
 foreach ($f in $footprint) {
     $mark = 'gone'
     if (-not $f.known) { $mark = 'UNKNOWN' } elseif ($f.present -and $f.kept) { $mark = 'kept' } elseif ($f.present) { $mark = 'LEFT' }

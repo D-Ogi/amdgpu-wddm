@@ -1,0 +1,23 @@
+; The stand-in for AMD's hipBLASLt in test_blaslt_front (blaslt_fake_amd.cpp), under the name that
+; the attach step gives AMD's DLL.
+LIBRARY libhipblaslt_amd.dll
+EXPORTS
+    hipblasLtCreate=fake_hipblasLtCreate
+    hipblasLtDestroy=fake_hipblasLtDestroy
+    hipblasLtGetVersion=fake_hipblasLtGetVersion
+    hipblasLtMatmul=fake_hipblasLtMatmul
+    hipblasLtMatmulAlgoGetHeuristic=fake_hipblasLtMatmulAlgoGetHeuristic
+    hipblasLtMatmulDescCreate=fake_hipblasLtMatmulDescCreate
+    hipblasLtMatmulDescDestroy=fake_hipblasLtMatmulDescDestroy
+    hipblasLtMatmulDescGetAttribute=fake_hipblasLtMatmulDescGetAttribute
+    hipblasLtMatmulDescSetAttribute=fake_hipblasLtMatmulDescSetAttribute
+    hipblasLtMatmulPreferenceCreate=fake_hipblasLtMatmulPreferenceCreate
+    hipblasLtMatmulPreferenceDestroy=fake_hipblasLtMatmulPreferenceDestroy
+    hipblasLtMatmulPreferenceSetAttribute=fake_hipblasLtMatmulPreferenceSetAttribute
+    hipblasLtMatrixLayoutCreate=fake_hipblasLtMatrixLayoutCreate
+    hipblasLtMatrixLayoutDestroy=fake_hipblasLtMatrixLayoutDestroy
+    hipblasLtMatrixLayoutGetAttribute=fake_hipblasLtMatrixLayoutGetAttribute
+    hipblasLtMatrixLayoutSetAttribute=fake_hipblasLtMatrixLayoutSetAttribute
+    ??_7hipblaslt_internal_ostream@@6B@=fake_vtable DATA
+    fake_amd_set_mode
+    fake_amd_get_counts

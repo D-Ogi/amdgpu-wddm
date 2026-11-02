@@ -124,6 +124,10 @@ try {
  Check 'system-tuning-installer' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-system-tuning-installer.ps1" -Out "$Out\system-tuning-installer" }
  # BD-211: which leaked MEMxxxx.TMP files the installer removes, in a folder under Out only (no real temp folder).
  Check 'mesa-temp-cleanup-installer' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-mesa-temp-cleanup-installer.ps1" -Out "$Out\mesa-temp-cleanup-installer" }
+ # The TheRock venvs of the HIP runtime: the attach step on stand-in venvs (both PowerShell editions), and the
+ # uninstaller's detach of each listed venv. Both work in a folder under Out only; neither touches %ProgramData%.
+ Check 'rocm-attach' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\compute\hip\tests\host\test-attach-rocm-venv.ps1" -Work "$Out\rocm-attach-$([Guid]::NewGuid().ToString('N'))" }
+ Check 'rocm-venvs-installer' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-rocm-venvs.ps1" -Out (New-Item -ItemType Directory -Force "$Out\rocm-venvs-installer").FullName }
  # This gate uses real ACL/DPAPI storage below Out, with no service, task or registry changes.
  Check 'system-tuning-journal' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\win\system-tuning\test-system-tuning-journal.ps1" -Out "$Out\system-tuning-journal" }
  Check 'lab-runner-etw' { & pwsh -NoProfile -File "$repo\tools\win\lab-runner\etw\host-checks.ps1" }

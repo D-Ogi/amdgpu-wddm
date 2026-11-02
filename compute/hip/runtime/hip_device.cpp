@@ -377,6 +377,10 @@ void memory_info(size_t* free_bytes, size_t* total_bytes) {
     for (const auto& entry : s.by_va) {
         used += entry.second.mem.bytes;
     }
+    // An allocation that layer 1 could not release still holds its memory (BD-117).
+    for (const bc250hip::Allocation& allocation : s.retired) {
+        used += allocation.mem.bytes;
+    }
     // The kernel argument pool is device memory as well, even though no HIP call made it.
     for (const bc250hip::KernargBuffer& buffer : s.kernargs) {
         used += buffer.mem.bytes;

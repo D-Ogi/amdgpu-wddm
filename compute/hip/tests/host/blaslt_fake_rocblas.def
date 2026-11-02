@@ -1,0 +1,10 @@
+; The processor rocblas.dll of test_blaslt_front (blaslt_fake_rocblas.cpp).
+LIBRARY rocblas.dll
+EXPORTS
+    rocblas_create_handle=fake_rocblas_create_handle
+    rocblas_destroy_handle=fake_rocblas_destroy_handle
+    rocblas_set_stream=fake_rocblas_set_stream
+    rocblas_set_pointer_mode=fake_rocblas_set_pointer_mode
+    rocblas_gemm_ex=fake_rocblas_gemm_ex
+    fake_rocblas_last
+    fake_rocblas_set_callback

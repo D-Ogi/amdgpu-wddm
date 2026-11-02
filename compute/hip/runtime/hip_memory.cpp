@@ -38,6 +38,11 @@ const Allocation* find_allocation(uint64_t va, uint64_t bytes, uint64_t* offset)
     }
     --it;
     const Allocation& allocation = it->second;
+    // A free that layer 1 could not finish leaves the entry for a second hipFree only: no copy,
+    // fill or attribute query may name it (BD-117).
+    if (allocation.retiring) {
+        return nullptr;
+    }
     const uint64_t base = allocation.mem.va;
     if (va < base || va - base > allocation.mem.bytes) {
         return nullptr;
@@ -76,7 +81,7 @@ const Allocation* find_host_allocation(const void* ptr, uint64_t bytes, uint64_t
     const unsigned char* want = static_cast<const unsigned char*>(ptr);
     for (const auto& entry : state().by_va) {
         const Allocation& allocation = entry.second;
-        if (allocation.mem.host == nullptr) {
+        if (allocation.mem.host == nullptr || allocation.retiring) {
             continue;
         }
         const unsigned char* base = static_cast<const unsigned char*>(allocation.mem.host);
@@ -439,7 +444,11 @@ hipError_t copy_device_to_device(bc250hip::Guard& guard, bc250hsa_device* dev,
                                  const Allocation* dst, uint64_t dst_offset,
                                  const Allocation* src, uint64_t src_offset, size_t bytes) {
     const uint64_t start = bc250hsa_ticks();
-    const bool mapped = dst->mem.host != nullptr && src->mem.host != nullptr;
+    // Both sides reachable by the host processor: through a mapping, or through the host views
+    // of a split allocation, which only layer 1 walks (BD-117).
+    const bool mapped = dst->cpu_access != BC250HSA_ACCESS_NONE &&
+                        src->cpu_access != BC250HSA_ACCESS_NONE;
+    const bool direct = dst->mem.host != nullptr && src->mem.host != nullptr;
     const bool overlap =
         ranges_overlap(src->mem.va + src_offset, dst->mem.va + dst_offset, bytes);
     FallbackReason reason = kFallbackOverlap;
@@ -489,6 +498,15 @@ hipError_t copy_device_to_device(bc250hip::Guard& guard, bc250hsa_device* dev,
         return held;
     }
     fallback(reason, "hipMemcpy device to device", refused);
+    if (!direct) {
+        const bc250hsa_status copied =
+            bc250hsa_copy_device_cpu(dev, &dst->mem, dst_offset, &src->mem, src_offset, bytes);
+        if (copied != BC250HSA_OK) {
+            return bc250hip::translate(copied);
+        }
+        fallback_done(bytes, start);
+        return hipSuccess;
+    }
     std::memcpy(static_cast<unsigned char*>(dst->mem.host) + dst_offset,
                 static_cast<const unsigned char*>(src->mem.host) + src_offset, bytes);
     bc250hsa_write_barrier();
@@ -603,7 +621,7 @@ hipError_t fill_now(bc250hip::Guard& guard, void* dst, int value, size_t bytes) 
     // and, with BC250_HIP_GPU_FILL=1, device memory it can. The default keeps the
     // host-processor fill for a mapped allocation, because a write of that mapping is
     // MEASURED at 15.6 GB/s and there is nothing to win (runtime_internal.h).
-    const bool must = allocation->mem.host == nullptr;
+    const bool must = allocation->cpu_access == BC250HSA_ACCESS_NONE;
     uint64_t start = 0;
     bc250hsa_status refused = BC250HSA_OK;   // a GPU fill that layer 1 refused, if any
     if (!host_pointer && (must || state().gpu_fill_mapped) && gpu_route(bytes, must)) {
@@ -646,9 +664,18 @@ hipError_t fill_now(bc250hip::Guard& guard, void* dst, int value, size_t bytes) 
         fallback(refused == BC250HSA_EUNSUPPORTED ? kFallbackNoCoherence : kFallbackRefused,
                  "hipMemset", refused);
     }
-    base = static_cast<unsigned char*>(allocation->mem.host) + offset;
-    std::memset(base, value, bytes);
-    bc250hsa_write_barrier();
+    if (allocation->mem.host == nullptr) {
+        // A split allocation: layer 1 walks its host views (BD-117).
+        const bc250hsa_status filled = bc250hsa_fill_device_cpu(
+            dev, &allocation->mem, offset, static_cast<uint8_t>(value & 0xFF), bytes);
+        if (filled != BC250HSA_OK) {
+            return bc250hip::translate(filled);
+        }
+    } else {
+        base = static_cast<unsigned char*>(allocation->mem.host) + offset;
+        std::memset(base, value, bytes);
+        bc250hsa_write_barrier();
+    }
     // Only a fill the GPU route refused is a fallback. The host-processor fill of a mapped
     // allocation is the default of gpu_fill_mapped and was never counted.
     if (refused != BC250HSA_OK) {
@@ -697,6 +724,18 @@ hipError_t allocate_device(size_t bytes, Allocation* out) {
     bc250hsa_mem mem;
     std::memset(&mem, 0, sizeof(mem));
     bc250hsa_status status = bc250hsa_alloc(dev, bytes, 0, BC250HSA_MEM_MAPPABLE, &mem);
+    uint32_t access = BC250HSA_ACCESS_NONE;
+    if (status == BC250HSA_OK && mem.host == nullptr &&
+        bc250hsa_memory_access(dev, &mem, &access) == BC250HSA_OK &&
+        access == BC250HSA_ACCESS_SCATTER) {
+        // A split allocation above the VidMm limit of one allocation (BD-117): one GPU range,
+        // no contiguous host view, and layer 1's host-processor calls reach every byte. It is
+        // complete as it is; a host-visible replacement of that size would be refused anyway.
+        warn_on_address_collision(mem.va);
+        out->mem = mem;
+        out->cpu_access = access;
+        return hipSuccess;
+    }
     if (status == BC250HSA_OK && mem.host == nullptr) {
         void* host = nullptr;
         const bc250hsa_status mapped = bc250hsa_map(dev, &mem, &host);
@@ -724,7 +763,25 @@ hipError_t allocate_device(size_t bytes, Allocation* out) {
     }
     warn_on_address_collision(mem.va);
     out->mem = mem;
+    out->cpu_access = mem.host != nullptr ? BC250HSA_ACCESS_DIRECT : BC250HSA_ACCESS_NONE;
     return hipSuccess;
+}
+
+// Puts a new allocation into the table. A retiring entry at the same address is one whose
+// GPU address layer 1 already gave back (BD-117); it moves aside, and layer 1 keeps what it
+// still owns until the device closes.
+void insert_allocation(const Allocation& allocation) {
+    bc250hip::State& s = state();
+    const auto old = s.by_va.find(allocation.mem.va);
+    if (old != s.by_va.end() && old->second.retiring) {
+        const auto host = s.va_by_host.find(old->second.mem.host);
+        if (host != s.va_by_host.end() && host->second == old->first) {
+            s.va_by_host.erase(host);
+        }
+        s.retired.push_back(old->second);
+        s.by_va.erase(old);
+    }
+    s.by_va[allocation.mem.va] = allocation;
 }
 
 }  // namespace
@@ -747,7 +804,7 @@ hipError_t hipMalloc(void** ptr, size_t size) {
     if (err != hipSuccess) {
         return fail(err);
     }
-    state().by_va[allocation.mem.va] = allocation;
+    insert_allocation(allocation);
     *ptr = reinterpret_cast<void*>(static_cast<uintptr_t>(allocation.mem.va));
     return hipSuccess;
 }
@@ -778,7 +835,8 @@ hipError_t hipHostMalloc(void** ptr, size_t size, unsigned int flags) {
         bc250hsa_free(dev, &allocation.mem);
         return fail(hipErrorOutOfMemory);
     }
-    state().by_va[allocation.mem.va] = allocation;
+    allocation.cpu_access = BC250HSA_ACCESS_DIRECT;
+    insert_allocation(allocation);
     state().va_by_host[allocation.mem.host] = allocation.mem.va;
     *ptr = allocation.mem.host;
     return hipSuccess;
@@ -828,12 +886,24 @@ static hipError_t free_allocation(bc250hip::Guard& guard, uint64_t va) {
             need = found->second.busy_fence;
             continue;
         }
+        // BD-117: layer 1 may fail to release an allocation and keep it retiring. The entry
+        // stays in the table, marked retiring, so that a later hipFree can retry the release
+        // and no other call can reach the memory. It leaves the table only when layer 1 freed it.
+        found->second.retiring = true;
         bc250hsa_mem mem = found->second.mem;
-        if (mem.host != nullptr) {
-            s.va_by_host.erase(mem.host);
+        const bc250hsa_status status = bc250hsa_free(dev, &mem);
+        if (status != BC250HSA_OK) {
+            found->second.mem = mem;
+            return bc250hip::translate(status);
+        }
+        if (found->second.mem.host != nullptr) {
+            const auto host = s.va_by_host.find(found->second.mem.host);
+            if (host != s.va_by_host.end() && host->second == va) {
+                s.va_by_host.erase(host);
+            }
         }
         s.by_va.erase(found);
-        return bc250hip::translate(bc250hsa_free(dev, &mem));
+        return hipSuccess;
     }
 }
 

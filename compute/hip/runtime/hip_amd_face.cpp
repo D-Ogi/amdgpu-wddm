@@ -20,10 +20,13 @@ using bc250hip::ModuleKind;
 using bc250hip::State;
 using bc250hip::state;
 
-// AMD's numbers for the errors our hipError_t does not name (hip_runtime_api.h of HIP 7.18).
-constexpr int kErrorInvalidSymbol = 13;
-constexpr int kErrorFileNotFound = 301;
-constexpr int kErrorNotFound = 500;
+// AMD's numbers for the errors that only the face returns (hip_runtime_api.h of HIP 7.18). Our
+// header names them too, so that hipGetErrorName and hipGetErrorString name them.
+constexpr int kErrorInvalidSymbol = hipErrorInvalidSymbol;
+constexpr int kErrorFileNotFound = hipErrorFileNotFound;
+constexpr int kErrorNotFound = hipErrorNotFound;
+static_assert(kErrorInvalidSymbol == 13 && kErrorFileNotFound == 301 && kErrorNotFound == 500,
+              "AMD's numbers of hipErrorInvalidSymbol, hipErrorFileNotFound and hipErrorNotFound");
 
 Module* program_module(void* handle) {
     for (Module* module : state().modules) {
@@ -38,7 +41,7 @@ const bc250hip::Allocation* host_allocation(const void* ptr, uint64_t* offset) {
     const unsigned char* want = static_cast<const unsigned char*>(ptr);
     for (const auto& entry : state().va_by_host) {
         const auto found = state().by_va.find(entry.second);
-        if (found == state().by_va.end()) {
+        if (found == state().by_va.end() || found->second.retiring) {
             continue;
         }
         const bc250hsa_mem& mem = found->second.mem;
@@ -137,9 +140,15 @@ int module_load_file(const char* path, void** module_out) {
     // of another thread's launch.
     std::FILE* file = std::fopen(path, "rb");
     if (file == nullptr) {
+        // hipErrorFileNotFound is the contract of hipModuleLoad for a missing file
+        // (hip_runtime_api.h of HIP 7.18). It is not an error of the runtime: hipBLASLt looks for
+        // Kernels.so-000-<arch>.hsaco, then the -xnack- and -xnack+ names, and a miss before the
+        // last one is normal, so the log gets an info line, as a hipModuleGetFunction miss does.
         // The path names a file of the application's own installation, not its data, so the
         // log may carry it.
-        return refuse("hipModuleLoad", path, kErrorFileNotFound);
+        bc250hip::log_line(BC250HSA_LOG_INFO, "hipModuleLoad: no file '%s' (hipErrorFileNotFound)",
+                           path);
+        return fail(kErrorFileNotFound);
     }
     std::vector<unsigned char> bytes;
     unsigned char chunk[65536];

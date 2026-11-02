@@ -45,6 +45,7 @@
 #define D3DKMTWaitForSynchronizationObjectFromCpu FakeWaitFromCpu
 #define D3DKMTGetDeviceState FakeGetDeviceState
 #define D3DKMTQueryVideoMemoryInfo FakeQueryVideoMemoryInfo
+#define D3DKMTReserveGpuVirtualAddress FakeReserveGpuVirtualAddress
 #include "../../bc250hsa/kmt_device.h"
 /* windows.h is in now, so this rename reaches only the two files below. */
 static HANDLE WINAPI FakeCreateEventW(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial,
@@ -76,6 +77,9 @@ typedef struct fake_alloc {
     uint8_t*      backing;
     int           live;
     int           va_live;
+    int           sparse;    /* backing is reserved address space, committed on demand */
+    int           local_resident;      /* counted in g_local_usage until destroyed */
+    int           nonlocal_resident;   /* counted in g_nonlocal_usage until destroyed */
 } fake_alloc;
 
 typedef struct fake_packet {
@@ -139,6 +143,9 @@ static int      g_hold;             /* 1: a submission waits for the test, or fo
 static uint32_t g_delay_ms;         /* the pump retires a submission this long after it */
 static int      g_submit_fail;
 static int      g_alloc_fail;
+static int      g_memory_failure_stage;
+static NTSTATUS g_memory_failure_status;
+static NTSTATUS g_memory_fallback_status;
 static int      g_corrupt_host;     /* a copy into GTT memory leaves the stale bytes */
 static uint32_t g_register_fail_at; /* the n-th fence wait registration fails, 0 never */
 static uint32_t g_event_fail_at;    /* the n-th CreateEventW fails, 0 never */
@@ -147,6 +154,10 @@ static int      g_error_next;       /* the next submission puts the device in it
 /* The local segment group: its budget and what this process uses of it (0 budget: no limit),
  * and a VidMm that refuses residency in the carve-out. MustSucceed puts the device in error. */
 static uint64_t g_local_budget, g_local_usage;
+/* The non-local group (BD-117). VidMm accepts a residency past this budget and fails it later on
+ * the paging queue, so the fake accepts it as well and counts it: no case may make one. */
+static uint64_t g_nonlocal_budget, g_nonlocal_usage;
+static uint32_t g_nonlocal_overcommits;
 static int      g_vram_resident_fail;
 static uint32_t g_must_succeed;
 
@@ -158,6 +169,103 @@ static uint32_t g_destroys, g_violations, g_faults, g_packets_run;
  * value below an earlier one, or a context that submitted while another's work was out. */
 static uint32_t g_side_escapes, g_uploads, g_bind_refusals, g_order_violations;
 static uint32_t g_context_creates, g_side_submits;
+
+/* BD-117, the aggregate allocations of tests/host/test_aggregate_alloc.c, which includes this
+ * file. Nothing below changes a case of this file: every knob is off after dev_init.
+ *   - GPU address reservations, and maps at a requested address inside one;
+ *   - sparse backing: an allocation above FAKE_SPARSE_BYTES gets reserved host address space,
+ *     and a case commits the pages it touches (fake_commit), so a multi-GiB child costs no
+ *     memory of the development PC;
+ *   - failure injection by kind of call: the n-th call of that kind fails with g_inj_status,
+ *     and with g_inj_persist every later one as well;
+ *   - scripted paging fence values, and what the paging waits asked for. */
+#define MAX_RESERVATIONS  8u
+#define FAKE_SPARSE_BYTES (64ull << 20)
+typedef struct fake_reservation {
+    uint64_t base;
+    uint64_t bytes;
+    int      live;
+} fake_reservation;
+enum { INJ_CREATE, INJ_RESIDENT, INJ_MAP, INJ_LOCK, INJ_UNLOCK, INJ_FREE_VA, INJ_DESTROY,
+       INJ_RESERVE, INJ_PAGING_WAIT, INJ_COUNT };
+static fake_reservation g_reservations[MAX_RESERVATIONS];
+static uint32_t g_reserves, g_reservation_frees, g_bad_frees, g_bad_destroys, g_locks;
+static uint32_t g_unlocks_at_init;   /* g_unlocks counts across devices; this is its value at dev_init */
+static uint64_t g_reserve_skew;      /* added to the base a reservation returns */
+static uint64_t g_map_skew;          /* added to the address a map at a requested base returns */
+static uint32_t g_inj_calls[INJ_COUNT];
+static int      g_inj_kind = -1;
+static uint32_t g_inj_at;
+static int      g_inj_persist;
+static NTSTATUS g_inj_status;
+static const uint64_t* g_paging_script;   /* values that map and residency return, in turn */
+static uint32_t g_paging_script_len, g_paging_script_at;
+static uint64_t g_paging_issued_max, g_paging_waited_max;
+static uint32_t g_paging_waits;
+/* While set, a paging wait checks that nothing of the allocation in progress is published yet:
+ * the device list has g_watch_records records and the caller's handle holds no address (0, or
+ * the 0xa5 the case filled it with). */
+static const bc250hsa_mem* g_watch_mem;
+static uint32_t g_watch_records;
+static uint32_t g_watch_violations;
+
+/* A second, one-shot failure of another kind, for a cleanup that fails after a construction
+ * failure. */
+static int      g_inj2_kind = -1;
+static uint32_t g_inj2_at;
+static NTSTATUS g_inj2_status;
+static NTSTATUS g_inj_last;   /* the status the last injected failure returned */
+
+static int inject(int kind)
+{
+    ++g_inj_calls[kind];
+    if (kind == g_inj2_kind && g_inj_calls[kind] == g_inj2_at) {
+        g_inj_last = g_inj2_status;
+        return 1;
+    }
+    if (kind == g_inj_kind &&
+        (g_inj_calls[kind] == g_inj_at || (g_inj_persist && g_inj_calls[kind] > g_inj_at))) {
+        g_inj_last = g_inj_status;
+        return 1;
+    }
+    return 0;
+}
+
+static void inject_set(int kind, uint32_t at, int persist, NTSTATUS status)
+{
+    memset(g_inj_calls, 0, sizeof(g_inj_calls));
+    g_inj_kind = kind; g_inj_at = at; g_inj_persist = persist; g_inj_status = status;
+    g_inj2_kind = -1; g_inj2_at = 0u; g_inj2_status = STATUS_SUCCESS;
+}
+
+static uint64_t paging_value(void)
+{
+    uint64_t v;
+    if (g_paging_script == NULL || g_paging_script_len == 0u) { return 0u; }
+    v = g_paging_script[g_paging_script_at++ % g_paging_script_len];
+    if (v > g_paging_issued_max) { g_paging_issued_max = v; }
+    return v;
+}
+
+static fake_reservation* reservation_holding(uint64_t va, uint64_t bytes)
+{
+    uint32_t i;
+    for (i = 0; i < MAX_RESERVATIONS; i++) {
+        const fake_reservation* r = &g_reservations[i];
+        if (r->live && va >= r->base && bytes <= r->bytes && va - r->base <= r->bytes - bytes) {
+            return &g_reservations[i];
+        }
+    }
+    return NULL;
+}
+
+static void backing_release(fake_alloc* a)
+{
+    if (a->backing == NULL) { return; }
+    if (a->sparse) { VirtualFree(a->backing, 0, MEM_RELEASE); } else { free(a->backing); }
+    a->backing = NULL;
+}
+
 
 static fake_context* context_by_handle(D3DKMT_HANDLE handle)
 {
@@ -211,12 +319,47 @@ static int outstanding(uint64_t va, uint64_t bytes)
     return 0;
 }
 
+/* The live mapping that holds the byte at va, and how many bytes of it follow. */
+static fake_alloc* alloc_at(uint64_t va, uint64_t* left)
+{
+    fake_alloc* a = alloc_by_va(va, 1u);
+    if (a != NULL) { *left = a->bytes - (va - a->va); }
+    return a;
+}
+
+/* A packet whose range crosses mappings, as a packet over an aggregate allocation does: the
+ * engine sees one GPU address range, so the fake runs it piece by piece, front to back. */
+static void run_packet_pieces(const fake_packet* p)
+{
+    uint64_t done = 0u;
+    while (done < p->bytes) {
+        uint64_t    dst_left = 0u, src_left = 0u, piece, i;
+        fake_alloc* dst = alloc_at(p->dst + done, &dst_left);
+        fake_alloc* src = p->fill ? NULL : alloc_at(p->src + done, &src_left);
+        if (dst == NULL || (!p->fill && src == NULL)) { ++g_faults; return; }
+        piece = p->bytes - done;
+        if (dst_left < piece) { piece = dst_left; }
+        if (!p->fill && src_left < piece) { piece = src_left; }
+        for (i = 0; i < piece; i++) {
+            const uint64_t at = done + i;
+            dst->backing[p->dst + at - dst->va] =
+                p->fill ? (uint8_t)(p->pattern >> (8u * (uint32_t)(at & 3u)))
+                        : src->backing[p->src + at - src->va];
+        }
+        done += piece;
+    }
+    ++g_packets_run;
+}
+
 static void run_packet(const fake_packet* p)
 {
     fake_alloc* dst = alloc_by_va(p->dst, p->bytes);
     uint64_t    i;
 
-    if (dst == NULL) { ++g_faults; return; }
+    if (dst == NULL || (!p->fill && alloc_by_va(p->src, p->bytes) == NULL)) {
+        run_packet_pieces(p);
+        return;
+    }
     if (p->fill) {
         for (i = 0; i < p->bytes; i++) {
             dst->backing[p->dst - dst->va + i] = (uint8_t)(p->pattern >> (8u * (uint32_t)(i & 3u)));
@@ -307,14 +450,29 @@ NTSTATUS APIENTRY FakeCreateAllocation2(D3DKMT_CREATEALLOCATION* create)
     const struct bc250hsa_alloc_blob* blob =
         (const struct bc250hsa_alloc_blob*)create->pAllocationInfo2[0].pPrivateDriverData;
     uint32_t i;
+    if (g_memory_failure_stage == 1) {
+        NTSTATUS refusal = blob->preferred_heap == BC250HSA_HEAP_VRAM ?
+                           g_memory_failure_status : g_memory_fallback_status;
+        if (!NT_SUCCESS(refusal)) { return refusal; }
+    }
     if (g_alloc_fail) { return STATUS_NO_MEMORY; }
+    if (inject(INJ_CREATE)) { return g_inj_last; }
+    /* The limit BD-117 measured on unit A: VidMm refuses a larger allocation as a parameter
+     * error, whatever the budget. */
+    if (blob->alloc_size > 0xFFFF0000ull) { return STATUS_INVALID_PARAMETER; }
     for (i = 0; i < MAX_ALLOCS; i++) {
         if (!g_allocs[i].live) { break; }
     }
     CHECK(i < MAX_ALLOCS);
     if (i == MAX_ALLOCS) { return STATUS_NO_MEMORY; }
     memset(&g_allocs[i], 0, sizeof(g_allocs[i]));
-    g_allocs[i].backing = (uint8_t*)calloc(1, (size_t)blob->alloc_size);
+    if (blob->alloc_size > FAKE_SPARSE_BYTES) {
+        g_allocs[i].sparse = 1;
+        g_allocs[i].backing = (uint8_t*)VirtualAlloc(NULL, (SIZE_T)blob->alloc_size, MEM_RESERVE,
+                                                     PAGE_READWRITE);
+    } else {
+        g_allocs[i].backing = (uint8_t*)calloc(1, (size_t)blob->alloc_size);
+    }
     if (g_allocs[i].backing == NULL) { return STATUS_NO_MEMORY; }
     g_allocs[i].handle = ++g_next_handle;
     g_allocs[i].bytes = blob->alloc_size;
@@ -328,20 +486,72 @@ NTSTATUS APIENTRY FakeCreateAllocation2(D3DKMT_CREATEALLOCATION* create)
 NTSTATUS APIENTRY FakeMapGpuVirtualAddress(D3DDDI_MAPGPUVIRTUALADDRESS* map)
 {
     fake_alloc* a = alloc_by_handle(map->hAllocation);
+    if (g_memory_failure_stage == 2 && a != NULL) {
+        NTSTATUS refusal = a->heap == BC250HSA_HEAP_VRAM ?
+                           g_memory_failure_status : g_memory_fallback_status;
+        if (!NT_SUCCESS(refusal)) { return refusal; }
+    }
     CHECK(a != NULL);
     if (a == NULL) { return STATUS_INVALID_PARAMETER; }
+    if (inject(INJ_MAP)) { return g_inj_last; }
+    if (map->BaseAddress != 0u) {
+        /* A map at a requested address must lie in a reservation (d3dukmdt.h,
+         * D3DDDI_MAPGPUVIRTUALADDRESS) and covers the whole allocation. */
+        CHECK(reservation_holding(map->BaseAddress, a->bytes) != NULL);
+        CHECK(map->OffsetInPages == 0u && map->SizeInPages * 4096u == a->bytes);
+        CHECK(map->BaseAddress % 4096u == 0u);
+        a->va = map->BaseAddress + g_map_skew;
+        a->va_live = 1;
+        map->VirtualAddress = a->va;
+        map->PagingFenceValue = paging_value();
+        return STATUS_SUCCESS;
+    }
     a->va = g_next_va;
     a->va_live = 1;
-    g_next_va += 0x10000000ull;   /* 256 MiB apart: no test allocation is larger */
+    g_next_va += 0x10000000ull;   /* 256 MiB apart: no single test allocation is larger */
     map->VirtualAddress = a->va;
-    map->PagingFenceValue = 0u;
+    map->PagingFenceValue = paging_value();
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS APIENTRY FakeReserveGpuVirtualAddress(D3DDDI_RESERVEGPUVIRTUALADDRESS* reserve)
+{
+    uint32_t i;
+    uint64_t base;
+    if (inject(INJ_RESERVE)) { return g_inj_last; }
+    CHECK(reserve->hAdapter == g_dev->adapter);
+    CHECK(reserve->BaseAddress == 0u);
+    CHECK(reserve->Size != 0u && reserve->Size % 0x10000u == 0u);
+    CHECK(reserve->MinimumAddress == g_dev->va_window_start &&
+          reserve->MaximumAddress == g_dev->va_window_end);
+    for (i = 0; i < MAX_RESERVATIONS; i++) {
+        if (!g_reservations[i].live) { break; }
+    }
+    CHECK(i < MAX_RESERVATIONS);
+    if (i == MAX_RESERVATIONS) { return STATUS_NO_MEMORY; }
+    base = ((g_next_va + 0xFFFFu) & ~0xFFFFull) + g_reserve_skew;
+    if (base + reserve->Size > reserve->MaximumAddress) { return STATUS_NO_MEMORY; }
+    g_reservations[i].base = base;
+    g_reservations[i].bytes = reserve->Size;
+    g_reservations[i].live = 1;
+    /* The next range starts on a fresh 256 MiB step, as the maps above do. */
+    g_next_va = (base + reserve->Size + 0x10000000ull) & ~0xFFFFFFFull;
+    reserve->VirtualAddress = base;
+    reserve->PagingFenceValue = 0u;
+    ++g_reserves;
     return STATUS_SUCCESS;
 }
 
 NTSTATUS APIENTRY FakeMakeResident(D3DDDI_MAKERESIDENT* resident)
 {
     fake_alloc* a = alloc_by_handle(resident->AllocationList[0]);
-    resident->PagingFenceValue = 0u;
+    if (g_memory_failure_stage == 3 && a != NULL) {
+        NTSTATUS refusal = a->heap == BC250HSA_HEAP_VRAM ?
+                           g_memory_failure_status : g_memory_fallback_status;
+        if (!NT_SUCCESS(refusal)) { return refusal; }
+    }
+    if (inject(INJ_RESIDENT)) { return g_inj_last; }
+    resident->PagingFenceValue = paging_value();
     if (resident->Flags.MustSucceed) { ++g_must_succeed; }
     if (a != NULL && a->heap == BC250HSA_HEAP_VRAM) {
         /* VidMm without CantTrimFurther: a residency past the budget is refused. */
@@ -350,6 +560,13 @@ NTSTATUS APIENTRY FakeMakeResident(D3DDDI_MAKERESIDENT* resident)
             return STATUS_NO_MEMORY;
         }
         g_local_usage += a->bytes;
+        a->local_resident = 1;
+    } else if (a != NULL && a->heap == BC250HSA_HEAP_GTT) {
+        if (g_nonlocal_budget != 0u && g_nonlocal_usage + a->bytes > g_nonlocal_budget) {
+            ++g_nonlocal_overcommits;
+        }
+        g_nonlocal_usage += a->bytes;
+        a->nonlocal_resident = 1;
     }
     return STATUS_SUCCESS;
 }
@@ -358,7 +575,8 @@ NTSTATUS APIENTRY FakeQueryVideoMemoryInfo(D3DKMT_QUERYVIDEOMEMORYINFO* query)
 {
     CHECK(query->hAdapter == g_dev->adapter);
     if (query->MemorySegmentGroup != D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL) {
-        query->Budget = UINT64_MAX;
+        query->Budget = g_nonlocal_budget != 0u ? g_nonlocal_budget : UINT64_MAX;
+        query->CurrentUsage = g_nonlocal_usage;
         return STATUS_SUCCESS;
     }
     query->Budget = g_local_budget != 0u ? g_local_budget : UINT64_MAX;
@@ -370,13 +588,16 @@ NTSTATUS APIENTRY FakeLock2(D3DKMT_LOCK2* lock)
 {
     fake_alloc* a = alloc_by_handle(lock->hAllocation);
     if (a == NULL) { return STATUS_INVALID_PARAMETER; }
+    if (inject(INJ_LOCK)) { return g_inj_last; }
     lock->pData = a->backing;
+    ++g_locks;
     return STATUS_SUCCESS;
 }
 
 NTSTATUS APIENTRY FakeUnlock2(const D3DKMT_UNLOCK2* unlock)
 {
     fake_alloc* a = alloc_by_handle(unlock->hAllocation);
+    if (inject(INJ_UNLOCK)) { return g_inj_last; }
     ++g_unlocks;
     EnterCriticalSection(&g_fake);
     if (a != NULL && outstanding(a->va, a->bytes)) { ++g_violations; }
@@ -386,26 +607,55 @@ NTSTATUS APIENTRY FakeUnlock2(const D3DKMT_UNLOCK2* unlock)
 
 NTSTATUS APIENTRY FakeFreeGpuVirtualAddress(const D3DKMT_FREEGPUVIRTUALADDRESS* free_va)
 {
-    fake_alloc* a = alloc_by_va(free_va->BaseAddress, 1u);
+    fake_alloc*       a;
+    fake_reservation* r;
+    uint32_t          i;
+    if (inject(INJ_FREE_VA)) { return g_inj_last; }
     ++g_free_vas;
     EnterCriticalSection(&g_fake);
     if (outstanding(free_va->BaseAddress, free_va->Size)) { ++g_violations; }
     LeaveCriticalSection(&g_fake);
-    if (a != NULL) { a->va_live = 0; }
+    /* A whole reservation: it goes, with every mapping inside it. Only the exact range that
+     * the reservation returned frees it. */
+    r = reservation_holding(free_va->BaseAddress, 1u);
+    if (r != NULL && r->base == free_va->BaseAddress) {
+        CHECK(free_va->Size == r->bytes);
+        for (i = 0; i < MAX_ALLOCS; i++) {
+            fake_alloc* m = &g_allocs[i];
+            if (m->live && m->va_live && m->va >= r->base && m->va - r->base < r->bytes) {
+                m->va_live = 0;
+            }
+        }
+        r->live = 0;
+        ++g_reservation_frees;
+        return STATUS_SUCCESS;
+    }
+    a = alloc_by_va(free_va->BaseAddress, 1u);
+    if (a != NULL && a->va == free_va->BaseAddress) {
+        a->va_live = 0;
+    } else {
+        ++g_bad_frees;   /* an address nobody holds, or a range freed twice */
+    }
     return STATUS_SUCCESS;
 }
 
 NTSTATUS APIENTRY FakeDestroyAllocation2(const D3DKMT_DESTROYALLOCATION2* destroy)
 {
     UINT i;
+    if (inject(INJ_DESTROY)) { return g_inj_last; }
     for (i = 0; i < destroy->AllocationCount; i++) {
         fake_alloc* a = alloc_by_handle(destroy->phAllocationList[i]);
         ++g_destroys;
-        if (a == NULL) { continue; }
+        if (a == NULL) { ++g_bad_destroys; continue; }
         EnterCriticalSection(&g_fake);
         if (outstanding(a->va, a->bytes)) { ++g_violations; }
         LeaveCriticalSection(&g_fake);
-        free(a->backing);
+        /* A case that reset the counters with this allocation live counts from zero. */
+        if (a->local_resident) { g_local_usage -= a->bytes < g_local_usage ? a->bytes : g_local_usage; }
+        if (a->nonlocal_resident) {
+            g_nonlocal_usage -= a->bytes < g_nonlocal_usage ? a->bytes : g_nonlocal_usage;
+        }
+        backing_release(a);
         memset(a, 0, sizeof(*a));
     }
     return STATUS_SUCCESS;
@@ -561,7 +811,23 @@ NTSTATUS APIENTRY FakeGetDeviceState(D3DKMT_GETDEVICESTATE* state)
 
 NTSTATUS APIENTRY FakeWaitFromCpu(const D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMCPU* wait)
 {
-    if (wait->ObjectHandleArray[0] == FAKE_PAGING_FENCE) { return STATUS_SUCCESS; }
+    if (wait->ObjectHandleArray[0] == FAKE_PAGING_FENCE) {
+        ++g_paging_waits;
+        if (wait->FenceValueArray[0] > g_paging_waited_max) {
+            g_paging_waited_max = wait->FenceValueArray[0];
+        }
+        if (g_watch_mem != NULL) {
+            uint32_t                     records = 0u;
+            const bc250hsa_alloc_record* r;
+            for (r = g_dev->allocations; r != NULL; r = r->next) { ++records; }
+            if (records != g_watch_records ||
+                (g_watch_mem->va != 0u && g_watch_mem->va != 0xa5a5a5a5a5a5a5a5ull)) {
+                ++g_watch_violations;
+            }
+        }
+        if (inject(INJ_PAGING_WAIT)) { return g_inj_last; }
+        return STATUS_SUCCESS;
+    }
     CHECK(wait->ObjectHandleArray[0] == FAKE_FENCE && wait->hAsyncEvent != NULL);
     ++g_register_calls;
     if (g_register_fail_at != 0u && g_register_calls == g_register_fail_at) {
@@ -603,7 +869,12 @@ static HANDLE WINAPI FakeCreateEventW(LPSECURITY_ATTRIBUTES attributes, BOOL man
 
 /* What kmt_device.c would provide. */
 bc250hsa_status bc250hsa_os_status(const char* what, NTSTATUS status)
-{ (void)what; bc250hsa_set_os_status((int32_t)status); return BC250HSA_EOS; }
+{
+    (void)what;
+    if (NT_SUCCESS(status)) { return BC250HSA_OK; }   /* as kmt_device.c answers a success */
+    bc250hsa_set_os_status((int32_t)status);
+    return BC250HSA_EOS;
+}
 void bc250hsa_mark_lost(struct bc250hsa_device* d, const char* why)
 {
     /* The line kmt_device.c logs, so that a case shows which read lost the device. */
@@ -668,10 +939,21 @@ static void dev_init(struct bc250hsa_device* d)
     g_pending_count = 0u;
     g_fence_mem = 0u; g_retired = 0u; g_submitted = 0u; g_removed = 0;
     g_hold = 0; g_delay_ms = 0u; g_submit_fail = 0; g_alloc_fail = 0; g_corrupt_host = 0;
+    g_memory_failure_stage = 0; g_memory_failure_status = STATUS_SUCCESS;
+    g_memory_fallback_status = STATUS_SUCCESS;
     g_register_fail_at = 0u; g_event_fail_at = 0u;
     g_context_fail = 0; g_error_next = 0; g_device_error = 0; g_error_pending = 0;
     g_local_budget = 0u; g_local_usage = 0u; g_vram_resident_fail = 0;
+    g_nonlocal_budget = 0u; g_nonlocal_usage = 0u; g_nonlocal_overcommits = 0u;
     g_exec_state = D3DKMT_DEVICEEXECUTION_ACTIVE;
+    memset(g_reservations, 0, sizeof(g_reservations));
+    g_reserves = g_reservation_frees = g_bad_frees = g_bad_destroys = g_locks = 0u;
+    g_unlocks_at_init = g_unlocks;
+    g_reserve_skew = 0u; g_map_skew = 0u;
+    inject_set(-1, 0u, 0, STATUS_SUCCESS);
+    g_paging_script = NULL; g_paging_script_len = 0u; g_paging_script_at = 0u;
+    g_paging_issued_max = 0u; g_paging_waited_max = 0u; g_paging_waits = 0u;
+    g_watch_mem = NULL; g_watch_records = 0u; g_watch_violations = 0u;
     memset(g_contexts, 0, sizeof(g_contexts));
     g_contexts[0].handle = d->context;
     g_context_count = 1u;
@@ -699,7 +981,7 @@ static void dev_finish(struct bc250hsa_device* d, int quarantine)
     CHECK(g_state_wrong == 0u);        /* every state query names this device and EXECUTION */
     g_state_wrong = 0u;
     for (i = 0; i < MAX_ALLOCS; i++) {
-        if (g_allocs[i].live) { free(g_allocs[i].backing); }
+        if (g_allocs[i].live) { backing_release(&g_allocs[i]); }
         memset(&g_allocs[i], 0, sizeof(g_allocs[i]));
     }
     if (g_waiter != NULL) { CloseHandle(g_waiter); g_waiter = NULL; }
@@ -973,7 +1255,8 @@ static void case_control_inconclusive(int kind)
     if (kind == 2) { g_event_fail_at = g_event_calls + 1u; }
     if (kind == 3) { g_alloc_fail = 1; }
     status = bc250hsa_gpu_copy_ready(&d, &ready);
-    CHECK(status == ((kind == 0) ? BC250HSA_ETIMEOUT : BC250HSA_EOS) && ready == 0u);
+    CHECK(status == ((kind == 0) ? BC250HSA_ETIMEOUT :
+                     (kind == 3) ? BC250HSA_ENOMEM : BC250HSA_EOS) && ready == 0u);
     CHECK(d.gpu_copy_control == BC250HSA_CONTROL_UNTRIED && !d.device_lost);
     CHECK(counters(&c1) && c1.gpu_copy_control_failed == c0.gpu_copy_control_failed);
     if (kind != 3) {
@@ -1740,6 +2023,70 @@ static void case_copy_lock(void)
 #endif
 #endif
 
+static void case_allocation_errors(void)
+{
+    static const NTSTATUS statuses[] = {
+        STATUS_NO_MEMORY, STATUS_INSUFFICIENT_RESOURCES, STATUS_COMMITMENT_LIMIT,
+        STATUS_GRAPHICS_NO_VIDEO_MEMORY, STATUS_INVALID_PARAMETER, STATUS_ACCESS_DENIED,
+        STATUS_GRAPHICS_GPU_EXCEPTION_ON_DEVICE
+    };
+    unsigned i, j;
+    int stage;
+    printf("copy lifecycle: typed allocation refusals, cleanup and recovery\n");
+    for (stage = 1; stage <= 3; ++stage) {
+        for (i = 0; i < sizeof(statuses) / sizeof(statuses[0]); ++i) {
+            struct bc250hsa_device d;
+            bc250hsa_mem mem;
+            uint32_t creates, destroys, free_vas;
+            dev_init(&d);
+            creates = g_creates; destroys = g_destroys; free_vas = g_free_vas;
+            g_memory_failure_stage = stage;
+            g_memory_failure_status = statuses[i];
+            g_memory_fallback_status = statuses[i];
+            memset(&mem, 0xa5, sizeof(mem));
+            /* MAPPABLE is hipMalloc's actual flag: both VRAM and fallback GTT
+             * refuse, so both partial allocations must be released. */
+            CHECK(bc250hsa_alloc(&d, 4096u, 0u, BC250HSA_MEM_MAPPABLE, &mem) ==
+                  (i < 4u ? BC250HSA_ENOMEM : BC250HSA_EOS));
+            CHECK(bc250hsa_last_os_status() == (int32_t)statuses[i]);
+            CHECK(mem.opaque == NULL && mem.va == 0u && mem.bytes == 0u);
+            CHECK(d.allocations == NULL && !d.device_lost);
+            CHECK(g_creates - creates == (stage > 1 ? 2u : 0u));
+            CHECK(g_destroys - destroys == g_creates - creates);
+            CHECK(g_free_vas - free_vas == (stage > 2 ? 2u : 0u));
+            for (j = 0; j < MAX_ALLOCS; ++j) { CHECK(!g_allocs[j].live); }
+            g_memory_failure_stage = 0;
+            CHECK(bc250hsa_alloc(&d, 4096u, 0u, BC250HSA_MEM_MAPPABLE, &mem) == BC250HSA_OK);
+            CHECK(bc250hsa_free(&d, &mem) == BC250HSA_OK);
+            dev_finish(&d, 0);
+        }
+        for (i = 0; i < 2u; ++i) {
+            struct bc250hsa_device d;
+            bc250hsa_mem mem;
+            dev_init(&d);
+            g_memory_failure_stage = stage;
+            g_memory_failure_status = STATUS_NO_MEMORY;
+            g_memory_fallback_status = i == 0u ? STATUS_SUCCESS : STATUS_ACCESS_DENIED;
+            CHECK(bc250hsa_alloc(&d, 4096u, 0u, BC250HSA_MEM_MAPPABLE, &mem) ==
+                  (i == 0u ? BC250HSA_OK : BC250HSA_EOS));
+            if (i == 0u) {
+                fake_alloc* a = alloc_by_handle(((bc250hsa_alloc_record*)mem.opaque)->handle);
+                CHECK(a != NULL && a->heap == BC250HSA_HEAP_GTT);
+                CHECK(bc250hsa_free(&d, &mem) == BC250HSA_OK);
+            } else {
+                CHECK(bc250hsa_last_os_status() == (int32_t)STATUS_ACCESS_DENIED);
+                CHECK(mem.opaque == NULL && mem.va == 0u);
+            }
+            CHECK(d.allocations == NULL && !d.device_lost);
+            for (j = 0; j < MAX_ALLOCS; ++j) { CHECK(!g_allocs[j].live); }
+            dev_finish(&d, 0);
+        }
+    }
+}
+
+/* tests/host/test_aggregate_alloc.c includes this file for its fake kernel driver and brings
+ * its own main. */
+#ifndef BC250HSA_LIFECYCLE_NO_MAIN
 int main(void)
 {
     int kind;
@@ -1747,6 +2094,7 @@ int main(void)
     bc250hsa_set_log(print_log, NULL, BC250HSA_LOG_INFO);
     g_next_handle = 0x100u;
     launch_init();
+    case_allocation_errors();
     case_lab_shape(0);
     case_lab_shape(1);
     case_two_contexts_one_fence();
@@ -1772,3 +2120,4 @@ int main(void)
     printf("copy lifecycle: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }
+#endif
