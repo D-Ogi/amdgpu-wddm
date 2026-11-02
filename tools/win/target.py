@@ -126,6 +126,26 @@ def script_arg(arg):
 # last statement succeeded, with the last native exit code when that statement failed and set one, and with 1 for
 # a failed cmdlet, as before.
 PASS_EXIT = "; exit $LASTEXITCODE"
+
+# BD-051: the in-process KMD reader. A lab script that polls the driver dot-sources it from its own directory, so a
+# poll starts no bc250kmd_cli process inside the ssh session.
+KMD_READER = Path(__file__).resolve().parent / "kmdread" / "kmd-reader.ps1"
+
+
+def script_companions(local_path):
+    """The files that `run_script` pushes beside a script: kmd-reader.ps1 when the script names it. A copy beside the
+    script (a frozen kit) comes first, else the one of this repository."""
+    path = Path(local_path)
+    try:
+        text = path.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError:
+        return []
+    if path.name.lower() == "kmd-reader.ps1" or "kmd-reader.ps1" not in text:
+        return []
+    for candidate in (path.with_name("kmd-reader.ps1"), KMD_READER):
+        if candidate.is_file():
+            return [str(candidate)]
+    return []
 INLINE_STATUS = ("\n$bc250Ok = $?; $bc250Code = $LASTEXITCODE\n"
                  "if ($bc250Ok) { exit 0 } elseif ($bc250Code) { exit $bc250Code } else { exit 1 }\n")
 
@@ -268,7 +288,7 @@ class Target:
         """Copy a .ps1 over and run it with -File. Returns the CompletedProcess, so the caller sees stderr
         and the exit code; inline PowerShell through ssh mangles quotes, a file does not."""
         remote_dir = remote_dir or self.cfg["tmp_dir"]
-        self.push([local_path], remote_dir)
+        self.push([local_path] + script_companions(local_path), remote_dir)
         remote = remote_dir.rstrip("\\") + "\\" + os.path.basename(local_path)
         return self.run_staged(remote, args, timeout=timeout)
 

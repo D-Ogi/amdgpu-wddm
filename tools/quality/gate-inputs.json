@@ -269,6 +269,12 @@
         "documents"
       ]
     },
+    "spawn-loop": {
+      "timeout": 600
+    },
+    "kmdread": {
+      "timeout": 600
+    },
     "third-party-doc": {
       "inputs": [
         "documents"

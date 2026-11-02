@@ -77,6 +77,13 @@ in the workspace scratch directory and is not part of this repository, because e
 copy of the package as evidence. `session.py` and `profile-check.py` therefore ask for the kit:
 `BC250_ROOT` names the workspace root, by default the parent directory of this repository.
 
+The kit also stages `tools/win/kmdread/kmd-reader.ps1` beside `game-runtime.ps1` and `kmdlog-stream.ps1`. Both
+read the clock, the temperature and the driver log through it, in their own process, from the installed
+`bc250control.dll`. Without it, `kmdlog-stream.ps1` writes a `lost reader` line and records only the memory
+counters, and `game-runtime.ps1` takes the temperature from the overlay. Neither one starts `bc250kmd_cli`
+in its loop again: one process start every second inside an ssh session is one half of the sshd accept stall
+of BD-051.
+
 The host-side tools reach the lab only through `tools/win/target.py`, which holds the address and the ssh
 options, and they use the overlay through `tools/win/bc250mon/mon.py`. No address and no key is in this
 repository.

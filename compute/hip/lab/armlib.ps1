@@ -350,6 +350,52 @@ function New-ArmTctlSampler {
     }.GetNewClosure()
 }
 
+# BD-051: the same "clock read", sent in this process through the release bc250control.dll by kmd-reader.ps1 (staged
+# beside this file), so the arm starts no process for a sample. A loop that starts a process every few seconds inside
+# an ssh session is one half of the sshd accept stall. The reading is bounded by its own timeout and starts no helper,
+# so there is nothing to kill; the band check is the one of Read-ArmTctl.
+function Read-ArmTctlInProcess {
+    param([double]$TimeoutSec = 10)
+    $ms = [int]([math]::Max(250, $TimeoutSec * 1000))
+    $c = Read-KmdClock -TimeoutMs $ms
+    if (-not $c.Ok) {
+        return [pscustomobject]@{ Ok = $false; Tctl = $null; Line = ''; Reason = "the clock read failed: $($c.Reason)" }
+    }
+    $tctl = [double]$c.TemperatureMc / 1000.0
+    if ($tctl -lt 5.0 -or $tctl -gt 130.0) {
+        return [pscustomobject]@{ Ok = $false; Tctl = $null; Line = $c.Line
+                                  Reason = "the clock read gave $tctl C, which is outside 5 to 130 C" }
+    }
+    return [pscustomobject]@{ Ok = $true; Tctl = $tctl; Line = $c.Line; Reason = '' }
+}
+
+# The default sampler of an arm: the in-process reader when kmd-reader.ps1 is staged beside this file and loads, else
+# the bounded CLI sampler above. $script:ArmSamplerKind says which one, and the report carries it.
+$script:ArmSamplerKind = ''
+# The reader's functions must live in this file's scope, so the dot-source is here and not in a function.
+$script:ArmReaderFile = Join-Path $PSScriptRoot 'kmd-reader.ps1'
+if (Test-Path -LiteralPath $script:ArmReaderFile) { . $script:ArmReaderFile }
+function New-ArmDefaultSampler {
+    param([double]$TimeoutSec = 10)
+    if (Get-Command Initialize-KmdReader -CommandType Function -ErrorAction SilentlyContinue) {
+        try {
+            $loaded = Initialize-KmdReader
+            $script:ArmSamplerKind = 'in-process ' + $loaded.DllPath
+            return {
+                param([double]$BudgetSec = 0)
+                $t = $TimeoutSec
+                if ($BudgetSec -gt 0) { $t = [math]::Max(0.25, [math]::Min($TimeoutSec, $BudgetSec - 0.25)) }
+                Read-ArmTctlInProcess -TimeoutSec $t
+            }.GetNewClosure()
+        } catch {
+            $script:ArmSamplerKind = 'cli, the reader did not load: ' + $_.Exception.Message
+        }
+    } else {
+        $script:ArmSamplerKind = 'cli, kmd-reader.ps1 is not staged beside armlib.ps1'
+    }
+    return New-ArmTctlSampler -Cli (Get-ArmClockCli) -TimeoutSec $TimeoutSec
+}
+
 # One sample inside a budget. Below ArmMinSampleSec the sampler is not called: there is no room for
 # a read that can be bounded, and a read that cannot be bounded is what put the arm over its limit.
 function Invoke-ArmBoundedSample {
@@ -454,7 +500,9 @@ function Invoke-LabArm {
     $errFile = Join-Path $Dir "$Name-$stamp.err.txt"
 
     if (-not $Sampler) {
-        $Sampler = New-ArmTctlSampler -Cli (Get-ArmClockCli) -TimeoutSec $HelperTimeoutSec
+        $Sampler = New-ArmDefaultSampler -TimeoutSec $HelperTimeoutSec
+    } else {
+        $script:ArmSamplerKind = 'given by the caller'
     }
     if (-not $Terminator) {
         # The kill receives only the remaining cleanup budget; zero means do not start.
@@ -486,6 +534,7 @@ function Invoke-LabArm {
         tctl_max = $null
         tctl_after = $null
         telemetry_failures = 0
+        sampler = $script:ArmSamplerKind
         env = @{}
         stdout_path = $outFile
         stderr_path = $errFile

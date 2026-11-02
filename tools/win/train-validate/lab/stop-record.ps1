@@ -50,11 +50,22 @@ function Show($label, $r) {
     if ($null -eq $r) { "  $label : no record at all"; return }
     foreach ($n in $r.PSObject.Properties.Name) { '  {0} {1} = {2}' -f $label, $n, $r.$n }
 }
+# BD-051: the health reads go through kmd-reader.ps1 in this process (target.py ps pushes it beside this script), so
+# the wait for a confirmed start below starts no bc250kmd_cli process every 3 s inside the ssh session. The reader
+# opens the adapter for each reading, as the CLI does, so a disabled device is a failed reading and not a stale one.
+$script:Reader = Join-Path $PSScriptRoot 'kmd-reader.ps1'
+$script:ReaderState = 'not staged beside this script'
+if (Test-Path -LiteralPath $script:Reader) {
+    . $script:Reader
+    try { $null = Initialize-KmdReader; $script:ReaderState = 'loaded' } catch { $script:ReaderState = $_.Exception.Message }
+}
+"kmd reader: $script:ReaderState"
+if ($script:ReaderState -ne 'loaded') { $problems.Add('the start health is unreadable: kmd-reader.ps1 ' + $script:ReaderState) }
 function HealthFlags {
-    if (-not $cli -or -not (Test-Path -LiteralPath $cli)) { return $null }
-    $line = (& $cli health read 2>&1 | Select-String 'flags=(\d+)')
-    if (-not $line) { return $null }
-    return [int]([regex]::Match($line.Line, 'flags=(\d+)').Groups[1].Value)
+    if ($script:ReaderState -ne 'loaded') { return $null }
+    try { $line = Read-KmdHealth -TimeoutMs 3000 } catch { return $null }
+    if (-not $line -or $line -notmatch 'flags=(\d+)') { return $null }
+    return [int]$Matches[1]
 }
 # A confirmed start: FULL, READY, VISIBLE and CONFIRMED (15), with QUIET (16, KMD 0.7.216.65) allowed beside them.
 function IsConfirmed($flags) { return ($flags -eq 15 -or $flags -eq 31) }

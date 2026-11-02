@@ -150,6 +150,11 @@ try {
 # The lab's sshd watch (BD-051) under Windows PowerShell 5.1 against a stand-in sshd on 127.0.0.1: log-only heals, a
 # stub for the forensics, no service restarted.
 Check 'lab-emerg-watch' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Out\lab-emerg-watch").FullName; & python -B -m unittest discover -s "$repo\tools\win\lab-emerg" -p 'test_*.py' }
+ # BD-051: no new polling loop that starts a process each round (spawn_loop_baseline.txt is the ratchet; 600 s in
+ # gate-inputs.json: it parses about 1600 scripts, 43 s alone on six PowerShell processes). The in-process KMD reader
+ # that replaces those loops is tested against the CLI on a fake driver built from bc250kmd_cli.c.
+ Check 'spawn-loop' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Out\spawn-loop").FullName; & python -B "$repo\tools\quality\spawn_loop_lint.py" --root $repo }
+ Check 'kmdread' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Out\kmdread").FullName; $env:BC250_ROOT=$Workspace; if($Kits){ $env:BC250_KITS=$Kits }; & python -B -m unittest discover -s "$repo\tools\win\kmdread" -p 'test_*.py' }
  # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest, for the reason the ledger and
  # release-provenance gates hold 600 s: 43 host tests of Python, which compete for the same cores as every
  # other Python gate under the 24 workers of the full profile. Measured: 50.7 s alone, 57.6 s to 102.0 s over

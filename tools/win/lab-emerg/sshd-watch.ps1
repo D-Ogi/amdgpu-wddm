@@ -187,6 +187,7 @@ $cycleNo = 0
 $hourProbes = 0
 $hourBad = 0
 $hourStart = [DateTime]::UtcNow
+# spawn-loop-ok: the probe is an in-process TCP read; a process starts only for a heal or forensics after a confirmed stall
 while ($true) {
     if (Test-Path -LiteralPath $stopPath) { Write-WatchLog 'stop file: the watch ends'; break }
     if ($Cycles -gt 0 -and $cycleNo -ge $Cycles) { Write-WatchLog "watch ends after $cycleNo probes"; break }
