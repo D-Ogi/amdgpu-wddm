@@ -133,16 +133,18 @@ int main(int argc, char **argv) {
     const char *manifestPath = NULL;
     const char *cacheDir = NULL;
     int pipelines = 16;
+    uint32_t seedBase = 0;
 
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
         if (!strcmp(a, "--help")) {
             puts(
-                "vkpipecache [--icd DLL | --manifest JSON] [--pipelines N] [--cache-dir DIR]\n"
+                "vkpipecache [--icd DLL | --manifest JSON] [--pipelines N] [--cache-dir DIR] [--seed-base N]\n"
                 "  --icd DLL       load this ICD DLL directly (lab route for elevated sessions)\n"
                 "  --manifest JSON hand this ICD manifest to the loader (VK_DRIVER_FILES)\n"
                 "  --pipelines N   number of compute pipelines to create (default 16, max 256)\n"
                 "  --cache-dir DIR directory to check for Mesa disk cache files (default: $MESA_SHADER_CACHE_DIR)\n"
+                "  --seed-base N   offset added to each pipeline's specialization constant (default 0)\n"
                 "Exit: 0 ok, 1 pipeline or verification failed, 2 usage, 3 Vulkan/system error.");
             return 0;
         }
@@ -151,6 +153,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(a, "--manifest")) manifestPath = argv[++i];
         else if (!strcmp(a, "--pipelines")) { pipelines = atoi(argv[++i]); if (pipelines < 1 || pipelines > MAX_PIPELINES) { fprintf(stderr, "--pipelines: 1..%d\n", MAX_PIPELINES); return 2; } }
         else if (!strcmp(a, "--cache-dir")) cacheDir = argv[++i];
+        else if (!strcmp(a, "--seed-base")) { seedBase = (uint32_t)strtoul(argv[++i], NULL, 0); }
         else { fprintf(stderr, "unknown option: %s\n", a); return 2; }
     }
 
@@ -267,7 +270,7 @@ int main(int argc, char **argv) {
     double t0 = now_ms();
 
     for (int i = 0; i < pipelines; i++) {
-        uint32_t seed = (uint32_t)(i + 1);
+        uint32_t seed = seedBase + (uint32_t)(i + 1);
         VkSpecializationMapEntry sme = { 0, 0, sizeof(uint32_t) };
         VkSpecializationInfo si = { 1, &sme, sizeof(uint32_t), &seed };
         VkComputePipelineCreateInfo cpci = { .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
@@ -299,6 +302,7 @@ int main(int argc, char **argv) {
 
     int filesAfter = count_dir_files(cacheDir);
 
+    printf("seed_base: %u\n", seedBase);
     printf("pipelines: %d created in %.1f ms (%.2f ms/pipeline)\n", pipelines, t1 - t0, (t1 - t0) / pipelines);
     printf("pipeline_cache_bytes: %zu\n", cacheSize);
     printf("cache_dir: %s\n", cacheDir ? cacheDir : "(not set)");
