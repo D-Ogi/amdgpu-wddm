@@ -24,7 +24,7 @@ static HANDLE releaseGate, enteredGate;
 static LONG connectorStopResult;
 typedef struct {
  void* PhysicalDeviceObject;
- int Rotation,Smu,Hwmon,GartLock,GfxPagingLock,GfxAccessLock,GfxAccessDrained,GfxRetireEvent,GfxAccessClosed,PspSessionLock;
+ int Rotation,Smu,Hwmon,GartLock,GfxPagingLock,GfxAccessLock,GfxAccessDrained,GfxRetireEvent,GfxAccessClosed,PspSessionLock,DcnScanoutLock;
  BOOLEAN StopDone,GpuStopUnconfirmed,Started,InheritedSignalValid,SystemDisplayReady,PostDisplayStopAttempted;
  LONG PostDisplayStopStatus;
  volatile LONG StartVisibilityPending;
