@@ -184,6 +184,27 @@ static const uint32_t kPartial1FillSizes[] = { 1040u, 65552u };
 static const uint32_t kPartial1FillOffsets[] = { 0u, 4u };
 static const uint32_t kPartial1FillSrc[] = { 0u };
 
+/* BD-287 upload overread: a 65536-byte vkCmdUpdateBuffer at a non-zero dst offset forces
+ * dst_align_offset != 0 in ac_prepare_cs_clear_copy_buffer (dwords_per_thread=2, so
+ * dst_align_offset = dst_va % 8). The compute copy dispatches ceil((dst_align_offset +
+ * size) / 8) threads, and the last thread's source load is 8 bytes starting at
+ * (num_threads-1)*8 + realign_offset bytes from the upload BO base. When dst_align_offset=4
+ * and size=65536, that load ends 4 bytes past the 65536-byte upload BO. On WDDM the
+ * overread hits unmapped GPU VA, giving a VM fault that the KMD reports as a TDR.
+ *
+ * Offsets 4 and 12 give dst_align_offset=4 (should hang); offset 8 gives dst_align_offset=0
+ * (should pass). All three are valid API use without --negative-control. */
+static const uint32_t kBd287UpdSizes[] = { 65536u };
+static const uint32_t kBd287UpdOffsets[] = { 4u, 8u, 12u };
+static const uint32_t kBd287UpdSrc[] = { 0u };
+
+/* The matching copy uses the src buffer (CAP bytes), not the upload BO, so the source
+ * load cannot overread. If the copy passes at dst offset 4 while the update hangs, the
+ * fault is on the source (upload BO) side, not the destination side. */
+static const uint32_t kBd287CopySizes[] = { 65536u };
+static const uint32_t kBd287CopyOffsets[] = { 4u };
+static const uint32_t kBd287CopySrc[] = { 0u };
+
 #define SPAN(a) a, (uint32_t)(sizeof(a) / sizeof((a)[0]))
 
 static const Group kGroups[] = {
@@ -198,6 +219,10 @@ static const Group kGroups[] = {
       SPAN(kPartial1CopySizes), SPAN(kPartial1CopyOffsets), SPAN(kPartial1CopySrc) },
     { "partial-1-fill", OPS(OP(OP_FILL)),
       SPAN(kPartial1FillSizes), SPAN(kPartial1FillOffsets), SPAN(kPartial1FillSrc) },
+    { "bd287-upd", OPS(OP(OP_UPDATE)),
+      SPAN(kBd287UpdSizes), SPAN(kBd287UpdOffsets), SPAN(kBd287UpdSrc) },
+    { "bd287-copy", OPS(OP(OP_COPY)),
+      SPAN(kBd287CopySizes), SPAN(kBd287CopyOffsets), SPAN(kBd287CopySrc) },
 };
 #define GROUP_COUNT (uint32_t)(sizeof(kGroups) / sizeof(kGroups[0]))
 /* --quick keeps the first two values of each axis of each group: the same shapes, a smoke-sized run. */
