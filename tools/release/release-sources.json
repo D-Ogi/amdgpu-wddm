@@ -101,9 +101,9 @@
     "d3d11_engine": "Current tester.36 payload sources. release payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829; lab payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d11_icd": "Current tester.35 payload sources. release payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; lab payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "desktop_umd": "Current tester.36 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 63fd611f283c94929215c0282d6e4538c694ca7d; lab payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 63fd611f283c94929215c0282d6e4538c694ca7d; release payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 038cb72013baf4ebd6c22dc2440b9dda88ffaf97; lab payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 038cb72013baf4ebd6c22dc2440b9dda88ffaf97; release payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "vulkan_icd": "Current tester.36 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 0a4e807077528ff4050350961f09bc329a063f4a; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 0a4e807077528ff4050350961f09bc329a063f4a; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "vulkan_icd": "Current tester.36 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm c7474d7b8b15657e2c8f3a2358a05aa8c9638957; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm c7474d7b8b15657e2c8f3a2358a05aa8c9638957; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "control": "Current tester.35 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/control/bc250control.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/control/bc250control.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "wow64": "Current tester.36 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm 9b9cbe11ac482f4a1dea534bc0f890b70f006fca; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm 9b9cbe11ac482f4a1dea534bc0f890b70f006fca; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 429d327e4ebb76c2e064c58b1489742cb62c6c15; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 429d327e4ebb76c2e064c58b1489742cb62c6c15; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 83548b4bf065daeb62b46e6e4008e91a3f23ca2c; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 83548b4bf065daeb62b46e6e4008e91a3f23ca2c; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 17de7ab1ce68069b25c29c3e734b8a3cbd74734c; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 17de7ab1ce68069b25c29c3e734b8a3cbd74734c; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "wow64": "Current tester.36 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm 9b9cbe11ac482f4a1dea534bc0f890b70f006fca; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm 9b9cbe11ac482f4a1dea534bc0f890b70f006fca; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 429d327e4ebb76c2e064c58b1489742cb62c6c15; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 429d327e4ebb76c2e064c58b1489742cb62c6c15; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 83548b4bf065daeb62b46e6e4008e91a3f23ca2c; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 83548b4bf065daeb62b46e6e4008e91a3f23ca2c; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm a58779800778b1ece6c8b549991f0b70e24a673e; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm a58779800778b1ece6c8b549991f0b70e24a673e; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "mft_h264": "Current tester.35 payload sources. release payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer",
     "control_app": "Current tester.35 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3. File rows retain exact recipes, hashes, dependencies and validation limits.",
@@ -1120,11 +1120,11 @@
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/t36/f4-dxil/sys-set-r1/artifacts/release/system-x64-rel/vulkan_radeon.dll",
-      "sha256": "428FC4D5CE50CD13D44E7C4DE65C27B8B9E1B10D4D8FA480117CB8A38F65265C",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/system-x64-rel/vulkan_radeon.dll",
+      "sha256": "E0EBEB136608A6C1AB43DD17578D8E963FE02553C57635CBDB2E1B0FCD8DC87E",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "0a4e807077528ff4050350961f09bc329a063f4a",
+        "commit": "c7474d7b8b15657e2c8f3a2358a05aa8c9638957",
         "recipe_commit": "0e8ebe818b3dede203be6f6b1354f57b47ec1806",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -1153,18 +1153,18 @@
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
-      "size": 18562560,
+      "size": 18540544,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/t36/f4-dxil/sys-set-r1/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
-      "sha256": "35C1DD649D27DF71FB330887D4F9FD3DA5CBC9B201CEC3B832384367E3F760F2",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
+      "sha256": "F301E0A4FDE4C57F9E2EB11D2C99FEB595FFEA9D4379E42EBB3F147F5C20F39A",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "0a4e807077528ff4050350961f09bc329a063f4a",
+        "commit": "c7474d7b8b15657e2c8f3a2358a05aa8c9638957",
         "recipe_commit": "0e8ebe818b3dede203be6f6b1354f57b47ec1806",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -1194,7 +1194,7 @@
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
-      "size": 18600448,
+      "size": 18578944,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
@@ -1970,11 +1970,11 @@
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/t35/release/set/artifacts/release/wow64-x86-rel/vulkan_radeon.dll",
-      "sha256": "D3A020AF8B467439B9E401E6EA723EF6ECF3115BBB052A6FE25E435FB7683B92",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/wow64-x86-rel/vulkan_radeon.dll",
+      "sha256": "F4B7E8E7D499DE75C81F56EE41AB906BECFD45DBA6F9E9BAD6D7CF95DF02CA96",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "17de7ab1ce68069b25c29c3e734b8a3cbd74734c",
+        "commit": "a58779800778b1ece6c8b549991f0b70e24a673e",
         "recipe_commit": "0e8ebe818b3dede203be6f6b1354f57b47ec1806",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -1999,7 +1999,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.107-tester.35"
+          "0.7.216.108-tester.36"
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
@@ -2011,11 +2011,11 @@
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/t35/release/set/artifacts/lab/wow64-x86-lab/vulkan_radeon.dll",
-      "sha256": "34F5FEA5782E383F5851B78CA991A8BFB922AC9BCFFA178A013EDFD4721C2C05",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/wow64-x86-lab/vulkan_radeon.dll",
+      "sha256": "E67C06A9A2D923D935D9A8B2CD84D0760C5F0A2610265238DC3F66AFD1392CB1",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "17de7ab1ce68069b25c29c3e734b8a3cbd74734c",
+        "commit": "a58779800778b1ece6c8b549991f0b70e24a673e",
         "recipe_commit": "0e8ebe818b3dede203be6f6b1354f57b47ec1806",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -2041,7 +2041,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.107-tester.35"
+          "0.7.216.108-tester.36"
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
@@ -2492,11 +2492,11 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/amdhip64.dll",
-      "source": "scratch/t35/release/set/artifacts/release/extra-hip-release/amdhip64.dll",
-      "sha256": "35B1D890023ED1A3E405141A772E8B6DFC85BEFC11E27E035F163DC11BD34EB7",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-hip-release/amdhip64.dll",
+      "sha256": "52AE15589B11EB95E04AFB0D020942B68E85CAF819E04FA7F673663DDD251805",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
@@ -2506,7 +2506,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.107-tester.35",
+          "0.7.216.108-tester.36",
           "-Flavour",
           "release",
           "-Root",
@@ -2519,24 +2519,24 @@
         ],
         "inputs": {
           "layer1": {
-            "workspace": "scratch/t35/release/hip-layer1"
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
           }
         },
         "output": "amdhip64.dll"
       },
-      "size": 309760,
-      "authenticode_sha256": "FD46BF98B6E2B30BC927FB7CD5061716896AB9F4AA14122F24BFE10DB9C8BE54",
+      "size": 322560,
+      "authenticode_sha256": "26B99DA3E56DC10106F958BEDD6D5A2F7C724D299BC92EC1A6C9196ADF045600",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/amdhip64.dll",
-      "source": "scratch/t35/release/set/artifacts/lab/extra-hip-lab/amdhip64.dll",
-      "sha256": "F53935B27B6152A745A5D276487ED70ACCE86391EA740974F80DDEAAC805D5DF",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-hip-lab/amdhip64.dll",
+      "sha256": "37DC87C888C4BB9CD19AEEC95D6B7AB38FFAF57AB74E1B6F8F74DCE985A6AA25",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
@@ -2546,7 +2546,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.107-tester.35",
+          "0.7.216.108-tester.36",
           "-Flavour",
           "lab",
           "-Root",
@@ -2559,24 +2559,24 @@
         ],
         "inputs": {
           "layer1": {
-            "workspace": "scratch/t35/release/hip-layer1"
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
           }
         },
         "output": "amdhip64.dll"
       },
-      "size": 326144,
-      "authenticode_sha256": "7E9D6E615FDAB7A4A08F707BEA3FE9C92E53367E49FB3609E8D2D20D674530C9",
+      "size": 338944,
+      "authenticode_sha256": "96CD83122E8C97E5F32F07584F76EFAA032C751739481E2F80B157D93F43C170",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/vadd.exe",
-      "source": "scratch/t35/release/set/artifacts/release/extra-hip-release/vadd.exe",
-      "sha256": "CF3F51E13B76697E3465E963B12711415220255190250DF7EC67EB15CFEE89C0",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-hip-release/vadd.exe",
+      "sha256": "147D34BC3B061BCB12CF22F7BDEFB372EDC5F295BE54CC8414BE080665B84C6F",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
@@ -2586,7 +2586,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.107-tester.35",
+          "0.7.216.108-tester.36",
           "-Flavour",
           "release",
           "-Root",
@@ -2599,24 +2599,24 @@
         ],
         "inputs": {
           "layer1": {
-            "workspace": "scratch/t35/release/hip-layer1"
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
           }
         },
         "output": "controls/vadd.exe"
       },
       "size": 162304,
-      "authenticode_sha256": "BABBAB0C313A6EA3CB4693310E5BBD6515F37AD70DF6106212FD7238ECACFB25",
+      "authenticode_sha256": "CD2A5B4ECCEFE7B43590101F6E804C36B4722CBCF5D2C1FFF15B1C769709EA27",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/vadd.exe",
-      "source": "scratch/t35/release/set/artifacts/lab/extra-hip-lab/vadd.exe",
-      "sha256": "F0CC38ADAA59CACF8E954789266D9BCD361ABB5822D53F99A9E326EE94442A27",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-hip-lab/vadd.exe",
+      "sha256": "169230E75E3EDCD549E3CD3C0B262241159514B683AEF17B418964D833E39E16",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
@@ -2626,7 +2626,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.107-tester.35",
+          "0.7.216.108-tester.36",
           "-Flavour",
           "lab",
           "-Root",
@@ -2639,24 +2639,24 @@
         ],
         "inputs": {
           "layer1": {
-            "workspace": "scratch/t35/release/hip-layer1"
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
           }
         },
         "output": "controls/vadd.exe"
       },
       "size": 166400,
-      "authenticode_sha256": "D9CC490F18626A54332A876BB58CBE54553730558660A6A191DF2815EC140C26",
+      "authenticode_sha256": "64CC1B1A6FFD7ABE6A913D195C30F8F251F84F41987A37DCD364B54E41335408",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/bc250hipblas.dll",
-      "source": "scratch/t35/release/set/artifacts/release/extra-hip-release/bc250hipblas.dll",
-      "sha256": "934894A7BA4B694C1D3373967913C64D17BD80E001983DEDA70F7F67D8B04E0E",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-hip-release/bc250hipblas.dll",
+      "sha256": "231BE7D8FDF7675F6EA4EA86BE9C68D42454D5B6DCE621C50ACA79F35B4C5C34",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
@@ -2666,7 +2666,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.107-tester.35",
+          "0.7.216.108-tester.36",
           "-Flavour",
           "release",
           "-Root",
@@ -2679,24 +2679,24 @@
         ],
         "inputs": {
           "layer1": {
-            "workspace": "scratch/t35/release/hip-layer1"
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
           }
         },
         "output": "controls/hipblas/bc250hipblas.dll"
       },
       "size": 157696,
-      "authenticode_sha256": "568E96BC449761076C529B981D4247381471C60FA07E96FDA66EFC31ADBFC329",
+      "authenticode_sha256": "32F3414BBF2FA52AA75A7FF4CD6DFA3961E8BFAB80FD4CE4F85333AC22BAE3C6",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/bc250hipblas.dll",
-      "source": "scratch/t35/release/set/artifacts/lab/extra-hip-lab/bc250hipblas.dll",
-      "sha256": "7606A5FE23166F24E5E78A83A946BDAB175DA15B260CC6AFBB286DB2FE99BFAF",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-hip-lab/bc250hipblas.dll",
+      "sha256": "9B6DD33809934E313FFECC7EDB2269C40CD5E3AB0E8978557A92B2783D03C313",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
@@ -2706,7 +2706,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.107-tester.35",
+          "0.7.216.108-tester.36",
           "-Flavour",
           "lab",
           "-Root",
@@ -2719,13 +2719,13 @@
         ],
         "inputs": {
           "layer1": {
-            "workspace": "scratch/t35/release/hip-layer1"
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
           }
         },
         "output": "controls/hipblas/bc250hipblas.dll"
       },
       "size": 157696,
-      "authenticode_sha256": "C025FFCE5E13B6D1BB54952C8ACD144846F13F0528734AB816A5F95F308E9AE7",
+      "authenticode_sha256": "E5DB27ECE20537D4C2615C7DFDD19069B8416E37869F6FF5444748D9383B09FA",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "lab"
     },
@@ -3062,6 +3062,490 @@
       "size": 108032,
       "authenticode_sha256": "1203943D62F6CD03DC92DAE45A980666A0CF9BD22389917D6354BC71CCAE0D0A",
       "unverified": "The stamped ADL outputs have passed their ABI gates; byte-identical rebuilds across different output directories are not claimed by this registration.",
+      "flavour": "lab"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/rocm/amdhip64_7.dll",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-rocm-release/amdhip64_7.dll",
+      "sha256": "A70666CDE5B5DCA5495C99C44835EE7C825278E895286F16030141F25AECB62B",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "recipe": "compute/hip/build-rocm-payload.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.108-tester.36",
+          "-Flavour",
+          "release",
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-TheRockInput",
+          "{input:therock}",
+          "-PreviousPayloadManifest",
+          "{input:history}/payload.json",
+          "-PreviousPayloadSha256",
+          "1d212df471d25b1e41c92f0d123a81abf8524ac8778e3c59fc2f837a37605bc2"
+        ],
+        "inputs": {
+          "layer1": {
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+          },
+          "therock": {
+            "workspace": "scratch/t36/f11-rocm/rocm-input"
+          },
+          "history": {
+            "workspace": "scratch/t36/f11-rocm/tmp/kit8-qwen-split"
+          }
+        },
+        "output": "rocm/amdhip64_7.dll"
+      },
+      "size": 360960,
+      "authenticode_sha256": "3C94B5AE6FBF237A092EF2E0AC9D8B476F273397F874EF1D782F380BD0A7A34D",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "release"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/rocm/libhipblaslt.dll",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-rocm-release/libhipblaslt.dll",
+      "sha256": "AFA0C451E96F24A181187C1B8F938D926EDBCCD74ECAE8DAC659A5E7753BF238",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "recipe": "compute/hip/build-rocm-payload.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.108-tester.36",
+          "-Flavour",
+          "release",
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-TheRockInput",
+          "{input:therock}",
+          "-PreviousPayloadManifest",
+          "{input:history}/payload.json",
+          "-PreviousPayloadSha256",
+          "1d212df471d25b1e41c92f0d123a81abf8524ac8778e3c59fc2f837a37605bc2"
+        ],
+        "inputs": {
+          "layer1": {
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+          },
+          "therock": {
+            "workspace": "scratch/t36/f11-rocm/rocm-input"
+          },
+          "history": {
+            "workspace": "scratch/t36/f11-rocm/tmp/kit8-qwen-split"
+          }
+        },
+        "output": "rocm/libhipblaslt.dll"
+      },
+      "size": 211456,
+      "authenticode_sha256": "8E554647B4D2DFE12726EA7D394EBD034A607EEC542A7CF74BDDFC45020D9B91",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "release"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/rocm/attach-rocm-venv.ps1",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-rocm-release/attach-rocm-venv.ps1",
+      "sha256": "970D64F06F8F56671B96C21CB0D8C6A57E88B92F43BA7E81F3E63AFE6EC50781",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "recipe": "compute/hip/build-rocm-payload.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.108-tester.36",
+          "-Flavour",
+          "release",
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-TheRockInput",
+          "{input:therock}",
+          "-PreviousPayloadManifest",
+          "{input:history}/payload.json",
+          "-PreviousPayloadSha256",
+          "1d212df471d25b1e41c92f0d123a81abf8524ac8778e3c59fc2f837a37605bc2"
+        ],
+        "inputs": {
+          "layer1": {
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+          },
+          "therock": {
+            "workspace": "scratch/t36/f11-rocm/rocm-input"
+          },
+          "history": {
+            "workspace": "scratch/t36/f11-rocm/tmp/kit8-qwen-split"
+          }
+        },
+        "output": "rocm/attach-rocm-venv.ps1"
+      },
+      "size": 13193,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "release"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/rocm/payload.json",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-rocm-release/payload.json",
+      "sha256": "D886FA04F615F3379952DA32203CF4751B681F07ECFBB1C48BFBBE756DC08808",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "recipe": "compute/hip/build-rocm-payload.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.108-tester.36",
+          "-Flavour",
+          "release",
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-TheRockInput",
+          "{input:therock}",
+          "-PreviousPayloadManifest",
+          "{input:history}/payload.json",
+          "-PreviousPayloadSha256",
+          "1d212df471d25b1e41c92f0d123a81abf8524ac8778e3c59fc2f837a37605bc2"
+        ],
+        "inputs": {
+          "layer1": {
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+          },
+          "therock": {
+            "workspace": "scratch/t36/f11-rocm/rocm-input"
+          },
+          "history": {
+            "workspace": "scratch/t36/f11-rocm/tmp/kit8-qwen-split"
+          }
+        },
+        "output": "rocm/payload.json"
+      },
+      "size": 1218,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "release"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/rocm/rocm-files.ps1",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-rocm-release/rocm-files.ps1",
+      "sha256": "603E6AE80CC3B05619BF416D89DD59D7F289916A82C08CDBE8E79DACEBC1E53B",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "recipe": "compute/hip/build-rocm-payload.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.108-tester.36",
+          "-Flavour",
+          "release",
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-TheRockInput",
+          "{input:therock}",
+          "-PreviousPayloadManifest",
+          "{input:history}/payload.json",
+          "-PreviousPayloadSha256",
+          "1d212df471d25b1e41c92f0d123a81abf8524ac8778e3c59fc2f837a37605bc2"
+        ],
+        "inputs": {
+          "layer1": {
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+          },
+          "therock": {
+            "workspace": "scratch/t36/f11-rocm/rocm-input"
+          },
+          "history": {
+            "workspace": "scratch/t36/f11-rocm/tmp/kit8-qwen-split"
+          }
+        },
+        "output": "rocm/rocm-files.ps1"
+      },
+      "size": 9932,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "release"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/rocm/amdhip64_7.dll",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-rocm-lab/amdhip64_7.dll",
+      "sha256": "6B5C5B9971026855B013AC91899D1566E44F493E732C3041143511FE3627DD48",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "recipe": "compute/hip/build-rocm-payload.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.108-tester.36",
+          "-Flavour",
+          "lab",
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-TheRockInput",
+          "{input:therock}",
+          "-PreviousPayloadManifest",
+          "{input:history}/payload.json",
+          "-PreviousPayloadSha256",
+          "1d212df471d25b1e41c92f0d123a81abf8524ac8778e3c59fc2f837a37605bc2"
+        ],
+        "inputs": {
+          "layer1": {
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+          },
+          "therock": {
+            "workspace": "scratch/t36/f11-rocm/rocm-input"
+          },
+          "history": {
+            "workspace": "scratch/t36/f11-rocm/tmp/kit8-qwen-split"
+          }
+        },
+        "output": "rocm/amdhip64_7.dll"
+      },
+      "size": 367616,
+      "authenticode_sha256": "7710DA3DD3A41017A49E4BCFE49FF1FAAA783F7E595029C93340731215E4CFEF",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "lab"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/rocm/libhipblaslt.dll",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-rocm-lab/libhipblaslt.dll",
+      "sha256": "03EA4760932E77E5C9ECB9553E8A6BCA3E9ABF711F51EF9771D5B8A40CCACBED",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "recipe": "compute/hip/build-rocm-payload.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.108-tester.36",
+          "-Flavour",
+          "lab",
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-TheRockInput",
+          "{input:therock}",
+          "-PreviousPayloadManifest",
+          "{input:history}/payload.json",
+          "-PreviousPayloadSha256",
+          "1d212df471d25b1e41c92f0d123a81abf8524ac8778e3c59fc2f837a37605bc2"
+        ],
+        "inputs": {
+          "layer1": {
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+          },
+          "therock": {
+            "workspace": "scratch/t36/f11-rocm/rocm-input"
+          },
+          "history": {
+            "workspace": "scratch/t36/f11-rocm/tmp/kit8-qwen-split"
+          }
+        },
+        "output": "rocm/libhipblaslt.dll"
+      },
+      "size": 211456,
+      "authenticode_sha256": "38CAE9B13CDEADEF92DCD463B7E887677A9712BD839F0B5682D54E29165344A4",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "lab"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/rocm/attach-rocm-venv.ps1",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-rocm-lab/attach-rocm-venv.ps1",
+      "sha256": "970D64F06F8F56671B96C21CB0D8C6A57E88B92F43BA7E81F3E63AFE6EC50781",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "recipe": "compute/hip/build-rocm-payload.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.108-tester.36",
+          "-Flavour",
+          "lab",
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-TheRockInput",
+          "{input:therock}",
+          "-PreviousPayloadManifest",
+          "{input:history}/payload.json",
+          "-PreviousPayloadSha256",
+          "1d212df471d25b1e41c92f0d123a81abf8524ac8778e3c59fc2f837a37605bc2"
+        ],
+        "inputs": {
+          "layer1": {
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+          },
+          "therock": {
+            "workspace": "scratch/t36/f11-rocm/rocm-input"
+          },
+          "history": {
+            "workspace": "scratch/t36/f11-rocm/tmp/kit8-qwen-split"
+          }
+        },
+        "output": "rocm/attach-rocm-venv.ps1"
+      },
+      "size": 13193,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "lab"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/rocm/payload.json",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-rocm-lab/payload.json",
+      "sha256": "BD06FCCADB025BA8FCF1C2A74442D70B3DC0B32C449B86EB1605B53C960BF7AE",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "recipe": "compute/hip/build-rocm-payload.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.108-tester.36",
+          "-Flavour",
+          "lab",
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-TheRockInput",
+          "{input:therock}",
+          "-PreviousPayloadManifest",
+          "{input:history}/payload.json",
+          "-PreviousPayloadSha256",
+          "1d212df471d25b1e41c92f0d123a81abf8524ac8778e3c59fc2f837a37605bc2"
+        ],
+        "inputs": {
+          "layer1": {
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+          },
+          "therock": {
+            "workspace": "scratch/t36/f11-rocm/rocm-input"
+          },
+          "history": {
+            "workspace": "scratch/t36/f11-rocm/tmp/kit8-qwen-split"
+          }
+        },
+        "output": "rocm/payload.json"
+      },
+      "size": 1218,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "lab"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/hip/rocm/rocm-files.ps1",
+      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-rocm-lab/rocm-files.ps1",
+      "sha256": "603E6AE80CC3B05619BF416D89DD59D7F289916A82C08CDBE8E79DACEBC1E53B",
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+        "recipe": "compute/hip/build-rocm-payload.ps1",
+        "args": [
+          "-Kits",
+          "{root}/toolchain/nuget",
+          "-Out",
+          "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.108-tester.36",
+          "-Flavour",
+          "lab",
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-TheRockInput",
+          "{input:therock}",
+          "-PreviousPayloadManifest",
+          "{input:history}/payload.json",
+          "-PreviousPayloadSha256",
+          "1d212df471d25b1e41c92f0d123a81abf8524ac8778e3c59fc2f837a37605bc2"
+        ],
+        "inputs": {
+          "layer1": {
+            "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+          },
+          "therock": {
+            "workspace": "scratch/t36/f11-rocm/rocm-input"
+          },
+          "history": {
+            "workspace": "scratch/t36/f11-rocm/tmp/kit8-qwen-split"
+          }
+        },
+        "output": "rocm/rocm-files.ps1"
+      },
+      "size": 9932,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "lab"
     }
   ],
