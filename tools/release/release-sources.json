@@ -116,7 +116,7 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/kmd-rel/bc250kmd.inf",
+      "source": "scratch/t36/cand-set/artifacts/release/kmd-rel/bc250kmd.inf",
       "sha256": "21C4DBA7FA3D6BC3E7A20D6417F6D27A989997CC7C8D9D923B18AF8B26DE23FD",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -143,7 +143,7 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/kmd-rel/bc250kmd.sys",
+      "source": "scratch/t36/cand-set/artifacts/release/kmd-rel/bc250kmd.sys",
       "sha256": "017251E77BB665025538E17B97E7B182F88FE018AFE16600B90D1FD5D927924D",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -172,7 +172,7 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/kmd-lab/bc250kmd.sys",
+      "source": "scratch/t36/cand-set/artifacts/lab/kmd-lab/bc250kmd.sys",
       "sha256": "0E396DD02D687C8A88E3109EA04B47ABA42CAAB85DF5AAEBF21B2333CF11FCD1",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -201,7 +201,7 @@
     {
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/t36/f4-dxil/d3d12-set-429/artifacts/release/d3d12-x64-rel/amdgpu_wddm_d3d12.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/d3d12-x64-rel/amdgpu_wddm_d3d12.dll",
       "sha256": "B22A227779D85200F67CB7592C08901E4875947CDE2854552373008CCA0E8275",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -261,7 +261,7 @@
     {
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/t36/f4-dxil/d3d12-set-429/artifacts/lab/d3d12-x64-lab/amdgpu_wddm_d3d12.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/d3d12-x64-lab/amdgpu_wddm_d3d12.dll",
       "sha256": "8871B6C4011366233511DC8C9F9DBF6334B5D9623415B0478F5222196636D684",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -321,7 +321,7 @@
     {
       "component": "d3d12-engine",
       "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/release/engine12-x64-rel/amdgpu_wddm_vkd3d.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/engine12-x64-rel/amdgpu_wddm_vkd3d.dll",
       "sha256": "218BE62BEB2B88632F47A17AE1E6F183E8D45F671C23D8C73FAB1C209F26CD5B",
       "built_from": {
         "repo": "vkd3d-proton",
@@ -357,7 +357,7 @@
     {
       "component": "d3d12-engine",
       "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/lab/engine12-x64-lab/amdgpu_wddm_vkd3d.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/engine12-x64-lab/amdgpu_wddm_vkd3d.dll",
       "sha256": "421AB352A8391AF02300C136B8CCC253A6CF054864D9461521C8AED500A952EC",
       "built_from": {
         "repo": "vkd3d-proton",
@@ -393,7 +393,7 @@
     {
       "component": "d3d12-icd",
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/t36/f4-dxil/icd3-reg/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
       "sha256": "8D439322B3750D7A29DFE8AC02BBBF3203899F90F53CA43B78DA59345CB4FFBE",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -433,7 +433,7 @@
     {
       "component": "d3d12-icd",
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/t36/f4-dxil/icd3-reg/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
       "sha256": "121DDBA184F3F33DD1788AA19DA2FF309EC081A11254DE25F9F243BB8B3526CB",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -474,7 +474,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/router-x64-rel/bc250d3d_router.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/router-x64-rel/bc250d3d_router.dll",
       "sha256": "03030A2226E911A73D952D2ABEEC05103F33EEC804EDCE48300AD2F922E704AA",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -501,7 +501,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/router-x64-lab/bc250d3d_router.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/router-x64-lab/bc250d3d_router.dll",
       "sha256": "E2C2D4A7C6C28FF92CA67C3D4270458A784A1BE77341425A9C4C34E5913F8D66",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -528,7 +528,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_zink.dll",
-      "source": "scratch/t36/f4-dxil/zink-set/artifacts/release/zink-x64-rel/bc250d3d_zink.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/zink-x64-rel/bc250d3d_zink.dll",
       "sha256": "F670D8EB8B4323018D8DFB40E94C95CDEBF2B08397E5FD8D4C2106F12DBB120D",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -569,7 +569,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_zink.dll",
-      "source": "scratch/t36/f4-dxil/zink-set/artifacts/lab/zink-x64-lab/bc250d3d_zink.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/zink-x64-lab/bc250d3d_zink.dll",
       "sha256": "8C05765E93C0F99001C562CC9FA5160C89DFCBF5711C7E2F084B606FD848D8D5",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -611,7 +611,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
-      "source": "scratch/t36/f4-dxil/stale-set/artifacts/release/desktop-x64-rel/amdgpu_wddm_radv.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/desktop-x64-rel/amdgpu_wddm_radv.dll",
       "sha256": "840C4BAA804B22E9971CEDCFA56C217CCF68707F3D489A92C6EFCFB836CF929A",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -651,7 +651,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
-      "source": "scratch/t36/f4-dxil/stale-set/artifacts/lab/desktop-x64-lab/amdgpu_wddm_radv.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/desktop-x64-lab/amdgpu_wddm_radv.dll",
       "sha256": "62C4856F5444DEA5FD2412552832E032DE760F62309BFBAD4C1C286240B17019",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -692,7 +692,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d.dll",
-      "source": "scratch/t36/f4-dxil/stale-set/artifacts/release/cpu-x64-rel/bc250d3d.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/cpu-x64-rel/bc250d3d.dll",
       "sha256": "3BF4929F8EA9A3A843328103DCF364176F9D5277A48EF6237F41E2B0E89B3F8D",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -740,7 +740,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d.dll",
-      "source": "scratch/t36/f4-dxil/stale-set/artifacts/lab/cpu-x64-lab/bc250d3d.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/cpu-x64-lab/bc250d3d.dll",
       "sha256": "C06994CB39521DB5D36C825842AADFF0A752A6FBB5E88CB948DFCF3E97ADF423",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -789,7 +789,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/release/d3d11-x64-rel/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/d3d11-x64-rel/amdgpu_wddm_d3d11.dll",
       "sha256": "EAE5A2EE7B6BD317BC002975DC72425A2FD4F382E97B672C0D183FC34FBB5C56",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -827,7 +827,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/lab/d3d11-x64-lab/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/d3d11-x64-lab/amdgpu_wddm_d3d11.dll",
       "sha256": "17D857A4E5959948E8309224C09E446216EF6A4C64D8F59E40EE521C62064F9D",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -968,7 +968,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/release/dxvk-x64-rel/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/dxvk-x64-rel/amdgpu_wddm_dxvk.dll",
       "sha256": "8485EC600B28B805BA95E0A201B5527E919B95F5E4CDCC3D3ECD925EE569F919",
       "built_from": {
         "repo": "dxvk",
@@ -1003,7 +1003,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/lab/dxvk-x64-lab/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/dxvk-x64-lab/amdgpu_wddm_dxvk.dll",
       "sha256": "7E458260B8136F46ADE8D6B9A8D05024741A46B0CB5C998E22A1B7D83D38E7A2",
       "built_from": {
         "repo": "dxvk",
@@ -1039,7 +1039,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/t36/f4-dxil/icd3-reg/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
       "sha256": "8D439322B3750D7A29DFE8AC02BBBF3203899F90F53CA43B78DA59345CB4FFBE",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1079,7 +1079,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/t36/f4-dxil/icd3-reg/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
       "sha256": "121DDBA184F3F33DD1788AA19DA2FF309EC081A11254DE25F9F243BB8B3526CB",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1120,7 +1120,7 @@
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/t36/f4-dxil/icd3-reg/artifacts/release/system-x64-rel/vulkan_radeon.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/system-x64-rel/vulkan_radeon.dll",
       "sha256": "51432830C28475CE3324CEA40D914C84F8BE943387DB9C23A919152AC823237E",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1160,7 +1160,7 @@
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/t36/f4-dxil/icd3-reg/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
       "sha256": "C48DA89F8BCCB7AB8C2CA2E1BCB71402772E7D44EF8C516579989ACD608BA780",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1215,7 +1215,7 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/router-x86-rel/bc250d3d_router.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/router-x86-rel/bc250d3d_router.dll",
       "sha256": "0B68FB8A3A7FDCF955CF8AD8CE4E348DF083FB82235DB77D160C74FFCAE8A50A",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1242,7 +1242,7 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/router-x86-lab/bc250d3d_router.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/router-x86-lab/bc250d3d_router.dll",
       "sha256": "A098818517C709ABCB99C9BD500DBB2C286F80F9B0A7F32D916A9752B4A94673",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1269,7 +1269,7 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d.dll",
-      "source": "scratch/t36/f4-dxil/stale-set/artifacts/release/cpu-x86-rel/bc250d3d.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/cpu-x86-rel/bc250d3d.dll",
       "sha256": "2696C3F68801C7FCA5A43DFA6B091D5EA011B413962808D920FF9B8710CAD1EB",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1317,7 +1317,7 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d.dll",
-      "source": "scratch/t36/f4-dxil/stale-set/artifacts/lab/cpu-x86-lab/bc250d3d.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/cpu-x86-lab/bc250d3d.dll",
       "sha256": "878151E62E2C2ED5C3A2E4D7C9E746C74A24BDABC460221DA706334F1C40E9DF",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1366,7 +1366,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/release/d3d11-x86-rel/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/d3d11-x86-rel/amdgpu_wddm_d3d11.dll",
       "sha256": "D77C449FC08B146E6F52C3D0376C76D7AFA0B86585525DCD0F58B92F218D370F",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1404,7 +1404,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/lab/d3d11-x86-lab/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/d3d11-x86-lab/amdgpu_wddm_d3d11.dll",
       "sha256": "53309EBA3E85343EADFC7A72AEDAC18A1E2CF7E1039D84355A5EF9B8DBC62468",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1545,7 +1545,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/release/dxvk-x86-rel/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/dxvk-x86-rel/amdgpu_wddm_dxvk.dll",
       "sha256": "6788ECC53B774FE56D690D85906A39DD6D0BB96015693981901FFF389A6B820D",
       "built_from": {
         "repo": "dxvk",
@@ -1580,7 +1580,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/lab/dxvk-x86-lab/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/dxvk-x86-lab/amdgpu_wddm_dxvk.dll",
       "sha256": "127133E48F46A4A2A3D6B6CDC9850786DE902256D58876D96DC1CEC067B52CBF",
       "built_from": {
         "repo": "dxvk",
@@ -1616,7 +1616,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/t36/f4-dxil/icd3-reg/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
       "sha256": "903A9E87C6DE76E735BA393ED3F453232D01714FF5865BED76F71D3A02166CC1",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1656,7 +1656,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/t36/f4-dxil/icd3-reg/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
       "sha256": "522CC66CADA9C2DF77705F7019CF31BA1BB2305CBA43C9B2D7788F1912FCEA28",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1697,7 +1697,7 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/t36/f4-dxil/d3d12-set-429/artifacts/release/d3d12-x86-rel/amdgpu_wddm_d3d12.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/d3d12-x86-rel/amdgpu_wddm_d3d12.dll",
       "sha256": "2C05A7C1A23D3BE99429498837EE1F25733AB0D9983639D5DE5C0A7E20C7E2E2",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1757,7 +1757,7 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/t36/f4-dxil/d3d12-set-429/artifacts/lab/d3d12-x86-lab/amdgpu_wddm_d3d12.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/d3d12-x86-lab/amdgpu_wddm_d3d12.dll",
       "sha256": "67A169D3A84A4F15EEF2CE21D69A42321C4B6C83B0C9C095429297C991CF0D95",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1817,7 +1817,7 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/release/engine12-x86-rel/amdgpu_wddm_vkd3d.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/engine12-x86-rel/amdgpu_wddm_vkd3d.dll",
       "sha256": "955CB57B9812684A1CBEA0112479C5472F925CBEAB6F65DD573FF86A699C4296",
       "built_from": {
         "repo": "vkd3d-proton",
@@ -1853,7 +1853,7 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/lab/engine12-x86-lab/amdgpu_wddm_vkd3d.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/engine12-x86-lab/amdgpu_wddm_vkd3d.dll",
       "sha256": "4564E9895E04945B3F45F528CF55C4423722CECCDE8CE1648498AEAD00C6A5B5",
       "built_from": {
         "repo": "vkd3d-proton",
@@ -1889,7 +1889,7 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/t36/f4-dxil/icd3-reg/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
       "sha256": "903A9E87C6DE76E735BA393ED3F453232D01714FF5865BED76F71D3A02166CC1",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1929,7 +1929,7 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/t36/f4-dxil/icd3-reg/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
       "sha256": "522CC66CADA9C2DF77705F7019CF31BA1BB2305CBA43C9B2D7788F1912FCEA28",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1970,7 +1970,7 @@
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/t36/f4-dxil/icd3-reg/artifacts/release/wow64-x86-rel/vulkan_radeon.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/wow64-x86-rel/vulkan_radeon.dll",
       "sha256": "3A216E8377DE0FF123345338B926704146C3CB7D0BE11C875844DEE6D2499153",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -2011,7 +2011,7 @@
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/t36/f4-dxil/icd3-reg/artifacts/lab/wow64-x86-lab/vulkan_radeon.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/wow64-x86-lab/vulkan_radeon.dll",
       "sha256": "7AD2AD057BF63F72E5DFEB96351B2A05827D07991A76C3567D1F08E0092268A0",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -2067,7 +2067,7 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/control-rel/bc250kmd_cli.exe",
+      "source": "scratch/t36/cand-set/artifacts/release/control-rel/bc250kmd_cli.exe",
       "sha256": "78EC1211618B27DAF35572805106284347BD21A0D9CE6C92B9ED62645A07E7B1",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2095,7 +2095,7 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/control-lab/bc250kmd_cli.exe",
+      "source": "scratch/t36/cand-set/artifacts/lab/control-lab/bc250kmd_cli.exe",
       "sha256": "CAF676551F408D29CFA50C062759BC1EB52A755F2185FF3E7F8D8983A7A9924D",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2123,7 +2123,7 @@
     {
       "component": "tool",
       "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/extra-caps-release/amdgpu_wddm_d3d12caps.exe",
+      "source": "scratch/t36/cand-set/artifacts/release/extra-caps-release/amdgpu_wddm_d3d12caps.exe",
       "sha256": "3D419940EE18FF829C7C3F120FF9FA8F7AEB4ADB11F34DE4CC61C4890DB475D0",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2151,7 +2151,7 @@
     {
       "component": "tool",
       "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/extra-caps-lab/amdgpu_wddm_d3d12caps.exe",
+      "source": "scratch/t36/cand-set/artifacts/lab/extra-caps-lab/amdgpu_wddm_d3d12caps.exe",
       "sha256": "A9E9F3F21464DC16AAEBBBD7D029C935606A26668F3ACD22FEE0DA59D2AD8BF5",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2179,7 +2179,7 @@
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/control-exe-rel/amdgpu_wddm_control.exe",
+      "source": "scratch/t36/cand-set/artifacts/release/control-exe-rel/amdgpu_wddm_control.exe",
       "sha256": "27F4B6E5F9F8E72D44FE9FDE643FDF19498D9D7A2FCCB949208F5B2D54AB87F8",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2207,7 +2207,7 @@
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/control-exe-lab/amdgpu_wddm_control.exe",
+      "source": "scratch/t36/cand-set/artifacts/lab/control-exe-lab/amdgpu_wddm_control.exe",
       "sha256": "35BD83EEBED898091D78934615C555CA57C101754B3952BC3BFE55AC66085D4C",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2235,7 +2235,7 @@
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/control-rel/bc250control.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/control-rel/bc250control.dll",
       "sha256": "E81C8FAA8AB5EE57B2B53ACAA6B6CEEF11152BB85AE68E52F1146E637FBA7CA6",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2263,7 +2263,7 @@
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/control-lab/bc250control.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/control-lab/bc250control.dll",
       "sha256": "5C71D1FAB770A9632CA12A0E88E637826105D6BB8AAFD907E31E9B3F04F503D0",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2291,7 +2291,7 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/control-rel/bc250control.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/control-rel/bc250control.dll",
       "sha256": "E81C8FAA8AB5EE57B2B53ACAA6B6CEEF11152BB85AE68E52F1146E637FBA7CA6",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2319,7 +2319,7 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/control-lab/bc250control.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/control-lab/bc250control.dll",
       "sha256": "5C71D1FAB770A9632CA12A0E88E637826105D6BB8AAFD907E31E9B3F04F503D0",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2380,7 +2380,7 @@
     {
       "component": "mft-h264",
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/extra-mft-release/amdgpu_wddm_mft_h264.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/extra-mft-release/amdgpu_wddm_mft_h264.dll",
       "sha256": "00C760CC8B6E84CEDB4F8ABB0C96F74C9BA0F505999CE6E82CE85051F20F7DBF",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2408,7 +2408,7 @@
     {
       "component": "mft-h264",
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/extra-mft-lab/amdgpu_wddm_mft_h264.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/extra-mft-lab/amdgpu_wddm_mft_h264.dll",
       "sha256": "773E33091ECD09FF4A2960B9312E60852E32A01DB6C02C53F872A7C8AD164FEC",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2436,7 +2436,7 @@
     {
       "component": "tool",
       "path": "payload/tools/d3d11bench.exe",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/extra-bench-release/d3d11bench.exe",
+      "source": "scratch/t36/cand-set/artifacts/release/extra-bench-release/d3d11bench.exe",
       "sha256": "648B78CD2E7B126E8664054FD60FF792CA57609A0628F7EEFF55B9DD5080379E",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2464,7 +2464,7 @@
     {
       "component": "tool",
       "path": "payload/tools/d3d11bench.exe",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/extra-bench-lab/d3d11bench.exe",
+      "source": "scratch/t36/cand-set/artifacts/lab/extra-bench-lab/d3d11bench.exe",
       "sha256": "EE0074E6F9D56FBBF30BEAD86E14E154E8B75866B3842FCAFC5A74D1DA655330",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2492,7 +2492,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/amdhip64.dll",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-hip-release/amdhip64.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/extra-hip-release/amdhip64.dll",
       "sha256": "52AE15589B11EB95E04AFB0D020942B68E85CAF819E04FA7F673663DDD251805",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2532,7 +2532,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/amdhip64.dll",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-hip-lab/amdhip64.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/extra-hip-lab/amdhip64.dll",
       "sha256": "37DC87C888C4BB9CD19AEEC95D6B7AB38FFAF57AB74E1B6F8F74DCE985A6AA25",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2572,7 +2572,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/vadd.exe",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-hip-release/vadd.exe",
+      "source": "scratch/t36/cand-set/artifacts/release/extra-hip-release/vadd.exe",
       "sha256": "147D34BC3B061BCB12CF22F7BDEFB372EDC5F295BE54CC8414BE080665B84C6F",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2612,7 +2612,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/vadd.exe",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-hip-lab/vadd.exe",
+      "source": "scratch/t36/cand-set/artifacts/lab/extra-hip-lab/vadd.exe",
       "sha256": "169230E75E3EDCD549E3CD3C0B262241159514B683AEF17B418964D833E39E16",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2652,7 +2652,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/bc250hipblas.dll",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-hip-release/bc250hipblas.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/extra-hip-release/bc250hipblas.dll",
       "sha256": "231BE7D8FDF7675F6EA4EA86BE9C68D42454D5B6DCE621C50ACA79F35B4C5C34",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2692,7 +2692,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/bc250hipblas.dll",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-hip-lab/bc250hipblas.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/extra-hip-lab/bc250hipblas.dll",
       "sha256": "9B6DD33809934E313FFECC7EDB2269C40CD5E3AB0E8978557A92B2783D03C313",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2732,7 +2732,7 @@
     {
       "component": "opengl-icd",
       "path": "payload/opengl/amdgpu_wddm_gl.dll",
-      "source": "scratch/t36/f4-dxil/gl-set-r3/artifacts/release/gl-x64-rel/amdgpu_wddm_gl.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/gl-x64-rel/amdgpu_wddm_gl.dll",
       "sha256": "9D7A14B4DFF303BF9B8AAA9E0D4A938B5708F7BE612AEA9703307D12F21926F7",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -2773,7 +2773,7 @@
     {
       "component": "opengl-icd",
       "path": "payload/opengl/amdgpu_wddm_gl.dll",
-      "source": "scratch/t36/f4-dxil/gl-set-r3/artifacts/lab/gl-x64-lab/amdgpu_wddm_gl.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/gl-x64-lab/amdgpu_wddm_gl.dll",
       "sha256": "FA3C8D40C81E6A75E8150EB9E45C0F42A6A99F1A72F2E82306D562213B31CF03",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -2873,7 +2873,7 @@
     {
       "component": "kmd",
       "path": "payload/kmd/amdgpu-state.bin",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/kmd-rel/amdgpu-state.bin",
+      "source": "scratch/t36/cand-set/artifacts/release/kmd-rel/amdgpu-state.bin",
       "sha256": "7C72209258D86D6EF52B46AB78718C3F9D9871EFFAC1A77A0423D8BCD55179CE",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2899,7 +2899,7 @@
     {
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/state-worker-rel/amdgpu-state-installer.exe",
+      "source": "scratch/t36/cand-set/artifacts/release/state-worker-rel/amdgpu-state-installer.exe",
       "sha256": "90676C023EFFA3864818D4AEE11B6C50D7EAEB992477CCA6391E872A7B672FD2",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2927,7 +2927,7 @@
     {
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/state-worker-lab/amdgpu-state-installer.exe",
+      "source": "scratch/t36/cand-set/artifacts/lab/state-worker-lab/amdgpu-state-installer.exe",
       "sha256": "8320E9F35FCE25D75C81536D8401F478D29FA6AA062C941BD53EF94B64C52B05",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2955,7 +2955,7 @@
     {
       "component": "adl",
       "path": "payload/adl/atiadlxx.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/adl-x64-release/atiadlxx.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/adl-x64-release/atiadlxx.dll",
       "sha256": "FD79CAF4FEF435788495151D85E39BF21938D6132CAE6B695A74F49CCA11F00D",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2983,7 +2983,7 @@
     {
       "component": "adl",
       "path": "payload/wow64/adl/atiadlxy.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/release/adl-x86-release/atiadlxy.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/adl-x86-release/atiadlxy.dll",
       "sha256": "E23CE702E565A6CA6C382D5B47E8004FD995BA56F43C68FCBCDCA968A023DE33",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -3011,7 +3011,7 @@
     {
       "component": "adl",
       "path": "payload/adl/atiadlxx.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/adl-x64-lab/atiadlxx.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/adl-x64-lab/atiadlxx.dll",
       "sha256": "DC20434ADC49B61F21BDA5050E417AE52885000DEA0AF24629859C9D2AF00977",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -3039,7 +3039,7 @@
     {
       "component": "adl",
       "path": "payload/wow64/adl/atiadlxy.dll",
-      "source": "scratch/t36/f4-dxil/x1-set-r3/artifacts/lab/adl-x86-lab/atiadlxy.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/adl-x86-lab/atiadlxy.dll",
       "sha256": "332BA7819A701EF2A3ED9C51218142F37B3F42F91E9839E986698C8FCD3DD124",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -3067,7 +3067,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/rocm/amdhip64_7.dll",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-rocm-release/amdhip64_7.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/extra-rocm-release/amdhip64_7.dll",
       "sha256": "A70666CDE5B5DCA5495C99C44835EE7C825278E895286F16030141F25AECB62B",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -3116,7 +3116,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/rocm/libhipblaslt.dll",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-rocm-release/libhipblaslt.dll",
+      "source": "scratch/t36/cand-set/artifacts/release/extra-rocm-release/libhipblaslt.dll",
       "sha256": "AFA0C451E96F24A181187C1B8F938D926EDBCCD74ECAE8DAC659A5E7753BF238",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -3165,7 +3165,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/rocm/attach-rocm-venv.ps1",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-rocm-release/attach-rocm-venv.ps1",
+      "source": "scratch/t36/cand-set/artifacts/release/extra-rocm-release/attach-rocm-venv.ps1",
       "sha256": "970D64F06F8F56671B96C21CB0D8C6A57E88B92F43BA7E81F3E63AFE6EC50781",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -3213,7 +3213,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/rocm/payload.json",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-rocm-release/payload.json",
+      "source": "scratch/t36/cand-set/artifacts/release/extra-rocm-release/payload.json",
       "sha256": "D886FA04F615F3379952DA32203CF4751B681F07ECFBB1C48BFBBE756DC08808",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -3261,7 +3261,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/rocm/rocm-files.ps1",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/release/extra-rocm-release/rocm-files.ps1",
+      "source": "scratch/t36/cand-set/artifacts/release/extra-rocm-release/rocm-files.ps1",
       "sha256": "603E6AE80CC3B05619BF416D89DD59D7F289916A82C08CDBE8E79DACEBC1E53B",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -3309,7 +3309,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/rocm/amdhip64_7.dll",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-rocm-lab/amdhip64_7.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/extra-rocm-lab/amdhip64_7.dll",
       "sha256": "6B5C5B9971026855B013AC91899D1566E44F493E732C3041143511FE3627DD48",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -3358,7 +3358,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/rocm/libhipblaslt.dll",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-rocm-lab/libhipblaslt.dll",
+      "source": "scratch/t36/cand-set/artifacts/lab/extra-rocm-lab/libhipblaslt.dll",
       "sha256": "03EA4760932E77E5C9ECB9553E8A6BCA3E9ABF711F51EF9771D5B8A40CCACBED",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -3407,7 +3407,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/rocm/attach-rocm-venv.ps1",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-rocm-lab/attach-rocm-venv.ps1",
+      "source": "scratch/t36/cand-set/artifacts/lab/extra-rocm-lab/attach-rocm-venv.ps1",
       "sha256": "970D64F06F8F56671B96C21CB0D8C6A57E88B92F43BA7E81F3E63AFE6EC50781",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -3455,7 +3455,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/rocm/payload.json",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-rocm-lab/payload.json",
+      "source": "scratch/t36/cand-set/artifacts/lab/extra-rocm-lab/payload.json",
       "sha256": "BD06FCCADB025BA8FCF1C2A74442D70B3DC0B32C449B86EB1605B53C960BF7AE",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -3503,7 +3503,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/rocm/rocm-files.ps1",
-      "source": "scratch/t36/f4-dxil/reg-set-r2/artifacts/lab/extra-rocm-lab/rocm-files.ps1",
+      "source": "scratch/t36/cand-set/artifacts/lab/extra-rocm-lab/rocm-files.ps1",
       "sha256": "603E6AE80CC3B05619BF416D89DD59D7F289916A82C08CDBE8E79DACEBC1E53B",
       "built_from": {
         "repo": "amdgpu-wddm",
