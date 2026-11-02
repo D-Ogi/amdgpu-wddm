@@ -10,8 +10,8 @@
     "that the patch adds to the file and that the base does not hold, so the marker, not the patch file, is the",
     "evidence that a change is in. The llama-rdna1-* entries are ports of the MIT llama.cpp patches of",
     "https://github.com/akandr/bc250-rocm (patches/llamacpp); each has its own .md with the source and the rebase notes.",
-    "llama-rdna1-pkf16-bload, llama-rdna1-pkf16-lds-barrier and llama-rdna1-pkf16-id-bn64 are our own changes to",
-    "the ported packed-fp16 GEMM, not ports. Their .md files hold the measurements."
+    "llama-rdna1-pkf16-bload and llama-rdna1-pkf16-lds-barrier are our own changes to the ported packed-fp16 GEMM,",
+    "not ports. Their .md files hold the measurements."
   ],
   "patches": [
     { "patch": "llama-no-device-printf.patch", "file": "ggml/src/ggml-cuda/common.cuh",
@@ -45,8 +45,6 @@
     { "patch": "llama-rdna1-gdn-lanes.patch", "file": "ggml/src/ggml-cuda/gated_delta_net.cu",
       "marker": "lanes_t", "what": "gated delta net lanes per column on RDNA1" },
     { "patch": "llama-rdna1-iq-codebook.patch", "file": "ggml/src/ggml-cuda/mmvq-rdna1-f32.cu",
-      "marker": "iq_grid_dwords", "what": "the IQ codebook of the float-activation matvec in shared memory" },
-    { "patch": "llama-rdna1-pkf16-id-bn64.patch", "file": "ggml/src/ggml-cuda/mmf16-rdna1.cu",
-      "marker": "atoi(e) : 64", "what": "the MoE expert tile default at BN=64 instead of 32" }
+      "marker": "iq_grid_dwords", "what": "the IQ codebook of the float-activation matvec in shared memory" }
   ]
 }

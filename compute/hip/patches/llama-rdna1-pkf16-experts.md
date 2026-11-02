@@ -33,3 +33,22 @@ which this path reads, keep their meaning.
 
 Their figures, on Linux at 1500 MHz: qwen3.6-35B-A3B pp512 from 379 to 588 (x1.55). Hypothesis
 for this driver. `GGML_RDNA1_PKF16_ID=0` is the A/B arm inside one build.
+
+## Why the default column tile stays 32
+
+MEASURED, unit A, 40 CU, 1500 MHz, 12 GiB carve-out, Qwen3.6-35B-A3B UD-IQ2_M, llama-bench pp512
+(t/s). The winner of BN=32 against BN=64 changes with the packed `__hfma2` of the runtime header
+`hip_fp16.h`:
+
+| Build | BN=32 (default) | BN=64 |
+|---|---:|---:|
+| 2026-10-30, before bload, scalar `__hfma2` | 464.00 | 513.94 |
+| 2026-10-30, bload and LDS-only barriers, scalar `__hfma2` | 561.59 | 605.61 |
+| 2026-10-30, bload, vector `__hfma2` | 657.39 | 604.34 |
+| 2026-11-02, this patch set, LargePages 1 (ggml-hip F627D339, BN=64 compiled in) | 661.63 | 610.91 |
+
+With the vector header, the BN=32 IQ2_XXS expert kernel does 512 `v_pk_fma_f16` instead of 1024
+scalar FMAs, and BN=32 gains 17 %. BN=64 gains nothing. The shipped runtime has the vector header,
+so BN=32 is faster by 8 %. tg64 does not change with the tile width (74.10 against 74.22). The
+BN=64 figures of the first two rows are not valid for a build with the vector header.
+`GGML_RDNA1_PKF16_ID_BN` keeps the A/B arm inside one build.
