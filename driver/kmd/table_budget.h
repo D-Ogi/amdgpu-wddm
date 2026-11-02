@@ -12,6 +12,7 @@
 #define BC250_TABLE_LEVELS 4
 #define BC250_TABLE_GIANT_PAGE ((unsigned long long)1 << 30)
 #define BC250_TABLE_ALIGNMENT 65536
+#define BC250_TABLE_BUDGET_CAP (64ull * 1024 * 1024)
 
 typedef struct _BC250_TABLE_BUDGET {
     unsigned long long ApplicationBytes;

@@ -25,6 +25,7 @@ typedef int BOOLEAN;
 #define BC250_GART_WINDOW (2ull<<20)
 #define BC250_GART_SCRATCH_OFFSET 4096ull
 #define BC250_VIDMM_GIANT_PAGE_BYTES (1024ull*1024*1024)
+#define BC250_TABLE_BUDGET_CAP (64ull*1024*1024)
 #define GuardLog(...) ((void)0)
 #define RtlZeroMemory(p,n) memset(p,0,n)
 /* vram.c publishes the active board memory size for the board memory card while it sets the geometry.
@@ -96,20 +97,20 @@ static void check_caps(BC250_DEVICE* d, ULONGLONG expected)
 static void caps_cases(void)
 {
  /* Independent fixtures: POST occupies 9,216,000 bytes, rounded to 9,240,576;
-    the 32 MiB tail and rounded 1/32 page-table reservation are excluded. */
+    the 32 MiB tail and the capped page-table reservation (64 MiB) are excluded. */
  static const struct {ULONG gib;ULONGLONG local;} cases[]={
-  {4,4119330816ull},{8,8280080384ull},{12,12440829952ull},{16,16601579520ull}};
+  {4,4185063424ull},{8,8480030720ull},{12,12774998016ull},{16,17069965312ull}};
  unsigned i;BC250_DEVICE d;
  for(i=0;i<sizeof(cases)/sizeof(cases[0]);i++) {
   init(&d,cases[i].gib);CHECK(VramStart(&d)==0);check_caps(&d,cases[i].local);
  }
  init(&d,8);CHECK(VramStart(&d)==0);
- d.Post.Pitch=8192;d.Post.Height=8192;check_caps(&d,8223981568ull);
+ d.Post.Pitch=8192;d.Post.Height=8192;check_caps(&d,8422162432ull);
  d.WddmAperture.bytes=0;check_caps(&d,0);
  d.WddmAperture.bytes=(384ull<<20)+4096;check_caps(&d,0);
  d.WddmAperture.bytes=448ull<<20;check_caps(&d,0);
- d.WddmAperture.bytes=256ull<<20;check_caps(&d,8223981568ull);
- d.WddmAperture.bytes=447ull<<20;check_caps(&d,8223981568ull);
+ d.WddmAperture.bytes=256ull<<20;check_caps(&d,8422162432ull);
+ d.WddmAperture.bytes=447ull<<20;check_caps(&d,8422162432ull);
  d.Post.Height=0;check_caps(&d,0);
  init(&d,8);CHECK(VramStart(&d)==0);d.VramEnabled=FALSE;check_caps(&d,0);
  init(&d,8);CHECK(VramStart(&d)==0);d.Post.PhysicAddress.QuadPart=1;check_caps(&d,0);

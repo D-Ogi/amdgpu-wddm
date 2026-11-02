@@ -104,6 +104,56 @@ static void test_reclaimed_bytes(void)
     }
 }
 
+static unsigned long long cap_policy(unsigned long long avail)
+{
+    unsigned long long t = (avail / 32u) & ~65535ull;
+    if (t > BC250_TABLE_BUDGET_CAP) t = BC250_TABLE_BUDGET_CAP;
+    if (t < 4ull * 1024 * 1024) t = 4ull * 1024 * 1024;
+    return t;
+}
+
+static void test_budget_cap(void)
+{
+    unsigned long long avail, tableBytes, uncapped;
+    // At 8 GiB: 1/32 = 256 MiB, capped to 64 MiB -> app gains 192 MiB
+    avail = 8ull * 1024 * 1024 * 1024;
+    tableBytes = cap_policy(avail);
+    uncapped = (avail / 32u) & ~65535ull;
+    CHECK(uncapped == 256ull * 1024 * 1024, "8G uncapped %llu", uncapped);
+    CHECK(tableBytes == 64ull * 1024 * 1024, "8G capped %llu", tableBytes);
+    CHECK(uncapped - tableBytes == 192ull * 1024 * 1024, "8G gain");
+    // At 12 GiB: 1/32 = 384 MiB, capped to 64 MiB -> app gains 320 MiB
+    avail = 12ull * 1024 * 1024 * 1024;
+    tableBytes = cap_policy(avail);
+    uncapped = (avail / 32u) & ~65535ull;
+    CHECK(uncapped == 384ull * 1024 * 1024, "12G uncapped %llu", uncapped);
+    CHECK(tableBytes == 64ull * 1024 * 1024, "12G capped %llu", tableBytes);
+    CHECK(uncapped - tableBytes == 320ull * 1024 * 1024, "12G gain");
+    // At 4 GiB: 1/32 = 128 MiB, capped to 64 MiB -> app gains 64 MiB
+    avail = 4ull * 1024 * 1024 * 1024;
+    tableBytes = cap_policy(avail);
+    uncapped = (avail / 32u) & ~65535ull;
+    CHECK(uncapped == 128ull * 1024 * 1024, "4G uncapped %llu", uncapped);
+    CHECK(tableBytes == 64ull * 1024 * 1024, "4G capped %llu", tableBytes);
+    // At 1 GiB: 1/32 = 32 MiB, below cap -> unchanged at 32 MiB
+    avail = 1ull * 1024 * 1024 * 1024;
+    tableBytes = cap_policy(avail);
+    uncapped = (avail / 32u) & ~65535ull;
+    CHECK(uncapped == 32ull * 1024 * 1024, "1G uncapped %llu", uncapped);
+    CHECK(tableBytes == uncapped, "1G below cap");
+    // At 64 MiB: 1/32 = 2 MiB, below cap, min 4 MiB applies
+    avail = 64ull * 1024 * 1024;
+    tableBytes = cap_policy(avail);
+    CHECK(tableBytes == 4ull * 1024 * 1024, "64M min %llu", tableBytes);
+    // Cap headroom: 64 MiB is >30x the pinned paging reserve
+    {
+        unsigned long long pinnedBytes = (unsigned long long)Bc250PinnedPagingPages() * PAGE_SIZE;
+        pinnedBytes = (pinnedBytes + BC250_TABLE_ALIGNMENT - 1) & ~(unsigned long long)(BC250_TABLE_ALIGNMENT - 1);
+        CHECK(cap_policy(8ull*1024*1024*1024) > pinnedBytes * 10,
+              "cap %llu >> pinned %llu", cap_policy(8ull*1024*1024*1024), pinnedBytes);
+    }
+}
+
 int main(void)
 {
     test_paging_pages();
@@ -111,6 +161,7 @@ int main(void)
     test_current_budget();
     test_proposed_budget();
     test_reclaimed_bytes();
+    test_budget_cap();
     printf("%d PASS, %d FAIL\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
