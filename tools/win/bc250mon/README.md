@@ -436,8 +436,8 @@ value the lab thermal guard reads. The peak is the hottest 250 ms sample, so a s
 one minute. Tctl and the peak are amber from 85 C and red from 87 C. The GFX temperature comes from the SMU metrics
 table (`BC250_DPM_METRICS`, RUN_DPM ABI 3, KMD 0.7.215 and later) and is `n/a` without a fresh table
 (`EnableSmuMetrics` 0, an older KMD or DLL). `GET /telemetry` gives `tctlPeak60C`, `gfxTemperatureC` and
-`temperatureText`; `mon.py telemetry` gives `tctl_peak60_c` and `gfx_temp_c`. Every source is read-only. The DPM snapshot and the segment statistics are answered from
-memory the KMD or dxgkrnl already holds; the clock fallback is the same typed read the SoC panel makes anyway:
+`temperatureText`. `mon.py telemetry` gives `tctl_peak60_c` and `gfx_temp_c`. Every source is read-only. The DPM snapshot and the segment statistics are answered from
+memory the KMD or dxgkrnl already holds. The clock fallback is the same typed read the SoC panel makes anyway:
 
 | Value | Source |
 |---|---|
