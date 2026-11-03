@@ -11,7 +11,9 @@ C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, OcTier) == 556);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, OcTiers) == 576);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, OcPoints) == 624);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, OcCpuMinUvSteps) == 660);
-C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, Reserved) == 684);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, CpuDefaultTempC) == 684);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, Reserved) == 688);
+C_ASSERT(BC250_CPU_TEMP_DEFAULT_C >= BC250_CPU_TEMP_MIN_C && BC250_CPU_TEMP_DEFAULT_C <= BC250_CPU_TEMP_MAX_C);
 C_ASSERT(BC250_OC_TIER_COUNT == 3 && BC250_CLOCK_OC_LEVELS == 3);
 
 void BoardProviderBind(BC250_DEVICE* device)
@@ -38,9 +40,9 @@ void BoardProviderCaps(BC250_DEVICE* device, BC250_ESCAPE_BOARD_CAPS* data, ULON
     canonical.Magic = BC250_ESCAPE_MAGIC;
     canonical.Command = BC250_ESCAPE_RUN_BOARD_CAPS;
     canonical.Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
-    // ABI 1 readers (an older control application) get the ABI 1 reply: the overclock words stay zero.
-    canonical.AbiVersion = request.AbiVersion == BC250_BOARD_CAPS_ABI_V1 ? BC250_BOARD_CAPS_ABI_V1 :
-                                                                          BC250_BOARD_CAPS_ABI;
+    // An older reader gets the reply of the ABI it names: ABI 1 (no overclock words) and ABI 2 (no default cap).
+    canonical.AbiVersion = (request.AbiVersion == BC250_BOARD_CAPS_ABI_V1 ||
+                            request.AbiVersion == BC250_BOARD_CAPS_ABI_V2) ? request.AbiVersion : BC250_BOARD_CAPS_ABI;
     *data = canonical;
     data->Status = BC250_ESCAPE_STATUS_REFUSED;
     data->NtStatus = (ULONG)STATUS_INVALID_PARAMETER;
@@ -82,7 +84,8 @@ void BoardProviderCaps(BC250_DEVICE* device, BC250_ESCAPE_BOARD_CAPS* data, ULON
         data->GpuPoints[i].Mv=bc250_clock_points[i].mv;
         data->GpuPoints[i].Vid=bc250_clock_points[i].vid;
     }
-    if (canonical.AbiVersion == BC250_BOARD_CAPS_ABI) {
+    if (canonical.AbiVersion == BC250_BOARD_CAPS_ABI) data->CpuDefaultTempC=BC250_CPU_TEMP_DEFAULT_C;
+    if (canonical.AbiVersion != BC250_BOARD_CAPS_ABI_V1) {
         data->OcTier=device->OcTier; data->OcStoredTier=device->OcStoredTier;
         data->OcReason=device->OcReason; data->OcBoard=device->OcBoard;
         data->OcTierCount=BC250_OC_TIER_COUNT;

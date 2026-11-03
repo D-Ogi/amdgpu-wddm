@@ -117,9 +117,10 @@ The rules:
   the three points. It is read only.
 - The thermal rules do not change: the 87 C warm zone and thermal cap, the 90 C thermal floor, the fan guard and
   the CPU gates apply at every tier. The PSU limit of 300 W does not change.
-- The board capability query (ABI 2) reports the tier of this start, the stored tier, the reason, the board
-  fingerprint, the three envelopes, the three points and the CPU undervolt table. A reader that asks for ABI 1 gets
-  the ABI 1 reply, with the overclock words at zero.
+- The board capability query (ABI 2 and later) reports the tier of this start, the stored tier, the reason, the
+  board fingerprint, the three envelopes, the three points and the CPU undervolt table. A reader that asks for ABI 1
+  gets the ABI 1 reply, with the overclock words at zero. ABI 3 adds the default CPU temperature cap
+  (`CpuDefaultTempC`, [tuner.md](tuner.md)). An ABI 2 reply has that word at zero.
 - The control app asks for the cooling type and then shows three warnings. Each warning needs an explicit "I
   understand". A "Stop" at any step writes nothing. The app then writes `OcTier` and `OcTierBoard` through the
   ordinary plan and confirmation. The reset to defaults deletes both values.

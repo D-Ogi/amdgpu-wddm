@@ -183,6 +183,13 @@ static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
         }
         if (boardMode == 8) { *c = boardFixture; c->OcPoints[1].Mv = 1000; return 0; } /* a falling overclock point */
         if (boardMode == 9) { *c = boardFixture; c->AbiVersion = 1; return 0; }        /* ABI 1 with overclock words */
+        if (boardMode == 10) { /* a driver of ABI 2 (tester.36): refuses ABI 3, answers ABI 2 without the default cap */
+            if (c->AbiVersion != 2) { c->Status = BC250_ESCAPE_STATUS_REFUSED; c->NtStatus = (ULONG)0xC000000D; return 0; }
+            *c = boardFixture; c->AbiVersion = 2; c->CpuDefaultTempC = 0;
+            return 0;
+        }
+        if (boardMode == 11) { *c = boardFixture; c->CpuDefaultTempC = c->CpuTempMaxC + 1; return 0; } /* out of the band */
+        if (boardMode == 12) { *c = boardFixture; c->AbiVersion = 2; return 0; }       /* ABI 2 with a default cap */
         *c = boardFixture;
         if (boardMode == 2) { memset(c, 0, sizeof(*c)); c->Magic=BC250_ESCAPE_MAGIC; c->Command=33; c->AbiVersion=1; c->Reason=1; }
         if (boardMode == 3) c->GpuPointCount = 17;
@@ -273,10 +280,16 @@ int main(int argc, char **argv)
     }
     boardMode = 7; boardCalls = 0;
     CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) == 0 && caps.AbiVersion == 1 && caps.Flags == 31 &&
-          boardCalls == 2 && !caps.OcTierCount);
+          boardCalls == 3 && !caps.OcTierCount && !caps.CpuDefaultTempC);
+    boardMode = 10; boardCalls = 0;
+    CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) == 0 && caps.AbiVersion == 2 && caps.Flags == 31 &&
+          boardCalls == 2 && caps.OcTierCount == 3 && !caps.CpuDefaultTempC);
+    boardMode = 11; CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) < 0);
+    boardMode = 12; CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) < 0);
     boardMode = 8; CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) < 0);
     boardMode = 9; CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) < 0);
-    boardMode = 0; CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) == 0 && caps.AbiVersion == 2 && caps.OcTierCount == 3);
+    boardMode = 0; CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) == 0 && caps.AbiVersion == 3 && caps.OcTierCount == 3 &&
+                         caps.CpuDefaultTempC == 90);
     boardMode = 0; escapeCalls = 0;
 
 

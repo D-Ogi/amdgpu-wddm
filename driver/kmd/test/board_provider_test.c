@@ -52,8 +52,11 @@ int main(int argc,char** argv)
     CHECK(caps.FanPresets[0][3].TempC==76 && caps.FanPresets[0][3].DutyPct==95);
     CHECK(caps.FanPresets[1][4].TempC==85 && caps.FanPresets[2][3].DutyPct==100);
     for(i=0;i<ARRAYSIZE(caps.Reserved);++i)CHECK(!caps.Reserved[i]);
+    /* ABI 3: the default CPU temperature cap (2026-11-04), inside the band the same reply names. */
+    CHECK(caps.AbiVersion==3 && caps.CpuDefaultTempC==90 && caps.CpuDefaultTempC>=caps.CpuTempMinC &&
+          caps.CpuDefaultTempC<=caps.CpuTempMaxC);
     /* ABI 2: the overclock envelopes, and no tier on a start that decided none. */
-    CHECK(caps.AbiVersion==2 && caps.OcTierCount==3 && !caps.OcTier && !caps.OcStoredTier && !caps.OcReason && !caps.OcBoard);
+    CHECK(caps.OcTierCount==3 && !caps.OcTier && !caps.OcStoredTier && !caps.OcReason && !caps.OcBoard);
     CHECK(caps.OcTiers[0].GpuMaxMHz==2000 && caps.OcTiers[0].GpuMaxMv==1000 && caps.OcTiers[0].CpuMaxMHz==3500 &&
           caps.OcTiers[0].CpuUvMaxSteps==16);
     CHECK(caps.OcTiers[1].GpuMaxMHz==2200 && caps.OcTiers[1].GpuMaxMv==1050 && caps.OcTiers[1].CpuMaxMHz==3900 &&
@@ -71,7 +74,11 @@ int main(int argc,char** argv)
     query_abi(&device,&caps,1);CHECK(caps.Status==BC250_ESCAPE_STATUS_DONE && caps.AbiVersion==1 && caps.Flags==31);
     {const ULONG* w=(const ULONG*)&caps;for(i=139;i<192;++i)CHECK(!w[i]);}
     query(&device,&caps);CHECK(caps.OcTier==2 && caps.OcStoredTier==2 && caps.OcReason==1 && caps.OcBoard==0x1234);
-    query_abi(&device,&caps,3);CHECK(caps.Status==BC250_ESCAPE_STATUS_REFUSED);
+    /* An ABI 2 reader (the control application of tester.36) gets the overclock words and no default cap. */
+    query_abi(&device,&caps,2);CHECK(caps.Status==BC250_ESCAPE_STATUS_DONE && caps.AbiVersion==2 && caps.Flags==31);
+    CHECK(caps.OcTier==2 && caps.OcTierCount==3 && !caps.CpuDefaultTempC);
+    {const ULONG* w=(const ULONG*)&caps;for(i=171;i<192;++i)CHECK(!w[i]);}
+    query_abi(&device,&caps,4);CHECK(caps.Status==BC250_ESCAPE_STATUS_REFUSED);
     device.Hwmon.Online=device.Smu.Online=FALSE;
     query(&device,&caps);CHECK(caps.Flags==31);
     device.RetainedPowerPhase=1;query(&device,&caps);CHECK(caps.Flags==1);

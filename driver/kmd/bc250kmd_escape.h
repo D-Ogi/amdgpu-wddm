@@ -2026,7 +2026,8 @@ typedef struct _BC250_ESCAPE_PROCESS_POLICY {
     unsigned short Image[BC250_PROCESS_POLICY_IMAGE_CHARS]; // in: the process image's file name, zero-terminated
 } BC250_ESCAPE_PROCESS_POLICY; // 176 bytes, ABI 1
 typedef char BC250_PROCESS_POLICY_SIZE_CHECK[(sizeof(BC250_ESCAPE_PROCESS_POLICY) == 176) ? 1 : -1];
-#define BC250_BOARD_CAPS_ABI 2u
+#define BC250_BOARD_CAPS_ABI 3u
+#define BC250_BOARD_CAPS_ABI_V2 2u   // the overclock words, without CpuDefaultTempC
 #define BC250_BOARD_CAPS_ABI_V1 1u
 #define BC250_BOARD_CAPS_SUPPORTED 1u
 #define BC250_BOARD_CAPS_FAN 2u
@@ -2060,5 +2061,9 @@ typedef struct _BC250_ESCAPE_BOARD_CAPS {
     BC250_BOARD_OC_TIER OcTiers[3];
     BC250_BOARD_GPU_POINT OcPoints[3];
     unsigned long OcCpuMinUvSteps[6];
-    unsigned long Reserved[21];
+    // ABI 3 (2026-11-04): the CPU temperature cap a start applies when no CpuTempC is stored
+    // (BC250_CPU_TEMP_DEFAULT_C, inside CpuTempMinC..CpuTempMaxC). It stays zero in an ABI 1 or ABI 2 reply, so a
+    // reader of those ABIs sees the reply it always saw. A request names the ABI it reads, and the driver answers it.
+    unsigned long CpuDefaultTempC;
+    unsigned long Reserved[20];
 } BC250_ESCAPE_BOARD_CAPS;

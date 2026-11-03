@@ -717,13 +717,16 @@ static int BoardCapabilitiesValid(const BC250_ESCAPE_BOARD_CAPS *c)
     const ULONG *words = (const ULONG *)c;
     if (c->Magic != BC250_ESCAPE_MAGIC || c->Command != BC250_ESCAPE_RUN_BOARD_CAPS ||
         c->Status != BC250_ESCAPE_STATUS_DONE || c->NtStatus ||
-        (c->AbiVersion != BC250_BOARD_CAPS_ABI && c->AbiVersion != BC250_BOARD_CAPS_ABI_V1) ||
+        (c->AbiVersion != BC250_BOARD_CAPS_ABI && c->AbiVersion != BC250_BOARD_CAPS_ABI_V2 &&
+         c->AbiVersion != BC250_BOARD_CAPS_ABI_V1) ||
         (c->Flags & ~31u) || c->Reason > BC250_BOARD_CAPS_REASON_INACTIVE) return 0;
     for (i = 0; i < ARRAYSIZE(c->Reserved); ++i) if (c->Reserved[i]) return 0;
     // An ABI 1 reply (a driver older than the overclock tiers) has no overclock words at all.
     if (c->AbiVersion == BC250_BOARD_CAPS_ABI_V1)
         for (i = FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, OcTier) / sizeof(ULONG); i < sizeof(*c) / sizeof(ULONG); ++i)
             if (words[i]) return 0;
+    // An ABI 2 reply (a driver older than the default CPU temperature cap) has no default cap.
+    if (c->AbiVersion != BC250_BOARD_CAPS_ABI && c->CpuDefaultTempC) return 0;
     if (!c->ProviderId) {
         if (c->Flags || c->Reason != BC250_BOARD_CAPS_REASON_BOARD) return 0;
         for (i = 8; i < sizeof(*c) / sizeof(ULONG); ++i) if (words[i]) return 0;
@@ -745,6 +748,9 @@ static int BoardCapabilitiesValid(const BC250_ESCAPE_BOARD_CAPS *c)
         !c->CpuStepMHz || c->CpuTempMinC > c->CpuTempMaxC || !c->CpuRefuseMv ||
         !c->CpuStockMask || (c->CpuStockMask & ~c->CpuFullMask) || !c->CpuCoreCount || c->CpuCoreCount > 32 ||
         !c->CpuStockCoreCount || c->CpuStockCoreCount > c->CpuCoreCount) return 0;
+    // ABI 3: the cap a start applies with no CpuTempC stored, a value of the band of the same reply.
+    if (c->AbiVersion == BC250_BOARD_CAPS_ABI &&
+        (c->CpuDefaultTempC < c->CpuTempMinC || c->CpuDefaultTempC > c->CpuTempMaxC)) return 0;
     if (c->FanMinC >= c->FanMaxC || c->FanFloorPct > c->FanFullPct || c->FanFullPct > 100 ||
         !c->FanEmergencyMc || c->FanPointMin < 2 || c->FanPointMin > c->FanPointMax || c->FanPointMax > 8 ||
         !c->FanLeaseMinMs || c->FanLeaseMinMs > c->FanLeaseDefaultMs || c->FanLeaseDefaultMs > c->FanLeaseMaxMs) return 0;
@@ -755,7 +761,7 @@ static int BoardCapabilitiesValid(const BC250_ESCAPE_BOARD_CAPS *c)
             p->Mv < c->GpuMinMv || p->Mv > c->GpuMaxMv || p->Vid != (1550u - p->Mv) * 160u / 1000u || (i && p->Mv < c->GpuPoints[i-1].Mv)) return 0;
     }
     if (c->GpuPoints[c->GpuPointCount-1].MHz != c->GpuMaxMHz) return 0;
-    if (c->AbiVersion == BC250_BOARD_CAPS_ABI) {
+    if (c->AbiVersion != BC250_BOARD_CAPS_ABI_V1) {
         // The overclock envelopes: tier 0 is the plain envelope above, each tier admits at least what the one
         // before it admits, and every tier ceiling is a published point.
         if (c->OcTierCount != ARRAYSIZE(c->OcTiers) || c->OcTier >= c->OcTierCount || c->OcStoredTier > MAXLONG ||
@@ -790,28 +796,33 @@ static int BoardCapabilitiesValid(const BC250_ESCAPE_BOARD_CAPS *c)
     }
     return 1;
 }
+// One capability request of the named ABI.
+static NTSTATUS BoardCapabilitiesAsk(BC250_ESCAPE_BOARD_CAPS *data, ULONG abi)
+{
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_BOARD_CAPS;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = abi;
+    return TelemetryEscape(data, sizeof(*data));
+}
 BC250_CONTROL_API LONG WINAPI Bc250BoardCapabilities(BC250_ESCAPE_BOARD_CAPS *data, ULONG bytes)
 {
     NTSTATUS status;
     typedef char BoardCapsAbiSizeCheck[(sizeof(BC250_ESCAPE_BOARD_CAPS) == 768) ? 1 : -1];
     (void)sizeof(BoardCapsAbiSizeCheck);
     if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
-    memset(data, 0, sizeof(*data));
-    data->Magic = BC250_ESCAPE_MAGIC;
-    data->Command = BC250_ESCAPE_RUN_BOARD_CAPS;
-    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
-    data->AbiVersion = BC250_BOARD_CAPS_ABI;
-    status = TelemetryEscape(data, sizeof(*data));
+    status = BoardCapabilitiesAsk(data, BC250_BOARD_CAPS_ABI);
     if (!NT_SUCCESS(status)) return status;
     if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    // A driver older than the default CPU temperature cap refuses ABI 3, and one older than the overclock tiers
+    // refuses ABI 2 as well: ask again, one ABI lower each time.
     if (data->Status == BC250_ESCAPE_STATUS_REFUSED) {
-        // A driver older than the overclock tiers refuses ABI 2: ask it again for the ABI 1 reply.
-        memset(data, 0, sizeof(*data));
-        data->Magic = BC250_ESCAPE_MAGIC;
-        data->Command = BC250_ESCAPE_RUN_BOARD_CAPS;
-        data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
-        data->AbiVersion = BC250_BOARD_CAPS_ABI_V1;
-        status = TelemetryEscape(data, sizeof(*data));
+        status = BoardCapabilitiesAsk(data, BC250_BOARD_CAPS_ABI_V2);
+        if (!NT_SUCCESS(status)) return status;
+    }
+    if (data->Status == BC250_ESCAPE_STATUS_REFUSED) {
+        status = BoardCapabilitiesAsk(data, BC250_BOARD_CAPS_ABI_V1);
         if (!NT_SUCCESS(status)) return status;
     }
     if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus)
@@ -4403,6 +4414,8 @@ static int BoardCapsCommand(void)
     printf("cpu min_mhz=%lu max_mhz=%lu lab_max_mhz=%lu step_mhz=%lu uv_max_steps=%lu temp_min_c=%lu temp_max_c=%lu refuse_mv=%lu stock_mask=0x%lX full_mask=0x%lX\n",
         c.CpuMinMHz, c.CpuMaxMHz, c.CpuLabMaxMHz, c.CpuStepMHz, c.CpuUvMaxSteps,
         c.CpuTempMinC, c.CpuTempMaxC, c.CpuRefuseMv, c.CpuStockMask, c.CpuFullMask);
+    // 0: a driver of board-caps ABI 1 or 2, which applies no default cap (the firmware's own stays).
+    printf("cpu default_temp_c=%lu\n", c.CpuDefaultTempC);
     printf("fan min_c=%lu max_c=%lu min_pct=%lu max_pct=%lu emergency_mc=%lu lease_min_ms=%lu lease_max_ms=%lu lease_default_ms=%lu\n",
         c.FanMinC, c.FanMaxC, c.FanFloorPct, c.FanFullPct, c.FanEmergencyMc, c.FanLeaseMinMs, c.FanLeaseMaxMs, c.FanLeaseDefaultMs);
     for (ULONG profile = 0; profile < 3; ++profile)
@@ -4427,7 +4440,7 @@ static int OcCommand(void)
         printf("oc: not supported on this device (board-caps reason %lu)\n", c.Reason);
         return 0;
     }
-    if (c.AbiVersion != BC250_BOARD_CAPS_ABI) {
+    if (c.AbiVersion == BC250_BOARD_CAPS_ABI_V1) {
         printf("oc: this driver reports no overclock tiers (board capabilities ABI %lu)\n", c.AbiVersion);
         return 0;
     }
