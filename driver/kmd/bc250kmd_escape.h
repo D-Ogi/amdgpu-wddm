@@ -985,7 +985,7 @@ typedef struct _BC250_ESCAPE_DPM_CURVE {
 #define BC250_CPU_OP_SET 2u                  // in: Given, MaxMHz, UvSteps, TempC, TrialMs
 #define BC250_CPU_OP_KEEP 3u
 #define BC250_CPU_OP_CANCEL 4u
-#define BC250_CPU_OP_RESET 5u                // the recorded baseline, and the stored values deleted
+#define BC250_CPU_OP_RESET 5u                // baseline clock, no undervolt, default cap; stored values deleted
 #define BC250_CPU_OP_CORES 6u                // in: CoreMask (119 or 255); applies at the next Windows restart
 // The guided undervolt search ("find my setting"). The judgement is the shim's (bc250_cpu_search_next), the load is
 // the caller's: BEGIN records the baseline and applies step 1 as a trial; then the caller loads the CPU for

@@ -16,7 +16,13 @@
 #define BC250_CPU_LAB_MIN_UV_STEPS	4u	/* about 13 to 17 mV: what the lab bound needs first */
 #define BC250_CPU_UV_MAX_STEPS		16u	/* about 50 to 115 mV; the reference tool's own GUI stops at 40 */
 #define BC250_CPU_TEMP_MIN_C		85u
-#define BC250_CPU_TEMP_MAX_C		100u	/* the firmware default, and the value a restore puts back */
+#define BC250_CPU_TEMP_MAX_C		100u	/* the firmware's own cap: the highest value an operator may choose */
+/* The cap a start applies when no CpuTempC is stored, and the value a reset or a revert puts back when nothing else
+ * names one. Not the firmware's 100 C: on unit A the CPU test of 3DMark Time Spy took Tctl from 81 to 93.5 C in 12 s
+ * at 3500 MHz and 1.21 V with the firmware's cap, past the lab's thermal stop; with an 85 C cap the firmware held
+ * 86.2 C and the run completed (BD-180, 2026-11-03). The project decision of 2026-11-04 is 90 C. Any value of the
+ * band stays a choice: 100 C is the firmware's own cap. */
+#define BC250_CPU_TEMP_DEFAULT_C	90u
 #define BC250_CPU_REFUSE_MV		1300u
 #define BC250_CPU_PLAUSIBLE_MIN_MV	700u	/* a readback outside this band is not a voltage we understand */
 #define BC250_CPU_PLAUSIBLE_MAX_MV	1600u
@@ -62,7 +68,8 @@ static inline int bc250_board_supported(unsigned int provider_id)
 #define BC250_DPM_TOP_LEVEL	(BC250_CLOCK_LEVELS - 1u)
 /* The opt-in overclock tiers by cooling type (docs/design/dpm.md, "Overclock tiers"; include/bc250_oc.h). A project
  * decision on third-party numbers: nobody has measured them on unit A. Each value is the highest the tier admits.
- * The defaults (BC250_DPM_DEFAULT_MAX_MHZ, the CPU restore baseline) do not change with the tier, and the thermal
+ * The defaults (BC250_DPM_DEFAULT_MAX_MHZ, BC250_CPU_TEMP_DEFAULT_C, the CPU restore baseline) do not change with
+ * the tier, and the thermal
  * rules above do not change either. */
 #define BC250_OC_TIER_NONE		0u	/* the qualified table and the release CPU bound: the default */
 #define BC250_OC_TIER_AIR		1u

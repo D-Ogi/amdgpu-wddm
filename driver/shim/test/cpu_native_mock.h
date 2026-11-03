@@ -83,6 +83,7 @@ static ULONG64 KeQueryInterruptTime(void) { return native_time; }
  * stays open. The model opens the next window once the driver's stalls have spent `us` microseconds in this one,
  * which is how the probe's BC250_CPU_BOOST_PROBE_MS busy window ends. */
 #define NATIVE_WINDOWS 6
+#define NATIVE_SETS 8
 struct native_window {
     unsigned int core_mhz[BC250_CPU_CORES];
     ULONG64 us;                             /* 0 for the last window, which never closes */
@@ -104,6 +105,8 @@ static struct {
     int sequence_open;
     int writes;                             /* any setter: the probe must send none */
     int refuse_core_reads;                  /* 1: message 0x43 is refused, for the no-answer arm */
+    int accept_writes;                      /* 1: a setter is taken (the start and reset arms), 0: refused */
+    struct { ULONG queue, message, parameter; } set[NATIVE_SETS];  /* the setters, in the order they came */
 } native_firmware;
 
 static void NativeFirmwareStall(ULONG64 usec)
@@ -502,8 +505,17 @@ static NTSTATUS SmuCpuMessage(BC250_SMU_OWNER_NATIVE *owner, ULONG queue, ULONG 
     if (temperature_mc != NULL) *temperature_mc = native_firmware.temperature_mc;
     if (temperature_valid != NULL) *temperature_valid = native_firmware.temperature_valid;
     if (write) {
+        /* Every setter is recorded, and an argument outside the shim's own check is a failure of cpu.c. */
+        CHECK(bc250_cpu_argument_allowed(queue, message, parameter));
+        if (native_firmware.writes < NATIVE_SETS) {
+            native_firmware.set[native_firmware.writes].queue = queue;
+            native_firmware.set[native_firmware.writes].message = message;
+            native_firmware.set[native_firmware.writes].parameter = parameter;
+        }
         native_firmware.writes++;
-        return STATUS_NOT_SUPPORTED;
+        if (!native_firmware.accept_writes) return STATUS_NOT_SUPPORTED;
+        if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_SET_CAP_C) native_firmware.cap_c = parameter;
+        return STATUS_SUCCESS;
     }
     CHECK(allow_hot);                       /* every getter of cpu.c passes the hot gate */
     if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_READ_CORE_MHZ) {

@@ -22,6 +22,9 @@
 #define BC250_CPU_Q3_MSG   (BC250_SMU_mmMP1_SMN_C2PMSG_66 + 6u * 4u)	/* C2PMSG_72, 0x58A20 */
 #define BC250_CPU_Q3_RESP  (BC250_SMU_mmMP1_SMN_C2PMSG_90 + 6u * 4u)	/* C2PMSG_96, 0x58A80 */
 #define BC250_CPU_Q3_PARAM (BC250_SMU_mmMP1_SMN_C2PMSG_90 + 8u * 4u)	/* C2PMSG_98, 0x58A88 */
+/* The default cap is a value of the band, so the argument check admits it and a stored choice can always equal it. */
+typedef char bc250_cpu_temp_default_in_band[(BC250_CPU_TEMP_DEFAULT_C >= BC250_CPU_TEMP_MIN_C &&
+					     BC250_CPU_TEMP_DEFAULT_C <= BC250_CPU_TEMP_MAX_C) ? 1 : -1];
 typedef char bc250_cpu_queue3_offsets[(BC250_CPU_Q3_MSG == 0x58A20u && BC250_CPU_Q3_RESP == 0x58A80u &&
 				       BC250_CPU_Q3_PARAM == 0x58A88u) ? 1 : -1];
 
@@ -260,10 +263,12 @@ int bc250_cpu_restore_target(const struct bc250_cpu_settings *from, const struct
 {
 	int complete = 1;
 	*out = *before;
-	/* The cap: the state before the trial, then what the read stage answered, then the firmware's own. */
+	/* The cap: the state before the trial, then the driver's default (2026-11-04). Up to then the second choice
+	 * was the cap the read stage answered and the third the firmware's 100 C, so a reset took the part back to
+	 * the cap under which the Time Spy CPU test passed the lab's thermal stop (BD-180). */
 	if (from->temp_given && !out->temp_given) {
 		out->temp_given = 1;
-		out->temp_c = (baseline != NULL && baseline->temp_given) ? baseline->temp_c : BC250_CPU_TEMP_MAX_C;
+		out->temp_c = BC250_CPU_TEMP_DEFAULT_C;
 	}
 	/* The undervolt: zero is the firmware's own curve and a valid argument, so this is always nameable. */
 	if (from->uv_given && !out->uv_given) {
@@ -279,6 +284,15 @@ int bc250_cpu_restore_target(const struct bc250_cpu_settings *from, const struct
 		} else complete = 0;
 	}
 	return complete;
+}
+
+void bc250_cpu_start_target(const struct bc250_cpu_settings *stored, struct bc250_cpu_settings *out)
+{
+	*out = *stored;
+	if (!out->temp_given) {
+		out->temp_given = 1;
+		out->temp_c = BC250_CPU_TEMP_DEFAULT_C;
+	}
 }
 
 /* One firmware answer into the running maximum, when it is a clock of this part (bc250_cpu.h). */

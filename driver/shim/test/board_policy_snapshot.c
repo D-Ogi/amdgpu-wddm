@@ -22,6 +22,7 @@ printf("BC250_CPU_LAB_MIN_UV_STEPS=%llu\n",(unsigned long long)(BC250_CPU_LAB_MI
 printf("BC250_CPU_UV_MAX_STEPS=%llu\n",(unsigned long long)(BC250_CPU_UV_MAX_STEPS));
 printf("BC250_CPU_TEMP_MIN_C=%llu\n",(unsigned long long)(BC250_CPU_TEMP_MIN_C));
 printf("BC250_CPU_TEMP_MAX_C=%llu\n",(unsigned long long)(BC250_CPU_TEMP_MAX_C));
+printf("BC250_CPU_TEMP_DEFAULT_C=%llu\n",(unsigned long long)(BC250_CPU_TEMP_DEFAULT_C));
 printf("BC250_CPU_REFUSE_MV=%llu\n",(unsigned long long)(BC250_CPU_REFUSE_MV));
 printf("BC250_CPU_PLAUSIBLE_MIN_MV=%llu\n",(unsigned long long)(BC250_CPU_PLAUSIBLE_MIN_MV));
 printf("BC250_CPU_PLAUSIBLE_MAX_MV=%llu\n",(unsigned long long)(BC250_CPU_PLAUSIBLE_MAX_MV));

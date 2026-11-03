@@ -267,6 +267,126 @@ static void test_an_answered_part_owes_no_probe(void)
     Report(__func__ + 5);
 }
 
+/* ---- the default temperature cap (2026-11-04, BD-180) ----------------------------------------------- */
+/* The start and the reset of the binding itself: CpuApplyStart and the RESET escape. The shim's own test pins the
+ * rule (bc250_cpu_start_target, bc250_cpu_restore_target); these arms pin that cpu.c sends what the rule says. */
+
+/* One full read stage of an idle part that is already inside the band, then the start's settings, as the worker
+ * runs them. The firmware takes every setter. */
+static void StartWith(void)
+{
+    StageWindow(3500u);
+    ProbeWindow(3500u, 0);
+    CHECK(Stage() == STATUS_SUCCESS);
+    CHECK(native_firmware.writes == 0);
+    native_firmware.accept_writes = 1;
+    CpuLock(&device.Cpu);
+    CpuApplyStart(&device);
+    CpuUnlock(&device.Cpu);
+}
+
+static int CapSent(int at, unsigned int c)
+{
+    return native_firmware.set[at].queue == BC250_CPU_QUEUE_CPU &&
+           native_firmware.set[at].message == BC250_CPU_MSG_SET_CAP_C && native_firmware.set[at].parameter == c;
+}
+
+/* Nothing stored: the start sends the default cap, one setter, and stores nothing. */
+static void test_start_applies_the_default_cap(void)
+{
+    ULONG value = 0;
+
+    Reset();
+    native_firmware.cap_c = 100u;                           /* the firmware's own cap after a cold boot */
+    StartWith();
+    CHECK(native_firmware.writes == 1 && CapSent(0, BC250_CPU_TEMP_DEFAULT_C));
+    CHECK(native_firmware.cap_c == BC250_CPU_TEMP_DEFAULT_C);
+    CHECK(device.Cpu.Applied.temp_given && device.Cpu.Applied.temp_c == BC250_CPU_TEMP_DEFAULT_C);
+    CHECK(!device.Cpu.Applied.max_given && !device.Cpu.Applied.uv_given);
+    CHECK(!device.Cpu.Stored.temp_given);                   /* the default is not a stored value */
+    CHECK(device.Cpu.Baseline.temp_given && device.Cpu.Baseline.temp_c == 100u);   /* the firmware's, unchanged */
+    CHECK(GuardQuerySetting(L"CpuTempC", &value) == STATUS_OBJECT_NAME_NOT_FOUND);
+    CHECK(GuardQuerySetting(L"CpuLastReason", &value) == STATUS_OBJECT_NAME_NOT_FOUND);
+    CHECK(native_log_has("the default of 90 C goes in"));
+    printf("  %-31s cap %lu C sent, baseline cap %u C\n", "start_default_cap", native_firmware.set[0].parameter,
+           device.Cpu.Baseline.temp_c);
+}
+
+/* A stored cap wins: 100 C (the firmware's own) is sent as 100 C, and the default does not replace it. */
+static void test_start_keeps_a_stored_cap(void)
+{
+    ULONG value = 0;
+
+    Reset();
+    native_firmware.cap_c = 100u;
+    device.Cpu.Stored.temp_given = 1;
+    device.Cpu.Stored.temp_c = BC250_CPU_TEMP_MAX_C;
+    StartWith();
+    CHECK(native_firmware.writes == 1 && CapSent(0, BC250_CPU_TEMP_MAX_C));
+    CHECK(device.Cpu.Applied.temp_given && device.Cpu.Applied.temp_c == BC250_CPU_TEMP_MAX_C);
+    CHECK(!native_log_has("goes in"));
+    CHECK(GuardQuerySetting(L"CpuLastReason", &value) == STATUS_SUCCESS && value == 1u);    /* CPU_REASON_OK */
+}
+
+/* Stored settings without a cap: the undervolt goes in with the default cap, and the cap goes first (it cools). */
+static void test_start_adds_the_cap_to_stored_settings(void)
+{
+    Reset();
+    device.Cpu.Stored.uv_given = 1;
+    device.Cpu.Stored.uv_steps = 4u;
+    StartWith();
+    CHECK(native_firmware.writes == 2 && CapSent(0, BC250_CPU_TEMP_DEFAULT_C));
+    CHECK(native_firmware.set[1].message == BC250_CPU_MSG_SET_CURVE_SCALE &&
+          native_firmware.set[1].parameter == bc250_cpu_scale_argument(4u));
+    CHECK(device.Cpu.Applied.temp_c == BC250_CPU_TEMP_DEFAULT_C && device.Cpu.Applied.uv_steps == 4u);
+    CHECK(!device.Cpu.Stored.temp_given);
+}
+
+/* One RESET escape, as the CLI and the control application send it. */
+static void ResetEscape(BC250_ESCAPE_CPU *d)
+{
+    D3DDDI_ESCAPEFLAGS flags;
+
+    memset(d, 0, sizeof(*d));
+    memset(&flags, 0, sizeof(flags));
+    flags.HardwareAccess = 1;
+    d->AbiVersion = BC250_CPU_ABI;
+    d->Op = BC250_CPU_OP_RESET;
+    d->ExpectedGeneration = device.Cpu.Generation;
+    CpuRequest(&device, d, sizeof(*d), TRUE, flags.Value);
+}
+
+/* The RESET escape after a kept 100 C: the stored values go off the disk and the cap comes back to the default,
+ * not to the 100 C of the baseline. The reply still names the baseline as the firmware's own value. */
+static void test_reset_returns_to_the_default_cap(void)
+{
+    BC250_ESCAPE_CPU d;
+    ULONG value = 0;
+
+    Reset();
+    native_firmware.cap_c = 100u;
+    device.Cpu.Stored.temp_given = 1;
+    device.Cpu.Stored.temp_c = BC250_CPU_TEMP_MAX_C;
+    NativeSetSetting(L"CpuTempC", BC250_CPU_TEMP_MAX_C);
+    StartWith();
+    CHECK(device.Cpu.Applied.temp_c == BC250_CPU_TEMP_MAX_C);
+    device.Cpu.Enabled = TRUE;
+    device.Cpu.Created = TRUE;
+    device.Cpu.Proven = TRUE;                               /* the worker sets it after the stage answered */
+    ResetEscape(&d);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE);
+    CHECK(native_firmware.writes == 2 && CapSent(1, BC250_CPU_TEMP_DEFAULT_C));
+    CHECK(native_firmware.cap_c == BC250_CPU_TEMP_DEFAULT_C);
+    CHECK(d.AppliedTempC == BC250_CPU_TEMP_DEFAULT_C && d.StoredTempC == 0u && d.BaselineTempC == 100u);
+    CHECK(!(d.Flags & BC250_CPU_FLAG_STORED));
+    CHECK(GuardQuerySetting(L"CpuTempC", &value) == STATUS_OBJECT_NAME_NOT_FOUND);
+    /* A second reset finds the default in force and sends nothing. */
+    ResetEscape(&d);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && native_firmware.writes == 2);
+    printf("  %-31s cap %u C -> %lu C, baseline cap %lu C\n", "reset_default_cap", BC250_CPU_TEMP_MAX_C,
+           native_firmware.set[1].parameter, d.BaselineTempC);
+}
+
 /* The stop rule as the loop asks it, next to the sweep that uses it: only the bound ends the sweep. */
 static void test_the_stop_rule(void)
 {
@@ -291,6 +411,11 @@ int main(void)
     test_refused_core_reads();
     test_an_answered_part_owes_no_probe();
     test_the_stop_rule();
-    printf("cpu native (the boost probe's sweep): %ld checks, %ld failures\n", native_checks, native_failures);
+    test_start_applies_the_default_cap();
+    test_start_keeps_a_stored_cap();
+    test_start_adds_the_cap_to_stored_settings();
+    test_reset_returns_to_the_default_cap();
+    printf("cpu native (the boost probe's sweep, the default cap): %ld checks, %ld failures\n", native_checks,
+           native_failures);
     return native_failures != 0 ? 1 : 0;
 }

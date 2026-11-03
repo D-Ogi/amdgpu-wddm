@@ -30,7 +30,7 @@
 //                     admits up to 3900 MHz (air) or 4100 MHz (liquid), with the undervolt
 //                     bc250_oc_cpu_min_uv_steps asks for (bc250_cpu_settings_check_tier)
 //   CpuUvSteps        the stored undervolt, in curve-scale steps
-//   CpuTempC          the stored temperature cap
+//   CpuTempC          the stored temperature cap; absent, a start applies BC250_CPU_TEMP_DEFAULT_C (90 C)
 //   CpuTrialMs        the default trial window of a SET
 //   CpuPending        the mark of a start that applied the stored values and never became healthy
 //   CpuConfirmed      the mark a healthy start wrote
@@ -55,7 +55,7 @@
 #define CPU_SETTING_CORE_CONFIRMED L"CoreMaskConfirmed"
 
 // CpuLastReason, for the tools when the adapter is gone (docs/design/tuner.md).
-#define CPU_REASON_NONE 0u              // nothing stored: the firmware's own settings
+#define CPU_REASON_NONE 0u              // nothing stored: the shipped settings (the default cap)
 #define CPU_REASON_OK 1u                // the stored values are applied
 #define CPU_REASON_REFUSED 2u           // the stored values are outside the admitted ranges
 #define CPU_REASON_UNCONFIRMED 3u       // an earlier start applied them and never became healthy
@@ -768,6 +768,48 @@ static BOOLEAN CpuJointYield(BC250_DEVICE* Device, ULONG Op)
     return TRUE;
 }
 
+// The settings of a start into the chip, from the worker alone, under Lock, after a read stage that answered. They
+// are the stored settings and, when no cap is stored, the default temperature cap BC250_CPU_TEMP_DEFAULT_C
+// (bc250_cpu_start_target, 2026-11-04, BD-180). The default is not a stored value: s->Stored keeps saying what is on
+// disk, the guard's marks name the stored values alone, and CpuLastReason is written only for a start that had
+// stored values, as before. The default cap tightens the firmware's own 100 C, so its one step cools and passes the
+// hot gate. On a board that is not a BC-250 nothing here runs: the SMU owner admits no message there (BoardAllowed).
+static void CpuApplyStart(BC250_DEVICE* Device)
+{
+    BC250_CPU_STATE* s = &Device->Cpu;
+    const BOOLEAN stored = (s->Stored.max_given || s->Stored.uv_given || s->Stored.temp_given) ? TRUE : FALSE;
+    const char* why = stored ? "the stored settings" : "the default cap";
+    enum bc250_cpu_error error = BC250_CPU_OK;
+    struct bc250_cpu_settings start;
+    NTSTATUS status;
+
+    bc250_cpu_start_target(&s->Stored, &start);
+    if (!s->Stored.temp_given)
+        GuardLog("cpu: no temperature cap is stored: the default of %lu C goes in", (ULONG)BC250_CPU_TEMP_DEFAULT_C);
+    // A clock limit this start could not give back is left OUT of the plan, and the rest of the settings still go
+    // in (0.7.216.24, BD-094). CpuApplyEx refuses a whole plan that carries such a step, which is right for a
+    // request an operator sent and wrong here: the undervolt and the temperature cap have nothing to do with the
+    // ceiling, and losing them would turn one refused control into three. s->Stored itself does not move, so the
+    // surface still reports what is on disk.
+    if (start.max_given && !(s->BaselineValid && s->BaselineRead.boost_given)) {
+        GuardLog("cpu: the stored clock limit of %lu MHz is left out: this start does not know "
+                 "the firmware's own ceiling (BD-094); the rest of the settings go in", start.max_mhz);
+        start.max_given = 0;
+        start.max_mhz = 0;
+    }
+    status = CpuApply(Device, &start, why, &error, FALSE);
+    if (stored) CpuStoreLogged(CPU_SETTING_REASON, NT_SUCCESS(status) ? CPU_REASON_OK : CPU_REASON_HARDWARE);
+    if (!NT_SUCCESS(status)) {
+        struct bc250_cpu_settings none;
+        // CpuApply stops in the middle of its plan, so the steps before the refusal ARE in the chip. This undoes
+        // them, and the log then names what is left if even that does not go through.
+        GuardLog("cpu: %s did not go through 0x%08X (error %d); the steps that did are undone now", why, status,
+                 (int)error);
+        RtlZeroMemory(&none, sizeof(none));
+        (void)CpuRestoreTo(Device, &none, "the start settings failed");
+    }
+}
+
 // ---- the worker thread ------------------------------------------------------------------------------------------
 // It owns the start sequence (the read stage, the stored values, the core mask) and every trial's deadline. Nothing
 // else in this file sends a message without holding Lock, and the thread holds it for one piece of work at a time.
@@ -807,42 +849,9 @@ static void CpuThread(_In_ PVOID Context)
             if (!s->Proven) {
                 CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_NOT_PROVEN);
             } else {
-                // CpuReadStage has recorded the baseline from what the firmware answered. Applied stays empty:
-                // this driver has sent nothing yet, and saying otherwise would report settings the chip has
-                // from its own firmware as ours.
-                if (s->Stored.max_given || s->Stored.uv_given || s->Stored.temp_given) {
-                    enum bc250_cpu_error error = BC250_CPU_OK;
-                    struct bc250_cpu_settings stored = s->Stored;
-                    // A clock limit this start could not give back is left OUT of the plan, and the rest of the
-                    // stored settings still go in (0.7.216.24, BD-094). CpuApplyEx refuses a whole plan that
-                    // carries such a step, which is right for a request an operator sent and wrong here: the
-                    // undervolt and the temperature cap of the registry have nothing to do with the ceiling, and
-                    // losing them would turn one refused control into three. s->Stored itself does not move, so
-                    // the surface still reports what is on disk.
-                    if (stored.max_given && !(s->BaselineValid && s->BaselineRead.boost_given)) {
-                        GuardLog("cpu: the stored clock limit of %lu MHz is left out: this start does not know "
-                                 "the firmware's own ceiling (BD-094); the rest of the stored settings go in",
-                                 stored.max_mhz);
-                        stored.max_given = 0;
-                        stored.max_mhz = 0;
-                    }
-                    if (!stored.max_given && !stored.uv_given && !stored.temp_given)
-                        GuardLog("cpu: the stored settings were that clock limit alone: nothing is sent");
-                    else
-                        status = CpuApply(device, &stored, "the stored settings", &error, FALSE);
-                    if (NT_SUCCESS(status)) CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_OK);
-                    else {
-                        struct bc250_cpu_settings none;
-                        CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_HARDWARE);
-                        // CpuApply stops in the middle of its plan, so the steps before the refusal ARE in the
-                        // chip. Saying "the firmware's own values stand" was false; this undoes them instead,
-                        // and the log then names what is left if even that does not go through.
-                        GuardLog("cpu: the stored settings did not go through 0x%08X (error %d); the steps that "
-                                 "did are undone now", status, (int)error);
-                        RtlZeroMemory(&none, sizeof(none));
-                        (void)CpuRestoreTo(device, &none, "the stored settings failed");
-                    }
-                }
+                // CpuReadStage has recorded the baseline from what the firmware answered. Applied was empty up to
+                // here: this driver had sent nothing yet. The stored settings and the default cap go in now.
+                CpuApplyStart(device);
                 // The core mask is the CU mode's shape: sent now, visible after the next restart.
                 if (s->CoreMask && s->CoreMask != BC250_CPU_MASK_STOCK) {
                     if (SmuCpuBegin(&device->Smu)) {
@@ -982,7 +991,7 @@ void CpuStart(BC250_DEVICE* Device)
         enum bc250_cpu_error error = bc250_cpu_settings_check_tier(&s->Stored, s->Lab ? 1 : 0, s->OcTier);
         if (pendingPresent) {
             GuardLog("cpu: the stored settings (mark 0x%08X) ran a start that never became healthy: they are "
-                     "deleted and the firmware's own values stand", pending);
+                     "deleted and the shipped settings stand", pending);
             CpuDeleteLogged(CPU_SETTING_MAX);
             CpuDeleteLogged(CPU_SETTING_UV);
             CpuDeleteLogged(CPU_SETTING_TEMP);
@@ -991,7 +1000,7 @@ void CpuStart(BC250_DEVICE* Device)
             CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_UNCONFIRMED);
             RtlZeroMemory(&s->Stored, sizeof(s->Stored));
         } else if (error != BC250_CPU_OK) {
-            GuardLog("cpu: the stored settings are refused (error %d): the firmware's own values stand", (int)error);
+            GuardLog("cpu: the stored settings are refused (error %d): the shipped settings stand", (int)error);
             CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_REFUSED);
             RtlZeroMemory(&s->Stored, sizeof(s->Stored));
         } else if (!NT_SUCCESS(GuardStoreSetting(CPU_SETTING_PENDING, CpuMark(&s->Stored)))) {
@@ -1364,10 +1373,11 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
             if (!onTrial) status = STATUS_INVALID_DEVICE_STATE;
             else CpuRevert(Device, "cancelled");
         } else if (op == BC250_CPU_OP_RESET) {
-            // The recorded baseline back into the chip, and the stored values off the disk. Every control this
-            // driver has sent is named by bc250_cpu_restore_target out of the baseline or the firmware's own
-            // default, and a clock limit the baseline cannot name is reported and left: 0.7.210 substituted
-            // BC250_CPU_MAX_MHZ here, which raised the ceiling to 3600 MHz and called it a restore.
+            // The shipped settings back into the chip, and the stored values off the disk. Every control this
+            // driver has sent is named by bc250_cpu_restore_target: the clock limit out of the baseline, no
+            // undervolt, and the cap at BC250_CPU_TEMP_DEFAULT_C (2026-11-04), which is also what the next start
+            // applies with nothing stored. A clock limit the baseline cannot name is reported and left: 0.7.210
+            // substituted BC250_CPU_MAX_MHZ here, which raised the ceiling to 3600 MHz and called it a restore.
             struct bc250_cpu_settings none;
             RtlZeroMemory(&none, sizeof(none));
             status = CpuRestoreTo(Device, &none, "reset");
@@ -1384,7 +1394,8 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
             s->TrialDeadline = 0;
             RtlZeroMemory(&s->Search, sizeof(s->Search));
             KeReleaseSpinLock(&s->SnapLock, irql);
-            GuardLog("cpu: reset to the recorded baseline: 0x%08X", status);
+            GuardLog("cpu: reset to the recorded baseline clock and the default cap of %lu C: 0x%08X",
+                     (ULONG)BC250_CPU_TEMP_DEFAULT_C, status);
         } else if (op == BC250_CPU_OP_CORES) {
             ULONG mask = Data->CoreMask;
             if (!bc250_cpu_mask_allowed(mask)) status = STATUS_INVALID_PARAMETER;

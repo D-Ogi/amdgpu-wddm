@@ -114,5 +114,5 @@ if([Convert]::ToBase64String($baselineBytes) -cne [Convert]::ToBase64String($can
     exit 1
 }
 Write-Output 'test-end: compiled policy values exit 0'
-Write-Output "PASS: 113 compiled constants and complete GPU/fan table values are byte-identical"
+Write-Output "PASS: 114 compiled constants and complete GPU/fan table values are byte-identical"
 Get-FileHash "$Out\snapshot.c","$Out\baseline-snapshot.txt","$Out\candidate-snapshot.txt" | Select-Object Path,Hash | ConvertTo-Json | Set-Content "$Out\policy-pins.json"

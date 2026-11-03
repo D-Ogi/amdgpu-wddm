@@ -30,6 +30,9 @@ typedef char cpu_shape[(BC250_CPU_CORES == 8u && BC250_CPU_PSTATES == 8u && BC25
 			BC250_CPU_LAB_MIN_UV_STEPS <= BC250_CPU_UV_MAX_STEPS &&
 			/* every step the search ever asks for is inside the admitted undervolt range */
 			BC250_CPU_SEARCH_MAX_STEPS <= BC250_CPU_UV_MAX_STEPS) ? 1 : -1];
+/* The default cap (test_default_cap) and the band it sits in, which the default does not move. */
+typedef char cpu_default_cap[(BC250_CPU_TEMP_DEFAULT_C == 90u && BC250_CPU_TEMP_MIN_C == 85u &&
+			      BC250_CPU_TEMP_MAX_C == 100u) ? 1 : -1];
 
 /* ---- the transport ------------------------------------------------------------------------------- */
 
@@ -488,7 +491,8 @@ static void test_restore(void)
 	CHECK(bc250_cpu_restore_target(&from, &before, &baseline, &out) == 1);
 	CHECK(out.max_given && out.max_mhz == 3500u);
 	CHECK(out.uv_given && out.uv_steps == 0u);
-	CHECK(out.temp_given && out.temp_c == 100u);
+	/* The cap goes to the driver's default and not to the 100 C the read stage answered (2026-11-04, BD-180). */
+	CHECK(out.temp_given && out.temp_c == BC250_CPU_TEMP_DEFAULT_C && out.temp_c != baseline.temp_c);
 	CHECK(bc250_cpu_plan(&from, &out, 0, &p) == BC250_CPU_OK && p.count == 3);
 
 	/* The state before the trial wins over the baseline: a second trial inside a kept setting goes back to
@@ -499,13 +503,13 @@ static void test_restore(void)
 	CHECK(out.max_mhz == 3200u && out.uv_steps == 3u && out.temp_c == 90u);
 
 	/* No baseline at all (the read stage did not answer a P-state): the cap and the undervolt still have
-	 * firmware defaults, the clock limit does not, so the caller is told it cannot be named. */
+	 * defaults, the clock limit does not, so the caller is told it cannot be named. */
 	before = set(0, 0, 0);
 	from = set(3000u, 2u, 95u);
 	CHECK(bc250_cpu_restore_target(&from, &before, NULL, &out) == 0);
 	CHECK(!out.max_given);
 	CHECK(out.uv_given && out.uv_steps == 0u);
-	CHECK(out.temp_given && out.temp_c == BC250_CPU_TEMP_MAX_C);
+	CHECK(out.temp_given && out.temp_c == BC250_CPU_TEMP_DEFAULT_C);
 	baseline = set(0, 0, 0);
 	baseline.uv_given = 1;
 	CHECK(bc250_cpu_restore_target(&from, &before, &baseline, &out) == 0);
@@ -525,13 +529,97 @@ static void test_restore(void)
 	from = set(3000u, 4u, 95u);
 	CHECK(bc250_cpu_restore_target(&from, &before, &baseline, &out) == 1);
 	CHECK(out.max_given && out.max_mhz == baseline.max_mhz);
+	CHECK(out.temp_given && out.temp_c == BC250_CPU_TEMP_DEFAULT_C);
 	CHECK(bc250_cpu_plan(&from, &out, 0, &p) == BC250_CPU_OK && p.count == 3);
 	/* Both steps raise the voltage the firmware chooses, so neither passes the hot gate on its own: only the
 	 * Restore flag of driver/kmd/cpu.c admits them, which is the whole reason that flag exists. The undervolt
 	 * goes away before the clock goes back up, so the higher clock never runs over the deeper undervolt. */
-	CHECK(p.step[0].kind == BC250_CPU_STEP_UV && p.step[0].cools == 0u);
-	CHECK(p.step[1].kind == BC250_CPU_STEP_CLOCK && p.step[1].cools == 0u);
-	CHECK(p.step[2].kind == BC250_CPU_STEP_TEMP && p.step[2].cools == 0u);
+	/* The cap of 95 C comes down to the default 90 C, which tightens it: it goes first of all, and it cools. */
+	CHECK(p.step[0].kind == BC250_CPU_STEP_TEMP && p.step[0].parameter == BC250_CPU_TEMP_DEFAULT_C);
+	CHECK(p.step[0].cools == 1u);
+	CHECK(p.step[1].kind == BC250_CPU_STEP_UV && p.step[1].cools == 0u);
+	CHECK(p.step[2].kind == BC250_CPU_STEP_CLOCK && p.step[2].cools == 0u);
+	/* A reset from a tighter cap than the default loosens it, so the cap goes last of all and waits to cool. */
+	from = set(3000u, 4u, BC250_CPU_TEMP_MIN_C);
+	CHECK(bc250_cpu_restore_target(&from, &before, &baseline, &out) == 1);
+	CHECK(out.temp_c == BC250_CPU_TEMP_DEFAULT_C);
+	CHECK(bc250_cpu_plan(&from, &out, 0, &p) == BC250_CPU_OK && p.count == 3);
+	CHECK(p.step[2].kind == BC250_CPU_STEP_TEMP && p.step[2].parameter == BC250_CPU_TEMP_DEFAULT_C);
+	CHECK(p.step[2].cools == 0u);
+}
+
+/* The default temperature cap (2026-11-04, BD-180). With the firmware's own 100 C, the CPU test of 3DMark Time Spy
+ * took unit A's Tctl from 81 to 93.5 C in 12 s and passed the lab's thermal stop; with 85 C the firmware held
+ * 86.2 C. A start therefore applies BC250_CPU_TEMP_DEFAULT_C when no cap is stored, a reset and a revert end there
+ * when nothing else names a cap, and an operator may still choose any value of the band. */
+static void test_default_cap(void)
+{
+	struct bc250_cpu_settings stored, start, applied, before, baseline, out;
+	struct bc250_cpu_plan p;
+
+	/* The number and the band are pinned at file scope (cpu_default_cap); the mailbox check admits the default. */
+	CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CAP_C, BC250_CPU_TEMP_DEFAULT_C));
+	stored = set(0, 0, BC250_CPU_TEMP_DEFAULT_C);
+	CHECK(bc250_cpu_settings_check(&stored, 0) == BC250_CPU_OK);
+
+	/* Nothing stored (CpuTempC absent): the start applies 90 C, one tightening step that cools. */
+	memset(&stored, 0, sizeof(stored));
+	bc250_cpu_start_target(&stored, &start);
+	CHECK(start.temp_given && start.temp_c == BC250_CPU_TEMP_DEFAULT_C);
+	CHECK(!start.max_given && !start.uv_given);
+	CHECK(!stored.temp_given);                      /* the record of the disk is not touched */
+	memset(&applied, 0, sizeof(applied));
+	CHECK(bc250_cpu_plan(&applied, &start, 0, &p) == BC250_CPU_OK && p.count == 1);
+	CHECK(p.step[0].kind == BC250_CPU_STEP_TEMP && p.step[0].message == BC250_CPU_MSG_SET_CAP_C);
+	CHECK(p.step[0].parameter == BC250_CPU_TEMP_DEFAULT_C && p.step[0].cools == 1u);
+
+	/* Other stored values without a cap: they go in as they stand, and the default cap goes with them. */
+	stored = set(3300u, 6u, 0);
+	bc250_cpu_start_target(&stored, &start);
+	CHECK(start.max_given && start.max_mhz == 3300u && start.uv_given && start.uv_steps == 6u);
+	CHECK(start.temp_given && start.temp_c == BC250_CPU_TEMP_DEFAULT_C);
+
+	/* A stored cap wins, whatever its value: 100 C stays 100 C (the firmware's own), 85 C stays 85 C. */
+	stored = set(0, 0, BC250_CPU_TEMP_MAX_C);
+	bc250_cpu_start_target(&stored, &start);
+	CHECK(start.temp_given && start.temp_c == BC250_CPU_TEMP_MAX_C);
+	CHECK(bc250_cpu_plan(&applied, &start, 0, &p) == BC250_CPU_OK && p.count == 1);
+	CHECK(p.step[0].parameter == BC250_CPU_TEMP_MAX_C);
+	stored = set(0, 0, BC250_CPU_TEMP_MIN_C);
+	bc250_cpu_start_target(&stored, &start);
+	CHECK(start.temp_c == BC250_CPU_TEMP_MIN_C);
+	/* A stored value outside the band is still refused as a whole by the start's check, never clamped here. */
+	stored = set(0, 0, BC250_CPU_TEMP_MAX_C + 1u);
+	bc250_cpu_start_target(&stored, &start);
+	CHECK(start.temp_c == BC250_CPU_TEMP_MAX_C + 1u);
+	CHECK(bc250_cpu_settings_check(&start, 0) == BC250_CPU_ERROR_TEMP);
+
+	/* The baseline keeps its meaning: the firmware's own cap, read before the first write (100 C after a cold
+	 * boot). A reset (nothing given as the state before) still ends at 90 C. */
+	baseline = set(3500u, 0, BC250_CPU_TEMP_MAX_C);
+	baseline.uv_given = 1;
+	memset(&before, 0, sizeof(before));
+	applied = set(0, 0, BC250_CPU_TEMP_MAX_C);      /* a user had kept 100 C */
+	CHECK(bc250_cpu_restore_target(&applied, &before, &baseline, &out) == 1);
+	CHECK(out.temp_given && out.temp_c == BC250_CPU_TEMP_DEFAULT_C);
+	CHECK(bc250_cpu_plan(&applied, &out, 0, &p) == BC250_CPU_OK && p.count == 1);
+	CHECK(p.step[0].parameter == BC250_CPU_TEMP_DEFAULT_C && p.step[0].cools == 1u);
+	/* A reset with the default already in force sends nothing. */
+	applied = set(0, 0, BC250_CPU_TEMP_DEFAULT_C);
+	CHECK(bc250_cpu_restore_target(&applied, &before, &baseline, &out) == 1);
+	CHECK(bc250_cpu_plan(&applied, &out, 0, &p) == BC250_CPU_ERROR_NOTHING);
+
+	/* A trial on top of the default goes back to the default: the state before the trial is the applied 90 C. */
+	before = set(0, 0, BC250_CPU_TEMP_DEFAULT_C);
+	applied = set(0, 0, 95u);
+	CHECK(bc250_cpu_restore_target(&applied, &before, &baseline, &out) == 1);
+	CHECK(out.temp_c == BC250_CPU_TEMP_DEFAULT_C);
+	/* A trial on top of a kept 100 C goes back to 100 C, and not to the default. */
+	before = set(0, 0, BC250_CPU_TEMP_MAX_C);
+	applied = set(0, 0, 87u);
+	CHECK(bc250_cpu_restore_target(&applied, &before, &baseline, &out) == 1);
+	CHECK(out.temp_c == BC250_CPU_TEMP_MAX_C);
+	CHECK(bc250_cpu_plan(&applied, &out, 0, &p) == BC250_CPU_OK && p.count == 1 && p.step[0].cools == 0u);
 }
 
 /* The read stage's record of the clock the chip runs at by itself (0.7.216.24, BD-094; 0.7.216.15, K137).
@@ -946,6 +1034,7 @@ int main(void)
 	test_settings_tier();
 	test_plan();
 	test_restore();
+	test_default_cap();
 	test_baseline();
 	test_baseline_starts();
 	test_sample();

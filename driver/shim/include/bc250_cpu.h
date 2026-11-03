@@ -190,12 +190,19 @@ unsigned int bc250_cpu_scale_argument(unsigned int uv_steps);
  * trial stays in the chip while the driver reports that it came back. This names every control *from carries:
  *   *before    the state before the trial. Every value it gives is used as it stands.
  *   *baseline  what the read stage of this start answered before the first write of this start.
- * A control neither of them names goes back to the firmware's own default: no undervolt, and the cap at
- * BC250_CPU_TEMP_MAX_C. The clock limit has no such default - the firmware's own ceiling is what the baseline
+ * A control neither of them names goes back to the driver's default: no undervolt, and the cap at
+ * BC250_CPU_TEMP_DEFAULT_C. The cap skips *baseline for that reason: the baseline is what the firmware held
+ * before this start wrote anything (100 C after a cold boot), and a reset must end at the shipped 90 C and not at
+ * the firmware's own cap. The clock limit has no such default - the firmware's own ceiling is what the baseline
  * read is for - so the return value is 0 when *from carries a clock limit that neither *before nor *baseline
  * can name. *out then holds every control that can be named, and the caller must say which one stays. */
 int bc250_cpu_restore_target(const struct bc250_cpu_settings *from, const struct bc250_cpu_settings *before,
 			     const struct bc250_cpu_settings *baseline, struct bc250_cpu_settings *out);
+
+/* The settings a start applies (2026-11-04): the stored ones as they stand, and BC250_CPU_TEMP_DEFAULT_C as the
+ * cap when none is stored. A stored cap of any value of the band stays as it is, 100 C included. The default is
+ * not a stored value: *stored keeps saying what is on disk, and nothing here writes it. */
+void bc250_cpu_start_target(const struct bc250_cpu_settings *stored, struct bc250_cpu_settings *out);
 
 /* What the read stage learned about the clock the chip runs at by itself (0.7.216.24, BD-094). Two answers of the
  * firmware carry it, and they are not the same number:
