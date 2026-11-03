@@ -195,6 +195,7 @@ u64  bc250_gfx_fence_addr(struct amdgpu_device *adev, unsigned int slot);
 /* What the CP wrote there. A 32-bit fence leaves the upper half at whatever it was, so a caller
  * that did not pass _64BIT should look at the low 32 bits only. */
 u64  bc250_gfx_fence_read(struct amdgpu_device *adev, unsigned int slot);
+int  bc250_gfx_fence_write(struct amdgpu_device *adev, unsigned int slot, u64 value);
 
 /* One ring test: write 0xCAFEDEAD to SCRATCH_REG0, submit a SET_UCONFIG_REG packet writing
  * 0xDEADBEEF, poll for it. gfx_v10_0.c:4033 gfx_v10_0_ring_test_ring(). Returns 0 or BC250_ETIME.
@@ -321,5 +322,39 @@ void bc250_gfx_rlc_safe_exit(struct amdgpu_device *adev, bool requested);
  * the caller judges success only by the job's fence retiring afterwards. See the implementation's
  * PROVENANCE note. */
 void bc250_gfx_soft_recover_vmid(struct amdgpu_device *adev, u32 vmid);
+
+/* Stage 2 of the hang recovery: one queue taken off its HQD by the KIQ and mapped again
+ * (gfx_v10_0_reset_kcq / gfx_v10_0_reset_kgq, docs/design/queue-reset.md). The caller holds the
+ * lock that serializes KIQ submissions and queue selects (GartLock in the KMD). 0 only when every
+ * step passed, the last one a ring test of the queue itself. On a failure, res->step names the step
+ * that failed and no later step ran. */
+enum bc250_qreset_step {
+	BC250_QRESET_STEP_NONE = 0,
+	BC250_QRESET_STEP_ARGS,
+	BC250_QRESET_STEP_UNMAP,	/* compute: UNMAP_QUEUES RESET_QUEUES + KIQ ring test */
+	BC250_QRESET_STEP_HQD,		/* compute: CP_HQD_ACTIVE did not clear in usec_timeout */
+	BC250_QRESET_STEP_VMID_RESET,	/* gfx: CP_VMID_RESET + both waits + KIQ ring test */
+	BC250_QRESET_STEP_MQD,
+	BC250_QRESET_STEP_MAP,		/* MAP_QUEUES + KIQ ring test */
+	BC250_QRESET_STEP_RING_TEST,	/* ring test on the reset queue */
+	BC250_QRESET_STEP_DONE,
+};
+
+struct bc250_qreset_result {
+	u32 step;		/* enum bc250_qreset_step */
+	int error;
+	u32 hqd_active_before;	/* CP_HQD_ACTIVE or CP_GFX_HQD_ACTIVE, under the queue select */
+	u32 rptr_before;
+	u32 wptr_before;
+	u32 hqd_poll_us;	/* compute only */
+};
+
+/* The KIQ submission of reset_kgq: WRITE_DATA (5), WAIT_REG_MEM on memory (7), WAIT_REG_MEM on
+ * CP_VMID_RESET (7). */
+#define BC250_KGQ_RESET_DWORDS	(5u + 7u + 7u)
+
+u32 bc250_gfx_vmid_reset_value(const struct amdgpu_ring *ring, u32 vmid);
+int bc250_gfx_reset_kcq(struct amdgpu_ring *ring, struct bc250_qreset_result *res);
+int bc250_gfx_reset_kgq(struct amdgpu_ring *ring, u32 vmid, struct bc250_qreset_result *res);
 
 #endif /* BC250_GFX_H */

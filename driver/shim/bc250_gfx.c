@@ -1676,6 +1676,20 @@ u64 bc250_gfx_fence_read(struct amdgpu_device *adev, unsigned int slot)
 	p = (const volatile u64 *)adev->gfx.fence_mem.cpu;
 	return p[slot];
 }
+/* The CPU side of one fence slot, for stage 2 of the hang recovery only: a ring whose queue was reset
+ * (bc250_gfx_reset_kcq/kgq) restarts empty, so no end-of-pipe will ever write the sequences it held.
+ * amdgpu_ring_reset_helper_end() forces the fences of the ring to their last emitted value for the same
+ * reason (amdgpu_fence_driver_force_completion). */
+int bc250_gfx_fence_write(struct amdgpu_device *adev, unsigned int slot, u64 value)
+{
+	volatile u64 *p;
+
+	if (adev == NULL || adev->gfx.fence_mem.cpu == NULL || slot >= BC250_GFX_FENCE_SLOTS)
+		return BC250_EINVAL;
+	p = (volatile u64 *)adev->gfx.fence_mem.cpu;
+	p[slot] = value;
+	return 0;
+}
 
 /* ---------------------------------------------------------------------------------------------
  * The indirect buffer: the first submission whose packets are not in the ring (ADR 0008 stage C)
@@ -1882,6 +1896,216 @@ static void bc250_gfx_vm_reg_wait(struct amdgpu_ring *ring, u32 reg, u32 value, 
 	amdgpu_ring_write(ring, value);
 	amdgpu_ring_write(ring, mask);
 	amdgpu_ring_write(ring, 0x20);
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Per-queue resets: stage 2 of the hang recovery (docs/design/queue-reset.md)
+ *
+ * PROVENANCE: gfx_v10_0.c:9578 gfx_v10_0_reset_kcq() and :9511 gfx_v10_0_reset_kgq(), AMD MIT, at
+ * ref/linux-src 7d0a66e4b (driver/amdgpu-import/reference/gfx_v10_0.c). M944 measured both on unit A
+ * under Linux.
+ *
+ * Deviations from upstream, each for one reason:
+ *   - no kiq->ring_lock and no srbm_mutex. The caller (gfx.c GfxQueueReset) holds GartLock, which
+ *     serializes every KIQ submission and every queue select of the KMD.
+ *   - no amdgpu_ring_reset_helper_begin/_end. The fences of the ring belong to the KMD's stage-1
+ *     commit (wddm.c), which runs after this returns 0.
+ *   - the restore arm of kcq_init_queue/kgq_init_queue copies a backup MQD. The shim keeps no backup,
+ *     so the MQD is built again from the ring by the cold arm, and the read pointer that the cold arm
+ *     samples is set to 0 after it: the HQD is inactive and the ring restarts at 0, so 0 is the only
+ *     value that agrees with wptr (the same correction as bc250_kiq_dequeue(), E12 run 001).
+ *   - the ring positions are set to 0 here, as the restore arm does (wptr, the write-back wptr slot,
+ *     the ring cleared to NOPs).
+ *   - every step reports where it stopped in *res, so that the KMD can name the step in its hang
+ *     record. Upstream returns an errno only.
+ * ------------------------------------------------------------------------------------------- */
+
+static void bc250_qreset_ring_positions(struct amdgpu_ring *ring)
+{
+	ring->wptr = 0;
+	if (ring->wptr_cpu_addr != NULL)
+		*(volatile u64 *)ring->wptr_cpu_addr = 0;
+	amdgpu_ring_clear_ring(ring);
+}
+
+/* gfx_v10_0_wait_reg_mem(ring, 0, 1, 0, lo, hi, ref, mask, 0x20): memory space, operation
+ * wait_reg_mem, function equal, engine ME, poll interval 0x20. */
+static void bc250_kiq_wait_mem(struct amdgpu_ring *ring, u64 addr, u32 value, u32 mask)
+{
+	amdgpu_ring_write(ring, PACKET3(PACKET3_WAIT_REG_MEM, 5));
+	amdgpu_ring_write(ring, WAIT_REG_MEM_MEM_SPACE(1) | WAIT_REG_MEM_OPERATION(0) |
+				WAIT_REG_MEM_FUNCTION(3) | WAIT_REG_MEM_ENGINE(0));
+	amdgpu_ring_write(ring, lower_32_bits(addr));
+	amdgpu_ring_write(ring, upper_32_bits(addr));
+	amdgpu_ring_write(ring, value);
+	amdgpu_ring_write(ring, mask);
+	amdgpu_ring_write(ring, 0x20);
+}
+
+static int bc250_qreset_fail(struct bc250_qreset_result *res, u32 step, int r)
+{
+	res->step = step;
+	res->error = r;
+	return r;
+}
+
+/* MAP_QUEUES for the ring, then the KIQ ring test. */
+static int bc250_qreset_map(struct amdgpu_ring *kiq_ring, struct amdgpu_ring *ring)
+{
+	int r = amdgpu_ring_alloc(kiq_ring, BC250_MAP_QUEUES_SIZE);
+
+	if (r)
+		return r;
+	bc250_kiq_map_queues(kiq_ring, ring);
+	amdgpu_ring_commit(kiq_ring);
+	return bc250_gfx_ring_test(kiq_ring);
+}
+
+u32 bc250_gfx_vmid_reset_value(const struct amdgpu_ring *ring, u32 vmid)
+{
+	u32 tmp = REG_SET_FIELD(0, CP_VMID_RESET, RESET_REQUEST, 1u << vmid);
+
+	if (ring->pipe == 0)
+		tmp = REG_SET_FIELD(tmp, CP_VMID_RESET, PIPE0_QUEUES, 1u << ring->queue);
+	else
+		tmp = REG_SET_FIELD(tmp, CP_VMID_RESET, PIPE1_QUEUES, 1u << ring->queue);
+	return tmp;
+}
+
+int bc250_gfx_reset_kcq(struct amdgpu_ring *ring, struct bc250_qreset_result *res)
+{
+	struct amdgpu_device *adev;
+	struct amdgpu_ring *kiq_ring;
+	bool safe = false;
+	u32 i;
+	int r;
+
+	if (res == NULL)
+		return BC250_EINVAL;
+	memset(res, 0, sizeof(*res));
+	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL ||
+	    ring->funcs->type != AMDGPU_RING_TYPE_COMPUTE || ring->mqd_ptr == NULL)
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_ARGS, BC250_EINVAL);
+	adev = ring->adev;
+	kiq_ring = &adev->gfx.kiq[0].ring;
+
+	/* Step 1: the witnesses before, under the queue select. */
+	nv_grbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
+	res->hqd_active_before = RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE);
+	res->rptr_before = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_RPTR);
+	res->wptr_before = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_WPTR_LO);
+	nv_grbm_select(adev, 0, 0, 0, 0);
+
+	/* Step 2: UNMAP_QUEUES RESET_QUEUES, then the KIQ ring test. */
+	r = amdgpu_ring_alloc(kiq_ring, BC250_UNMAP_QUEUES_SIZE);
+	if (r)
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_UNMAP, r);
+	bc250_kiq_unmap_queues(kiq_ring, ring);
+	amdgpu_ring_commit(kiq_ring);
+	r = bc250_gfx_ring_test(kiq_ring);
+	if (r)
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_UNMAP, r);
+
+	/* Step 3: make sure the dequeue is complete. Select and safe mode are restored on both exits. */
+	r = bc250_gfx_rlc_safe_enter(adev, &safe);
+	if (r) {
+		bc250_gfx_rlc_safe_exit(adev, safe);
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_HQD, r);
+	}
+	nv_grbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
+	for (i = 0; i < adev->usec_timeout; i++) {
+		if (!(RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE) & 1))
+			break;
+		bc250_shim_udelay(1);
+	}
+	res->hqd_poll_us = i;
+	nv_grbm_select(adev, 0, 0, 0, 0);
+	bc250_gfx_rlc_safe_exit(adev, safe);
+	if (i >= adev->usec_timeout) {
+		dev_err(adev->dev, "fail to wait on hqd deactivate\n");
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_HQD, BC250_ETIME);
+	}
+
+	/* Step 4: a clean queue state, see the deviations above. */
+	bc250_qreset_ring_positions(ring);
+	r = bc250_kcq_init_queue(ring);
+	if (r)
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_MQD, r);
+	((struct v10_compute_mqd *)ring->mqd_ptr)->cp_hqd_pq_rptr = 0;
+
+	/* Step 5: MAP_QUEUES, then the KIQ ring test. */
+	r = bc250_qreset_map(kiq_ring, ring);
+	if (r)
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_MAP, r);
+
+	/* Step 6: the proof on the queue itself, a fresh fetch from the clean ring. */
+	r = bc250_gfx_ring_test(ring);
+	if (r)
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_RING_TEST, r);
+
+	res->step = BC250_QRESET_STEP_DONE;
+	return 0;
+}
+
+int bc250_gfx_reset_kgq(struct amdgpu_ring *ring, u32 vmid, struct bc250_qreset_result *res)
+{
+	struct amdgpu_device *adev;
+	struct amdgpu_ring *kiq_ring;
+	u64 addr;
+	int r;
+
+	if (res == NULL)
+		return BC250_EINVAL;
+	memset(res, 0, sizeof(*res));
+	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL ||
+	    ring->funcs->type != AMDGPU_RING_TYPE_GFX || ring->mqd_ptr == NULL ||
+	    vmid == 0 || vmid >= AMDGPU_NUM_VMID || ring->pipe > 1)
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_ARGS, BC250_EINVAL);
+	adev = ring->adev;
+	kiq_ring = &adev->gfx.kiq[0].ring;
+
+	/* Step 1: the witnesses before, under the queue select. */
+	nv_grbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
+	res->hqd_active_before = RREG32_SOC15(GC, 0, mmCP_GFX_HQD_ACTIVE);
+	res->rptr_before = RREG32_SOC15(GC, 0, mmCP_GFX_HQD_RPTR);
+	res->wptr_before = RREG32_SOC15(GC, 0, mmCP_GFX_HQD_WPTR);
+	nv_grbm_select(adev, 0, 0, 0, 0);
+
+	/* Step 2: one KIQ submission of 5 + 7 + 7 dwords, then the KIQ ring test, which retires only
+	 * after both waits passed. */
+	r = amdgpu_ring_alloc(kiq_ring, BC250_KGQ_RESET_DWORDS);
+	if (r)
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_VMID_RESET, r);
+	addr = ring->mqd_gpu_addr + offsetof(struct v10_gfx_mqd, cp_gfx_hqd_active);
+	bc250_gfx_vm_wreg(kiq_ring, SOC15_REG_OFFSET(GC, 0, mmCP_VMID_RESET),
+			  bc250_gfx_vmid_reset_value(ring, vmid));
+	bc250_kiq_wait_mem(kiq_ring, addr, 0, 1);
+	bc250_gfx_vm_reg_wait(kiq_ring, SOC15_REG_OFFSET(GC, 0, mmCP_VMID_RESET), 0, 0xffffffffu);
+	amdgpu_ring_commit(kiq_ring);
+	r = bc250_gfx_ring_test(kiq_ring);
+	if (r)
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_VMID_RESET, r);
+
+	/* Step 3: the reset arm of kgq_init_queue: the doorbell range of ring 0 again (inside
+	 * bc250_kgq_init_queue), the MQD built again, the ring at 0. */
+	bc250_qreset_ring_positions(ring);
+	r = bc250_kgq_init_queue(ring, adev->gfx.async_gfx_ring);
+	if (r)
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_MQD, r);
+	((struct v10_gfx_mqd *)ring->mqd_ptr)->cp_gfx_hqd_rptr = 0;
+
+	/* Step 4: MAP_QUEUES with engine select 4, then the KIQ ring test. */
+	r = bc250_qreset_map(kiq_ring, ring);
+	if (r)
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_MAP, r);
+
+	/* Step 5: the proof on the queue itself. */
+	r = bc250_gfx_ring_test(ring);
+	if (r)
+		return bc250_qreset_fail(res, BC250_QRESET_STEP_RING_TEST, r);
+
+	res->step = BC250_QRESET_STEP_DONE;
+	return 0;
 }
 
 /* The flush for a gfx or a compute ring; the two public functions below say which. The packets
