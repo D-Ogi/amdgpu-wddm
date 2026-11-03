@@ -102,7 +102,11 @@ SEQUENCES = [
       # here from the trace). Written only when CuMode is 40, or to put back this boot's stock value. The RLC's
       # always-on WGP mask is read, never written; RLC_PG_CNTL (traced) is read as the precondition of 40.
       ("GC", "mmSPI_PG_ENABLE_STATIC_WGP_MASK", "not traced: CU mode dispatch gate, docs/design/cu-mode.md"),
-      ("GC", "mmRLC_PG_ALWAYS_ON_WGP_MASK", "not traced: CU mode observation, read only")]
+      ("GC", "mmRLC_PG_ALWAYS_ON_WGP_MASK", "not traced: CU mode observation, read only"),
+      # Stage 2 of the hang recovery (docs/design/queue-reset.md 5.2 step 1): the witnesses of the gfx queue before
+      # its reset, read under the queue select. amdgpu does not read them in gfx_v10_0_reset_kgq; they are read only.
+      ("GC", "mmCP_GFX_HQD_ACTIVE", "not traced: queue reset witness, read only"),
+      ("GC", "mmCP_GFX_HQD_WPTR", "not traced: queue reset witness, read only")]
      + VMID_PAGE_TABLE_BASE),
     # M6: navi10_ih_irq_init() on unit A, 0.252832 to 0.252845 s: the IH ring's registers, the dummy read address and
     # the bus master bit of the interrupt controller, the IH doorbell range. 19 accesses, nothing else in the window.

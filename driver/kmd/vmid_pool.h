@@ -268,6 +268,20 @@ static __inline void Bc250VmidResetAll(BC250_VMID_TABLE* Table, BC250_VMID_HISTO
     for (i = 0; i < (unsigned long)sizeof(*Table); i++) p[i] = 0;
 }
 
+/* Stage 2 of the hang recovery (docs/design/queue-reset.md 5.4 step 8): the hung VMID's tenancy goes to the history
+ * and the VMID holds no root any more, so its next job programs it again (Bc250VmidChoose claims a VMID whose root
+ * differs). Its live sequences are cleared: the queue reset ended them, and the fence slot was advanced past them. */
+static __inline void Bc250VmidForget(BC250_VMID_TABLE* Table, BC250_VMID_HISTORY_RING* History, unsigned Vmid)
+{
+    if (Vmid >= BC250_VMID_COUNT) return;
+    if (Table->Root[Vmid] != 0 && Table->FirstSeq[Vmid] != 0) Bc250VmidHistoryPush(History, Vmid, Table);
+    Table->Root[Vmid] = 0;
+    Table->FirstSeq[Vmid] = 0;
+    Table->LastSeq[Vmid] = 0;
+    Table->LiveSeq[Vmid] = 0;
+    Table->LiveSeqCompute[Vmid] = 0;
+    Table->Process[Vmid] = 0;
+}
 /* The VMIDs that hold Root (any candidate, not only pool members: the IB_AT escape may program another one). */
 static __inline unsigned Bc250VmidHolders(const BC250_VMID_TABLE* Table, unsigned long long Root)
 {

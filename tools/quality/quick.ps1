@@ -804,6 +804,9 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='adapter-reset-complete-window';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-CompleteNonEmptyWindow');Fails=$true}
   @{n='adapter-reset-witness-order';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-ReorderWitnessTable');Fails=$true;Step='source checks'}
   @{n='adapter-reset-commit-first';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-CommitBeforeWitness');Fails=$true;Step='source checks'}
+  @{n='kmd-queue-reset';s='driver\kmd\test\run_queue_reset.ps1';a=@('-Root',$Workspace)}
+  @{n='kmd-queue-reset-any-vmid';s='driver\kmd\test\run_queue_reset.ps1';a=@('-Root',$Workspace,'-AnyVmidPasses');Fails=$true}
+  @{n='kmd-queue-reset-stage-first';s='driver\kmd\test\run_queue_reset.ps1';a=@('-Root',$Workspace,'-StageBeforeKill');Fails=$true;Step='source checks'}
   @{n='submit-watchdog-CountUnchangedAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountUnchangedAsActivity');Fails=$true}
   @{n='submit-watchdog-CountPrimeAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountPrimeAsActivity');Fails=$true}
   @{n='submit-watchdog-CountGapAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountGapAsActivity');Fails=$true}
@@ -863,6 +866,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   # The frozen gfx job frame and the VM flush on the ring (docs/design/gfx-submit-root-serialization.md).
   @{n='gfx-vm-flush';s='driver\shim\test\run_gfx_vm_flush.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='gfx-vm-flush-wrong-ack';s='driver\shim\test\run_gfx_vm_flush.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-WrongAckMask');Fails=$true}
+  @{n='queue-reset';s='driver\shim\test\run_queue_reset.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  @{n='queue-reset-no-rptr-zero';s='driver\shim\test\run_queue_reset.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-NoRptrZero');Fails=$true}
   @{n='shim-ih';s='driver\shim\test\run_ih.ps1';a=@('-Kits',$Kits)}
   @{n='shim-psp';s='driver\shim\test\run_psp.ps1';a=@('-Kits',$Kits,'-Firmware',$firmware)}
   @{n='shim-pte';s='driver\shim\test\run_pte.ps1';a=@('-Kits',$Kits)}

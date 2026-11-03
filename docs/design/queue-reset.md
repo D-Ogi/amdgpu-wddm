@@ -1,6 +1,6 @@
 # Stage 2 of the hang recovery: KIQ queue resets for node 2 and node 0
 
-Status: DESIGN, not implemented. Stage S2 of [the TDR recovery plan](tdr-recovery-plan.md#52-stages). It
+Status: IMPLEMENTED for the lab flavour only (tester.37 line), not measured on the lab yet. Stage S2 of [the TDR recovery plan](tdr-recovery-plan.md#52-stages). It
 replaces the section "Why there is no stage 2" of [hang-recovery.md](hang-recovery.md) when it lands.
 
 ## 1. Problem
@@ -72,13 +72,19 @@ The lab trials of section 8 measure those two.
 
 ## 4. Where it runs
 
-- In `ResetEngine` (wddm.c), for node 0 and node 2, when stage 1 returns `NOT_DRAINED` and `HangRecoveryMode` is 2.
+- In `ResetEngine` (wddm.c), for node 0 and node 2, when the stage-1 kill loop returns `NOT_DRAINED`, in the lab
+  flavour with `LabQueueReset` 1.
   dxgkrnl calls `ResetEngine` at PASSIVE_LEVEL in first-level synchronization, so no other DDI of the adapter runs.
 - In `ResetFromTimeout`, before the S1 witnesses, for each of node 0 and node 2 whose ring has an unretired
   sequence and whose stage-1 record of this TDR says `NOT_DRAINED`. S1 then reads its witnesses again and keeps
   its rule: success only when they prove idle.
-- `HangRecoveryMode` 2 is a lab selector first. The default moves from 1 to 2 when section 8 passes. Mode 1 and
-  mode 0 keep today's paths exactly.
+- The selector is `LabQueueReset` (REG_DWORD under Parameters, read at DriverEntry, lab flavour only, the pattern of
+  `LabScaledPlane`), not a value 2 of `HangRecoveryMode`. A new allowed value of a catalog setting changes the
+  catalog identity, and a KMD of another catalog fails to begin over the installed package. When section 8 passes,
+  the catalog adds the setting and the release flavour takes the path. Without the selector, stage 1 and S1 are
+  exactly as before. `HangRecoveryMode` 0 turns stage 2 off too.
+- The first code runs stage 2 in `ResetEngine` only. The `ResetFromTimeout` half is the next step, after Q2 and Q3
+  show the `ResetEngine` half on the lab.
 - Node 1 (paging, SDMA) is out of scope. That is stage S3.
 
 ## 5. Order of operations
@@ -195,7 +201,23 @@ other tests do.
 | Q3 | 0 | a GFX `WAIT_REG_MEM` on a CPU flag (the M939 job) | stage 2 GFX passes (as M944 on Linux), 4101 |
 | Q4 | 0 | 3DMark SystemInfo scan on the candidate | stage 2 GFX after a no-retry CPG fault: not measured anywhere. Records the result. |
 
-## 9. Open points
+## 9. Code
+
+| Part | File |
+|---|---|
+| The KIQ steps of 5.1 and 5.2 (`bc250_gfx_reset_kcq`, `bc250_gfx_reset_kgq`) | `driver/shim/bc250_gfx.c` |
+| The fence slot write of 5.4 step 9 (`bc250_gfx_fence_write`) | `driver/shim/bc250_gfx.c` |
+| GartLock, the gfx sequence, the wave proof, the VMID (`GfxQueueReset`) | `driver/kmd/gfx.c` |
+| The pure decisions (`Bc250QueueResetWanted`, `Bc250QueueResetWaveProof`, `Bc250VmidForget`) | `driver/kmd/hang_recovery.h`, `queue_reset.h`, `vmid_pool.h` |
+| The call after stage 1, the verdicts `QUEUE_RESET` (11) and `QUEUE_RESET_FAILED` (12) | `driver/kmd/wddm.c`, `hang_recovery.h` |
+| The selector `LabQueueReset` | `driver/kmd/guard.c`, `entry.c` |
+| Host checks, with negative controls | `driver/shim/test/queue_reset.c`, `driver/kmd/test/queue_reset_test.c` |
+
+`CP_GFX_HQD_ACTIVE` and `CP_GFX_HQD_WPTR` are on the Gfx table of `gen_regs.py` as read-only witnesses. A failed
+stage 2 writes `QUEUE_RESET_FAILED` with the failed step in `LastSeq`: the steps of `enum bc250_qreset_step`, 9 for
+the wave proof, 10 for a register that the gfx sequence refused.
+
+## 10. Open points
 
 - Whether `CP_VMID_RESET` clears a CP stalled on a no-retry fault (Q4). If not, the next candidate is the
   fault itself (section 1, the CPG write to `0x1001C8000`): a write target the KMD did not map is a KMD defect of

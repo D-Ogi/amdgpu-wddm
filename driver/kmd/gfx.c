@@ -37,6 +37,7 @@
 #include "lab_gate.h"          // BD-167: GfxEscape/GfxFenceEscape are the lab-only user GFX/FENCE submit entries
 #include "bc250_fence_order.h"
 #include "hang_recovery.h"
+#include "queue_reset.h"     // stage 2 of the hang recovery: the wave proof and the step numbers
 #include "adapter_reset.h"   // TDR recovery S1: the ring witnesses of DxgkDdiResetFromTimeout
 #include "vmid_pool.h"
 #include "bc250_sdma_virtual_ptes.h"
@@ -1305,6 +1306,143 @@ ULONG GfxComputeSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULON
                             _Out_ ULONG* Micros)
 {
     return GfxSoftRecoverRing(Device, Vmid, TRUE, Seq, Kills, Micros);
+}
+// Stage 2 of the hang recovery (docs/design/queue-reset.md section 5). The shim's steps (bc250_gfx_reset_kcq and
+// bc250_gfx_reset_kgq) run as GfxSoftRecoverRing's kill runs: under GartLock, with the gfx sequence as the backend,
+// so that every register the shim touches is checked against the Gfx table and a refusal stops the sequence. Then,
+// outside GartLock, the wave proof (GfxCaptureWaves takes GartLock itself), and last the VMID under VmidLock.
+//
+// What a success leaves: the queue is mapped again on a clean ring, its fence slot holds the ring's newest sequence
+// (no end-of-pipe will write the old ones), and the hung VMID holds no root. The gates stay closed: wddm.c's commit
+// opens them under the WDDM lock, as after a stage-1 drain.
+C_ASSERT(BC250_QRESET_STEP_UNMAP == 2 && BC250_QRESET_STEP_VMID_RESET == 4 && BC250_QRESET_STEP_MAP == 6);
+C_ASSERT(BC250_QRESET_STEP_DONE == 8 && BC250_QRESET_STEP_WAVES > BC250_QRESET_STEP_DONE);
+
+ULONG GfxQueueReset(_Inout_ BC250_DEVICE* Device, ULONG Vmid, BOOLEAN Compute, _Out_ ULONG* Step,
+                    _Out_ ULONG* Micros)
+{
+    const char* ringName = Compute ? "compute" : "gfx";
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev = NULL;
+    struct amdgpu_device* ringAdev;
+    struct amdgpu_ring* ring;
+    struct bc250_qreset_result res;
+    BC250_WAVE_SNAPSHOT* snapshot;
+    BOOLEAN gartEnabled = FALSE;
+    void* previousBackend;
+    NTSTATUS status, fault;
+    ULONG faultOffset, ringSeq, slot, proof;
+    ULONGLONG start;
+    KIRQL irql;
+    int r;
+
+    *Step = BC250_QRESET_STEP_NONE;
+    *Micros = 0;
+    RtlZeroMemory(&res, sizeof(res));
+    if (!Bc250KillVmidValid(Vmid) || KeGetCurrentIrql() != PASSIVE_LEVEL)
+    {
+        *Step = BC250_QRESET_STEP_ARGS;
+        GuardLog("gfx: queue reset %s refused: vmid %lu, IRQL %u; nothing changed", ringName, Vmid,
+                 (ULONG)KeGetCurrentIrql());
+        return BC250_HANG_VERDICT_QUEUE_RESET_FAILED;
+    }
+    // Allocated before anything changes: without it the proof of step 7 cannot run, and a reset whose proof
+    // cannot run is not reported.
+    snapshot = ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*snapshot), BC250_GFX_TAG);
+    if (snapshot == NULL)
+    {
+        *Step = BC250_QRESET_STEP_WAVES;
+        GuardLog("gfx: queue reset %s refused: no memory for the wave proof; nothing changed", ringName);
+        return BC250_HANG_VERDICT_QUEUE_RESET_FAILED;
+    }
+
+    ExAcquireFastMutex(&Device->GartLock);
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx == NULL || Device->GpuMem == NULL) status = STATUS_DEVICE_NOT_READY;
+    else status = GartDevice(Device, &adev, &gartEnabled);
+    if (NT_SUCCESS(status) && !gartEnabled) status = STATUS_INVALID_DEVICE_STATE;
+    ringSeq = 0;
+    ringAdev = NULL;
+    if (NT_SUCCESS(status))
+    {
+        ringSeq = Compute ? gfx->ComputeSeq : gfx->SubmitSeq;
+        ringAdev = Compute ? gfx->ComputeAdev : gfx->SubmitAdev;
+        if (ringSeq == 0 || ringAdev != adev) status = STATUS_INVALID_DEVICE_STATE;
+    }
+    if (!NT_SUCCESS(status))
+    {
+        ExReleaseFastMutex(&Device->GartLock);
+        ExFreePoolWithTag(snapshot, BC250_GFX_TAG);
+        *Step = BC250_QRESET_STEP_ARGS;
+        GuardLog("gfx: queue reset %s found no ring (0x%08lX, seq %lu); nothing changed", ringName, (ULONG)status,
+                 ringSeq);
+        return BC250_HANG_VERDICT_QUEUE_RESET_FAILED;
+    }
+    ring = Compute ? &adev->gfx.compute_ring[BC250_COMPUTE_RING_INDEX] : &adev->gfx.gfx_ring[0];
+    slot = Compute ? BC250_COMPUTE_FENCE_SLOT : BC250_SUBMIT_FENCE_SLOT;
+
+    start = KeQueryInterruptTime();
+    previousBackend = adev->backend;
+    adev->backend = &gfx->Sequence;
+    SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
+    r = Compute ? bc250_gfx_reset_kcq(ring, &res) : bc250_gfx_reset_kgq(ring, Vmid, &res);
+    fault = gfx->Sequence.Fault;
+    faultOffset = gfx->Sequence.FaultOffset;
+    // Step 9's first half: the ring restarts empty, so its fence slot takes the newest sequence it held. Only after
+    // a proven reset: a failed one leaves the slot as the hardware wrote it, which is what S1 reads next.
+    if (r == 0 && NT_SUCCESS(fault)) (void)bc250_gfx_fence_write(adev, slot, ringSeq);
+    adev->backend = previousBackend;
+    // Section 7: a KIQ that did not answer is not trusted by the next stop either.
+    if (r != 0 && Bc250QueueResetKiqStep(res.step)) Device->GpuStopUnconfirmed = TRUE;
+    ExReleaseFastMutex(&Device->GartLock);
+    *Micros = (ULONG)((KeQueryInterruptTime() - start) / 10ull);
+
+    GuardLog("gfx: queue reset %s witnesses: hqd active 0x%lX rptr 0x%lX wptr 0x%lX, poll %lu us", ringName,
+             res.hqd_active_before, res.rptr_before, res.wptr_before, res.hqd_poll_us);
+    if (!NT_SUCCESS(fault))
+    {
+        ExFreePoolWithTag(snapshot, BC250_GFX_TAG);
+        *Step = BC250_QRESET_STEP_SEQUENCE;
+        GuardLog("gfx: queue reset %s stopped: register 0x%05lX refused (0x%08lX) at step %lu; node stays closed",
+                 ringName, faultOffset, (ULONG)fault, res.step);
+        return BC250_HANG_VERDICT_QUEUE_RESET_FAILED;
+    }
+    if (r != 0)
+    {
+        ExFreePoolWithTag(snapshot, BC250_GFX_TAG);
+        *Step = res.step;
+        GuardLog("gfx: queue reset %s failed at step %lu (%d) after %lu us; node stays closed", ringName, res.step,
+                 r, *Micros);
+        return BC250_HANG_VERDICT_QUEUE_RESET_FAILED;
+    }
+
+    // Step 7: no wave of the hung VMID is left on the hardware.
+    RtlZeroMemory(&snapshot->Header, sizeof(snapshot->Header));
+    snapshot->Header.Kind = BC250_WAVE_KIND_LIVE;
+    snapshot->Header.Seq = ringSeq;
+    snapshot->Header.Vmid = Vmid;
+    status = GfxCaptureWaves(Device, snapshot);
+    proof = Bc250QueueResetWaveProof(&snapshot->Header, snapshot->Waves, NT_SUCCESS(status), Vmid);
+    GuardLog("gfx: queue reset %s wave proof: capture 0x%08lX flags 0x%lX count %lu, verdict %lu", ringName,
+             (ULONG)status, (ULONG)snapshot->Header.Flags, (ULONG)snapshot->Header.WaveCount, proof);
+    ExFreePoolWithTag(snapshot, BC250_GFX_TAG);
+    if (proof != 0)
+    {
+        *Step = proof;
+        GuardLog("gfx: queue reset %s not proven: a wave of VMID %lu, or no complete capture; node stays closed",
+                 ringName, Vmid);
+        return BC250_HANG_VERDICT_QUEUE_RESET_FAILED;
+    }
+
+    // Step 8: the VMID is programmed again by its next job.
+    KeAcquireSpinLock(&gfx->VmidLock, &irql);
+    Bc250VmidForget(&gfx->Vmid, &gfx->VmidHistory, Vmid);
+    KeReleaseSpinLock(&gfx->VmidLock, irql);
+
+    *Step = BC250_QRESET_STEP_DONE;
+    GuardLog("gfx: queue reset %s: seq %lu ended in %lu us, VMID %lu released; awaiting commit", ringName, ringSeq,
+             *Micros, Vmid);
+    return BC250_HANG_VERDICT_QUEUE_RESET;
 }
 
 // Wave observation never uses the live submission sequence: a refused debug read

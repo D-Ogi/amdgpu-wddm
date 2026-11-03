@@ -1709,7 +1709,7 @@ static const unsigned long g_MmioPspAllow[BC250_MMIO_PSP_ALLOW_COUNT] = {
 
 // E11: what amdgpu wrote on unit A in this step (E03 trace, 0.0375 to 0.0385 s, 0.2495 to 0.2528 s, 0.5496 to 0.551 s, 1.56 to 1.562 s, names matching
 // ^(GC\.(?!GCVM_|GCMC_)|GC\.GCVM_INVALIDATE_ENG17_(REQ|ACK)$|GC\.GCMC_VM_CACHEABLE_DRAM_ADDRESS_END$|MMHUB\.MMVM_INVALIDATE_ENG17_(REQ|ACK|SEM)$|NBIO\.(RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN|BIF_SDMA[01]_DOORBELL_RANGE|BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_(BASE_LOW|BASE_HIGH|CNTL))$)), plus the registers it only polled. For the kernel command alone.
-#define BC250_MMIO_GFX_ALLOW_COUNT 293
+#define BC250_MMIO_GFX_ALLOW_COUNT 295
 static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x03780ul,   // NBIO.RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN
     0x0384Cul,   // NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_HIGH
@@ -1876,12 +1876,14 @@ static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x0C2C0ul,   // GC.CP_IQ_WAIT_TIME2
     0x0C2D0ul,   // GC.CPC_INT_CNTL
     0x0C2E0ul,   // GC.CP_PQ_STATUS
+    0x0C380ul,   // GC.CP_GFX_HQD_ACTIVE (not traced: queue reset witness, read only)
     0x0C384ul,   // GC.CP_GFX_HQD_VMID
     0x0C390ul,   // GC.CP_GFX_HQD_QUEUE_PRIORITY
     0x0C394ul,   // GC.CP_GFX_HQD_QUANTUM
     0x0C3A0ul,   // GC.CP_GFX_HQD_RPTR
     0x0C3B4ul,   // GC.CP_RB_DOORBELL_CONTROL
     0x0C3BCul,   // GC.CP_GFX_HQD_CNTL
+    0x0C3C4ul,   // GC.CP_GFX_HQD_WPTR (not traced: queue reset witness, read only)
     0x0C3E8ul,   // GC.CP_GFX_MQD_CONTROL
     0x0C6DCul,   // GC.CP_SD_CNTL
     0x0C748ul,   // GC.SPI_GDBG_TRAP_CONFIG

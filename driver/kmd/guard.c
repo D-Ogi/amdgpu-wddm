@@ -433,6 +433,33 @@ BOOLEAN GuardLabPowerDownFault(ULONG Step)
     return TRUE;
 }
 
+// Stage 2 of the hang recovery (docs/design/queue-reset.md), lab flavour only, not a catalog setting for the reason
+// of LabScaledPlane above. LabQueueReset (REG_DWORD, Parameters, read only at DriverEntry): 1 lets ResetEngine reset
+// the queue of node 0 or node 2 through the KIQ when the stage-1 wave kill did not drain. Any other value, absent or
+// not a REG_DWORD is 0, which keeps stage 1 exactly as before.
+static ULONG g_LabQueueReset = 0;
+
+void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status;
+    ULONG value = 0;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("lab: queue reset selector: Parameters key not opened for reading (0x%08X), 0", status);
+        return;
+    }
+    status = ParameterDword(key, L"LabQueueReset", &value);
+    ZwClose(key);
+    if (status == STATUS_OBJECT_NAME_NOT_FOUND) {
+        GuardLog("lab: queue reset selector absent, 0 (the default)");
+        return;
+    }
+    g_LabQueueReset = (NT_SUCCESS(status) && value == 1) ? 1 : 0;
+    GuardLog("lab: queue reset selector read (value 0x%lX, 0x%08X): stage 2 %s", value, status,
+             g_LabQueueReset ? "on" : "off");
+}
 // StartDevice, after the boot-loop guard passed: the seed for this start's first fresh SDMA0 bring-up, or 0. The
 // nonce is written and flushed first; any failure on the way gives 0. Without a seed, a marker of an earlier seed is
 // deleted, so the internal state holds nothing once the lab script has removed the seed.
@@ -509,6 +536,14 @@ ULONG GuardLabScaledPlane(void)
 {
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     return g_LabScaledPlane;
+#else
+    return 0;
+#endif
+}
+ULONG GuardLabQueueReset(void)
+{
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    return g_LabQueueReset;
 #else
     return 0;
 #endif

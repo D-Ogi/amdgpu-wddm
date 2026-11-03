@@ -86,6 +86,12 @@ static __inline int Bc250KillVmidValid(unsigned vmid)
                                                    RestartFromTimeout */
 #define BC250_HANG_VERDICT_ADAPTER_BUSY    10u  /* a witness busy: failure returned (0x116), LastSeq is the
                                                    BC250_ADAPTER_BUSY_* mask, not a hardware sequence */
+#define BC250_HANG_VERDICT_QUEUE_RESET     11u  /* stage 2 (docs/design/queue-reset.md): stage 1 did not drain, the
+                                                 * KIQ reset the queue, a ring test passed, no wave of the VMID is
+                                                 * left: reset reported, node open. Lab flavour, LabQueueReset 1. */
+#define BC250_HANG_VERDICT_QUEUE_RESET_FAILED 12u /* stage 2 failed: refused as before (0x116). LastSeq is the failed
+                                                 * step, enum bc250_qreset_step of bc250_gfx.h, or 9 for the wave
+                                                 * proof and 10 for a register refused by the gfx sequence. */
 
 /* Which DDI wrote the record: HangRecovery\LastPath of the state store. */
 #define BC250_HANG_PATH_ENGINE   1u     /* DxgkDdiResetEngine, stage 1 of hang-recovery.md */
@@ -265,7 +271,16 @@ static __inline unsigned Bc250HangKillLoop(const BC250_HANG_KILL_OPS* ops, void*
 static __inline int Bc250HangVerdictRecovered(unsigned verdict)
 {
     return verdict == BC250_HANG_VERDICT_DRAINED || verdict == BC250_HANG_VERDICT_ALREADY_RETIRED ||
-           verdict == BC250_HANG_VERDICT_ABORT_REPORTED;
+           verdict == BC250_HANG_VERDICT_ABORT_REPORTED || verdict == BC250_HANG_VERDICT_QUEUE_RESET;
+}
+
+/* Stage 2 (docs/design/queue-reset.md): only after a stage-1 kill loop that did not drain, only on the two IB
+ * nodes, and only when the lab selector is on (it is 0 in the release flavour). */
+static __inline int Bc250QueueResetWanted(unsigned long labQueueReset, int hangRecoveryMode, unsigned nodeOrdinal,
+                                          unsigned stage1Verdict, int killLoopRan)
+{
+    return labQueueReset == 1u && hangRecoveryMode != 0 && (nodeOrdinal == 0u || nodeOrdinal == 2u) &&
+           killLoopRan && stage1Verdict == BC250_HANG_VERDICT_NOT_DRAINED;
 }
 
 /* Which counters of the record one write adds 1 to. Every attempt counts one Attempt in its first write (the
@@ -287,6 +302,8 @@ static __inline unsigned Bc250HangVerdictCounts(unsigned verdict)
      * write ahead of it to have counted one. Without this the record's invariant would break the other way. */
     case BC250_HANG_VERDICT_ABORT_REPORTED:   return BC250_HANG_COUNT_ATTEMPT | BC250_HANG_COUNT_RECOVERED;
     case BC250_HANG_VERDICT_NOT_DRAINED:      return BC250_HANG_COUNT_NOT_DRAINED;
+    case BC250_HANG_VERDICT_QUEUE_RESET:      return BC250_HANG_COUNT_RECOVERED;
+    case BC250_HANG_VERDICT_QUEUE_RESET_FAILED: return BC250_HANG_COUNT_NOT_DRAINED;
     /* The adapter path always writes PENDING first, which counted its attempt: the outcome counts only itself. */
     case BC250_HANG_VERDICT_ADAPTER_RESET:    return BC250_HANG_COUNT_RECOVERED;
     case BC250_HANG_VERDICT_ADAPTER_BUSY:     return BC250_HANG_COUNT_REFUSED;

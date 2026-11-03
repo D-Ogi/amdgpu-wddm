@@ -1516,6 +1516,31 @@
         "host"
       ]
     },
+    "kmd-queue-reset": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "kmd-queue-reset-any-vmid": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "kmd-queue-reset-stage-first": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "queue-reset": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "queue-reset-no-rptr-zero": {
+      "inputs": [
+        "host"
+      ]
+    },
     "shim-ih": {
       "inputs": [
         "host"

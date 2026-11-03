@@ -730,6 +730,10 @@ BOOLEAN GuardLabGdiHwAccel(void);
 BOOLEAN GuardLabGdiEngineOnly(void);
 // BD-223: the LabScaledPlane bits read at DriverEntry in the lab flavour; 0 in the release flavour. Any IRQL.
 ULONG GuardLabScaledPlane(void);
+// Stage 2 of the hang recovery: 1 when the lab flavour read LabQueueReset 1 at DriverEntry; 0 in the release
+// flavour. Any IRQL.
+void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject);
+ULONG GuardLabQueueReset(void);
 // BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
 // one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog
 // must never undercut (submit_watchdog.h). Read-only: nothing in this driver writes that key - the installer
@@ -1244,7 +1248,12 @@ BOOLEAN GfxComputeReady(_In_ const BC250_DEVICE* Device);
 BOOLEAN GfxComputeBusy(_In_ const BC250_DEVICE* Device);
 void GfxComputeClose(_Inout_ BC250_DEVICE* Device);
 ULONG GfxComputeSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq, _Out_ ULONG* Kills,
-                            _Out_ ULONG* Micros);
+                            _Out_ ULONG* Micros);// Stage 2 of the hang recovery (docs/design/queue-reset.md): after a stage-1 kill loop that did not drain, reset
+// the queue of node 0 (Compute FALSE) or node 2 (Compute TRUE) through the KIQ, prove it, and advance the ring's
+// fence slot to its newest sequence. PASSIVE_LEVEL, from DxgkDdiResetEngine with both gates closed. Returns
+// BC250_HANG_VERDICT_QUEUE_RESET, or BC250_HANG_VERDICT_QUEUE_RESET_FAILED with *Step set. Opens no gate.
+ULONG GfxQueueReset(_Inout_ BC250_DEVICE* Device, ULONG Vmid, BOOLEAN Compute, _Out_ ULONG* Step,
+                    _Out_ ULONG* Micros);
 BOOLEAN GfxComputeFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value);
 BOOLEAN GfxComputeReopenAfterAbort(_Inout_ BC250_DEVICE* Device);
 BOOLEAN GfxComputeNodeGate(_In_ const BC250_DEVICE* Device);
