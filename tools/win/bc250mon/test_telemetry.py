@@ -153,10 +153,22 @@ class TelemetryAbiTest(unittest.TestCase):
         source = DRIVER_CS.read_text()
         self.assertIn('Bc250Dpm(out data, 192)', source)         # ABI 2 first
         self.assertIn('Bc250Dpm(out data, 160)', source)         # the ABI 1 prefix when a caller refuses 192
+        self.assertIn('Bc250Dpm(out ex, 248)', source)           # ABI 3 (0.7.215, SMU metrics) before both
         self.assertIn('Bc250VideoMemory(null, out data, 264)', source)
         # The fan reply's size is passed by Marshal.SizeOf, so the literal here is the thing that would
         # not move with the struct. 216 is the size test_monitor_hwmon_layout checks above.
         self.assertIn('bytes != 216', source)
+
+    def test_monitor_dpm_metrics_layout(self):
+        header = HEADER.read_text()
+        if 'typedef struct _BC250_DPM_METRICS' not in header:
+            self.skipTest('this tree has no BC250_DPM_METRICS')
+        expected = c_fields(header, 'BC250_DPM_METRICS')
+        self.assertEqual(expected, cs_fields('DpmMetrics'))
+        self.assertEqual(size_of(expected), 56)
+        self.assertRegex(header, r'#define BC250_DPM_FLAG_POWER 8192u')
+        self.assertRegex(header, r'#define BC250_DPM_ABI3_SIZE 248u')
+        self.assertRegex(header, r'#define BC250_DPM_METRICS_OK 2u')
 
 
 class MonTelemetryTest(unittest.TestCase):
@@ -167,10 +179,13 @@ class MonTelemetryTest(unittest.TestCase):
                                      'vramUsedMB': 1234, 'vramTotalMB': 2048, 'ageSeconds': 0.4,
                                      'fanRpm': 1589, 'fanDutyPercent': 96, 'fanStopped': False,
                                      'note': 'load n/a: KMD 0x000700B0 has no GRBM busy share (0.7.177)'})
-        self.assertEqual(line, 'tctl_c=67.5 load_pct=n/a gfx_mhz=1000 vram_used_mb=1234 vram_total_mb=2048 '
+        self.assertEqual(line, 'tctl_c=67.5 tctl_peak60_c=n/a gfx_temp_c=n/a load_pct=n/a gfx_mhz=1000 vram_used_mb=1234 vram_total_mb=2048 '
                                'fan_rpm=1589 fan_duty_pct=96 fan_stopped=0 age_s=0.4\n'
                                '# load n/a: KMD 0x000700B0 has no GRBM busy share (0.7.177)')
         self.assertEqual(mon.format_telemetry({'available': False}), 'telemetry=n/a')
+        temps = dict(p.split('=') for p in mon.format_telemetry(
+            {'available': True, 'temperatureC': 82.1, 'tctlPeak60C': 90.9, 'gfxTemperatureC': 70.6}).split())
+        self.assertEqual((temps['tctl_c'], temps['tctl_peak60_c'], temps['gfx_temp_c']), ('82.1', '90.9', '70.6'))
         pairs = dict(p.split('=') for p in mon.format_telemetry({'available': True, 'loadPercent': 12.3}).split())
         self.assertEqual(pairs['load_pct'], '12.3')
         self.assertEqual(pairs['tctl_c'], 'n/a')

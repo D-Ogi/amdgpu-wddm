@@ -35,13 +35,23 @@ namespace Bc250Mon
         DpmSnapshot _last;
         string _dpmError;
 
-        public void Add(DpmSnapshot s)
+        // The hottest Tctl of the window's samples, and the last fresh SMU GFX temperature.
+        int? _maxTctlMc;
+        double? _gfxC;
+
+        public void Add(DpmSnapshot s) { Add(s, default(DpmMetrics)); }
+
+        public void Add(DpmSnapshot s, DpmMetrics metrics)
         {
             _dpmError = null;
             // A stopped governor leaves its last tick behind: old values with fresh-looking flags.
             if ((s.Flags & FlagRunning) == 0) { _dpmError = "DPM governor not running"; return; }
             _samples++;
             _last = s;
+            if ((s.Flags & DpmSnapshot.FlagTemperature) != 0 && (!_maxTctlMc.HasValue || s.TemperatureMc > _maxTctlMc.Value))
+                _maxTctlMc = s.TemperatureMc;
+            double? gfx = DpmMetrics.GfxC(s, metrics);
+            if (gfx.HasValue) _gfxC = gfx;
             if ((s.Flags & DpmSnapshot.FlagHwBusy) != 0) { _busySum += Math.Min(1000u, s.BusyAvgPermille); _busySamples++; }
         }
 
@@ -114,11 +124,44 @@ namespace Bc250Mon
             }
             catch (Exception e) { notes.Add("fan n/a: " + e.Message); }
 
-            t.TemperatureLevel = !t.TemperatureC.HasValue ? Level.Info : t.TemperatureC >= GpuProvider.ErrorC ? Level.Error :
-                                 t.TemperatureC >= GpuProvider.WarnC ? Level.Warn : Level.Good;
+            t.TemperatureLevel = TctlLevel(t.TemperatureC);
+            t.GfxTemperatureC = _gfxC;
+            // The window's own peak: what TelemetryProvider feeds into the 60 s peak. Without DPM samples the one
+            // clock-escape reading is the only value there is.
+            t.TctlPeakC = _maxTctlMc.HasValue ? _maxTctlMc.Value / 1000.0 : t.TemperatureC;
+            t.TctlPeakLevel = TctlLevel(t.TctlPeakC);
             t.Note = notes.Count > 0 ? string.Join("; ", notes) : null;
-            _busySum = 0; _busySamples = 0; _samples = 0;
+            _busySum = 0; _busySamples = 0; _samples = 0; _maxTctlMc = null; _gfxC = null;
             return t;
+        }
+
+        // Tctl colours of the line: amber from 85 C, red from 87 C, the lab's stop limit.
+        public const double TctlWarnC = 85, TctlErrorC = 87;
+        public static Level TctlLevel(double? c)
+        {
+            return !c.HasValue ? Level.Info : c.Value >= TctlErrorC ? Level.Error : c.Value >= TctlWarnC ? Level.Warn : Level.Good;
+        }
+    }
+
+    // The highest value over a sliding time span. Values arrive in time order; a monotonic queue keeps only the
+    // values that can still become the maximum, so Add and Peak cost O(1) amortised.
+    public sealed class SlidingPeak
+    {
+        readonly TimeSpan _span;
+        readonly LinkedList<KeyValuePair<TimeSpan, double>> _q = new LinkedList<KeyValuePair<TimeSpan, double>>();
+        public SlidingPeak(TimeSpan span) { _span = span; }
+
+        public void Add(TimeSpan at, double value)
+        {
+            while (_q.Count > 0 && _q.Last.Value.Value <= value) _q.RemoveLast();
+            _q.AddLast(new KeyValuePair<TimeSpan, double>(at, value));
+        }
+
+        // The peak of the values added in (now - span, now]; null when there is none.
+        public double? Peak(TimeSpan now)
+        {
+            while (_q.Count > 0 && _q.First.Value.Key <= now - _span) _q.RemoveFirst();
+            return _q.Count > 0 ? (double?)_q.First.Value.Value : null;
         }
     }
 
@@ -128,6 +171,8 @@ namespace Bc250Mon
         readonly ITelemetrySource _source;
         readonly Func<TimeSpan> _clock;
         readonly TelemetryWindow _window = new TelemetryWindow();
+        public static readonly TimeSpan PeakSpan = TimeSpan.FromSeconds(60);
+        readonly SlidingPeak _peak = new SlidingPeak(PeakSpan);
         // The operating-point panel reads the DPM governor's mode, cap and throttle out of the same snapshot
         // this provider already takes four times a second, so that panel costs no escape of its own.
         readonly DpmFeed _feed;
@@ -148,7 +193,7 @@ namespace Bc250Mon
             try
             {
                 DpmSnapshot sample = _source.ReadDpm();
-                _window.Add(sample);
+                _window.Add(sample, _source.LastMetrics);
                 // Published whatever the flags say: a stopped governor is exactly what the other panel reports.
                 if (_feed != null) _feed.Publish(sample);
             }
@@ -161,6 +206,11 @@ namespace Bc250Mon
             if (_due.HasValue && now < _due.Value) return;
             _due = now + PublishPeriod;
             Telemetry t = _window.Close(DateTime.Now, _source);
+            // The window's hottest sample enters the 60 s peak, so a short spike between two publications is
+            // still on the screen for a minute (2026-11-03: the guard stopped a game at 90.9 C after a 2 s spike).
+            if (t.TctlPeakC.HasValue) _peak.Add(now, t.TctlPeakC.Value);
+            t.TctlPeakC = _peak.Peak(now);
+            t.TctlPeakLevel = TelemetryWindow.TctlLevel(t.TctlPeakC);
             state.SetTelemetry(t);
             // Logged on change only: an old KMD would otherwise say the same thing every two seconds forever.
             if (t.Note != _lastNote && t.Note != null) state.Log(Name, Level.Info, t.Note);
@@ -177,6 +227,10 @@ namespace Bc250Mon
                 { "ageSeconds", Math.Round((now - t.Time).TotalSeconds, 1) }, { "text", t.Text },
                 { "temperatureC", t.TemperatureC.HasValue ? (object)Math.Round(t.TemperatureC.Value, 1) : null },
                 { "temperatureLevel", t.TemperatureLevel.ToString() }, { "temperatureSource", t.TemperatureSource },
+                { "tctlPeak60C", t.TctlPeakC.HasValue ? (object)Math.Round(t.TctlPeakC.Value, 1) : null },
+                { "tctlPeak60Level", t.TctlPeakLevel.ToString() },
+                { "gfxTemperatureC", t.GfxTemperatureC.HasValue ? (object)Math.Round(t.GfxTemperatureC.Value, 1) : null },
+                { "temperatureText", t.TemperatureText },
                 { "loadPercent", t.LoadPercent.HasValue ? (object)Math.Round(t.LoadPercent.Value, 1) : null },
                 { "loadSource", t.LoadSource }, { "loadSamples", t.LoadSamples },
                 { "gfxMHz", t.GfxMHz }, { "clockSource", t.ClockSource },
@@ -194,15 +248,33 @@ namespace Bc250Mon
     // inside Bounds (it clips to it), which is what OverlayForm invalidates when the line changes.
     public static class TelemetryLine
     {
-        public const int Top = 36, Height = 18, Bottom = Top + Height + 2;
+        // Two rows since 2026-11-03: the temperatures on top, then load, clock and VRAM. One row cannot hold both
+        // temperatures and the peak next to the widest load line inside the 460-unit panel.
+        public const int Top = 36, RowHeight = 18, Height = 2 * RowHeight, Bottom = Top + Height + 2;
 
         public static RectangleF Bounds(float x, float width) { return new RectangleF(x, Top, width, Height); }
+
+        static KeyValuePair<string, Color> Seg(string text, Color c) { return new KeyValuePair<string, Color>(text, c); }
+
+        // Row 0: "Tctl 82.1 C  60s max 90.9 C  GFX 70.6 C". Tctl and its peak take the 85/87 C colours; the label
+        // text stays dim so the number carries the colour.
+        internal static List<KeyValuePair<string, Color>> TemperatureSegments(Telemetry t, Func<Level, Color> color, Color dim)
+        {
+            var s = new List<KeyValuePair<string, Color>>();
+            if (t == null) return s;
+            s.Add(Seg("Tctl", dim));
+            s.Add(Seg(t.Temperature, t.TemperatureC.HasValue ? color(t.TemperatureLevel) : dim));
+            s.Add(Seg("60s max", dim));
+            s.Add(Seg(t.TctlPeak, t.TctlPeakC.HasValue ? color(t.TctlPeakLevel) : dim));
+            s.Add(Seg("GFX", dim));
+            s.Add(Seg(t.GfxTemperature, t.GfxTemperatureC.HasValue ? color(Level.Info) : dim));
+            return s;
+        }
 
         static List<KeyValuePair<string, Color>> Segments(Telemetry t, Func<Level, Color> color, Color dim)
         {
             var s = new List<KeyValuePair<string, Color>> { new KeyValuePair<string, Color>("GPU", dim) };
             if (t == null) { s.Add(new KeyValuePair<string, Color>("waiting for the first sample", dim)); return s; }
-            s.Add(new KeyValuePair<string, Color>(t.Temperature, t.TemperatureC.HasValue ? color(t.TemperatureLevel) : dim));
             s.Add(new KeyValuePair<string, Color>("load " + t.Load, t.LoadPercent.HasValue ? color(Level.Info) : dim));
             s.Add(new KeyValuePair<string, Color>(t.Clock, t.GfxMHz.HasValue ? color(Level.Info) : dim));
             s.Add(new KeyValuePair<string, Color>("VRAM " + t.Vram, t.VramUsedBytes.HasValue ? color(Level.Info) : dim));
@@ -220,11 +292,29 @@ namespace Bc250Mon
             return g.MeasureString("0000000000", font, PointF.Empty, StringFormat.GenericTypographic).Width / 10f;
         }
 
-        public static float Width(Graphics g, Font font, Telemetry t)
+        static int Columns(List<KeyValuePair<string, Color>> segments)
         {
             int columns = -2;
-            foreach (var s in Segments(t, l => Color.Empty, Color.Empty)) columns += s.Key.Length + 2;
+            foreach (var s in segments) columns += s.Key.Length + 2;
+            return Math.Max(0, columns);
+        }
+
+        // The wider of the two rows.
+        public static float Width(Graphics g, Font font, Telemetry t)
+        {
+            int columns = Math.Max(Columns(Segments(t, l => Color.Empty, Color.Empty)),
+                                   Columns(TemperatureSegments(t, l => Color.Empty, Color.Empty)));
             return columns * Advance(g, font);
+        }
+
+        static void PaintRow(Graphics g, Font font, List<KeyValuePair<string, Color>> segments, float x, float y, float advance)
+        {
+            int column = 0;
+            foreach (var s in segments)
+            {
+                using (var b = new SolidBrush(s.Value)) g.DrawString(s.Key, font, b, x + column * advance, y);
+                column += s.Key.Length + 2;
+            }
         }
 
         public static void Paint(Graphics g, Font font, Telemetry t, float x, float width, Func<Level, Color> color, Color dim)
@@ -232,12 +322,8 @@ namespace Bc250Mon
             float advance = Advance(g, font);
             GraphicsState saved = g.Save();
             g.SetClip(Bounds(x, width), CombineMode.Intersect);
-            int column = 0;
-            foreach (var s in Segments(t, color, dim))
-            {
-                using (var b = new SolidBrush(s.Value)) g.DrawString(s.Key, font, b, x + column * advance, Top);
-                column += s.Key.Length + 2;
-            }
+            PaintRow(g, font, TemperatureSegments(t, color, dim), x, Top, advance);
+            PaintRow(g, font, Segments(t, color, dim), x, Top + RowHeight, advance);
             g.Restore(saved);
         }
     }

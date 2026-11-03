@@ -18,6 +18,8 @@ sealed class FakeSource : ITelemetrySource
     public DpmSnapshot Default;
     public object Clock, Vram, Fan;
     public int DpmCalls, ClockCalls, VramCalls, FanCalls;
+    public DpmMetrics Metrics;
+    public DpmMetrics LastMetrics { get { return Metrics; } }
     public DpmSnapshot ReadDpm()
     {
         DpmCalls++;
@@ -91,7 +93,7 @@ static class TelemetryTest
         var w = new TelemetryWindow();
         for (int i = 0; i < samples; i++)
         {
-            try { w.Add(s.ReadDpm()); } catch (Exception e) { w.Fail(e.Message); }
+            try { w.Add(s.ReadDpm(), s.LastMetrics); } catch (Exception e) { w.Fail(e.Message); }
         }
         return w.Close(new DateTime(2026, 9, 30, 12, 0, 0), s);
     }
@@ -204,13 +206,87 @@ static class TelemetryTest
         Check(t.VramTotalBytes == null && t.Vram == "300 MB", "no total: " + t.Vram);
         Check(Telemetry.Megabytes((1ul << 20) + (1ul << 19)) == 2 && Telemetry.Megabytes((1ul << 20) + (1ul << 19) - 1) == 1 && Telemetry.Megabytes(null) == null, "MB rounding");
 
-        // Temperature colours follow GpuProvider's thresholds.
-        int warnMilli = (int)(GpuProvider.WarnC * 1000), errorMilli = (int)(GpuProvider.ErrorC * 1000);
+        // Tctl colours of the line: amber from 85 C, red from 87 C.
+        Check(TelemetryWindow.TctlWarnC == 85 && TelemetryWindow.TctlErrorC == 87, "Tctl thresholds 85/87");
+        int warnMilli = (int)(TelemetryWindow.TctlWarnC * 1000), errorMilli = (int)(TelemetryWindow.TctlErrorC * 1000);
         foreach (var c in new[] { Tuple.Create(warnMilli - 100, Level.Good), Tuple.Create(warnMilli, Level.Warn),
                                   Tuple.Create(errorMilli, Level.Error) })
         {
             s = Source(); s.Default = Dpm(0x000700B1, Running | Temp | Clk | Hw, c.Item1, 1000, 1);
             Check(Window(s, 1).TemperatureLevel == c.Item2, "level at " + c.Item1);
+        }
+
+        // GFX temperature: only from a fresh ABI 3 metrics table.
+        const uint Pow = DpmSnapshot.FlagPower;
+        var metrics = new DpmMetrics { MetricsState = DpmMetrics.StateOk, GfxTemperatureCc = 7060 };
+        s = Source(); s.Metrics = metrics;
+        var abi3 = Dpm(0x000700D7, Running | Temp | Clk | Hw | Pow, 82100, 1000, 1); abi3.AbiVersion = 3; s.Default = abi3;
+        t = Window(s, 2);
+        Check(t.GfxTemperatureC == 70.6 && t.GfxTemperature == "70.6 C", "GFX temperature from the metrics table: " + t.GfxTemperature);
+        Check(t.TemperatureText == "Tctl 82.1 C  60s max 82.1 C  GFX 70.6 C", "temperature text: " + t.TemperatureText);
+        var abi2 = abi3; abi2.AbiVersion = 2; s.Default = abi2;
+        Check(Window(s, 2).GfxTemperatureC == null, "ABI 2 reply has no GFX temperature");
+        var stale = abi3; stale.Flags &= ~Pow; s.Default = stale;
+        Check(Window(s, 2).GfxTemperatureC == null, "no FlagPower: no GFX temperature");
+        s.Default = abi3; s.Metrics = new DpmMetrics { MetricsState = 3, GfxTemperatureCc = 7060 };
+        Check(Window(s, 2).GfxTemperatureC == null, "refused metrics: no GFX temperature");
+        s = Source();
+        t = Window(s, 1);
+        Check(t.GfxTemperature == "n/a" && t.TemperatureText == "Tctl 67.5 C  60s max 67.5 C  GFX n/a", "old KMD text: " + t.TemperatureText);
+
+        // The window's peak is its hottest sample, not its last one: a spike inside a window survives.
+        s = Source();
+        foreach (int mc in new[] { 80000, 90900, 81000, 80500 }) s.Dpm.Enqueue(Dpm(0x000700B1, Running | Temp | Clk | Hw, mc, 1000, 1));
+        t = Window(s, 4);
+        Check(t.TemperatureC == 80.5 && t.TctlPeakC == 90.9 && t.TemperatureLevel == Level.Good && t.TctlPeakLevel == Level.Error, "spike inside a window");
+
+        // SlidingPeak: the maximum of the last span, then it ages out.
+        var peak = new SlidingPeak(TimeSpan.FromSeconds(60));
+        Check(peak.Peak(TimeSpan.Zero) == null, "empty peak");
+        peak.Add(TimeSpan.FromSeconds(0), 80); peak.Add(TimeSpan.FromSeconds(2), 90.9); peak.Add(TimeSpan.FromSeconds(4), 82);
+        Check(peak.Peak(TimeSpan.FromSeconds(4)) == 90.9, "peak holds the spike");
+        Check(peak.Peak(TimeSpan.FromSeconds(61)) == 90.9, "spike still inside 60 s");
+        Check(peak.Peak(TimeSpan.FromSeconds(62)) == 82, "spike ages out after 60 s");
+        Check(peak.Peak(TimeSpan.FromSeconds(200)) == null, "everything ages out");
+        peak.Add(TimeSpan.FromSeconds(200), 70); peak.Add(TimeSpan.FromSeconds(201), 75);
+        Check(peak.Peak(TimeSpan.FromSeconds(201)) == 75, "a later higher value replaces older lower ones");
+
+        // Through the provider: a 2 s spike between publications is on the line for 60 s.
+        {
+            var pclock = TimeSpan.Zero;
+            var ps = Source();
+            string pdir = Path.Combine(args.Length > 0 ? args[0] : Path.GetTempPath(), "telemetry-peak-" + Guid.NewGuid().ToString("N"));
+            var pstate = new State(pdir);
+            int pevents = 0;
+            pstate.TelemetryChanged += () => pevents++;
+            var pp = new TelemetryProvider(ps, () => pclock);
+            ps.Default = Dpm(0x000700B1, Running | Temp | Clk | Hw, 80000, 1000, 1);
+            pp.Poll(pstate);
+            for (int i = 1; i <= 8; i++)
+            {
+                pclock = TimeSpan.FromMilliseconds(250 * i);
+                ps.Dpm.Enqueue(Dpm(0x000700B1, Running | Temp | Clk | Hw, i == 3 ? 90900 : 80000, 1000, 1));
+                pp.Poll(pstate);
+            }
+            Check(pstate.Telemetry.TemperatureC == 80.0 && pstate.Telemetry.TctlPeakC == 90.9 && pstate.Telemetry.TctlPeakLevel == Level.Error,
+                  "provider peak keeps the spike: " + pstate.Telemetry.TemperatureText);
+            pclock = TimeSpan.FromSeconds(30); pp.Poll(pstate);
+            Check(pstate.Telemetry.TctlPeakC == 90.9, "peak after 30 s");
+            pclock = TimeSpan.FromSeconds(62); pp.Poll(pstate);
+            Check(pstate.Telemetry.TctlPeakC == 80.0 && pstate.Telemetry.TctlPeakLevel == Level.Good, "peak gone after 60 s: " + pstate.Telemetry.TctlPeak);
+            Check(pevents >= 2, "peak change tells the screen");
+            var pd = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(new JavaScriptSerializer().Serialize(TelemetryProvider.Describe(pstate.Telemetry, pstate.Telemetry.Time)));
+            Check(Convert.ToDouble(pd["tctlPeak60C"], CultureInfo.InvariantCulture) == 80.0 && pd["gfxTemperatureC"] == null
+                  && (string)pd["tctlPeak60Level"] == "Good", "json peak and gfx");
+            try { Directory.Delete(pdir, true); } catch { }
+        }
+
+        // Row colours: Tctl and the peak carry their own levels.
+        {
+            var hot = new Telemetry { TemperatureC = 86, TemperatureLevel = Level.Warn, TctlPeakC = 90.9, TctlPeakLevel = Level.Error, GfxTemperatureC = 70.6 };
+            var segs = TelemetryLine.TemperatureSegments(hot, l => l == Level.Warn ? Color.Orange : l == Level.Error ? Color.Red : Color.White, Color.Gray);
+            Check(segs.Count == 6 && segs[1].Key == "86.0 C" && segs[1].Value == Color.Orange && segs[3].Key == "90.9 C" && segs[3].Value == Color.Red
+                  && segs[5].Key == "70.6 C" && segs[0].Value == Color.Gray, "temperature row segments and colours");
         }
 
         // Provider cadence: a sample every poll, a publication on the first poll and then every two seconds.

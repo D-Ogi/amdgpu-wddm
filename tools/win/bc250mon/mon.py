@@ -169,7 +169,9 @@ def format_telemetry(t):
         return "n/a" if v is None else v
     # fan_rpm is the fastest tachometer that turns, fan_duty_pct the duty read-back where a lab trial has proved
     # it, and fan_stopped the one state that needs an eye on it: a duty output runs and nothing turns.
-    line = (f"tctl_c={value('temperatureC')} load_pct={value('loadPercent')} gfx_mhz={value('gfxMHz')} "
+    # tctl_peak60_c is the hottest Tctl sample of the last 60 s, gfx_temp_c the SMU metrics table's GFX temperature.
+    line = (f"tctl_c={value('temperatureC')} tctl_peak60_c={value('tctlPeak60C')} "
+            f"gfx_temp_c={value('gfxTemperatureC')} load_pct={value('loadPercent')} gfx_mhz={value('gfxMHz')} "
             f"vram_used_mb={value('vramUsedMB')} vram_total_mb={value('vramTotalMB')} "
             f"fan_rpm={value('fanRpm')} fan_duty_pct={value('fanDutyPercent')} "
             f"fan_stopped={1 if t.get('fanStopped') else 0} age_s={value('ageSeconds')}")

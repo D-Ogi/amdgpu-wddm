@@ -424,8 +424,19 @@ mon.py scanout [--scale 0.5] [--format png|bmp] [--out FILE]
 
 ## GPU telemetry line
 
-One line under the title, `GPU  Tctl 67.5 C  load 12 %  GFX 1000 MHz  VRAM 1234/2048 MB`, from
-`TelemetryProvider.cs`. Every source is read-only. The DPM snapshot and the segment statistics are answered from
+Two rows under the title, from `TelemetryProvider.cs`:
+
+```
+Tctl  82.1 C  60s max  90.9 C  GFX  70.6 C
+GPU  load 12 %  1000 MHz  VRAM 1234/2048 MB
+```
+
+The first row (2026-11-03) shows Tctl, the peak Tctl of the last 60 s and the SMU GFX temperature. Tctl is the
+value the lab thermal guard reads. The peak is the hottest 250 ms sample, so a spike of 2 s stays on the screen for
+one minute. Tctl and the peak are amber from 85 C and red from 87 C. The GFX temperature comes from the SMU metrics
+table (`BC250_DPM_METRICS`, RUN_DPM ABI 3, KMD 0.7.215 and later) and is `n/a` without a fresh table
+(`EnableSmuMetrics` 0, an older KMD or DLL). `GET /telemetry` gives `tctlPeak60C`, `gfxTemperatureC` and
+`temperatureText`; `mon.py telemetry` gives `tctl_peak60_c` and `gfx_temp_c`. Every source is read-only. The DPM snapshot and the segment statistics are answered from
 memory the KMD or dxgkrnl already holds; the clock fallback is the same typed read the SoC panel makes anyway:
 
 | Value | Source |
