@@ -936,6 +936,22 @@ facts:
     evidence: "[L1031 visit](../evidence/linux/2026-11-01-L1031-visit/README.md)"
     edges:
       - {"type": "uses", "to": "M924"}
+  - id: M957
+    status: MEASURED
+    date: "2026-11-03"
+    claim: "On the lab Windows of unit A, no driver is bound to the secure processor PCI function 1022:143E: Windows lists it as `PCI Encryption/Decryption Controller` with problem `CM_PROB_FAILED_INSTALL` and no service, and no `amdpsp*` service or driver package is installed. So the KMD's GPU-side PSP ring (M34) is the only software client of the PSP on that system"
+    status_text: "MEASURED (unit A, Windows 11 22631, tester.36 release, one reading)"
+    detail: "Read-only PnP and service queries over SSH. AMD's chipset package can install a PSP driver for this function on a tester's system; the installer's verify step warns when a service is bound to it"
+    evidence: "[README](../evidence/windows/2026-11-03-psp-143e/README.md)"
+    edges:
+      - {"type": "uses", "to": "M34"}
+  - id: M958
+    status: HYPOTHESIS
+    date: "2026-11-03"
+    claim: "The BC-250 secure processor function 1022:143e has the pspv3/pspv4 register layout in BAR 2 (`bootloader_info_reg` 0x109ec, `feature_reg` 0x109fc, `inten_reg` 0x10690, `intsts_reg` 0x10694), a working platform access mailbox (bootloader version 00.1c.01.02, `PSP_CMD_HSTI_QUERY` answers), a capability register of 0x00000002 with a TEE ring that never starts, no CCP crypto engine (version register at 0x100 reads all ones), and firmware that rejects dynamic boost control"
+    status_text: "HYPOTHESIS (one external report on one board, not our measurement; L52 asks for our reading)"
+    detail: "Source: the dropped linux-crypto series \"crypto: ccp - two PSP init fixes, and the AMD BC-250\" against Linux 7.2.6, with the register values its author read from his board. The offsets are the patch's `pspv_bc250` fields in the ccp driver, not GPU BAR5 registers, so `tools/regcalc` does not cover them. Upstream Linux 7.2 does not match 1022:143e in `sp_pci_table[]`, so stock Linux leaves the function unbound"
+    evidence: "[README](../evidence/windows/2026-11-03-psp-143e/README.md)"
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"
