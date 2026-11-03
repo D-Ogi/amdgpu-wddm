@@ -666,6 +666,9 @@ function Invoke-Verify {
     $svc = Get-DeviceServiceName -InstanceId $id
     $pnp = Get-PnpDevice -InstanceId $id
     Add-Result 'driver bound' (($svc -eq $script:ServiceName) -and ($pnp.Status -eq 'OK')) "service $svc, status $($pnp.Status), problem code $($dev[0].ConfigManagerErrorCode)"
+    # A second driver on the secure processor function (Get-PspFunctionVerdict): a warning with its remedy, never a failure.
+    $pspVerdict = Get-PspFunctionVerdict -Readings (Read-PspFunctionState)
+    if ($pspVerdict.level -eq 'warn') { Add-Warning 'secure processor' $pspVerdict.text } else { Add-Info 'secure processor' $pspVerdict.text }
     # Everything below that needs a running driver asks this first.
     $startState = Get-VerifyStartState -ProblemCode ([int]$dev[0].ConfigManagerErrorCode) -Status ([string]$pnp.Status)
     $drv = Get-CimInstance Win32_PnPSignedDriver -Filter "DeviceID='$($id -replace '\\', '\\')'" -ErrorAction SilentlyContinue

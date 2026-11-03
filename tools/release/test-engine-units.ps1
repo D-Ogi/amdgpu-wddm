@@ -1468,6 +1468,17 @@ $script:state = [pscustomobject]@{ schema = 1 }
 Set-MutationRecord
 Check ($script:state.mutation_boot_elapsed_ms -is [long] -and $script:state.mutation_boot_elapsed_ms -ge $after) 'BD-138 mutation writer records uptime too'
 
+# The secure processor function 1022:143E (facts M957, M958): no function and an unbound function are information,
+# a bound service is a warning with its remedy, and verify never fails on it.
+$pspNone = Get-PspFunctionVerdict -Readings @()
+Check ($pspNone.level -eq 'info' -and $pspNone.text -match 'not a BC-250') 'PSP function: no 1022:143E function is information'
+$pspFree = Get-PspFunctionVerdict -Readings @([pscustomobject]@{ instance = 'PCI\VEN_1022&DEV_143E&SUBSYS_00000000&REV_00\4&1'; status = 'Error'; problem = 'CM_PROB_FAILED_INSTALL'; service = $null })
+Check ($pspFree.level -eq 'info' -and $pspFree.text -match 'no driver is bound' -and $pspFree.text -match 'CM_PROB_FAILED_INSTALL') 'PSP function: the unbound function of the lab (M957) is information with its status'
+$pspBound = Get-PspFunctionVerdict -Readings @([pscustomobject]@{ instance = 'PCI\VEN_1022&DEV_143E&SUBSYS_00000000&REV_00\4&1'; status = 'OK'; problem = ''; service = 'amdpsp' })
+Check ($pspBound.level -eq 'warn' -and $pspBound.text -match 'service amdpsp' -and $pspBound.text -match 'Remedy:') 'PSP function: a bound service is a warning that names the service and the remedy'
+Check ($verify -match "Get-PspFunctionVerdict -Readings \(Read-PspFunctionState\)" -and $verify -match "Add-Warning 'secure processor'" -and $verify -notmatch "Add-Result 'secure processor'") 'verify reads the PSP function and never fails on it'
+Check ($commonText -match "PspFunctionHardwareId = 'PCI\\VEN_1022&DEV_143E'") 'the PSP check matches the hardware id 1022:143E'
+
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 if ($fail) { "$fail check(s) failed"; exit 1 }
 'all checks passed'

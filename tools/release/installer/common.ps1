@@ -2852,6 +2852,42 @@ function Get-DeviceServiceName {
     if ($p) { return [string]$p.Data }
     return $null
 }
+# The secure processor (PSP) of the BC-250 is also a PCI function of its own, 1022:143E. Our KMD loads the GPU
+# firmware through the GPU-side ring of the same processor (facts M34, M957). Windows binds no driver to that
+# function by default; AMD's chipset package can bind one (amdpsp). A second client of the PSP is not tested with our
+# driver, so verify names it as a warning. The reading is separate from the verdict, so that the host test
+# gives the verdict readings without Windows.
+$script:PspFunctionHardwareId = 'PCI\VEN_1022&DEV_143E'
+function Read-PspFunctionState {
+    $rows = @()
+    $devs = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -like "$($script:PspFunctionHardwareId)*" })
+    foreach ($d in $devs) {
+        $rows += [pscustomobject]@{
+            instance = [string]$d.InstanceId
+            status   = [string]$d.Status
+            problem  = [string]$d.Problem
+            service  = Get-DeviceServiceName -InstanceId $d.InstanceId
+        }
+    }
+    return ,$rows
+}
+function Get-PspFunctionVerdict {
+    param([object[]]$Readings)
+    $Readings = @($Readings | Where-Object { $_ })
+    if ($Readings.Count -eq 0) {
+        return [pscustomobject]@{ level = 'info'; text = 'no PCI function 1022:143E on this computer (not a BC-250 board): nothing to check' }
+    }
+    $bound = @($Readings | Where-Object { $_.service })
+    if ($bound.Count -eq 0) {
+        $st = ($Readings | ForEach-Object { "status $($_.status)$(if ($_.problem) { ", $($_.problem)" })" }) -join '; '
+        return [pscustomobject]@{ level = 'info'; text = "no driver is bound to the AMD secure processor function 1022:143E ($st); our driver is the only client of the processor" }
+    }
+    $names = ($bound | ForEach-Object { "service $($_.service), status $($_.status)" }) -join '; '
+    return [pscustomobject]@{
+        level = 'warn'
+        text  = "a driver is bound to the AMD secure processor function 1022:143E ($names). Our driver loads the GPU firmware through the same processor, and the two together are not tested on the BC-250. Remedy: if the GPU does not start or games stop with a device loss, disable this device in Device Manager (or uninstall the AMD PSP driver), restart, and send the logs of this verify"
+    }
+}
 # A lab installation (the project's development unit) carries files under C:\BC250\m15, m14 or m10. The release
 # installer does not merge into one. The folders found are named in the check's detail (the support file).
 function Get-LabInstallPaths {
