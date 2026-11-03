@@ -49,7 +49,34 @@ namespace Bc250Mon
         public uint IdleEntries, IdleExits, IdleRefusals;
         public ulong IdleMs;                // time the governor held the idle point
 
-        public const uint FlagTemperature = 128, FlagClock = 256, FlagHwBusy = 512, FlagIdle = 1024;
+        public const uint FlagTemperature = 128, FlagClock = 256, FlagHwBusy = 512, FlagIdle = 1024, FlagPower = 8192;
+    }
+    // BC250_DPM_METRICS, 56 bytes: the SMU metrics table tail of RUN_DPM ABI 3 (KMD 0.7.215 and later,
+    // driver/kmd/bc250kmd_escape.h). The governor thread's published copy; the escape sends no SMU message.
+    // The values are a reading only when the reply's AbiVersion is 3 and DpmSnapshot.FlagPower is set.
+    [StructLayout(LayoutKind.Sequential)]
+    public struct DpmMetrics
+    {
+        public uint MetricsState, MetricsAgeMs, MetricsReads, MetricsFailures;
+        public uint SocketPowerMw, SocketPowerAvgMw, GfxPowerMw, SocPowerMw;
+        public uint GfxMv, SocMv, GfxMHz;
+        public uint GfxTemperatureCc, SocTemperatureCc;
+        public uint ThrottlerStatus;
+
+        public const uint Abi = 3, StateOk = 2;
+        // The SMU's GFX temperature in C, or null when this reply carries no fresh table.
+        public static double? GfxC(DpmSnapshot d, DpmMetrics m)
+        {
+            if (d.AbiVersion != Abi || (d.Flags & DpmSnapshot.FlagPower) == 0 || m.MetricsState != StateOk) return null;
+            return m.GfxTemperatureCc / 100.0;
+        }
+    }
+    // BC250_ESCAPE_DPM_EX, ABI 3, 248 bytes: the ABI 2 structure followed by the metrics tail.
+    [StructLayout(LayoutKind.Sequential)]
+    public struct DpmExSnapshot
+    {
+        public DpmSnapshot Dpm;
+        public DpmMetrics Metrics;
     }
     // BC250_ESCAPE_CU_MODE, ABI 1, 184 bytes (driver/kmd/bc250kmd_escape.h; test_lab_state.py keeps the two
     // layouts equal). The snapshot the start's GFX bring-up left behind: how many compute units this start
@@ -183,6 +210,8 @@ namespace Bc250Mon
     public interface ITelemetrySource
     {
         DpmSnapshot ReadDpm();
+        // The metrics tail of the last ReadDpm, all zero when that read was ABI 2 or ABI 1 (DpmMetrics.GfxC).
+        DpmMetrics LastMetrics { get; }
         VideoMemorySnapshot ReadVideoMemory();
         ClockSnapshot ReadClock();
         HwmonSnapshot ReadHwmon();
@@ -201,6 +230,8 @@ namespace Bc250Mon
         static extern int Bc250ClockControl(uint op, uint mhz, uint mv, out ClockSnapshot data, uint bytes);
         [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250Dpm(out DpmSnapshot data, uint bytes);
+        [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250Dpm(out DpmExSnapshot data, uint bytes);
         [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi, CharSet = CharSet.Unicode)]
         static extern int Bc250VideoMemory(string hardwareId, out VideoMemorySnapshot data, uint bytes);
         [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
@@ -293,8 +324,18 @@ namespace Bc250Mon
         // ABI 2 (192 bytes) carries the idle state. A KMD or a bc250control.dll from before 0.7.207 refuses that
         // size with STATUS_INVALID_PARAMETER, so the read repeats with the 160-byte ABI 1 prefix; the reply's
         // AbiVersion says which one answered.
+        // ABI 3 (248 bytes, KMD 0.7.215) adds the SMU metrics table with the GFX temperature. A KMD or DLL before
+        // 0.7.215 refuses that size with STATUS_INVALID_PARAMETER, and the read steps down to ABI 2, then ABI 1.
+        DpmMetrics _lastMetrics;
+        public DpmMetrics LastMetrics { get { return _lastMetrics; } }
         public DpmSnapshot ReadDpm()
         {
+            _lastMetrics = default(DpmMetrics);
+            DpmExSnapshot ex;
+            int exStatus = Bc250Dpm(out ex, 248);
+            if (exStatus >= 0) { _lastMetrics = ex.Metrics; return ex.Dpm; }
+            if (exStatus != unchecked((int)0xC000000D))
+                throw new InvalidOperationException("KMD DPM snapshot unavailable (0x" + exStatus.ToString("X8") + ")");
             DpmSnapshot data;
             int status = Bc250Dpm(out data, 192);
             if (status == unchecked((int)0xC000000D))

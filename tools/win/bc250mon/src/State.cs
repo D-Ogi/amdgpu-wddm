@@ -79,6 +79,17 @@ namespace Bc250Mon
         {
             get { return "Tctl " + Temperature + "  load " + Load + "  GFX " + Clock + "  VRAM " + Vram + "  fan " + Fan; }
         }
+        // The temperature row (2026-11-03): Tctl, its peak over the last 60 s and the SMU GFX temperature. The
+        // peak covers every 250 ms sample, so a 2 s spike stays visible after the line has moved on.
+        public double? TctlPeakC, GfxTemperatureC;
+        public Level TctlPeakLevel;
+        static string C(double? v) { return v.HasValue ? v.Value.ToString("0.0", Inv) + " C" : "n/a"; }
+        public string TctlPeak { get { return C(TctlPeakC); } }
+        public string GfxTemperature { get { return C(GfxTemperatureC); } }
+        public string TemperatureText
+        {
+            get { return "Tctl " + Temperature + "  60s max " + TctlPeak + "  GFX " + GfxTemperature; }
+        }
     }
 
     public sealed class State
@@ -124,7 +135,8 @@ namespace Bc250Mon
             bool changed;
             lock (_lock)
             {
-                changed = _telemetry == null || _telemetry.Text != t.Text || _telemetry.TemperatureLevel != t.TemperatureLevel;
+                changed = _telemetry == null || _telemetry.Text != t.Text || _telemetry.TemperatureLevel != t.TemperatureLevel
+                          || _telemetry.TemperatureText != t.TemperatureText || _telemetry.TctlPeakLevel != t.TctlPeakLevel;
                 _telemetry = t;
             }
             var h = TelemetryChanged;

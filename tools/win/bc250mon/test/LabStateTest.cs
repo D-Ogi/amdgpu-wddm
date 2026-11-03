@@ -47,6 +47,7 @@ sealed class FakeDpmSource : ITelemetrySource
         if (Dpm is Exception) throw (Exception)Dpm;
         return (DpmSnapshot)Dpm;
     }
+    public DpmMetrics LastMetrics { get { return default(DpmMetrics); } }
     public ClockSnapshot ReadClock() { return Clock; }
     public VideoMemorySnapshot ReadVideoMemory() { return Vram; }
     // The gate is closed by every install, so that is what this source answers: no fan reading, and no note.
