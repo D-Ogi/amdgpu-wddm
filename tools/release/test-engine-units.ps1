@@ -1476,6 +1476,16 @@ $pspFree = Get-PspFunctionVerdict -Readings @([pscustomobject]@{ instance = 'PCI
 Check ($pspFree.level -eq 'info' -and $pspFree.text -match 'no driver is bound' -and $pspFree.text -match 'CM_PROB_FAILED_INSTALL') 'PSP function: the unbound function of the lab (M957) is information with its status'
 $pspBound = Get-PspFunctionVerdict -Readings @([pscustomobject]@{ instance = 'PCI\VEN_1022&DEV_143E&SUBSYS_00000000&REV_00\4&1'; status = 'OK'; problem = ''; service = 'amdpsp' })
 Check ($pspBound.level -eq 'warn' -and $pspBound.text -match 'service amdpsp' -and $pspBound.text -match 'Remedy:') 'PSP function: a bound service is a warning that names the service and the remedy'
+# A modified BIOS declares the PSP as an ACPI device ("AMD PSP 3.0 Device") that amdpsp binds, while the PCI function
+# stays without a driver: still a second PSP client on a BC-250, so a warning.
+$pspAcpi = Get-PspFunctionVerdict -Readings @(
+    [pscustomobject]@{ instance = 'PCI\VEN_1022&DEV_143E&SUBSYS_00000000&REV_00\4&1'; name = 'AMD PSP Device'; status = 'Error'; problem = 'CM_PROB_FAILED_INSTALL'; service = $null },
+    [pscustomobject]@{ instance = 'ACPI\AMDI0030\0'; name = 'AMD PSP 3.0 Device'; status = 'OK'; problem = ''; service = 'amdpsp' })
+Check ($pspAcpi.level -eq 'warn' -and $pspAcpi.text -match "ACPI device 'AMD PSP 3\.0 Device', service amdpsp") 'PSP function: an ACPI PSP device bound on a BC-250 is a warning that names the bus'
+# Another AMD computer (no 1022:143E) with its PSP driver bound: normal there, information only.
+$pspOther = Get-PspFunctionVerdict -Readings @([pscustomobject]@{ instance = 'PCI\VEN_1022&DEV_15C7&SUBSYS_00000000&REV_00\4&2'; name = 'AMD PSP 11.0 Device'; status = 'OK'; problem = ''; service = 'amdpsp' })
+Check ($pspOther.level -eq 'info' -and $pspOther.text -match 'not a BC-250' -and $pspOther.text -match 'normal') 'PSP function: a bound PSP driver on another AMD computer is information'
+Check ((Test-PspDeviceRow 'ACPI\AMDI0030\0' 'AMD PSP 3.0 Device' '') -and (Test-PspDeviceRow 'ROOT\X\0' 'x' 'amdpsp') -and -not (Test-PspDeviceRow 'PCI\VEN_1022&DEV_1630\3&1' 'PCI standard host CPU bridge' 'pci')) 'PSP rows: matched by hardware id, service or name, and nothing else'
 Check ($verify -match "Get-PspFunctionVerdict -Readings \(Read-PspFunctionState\)" -and $verify -match "Add-Warning 'secure processor'" -and $verify -notmatch "Add-Result 'secure processor'") 'verify reads the PSP function and never fails on it'
 Check ($commonText -match "PspFunctionHardwareId = 'PCI\\VEN_1022&DEV_143E'") 'the PSP check matches the hardware id 1022:143E'
 
