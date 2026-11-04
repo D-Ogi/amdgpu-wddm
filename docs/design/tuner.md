@@ -177,7 +177,20 @@ firmware baseline, so a reset and a revert went back to the leftover and not to 
 - Until that restore goes through, every write but a readback is refused with `BC250_CPU_ERROR_LEFTOVER`. The reply
   carries `BC250_CPU_FLAG_REVERT_OWED`, and the worker tries again every second.
 - The lab flavour has `LabCpuRevertFault` for the lab arm. Bit 1 refuses the next revert of a stop. Bit 2 refuses the
-  first leftover restore of a start. The release flavour does not contain it.
+  first leftover restore of a start. Bit 4 refuses the first read stage of a start (BD-297). The release flavour
+  does not contain it.
+
+### A start read stage that does not answer (BD-297)
+
+The firmware can refuse the first read stage of a start. On unit A, message `0x36` was refused with `0x80000011`
+3.6 s after a boot (fact M960). Up to BD-297 the start then sent nothing, so the default cap of 87 C did not go in.
+
+- The start of the surface is one state, `BC250_CPU_START`: none, owed, missed or proven. Setters run only in
+  proven.
+- The worker tries an owed read stage again every second, 30 times in all (`BC250_CPU_START_TRIES`). When the
+  stage answers, the start apply runs and the state is proven.
+- After the last attempt the state is missed. A readback that answers then makes the start owed again, and the
+  worker runs the whole start at once.
 
 ### The allowlist
 

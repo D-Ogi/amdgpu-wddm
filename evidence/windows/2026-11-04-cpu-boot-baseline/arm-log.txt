@@ -1,0 +1,250 @@
+keep 0396895A237BF6DF04258082D4C8997A8AC8C7D74C4AF5D86A7F7C5A5606BB81 at C:\BC250\tmp\t37qr\kmd-orig\bc250kmd.sys
+new signature Valid signer AFCA4B1A82081E848DD6E53A6550D29153FD2EB6
+image now 02CF4015FE566B873022C6420C6F6F8426E46CD3A3F587FE63D95B7F31237305
+2026-11-04T17:01:10.724Z 00d90bb7b8c5 backup backup-20261104T170110721Z.json
+2026-11-04T17:01:10.744Z 00d90bb7b8c5 wrote: set HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters EnableGpuPresentBlit = 1 (DWord)
+2026-11-04T17:01:10.748Z 00d90bb7b8c5 read back OK: set HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters EnableGpuPresentBlit = 1 (DWord)
+2026-11-04T17:01:10.755Z 00d90bb7b8c5 wrote: set HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters EnableCddDwmInterop = 1 (DWord)
+2026-11-04T17:01:10.757Z 00d90bb7b8c5 read back OK: set HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters EnableCddDwmInterop = 1 (DWord)
+2026-11-04T17:01:10.764Z 00d90bb7b8c5 wrote: set HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters DpmMode = 1 (DWord)
+2026-11-04T17:01:10.765Z 00d90bb7b8c5 read back OK: set HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters DpmMode = 1 (DWord)
+2026-11-04T17:01:10.773Z 00d90bb7b8c5 wrote: delete HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters InteropClosedReason
+2026-11-04T17:01:10.775Z 00d90bb7b8c5 read back OK: delete HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters InteropClosedReason
+2026-11-04T17:01:10.785Z 00d90bb7b8c5 result: written, pending until the next restart of Windows: Puts back EnableGpuPresentBlit 1, EnableCddDwmInterop 1, DpmMode 1, and removes the driver's close mark InteropClosedReason. Closed by the driver: EnableGpuPresentBlit 0 -> 1 (InteropClosedReason 4), EnableCddDwmInterop 0 -> 1 (InteropClosedReason 4), DpmMode 0 -> 1 (DpmClosedReason 4).
+exit 0
+cli: {"abi":1,"command":"set","error":0,"path":"","name":"CuMode","kind":"setting","type":4,"max_bytes":4,"access":0,"private_read":0,"group":2}
+Cli : Cannot find path 'C:\Users\<user>\cpu' because it does not exist.
+   undException
+
+utc 2026-11-04T17:02:58.0315489Z boot 2026-11-04T17:02:08.5000000Z
+== cpu
+utc 2026-11-04T17:03:06.4493455Z boot 2026-11-04T17:02:08.5000000Z
+== cpu
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 has not answered yet
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 0 / 0 / 0)
+cpu: 0 mV (GPU 0 mV), firmware cap 0 C, features 0x00000000, 0.0 C
+cpu: cores 0 0 0 0 0 0 0 0 MHz; P-states 0 0 0 0 0 0 0 0 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 0 writes 0 refusals 1 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x80000011
+cpu: the temperature above was NOT read on the last message, so it is older than the rest
+== kmd log, cpu lines
+   668      3.584 cpu: queue 3 message 0x36 argument 0x00000000 get refused 0x80000011 (firmware 0x00000000)
+   669      3.584 cpu: the read stage did NOT answer (0x80000011): 0 mV, GPU 0 mV, cap 0 C
+LabCpuRevertFault now: absent
+utc 2026-11-04T17:03:18.5111971Z boot 2026-11-04T17:02:08.5000000Z
+cpu readback: done, serial 0
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 1199 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 73.7 C
+cpu: cores 1555 3500 3500 1555 1400 1400 3500 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 36 writes 0 refusals 1 reverts 0 (retries 0, refused 0); last queue 3 message 0x43 argument 0x00000007 status 0x00000001
+== cpu
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 1199 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 73.7 C
+cpu: cores 1555 3500 3500 1555 1400 1400 3500 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 36 writes 0 refusals 1 reverts 0 (retries 0, refused 0); last queue 3 message 0x43 argument 0x00000007 status 0x00000001
+== kmd log, cpu lines
+   668      3.584 cpu: queue 3 message 0x36 argument 0x00000000 get refused 0x80000011 (firmware 0x00000000)
+   669      3.584 cpu: the read stage did NOT answer (0x80000011): 0 mV, GPU 0 mV, cap 0 C
+  1367     71.302 cpu: the boost probe kept one core busy and read 16 core clocks: the highest observed core clock is 3500 MHz
+  1368     71.302 cpu: the baseline of this start is clock 3500 MHz, undervolt 0 steps, cap 100 C
+  1369     71.302 cpu: the baseline's answers: P-state table top 3200 MHz, per-core (boost) top 3500 MHz
+  1370     71.302 cpu: the boot record is written: clock 3500 MHz, cap 100 C, table 3200 MHz, boost 3500 MHz
+LabCpuRevertFault now: absent
+utc 2026-11-04T17:33:47.7203569Z boot 2026-11-04T17:02:08.5000000Z
+ImagePath \SystemRoot\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_ba91a637ce669223\bc250kmd.sys
+resolved C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_ba91a637ce669223\bc250kmd.sys
+current 02CF4015FE566B873022C6420C6F6F8426E46CD3A3F587FE63D95B7F31237305
+keep 0396895A237BF6DF04258082D4C8997A8AC8C7D74C4AF5D86A7F7C5A5606BB81 at C:\BC250\tmp\t37qr\kmd-orig\bc250kmd.sys
+new signature Valid signer AFCA4B1A82081E848DD6E53A6550D29153FD2EB6
+kept original already there 0396895A237BF6DF04258082D4C8997A8AC8C7D74C4AF5D86A7F7C5A5606BB81
+testsigning: testsigning             Yes
+pnputil disable exit 0 ::
+device now CM_PROB_DISABLED, service Stopped
+image now 6C948F905E0F5134D335C44DA181034D72CBAD9B85FC3206D18646E58FBF7EF0
+UnconfirmedStarts 0 (StateV2 <redacted> and legacy)
+utc 2026-11-04T17:34:06.4191173Z boot 2026-11-04T17:02:08.5000000Z
+set LabCpuRevertFault 3
+LabCpuRevertFault now: 3
+utc 2026-11-04T17:36:43.6556886Z boot 2026-11-04T17:34:56.5000000Z
+== cpu
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 806 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 69.7 C
+cpu: cores 1555 3500 1555 1555 1400 1400 1400 933 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 37 writes 1 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+== kmd log, cpu lines
+     6      0.000 lab: CPU revert fault selector read (read only; value 3, 0x00000000): mask 3 (1 stop revert, 2 leftover restore)
+LabCpuRevertFault now: 3
+utc 2026-11-04T17:36:54.0378729Z boot 2026-11-04T17:34:56.5000000Z
+cpu set: done, serial 1
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: ON TRIAL, 25000 ms left (default window 25000 ms); without a keep the settings before it come back
+cpu: applied clock 3000 MHz, undervolt 2 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 799 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 68.6 C
+cpu: cores 1555 3500 1555 1555 1400 1400 1400 933 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 38 writes 3 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+== cpu
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: ON TRIAL, 24955 ms left (default window 25000 ms); without a keep the settings before it come back
+cpu: applied clock 3000 MHz, undervolt 2 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 799 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 68.6 C
+cpu: cores 1555 3500 1555 1555 1400 1400 1400 933 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 38 writes 3 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+== kmd log, cpu lines
+     6      0.000 lab: CPU revert fault selector read (read only; value 3, 0x00000000): mask 3 (1 stop revert, 2 leftover restore)
+  1520    116.764 cpu: on trial clock 3000 MHz
+  1521    116.764 cpu: on trial undervolt 2 steps, cap 87 C
+  1522    116.764 cpu: on trial sent 2 of 2 steps, 799 mV back: 0x00000000
+  1523    116.764 cpu: the trial runs for 25000 ms; the settings before it come back by themselves
+LabCpuRevertFault now: 3
+utc 2026-11-04T17:36:56.7612970Z boot 2026-11-04T17:34:56.5000000Z
+disable: Microsoft PnP Utility |  | Disabling device:          PCI\VEN_1002&DEV_13FE&<instance redacted> | Device disabled successfully. |
+enable: Microsoft PnP Utility |  | Enabling device:          PCI\VEN_1002&DEV_13FE&<instance redacted> | Device enabled successfully. |
+device status OK problem CM_PROB_NONE
+== cpu
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 3500 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 806 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 65.3 C
+cpu: cores 3000 3000 1421 1421 3000 1421 3000 1421 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 21 writes 3 refusals 0 reverts 0 (retries 2, refused 1); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+== kmd log, cpu lines
+     6      0.003 lab: CPU revert fault selector read (read only; value 3, 0x00000000): mask 3 (1 stop revert, 2 leftover restore)
+   274      0.600 cpu: an earlier stop of this boot left settings in the chip (what 0x1): clock 3000 MHz, undervolt 2 steps, cap 87 C
+   275      0.600 cpu: the surface is on (CpuTune 1), trial window 25000 ms
+   276      0.600 cpu: the surface sees 12 processors, core mask 0x77
+   896      4.668 cpu: this start adopts the boot record as its baseline: clock 3500 MHz, undervolt 0 steps, cap 100 C
+   897      4.668 cpu: the boot record's answers: P-state table top 3200 MHz, per-core (boost) top 3500 MHz
+   898      4.668 cpu: the read stage answered (0x00000000, attempt 1 of 30): 962 mV, GPU 824 mV, cap 87 C
+   899      4.668 cpu: lab fault 2 (LabCpuRevertFault, BD-295 arm): the restore reports a refusal and sends nothing
+   900      4.668 cpu: the leftover restore is refused 0xC0000185 at attempt 1: every setter stays refused, again in 1000 ms
+   911      6.108 cpu: the leftover restore clock 3500 MHz
+   912      6.108 cpu: the leftover restore undervolt 0 steps, cap 87 C
+   913      6.108 cpu: the leftover restore sent 3 of 3 steps, 806 mV back: 0x00000000
+   914      6.108 cpu: the leftover of an earlier start is back at the boot baseline (attempt 2): clock 3500 MHz, cap 87 C
+   915      6.108 cpu: no temperature cap is stored: the default of 87 C goes in
+   916      6.108 cpu: the default cap sends nothing: the chip already has what it asks for
+LabCpuRevertFault now: 3
+utc 2026-11-04T17:37:42.1401309Z boot 2026-11-04T17:34:56.5000000Z
+cleared LabCpuRevertFault
+LabCpuRevertFault now: absent
+utc 2026-11-04T17:37:46.4605130Z boot 2026-11-04T17:34:56.5000000Z
+cpu set: done, serial 1
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: ON TRIAL, 25000 ms left (default window 25000 ms); without a keep the settings before it come back
+cpu: applied clock 3000 MHz, undervolt 2 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 949 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 65.3 C
+cpu: cores 3000 3000 1421 1421 3000 1421 3000 1421 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 22 writes 5 refusals 0 reverts 0 (retries 2, refused 1); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+== cpu
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: ON TRIAL, 24949 ms left (default window 25000 ms); without a keep the settings before it come back
+cpu: applied clock 3000 MHz, undervolt 2 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 949 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 65.3 C
+cpu: cores 3000 3000 1421 1421 3000 1421 3000 1421 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 22 writes 5 refusals 0 reverts 0 (retries 2, refused 1); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+== kmd log, cpu lines
+  1011     43.144 cpu: on trial undervolt 2 steps, cap 87 C
+  1012     43.144 cpu: on trial sent 2 of 2 steps, 949 mV back: 0x00000000
+  1013     43.144 cpu: the trial runs for 25000 ms; the settings before it come back by themselves
+LabCpuRevertFault now: absent
+utc 2026-11-04T17:37:51.7420512Z boot 2026-11-04T17:34:56.5000000Z
+cpu keep: done, serial 2
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered, values stored, confirmed
+cpu: applied clock 3000 MHz, undervolt 2 steps, cap 87 C (stored 3000 / 2 / 87, baseline 3500 / 0 / 100)
+cpu: 949 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 65.3 C
+cpu: cores 3000 3000 1421 1421 3000 1421 3000 1421 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 22 writes 5 refusals 0 reverts 0 (retries 2, refused 1); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+LabCpuRevertFault now: absent
+utc 2026-11-04T17:37:56.6005769Z boot 2026-11-04T17:34:56.5000000Z
+disable: Microsoft PnP Utility |  | Disabling device:          PCI\VEN_1002&DEV_13FE&<instance redacted> | Device disabled successfully. |
+enable: Microsoft PnP Utility |  | Enabling device:          PCI\VEN_1002&DEV_13FE&<instance redacted> | Device enabled successfully. |
+device status OK problem CM_PROB_NONE
+== cpu
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered, values stored, PENDING (unconfirmed start), confirmed
+cpu: applied clock 3000 MHz, undervolt 2 steps, cap 87 C (stored 3000 / 2 / 87, baseline 3500 / 0 / 100)
+cpu: 962 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 63.0 C
+cpu: cores 1400 1400 1400 1421 1400 1336 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 21 writes 3 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+== kmd log, cpu lines
+   273      0.606 cpu: stored clock 3000 MHz
+   274      0.606 cpu: stored undervolt 2 steps, cap 87 C
+   275      0.606 cpu: the surface is on (CpuTune 1), trial window 25000 ms
+   276      0.606 cpu: the surface sees 12 processors, core mask 0x77
+   845      4.727 cpu: this start adopts the boot record as its baseline: clock 3500 MHz, undervolt 0 steps, cap 100 C
+   846      4.727 cpu: the boot record's answers: P-state table top 3200 MHz, per-core (boost) top 3500 MHz
+   847      4.727 cpu: the read stage answered (0x00000000, attempt 1 of 30): 962 mV, GPU 824 mV, cap 87 C
+   849      5.062 cpu: the stored settings clock 3000 MHz
+   850      5.062 cpu: the stored settings undervolt 2 steps, cap 87 C
+   851      5.062 cpu: the stored settings sent 3 of 3 steps, 962 mV back: 0x00000000
+LabCpuRevertFault now: absent
+utc 2026-11-04T17:38:28.5676182Z boot 2026-11-04T17:34:56.5000000Z
+cpu reset: done, serial 0
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 3500 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 806 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 61.7 C
+cpu: cores 1400 1400 1400 1421 1400 1336 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 23 writes 5 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+== cpu
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 3500 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 806 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 61.7 C
+cpu: cores 1400 1400 1400 1421 1400 1336 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 23 writes 5 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+== kmd log, cpu lines
+   894     25.589 cpu: reset clock 3500 MHz
+   895     25.589 cpu: reset undervolt 0 steps, cap 87 C
+   896     25.589 cpu: reset sent 2 of 2 steps, 806 mV back: 0x00000000
+   897     25.597 cpu: reset to the recorded baseline clock and the default cap of 87 C: 0x00000000
+LabCpuRevertFault now: absent
+utc 2026-11-04T17:47:59.8862034Z boot 2026-11-04T17:34:56.5000000Z
+ImagePath \SystemRoot\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_ba91a637ce669223\bc250kmd.sys
+resolved C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_ba91a637ce669223\bc250kmd.sys
+current 6C948F905E0F5134D335C44DA181034D72CBAD9B85FC3206D18646E58FBF7EF0
+keep 0396895A237BF6DF04258082D4C8997A8AC8C7D74C4AF5D86A7F7C5A5606BB81 at C:\BC250\tmp\t37qr\kmd-orig\bc250kmd.sys
+new signature Valid signer AFCA4B1A82081E848DD6E53A6550D29153FD2EB6
+kept original already there 0396895A237BF6DF04258082D4C8997A8AC8C7D74C4AF5D86A7F7C5A5606BB81
+testsigning: testsigning             Yes
+pnputil disable exit 0 ::
+device now CM_PROB_DISABLED, service Stopped
+image now 8F955FB47CB806F72FC1117BEC272C0ABC1D3224E339F0442DFE5FAFC009A7B3
+UnconfirmedStarts 0 (StateV2 <redacted> and legacy)
+utc 2026-11-04T17:48:25.3146368Z boot 2026-11-04T17:34:56.5000000Z
+disable: Microsoft PnP Utility |  | Disabling device:          PCI\VEN_1002&DEV_13FE&<instance redacted> | Device disabled successfully. |
+enable: Microsoft PnP Utility |  | Enabling device:          PCI\VEN_1002&DEV_13FE&<instance redacted> | Device enabled successfully. |
+device status OK problem CM_PROB_NONE
+== cpu
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 806 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 64.6 C
+cpu: cores 1400 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+cpu: reads 21 writes 1 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+== kmd log, cpu lines
+     6      0.003 lab: CPU revert fault selector read (read only; value 4, 0x00000000): mask 4 (1 stop revert, 2 leftover restore, 4 start read)
+   274      0.556 cpu: the surface is on (CpuTune 1), trial window 25000 ms
+   275      0.556 cpu: the surface sees 12 processors, core mask 0x77
+   878      2.559 cpu: lab fault 4 (LabCpuRevertFault, BD-295/BD-297 arm): the step reports a refusal and sends nothing
+   879      2.559 cpu: the read stage did NOT answer (0xC0000185, attempt 1 of 30): 0 mV, GPU 0 mV, cap 0 C
+   880      2.559 cpu: the start read stage is tried again every 1000 ms; the start settings wait for it
+   961      5.757 cpu: this start adopts the boot record as its baseline: clock 3500 MHz, undervolt 0 steps, cap 100 C
+   962      5.757 cpu: the boot record's answers: P-state table top 3200 MHz, per-core (boost) top 3500 MHz
+   963      5.757 cpu: the read stage answered (0x00000000, attempt 2 of 30): 806 mV, GPU 824 mV, cap 87 C
+   964      5.757 cpu: no temperature cap is stored: the default of 87 C goes in
+   965      5.869 cpu: the default cap clock (not given) 0 MHz
+   966      5.869 cpu: the default cap undervolt (not given) 0 steps, cap 87 C
+   967      5.869 cpu: the default cap sent 1 of 1 steps, 806 mV back: 0x00000000
+LabCpuRevertFault now: 4

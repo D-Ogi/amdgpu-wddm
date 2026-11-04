@@ -2191,3 +2191,10 @@ facts:
     edges:
       - {"type": "uses", "to": "M938"}
       - {"type": "uses", "to": "M944"}
+  - id: M960
+    status: MEASURED
+    date: "2026-11-04"
+    claim: "On unit A the SMU can refuse the first CPU read stage of a driver start: at the boot of 2026-11-04 17:02Z queue 3 message 0x36 answered 0x80000011 3.6 s after the boot, and a KMD that ran the read stage once sent no start settings, so the CPU kept its firmware cap of 100 C. Within one boot the chip keeps the CPU clock limit, the curve scale and the cap across a driver stop and start, and a KMD that keeps a boot baseline record and a leftover mark in the volatile store puts the chip back at the boot baseline (3500 MHz, 0 steps, 87 C) at the next start"
+    status_text: "MEASURED (unit A, Windows 11 22631, lab-flavour KMDs 02CF4015, 6C948F90 and 8F955FB4 of t38/bd295-cpu-boot-baseline)"
+    detail: "The spontaneous refusal was not seen again in one later boot and two device cycles without bit 4. The lab selector LabCpuRevertFault reproduced the other paths: bit 1 refused the stop revert of a 3000 MHz, 2-step trial, and the next start logged the leftover (what 0x1, clock 3000 MHz, undervolt 2 steps) and adopted the boot record as its baseline (3500 MHz, cap 100 C). Bit 2 refused the first leftover restore; the second attempt 1.4 s later sent 3 of 3 steps. Bit 4 refused the first start read stage; the second attempt 3.2 s later answered and the default cap of 87 C went in. A kept 3000 MHz, 2-step setting went in again after a cycle, and a reset sent 3500 MHz and 87 C"
+    evidence: "[CPU boot baseline arm](../evidence/windows/2026-11-04-cpu-boot-baseline/README.md)"
