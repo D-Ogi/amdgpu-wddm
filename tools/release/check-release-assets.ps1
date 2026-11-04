@@ -12,6 +12,11 @@ carry, and every llama.cpp download got HTTP 404. This script finds that before 
   after the upload    (no -LocalDir): every address of every pinned asset answers 200 with the pinned size;
                       -Download also downloads each asset and checks its SHA256.
   -Models             also checks the model addresses (HEAD and size only, the files are several GB).
+  -Update <file>      also checks the self-update assets (docs/design/self-update.md) of the release flavour: the
+                      manifest nagi-update.json that the file is, its signature nagi-update.json.p7s and each
+                      component asset that the manifest names. Before the upload they must be in -LocalDir with the
+                      manifest's size and SHA256. After the upload each one must answer 200 at -ReleaseBase.
+                      -Download also compares the downloaded manifest with the file, byte for byte.
 
 A component without a pin (no 64-digit SHA256) is listed and not checked: the installer refuses it and downloads
 nothing. One line per check, "ASSET ..." or "MODEL ...", then "check-release-assets: ok" or "... FAIL (<n>)".
@@ -27,7 +32,10 @@ param(
     [switch]$Download,
     [switch]$Models,
     [string]$Scratch = '',
-    [int]$TimeoutSec = 60
+    [int]$TimeoutSec = 60,
+    [string]$Update = '',
+    # The download folder of the release: SelfUpdate.cs DownloadUrl, with the tag of the release (v<release>).
+    [string]$ReleaseBase = 'https://github.com/D-Ogi/amdgpu-wddm/releases/download/v{release}'
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'installer\components.ps1')
@@ -98,6 +106,60 @@ foreach ($c in @($manifest.components)) {
                 if (-not $ok2) { $fails++ }
             } catch { Write-Output "ASSET $id download FAIL: $($_.Exception.Message)"; $fails++ }
             finally { Remove-Item -LiteralPath $dst -ErrorAction SilentlyContinue }
+        }
+    }
+}
+if ($Update) {
+    if (-not (Test-Path -LiteralPath $Update -PathType Leaf)) { Write-Output "UPDATE FAIL: no file $Update"; $fails++ }
+    else {
+        $um = Get-Content -LiteralPath $Update -Raw | ConvertFrom-Json
+        if ([string]$um.release -ne [string]$manifest.release) {
+            Write-Output "UPDATE FAIL: $Update is of release $([string]$um.release), the package of $([string]$manifest.release)"; $fails++
+        }
+        $base = $ReleaseBase.Replace('{release}', [string]$manifest.release).TrimEnd('/')
+        $updateDir = Split-Path -Parent ([IO.Path]::GetFullPath($Update))
+        # Each asset of the update: the manifest and its signature (no pin inside the manifest: the manifest file
+        # itself is the reference), then each component with the manifest's size and SHA256.
+        $items = @(
+            [pscustomobject]@{ id = 'manifest'; name = 'nagi-update.json'; size = (Get-Item -LiteralPath $Update).Length; sha = (Get-FileSha $Update) }
+            [pscustomobject]@{ id = 'signature'; name = 'nagi-update.json.p7s'; size = -1; sha = '' }
+        ) + @(foreach ($c in @($um.components)) {
+            [pscustomobject]@{ id = [string]$c.name; name = [string]$c.asset; size = [long]$c.size; sha = ([string]$c.sha256).ToUpperInvariant() }
+        })
+        foreach ($it in $items) {
+            if ($LocalDir) {
+                $f = Join-Path $LocalDir $it.name
+                if ($it.id -eq 'manifest' -or $it.id -eq 'signature') { if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { $f = Join-Path $updateDir $it.name } }
+                if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { Write-Output "UPDATE $($it.id) $($it.name) FAIL: not in $LocalDir"; $fails++; continue }
+                $len = (Get-Item -LiteralPath $f).Length
+                if ($it.size -lt 0) { $ok = $len -gt 0; Write-Output "UPDATE $($it.id) $($it.name) local size $len $(if ($ok) { 'ok' } else { 'FAIL' })" }
+                else {
+                    $h = Get-FileSha $f; $ok = ($len -eq $it.size -and $h -eq $it.sha)
+                    Write-Output "UPDATE $($it.id) $($it.name) local size $len (manifest $($it.size)) sha256 $($h.Substring(0, 8)) (manifest $($it.sha.Substring(0, 8))) $(if ($ok) { 'ok' } else { 'FAIL' })"
+                }
+                if (-not $ok) { $fails++ }
+                continue
+            }
+            $u = "$base/$($it.name)"
+            $hd = Get-Head $u
+            $ok = ($hd.code -eq 200 -and ($it.size -lt 0 -or $hd.size -eq $it.size -or $hd.size -eq 0))
+            $sz = if ($hd.size -gt 0) { "size $($hd.size)$(if ($it.size -ge 0) { " (manifest $($it.size))" })" } else { 'size not given' }
+            Write-Output "UPDATE $($it.id) $u HTTP $($hd.code) $sz $(if ($ok) { 'ok' } else { 'FAIL' })$(if ($hd.why) { ': ' + $hd.why })"
+            if (-not $ok) { $fails++; continue }
+            if ($Download -and $it.sha) {
+                New-Item -ItemType Directory -Force $Scratch | Out-Null
+                $dst = Join-Path $Scratch $it.name
+                try {
+                    $old = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
+                    Invoke-WebRequest -Uri $u -OutFile $dst -UseBasicParsing -TimeoutSec ([Math]::Max($TimeoutSec, 600)) -UserAgent $ua
+                    $ProgressPreference = $old
+                    $len = (Get-Item -LiteralPath $dst).Length; $h = Get-FileSha $dst
+                    $ok2 = ($len -eq $it.size -and $h -eq $it.sha)
+                    Write-Output "UPDATE $($it.id) downloaded size $len sha256 $($h.Substring(0, 8)) (manifest $($it.sha.Substring(0, 8))) $(if ($ok2) { 'ok' } else { 'FAIL' })"
+                    if (-not $ok2) { $fails++ }
+                } catch { Write-Output "UPDATE $($it.id) download FAIL: $($_.Exception.Message)"; $fails++ }
+                finally { Remove-Item -LiteralPath $dst -ErrorAction SilentlyContinue }
+            }
         }
     }
 }

@@ -411,14 +411,16 @@ checks the fourth:
    checks that each pinned zip is in that folder with its pinned size and SHA-256. After the upload, the script
    without `-LocalDir` checks that each address answers 200 with the pinned size, and `-Download` also checks the
    SHA-256 of each downloaded zip. tester.31 to tester.34 pinned a llama.cpp zip that they did not carry, and each
-   download of it got HTTP 404 (BD-278).
+   download of it got HTTP 404 (BD-278). The release flavour also carries the self-update assets (`nagi-update.json`,
+   `nagi-update.json.p7s` and each component asset that the manifest names). `-Update <nagi-update.json>` checks
+   them in the same two ways: before the upload in `-LocalDir`, after the upload at the download folder of the tag.
 
 ```
 pwsh -File tools\release\build-release-set.ps1 -Manifest tools\release\release-tester.32.json -Out <dir> -Register
-git commit --only -- tools/release/release-sources.json   (then push)
+git commit --only -- tools/release/release-sources.json docs/testing/THIRD-PARTY.md   (then push)
 pwsh -File tools\release\build-release-set.ps1 -Package -From <dir> -UmdSource <Mesa tree> -UmdBuild <its build>
-pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release\<name> -LocalDir <component zips>
-pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release\<name> -Download   (after the upload)
+pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release\<name> -LocalDir <component zips> -Update <dist>\nagi-update.json
+pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release\<name> -Download -Update <dist>\nagi-update.json   (after the upload)
 ```
 
 The package ships `files\RELEASE-NOTES.md` and its translations. The setup window displays them, and
