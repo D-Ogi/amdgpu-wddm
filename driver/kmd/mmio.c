@@ -147,6 +147,7 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->DcnScanoutMapLength = 0;
     Device->DcnScanoutRemaps = 0;
     Device->DcnScanoutMapFailed = 0;
+    RtlZeroMemory(&Device->DcnBlitMaps, sizeof(Device->DcnBlitMaps));    // BD-289: released by DcnUnmapScanout too
     if (GuardReadSetting(L"EnableMmio", 0) != 1) return STATUS_SUCCESS;        // the gate is closed: M3 behaviour
 
     status = FindRegisterBar(Device, &start);

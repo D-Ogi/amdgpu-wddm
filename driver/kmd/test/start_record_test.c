@@ -363,7 +363,10 @@ static void GuardLogKeepEpisode(PCWSTR label) { (void)label; }
 static BOOLEAN WddmFullTableSelected(void) { return TRUE; }
 static void WddmGateConsume(void) {}
 static NTSTATUS guardStatus;
-static NTSTATUS GuardCheckAndCountStart(BOOLEAN durableNeeded) { (void)durableNeeded; return guardStatus; }
+static BOOLEAN earlierImageUnconfirmed;   /* guard.c GuardStopUnconfirmedThisBoot: the volatile mark of this boot */
+static BOOLEAN GuardStopUnconfirmedThisBoot(void) { return earlierImageUnconfirmed; }
+static int guardCounts;
+static NTSTATUS GuardCheckAndCountStart(BOOLEAN durableNeeded) { (void)durableNeeded; guardCounts++; return guardStatus; }
 static void StartHealthBegin(BC250_DEVICE* d, BOOLEAN f) { (void)d; (void)f; }
 static void StartHealthClose(BC250_DEVICE* d) { (void)d; Trace("hclose"); }
 static unsigned readyCalls;
@@ -541,13 +544,14 @@ static ULONG outputSources, outputChildren;
 
 static void Reset(void)
 {
+    guardCounts = 0;
     memset(vals, 0, sizeof(vals));
     memset(&dev, 0, sizeof(dev));
     dev.DisplayReservationEnd=1;dev.RuntimeFramebufferLength=1;
     dev.RuntimePostValid=dev.RuntimeDisplayChanged=dev.RuntimePlaneBlank=1;
     dev.DcnWriteEnabled = TRUE;
     memset(&iface, 0, sizeof(iface));
-    trace[0] = 0; logCount = 0; lastStage = 0; durable = 0;
+    trace[0] = 0; logCount = 0; lastStage = 0; durable = 0; earlierImageUnconfirmed = FALSE;
     opens = creates = closes = flushes = writeOps = stops = readyCalls = 0;
     failAt = 0; openStatus = createStatus = writeStatus = flushStatus = STATUS_SUCCESS;
     fbStatus = wddmStatus = timingStatus = smuStatus = guardStatus = connectorStartStatus = STATUS_SUCCESS;
@@ -851,6 +855,12 @@ int main(void)
     CHECK(Start() == STATUS_DEVICE_HARDWARE_ERROR);
     CHECK(RecordIs(L"failed", L"PreviousStopUnconfirmed", L"-", (ULONG)STATUS_DEVICE_HARDWARE_ERROR, StageStartFailed));
     CHECK(lastStage == StageStartFailed);
+    // The same for an unconfirmed stop that an earlier image of this boot left (a reload after a disable/enable):
+    // refused before the guard counts the start, so the guard count stays as it was.
+    Reset(); earlierImageUnconfirmed = TRUE;
+    CHECK(Start() == STATUS_DEVICE_HARDWARE_ERROR);
+    CHECK(RecordIs(L"failed", L"EarlierImageStopUnconfirmed", L"-", (ULONG)STATUS_DEVICE_HARDWARE_ERROR, StageStartFailed));
+    CHECK(lastStage == StageStartFailed && guardCounts == 0);
 
     // A device object this driver does not own writes nothing at all.
     Reset(); dev.PhysicalDeviceObject = NULL;

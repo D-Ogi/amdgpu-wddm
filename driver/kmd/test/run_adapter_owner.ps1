@@ -1,5 +1,5 @@
 param([Parameter(Mandatory=$true)][string]$Root,[Parameter(Mandatory=$true)][string]$Out,
- [ValidateSet('none','admission','cleanup','poison')][string]$Mutation='none')
+ [ValidateSet('none','admission','cleanup','poison','bootmark')][string]$Mutation='none')
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path "$PSScriptRoot/../../..").Path
 New-Item -ItemType Directory -Force $Out | Out-Null
@@ -19,12 +19,16 @@ foreach($name in @('Bc250StartDevice','Bc250StopDevice','Bc250RemoveDevice','Bc2
 }
 $startBody=FunctionBody 'Bc250StartDevice'
 if($startBody.IndexOf('AdapterOwnerIs') -gt $startBody.IndexOf('BoardMemoryIdentityClear')){throw 'Start mutates before admission'}
+# An unconfirmed stop of an earlier image of this boot refuses the start before the guard counts it.
+$mark=$startBody.IndexOf('GuardStopUnconfirmedThisBoot()');$count=$startBody.IndexOf('GuardCheckAndCountStart(')
+if($mark -lt 0 -or $count -lt $mark){throw 'Start does not refuse an earlier image''s unconfirmed stop before it counts'}
 $owner=(Get-Content -Raw "$repo/driver/kmd/adapter_owner.c").Replace('#include <ntddk.h>','')
 $actual=(FunctionBody 'Bc250AddDevice')+"`n"+(FunctionBody 'Bc250StopDevice')+"`n"+(FunctionBody 'Bc250RemoveDevice')
 switch($Mutation) {
  'admission' {$actual=$actual.Replace('if (!AdapterOwnerClaim(PhysicalDeviceObject)) return STATUS_DEVICE_BUSY;', '(void)AdapterOwnerClaim(PhysicalDeviceObject);')}
  'cleanup' {$actual=$actual.Replace('if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_SUCCESS;', 'if (!device) return STATUS_SUCCESS;')}
  'poison' {$owner=$owner.Replace('uncertain ? &AdapterPoison : NULL','(uncertain && 0) ? &AdapterPoison : NULL')}
+ 'bootmark' {$actual=$actual.Replace('if (device->GpuStopUnconfirmed) GuardMarkStopUnconfirmed();','(void)0;')}
 }
 $template=Get-Content -Raw "$PSScriptRoot/adapter_owner_test.c"
 Set-Content -Encoding ascii "$Out/actual.c" $template.Replace('/* ACTUAL_OWNER */',$owner).Replace('/* ACTUAL_PNP */',$actual)

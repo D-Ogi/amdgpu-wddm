@@ -5,7 +5,8 @@ parts=[]
 # Each name is the start of a definition; it ends at its closing brace in column 0 (a typedef also takes its name).
 for file,names in [('dcn.c',['static BOOLEAN AddressAllowed(', 'static NTSTATUS CaptureFirmwareSurface(', 'static NTSTATUS FillSurface(',
                              'typedef struct DCN_SCANOUT_OPS_CONTEXT {', 'static void* DcnOpsMap(', 'static void DcnOpsUnmap(',
-                             'static int DcnOpsAllowed(', 'void DcnUnmapScanout(', 'BOOLEAN DcnScanoutMapping(']),
+                             'static int DcnOpsAllowed(', 'static void* DcnBlitOpsMap(', 'static void DcnBlitOpsUnmap(',
+                             'PVOID DcnBlitMap(', 'void DcnUnmapScanout(', 'BOOLEAN DcnScanoutMapping(']),
                    ('wddm.c',['static BOOLEAN WddmCopyScanoutRows(', 'static NTSTATUS Bc250WddmGetStandardAllocationDriverData('])]:
  s=(a.source/file).read_text()
  for name in names:

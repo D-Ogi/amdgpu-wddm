@@ -19,7 +19,7 @@ typedef void* PDEVICE_OBJECT;
 #define StageAddDevice 0
 #define StageStopEnter 1
 #define StageStopDone 2
-static LONG touches, allocations, frees, failAllocation, retained, checks, failures, stopCalls;
+static LONG touches, allocations, frees, failAllocation, retained, checks, failures, stopCalls, bootMarks;
 static HANDLE releaseGate, enteredGate;
 static LONG connectorStopResult;
 typedef struct {
@@ -116,6 +116,8 @@ static void ConnectorDestroy(BC250_DEVICE* device) {
  device->ConnectorDestroyed=1; touch();
 }
 #define GuardReleaseStart(...) touch()
+/* guard.c: the volatile mark of an unconfirmed stop, which outlives the image (a reload in the same boot). */
+static void GuardMarkStopUnconfirmed(void) { CHECK(retained); InterlockedIncrement(&bootMarks); }
 #define GuardRecordStopBegin(...) touch()
 #define GuardRecordStopDone(...) touch()
 #define GuardLogKeep(...) touch()
@@ -175,7 +177,9 @@ int main(void) {
  CloseHandle(threads[0]);CloseHandle(enteredGate);CloseHandle(releaseGate);enteredGate=NULL;releaseGate=NULL;
  // Unconfirmed hardware retirement poisons the image, even after context free.
  CHECK(Bc250AddDevice(&pdoA,&a)==0);((BC250_DEVICE*)a)->StopDone=FALSE;retained=1;
+ CHECK(bootMarks==0);
  CHECK(Bc250RemoveDevice(a)==0);before=touches;
+ CHECK(bootMarks==1);       // the mark that a reloaded image's start reads (GuardStopUnconfirmedThisBoot)
  CHECK(Bc250AddDevice(&pdoB,&b)==STATUS_DEVICE_BUSY);CHECK(!b && touches==before);
  CHECK(Bc250AddDevice(&pdoA,&b)==STATUS_DEVICE_BUSY);CHECK(!b && touches==before);
  printf("%ld checks, %ld failures\n",checks,failures);return failures?1:0;

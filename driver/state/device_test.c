@@ -123,6 +123,9 @@ static void WddmGateConsume(void){++gate_calls;}
 static NTSTATUS GuardCheckAndCountStart(BOOLEAN full)
 {CHECK(full);++budget_calls;budget_order=++order;return budget_status;}
 static NTSTATUS HardwareBoundary(void){++boundary_calls;return STATUS_SUCCESS;}
+// An earlier driver image of this boot left a GPU stop unconfirmed (guard.c volatile mark).
+static BOOLEAN earlier_unconfirmed;
+static BOOLEAN GuardStopUnconfirmedThisBoot(void){return earlier_unconfirmed;}
 /* ACTUAL_START_PREFIX */
 
 static void Reset(const char *name)
@@ -203,6 +206,8 @@ int main(void)
     CHECK(activation_calls==1 && budget_calls==1 && !boundary_calls && activation_order<budget_order);
     Reset("prior hardware stop unconfirmed");device.GpuStopUnconfirmed=TRUE;CHECK(Start(&device)==STATUS_DEVICE_HARDWARE_ERROR);
     CHECK(activation_calls==1 && !budget_calls && !boundary_calls);device.GpuStopUnconfirmed=FALSE;
+    Reset("earlier image stop unconfirmed");earlier_unconfirmed=TRUE;CHECK(Start(&device)==STATUS_DEVICE_HARDWARE_ERROR);
+    CHECK(activation_calls==1 && !budget_calls && !boundary_calls);earlier_unconfirmed=FALSE;
     CHECK(!thread_live && !system_worker && !pending_worker && !pending_context);
     printf("%u device lifecycle checks, %u failures\n",checks,failures);return failures?1:0;
 }

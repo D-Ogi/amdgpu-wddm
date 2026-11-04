@@ -4591,13 +4591,19 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
 
         // ADR 0008 stage D: node 1's own packet in flight, waited for independently - it may still be on SDMA0's
         // ring after node 0's has long finished (design note section 5).
-        for (waited = 0; waited < BC250_WDDM_STOP_DRAIN_MS && wddm->PagingHead; waited += 10)
+        // Only a packet on the ring can finish here. A job that is queued but not dispatched (a faulted node, a
+        // preemption in progress) stays queued for the whole stop, so the loop waits for the hardware only, and a
+        // queued job is reported apart. Until 2026-11-04 the loop ran on PagingHead and slept only on
+        // PagingHwPending: with a queued job it spun without a wait and then logged a wait that never happened.
+        for (waited = 0; waited < BC250_WDDM_STOP_DRAIN_MS && wddm->PagingHwPending; waited += 10)
         {
             WddmGpuFencePaging(Device);
             if (wddm->PagingHwPending) KeDelayExecutionThread(KernelMode, FALSE, &tick);
         }
         if (waited != 0) GuardLog("wddm: stop waited %u ms for node 1's packet in flight (%s)", waited,
                                   wddm->PagingHwPending ? "STILL PENDING" : "done");
+        if (wddm->PagingHead && !wddm->PagingHwPending)
+            GuardLog("wddm: stop leaves a node 1 job queued and not dispatched");
 
         // Node 2's job in flight, on its own ring and its own bound.
         for (waited = 0; waited < BC250_WDDM_STOP_DRAIN_MS && wddm->ComputeHwPending; waited += 10)
@@ -9034,17 +9040,19 @@ static int WddmPresentTranslate(void* Context, unsigned long long Va,
     return result;
 }
 
-// BD-289: release the blit source mapping. The release flavour always unmaps. In the lab flavour a probed present
-// (bd289_probe.h) keeps the VA when the probe found its PTEs already released or mapped elsewhere: a second
-// MmUnmapIoSpace would release PTEs this present no longer owns, and the lab would lose the log in a new fault.
-static void WddmUnmapBlitSource(_In_ const UCHAR* Map, SIZE_T Length, BOOLEAN Probed)
+// BD-289: the end of this present's use of its source mapping. The mapping is kept for the next present (dcn.c's
+// DcnBlitMap, blit_map_cache.h), so nothing is unmapped here. In the lab flavour a probed present (bd289_probe.h)
+// that found the source PTEs released or mapped elsewhere drops the mapping from the cache without an unmap: an
+// unmap would release PTEs this present no longer owns, and a later present must not copy through that VA.
+static void WddmEndBlitSource(_Inout_ BC250_DEVICE* Device, _In_ const UCHAR* Map, BOOLEAN Probed)
 {
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-    if (Probed && !Bd289ProbeEnd()) return;
+    if (Probed && !Bd289ProbeEnd()) DcnBlitForget(Device, Map);
 #else
+    UNREFERENCED_PARAMETER(Device);
+    UNREFERENCED_PARAMETER(Map);
     UNREFERENCED_PARAMETER(Probed);
 #endif
-    MmUnmapIoSpace((void*)Map, Length);
 }
 
 static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
@@ -9152,7 +9160,9 @@ static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXG
     if (!wddm->BlitGate) return;        // translation checked and counted; the copy itself needs the gate
 
     physical.QuadPart = (LONGLONG)first;
-    map = (const UCHAR*)VramMapCpuRange(device,physical,(SIZE_T)alloc->Size,PAGE_READONLY);
+    // BD-289 second form: a kept mapping (blit_map_cache.h). The caller, WddmPresentBlit, holds the scan-out mutex:
+    // this function runs only at PASSIVE_LEVEL (refused above otherwise).
+    map = (const UCHAR*)DcnBlitMap(device,physical,(SIZE_T)alloc->Size,PAGE_READONLY);
     if (map == NULL)
     {
         if (InterlockedIncrement(&wddm->BlitSkips) <= BC250_WDDM_LOG_CALLS) GuardLog("wddm: blit skipped: no mapping for 0x%llX", first);
@@ -9212,18 +9222,18 @@ static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXG
         {
             InterlockedIncrement(&wddm->BlitSkips);
             GuardLog("wddm: blit refused destination geometry, mapping or overlap");
-            WddmUnmapBlitSource(map, (SIZE_T)alloc->Size, probed);
+            WddmEndBlitSource(device, map, probed);
             return;
         }
         physical.QuadPart = (LONGLONG)dstFirst;
-        destinationMap = VramMapCpuRange(device,physical,(SIZE_T)d->Size,PAGE_READWRITE);
+        destinationMap = DcnBlitMap(device,physical,(SIZE_T)d->Size,PAGE_READWRITE);     // kept, as the source
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         if (probed) (void)Bd289ProbeStep(BD289_STEP_DEST);
 #endif
         if (destinationMap == NULL)
         {
             InterlockedIncrement(&wddm->BlitSkips);
-            WddmUnmapBlitSource(map, (SIZE_T)alloc->Size, probed);
+            WddmEndBlitSource(device, map, probed);
             return;
         }
         dst = (UCHAR*)destinationMap;
@@ -9345,8 +9355,8 @@ static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXG
             rows++;
         }
     }
-    if (destinationMap != NULL) MmUnmapIoSpace(destinationMap, dstLength);
-    WddmUnmapBlitSource(map, (SIZE_T)alloc->Size, probed);
+    // BD-289 second form: both mappings stay in the cache for the next present; DcnUnmapScanout releases them at stop.
+    WddmEndBlitSource(device, map, probed);
     InterlockedIncrement(&wddm->Blits);
     InterlockedExchange(&wddm->BlitRowsLast, (LONG)rows);
     if ((LONG)rows > wddm->BlitRowsMax) InterlockedExchange(&wddm->BlitRowsMax, (LONG)rows);
