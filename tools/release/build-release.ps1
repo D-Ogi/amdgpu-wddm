@@ -58,7 +58,8 @@ param(
     [string]$NoProvenanceReason,                 # required with -NoProvenance: recorded in the build log and manifest
     [string]$BuildRecords,                       # directory of the component builds' recipe.json: the gate then refuses a build from a tree that was not clean
     [switch]$RebuildCheck,                       # also rebuild every payload file that claims a bit-identical rebuild (slow)
-    [switch]$ReuseOut                            # build into an -Out that already holds files (an incremental rebuild of the same version)
+    [switch]$ReuseOut,                           # build into an -Out that already holds files (an incremental rebuild of the same version)
+    [string]$UpdateMinInstalled                  # the oldest installed release that may take this update (nagi-update.json min_installed); default: release-sources.json supersedes.release
 )
 # Release and provenance rebuilds always execute the gates, including nested analysis.
 $env:BC250_GATE_NOCACHE = '1'
@@ -297,7 +298,8 @@ foreach ($cfg in Get-ChildItem -LiteralPath (Join-Path $pkg 'payload') -Recurse 
 Write-Host 'installer and documents'
 # The logon tasks' scripts: the confirmation also writes the running-release witness (release-witness.ps1), and
 # start-window.ps1 is the window task's own script (BD-080), which the logged-on user runs with their own rights.
-$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1', 'version-identity.ps1', 'state-reader.ps1')
+# nagi-update.ps1 is the update step at the end of each confirmation run (docs/design/self-update.md).
+$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1', 'version-identity.ps1', 'state-reader.ps1', 'nagi-update.ps1')
 $inst = Join-Path $pkg 'installer'
 [void][IO.Directory]::CreateDirectory($inst)
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') -File) {
@@ -971,6 +973,14 @@ if ($r.code -ne 0) { throw 'symbols: a shipped file has no symbol file of its ow
 $symbols = [ordered]@{ archive = "symbols/$Flavour"; in_package = $false
     files = (Get-Content -LiteralPath $symbolRecords -Raw | ConvertFrom-Json) }
 
+# The update identity of each component kind (nagi_update.py identity, docs/design/self-update.md): the installed
+# release names the content it installed, so that the update of a later release can tell which kinds changed.
+$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'nagi_update.py'), 'identity', '--package', $pkg) -TimeoutSeconds 300
+if ($r.code -ne 0) { throw "nagi_update.py identity failed: $($r.text)" }
+$updateComponents = $r.text | ConvertFrom-Json
+'  update identity: driver {0} ({1} files), apps {2} ({3} files)' -f $updateComponents.driver.content_id.Substring(0, 12), $updateComponents.driver.files,
+    $updateComponents.apps.content_id.Substring(0, 12), $updateComponents.apps.files
+
 $manifest = [ordered]@{
     schema = 1
     driver_package = $driverPackage
@@ -1016,6 +1026,7 @@ $manifest = [ordered]@{
     firmware = $firmware
     defaults = $regDefaults.defaults
     licenses = @($sources.licenses | ForEach-Object { [ordered]@{ file = "licenses/$($_.file)"; repository = $_.repository; path = $_.path; ref = $_.ref; sha256 = $_.sha256 } })
+    update_components = $updateComponents   # the update identity of each kind (docs/design/self-update.md)
     components = $components
     files = $files
 }
@@ -1053,5 +1064,39 @@ if ($userSigner.mode -eq 'test') {
     Test-DriverFileSignature -Path $setupOne -SignTool $signtool -ExpectedRoot $ExpectedSigningRoot -TestCertificate $cer
 }
 '  single exe signed ({0} {1})' -f $userSigner.mode, $userSigner.thumbprint
+
+# The update assets of the release flavour (docs/design/self-update.md): the apps pack, the update manifest and its
+# signature, beside the zip, with the names the control application downloads. The manifest is signed by the
+# user-mode signer as a detached CMS message (signtool /p7), wrapped into a ContentInfo, and then checked as the
+# installed release checks it: in Windows PowerShell 5.1, against the pinned list of nagi-update.ps1. A signer that is
+# not on that list stops the build, because no installed release would take its update.
+if ($Flavour -eq 'release') {
+    Write-Host 'update assets'
+    $updateMin = $(if ($UpdateMinInstalled) { $UpdateMinInstalled } else { [string]$sources.supersedes.release })
+    $r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'nagi_update.py'), 'packs', '--package', $pkg, '--release', $Version, '--out', $Out) -TimeoutSeconds 300
+    if ($r.code -ne 0) { throw "nagi_update.py packs failed: $($r.text)" }
+    $appsPack = Join-Path $Out "nagi-apps-$Version.zip"
+    $updateManifest = Join-Path $Out 'nagi-update.json'
+    $r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'nagi_update.py'), 'manifest', '--package', $pkg, '--release-zip', $zip,
+        '--apps-pack', $appsPack, '--min-installed', $updateMin, '--out', $updateManifest) -TimeoutSeconds 300
+    if ($r.code -ne 0) { throw "nagi_update.py manifest failed: $($r.text)" }
+    '  ' + $r.text.Trim()
+    $p7Dir = Join-Path $Out 'nagi-update-p7'
+    [void][IO.Directory]::CreateDirectory($p7Dir)
+    $r = Invoke-Headless -File $signtool -Arguments (Get-ManifestSignToolArguments -Signer $userSigner -Path $updateManifest -OutDir $p7Dir -Pfx $pfx -Password $pass) -TimeoutSeconds 300
+    if ($r.code -ne 0) { throw "signtool /p7 $updateManifest ($($userSigner.mode)) failed: $($r.text -replace [regex]::Escape($pass), '<redacted>')" }
+    $updateSignature = Join-Path $Out 'nagi-update.json.p7s'
+    [IO.File]::WriteAllBytes($updateSignature, (ConvertTo-CmsContentInfo ([IO.File]::ReadAllBytes((Join-Path $p7Dir 'nagi-update.json.p7')))))
+    Remove-Item -LiteralPath $p7Dir -Recurse -Force
+    $q = { param($s) "'" + $s.Replace("'", "''") + "'" }
+    $check = "& { . $(& $q (Join-Path $PSScriptRoot 'installer\nagi-update.ps1')); `$r = Test-NagiManifestSignature -ManifestPath $(& $q $updateManifest) -SignaturePath $(& $q $updateSignature); " +
+        "if (`$r.ok) { 'signer ' + `$r.thumbprint + ' is pinned'; exit 0 }; `$r.reason; exit 1 }"
+    $r = Invoke-Headless -File 'powershell.exe' -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', $check) -TimeoutSeconds 120
+    if ($r.code -ne 0) { throw "the update manifest signature does not verify as the installed release checks it: $($r.text.Trim())" }
+    '  update manifest signed: {0}' -f $r.text.Trim()
+    foreach ($f in $appsPack, $updateManifest, $updateSignature) { '  {0} SHA256 {1}' -f (Split-Path -Leaf $f), (Get-FileHash -LiteralPath $f).Hash }
+} else {
+    '  update assets: none for the lab flavour (GitHub carries the release flavour only)'
+}
 $pass = $null
 'single exe {0} SHA256 {1}' -f $setupOne, (Get-FileHash -LiteralPath $setupOne).Hash
