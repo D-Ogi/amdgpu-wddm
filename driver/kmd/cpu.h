@@ -57,7 +57,6 @@ typedef struct _BC250_CPU_STATE {
     BOOLEAN LeftoverOwed;                  // BD-295: an earlier start of this boot left settings in the chip, and
                                             // the restore to the boot baseline has not gone through: every setter
                                             // is refused and the worker retries it every BC250_CPU_REVERT_RETRY_MS
-    BOOLEAN LeftoverStartOwed;              // BD-295: the stored settings of this start wait for that restore
     struct bc250_cpu_settings TrialBefore;  // what a revert puts back
     ULONG TrialMs;                          // the window a SET gets by default (CpuTrialMs)
     ULONG TrialSerial;                      // one more for every SET, KEEP, CANCEL and revert

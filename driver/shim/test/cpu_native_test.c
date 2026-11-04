@@ -588,7 +588,7 @@ static void test_a_refused_revert_is_restored_at_the_next_start(void)
     Load();
     CHECK(native_log_has("an earlier stop of this boot left settings in the chip"));
     CHECK(native_log_has("is back at the boot baseline"));
-    CHECK(!device.Cpu.LeftoverOwed && !device.Cpu.LeftoverStartOwed);
+    CHECK(!device.Cpu.LeftoverOwed);
     CHECK(Volatile(L"CpuLeftover", L"Owed") == 0u);
     CHECK(native_firmware.limit_mhz == 3500u);
     CHECK(native_firmware.scale == bc250_cpu_scale_argument(0u));
@@ -612,7 +612,7 @@ static void test_a_refused_restore_keeps_the_surface_shut(void)
     LoadAndStopWithRevertRefused();
     Chip(1200u, 3500u);
     Load();                                                         /* the firmware still refuses every setter */
-    CHECK(device.Cpu.LeftoverOwed && device.Cpu.LeftoverStartOwed);
+    CHECK(device.Cpu.LeftoverOwed && !device.Cpu.Applied.temp_given);   /* the start settings wait too */
     CHECK(native_log_has("the leftover restore is refused"));
     CHECK(native_firmware.limit_mhz == 3000u);
     CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3200u, 0u);
@@ -627,7 +627,7 @@ static void test_a_refused_restore_keeps_the_surface_shut(void)
 
     native_firmware.accept_writes = 1;
     CpuThread(&device);                                             /* the worker's next pass: the retry */
-    CHECK(!device.Cpu.LeftoverOwed && !device.Cpu.LeftoverStartOwed);
+    CHECK(!device.Cpu.LeftoverOwed);
     CHECK(Volatile(L"CpuLeftover", L"Owed") == 0u);
     CHECK(native_firmware.limit_mhz == 3500u && native_firmware.scale == bc250_cpu_scale_argument(0u));
     CHECK(device.Cpu.Applied.temp_given && device.Cpu.Applied.temp_c == BC250_CPU_TEMP_DEFAULT_C);

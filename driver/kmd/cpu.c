@@ -1020,7 +1020,9 @@ static void CpuApplyStart(BC250_DEVICE* Device)
 // Applied, and the earlier start's settings are still in the chip - so Applied is cleared before each attempt, and
 // the plan then sends every step, as a restore: each one passes the hot gate. A refusal keeps every setter refused
 // (BC250_CPU_ERROR_LEFTOVER), and the worker tries again every BC250_CPU_REVERT_RETRY_MS, as for an owed revert. On
-// success the mark goes, and the stored settings of this start follow when they waited for it.
+// success the mark goes, and the stored settings of this start follow: a leftover is owed only from CpuStart (and
+// across CpuResumeEx), and the start sequence of the worker sends the restore in place of CpuApplyStart, so the
+// start settings are always still owed when the restore goes through.
 static void CpuLeftoverService(BC250_DEVICE* Device)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
@@ -1057,10 +1059,7 @@ static void CpuLeftoverService(BC250_DEVICE* Device)
     CpuLeftoverClear();
     GuardLog("cpu: the leftover of an earlier start is back at the boot baseline (attempt %lu): clock %lu MHz, "
              "cap %lu C", attempts, back.max_mhz, back.temp_c);
-    if (s->LeftoverStartOwed) {
-        s->LeftoverStartOwed = FALSE;
-        CpuApplyStart(Device);
-    }
+    CpuApplyStart(Device);
 }
 
 // ---- the worker thread ------------------------------------------------------------------------------------------
@@ -1107,7 +1106,6 @@ static void CpuThread(_In_ PVOID Context)
                 // this boot left settings in the chip, the boot baseline goes back first (BD-295), and the stored
                 // settings and the default cap follow it. Otherwise they go in now.
                 if (s->LeftoverOwed) {
-                    s->LeftoverStartOwed = TRUE;
                     CpuLeftoverService(device);
                     nextRetry = KeQueryInterruptTime() + 10000ull * BC250_CPU_REVERT_RETRY_MS;
                 } else CpuApplyStart(device);
@@ -1196,7 +1194,7 @@ void CpuStart(BC250_DEVICE* Device)
     RtlZeroMemory(&s->BaselineRead, sizeof(s->BaselineRead));
     RtlZeroMemory(&s->Search, sizeof(s->Search));
     s->BaselineValid = s->Proven = s->OnTrial = s->RevertOwed = FALSE;
-    s->LeftoverOwed = s->LeftoverStartOwed = FALSE;
+    s->LeftoverOwed = FALSE;
     s->BootRecord = CPU_BOOT_RECORD_UNREAD;
     s->Pending = s->Confirmed = s->CorePending = s->CoreConfirmed = FALSE;
     s->TrialDeadline = 0;
@@ -1368,7 +1366,8 @@ void CpuStop(BC250_DEVICE* Device)
     KeReleaseSpinLock(&s->SnapLock, irql);
     // The BD-295 lab arm (LabCpuRevertFault bit 1, lab flavour only): this revert is refused before any message
     // goes out, the way a hot part or a busy GPU refuses it. FALSE in the release flavour.
-    labFault = (onTrial || owed) ? BC250_CPU_LAB_FAULT(BC250_CPU_LAB_FAULT_STOP_REVERT) : FALSE;
+    labFault = FALSE;
+    if (onTrial || owed) labFault = BC250_CPU_LAB_FAULT(BC250_CPU_LAB_FAULT_STOP_REVERT);
     if (labFault) {
         KeAcquireSpinLock(&s->SnapLock, &irql);
         if (onTrial) s->Snap.Reverts++;
@@ -1450,7 +1449,6 @@ static void CpuResumeEx(BC250_DEVICE* Device, BOOLEAN Joint)
     // BD-295: the next full read stage adopts the boot record again. A leftover of an earlier start stays owed: the
     // restore costs three messages, and nothing here proves that the transition took it out of the chip.
     s->BootRecord = CPU_BOOT_RECORD_UNREAD;
-    s->LeftoverStartOwed = FALSE;
     KeAcquireSpinLock(&s->SnapLock, &irql);
     s->OnTrial = FALSE;
     s->TrialDeadline = 0;
