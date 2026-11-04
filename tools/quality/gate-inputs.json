@@ -21,6 +21,8 @@
     "ledger",
     "release-provenance",
     "release-build-set",
+    "winsys-lines-controls",
+    "winsys-lines",
     "version-stamp",
     "app-route-lib",
     "system-tuning",
@@ -1718,6 +1720,11 @@
         "host"
       ],
       "timeout": 600
+    },
+    "winsys-lines-controls": {
+      "inputs": [
+        "host"
+      ]
     },
     "link-command-import": {
       "inputs": [
