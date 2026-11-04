@@ -24,6 +24,7 @@ def main():
     p.add_argument("--omit-rate-limit", action="store_true")
     p.add_argument("--omit-dto-check", action="store_true")
     p.add_argument("--omit-inherited-target", action="store_true")
+    p.add_argument("--keep-disable-generation", action="store_true")
     args = p.parse_args()
     source = Path(__file__).resolve().parents[1] / "connector_link.c"
     data = source.read_text(encoding="utf-8")
@@ -60,6 +61,12 @@ def main():
             if body.count(needle) != 1:
                 raise SystemExit("Changed-sink resume mutation anchor changed")
             body = body.replace(needle, "(void)c;")
+        if args.keep_disable_generation and name == "ConnectorLinkDisable":
+            # ISM 23: the disable before the fix, which left a failed disable's generation on the active link.
+            needle = "if(c->Active)c->Generation=sinkGeneration;"
+            if body.count(needle) != 1:
+                raise SystemExit("Disable generation mutation anchor changed")
+            body = body.replace(needle, "(void)sinkGeneration;")
         if args.omit_surface_adopt and name == "ConnectorLinkDisable":
             # BD-195: 31v2's detach, which set RuntimeDisplayChanged over an empty RuntimePost.
             needle = "DcnLinkSurfaceAdopt(Device);"

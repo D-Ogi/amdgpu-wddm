@@ -859,6 +859,11 @@
         "host"
       ]
     },
+    "connector-link-disable-generation": {
+      "inputs": [
+        "host"
+      ]
+    },
     "dml201": {
       "inputs": [
         "host"

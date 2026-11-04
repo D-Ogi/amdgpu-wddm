@@ -643,6 +643,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='connector-link-rate-limit';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitRateLimit','-ExpectFailure')}
   @{n='connector-link-dto-check';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitDtoCheck','-ExpectFailure')}
   @{n='connector-link-inherited-target';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitInheritedTarget','-ExpectFailure')}
+  @{n='connector-link-disable-generation';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-KeepDisableGeneration','-ExpectFailure')}
   @{n='dml201';s='driver\shim\test\run_dml201.ps1';a=@('-Kits',$Kits)}
   @{n='dcn201-pipe';s='driver\shim\test\run_dcn201_pipe.ps1';a=@('-Kits',$Kits)}
   @{n='dpaudio-start-debt';s='driver\kmd\test\run_dpaudio_debt.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
