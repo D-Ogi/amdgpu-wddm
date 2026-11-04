@@ -186,7 +186,7 @@ locks, the worker thread, the registry and the message gaps. A harness for them,
 |---|---|---|
 | Maximum boost clock | 2800 to 3500 MHz | up to 4000 MHz, and only with at least four undervolt steps in the same request |
 | Undervolt | 0 to 16 curve-scale steps | the same |
-| Temperature cap | 85 to 100 C | the same |
+| Temperature cap | 85 to 100 C, 90 C when none is stored | the same |
 
 The release range is a **limit** before it is ever a raise: lowering the firmware's ceiling lowers the voltage the
 firmware chooses, so it cannot reach the hazard. 3500 MHz is the highest limit the release build takes. It is also
@@ -194,6 +194,30 @@ the stock boost clock the community's two tools report; nothing on unit A has me
 document carried until 0.7.211 had no source at all. The lab range is the standing hardware pre-approval of
 2026-10-05, and `bc250_cpu_settings_check` refuses it without at least `BC250_CPU_LAB_MIN_UV_STEPS` undervolt
 steps in the same request.
+
+### The default temperature cap
+
+With no `CpuTempC` stored and `CpuTune` at 1, a start applies a cap of 90 C (`BC250_CPU_TEMP_DEFAULT_C` in
+`driver/shim/include/bc250_board_envelope.h`). The reason is a measurement of BD-180 (2026-11-03). At the
+firmware's own cap of 100 C, the CPU test of Time Spy took Tctl from 81 C to 93.5 C in 12 s. The clock was 3500 MHz
+at 1.21 V, and the lab guard stopped the run. With a cap of 85 C the firmware held 86.2 C and the run completed. 90 C keeps
+that margin under a long load and gives up less clock than 85 C does.
+
+- The default goes in through the ordinary apply path of the start (`CpuApplyStart` in `driver/kmd/cpu.c`), after
+  the read stage, so the read-first rule and the order of a change apply to it. A cap under the firmware's own is a
+  tightening cap, so it goes first. The CPU surface opens only on a positively identified BC-250, and so does the
+  default.
+- The default is not a stored value. `CpuTempC` stays absent, and `CpuLastReason` does not change.
+- A stored `CpuTempC` wins. An operator can still choose any cap from 85 C to 100 C. 100 C is the firmware's own cap.
+- The baseline keeps its meaning: the values that the firmware answered in the read stage of this start, 100 C for
+  the cap on unit A.
+- The end of a trial, a Stop and a revert put back what was in force before the trial: the stored cap, or the
+  default.
+- RESET (`bc250kmd_cli cpu reset`, "Standard processor settings" and "Reset driver settings to the release
+  defaults" in the application) removes the stored values and puts back the baseline clock, no undervolt and the
+  default cap, not the baseline cap. With the default already in force and nothing else changed, RESET sends nothing.
+- The board capability query reports the default from ABI 3 (`CpuDefaultTempC`). A reply of ABI 1 or 2 has that word
+  at zero, and the application then takes the top of the band, which is what an older driver leaves in force.
 
 One undervolt step is not a fixed number of millivolts. The community's own fitted model is about
 `0.004325 x f - 10` mV per step, which is 3 mV at 3000 MHz and 7 mV at 4000 MHz. The driver therefore never
@@ -254,7 +278,7 @@ no-op on a harvested die, and either answer closes an open question.
 |---|---|
 | `CpuTune` | 1 opens the surface. The INF writes 1 from 0.7.216 (lab check of 2026-10-07: 4 undervolt steps, 1206 to 1175-1181 mV under load, reverted by the cancel). Absent or 0: read-only, no thread, no message. |
 | `CpuLab` | 1 admits the lab clock range, with an undervolt. |
-| `CpuMaxMHz`, `CpuUvSteps`, `CpuTempC` | the stored settings, applied at start, absent for none |
+| `CpuMaxMHz`, `CpuUvSteps`, `CpuTempC` | the stored settings, applied at start, absent for none. An absent `CpuTempC` gives the default cap of 90 C. |
 | `CpuTrialMs` | the window a set gets when it asks for none |
 | `CpuPending`, `CpuConfirmed` | the two guard marks of the stored settings |
 | `CpuLastReason` | 0 none, 1 applied, 2 refused, 3 an unconfirmed start, 4 the registry refused the mark, 5 `CpuTune` is 0, 6 queue 3 did not answer, 7 the firmware or the voltage readback refused |
@@ -322,12 +346,18 @@ test runs, or an own setting is in use. It opens by itself while a trial runs or
 closed then. While it is open, the page reads both escapes every 2 s (READ only, `NoAdapterSynchronization`); a
 closed card reads nothing.
 
+One card stays outside the disclosure: "Processor temperature limit (throttling)" (`TunerView.CpuLimit`). It shows
+the processor temperature now, the cap in force, the default of the board capability query (90 C, marked as the
+default when it is in force), and one picker over 85 to 100 C. It sends the same trial, Keep and Stop as the
+processor card, so a cap is never stored by trying it. It offers the readback while the processor has not answered
+on this start, and it offers to turn `CpuTune` on when it is 0.
+
 What the open cards show (`tools/win/amdgpu_wddm_control/src/TunerView.cs`, pure functions of the two readings):
 
 | Card | Rows |
 |---|---|
 | Graphics voltage | in use now, saved for every start, the clock and voltage of the governor's level and the temperature (`LevelMHz`, `LevelMv`, `TemperatureMc`), the chart with a ring at that level and a dashed line at the ceiling, one row per speed with the difference from standard and the voltage in use when an edit differs |
-| Processor | the readback (voltage, temperature, temperature cap, the clock of each core that answered, the P-state clocks, the processor count), then what is in force, what is saved, and the baseline this start recorded (what "Standard processor settings" puts back), then the three pickers over the driver's own lists |
+| Processor | the readback (voltage, temperature, temperature cap, the clock of each core that answered, the P-state clocks, the processor count), then what is in force, what is saved, and the standard: the clock and undervolt this start recorded with the default cap (what "Standard processor settings" puts back), then the three pickers over the driver's own lists |
 
 How a trial ended is said in a sentence, not left to the reader: kept, stopped, gone back by itself at the end of
 the window, or reset. The curve's own counters (`Keeps`, `Cancels`, `Reverts`) tell the four apart. The processor
