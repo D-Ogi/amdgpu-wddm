@@ -860,6 +860,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='hwmon-telemetry-always';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','telemetry-always');Fails=$true}
   @{n='hwmon-boost-claims-fixed';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','boost-claims-fixed');Fails=$true}
   @{n='hwmon-rise-outlives-doubt';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','rise-outlives-doubt');Fails=$true}
+  # The restore debt (bc250_fan.h): the next start gives back a fan that a stop could not give back.
+  @{n='hwmon-debt-dropped';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','debt-dropped');Fails=$true}
+  @{n='hwmon-debt-chip-unread';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','debt-chip-unread');Fails=$true}
+  @{n='hwmon-debt-settle-gated';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','debt-settle-gated');Fails=$true}
   @{n='smu-metrics';s='driver\shim\test\run_smu_metrics.ps1';a=@('-Kits',$Kits)}
   @{n='contract-caps';s='driver\contract\test\run.ps1';a=@('-Kits',$Kits,'-Mesa',"$Workspace\ref\mesa")}
  )
