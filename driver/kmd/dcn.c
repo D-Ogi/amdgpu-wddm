@@ -1939,7 +1939,7 @@ NTSTATUS DcnLinkSurfaceRestore(BC250_DEVICE* Device, const BC250_LINK_SURFACE* S
 
 NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
 {
-    NTSTATUS status;
+    NTSTATUS status, shape;
     LONG changed=InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0);
     ULONG hubp=0;
     // The hardware pointer first: the next owner of the firmware surface reads no cursor of ours (dcn_cursor.c).
@@ -1959,8 +1959,14 @@ NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
     status=DcnRestorePostDisplaySerialized(Device);
     GuardLog("dcnflip: stop: verified firmware scanout status 0x%08X",status);
     // After the firmware surface is back: the native viewport and scaler shape for the next owner (modeset.c). It
-    // runs when the restore above failed as well; the screen of the next owner needs the shape either way.
-    ModesetStop(Device);
+    // runs when the restore above failed as well; the screen of the next owner needs the shape either way. A failed
+    // shape restore fails the handoff too: the next owner would get a scaled pipe. The surface's failure is the first
+    // cause and stays the result when both failed (pnp.c folds HDMI and the connector the same way).
+    shape=ModesetStop(Device);
+    if (NT_SUCCESS(status) && !NT_SUCCESS(shape)) {
+        GuardLog("dcnflip: stop: native shape restore 0x%08X fails the handoff",shape);
+        status=shape;
+    }
     return status;
 }
 

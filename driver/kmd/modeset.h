@@ -58,7 +58,7 @@ void ModesetStart(struct _BC250_DEVICE* Device);                        // Start
 // CommitVidPn of a source mode Width x Height with a VidPN scaling (enum bc250_scaling; IDENTITY for the native
 // size). Returns STATUS_GRAPHICS_INVALID_VIDEO_PRESENT_SOURCE_MODE for a size or scaling this start does not offer.
 NTSTATUS ModesetCommit(struct _BC250_DEVICE* Device, ULONG Width, ULONG Height, ULONG Scaling);
-void ModesetStop(struct _BC250_DEVICE* Device);                         // DcnStop, after the firmware surface is back
+NTSTATUS ModesetStop(struct _BC250_DEVICE* Device);                     // DcnStop, after the firmware surface is back
 void ModesetRestoreQuiet(struct _BC250_DEVICE* Device);                 // bugcheck and reset: any IRQL, no log, no lock
 void ModesetPowerDown(struct _BC250_DEVICE* Device);                    // before D3
 void ModesetPowerUp(struct _BC250_DEVICE* Device);                      // back in D0

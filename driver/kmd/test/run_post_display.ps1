@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\bd003-011\restore",[string]$Source='',[switch]$OldRuntimeOrder,[switch]$WrongSavedSurface,[switch]$ResumeRefusalIgnored,[switch]$SavedApplicationSurface,[switch]$TtuMeansBlank)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\bd003-011\restore",[string]$Source='',[switch]$OldRuntimeOrder,[switch]$WrongSavedSurface,[switch]$ResumeRefusalIgnored,[switch]$SavedApplicationSurface,[switch]$TtuMeansBlank,[switch]$ShapeStatusDropped)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 if(-not $Source){$Source="$repo\driver\kmd"}
@@ -66,6 +66,15 @@ if($TtuMeansBlank) {
     $anchor='if (status >= 0 && (value & HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK))'
     if(([regex]::Matches($text,[regex]::Escape($anchor))).Count -ne 1){throw 'Fetch resume mutation anchor changed'}
     $text=$text.Replace($anchor,'if (status >= 0 && (value & (HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK | HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK)))')
+    [IO.File]::WriteAllText($path,$text)
+}
+# ISM 26: DcnStop before the fix, which dropped the native-shape restore's status and reported the surface's alone.
+if($ShapeStatusDropped) {
+    $path="$Out\post_display_actual.c"
+    $text=[IO.File]::ReadAllText($path)
+    $anchor='shape=ModesetStop(Device);'
+    if(([regex]::Matches($text,[regex]::Escape($anchor))).Count -ne 1){throw 'Shape status mutation anchor changed'}
+    $text=$text.Replace($anchor,'shape=ModesetStop(Device);shape=STATUS_SUCCESS;')
     [IO.File]::WriteAllText($path,$text)
 }
 & $cl /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\post_display_test.exe" "$Out\post_display_actual.c" "$repo\driver\kmd\dcn_translate.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"

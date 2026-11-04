@@ -661,6 +661,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   # BD-090 (31 line): the firmware's HUBP_TTU_DISABLE is not a blank of this driver's own, and no DCN write names a
   # register that MmioDcnWriteEx refuses (the write-site check runs its own positive and negative controls first).
   @{n='post-display-ttu-means-blank';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-TtuMeansBlank');Fails=$true}
+  # A failed native-shape restore (ModesetStop) fails the display handoff; the pre-fix DcnStop dropped its status.
+  @{n='post-display-shape-status-dropped';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-ShapeStatusDropped');Fails=$true}
   @{n='dcn-write-sites';s='driver\kmd\test\run_dcn_write_sites.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-flip';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-flip-pending-only';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','PendingOnly');Fails=$true}
@@ -685,6 +687,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
 @{n='dcn-plane-state-pitch';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','OnPipeIgnoresPitch');Fails=$true}
 @{n='dcn-plane-state-staged';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','StagedKept');Fails=$true}
 @{n='dcn-plane-state-modeset';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','ModesetNoRestore');Fails=$true}
+  # ISM 26: ModesetStop before the fix cleared PipeChanged and dropped the native-shape restore's status.
+  @{n='modeset-stop-status-dropped';s='driver\kmd\test\run_modeset.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-StopStatusDropped');Fails=$true}
   @{n='flip-state';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   # Its deadline is 600 s in gate-inputs.json: 22 s to 92.3 s on 2026-10-28, half of the old 180 s under load.
   @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}

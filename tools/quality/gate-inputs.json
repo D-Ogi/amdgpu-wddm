@@ -919,6 +919,16 @@
         "host"
       ]
     },
+    "modeset-stop-status-dropped": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "post-display-shape-status-dropped": {
+      "inputs": [
+        "host"
+      ]
+    },
     "dcn-flip": {
       "inputs": [
         "host"
