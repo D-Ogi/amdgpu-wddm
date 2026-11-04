@@ -13,7 +13,7 @@ static partial class UnitTests
         var beforeUi = Thread.CurrentThread.CurrentUICulture;
         try
         {
-            foreach (var name in new[] { "en-US", "pl-PL", "es-ES", "ja-JP", "ko-KR" })
+            foreach (var name in new[] { "en-US", "pl-PL", "pt-BR", "pt-PT", "es-ES", "es-MX", "ja-JP", "ko-KR" })
             {
                 Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo(name);
                 Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo(name);

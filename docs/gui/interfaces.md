@@ -197,13 +197,13 @@ Both places are written by default. Each shortcut takes its icon from the applic
 boxes and states both answers on the command line, so a run after a restart can put back a shortcut the first run
 left out (`-StartMenuShortcut`, `-DesktopShortcut`). The uninstall removes all three.
 
-## 5. Control app preferences (HKCU, app state only; the installer never writes them)
+## 5. Control app preferences (HKCU, app state only; the installer writes none of them, the setup window only `Language`)
 
 `HKCU\Software\amdgpu-wddm\Control` (all REG_DWORD unless noted). Rule R4: the default is "value absent".
 
 | Value | Absent means | Written |
 |---|---|---|
-| `Language` (REG_SZ `en`/`pl`/`ja`/`ko`) | Windows UI language, else `en` | on a language choice |
+| `Language` (REG_SZ `en`/`pl`/`pt`/`es`/`ja`/`ko`) | Windows UI language (any `pt-*` gives `pt`, any `es-*` gives `es`), else `en` | on a language choice in the control app or in the title bar of the setup window. Both read it |
 | `UpdateCheckAtStart` | on (D2) | 0 when unchecked; removed when checked |
 | `RecordRecentLaunches` | on (D3) | 1 when checked, 0 when unchecked (read by the shells, section 3). Any value other than DWORD 0 or 1 records nothing; the app shows it as off and "not valid" until the user sets it |
 | `ShowNagi` | on: the guide character's art ships in the application, so a fresh install shows her. The setup window reads this value by the same rule | 0 when unchecked; removed when checked |

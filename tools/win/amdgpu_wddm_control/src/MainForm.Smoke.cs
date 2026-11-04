@@ -403,6 +403,12 @@ namespace AmdgpuWddmControl
                     if (cut != null) w.AppendLine(cut + " after the window was clamped to the screen");
                 }
             }
+            // G-LANG: the language choice is in the header of every page and first on Settings; both list every language
+            // by its own name, whatever the current language is, under a label that keeps the English word.
+            ShowPage("settings", null, false);
+            PerformLayout();
+            CreateHandles(this);
+            foreach (var p in LanguageChoiceFindings()) w.AppendLine("G-LANG: " + p);
             if (o.SwitchTo != null)
             {
                 SwitchLanguageForTest(o.SwitchTo);
@@ -584,6 +590,40 @@ namespace AmdgpuWddmControl
         }
 
         static IEnumerable<string> NoInternals(IEnumerable<string> texts) { return PlainWords.Findings(texts); }
+
+        // G-LANG, on the window as built: one language choice in the header and one on Settings (the page shown), each
+        // listing Strings.Endonym of every language in the order of Strings.Languages, the current one chosen, its name
+        // the label that keeps the English word, and the header's choice inside the header.
+        internal IEnumerable<string> LanguageChoiceFindings()
+        {
+            var found = new List<DropChoice>();
+            var stack = new Stack<Control>();
+            stack.Push(this);
+            while (stack.Count > 0)
+            {
+                var c = stack.Pop();
+                var d = c as DropChoice;
+                if (d != null && (d.Tag as string) == "language") found.Add(d);
+                foreach (Control k in c.Controls) stack.Push(k);
+            }
+            var want = Strings.Languages.Select(Strings.Endonym).ToList();
+            int inHeader = found.Count(d => _header.Contains(d)), inContent = found.Count(d => _content.Contains(d));
+            if (inHeader != 1) yield return inHeader + " language choices in the header, 1 expected";
+            if (inContent != 1) yield return inContent + " language choices on Settings, 1 expected";
+            foreach (var d in found)
+            {
+                if (!d.Items.SequenceEqual(want)) yield return "the list reads " + string.Join(", ", d.Items) + ", expected " + string.Join(", ", want);
+                if (d.SelectedIndex != Array.IndexOf(Strings.Languages, Strings.Language)) yield return "the current language is not the chosen entry";
+                if (d.AccessibleName == null || !d.AccessibleName.StartsWith(Strings.LanguageLabel(), StringComparison.Ordinal) || d.AccessibleName.IndexOf("Language", StringComparison.Ordinal) < 0)
+                    yield return "the accessible name \"" + d.AccessibleName + "\" lacks the label with the English word";
+                if (!d.Globe) yield return "a language choice has no globe";
+                if (_header.Contains(d))
+                {
+                    var r = _header.RectangleToClient(d.RectangleToScreen(d.ClientRectangle));
+                    if (r.Left < 0 || r.Right > _header.ClientSize.Width || r.Top < 0 || r.Bottom > _header.ClientSize.Height) yield return "the header's language choice is outside the header (" + r + ")";
+                }
+            }
+        }
 
         // G-A11Y: every interactive control has a name for screen readers and is reachable with Tab; the character
         // image is decorative.

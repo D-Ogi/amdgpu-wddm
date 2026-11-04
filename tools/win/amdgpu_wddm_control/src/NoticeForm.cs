@@ -13,7 +13,7 @@
 //   from Theme.S() so the whole window grows with the scale. The content width is bounded by the working area of
 //   the screen the window opens on, so a 200 % window on a 1024 px screen stays inside it instead of pushing its
 //   buttons off the right edge (BD-137 found exactly that in the first setup window).
-//   Four languages, chosen the way the control application chooses its language (AppPrefs.EffectiveLanguage: the
+//   Six languages, chosen the way the control application chooses its language (AppPrefs.EffectiveLanguage: the
 //   person's choice, else the language of Windows, else English).
 //   No driver words. Everything the person reads comes from the string tables and goes through the G-NOINT gate
 //   with every other sentence of this application.

@@ -8,8 +8,15 @@ The window speaks to ordinary users (GUI-PLAN-v7, phase 1): plain words, no driv
 versions. A unit test and the render gate check every visible text against `PlainWords.Internals`; technical detail
 goes only into the support report and the Support page (shown when "Show support options" is on). Texts come from
 `strings/strings.<lang>.txt` (English is the source). A Polish speaker read every Polish line against one
-terminology, where one English term keeps one Polish word, so each line carries the status `rev` (2026-10-12). Japanese and Korean are machine translations marked
-`mt`, or `mt-safe` where the English is a name or a number.
+terminology, where one English term keeps one Polish word, so each line carries the status `rev` (2026-10-12). Brazilian
+Portuguese (`pt`, which every `pt-*` Windows uses), Spanish (`es`, one neutral Latin American table for every `es-*`
+Windows), Japanese and Korean are machine translations marked `mt`, or `mt-safe` where the English is a name or a number.
+
+The language choice is a globe with the current language's own name, in the header of every page and as the first card
+of Settings. Its list names each language in its own script (English, Polski, Português (Brasil), Español, 日本語,
+한국어), never in the current language, and its label keeps the English word beside the translated one ("언어 /
+Language"), so a person who cannot read the current language still finds it. A choice redraws the window at once. The
+choice is the `Language` value that Nagi Setup also reads and writes (docs/gui/interfaces.md section 5).
 
 | Page | What it shows or changes |
 |---|---|
@@ -19,7 +26,7 @@ terminology, where one English term keeps one Polish word, so each line carries 
 | Display | The monitors Windows reports. Per monitor: the resolution, refresh rate and GPU scaling from the modes Windows lists. A change stays only when the person keeps it within 15 s (below). Identify and a link to the Windows display settings. HDR and VRR as "Coming later" |
 | Performance | Live load, temperature, clock, video memory, power and fan (every 2 s, only while shown and not minimized), the shader cache sizes. Each row says "No reading" when the driver gives no fresh value: power needs KMD 0.7.215 (the SMU metrics table, RUN_DPM ABI 3), the fan KMD 0.7.213.1. Voltage goes only into the support report. The ray tracing benchmark (below) |
 | Driver | The installed release, whether Windows runs it, the update check (Settings can turn the check at start off) |
-| Settings | Language, update check at start, recent launches, Nagi, tips, animations, support options, what data the app keeps |
+| Settings | Language (also the globe in the header), update check at start, recent launches, Nagi, tips, animations, support options, what data the app keeps |
 | Help | Four symptom guides, one explanation per setting (through search), Repair, Restart Windows, the support report, About |
 | Support | The driver's start and recovery states in English, the technical actions (below), the installed components |
 
@@ -457,12 +464,12 @@ the state BD-059 leaves behind on KMD 0.7.197, against its expected writes or re
 refused; one dry run of this PC; where the build is not elevated, one real run that must stop with exit 5 and still
 write `--out`), `--smoke-recovery <file>` (the recovery view built without a window; fails when `bc250control.dll`
 is loaded), `--smoke-perf <file>` (the window built hidden: no live timer, no ticks, no animation frame, start under
-5 s, private memory under 300 MB), `--smoke-loading <file>` (the loading window in both its states, four
+5 s, private memory under 300 MB), `--smoke-loading <file>` (the loading window in both its states, six
 languages, four scales, text at 100, 150 and 225 %, a 1024x768 and a large screen, with the checks of the sign-in
 notice) and `--smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--no-nagi]
-[--switch-to xx] [--fixture <snapshot.json>] [--work-area <w>x<h>]` in 39 runs: four languages at 1, 1.25, 1.5 and 2, with
+[--switch-to xx] [--fixture <snapshot.json>] [--work-area <w>x<h>]` in 58 runs: six languages at 1, 1.25, 1.5 and 2, with
 `test/snapshot-bd059.json` and the tuning snapshots as the fixtures, text at 150 %, two runs with the guide
-character off (she is on in every other run, as she is after an install), two language
+character off (she is on in every other run, as she is after an install), four language
 switches, and six runs that name the screen the window is drawn for (`--work-area`, in logical units: 800x600,
 1024x768, 1280x720, 1366x768 and 1920x1080), so that a render never reads the screen of the PC it runs on. Every page is drawn to a PNG without a window at the default size and at the minimum size, and the whole
 page as `<page>-full.png`. The build fails when two sibling controls overlap, a text is cut, a page is wider than

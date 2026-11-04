@@ -305,13 +305,55 @@ namespace AmdgpuWddmControl
             KeyDown += (s, e) => { if (e.KeyCode == Keys.F4 || (e.Alt && e.KeyCode == Keys.Down)) { e.Handled = true; Open(); } };
         }
 
+        // A globe at the left edge (the language choice): drawn here, so it needs no icon font and reads the same in
+        // every language. The width grows by the globe's room.
+        bool _globe, _glyphOnly;
+        public bool Globe
+        {
+            get { return _globe; }
+            set
+            {
+                if (_globe == value) return;
+                _globe = value;
+                int room = Theme.S(22);
+                Padding = new Padding(Padding.Left + (value ? room : -room), Padding.Top, Padding.Right, Padding.Bottom);
+                Width += value ? room : -room;
+            }
+        }
+
+        // The globe and the arrow alone, for a narrow header; the accessible name keeps the label and the choice.
+        public bool GlyphOnly
+        {
+            get { return _glyphOnly; }
+            set { _glyphOnly = value; if (value) Width = Padding.Left + Padding.Right + Theme.S(4); SelectedIndex = _index; }
+        }
+
         // The arrow at the right edge, in the padding the text leaves free.
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            TextRenderer.DrawText(e.Graphics, "\u25BE", Font, new Rectangle(Width - Theme.S(24), 0, Theme.S(20), Height), Enabled ? Theme.Text : Theme.Dim,
+            var color = Enabled ? Theme.Text : Theme.Dim;
+            TextRenderer.DrawText(e.Graphics, "\u25BE", Font, new Rectangle(Width - Theme.S(24), 0, Theme.S(20), Height), color,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+            if (_globe) DrawGlobe(e.Graphics, new Rectangle(Theme.S(8), (Height - Theme.S(16)) / 2, Theme.S(16), Theme.S(16)), color);
         }
+
+        public static void DrawGlobe(Graphics g, Rectangle r, Color color)
+        {
+            var old = g.SmoothingMode;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (var pen = new Pen(color, Math.Max(1f, Theme.S(1) * 1.25f)))
+            {
+                g.DrawEllipse(pen, r);
+                g.DrawEllipse(pen, r.X + r.Width * 0.28f, r.Y, r.Width * 0.44f, r.Height);
+                g.DrawLine(pen, r.X, r.Y + r.Height / 2f, r.Right, r.Y + r.Height / 2f);
+                g.DrawLine(pen, r.X + r.Width * 0.12f, r.Y + r.Height * 0.25f, r.Right - r.Width * 0.12f, r.Y + r.Height * 0.25f);
+                g.DrawLine(pen, r.X + r.Width * 0.12f, r.Y + r.Height * 0.75f, r.Right - r.Width * 0.12f, r.Y + r.Height * 0.75f);
+            }
+            g.SmoothingMode = old;
+        }
+
+        public IList<string> Items { get { return _items.AsReadOnly(); } }
 
         public int SelectedIndex
         {
@@ -320,7 +362,7 @@ namespace AmdgpuWddmControl
             {
                 _index = value >= 0 && value < _items.Count ? value : -1;
                 string shown = _index >= 0 ? _items[_index] : "";
-                Text = shown;
+                Text = _glyphOnly ? "" : shown;
                 AccessibleName = _name + ": " + shown;
             }
         }
@@ -329,6 +371,14 @@ namespace AmdgpuWddmControl
         {
             var menu = new ContextMenuStrip { ShowImageMargin = false, ShowCheckMargin = false, BackColor = Theme.Nav, ForeColor = Theme.Text, Font = Theme.Body, Renderer = new DarkMenu() };
             menu.AccessibleName = _name;
+            // The language list opens under its label in the current language and in English ("언어 / Language").
+            int first = 0;
+            if (_globe)
+            {
+                menu.Items.Add(new ToolStripLabel(_name) { ForeColor = Theme.Dim, BackColor = Theme.Nav, Font = Theme.Small });
+                menu.Items.Add(new ToolStripSeparator());
+                first = 2;
+            }
             for (int i = 0; i < _items.Count; i++)
             {
                 int n = i;
@@ -343,7 +393,7 @@ namespace AmdgpuWddmControl
             }
             menu.Closed += (s, e) => BeginInvoke((Action)menu.Dispose);
             menu.Show(this, new Point(0, Height));
-            if (_index >= 0) menu.Items[_index].Select();
+            if (_index >= 0) menu.Items[first + _index].Select();
         }
 
         sealed class DarkMenu : ToolStripProfessionalRenderer

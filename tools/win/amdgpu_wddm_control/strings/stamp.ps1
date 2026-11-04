@@ -1,12 +1,12 @@
 # Stamps NEW translations with the source hash of the English text they were made from (src/Strings.cs, A6).
 #
-#   pwsh tools\win\amdgpu_wddm_control\strings\stamp.ps1 [-Language pl,ja,ko]
+#   pwsh tools\win\amdgpu_wddm_control\strings\stamp.ps1 [-Language pl,pt,es,ja,ko]
 #
 # Only a line whose hash field is "?" is stamped: the translator writes "?" when the translation is new or was redone
 # for the current English text. A stale hash is never refreshed here: retranslate the line and set "?" again. This
 # keeps the rule that a build never blesses stale text. Prints the lines it stamped and the stale or missing ids.
 
-param([string[]]$Language = @('pl', 'ja', 'ko'))
+param([string[]]$Language = @('pl', 'pt', 'es', 'ja', 'ko'))
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path

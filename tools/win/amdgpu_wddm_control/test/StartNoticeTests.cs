@@ -46,7 +46,7 @@ static partial class UnitTests
         Check(kmd.Contains("#define BC250_MAX_UNCONFIRMED_STARTS " + Recovery.MaxUnconfirmedStarts), "the limit is the driver's own define");
         Check(kmd.Contains("StageRefusedByGuard = " + Recovery.StageGuardRefused), "the refusing stage is the driver's own StageRefusedByGuard");
 
-        // Both cases have a title, a body of at least two lines and no missing text, in all four languages.
+        // Both cases have a title, a body of at least two lines and no missing text, in all six languages.
         var before = Strings.Language;
         foreach (var lang in Strings.Languages)
         {

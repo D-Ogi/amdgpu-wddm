@@ -319,7 +319,7 @@ search.driver.version.terms|mt|63b1897d|버전|릴리스|설치됨|날짜
 search.driver.update|mt-safe|f26f3275|업데이트 확인
 search.driver.update.terms|mt|8e944c4d|업데이트|새 버전|다운로드|업그레이드
 search.settings.language|mt-safe|a4fe6526|언어
-search.settings.language.terms|mt|fd2aa88a|언어|English|Polski|日本語|한국어|영어|폴란드어|일본어
+search.settings.language.terms|mt|e5916771|언어|English|Polski|Português|Español|日本語|한국어|영어|폴란드어|포르투갈어|스페인어|일본어
 search.settings.update-start|mt|1795d304|앱 시작 시 업데이트 확인
 search.settings.update-start.terms|mt|f9b8aeaa|업데이트|자동|시작
 search.settings.recent|mt-safe|1584741a|실행한 게임 기억
@@ -363,7 +363,6 @@ ui.back|mt-safe|76900f1b|뒤로
 ui.search|mt-safe|255b076d|설정 검색
 ui.search.results|mt-safe|e978b00d|검색 결과
 ui.search.none|mt|4a80e7e4|설정을 찾을 수 없습니다.
-ui.language.current|mt-safe|45f00aed|현재 언어
 ui.nav.current|mt-safe|de2574e5|현재 페이지
 ui.explain|mt|c68f3c5e|"{0}"은(는) 어떤 기능인가요?
 ui.explain.page|mt-safe|d2447d18|이 페이지 정보
@@ -545,7 +544,7 @@ driver.repair.title|mt-safe|1196b6c5|복구
 driver.repair.text|mt|e71e61c4|드라이버가 제대로 작동하지 않으면 도움말에서 복구하세요.
 driver.repair.open|mt-safe|30dd758a|도움말 열기
 # ---- Settings (WU-003, WU-046, WU-075, WU-076, WU-077) ----
-settings.language.note|mt|3880569c|일본어와 한국어 텍스트는 현재 기계 번역입니다.
+settings.language.note|mt|6c69e5d7|포르투갈어, 스페인어, 일본어, 한국어 텍스트는 현재 기계 번역입니다.
 settings.updates.title|mt-safe|22e2bada|업데이트
 settings.update-start.note|mt|ae77c8bd|최대 1시간에 한 번 확인합니다. 사용자가 직접 하지 않으면 아무것도 다운로드하거나 설치하지 않습니다.
 settings.recent.title|mt-safe|085fe856|게임 목록
