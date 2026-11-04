@@ -397,6 +397,42 @@ void GuardLabReadScaledPlane(_In_ PDRIVER_OBJECT DriverObject)
     GuardLog("lab: scaled plane selector read (read only; value 0x%lX, 0x%08X)", value, status);
 }
 
+// BD-293 lab arm, lab flavour only: LabPowerDownFault (REG_DWORD, Parameters, read only at DriverEntry) names one
+// step of the next retained way down (GpuSetPowerRetained, power.c) that reports a failure instead of running:
+// 1 WddmSuspendRetained, 2 IhSetPowerRetained, 3 GfxSetPowerRetained, 4 PspSetPowerRetained, 5 GartSetPowerRetained.
+// The selector fires once per DriverEntry read (GuardLabTakePowerDownFault clears it), so the D0 after it and every
+// later transition of this load run normally. A resume from hibernation does not run DriverEntry again: the lab
+// script deletes the value after the start that read it, and the next load reads nothing. Absent, not a REG_DWORD or
+// outside 1-5 is 0 (no fault).
+static volatile LONG g_LabPowerDownFault = 0;
+
+void GuardLabReadPowerDownFault(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status;
+    ULONG value = 0;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("lab: power fault selector: Parameters key not opened for reading (0x%08X), no fault", status);
+        return;
+    }
+    status = ParameterDword(key, L"LabPowerDownFault", &value);
+    ZwClose(key);
+    if (status == STATUS_OBJECT_NAME_NOT_FOUND) return;     // the default: no line, every start would log it
+    g_LabPowerDownFault = (NT_SUCCESS(status) && value >= 1 && value <= 5) ? (LONG)value : 0;
+    GuardLog("lab: power fault selector read (read only; value %lu, 0x%08X): %s", value, status,
+             g_LabPowerDownFault ? "the next way down fails at this step" : "not used");
+}
+
+BOOLEAN GuardLabPowerDownFault(ULONG Step)
+{
+    // Only the named step takes the fault, and only once.
+    if (InterlockedCompareExchange(&g_LabPowerDownFault, 0, (LONG)Step) != (LONG)Step) return FALSE;
+    GuardLog("power: lab fault at way-down step %lu (LabPowerDownFault, BD-293 arm): the step does not run", Step);
+    return TRUE;
+}
+
 // StartDevice, after the boot-loop guard passed: the seed for this start's first fresh SDMA0 bring-up, or 0. The
 // nonce is written and flushed first; any failure on the way gives 0. Without a seed, a marker of an earlier seed is
 // deleted, so the internal state holds nothing once the lab script has removed the seed.

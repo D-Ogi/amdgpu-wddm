@@ -22,4 +22,13 @@
 #define BC250_POWER_RESTORING   3L
 #define BC250_POWER_FAILED      4L
 
+// BD-293 lab arm: one step of the way down, numbered 1-5 in GpuSetPowerRetained. In the lab flavour, the step that
+// LabPowerDownFault names (guard.c, GuardLabPowerDownFault) does not run and gives STATUS_IO_TIMEOUT, once per load.
+// In the release flavour, and in the host tests, the macro is the call itself.
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+#define BC250_POWER_DOWN_STEP(Step, Call) (GuardLabPowerDownFault(Step) ? STATUS_IO_TIMEOUT : (Call))
+#else
+#define BC250_POWER_DOWN_STEP(Step, Call) (Call)
+#endif
+
 #endif

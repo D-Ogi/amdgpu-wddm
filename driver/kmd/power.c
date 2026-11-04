@@ -88,15 +88,15 @@ NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POW
         InterlockedExchange(&Device->RetainedPowerPhase,BC250_POWER_SUSPENDING);
         StartHealthClose(Device);
         SmuOwnerStop(&Device->Smu); // joins no-synchronization telemetry before power loss
-        status=WddmSuspendRetained(Device);
+        status=BC250_POWER_DOWN_STEP(1,WddmSuspendRetained(Device));
         if (!NT_SUCCESS(status)) goto Failed;
-        status=IhSetPowerRetained(Device,FALSE);
+        status=BC250_POWER_DOWN_STEP(2,IhSetPowerRetained(Device,FALSE));
         if (!NT_SUCCESS(status)) goto Failed;
-        status=GfxSetPowerRetained(Device,FALSE);
+        status=BC250_POWER_DOWN_STEP(3,GfxSetPowerRetained(Device,FALSE));
         if (!NT_SUCCESS(status)) goto Failed;
-        status=PspSetPowerRetained(Device,FALSE,report);
+        status=BC250_POWER_DOWN_STEP(4,PspSetPowerRetained(Device,FALSE,report));
         if (!NT_SUCCESS(status)) goto Failed;
-        status=GartSetPowerRetained(Device,FALSE);
+        status=BC250_POWER_DOWN_STEP(5,GartSetPowerRetained(Device,FALSE));
         if (!NT_SUCCESS(status)) goto Failed;
         InterlockedExchange(&Device->RetainedPowerPhase,BC250_POWER_SUSPENDED);
         goto Done;

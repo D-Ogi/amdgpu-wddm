@@ -708,6 +708,11 @@ void GuardLabReadGdiHwAccel(_In_ PDRIVER_OBJECT DriverObject);
 // Lab flavour only (BD-223): LabScaledPlane (REG_DWORD under Parameters, read only in DriverEntry), the scaled plane
 // bits that WddmStart latches (wddm.c BC250_WDDM_SCALED_PLANE_*).
 void GuardLabReadScaledPlane(_In_ PDRIVER_OBJECT DriverObject);
+// Lab flavour only (BD-293 arm): LabPowerDownFault (REG_DWORD under Parameters, read only in DriverEntry), the step
+// 1-5 of the next retained way down that fails (guard.c). GuardLabPowerDownFault(Step) logs and returns TRUE once
+// when Step is the named step, else FALSE (BC250_POWER_DOWN_STEP, power_phase.h). PASSIVE_LEVEL, like the way down.
+void GuardLabReadPowerDownFault(_In_ PDRIVER_OBJECT DriverObject);
+BOOLEAN GuardLabPowerDownFault(ULONG Step);
 ULONGLONG GuardLabCommitPagingRingStart(void);
 extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
 extern int bc250_ring_boundary_pad;                     // shim/bc250_ring.c, 0 only in a lab control run
