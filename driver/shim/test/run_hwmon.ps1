@@ -33,7 +33,8 @@ param(
     [string]$Kits = 'P:\BC-250\toolchain\nuget',
     [string]$KitVersion = '10.0.26100.0',
     [ValidateSet('', 'no-boost-raise', 'boost-held-back', 'step-pays-all', 'telemetry-always', 'boost-claims-fixed',
-                 'rise-outlives-doubt', 'board-admission', 'board-port')][string]$Mutation = ''
+                 'rise-outlives-doubt', 'board-admission', 'board-port', 'debt-dropped', 'debt-chip-unread',
+                 'debt-settle-gated')][string]$Mutation = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -75,6 +76,18 @@ $mutations = @{
     'rise-outlives-doubt' = @{ file = 'policy'; find = 'forget_rise\(ctl\);(\s+)return;'
                             with = '(void)ctl;$1return;'
                             why = 'a measured rise outlives its reading: fan_test.c trace (j) must fail' }
+    # The restore debt (bc250_fan.h): a give-back that failed at a stop is made by the next start. Each control
+    # takes away one half of it: the record that bc250_fan_init keeps, the chip's own bit that a new device object
+    # reads, and the binding that settles the debt whatever EnableFanControl says.
+    'debt-dropped'     = @{ file = 'policy'; find = 'ctl->debt = debt;'
+                            with = '(void)debt;'
+                            why = 'bc250_fan_init drops the debt, as before the fix: fan_test.c restore_debt (a) and (c) must fail' }
+    'debt-chip-unread' = @{ file = 'policy'; find = 'chip_bit = \(mode & FAN_BIT\) != 0u \? 1 : 0;'
+                            with = 'chip_bit = 0;'
+                            why = 'a start ignores our bit in the chip: fan_test.c restore_debt (e) must fail' }
+    'debt-settle-gated' = @{ file = 'binding'; find = 'bc250_fan_settle\(&io, &owner->Ctl, chip, &settled\)'
+                            with = 'bc250_fan_settle(&io, &owner->Ctl, gate == BC250_FAN_GATE_OK, &settled)'
+                            why = 'EnableFanControl 0 also stops the give-back: fan_native_test.c restore_debt must fail' }
 }
 
 function Use-Mutation([string]$text, [string]$which) {

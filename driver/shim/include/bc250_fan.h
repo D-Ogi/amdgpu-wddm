@@ -198,6 +198,41 @@ enum bc250_fan_error {
 	BC250_FAN_ERROR_COUNT
 };
 
+/* ---- the restore debt ----------------------------------------------------------------------------------------
+ *
+ * A hand-back that fails at a stop keeps `controlling` (bc250_fan_handback), but the stop also removes the watchdog
+ * and the bugcheck callback, and the next start clears the controller. Without a record, a start in the board's
+ * mode or with the gate closed then writes nothing, the fan stays at the driver's last duty with our mode bit set,
+ * and the driver reports "board". The debt is that record. Its rule:
+ *   - OWED is set when a hand-back cannot be verified: a restore that failed, and the blind restore, which has no
+ *     read-back. It is also set at a start when the chip shows our mode bit and this controller does not hold the
+ *     fan: a driver before this device object held the fan and did not give it back (a remove, an unload).
+ *   - NONE is set only by a restore that succeeded (bc250_fan_handback, the fault retry, bc250_fan_settle).
+ *   - bc250_fan_init keeps it, as it keeps the restore record.
+ *   - A start settles it before the first step (bc250_fan_settle): one restore, also under EnableFanControl 0,
+ *     because a restore is the direction the fan hand-back rule (docs/design/fan.md) asks for. The restore needs the reader online and the
+ *     board identified. Without them the start keeps the debt and says so: the fault is set, so the state is
+ *     FAULT and not BOARD. `controlling` stays clear in that case, so no exit path tries a chip the gate closed.
+ */
+enum bc250_fan_debt {
+	BC250_FAN_DEBT_NONE = 0,	/* the last restore was verified, or the driver never held the fan */
+	BC250_FAN_DEBT_OWED = 1,	/* the fan may still be ours: a start must restore it */
+};
+
+/* What a start does about the debt. bc250_fan_debt_action() decides it from three facts, without the chip. */
+enum bc250_fan_debt_action {
+	BC250_FAN_SETTLE_NONE = 0,	/* nothing owed: the start goes on */
+	BC250_FAN_SETTLE_RESTORE = 1,	/* the controller owes a restore: restore now */
+	BC250_FAN_SETTLE_FOUND = 2,	/* the chip shows our bit and the controller owes nothing: restore now */
+	BC250_FAN_SETTLE_KEEP = 3,	/* owed, but the chip cannot be reached: keep the debt for the next start */
+	BC250_FAN_SETTLE_COUNT
+};
+
+/* `debt` is enum bc250_fan_debt. `reachable` is 1 when the reader is online and the board is identified. `chip_bit`
+ * is our mode bit as the chip shows it at this start: 1 set, 0 clear, -1 not read (the chip is not reachable, or the
+ * read was refused). */
+unsigned int bc250_fan_debt_action(unsigned int debt, int reachable, int chip_bit);
+
 /* The chip operations' answers. Zero is success. */
 #define BC250_FAN_E_BUSY	(-1)	/* the engine stayed in a phase, or a request stayed pending, before the open */
 #define BC250_FAN_E_OPEN	(-2)	/* the phase was not granted */
@@ -206,6 +241,7 @@ enum bc250_fan_error {
 #define BC250_FAN_E_UNLOCKED	(-5)	/* LOCK stayed clear after the close */
 #define BC250_FAN_E_VERIFY	(-6)	/* the duty target did not read back as written */
 #define BC250_FAN_E_MODE	(-7)	/* the mode bit did not stick, or did not clear */
+#define BC250_FAN_E_UNREACHABLE	(-8)	/* a restore is owed and the chip cannot be reached: the debt stays */
 
 /* ---- curves -------------------------------------------------------------------------------------------------- */
 
@@ -289,6 +325,7 @@ struct bc250_fan_ctl {
 	struct bc250_fan_curve	durable_curve;
 	/* the chip */
 	unsigned int		controlling;	/* our mode bit is set in the chip */
+	unsigned int		debt;		/* enum bc250_fan_debt, kept across a device stop and start */
 	struct bc250_fan_restore restore;	/* kept across a device stop and start */
 	unsigned int		written_raw;	/* the duty target we wrote last */
 	unsigned int		since_write_ms;
@@ -327,8 +364,17 @@ struct bc250_fan_ctl {
 };
 
 /* A start: `enabled` says whether this start may drive the chip at all, `start` is the mode the start runs
- * (the stored choice, already checked; null means the STANDARD curve). The restore record survives. */
+ * (the stored choice, already checked; null means the STANDARD curve). The restore record and the debt survive:
+ * a controller that still holds the fan (`controlling`) at this call also owes a restore. */
 void bc250_fan_init(struct bc250_fan_ctl *ctl, int enabled, const struct bc250_fan_request *start);
+
+/* The start's first chip step, after bc250_fan_init and before the first tick: the restore that the debt asks for.
+ * `reachable` as for bc250_fan_debt_action(); EnableFanControl does not enter it. When `reachable`, the mode
+ * register is read once to find our bit. `action` (enum bc250_fan_debt_action) says what happened, and may be null.
+ * Zero when nothing is owed or the restore was verified. BC250_FAN_E_UNREACHABLE when the debt stays because the
+ * chip cannot be reached: the fault and the debt are set, `controlling` is not. Another BC250_FAN_E_* value when the
+ * restore failed: `controlling`, the fault and the debt are set, and the fault retry of the tick tries again. */
+int bc250_fan_settle(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ctl, int reachable, unsigned int *action);
 
 /* The FanLoadBoost setting (rule 10), at the start and when the operator changes it. The feed-forward is on
  * unless this says otherwise; switching it off also ends a boost that holds now, and the slope rule then takes
@@ -353,12 +399,14 @@ int bc250_fan_renew(struct bc250_fan_ctl *ctl, unsigned int lease_ms);
 int bc250_fan_tick(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ctl, const struct bc250_fan_input *in);
 
 /* An exit path: the fan goes back to the board now, with the full handshake and verification. Zero when the fan is
- * the board's afterwards (also when the driver did not hold it). A failure latches the fault and keeps
- * `controlling`, so the next exit path, the bugcheck callback and the fault retry still try. */
+ * the board's afterwards (also when the driver did not hold it). A failure latches the fault, keeps `controlling`
+ * and sets the debt, so the next exit path, the bugcheck callback, the fault retry and the next start still try. */
 int bc250_fan_handback(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ctl, unsigned int reason);
 
 /* The bugcheck path: HIGH_LEVEL, other processors stopped. Port writes only: no lock (the io must have none), at
- * most BC250_FAN_BLIND_POLL_MAX polls, no verification, no retry. Nothing happens unless the driver holds the fan. */
+ * most BC250_FAN_BLIND_POLL_MAX polls, no verification, no retry. Nothing happens unless the driver holds the fan.
+ * It sets the debt, because nothing verified the restore: the next verified restore clears it, and at the latest
+ * the next start makes one. */
 void bc250_fan_handback_blind(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ctl);
 
 /* The chip operations, exposed for the host test. Each returns 0 or a BC250_FAN_E_* value. */

@@ -1075,7 +1075,8 @@ typedef struct _BC250_ESCAPE_CPU {
 #define BC250_FAN_FLAG_LEASED 8u            // the mode in force ends when LeaseMs runs out (then the durable mode from before it)
 #define BC250_FAN_FLAG_STORED 16u           // FanMode is on disk: StoredMode and StoredProfile are the registry's
 #define BC250_FAN_FLAG_FAULT 32u            // the chip refused something: the board has the fan for this start
-#define BC250_FAN_FLAG_GATED 64u            // EnableFanControl is 0: no write to the chip ever happens
+#define BC250_FAN_FLAG_GATED 64u            // EnableFanControl is 0: the driver never takes the fan (a start still
+                                            // gives back a fan that it owes, bc250_fan.h restore debt)
 #define BC250_FAN_FLAG_PAUSED 128u          // the adapter is out of D0: the board has the fan until D0
 #define BC250_FAN_FLAG_RESTORE_SAVED 256u   // the board's own mode and target were recorded before the first change
 #define BC250_FAN_FLAG_SUBSTITUTED 512u     // that record holds the rest values: our bit was already set when it was taken

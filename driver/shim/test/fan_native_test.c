@@ -629,6 +629,85 @@ static void escape(void)
     FanStop(&device, BC250_FAN_REASON_STOP);
 }
 
+/* ---- the restore debt ---------------------------------------------------------------------------------- */
+
+/* A stop whose give-back fails: the phase is never granted, so the chip keeps our bit and the driver's duty. Then
+ * the chip answers again, and the reader stops as Bc250StopDevice stops it. The device object stays, so the next
+ * FanStart finds the same controller, as after a PnP stop and start. */
+static void FailedStop(void)
+{
+    TakeAt70();
+    native_ec.stuck_open = 1;
+    FanStop(&device, BC250_FAN_REASON_STOP);
+    CHECK(Held() && device.Fan.Ctl.controlling && device.Fan.Ctl.debt == BC250_FAN_DEBT_OWED);
+    CHECK(native_log_has("the restore FAILED"));
+    native_ec.stuck_open = 0;
+    ec_put8(&native_ec, BC250_HWMON_REG_FAN_CTRL, 0);   /* the request it never granted is gone */
+    HwmonStop(&device.Hwmon);
+    native_ec.logged = 0;
+}
+
+static void restore_debt(void)
+{
+    BC250_ESCAPE_FAN f;
+    unsigned int i;
+
+    /* The stored mode is the board's: the start gives the fan back before anything else, then writes nothing. */
+    FailedStop();
+    NativeSetSetting(L"FanMode", 0);
+    Start();
+    CHECK(AtRest() && device.Fan.Enabled && device.Fan.Ctl.debt == BC250_FAN_DEBT_NONE);
+    CHECK(native_log_has("owed hand-back done (the last restore failed)"));
+    Read(&f);
+    CHECK(f.State == BC250_FAN_STATE_BOARD && !(f.Flags & (BC250_FAN_FLAG_CONTROLLING | BC250_FAN_FLAG_FAULT)));
+    native_ec.logged = 0;
+    for (i = 0; i < 5u; i++) Second(80000);
+    CHECK(native_ec.logged == 0u && CleanWrites(0));
+    FanStop(&device, BC250_FAN_REASON_STOP);
+
+    /* EnableFanControl 0: the switch keeps the driver from taking the fan, not from giving it back. */
+    FailedStop();
+    NativeSetSetting(L"EnableFanControl", 0);
+    Start();
+    CHECK(AtRest() && device.Fan.Gate == BC250_FAN_GATE_SETTING && device.Fan.Ctl.debt == BC250_FAN_DEBT_NONE);
+    Read(&f);
+    CHECK(f.State == BC250_FAN_STATE_OFF && (f.Flags & BC250_FAN_FLAG_GATED) && CleanWrites(0));
+    FanStop(&device, BC250_FAN_REASON_STOP);
+
+    /* The reader is offline, or the chip is not identified: not one access to the chip, the debt stays, and the
+     * escape says FAULT and not board. A stop keeps the debt; the first start that reaches the chip pays it. */
+    for (i = 0; i < 2u; i++) {
+        FailedStop();
+        if (i == 0u) NativeSetSetting(L"EnableHwmon", 0);
+        else ec_put16(&native_ec, BC250_HWMON_REG_CUSTOMER, 0x0E2Cu);
+        Start();
+        CHECK(device.Fan.Gate == (i == 0u ? BC250_FAN_GATE_READER : BC250_FAN_GATE_CHIP));
+        CHECK(Held() && native_ec.logged == 0u && native_log_has("the chip cannot be reached"));
+        CHECK(device.Fan.Ctl.debt == BC250_FAN_DEBT_OWED && !device.Fan.Ctl.controlling);
+        Read(&f);
+        CHECK(f.State == BC250_FAN_STATE_FAULT && (f.Flags & BC250_FAN_FLAG_FAULT));
+        CHECK(!(f.Flags & BC250_FAN_FLAG_CONTROLLING));
+        FanStop(&device, BC250_FAN_REASON_STOP);
+        CHECK(Held() && native_ec.logged == 0u && device.Fan.Ctl.debt == BC250_FAN_DEBT_OWED);
+        HwmonStop(&device.Hwmon);
+        NativeSetSetting(L"EnableHwmon", 1);
+        ec_put16(&native_ec, BC250_HWMON_REG_CUSTOMER, EC_MOCK_M803_CUSTOMER);
+        Start();
+        CHECK(AtRest() && device.Fan.Ctl.debt == BC250_FAN_DEBT_NONE && CleanWrites(0));
+        FanStop(&device, BC250_FAN_REASON_STOP);
+    }
+
+    /* A new device object (a remove, a driver update): the controller owes nothing, but the chip shows our bit and
+     * an old duty. The start gives the fan back with the M803 rest target. */
+    Fresh(1);
+    NativeSetSetting(L"FanMode", 0);
+    ec_put8(&native_ec, BC250_HWMON_REG_MODE, BC250_HWMON_MODE_REST | (1u << BC250_FAN_CHANNEL));
+    ec_put8(&native_ec, TARGET1, 230);
+    Start();
+    CHECK(AtRest() && native_log_has("owed hand-back done (our mode bit was set in the chip)") && CleanWrites(0));
+    FanStop(&device, BC250_FAN_REASON_STOP);
+}
+
 /* The load feed-forward through the miniport (rule 10): the FanLoadBoost setting, the feed the governor hands to
  * the step, and the flags the escape and the CLI line read. */
 static void load_boost(void)
@@ -787,6 +866,7 @@ int main(void)
     gate();
     exit_paths();
     escape();
+    restore_debt();
     load_boost();
     telemetry_width();
     printf("fan control binding: %ld checks, %ld failures\n", native_checks, native_failures);

@@ -586,6 +586,144 @@ static void refusals(void)
 	CHECK(at_rest(&ec, BC250_HWMON_TARGET_REST) && clean_writes(&ec));
 }
 
+/* ---- the restore debt ---------------------------------------------------------------------------------------- */
+
+/* The chip answers again: it grants the next request, and the request that it never granted is gone. */
+static void chip_back(struct ec_mock *ec)
+{
+	ec->stuck_open = 0;
+	ec_put8(ec, BC250_HWMON_REG_FAN_CTRL, 0);
+}
+
+/* The start after a stop whose give-back failed. The stop runs with the phase never granted (`stuck_open`), so the
+ * chip keeps our bit and the driver's duty, which is what a refusing chip leaves on unit A. The next start in the
+ * same device object calls bc250_fan_init and bc250_fan_settle on the same controller, as FanStart does. */
+static void failed_stop(struct ec_mock *ec, struct bc250_hwmon_io *io, struct bc250_fan_ctl *ctl)
+{
+	start(ec, io, ctl);
+	CHECK(tick_at(io, ec, ctl, 76000) == 0 && ctl->controlling && ctl->debt == BC250_FAN_DEBT_NONE);
+	ec->stuck_open = 1;
+	CHECK(bc250_fan_handback(io, ctl, BC250_FAN_REASON_STOP) == BC250_FAN_E_OPEN);
+	CHECK(ctl->controlling && ctl->fault && ctl->debt == BC250_FAN_DEBT_OWED);
+	CHECK((ec_peek8(ec, BC250_HWMON_REG_MODE) & BIT1) != 0u && ec_peek8(ec, TARGET1) == bc250_fan_pct_to_raw(95));
+	chip_back(ec);
+	ec->logged = 0;
+}
+
+static void restore_debt(void)
+{
+	struct ec_mock ec;
+	struct bc250_hwmon_io io;
+	struct bc250_fan_ctl ctl;
+	struct bc250_fan_request board;
+	unsigned int i, action, debt;
+	int reach, bit;
+
+	/* The decision alone, every edge: without the chip the debt stays or there is none, with the chip the debt is
+	 * paid, and our bit in the chip is a debt of an earlier driver. */
+	for (debt = 0; debt < 2u; debt++)
+		for (reach = 0; reach < 2; reach++)
+			for (bit = -1; bit <= 1; bit++) {
+				unsigned int want = !reach ? (debt ? BC250_FAN_SETTLE_KEEP : BC250_FAN_SETTLE_NONE) :
+						    debt ? BC250_FAN_SETTLE_RESTORE :
+						    bit == 1 ? BC250_FAN_SETTLE_FOUND : BC250_FAN_SETTLE_NONE;
+
+				CHECK(bc250_fan_debt_action(debt, reach, bit) == want);
+			}
+
+	memset(&board, 0, sizeof(board));
+	board.mode = BC250_FAN_MODE_BOARD;
+
+	/* (a) The stored mode is the board's. Before the fix the start wrote nothing and said "board" over a fan that
+	 * ran at 95 %. Now the start pays the debt first, with the full handshake. */
+	failed_stop(&ec, &io, &ctl);
+	bc250_fan_init(&ctl, 1, &board);
+	CHECK(ctl.debt == BC250_FAN_DEBT_OWED && ctl.restore.valid);
+	action = BC250_FAN_SETTLE_COUNT;
+	CHECK(bc250_fan_settle(&io, &ctl, 1, &action) == 0 && action == BC250_FAN_SETTLE_RESTORE);
+	CHECK(at_rest(&ec, BC250_HWMON_TARGET_REST) && ctl.debt == BC250_FAN_DEBT_NONE);
+	CHECK(!ctl.controlling && !ctl.fault && ctl.state == BC250_FAN_STATE_BOARD && ctl.handbacks == 1u);
+	CHECK(ec.log[0].value == BC250_HWMON_FAN_CFG_REQUEST && ec.log[1].reg == TARGET1 &&
+	      ec.log[2].reg == BC250_HWMON_REG_MODE && clean_writes(&ec) && ec.protocol_errors == 0);
+	ec.logged = 0;
+	for (i = 0; i < 20u; i++)
+		CHECK(tick_at(&io, &ec, &ctl, 76000) == 0);
+	CHECK(ec.logged == 0u && ctl.state == BC250_FAN_STATE_BOARD);	/* the board's mode: nothing more */
+
+	/* (b) The gate is closed (EnableFanControl 0): the give-back is the direction of the rule, so it still runs. */
+	failed_stop(&ec, &io, &ctl);
+	bc250_fan_init(&ctl, 0, NULL);
+	CHECK(bc250_fan_settle(&io, &ctl, 1, &action) == 0 && action == BC250_FAN_SETTLE_RESTORE);
+	CHECK(at_rest(&ec, BC250_HWMON_TARGET_REST) && ctl.debt == BC250_FAN_DEBT_NONE);
+	CHECK(!ctl.controlling && ctl.state == BC250_FAN_STATE_OFF && clean_writes(&ec));
+
+	/* (c) The chip cannot be reached (reader offline, a board not identified): not one access, the debt stays,
+	 * and the controller says FAULT, not board. It does not say "holding": an exit path would then try a chip that
+	 * the gate closed. A stop keeps the debt, a second start keeps it, and the first start that can reach the chip
+	 * pays it. */
+	failed_stop(&ec, &io, &ctl);
+	for (i = 0; i < 2u; i++) {
+		unsigned int reads = ec.reads;
+
+		bc250_fan_init(&ctl, 0, &board);
+		CHECK(bc250_fan_settle(&io, &ctl, 0, &action) == BC250_FAN_E_UNREACHABLE && action == BC250_FAN_SETTLE_KEEP);
+		CHECK(ec.reads == reads && ec.logged == 0u);
+		CHECK(ctl.debt == BC250_FAN_DEBT_OWED && !ctl.controlling && ctl.fault && ctl.state == BC250_FAN_STATE_FAULT);
+		CHECK(bc250_fan_handback(&io, &ctl, BC250_FAN_REASON_STOP) == 0);
+		CHECK(ec.reads == reads && ec.logged == 0u && ctl.debt == BC250_FAN_DEBT_OWED);
+	}
+	bc250_fan_init(&ctl, 1, &board);
+	CHECK(bc250_fan_settle(&io, &ctl, 1, &action) == 0 && action == BC250_FAN_SETTLE_RESTORE);
+	CHECK(at_rest(&ec, BC250_HWMON_TARGET_REST) && ctl.debt == BC250_FAN_DEBT_NONE && !ctl.controlling);
+
+	/* (d) The chip still refuses at the start: the debt stays, and the fault retry of the tick (gate open) tries
+	 * every 10 s. Only the restore that succeeds clears the debt. */
+	failed_stop(&ec, &io, &ctl);
+	bc250_fan_init(&ctl, 1, &board);
+	ec.stuck_open = 1;
+	CHECK(bc250_fan_settle(&io, &ctl, 1, &action) == BC250_FAN_E_OPEN && action == BC250_FAN_SETTLE_RESTORE);
+	CHECK(ctl.debt == BC250_FAN_DEBT_OWED && ctl.controlling && ctl.fault && ctl.state == BC250_FAN_STATE_FAULT);
+	for (i = 0; i < 10u; i++)
+		CHECK(tick_at(&io, &ec, &ctl, 60000) != 0 || i < 9u);
+	CHECK(ctl.debt == BC250_FAN_DEBT_OWED && ctl.controlling);
+	chip_back(&ec);
+	for (i = 0; i < 10u; i++)
+		CHECK(tick_at(&io, &ec, &ctl, 60000) == 0);
+	CHECK(ctl.debt == BC250_FAN_DEBT_NONE && !ctl.controlling && at_rest(&ec, BC250_HWMON_TARGET_REST));
+
+	/* (e) A new device object (a remove, an unload): the controller is new and owes nothing, but the chip shows our
+	 * bit and an old duty. The start gives the fan back with the M803 rest target. */
+	start(&ec, &io, &ctl);
+	ec_put8(&ec, BC250_HWMON_REG_MODE, BC250_HWMON_MODE_REST | BIT1);
+	ec_put8(&ec, TARGET1, 230);
+	bc250_fan_init(&ctl, 0, NULL);
+	CHECK(bc250_fan_settle(&io, &ctl, 1, &action) == 0 && action == BC250_FAN_SETTLE_FOUND);
+	CHECK(at_rest(&ec, BC250_HWMON_TARGET_REST) && !ctl.controlling && clean_writes(&ec));
+
+	/* (f) Nothing owed and our bit clear: the start reads the mode once and writes nothing. */
+	start(&ec, &io, &ctl);
+	CHECK(bc250_fan_settle(&io, &ctl, 1, &action) == 0 && action == BC250_FAN_SETTLE_NONE);
+	CHECK(ec.logged == 0u && ctl.state == BC250_FAN_STATE_BOARD && !ctl.controlling && !ctl.fault);
+
+	/* (g) A clean stop owes nothing, and a blind restore owes a verified one: the next start makes it. */
+	start(&ec, &io, &ctl);
+	CHECK(tick_at(&io, &ec, &ctl, 70000) == 0 && bc250_fan_handback(&io, &ctl, BC250_FAN_REASON_STOP) == 0);
+	CHECK(ctl.debt == BC250_FAN_DEBT_NONE);
+	CHECK(tick_at(&io, &ec, &ctl, 70000) == 0 && ctl.controlling);
+	io.lock = NULL;
+	io.unlock = NULL;
+	bc250_fan_handback_blind(&io, &ctl);
+	for (i = 0; i < 8u; i++)
+		(void)ec_live(&ec, BC250_HWMON_REG_ENGINE);
+	ec_io_write(&io, &ec);
+	CHECK(!ctl.controlling && ctl.debt == BC250_FAN_DEBT_OWED);
+	bc250_fan_init(&ctl, 1, &board);
+	ec.logged = 0;
+	CHECK(bc250_fan_settle(&io, &ctl, 1, &action) == 0 && action == BC250_FAN_SETTLE_RESTORE);
+	CHECK(ec.logged > 0u && at_rest(&ec, BC250_HWMON_TARGET_REST) && ctl.debt == BC250_FAN_DEBT_NONE);
+	CHECK(clean_writes(&ec) && ec.protocol_errors == 0);
+}
+
 /* ---- the slope rule, the hysteresis and the emergency -------------------------------------------------------- */
 
 static void slope_rule(void)
@@ -1178,6 +1316,7 @@ int main(void)
 	leases();
 	doubt();
 	refusals();
+	restore_debt();
 	slope_rule();
 	emergency();
 	load_boost();
