@@ -48,6 +48,14 @@ if ($Payload) { $text += ' from ' + (Get-FileHash -LiteralPath $Payload).Hash }
 [IO.File]::WriteAllText((Join-Path $Out "$Name.bin"), $text)
 if ($Events) { [IO.File]::WriteAllText((Join-Path $Events "$Name.end"), [string][DateTime]::UtcNow.Ticks) }
 """
+# A recipe that writes a PE image and stamps the release version into it as its last step, as the real recipes do.
+PESTUB = b"""param([string]$Out, [string]$Name, [ValidateSet('clang-cl', 'msvc')][string]$Compiler, [string]$Version,
+    [string]$Image, [string]$Stamp, [string]$Inf, [string]$Python)
+$dll = Join-Path $Out "$Name.dll"
+Copy-Item -LiteralPath $Image $dll
+& $Python -I $Stamp stamp --version $Version --inf $Inf --name amdgpu_wddm_d3d12.dll $dll
+exit $LASTEXITCODE
+"""
 # A host test with two summary lines, as the RADV queue tests print them.
 HOSTTEST = b"""param([string]$Build)
 if (-not (Test-Path -LiteralPath $Build)) { "no build $Build"; exit 2 }
@@ -902,6 +910,56 @@ class ReleaseSetRuns(unittest.TestCase):
         self.assertNotIn("  build ", out)
         self.assertFalse(self.ws.events.exists(), out)
         self.assertTreesGone()
+
+    def test_keep_from_stamps_an_earlier_release_build_with_the_new_version(self):
+        # Every recipe stamps the release version into its files as its last step, so a new release version made
+        # every row stand for nothing and the whole set was built again. The import now stamps the copy with the
+        # new version: the bytes must be those that a build for the new version gives.
+        import sys
+        sys.path.insert(0, str(HERE.parents[1] / "tools" / "build"))
+        import test_versionstamp
+        image = self.ws.root / "fixture" / "image.dll"
+        image.parent.mkdir(parents=True)
+        image.write_bytes(test_versionstamp.make_pe())
+        (self.ws.repo / "pestub.ps1").write_bytes(PESTUB)
+        head = self.ws.commit("a recipe that stamps a PE image", name="pestub-note.txt")
+        git(self.ws.repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+        repo = HERE.parents[1]
+        rows = [self.ws.row("p", commit=head, recipe="pestub.ps1",
+                            args=["-Out", "{out}", "-Name", "p", "-Compiler", "clang-cl", "-Version", "{version}",
+                                  "-Image", str(image), "-Stamp", str(repo / "tools/build/versionstamp.py"),
+                                  "-Inf", str(repo / "driver/kmd/bc250kmd.inf"), "-Python", sys.executable],
+                            outputs=[{"file": "p.dll", "path": "payload/d3d12/p.dll"}])]
+
+        def manifest(version):
+            m = self.ws.manifest(rows, recipe_commit=head)
+            m["version"] = version
+            return m
+
+        code, out = self.ws.run(manifest("1.2.3.4-test.1"))
+        self.assertEqual(code, 0, out)
+        round1 = self.ws.root / "round1"
+        self.ws.out.rename(round1)
+        code, out = self.ws.run(manifest("1.2.3.5-test.2"), "-KeepFrom", str(round1))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("  build p", out)
+        self.assertIn("restamped p: 1.2.3.4-test.1 -> 1.2.3.5-test.2", out)
+        restamped = next(b for b in self.ws.report()["builds"] if b["id"] == "p")
+        self.assertTrue(restamped["kept"])
+        art = Path(restamped["outputs"][0]["artifact"])
+        self.assertEqual(build_release_set.sha256_file(art), restamped["outputs"][0]["sha256"])
+        self.assertNotEqual(restamped["outputs"][0]["restamped_from_sha256"], restamped["outputs"][0]["sha256"])
+        rows_doc = json.loads((self.ws.out / "release-sources.rows.json").read_text(encoding="utf-8"))
+        self.assertEqual(rows_doc["files"][0]["sha256"], restamped["outputs"][0]["sha256"])
+        # A build for the new version gives the same bytes.
+        stamped = self.ws.root / "restamped"
+        self.ws.out.rename(stamped)
+        code, out = self.ws.run(manifest("1.2.3.5-test.2"))
+        self.assertEqual(code, 0, out)
+        fresh = next(b for b in self.ws.report()["builds"] if b["id"] == "p")
+        self.assertFalse(fresh.get("kept"))
+        self.assertEqual(fresh["outputs"][0]["sha256"], restamped["outputs"][0]["sha256"])
+        self.assertEqual(fresh["outputs"][0]["image_sha256"], restamped["outputs"][0]["image_sha256"])
 
     def test_a_moved_recipe_commit_keeps_the_build_when_the_recipe_is_the_same(self):
         # BD-244: the recipe commit of the manifest moved; a hand edit set the old one per row after an empty

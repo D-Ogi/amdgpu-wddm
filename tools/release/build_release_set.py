@@ -329,10 +329,65 @@ def entry_artifacts(entry):
     return files
 
 
+# The recipe that builds the KMD compiles its version resource into the image (versioninfo.json "built"), so a KMD
+# of another release is never stamped again: the row is built.
+NO_RESTAMP_RECIPES = ("driver/kmd/build.ps1",)
+
+
+def restamp_refusal(row):
+    """None when a build of this row for another release version can take this version by a new stamp of its
+    version resources (tools/build/versionstamp.py), else the reason it cannot. The stamp is the last step of every
+    recipe that writes one, it changes no code, data, debug directory or PDB identity, and a stamp of the same image
+    gives the same bytes. A row with an output that is not a PE image (a record that can name a hash or the version)
+    or with a signed output is built again."""
+    if row["recipe"] in NO_RESTAMP_RECIPES:
+        return f"its recipe {row['recipe']} compiles the version into the image"
+    for o in row["outputs"]:
+        if not o["file"].lower().endswith((".dll", ".exe")):
+            return f"its output {o['file']} is not a PE image"
+        if o.get("unsigned"):
+            return f"its output {o['file']} is signed by the build"
+    return None
+
+
+def restamp_files(entry, repo, version, flavour):
+    """Writes the version resource of `version` into each PE file of a kept entry that carries one, under the file
+    name that its resource gives, and updates the entry's digests. Returns the errors."""
+    spec = importlib.util.spec_from_file_location("versionstamp", Path(repo) / "tools/build/versionstamp.py")
+    vs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(vs)
+    inf = Path(repo) / "driver/kmd/bc250kmd.inf"
+    company, table = vs.inf_provider(inf), vs.load_table(Path(repo) / "tools/build/versioninfo.json")
+    errors, done = [], {}
+    for o in entry.get("outputs") or []:
+        path = o["artifact"]
+        if path not in done:
+            try:
+                found = [leaf for leaf in vs.read_resources(vs.Image(Path(path).read_bytes()))
+                         if leaf[0] == vs.RT_VERSION]
+                name = vs.parse_version_resource(found[0][4])[3].get("OriginalFilename") if found else None
+            except vs.StampError as exc:
+                errors.append(f"{path}: {exc}")
+                continue
+            if not name:
+                done[path] = None                                 # no version resource: the file stays as built
+            else:
+                before, after = vs.stamp_file(path, version, company, table, file_name=name, flavour=flavour)
+                done[path] = {"from_sha256": before, "sha256": after, "size": Path(path).stat().st_size,
+                              "image_sha256": provenance.authenticode_digest(path)}
+        stamped = done[path]
+        if stamped:
+            o["restamped_from_sha256"] = stamped["from_sha256"]
+            o.update(sha256=stamped["sha256"], size=stamped["size"], image_sha256=stamped["image_sha256"])
+            if "authenticode_sha256" in o:
+                o["authenticode_sha256"] = stamped["image_sha256"]
+    return errors
+
+
 def import_kept(plan):
     """Copies the artifact folder of each kept build that the plan imports from another -Out (--keep-from) into
     this run's artifact folder, then checks every copied file against the SHA-256 that the earlier report gives it.
-    Returns the errors."""
+    A build of another release version then gets this version's resources (restamp_files). Returns the errors."""
     errors = []
     for k in plan["kept"]:
         imp = k.get("imported_from")
@@ -346,6 +401,10 @@ def import_kept(plan):
         for path, digest in entry_artifacts(k):
             if not Path(path).is_file() or sha256_file(path) != digest:
                 errors.append(f"row {k['id']}: the copy {path} from {src} does not have SHA-256 {digest}")
+        restamp = k["definition"].get("restamp")
+        if restamp and not errors:
+            errors += [f"row {k['id']}: {e}" for e in
+                       restamp_files(k, plan["repo"], restamp["to"], k["definition"]["flavour"])]
     return errors
 
 
@@ -463,14 +522,25 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
                     pass                                         # a path outside that -Out stays as it is
     recipe_tree = recipe_checkout(root, table, recipe_repo)
 
-    def stands_for(entry, rid):
+    def stands_for(entry, rid, imported=False):
         """(definition, None) when the earlier build is the build of the row now, else (None, reason). A build whose
         row differs only in the recipe commit stands for it when the recipe paths are the same at both commits; its
-        definition keeps the commit that built it, so that the rows name that commit."""
+        definition keeps the commit that built it, so that the rows name that commit. A build that --keep-from
+        imports (`imported`) and that differs also in the release version stands for the row when the row can take
+        the new version by a new stamp (restamp_refusal); import_kept then writes that stamp into the copy."""
         old, new = entry.get("definition") or {}, define(rid)
+        restamp = None
+        if imported and old.get("version") and new.get("version") and old["version"] != new["version"]:
+            if build_key(dict(old, version=new["version"], recipe_commit=new["recipe_commit"])) != build_key(new):
+                return None, "the manifest row changed"
+            why = restamp_refusal(by_id[rid])
+            if why:
+                return None, f"the release version changed and {why}"
+            restamp = {"from": old["version"], "to": new["version"]}
+            old = dict(old, version=new["version"])
         definition = None
         if build_key(old) == build_key(new):
-            definition = new
+            definition = dict(new)
         elif old.get("recipe_commit") and build_key(dict(old, recipe_commit=new["recipe_commit"])) == build_key(new):
             why = recipe_difference(recipe_tree, old["recipe_commit"], new["recipe_commit"], new["recipe"])
             if why:
@@ -480,6 +550,8 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
                                                "paths": recipe_paths(new["recipe"])}
         else:
             return None, "the manifest row changed"
+        if restamp:
+            definition["restamp"] = restamp
         # The same bytes under today's row: its OUTPUT_NOTES reach the rows from the manifest as it is now. The jobs
         # stay those of the earlier run, so that the row gives the command line that made the artifact.
         if old.get("jobs"):
@@ -488,12 +560,14 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
 
     changed = {}
     if auto:
-        selected = set()
+        # A row that takes a payload of a row that is built, or of one that gets a new stamp, is built too: its
+        # inputs are no longer the bytes that its earlier build read.
+        selected, restamped = set(), set()
         for rid in order:
             reasons = []
-            for entry in (earlier.get(rid), foreign.get(rid)):
+            for entry, imported in ((earlier.get(rid), False), (foreign.get(rid), True)):
                 if entry is not None:
-                    definition, why = stands_for(entry, rid)
+                    definition, why = stands_for(entry, rid, imported)
                     if definition is not None:
                         break
                     reasons.append(why)
@@ -502,9 +576,13 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
                 changed[rid] = reasons[0] if reasons else "no earlier build of the row"
                 continue
             fed = [d for d in deps[rid] if d in selected]
-            if fed:
+            moved = [d for d in deps[rid] if d in restamped]
+            if fed or moved:
                 selected.add(rid)
-                changed[rid] = f"it takes a payload of {', '.join(fed)}, which this run builds"
+                changed[rid] = (f"it takes a payload of {', '.join(fed)}, which this run builds" if fed else
+                                f"it takes a payload of {', '.join(moved)}, which takes a new version stamp")
+            elif definition.get("restamp"):
+                restamped.add(rid)
 
     kept, refused = [], {}
     for rid in order:
@@ -515,7 +593,7 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
             definition, why = stands_for(earlier[rid], rid)
             source = out
         if definition is None and rid in foreign:
-            definition, foreign_why = stands_for(foreign[rid], rid)
+            definition, foreign_why = stands_for(foreign[rid], rid, imported=True)
             why = why or foreign_why
             source = keep_from
         if definition is None:
@@ -1300,10 +1378,19 @@ def main():
                       f"{', '.join(eq['paths'])} are the same at both")
         return 0
     if args.command == "import":
-        errors = import_kept(load_json(args.plan))
+        plan = load_json(args.plan)
+        errors = import_kept(plan)
         for e in errors:
             print(f"FAIL {e}")
-        return 1 if errors else 0
+        if errors:
+            return 1
+        # The new stamps changed the digests of the kept entries: the run reads them from the plan.
+        write_json(args.plan, plan)
+        for k in plan["kept"]:
+            if k["definition"].get("restamp"):
+                r = k["definition"]["restamp"]
+                print(f"  restamped {k['id']}: {r['from']} -> {r['to']}")
+        return 0
     if args.command == "gates":
         result = run_gates(load_json(args.plan), load_json(args.recipe_params), args.allow_unpushed)
         write_json(args.write, result)

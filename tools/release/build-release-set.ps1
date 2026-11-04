@@ -831,6 +831,10 @@ if (@($planData.kept | Where-Object { $_.imported_from }).Count) {
         "build-release-set: the import of the -KeepFrom builds fails, so nothing is built (report $reportFile)"
         exit 1
     }
+    # The import writes the digests of the files it stamped with this version into the plan (build_release_set.py).
+    $planData = Read-Json $planFile
+    $keptById = @{}
+    foreach ($k in $planData.kept) { $keptById[$k.id] = $k }
     "$(Get-Utc) imported $(@($planData.kept | Where-Object { $_.imported_from }).Count) kept builds from $($planData.keep_from)"
 }
 
