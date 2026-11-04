@@ -840,7 +840,7 @@ static partial class UnitTests
                 Equal(size + "x" + size + " with alpha", shape, "G-ART: " + file + "@" + size + ".png decodes as a picture of its named size");
             }
         Func<string, string[], IEnumerable<string>> where = (pattern, except) => files.Where(kv => (except == null || !except.Contains(kv.Key)) && Regex.IsMatch(Regex.Replace(kv.Value, @"//[^\n]*", ""), pattern)).Select(kv => kv.Key);
-        Equal("", string.Join(",", where(@"\b(WebRequest|HttpWebRequest|HttpClient|WebClient|TcpClient|UdpClient|Socket|ServicePointManager)\b", new[] { "UpdateCheck.cs" })), "G-SRC: network code only in UpdateCheck.cs");
+        Equal("", string.Join(",", where(@"\b(WebRequest|HttpWebRequest|HttpClient|WebClient|TcpClient|UdpClient|Socket|ServicePointManager)\b", new[] { "UpdateCheck.cs", "SelfUpdate.cs" })), "G-SRC: network code only in UpdateCheck.cs and SelfUpdate.cs (Install update)");
         Equal("", string.Join(",", where(@"\b(ChangeDisplaySettings\w*|SetDisplayConfig)\b", new[] { "DisplayModes.cs" })), "G-SRC: display-mode writes only in DisplayModes.cs");
         Check(Regex.IsMatch(files["DisplayModes.cs"], @"CdsTest") && Regex.IsMatch(files["MainForm.Display.cs"], @"KeepDisplayDialog\.Ask"), "G-SRC: a mode is tested first and kept only on the person's word");
         // BenchmarkRun.cs ends one process: the game it started itself, and only when that game could not be put

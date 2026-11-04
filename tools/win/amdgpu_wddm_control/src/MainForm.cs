@@ -733,12 +733,15 @@ namespace AmdgpuWddmControl
         {
             _status = HomeStatus.Compute(new StatusInputs
             {
-                Snapshot = _snap, Driver = _drv, Work = _work, UpgradeDone = _upgradeDone, UpdateAvailable = UpdateCheck.IsCandidateNewer(_upd, InstalledVersion),
+                Snapshot = _snap, Driver = _drv, Work = _work, UpgradeDone = _upgradeDone, UpdateAvailable = UpdateCheck.IsCandidateNewer(_upd, UpdateInstalled),
                 CuConfirmFailed = _cuConfirmFailed, LaterRestart = _laterRestart,
             });
         }
 
         string InstalledVersion { get { return _drv != null ? _drv.InstalledVersion : null; } }
+        // The release the update check compares with: the driver release, or a newer one whose apps an update installed
+        // on top of it (SelfUpdate.EffectiveRelease, docs/design/self-update.md).
+        string UpdateInstalled { get { return _smoke || InstalledVersion == null ? InstalledVersion : SelfUpdate.EffectiveRelease(InstalledVersion); } }
 
         // The live part every 2 s: the driver's own snapshots (Level-One), the session's DWM, and the status card.
         void Tick()

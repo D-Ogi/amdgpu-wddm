@@ -133,7 +133,7 @@ namespace AmdgpuWddmControl
 
             var drv = new CardPanel(Strings.T("home.driver.title"), width);
             drv.Add(Ui.Label(_drv != null ? _drv.RunningText : Strings.T("drv.running.unknown"), null, null, drv.Inner));
-            drv.Add(Ui.Dim(UpdateCheck.CardText(_upd, InstalledVersion, UpdateCheck.Running), drv.Inner));
+            drv.Add(Ui.Dim(UpdateCheck.CardText(_upd, UpdateInstalled, UpdateCheck.Running), drv.Inner));
             drv.Add(Ui.Button(Strings.T("status.action.driver"), (s, e) => Navigate("driver")));
             p.Controls.Add(drv);
 
@@ -283,18 +283,31 @@ namespace AmdgpuWddmControl
 
             var upd = new CardPanel(Strings.T("driver.updates.title"), width);
             bool running = UpdateCheck.Running;
-            upd.Add(Ui.Label(UpdateCheck.CardText(_upd, InstalledVersion, running), null, null, upd.Inner));
+            var updInstalled = UpdateInstalled;
+            upd.Add(Ui.Label(UpdateCheck.CardText(_upd, updInstalled, running), null, null, upd.Inner));
+            // A driver update that is waiting for its start, or one that went back by itself (the start-confirm task).
+            var txn = _smoke ? null : SelfUpdate.TransactionMessageHere();
+            if (txn != null) upd.Add(Ui.Label(Strings.T(txn), null, txn == "upd.self.txn-pending" ? (Color?)null : Theme.Warn, upd.Inner));
             var check = Ui.Button(Strings.T("driver.updates.check"), (s, e) => StartUpdateCheck(true));
             check.Enabled = !running;
             Mark("driver.update", check);
             var buttons = Ui.WrapRow(upd.Inner, check);
-            if (UpdateCheck.IsCandidateNewer(_upd, InstalledVersion) || (_upd != null && _upd.CandidateTag != null && InstalledVersion == null))
+            if (UpdateCheck.IsCandidateNewer(_upd, updInstalled) || (_upd != null && _upd.CandidateTag != null && updInstalled == null))
             {
                 string tag = _upd.CandidateTag;
-                buttons.Controls.Add(Ui.Button(Strings.T("driver.updates.open"), (s, e) => UpdateCheck.OpenReleasePage(tag), true));
+                // Install update: only with a known installed release and the kept repair set that installs it.
+                if (UpdateCheck.IsCandidateNewer(_upd, updInstalled) && (_smoke || HelpGuides.RepairSetup() != null))
+                {
+                    var install = Ui.Button(Strings.T("driver.updates.install"), (s, e) => StartSelfUpdate(tag), true);
+                    install.Enabled = !_selfBusy;
+                    buttons.Controls.Add(install);
+                    buttons.Controls.Add(Ui.Button(Strings.T("driver.updates.open"), (s, e) => UpdateCheck.OpenReleasePage(tag)));
+                }
+                else buttons.Controls.Add(Ui.Button(Strings.T("driver.updates.open"), (s, e) => UpdateCheck.OpenReleasePage(tag), true));
             }
             else buttons.Controls.Add(Ui.Button(Strings.T("driver.updates.releases"), (s, e) => UpdateCheck.OpenReleasePage(null)));
             upd.Add(buttons);
+            if (_selfLine != null) upd.Add(Ui.Label(_selfLine, null, null, upd.Inner));
             upd.Add(Ui.Dim(Strings.T("driver.updates.privacy"), upd.Inner));
             p.Controls.Add(upd);
 

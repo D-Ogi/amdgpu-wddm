@@ -155,10 +155,50 @@ namespace AmdgpuWddmControl
             var now = DateTime.UtcNow;
             if (manual ? UpdateCheck.ManualCheckAllowed(_upd, now) : UpdateCheck.AutoCheckDue(_upd, _prefs.UpdateCheckAtStart, now))
             {
-                UpdateCheck.Start(InstalledVersion);
+                UpdateCheck.Start(UpdateInstalled);
                 if (_page == "driver") ShowPage(_page, null, false);
             }
             else if (manual) ShowPage(_page, null, false);
+        }
+
+        // ---- Install update (SelfUpdate.cs, docs/design/self-update.md) ---------------------------------------------
+        // One run at a time. The line under the buttons says what it does; a ready update goes to Nagi Setup, and this
+        // window closes so that Setup can replace its files.
+        string _selfLine;
+        bool _selfBusy;
+
+        void StartSelfUpdate(string tag)
+        {
+            if (_smoke || _selfBusy || tag == null) return;
+            _selfBusy = true;
+            _selfLine = Strings.T("upd.self.reading");
+            ShowPage(_page, null, false);
+            var installed = InstalledVersion;
+            Action<string> show = line =>
+            {
+                try { BeginInvoke((Action)(() => { if (IsDisposed) return; _selfLine = line; if (_page == "driver") ShowPage(_page, null, false); })); }
+                catch (InvalidOperationException) { }
+            };
+            new System.Threading.Thread(() => Crash.Guard("self-update", () =>
+            {
+                var r = SelfUpdate.Prepare(tag, installed, show);
+                try
+                {
+                    BeginInvoke((Action)(() =>
+                    {
+                        if (IsDisposed) return;
+                        _selfBusy = false;
+                        if (r.Outcome == "ready")
+                        {
+                            if (SelfUpdate.Launch(r.Dir)) { _selfLine = Strings.T("upd.self.ready"); Close(); return; }
+                            _selfLine = Strings.T("upd.self.declined");
+                        }
+                        else _selfLine = Strings.Has(r.MessageId) ? Strings.T(r.MessageId) : Strings.T("upd.self.failed");
+                        if (_page == "driver") ShowPage(_page, null, false);
+                    }));
+                }
+                catch (InvalidOperationException) { }
+            })) { IsBackground = true, Name = "self-update" }.Start();
         }
 
         void OnUpdateFinished(UpdateResult r)

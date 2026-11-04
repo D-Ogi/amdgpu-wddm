@@ -77,6 +77,25 @@ upd.last-success|mt|cac0e0b4|最後に成功した確認: {0}。
 upd.never|mt|d413e103|まだ更新を確認していません。
 upd.checking|mt|8bcaee3c|更新を確認しています...
 upd.released|mt|48781b5a|リリース日: {0}
+upd.self.reading|mt|92891a00|更新を読み込んでいます...
+upd.self.downloading|mt|f94464ea|更新をダウンロードしています: {0} / {1} MB...
+upd.self.checking-files|mt|9e89fe00|ダウンロードしたファイルを確認しています...
+upd.self.ready|mt|7d5c7b68|Nagi セットアップが更新をインストールします。このウィンドウは閉じます。
+upd.self.declined|mt|768a879c|更新は開始されませんでした。インストールするには、もう一度 [更新をインストール] を選び、Windows の確認で [はい] を選んでください。
+upd.self.up-to-date|mt|2bafb369|この更新はすでにインストールされています。
+upd.self.failed|mt|3bfc0923|更新をダウンロードできませんでした。後でもう一度お試しいただくか、リリース ページを開いてください。
+upd.self.no-manifest|mt|b2abca0d|このリリースはここからインストールできません。リリース ページを開いてダウンロードしてください。
+upd.self.no-setup|mt|c845a923|インストールされているバージョンのインストール ファイルがないため、ここから更新をインストールできません。リリース ページを開いてダウンロードしてください。
+upd.self.refused-signature|mt|6532925e|更新はインストールされませんでした。Nagi プロジェクトから提供されたものであることを確認できませんでした。
+upd.self.refused-hash|mt|108332ed|更新はインストールされませんでした。ダウンロードしたファイルが破損しているか、不完全です。後でもう一度お試しください。
+upd.self.refused-downgrade|mt|70458ef6|更新はインストールされませんでした。このコンピューターにあるバージョンより古いものです。
+upd.self.refused-too-old|mt|d2ca8e0d|このコンピューターにあるバージョンは古すぎるため、ここから更新できません。リリース ページを開いて完全版をダウンロードしてください。
+upd.self.refused-incompatible|mt|74bd5d20|この更新は、このコンピューターのドライバーに合いません。リリース ページを開いて完全版をダウンロードしてください。
+upd.self.refused-unknown-installed|mt|5eaa2b5a|インストールされているバージョンが不明なため、ここから更新をインストールできません。リリース ページを開いて完全版をダウンロードしてください。
+upd.self.txn-pending|mt|6a3f38d1|ドライバーの更新をインストールしています。Nagi セットアップから求められたら、コンピューターを再起動してください。
+upd.self.txn-rollback-pending|mt|0b4af500|新しいドライバーが起動しなかったため、以前のドライバーに戻しました。使用するにはコンピューターを再起動してください。
+upd.self.txn-rolled-back|mt|cf117d74|新しいドライバーが起動しなかったため、以前のドライバーに戻っています。
+upd.self.txn-manual|mt|27a175f1|新しいドライバーが起動せず、以前のドライバーにも自動で戻せませんでした。[ヘルプ] ページの [修復] を使うか、リリース ページからリリースをもう一度インストールしてください。
 
 # ---- graphics cores (CU mode, plan v7 section 7) ----
 # ---- driver card (WU-043) ----
@@ -520,6 +539,7 @@ driver.updates.title|mt-safe|22e2bada|更新
 driver.updates.check|mt-safe|2937cffb|今すぐ確認
 driver.updates.open|mt-safe|9da2b089|リリース ページを開く
 driver.updates.releases|mt-safe|3b8c94fd|すべてのリリース
+driver.updates.install|mt|cada4215|更新をインストール
 driver.updates.privacy|mt|4813b1cb|確認では、公開されているリリース一覧を読み取ります。あなたや PC に関する情報は何も送信しません。
 driver.repair.title|mt-safe|1196b6c5|修復
 driver.repair.text|mt|e71e61c4|ドライバーが正しく動作しない場合は、ヘルプから修復してください。

@@ -1407,6 +1407,7 @@ static partial class UnitTests
         DriverCardTests();
         BenchmarkTests(args[0]);
         UpdateTests(args[0]);
+        SelfUpdateTests(args[0]);
         CrashTests(args[0]);
         GuiTests(args[0]);
         RocmParseTests();

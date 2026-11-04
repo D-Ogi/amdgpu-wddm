@@ -77,6 +77,25 @@ upd.last-success|mt|cac0e0b4|마지막으로 성공한 확인: {0}.
 upd.never|mt|d413e103|아직 업데이트를 확인하지 않았습니다.
 upd.checking|mt|8bcaee3c|업데이트를 확인하는 중...
 upd.released|mt|48781b5a|출시일: {0}
+upd.self.reading|mt|92891a00|업데이트를 읽는 중...
+upd.self.downloading|mt|f94464ea|업데이트를 다운로드하는 중: {0} / {1} MB...
+upd.self.checking-files|mt|9e89fe00|다운로드한 파일을 확인하는 중...
+upd.self.ready|mt|7d5c7b68|Nagi 설치 프로그램이 지금 업데이트를 설치합니다. 이 창은 닫힙니다.
+upd.self.declined|mt|768a879c|업데이트가 시작되지 않았습니다. 설치하려면 [업데이트 설치]를 다시 선택하고 Windows에서 물으면 [예]를 선택하세요.
+upd.self.up-to-date|mt|2bafb369|이 업데이트는 이미 설치되어 있습니다.
+upd.self.failed|mt|3bfc0923|업데이트를 다운로드하지 못했습니다. 나중에 다시 시도하거나 릴리스 페이지를 여세요.
+upd.self.no-manifest|mt|b2abca0d|이 릴리스는 여기에서 설치할 수 없습니다. 릴리스 페이지를 열고 다운로드하세요.
+upd.self.no-setup|mt|c845a923|설치된 버전의 설치 파일이 없어 여기에서 업데이트를 설치할 수 없습니다. 릴리스 페이지를 열고 다운로드하세요.
+upd.self.refused-signature|mt|6532925e|업데이트가 설치되지 않았습니다. Nagi 프로젝트에서 제공된 것인지 확인할 수 없었습니다.
+upd.self.refused-hash|mt|108332ed|업데이트가 설치되지 않았습니다. 다운로드한 파일이 손상되었거나 완전하지 않습니다. 나중에 다시 시도하세요.
+upd.self.refused-downgrade|mt|70458ef6|업데이트가 설치되지 않았습니다. 이 컴퓨터에 있는 버전보다 오래된 것입니다.
+upd.self.refused-too-old|mt|d2ca8e0d|이 컴퓨터에 있는 버전은 너무 오래되어 여기에서 업데이트할 수 없습니다. 릴리스 페이지를 열고 전체 릴리스를 다운로드하세요.
+upd.self.refused-incompatible|mt|74bd5d20|이 업데이트는 이 컴퓨터의 드라이버와 맞지 않습니다. 릴리스 페이지를 열고 전체 릴리스를 다운로드하세요.
+upd.self.refused-unknown-installed|mt|5eaa2b5a|설치된 버전을 알 수 없어 여기에서 업데이트를 설치할 수 없습니다. 릴리스 페이지를 열고 전체 릴리스를 다운로드하세요.
+upd.self.txn-pending|mt|6a3f38d1|드라이버 업데이트를 설치하는 중입니다. Nagi 설치 프로그램이 요청하면 컴퓨터를 다시 시작하세요.
+upd.self.txn-rollback-pending|mt|0b4af500|새 드라이버가 시작되지 않아 이전 드라이버로 되돌렸습니다. 사용하려면 컴퓨터를 다시 시작하세요.
+upd.self.txn-rolled-back|mt|cf117d74|새 드라이버가 시작되지 않아 이전 드라이버를 다시 사용하고 있습니다.
+upd.self.txn-manual|mt|27a175f1|새 드라이버가 시작되지 않았고 이전 드라이버로 자동으로 돌아갈 수 없었습니다. 도움말 페이지의 [복구]를 사용하거나 릴리스 페이지에서 릴리스를 다시 설치하세요.
 
 # ---- graphics cores (CU mode, plan v7 section 7) ----
 # ---- driver card (WU-043) ----
@@ -520,6 +539,7 @@ driver.updates.title|mt-safe|22e2bada|업데이트
 driver.updates.check|mt-safe|2937cffb|지금 확인
 driver.updates.open|mt|9da2b089|릴리스 페이지 열기
 driver.updates.releases|mt-safe|3b8c94fd|모든 릴리스
+driver.updates.install|mt|cada4215|업데이트 설치
 driver.updates.privacy|mt|4813b1cb|업데이트 확인은 공개된 릴리스 목록만 읽습니다. 사용자나 PC에 대한 정보는 전송하지 않습니다.
 driver.repair.title|mt-safe|1196b6c5|복구
 driver.repair.text|mt|e71e61c4|드라이버가 제대로 작동하지 않으면 도움말에서 복구하세요.

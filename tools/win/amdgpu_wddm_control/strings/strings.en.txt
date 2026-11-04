@@ -79,6 +79,25 @@ upd.last-success|src|-|Last successful check: {0}.
 upd.never|src|-|Not checked for updates yet.
 upd.checking|src|-|Checking for updates...
 upd.released|src|-|Released: {0}
+upd.self.reading|src|-|Reading the update...
+upd.self.downloading|src|-|Downloading the update: {0} of {1} MB...
+upd.self.checking-files|src|-|Checking the downloaded files...
+upd.self.ready|src|-|Nagi Setup installs the update now. This window closes.
+upd.self.declined|src|-|The update was not started. To install it, select Install update again and answer Yes when Windows asks.
+upd.self.up-to-date|src|-|This update is already installed.
+upd.self.failed|src|-|The update could not be downloaded. Try again later, or open the release page.
+upd.self.no-manifest|src|-|This release cannot be installed from here. Open the release page and download it there.
+upd.self.no-setup|src|-|The installation files of the installed version are missing, so the update cannot be installed from here. Open the release page and download it there.
+upd.self.refused-signature|src|-|The update was not installed: it could not be confirmed that it comes from the Nagi project.
+upd.self.refused-hash|src|-|The update was not installed: the downloaded files are damaged or incomplete. Try again later.
+upd.self.refused-downgrade|src|-|The update was not installed: it is older than the version on this computer.
+upd.self.refused-too-old|src|-|The version on this computer is too old to update from here. Open the release page and download the full release.
+upd.self.refused-incompatible|src|-|This update does not fit the driver on this computer. Open the release page and download the full release.
+upd.self.refused-unknown-installed|src|-|The installed version is not known, so the update cannot be installed from here. Open the release page and download the full release.
+upd.self.txn-pending|src|-|A driver update is being installed. Restart the computer when Nagi Setup asks for it.
+upd.self.txn-rollback-pending|src|-|The new driver did not start, so the previous driver was put back. Restart the computer to use it.
+upd.self.txn-rolled-back|src|-|The new driver did not start, so the previous driver is back in use.
+upd.self.txn-manual|src|-|The new driver did not start, and the previous driver could not come back by itself. Use Repair on the Help page, or install the release again from the release page.
 
 # ---- guide panel (plan v7 section 6): repeats or explains what the page says; never the only place of a message ----
 guide.title|src|-|Nagi's tip
@@ -534,6 +553,7 @@ driver.updates.title|src|-|Updates
 driver.updates.check|src|-|Check now
 driver.updates.open|src|-|Open the release page
 driver.updates.releases|src|-|All releases
+driver.updates.install|src|-|Install update
 driver.updates.privacy|src|-|The check reads the public list of releases. It sends nothing about you or your PC.
 driver.repair.title|src|-|Repair
 driver.repair.text|src|-|If the driver does not work as it should, repair it from Help.

@@ -90,7 +90,7 @@ $Out = (New-Item -ItemType Directory -Force $Out).FullName   # absolute: the nat
 $obj = Join-Path $Out 'obj'
 New-Item -ItemType Directory -Force $Out, $obj | Out-Null
 
-$refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll', 'System.Management.dll', 'System.Web.Extensions.dll' |
+$refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll', 'System.Management.dll', 'System.Web.Extensions.dll', 'System.Security.dll' |
     ForEach-Object { "/reference:$fx\$_" }
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
@@ -101,6 +101,8 @@ $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recove
     ForEach-Object { Join-Path $here "src\$_" }
 # The start of the window: the order of the loading window and the guard against a second window (Launch.cs).
 $pure += 'SingleInstance.cs', 'LaunchSequence.cs' | ForEach-Object { Join-Path $here "src\$_" }
+# Install update: the manifest, its signature, the plan and the download (docs/design/self-update.md).
+$pure += 'SelfUpdate.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # Build the capability fixture from the actual provider and shipping shim tables, without adapter access.
 $providerOut = Join-Path $obj 'board-provider'

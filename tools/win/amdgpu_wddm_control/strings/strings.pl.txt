@@ -79,6 +79,25 @@ upd.last-success|rev|cac0e0b4|Ostatnie udane sprawdzenie: {0}.
 upd.never|rev|d413e103|Aktualizacje nie były jeszcze sprawdzane.
 upd.checking|rev|8bcaee3c|Sprawdzanie aktualizacji...
 upd.released|rev|48781b5a|Wydano: {0}
+upd.self.reading|mt|92891a00|Odczytywanie aktualizacji...
+upd.self.downloading|mt|f94464ea|Pobieranie aktualizacji: {0} z {1} MB...
+upd.self.checking-files|mt|9e89fe00|Sprawdzanie pobranych plików...
+upd.self.ready|mt|7d5c7b68|Instalator Nagi instaluje teraz aktualizację. To okno się zamknie.
+upd.self.declined|mt|768a879c|Aktualizacja nie została uruchomiona. Aby ją zainstalować, wybierz ponownie Zainstaluj aktualizację i odpowiedz Tak, gdy Windows zapyta.
+upd.self.up-to-date|mt|2bafb369|Ta aktualizacja jest już zainstalowana.
+upd.self.failed|mt|3bfc0923|Nie udało się pobrać aktualizacji. Spróbuj ponownie później albo otwórz stronę wydania.
+upd.self.no-manifest|mt|b2abca0d|Tego wydania nie można zainstalować stąd. Otwórz stronę wydania i pobierz je tam.
+upd.self.no-setup|mt|c845a923|Brakuje plików instalacyjnych zainstalowanej wersji, więc aktualizacji nie można zainstalować stąd. Otwórz stronę wydania i pobierz ją tam.
+upd.self.refused-signature|mt|6532925e|Aktualizacja nie została zainstalowana: nie udało się potwierdzić, że pochodzi od projektu Nagi.
+upd.self.refused-hash|mt|108332ed|Aktualizacja nie została zainstalowana: pobrane pliki są uszkodzone lub niekompletne. Spróbuj ponownie później.
+upd.self.refused-downgrade|mt|70458ef6|Aktualizacja nie została zainstalowana: jest starsza niż wersja na tym komputerze.
+upd.self.refused-too-old|mt|d2ca8e0d|Wersja na tym komputerze jest zbyt stara, aby zaktualizować ją stąd. Otwórz stronę wydania i pobierz pełne wydanie.
+upd.self.refused-incompatible|mt|74bd5d20|Ta aktualizacja nie pasuje do sterownika na tym komputerze. Otwórz stronę wydania i pobierz pełne wydanie.
+upd.self.refused-unknown-installed|mt|5eaa2b5a|Zainstalowana wersja jest nieznana, więc aktualizacji nie można zainstalować stąd. Otwórz stronę wydania i pobierz pełne wydanie.
+upd.self.txn-pending|mt|6a3f38d1|Trwa instalacja aktualizacji sterownika. Uruchom ponownie komputer, gdy instalator Nagi o to poprosi.
+upd.self.txn-rollback-pending|mt|0b4af500|Nowy sterownik nie uruchomił się, więc przywrócono poprzedni. Uruchom ponownie komputer, aby go używać.
+upd.self.txn-rolled-back|mt|cf117d74|Nowy sterownik nie uruchomił się, więc znowu działa poprzedni sterownik.
+upd.self.txn-manual|mt|27a175f1|Nowy sterownik nie uruchomił się, a poprzedni nie mógł wrócić sam. Użyj opcji Napraw na stronie Pomoc albo zainstaluj wydanie ponownie ze strony wydania.
 
 # ---- graphics cores (CU mode, plan v7 section 7) ----
 # ---- driver card (WU-043) ----
@@ -522,6 +541,7 @@ driver.updates.title|rev|22e2bada|Aktualizacje
 driver.updates.check|rev|2937cffb|Sprawdź teraz
 driver.updates.open|rev|9da2b089|Otwórz stronę wydania
 driver.updates.releases|rev|3b8c94fd|Wszystkie wydania
+driver.updates.install|mt|cada4215|Zainstaluj aktualizację
 driver.updates.privacy|rev|4813b1cb|Sprawdzanie odczytuje publiczną listę wydań. Nie wysyła żadnych informacji o Tobie ani o Twoim komputerze.
 driver.repair.title|rev|1196b6c5|Naprawa
 driver.repair.text|rev|e71e61c4|Jeśli sterownik nie działa tak, jak powinien, napraw go na stronie Pomoc.
