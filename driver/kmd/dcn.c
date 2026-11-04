@@ -2631,6 +2631,45 @@ BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _O
     return TRUE;
 }
 
+// BD-289 second form (blit_map_cache.h): the CPU blit's kept mappings of its source and destination.
+static void* DcnBlitOpsMap(void* Context, unsigned long long Physical, size_t Length, unsigned long Access)
+{
+    PHYSICAL_ADDRESS phys;
+    phys.QuadPart = (LONGLONG)Physical;
+    return VramMapCpuRange((BC250_DEVICE*)Context, phys, (SIZE_T)Length, (ULONG)Access);
+}
+
+static void DcnBlitOpsUnmap(void* Context, void* Mapping, size_t Length)
+{
+    UNREFERENCED_PARAMETER(Context);
+    MmUnmapIoSpace(Mapping, (SIZE_T)Length);
+}
+
+PVOID DcnBlitMap(_Inout_ BC250_DEVICE* Device, PHYSICAL_ADDRESS Physical, SIZE_T Length, ULONG Access)
+{
+    BC250_BLIT_MAP_OPS ops = { Device, DcnBlitOpsMap, DcnBlitOpsUnmap };
+    ULONG evictions = Device->DcnBlitMaps.Evictions;
+    PVOID map;
+    NT_ASSERT(KeGetCurrentIrql() == PASSIVE_LEVEL);
+    NT_ASSERT(DcnScanoutLockHeld(Device));
+    if (Physical.QuadPart < 0) return NULL;
+    map = BlitMapGet(&Device->DcnBlitMaps, (unsigned long long)Physical.QuadPart, (size_t)Length, Access, &ops);
+    if (Device->DcnBlitMaps.Evictions != evictions && Device->DcnBlitMaps.Evictions <= BC250_DCN_LOG_CALLS)
+        GuardLog("dcnflip: blit mapping evicted for 0x%llX, %Iu bytes (%lu kept mappings made so far)",
+                 (ULONGLONG)Physical.QuadPart, Length, Device->DcnBlitMaps.Maps);
+    return map;
+}
+
+// The lab flavour's BD-289 probe found the PTEs of Mapping released or reused: drop it from the cache without an
+// unmap (its VA stays reserved for ever), so that the next present maps the range again.
+void DcnBlitForget(_Inout_ BC250_DEVICE* Device, _In_ const void* Mapping)
+{
+    NT_ASSERT(DcnScanoutLockHeld(Device));
+    if (BlitMapForget(&Device->DcnBlitMaps, Mapping))
+        GuardLog("dcnflip: blit mapping %p dropped without an unmap (%lu dropped so far)", Mapping,
+                 Device->DcnBlitMaps.Forgotten);
+}
+
 // Unmap, if mapped, and zero the fields either way - called from WddmStop and, idempotently, from DcnStop above.
 // Not a DDI: PASSIVE_LEVEL only (MmUnmapIoSpace and the scan-out mutex). It takes the scan-out mutex itself
 // (BD-289), so that a stop never releases a mapping a blit still copies into; the mutex is recursive for its owner.
@@ -2638,8 +2677,11 @@ void DcnUnmapScanout(_Inout_ BC250_DEVICE* Device)
 {
     DCN_SCANOUT_OPS_CONTEXT c = { Device, 0 };
     BC250_SCANOUT_MAP_OPS ops = { &c, DcnOpsMap, DcnOpsUnmap, DcnOpsAllowed, NULL, NULL, NULL };
+    BC250_BLIT_MAP_OPS blitOps = { Device, DcnBlitOpsMap, DcnBlitOpsUnmap };
     DcnScanoutLock(Device);
     ScanoutMapRelease(&Device->DcnScanoutMap, &Device->DcnScanoutMapAddress, &Device->DcnScanoutMapLength, &ops);
+    // BD-289 second form: the blit's kept mappings go with the flip target mapping, under the same mutex.
+    BlitMapRelease(&Device->DcnBlitMaps, &blitOps);
     Device->DcnScanoutSeedAddress = 0;       // the next target is not the one the firmware picture was copied into
     DcnScanoutUnlock(Device);
 }

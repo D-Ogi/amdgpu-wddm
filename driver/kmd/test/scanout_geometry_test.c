@@ -34,6 +34,10 @@ typedef struct {LONGLONG QuadPart;} PHYSICAL_ADDRESS;
 #define RtlZeroMemory(p,n) memset(p,0,n)
 #define RtlCopyMemory(d,s,n) memcpy(d,s,n)
 #define WRITE_REGISTER_ULONG(p,v) (*(p)=(v))
+#include "blit_map_cache.h"
+#define PASSIVE_LEVEL 0
+static int g_Irql;
+static int KeGetCurrentIrql(void){return g_Irql;}
 typedef struct {
  struct {ULONG Width,Height,Pitch;} Post;
  PHYSICAL_ADDRESS VramPhysical;
@@ -45,6 +49,7 @@ typedef struct {
  PVOID DcnScanoutMap;
  int DcnPlaneFormats;ULONG DcnPlaneFormat;   /* M15.14 (dcn.c DcnCaptureFirmwareFormat) */
  int DcnPlaneScaled;                         /* BD-223: plane 0 has a shape of its own size */
+ BC250_BLIT_MAP_CACHE DcnBlitMaps;           /* BD-289 second form: the blit's kept mappings (blit_map_cache.h) */
 } BC250_DEVICE;
 /* Display modes (bc250kmd.h): the committed source size, else the inherited one. No mode is committed here. */
 static ULONG DisplaySourceWidth(const BC250_DEVICE *d){return d->Post.Width;}
@@ -270,6 +275,11 @@ int main(void){
   DcnScanoutUnlock(&d);
   /* DcnUnmapScanout takes the mutex itself and leaves it as it found it. */
   {unsigned taken=lock_takes;DcnUnmapScanout(&d);CHECK(lock_takes==taken+1 && !lock_depth && !d.DcnScanoutMap);}
+  /* BD-289 second form: a kept blit mapping is made once under the mutex, given again, and released by DcnUnmapScanout. */
+  {PHYSICAL_ADDRESS at;PVOID kept;unsigned m=maps,u=unmaps;at.QuadPart=(LONGLONG)d.VramPhysical.QuadPart;
+   DcnScanoutLock(&d);kept=DcnBlitMap(&d,at,4096,0);CHECK(kept==buffer+64 && maps==m+1);
+   CHECK(DcnBlitMap(&d,at,4096,0)==kept && maps==m+1 && unmaps==u);DcnScanoutUnlock(&d);
+   DcnUnmapScanout(&d);CHECK(unmaps==u+1 && !lock_depth && d.DcnBlitMaps.Slots[0].Mapping==NULL);}
   // Firmware pitch is wider than destination; last row must still be copied.
   {SIZE_T srcsize=d.FramebufferLength;UCHAR *src=malloc(srcsize);UCHAR *dst=malloc((SIZE_T)bytes+128);int exact=1;
    if(!src || !dst)return 2;

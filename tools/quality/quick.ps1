@@ -487,6 +487,10 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # BD-289: the flip target mapping under the scan-out mutex; the nolock control passes only when the model faults.
  Check 'scanout-lock' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scanout_lock.ps1" -Root $Workspace -Out "$Out\scanout-lock" }
  Check 'scanout-lock-nolock-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scanout_lock.ps1" -Root $Workspace -Out "$Out\scanout-lock-nolock-control" -Mutation nolock }
+ # BD-289 second form: the blit keeps its source and destination mappings; the per-present control passes only when
+ # the old shape flips 2 MiB regions of the PTE pool model between large and 4 KiB pages.
+ Check 'blit-map-cache' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_blit_map_cache.ps1" -Root $Workspace -Out "$Out\blit-map-cache" }
+ Check 'blit-map-cache-per-present-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_blit_map_cache.ps1" -Root $Workspace -Out "$Out\blit-map-cache-per-present-control" -Mutation per-present }
  Check 'dpaudio' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dpaudio.ps1" -Root $Workspace -Out "$Out\dpaudio" -Kits "$Kits" }
  Check 'modeset' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_modeset.ps1" -Root $Workspace -Out "$Out\modeset" -Kits "$Kits" }
  # BD-223: the scaler, MPC, surface and colour helpers, the DC types and the latch probe are gates of their own. Inside

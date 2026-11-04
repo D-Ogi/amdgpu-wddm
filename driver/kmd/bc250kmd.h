@@ -81,6 +81,7 @@
 #include "modeset.h"
 #include "connector.h"
 #include "board_memory_service.h"
+#include "blit_map_cache.h"     // BD-289: the CPU present blit's kept source and destination mappings
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
 
@@ -405,6 +406,10 @@ typedef struct _BC250_DEVICE {
     ULONGLONG DcnScanoutSeedAddress;     // firmware framebuffer copied here once; 0 until then, cleared on unmap
     volatile LONG DcnScanoutRemaps;      // DcnScanoutMapping: successful (re)maps of the flip target
     volatile LONG DcnScanoutMapFailed;   // DcnScanoutMapping: AddressAllowed or MmMapIoSpaceEx refused it
+    // BD-289 second form: the CPU present blit's source and destination mappings, kept from one present to the next
+    // (blit_map_cache.h), so that the blit does not map and release VRAM on every present. Same owner as the four
+    // fields above (DcnScanoutLock); released by DcnUnmapScanout.
+    BC250_BLIT_MAP_CACHE DcnBlitMaps;
 
     // The VRAM carve-out, all zero unless the EnableVram gate was open at start (vram.c).
     BOOLEAN VramEnabled;
@@ -1046,6 +1051,10 @@ void DcnVsyncFromVector(_Inout_ BC250_DEVICE* Device);
 // uses *Mapping. DcnUnmapScanout takes the mutex itself. PASSIVE_LEVEL (APC_LEVEL at most for the mutex).
 BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _Out_ SIZE_T* Length, _Out_ ULONG* Pitch);
 void DcnUnmapScanout(_Inout_ BC250_DEVICE* Device);
+// BD-289 second form: a kept CPU mapping of VRAM for the CPU present blit (blit_map_cache.h). The caller holds the
+// scan-out mutex for the call and while it uses the mapping, and never releases it. NULL when it cannot be mapped.
+PVOID DcnBlitMap(_Inout_ BC250_DEVICE* Device, PHYSICAL_ADDRESS Physical, SIZE_T Length, ULONG Access);
+void DcnBlitForget(_Inout_ BC250_DEVICE* Device, _In_ const void* Mapping);
 void DcnScanoutLock(_Inout_ BC250_DEVICE* Device);
 void DcnScanoutUnlock(_Inout_ BC250_DEVICE* Device);
 BOOLEAN DcnScanoutLockHeld(_In_ const BC250_DEVICE* Device);
