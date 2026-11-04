@@ -4591,13 +4591,19 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
 
         // ADR 0008 stage D: node 1's own packet in flight, waited for independently - it may still be on SDMA0's
         // ring after node 0's has long finished (design note section 5).
-        for (waited = 0; waited < BC250_WDDM_STOP_DRAIN_MS && wddm->PagingHead; waited += 10)
+        // Only a packet on the ring can finish here. A job that is queued but not dispatched (a faulted node, a
+        // preemption in progress) stays queued for the whole stop, so the loop waits for the hardware only, and a
+        // queued job is reported apart. Until 2026-11-04 the loop ran on PagingHead and slept only on
+        // PagingHwPending: with a queued job it spun without a wait and then logged a wait that never happened.
+        for (waited = 0; waited < BC250_WDDM_STOP_DRAIN_MS && wddm->PagingHwPending; waited += 10)
         {
             WddmGpuFencePaging(Device);
             if (wddm->PagingHwPending) KeDelayExecutionThread(KernelMode, FALSE, &tick);
         }
         if (waited != 0) GuardLog("wddm: stop waited %u ms for node 1's packet in flight (%s)", waited,
                                   wddm->PagingHwPending ? "STILL PENDING" : "done");
+        if (wddm->PagingHead && !wddm->PagingHwPending)
+            GuardLog("wddm: stop leaves a node 1 job queued and not dispatched");
 
         // Node 2's job in flight, on its own ring and its own bound.
         for (waited = 0; waited < BC250_WDDM_STOP_DRAIN_MS && wddm->ComputeHwPending; waited += 10)
