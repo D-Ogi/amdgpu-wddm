@@ -828,6 +828,12 @@ def run_gates(plan, recipe_params, allow_unpushed=False):
             continue
         if (repo, commit) not in whole:
             continue
+        # New-Tree makes the tree from the first checkout whose module stores hold every submodule commit (BD-285):
+        # a plan PASS means that each tree can be made.
+        tree_checkout, refused = repos.find_tree(repo, commit)
+        if tree_checkout is None:
+            missing.append(f"{repo} {commit[:8]} ({', '.join(wheres)}): no checkout can make its tree with every "
+                           f"submodule: {' | '.join(refused)}")
         for sub_path, sub_repo in (table[repo].get("submodules") or {}).items():
             code, text = provenance.git(checkout, "ls-tree", commit, sub_path)
             parts = text.split()

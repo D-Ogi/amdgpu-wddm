@@ -9,7 +9,9 @@ implicit or refused compiler fail their gates, the names of the models this proj
 collection of a build's outputs takes the PDB that each image names, not another file of that name.
 The end-to-end tests run build-release-set.ps1 (pwsh 7 on PATH; skipped without it): the scheduler keeps to -MaxParallel
 and to the disk budget, -Plan builds nothing, the gates refuse an unpushed commit, an AI trailer and an implicit
-compiler through the tool, and a failed build fails the release set and keeps its log while its tree goes.
+compiler through the tool, and a failed build fails the release set and keeps its log while its tree goes. A tree
+comes from the first checkout of its commit whose module stores hold every submodule commit, and -Plan fails the
+commits gate when no checkout does (BD-285).
 BC250_TEST_OUT, when set, holds the temporary trees (quick.ps1 keeps them off drive C:).
 """
 import copy
@@ -116,6 +118,32 @@ class Workspace:
         self.work = self.base / "bt"
         self.events = self.root / "events"
         self.manifest_path = self.base / "release.json"
+
+    def module_checkouts(self):
+        """BD-285: one repository "mod" with a submodule "sub" that has a submodule "inner", in three checkouts of the
+        same commit: mod-bare (a plain clone, no module store), mod-half (sub initialised, inner not) and mod-full
+        (every module store). Returns the commit."""
+        def repo(name, text):
+            path = self.root / name
+            path.mkdir()
+            git(path, "init", "-q")
+            git(path, "symbolic-ref", "HEAD", "refs/heads/main")
+            (path / f"{name}.txt").write_text(text, encoding="utf-8")
+            git(path, "add", "-A")
+            git(path, "commit", "-q", "-m", text)
+            return path
+        repo("innersrc", "inner")
+        sub = repo("subsrc", "sub")
+        git(sub, "submodule", "add", "-q", str(self.root / "innersrc"), "inner")
+        git(sub, "commit", "-q", "-m", "inner")
+        full = repo("mod-full", "mod")
+        git(full, "submodule", "add", "-q", str(sub), "sub")
+        git(full, "submodule", "update", "-q", "--init", "--recursive")
+        git(full, "commit", "-q", "-m", "sub")
+        git(self.root, "clone", "-q", str(full), "mod-bare")
+        git(self.root, "clone", "-q", str(full), "mod-half")
+        git(self.root / "mod-half", "submodule", "update", "-q", "--init")
+        return git(full, "rev-parse", "HEAD")
 
     def set_disk(self, **numbers):
         (self.guard_dir / "config.json").write_text(json.dumps(numbers), encoding="utf-8")
@@ -269,6 +297,60 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
         result, gates = self.gates(self.ws.manifest([self.ws.row("a")]))
         self.assertEqual(result["status"], "PASS", json.dumps(result, indent=1))
         self.assertIn("1 commits, 0 hits", " ".join(gates["attribution"]["lines"]))
+
+    def mod_manifest(self, commit, checkouts):
+        manifest = self.ws.manifest([self.ws.row("a", inputs={"mod": {"repo": "mod", "commit": commit}})])
+        manifest["repositories"]["mod"] = {"url": "https://example.invalid/mod", "checkouts": checkouts}
+        return manifest
+
+    def test_a_tree_comes_from_the_first_checkout_with_every_module_store(self):
+        # BD-285: locate gave the first checkout of the commit, New-Tree then found no module store there and the row
+        # failed, while a later checkout held every module.
+        import provenance
+        commit = self.ws.module_checkouts()
+        table = {"mod": {"url": "https://example.invalid/mod", "checkouts": ["mod-bare", "mod-half", "mod-full"]}}
+        repos = provenance.Repositories(table, self.ws.root, self.ws.repo)
+        self.assertEqual(repos.find("mod", commit), self.ws.root / "mod-bare", "the old answer: the first checkout")
+        found, refused = repos.find_tree("mod", commit)
+        self.assertEqual(found, self.ws.root / "mod-full")
+        self.assertEqual(len(refused), 2, refused)
+        self.assertIn("mod-bare", refused[0])
+        self.assertIn("submodule sub has no module store", refused[0])
+        self.assertIn("mod-half", refused[1])
+        self.assertIn("submodule sub/inner has no module store", refused[1])
+        # No checkout qualifies: each one is named with what it lacks.
+        table["mod"]["checkouts"] = ["mod-bare", "mod-half"]
+        found, refused = provenance.Repositories(table, self.ws.root, self.ws.repo).find_tree("mod", commit)
+        self.assertIsNone(found)
+        self.assertEqual(len(refused), 2, refused)
+        # A module store that exists but lacks the gitlink commit is refused as well.
+        full = self.ws.root / "mod-full"
+        (self.ws.root / "subsrc" / "more.txt").write_text("more", encoding="utf-8")
+        git(self.ws.root / "subsrc", "add", "-A")
+        git(self.ws.root / "subsrc", "commit", "-q", "-m", "more")
+        git(full / "sub", "fetch", "-q", "origin")
+        git(full / "sub", "checkout", "-q", "--detach", "origin/main")
+        git(full, "add", "sub")
+        git(full, "commit", "-q", "-m", "sub moves")
+        newer = git(full, "rev-parse", "HEAD")
+        # Without --no-recurse-submodules git fetches the new sub commit into the populated module store as well.
+        git(self.ws.root / "mod-half", "fetch", "-q", "--no-recurse-submodules", "origin")
+        table["mod"]["checkouts"] = ["mod-half", "mod-full"]
+        found, refused = provenance.Repositories(table, self.ws.root, self.ws.repo).find_tree("mod", newer)
+        self.assertEqual(found, full)
+        self.assertRegex(refused[0], r"submodule sub: module store .* has no commit [0-9a-f]{8}")
+
+    def test_the_plan_refuses_a_tree_that_no_checkout_can_make(self):
+        commit = self.ws.module_checkouts()
+        _, gates = self.gates(self.mod_manifest(commit, ["mod-bare", "mod-full"]), allow_unpushed=True)
+        self.assertEqual(gates["commits"]["status"], "PASS", gates["commits"])
+        _, gates = self.gates(self.mod_manifest(commit, ["mod-bare", "mod-half"]), allow_unpushed=True)
+        self.assertEqual(gates["commits"]["status"], "FAIL", gates["commits"])
+        text = " ".join(gates["commits"]["lines"])
+        self.assertIn("no checkout can make its tree with every submodule", text)
+        self.assertIn("a input mod", text)
+        self.assertIn("mod-bare", text)
+        self.assertIn("mod-half", text)
 
     def test_the_state_history_gate(self):
         # A row that builds the state worker: driver/state/history at its commit holds the catalog of the previous
@@ -811,8 +893,33 @@ class ReleaseSetRuns(unittest.TestCase):
         git(self.ws.repo, "worktree", "prune")
         self.assertTreesGone()
 
+    def test_a_tree_input_comes_from_a_later_checkout_with_the_module_stores(self):
+        # BD-285 end to end: the first checkout of the commit has no module store. The tree comes from the second,
+        # with sub/inner checked out (the stub hashes a file of it into its output); with no checkout that has every
+        # store, -Plan already fails the commits gate and nothing is built.
+        commit = self.ws.module_checkouts()
+
+        def manifest(checkouts):
+            row = self.ws.row("a", sleep=0, extra=["-Payload", "{input:mod}/sub/inner/innersrc.txt"],
+                              inputs={"mod": {"repo": "mod", "commit": commit}})
+            m = self.ws.manifest([row])
+            m["repositories"]["mod"] = {"url": "https://example.invalid/mod", "checkouts": checkouts}
+            return m
+        code, out = self.ws.run(manifest(["mod-bare", "mod-full"]), "-AllowUnpushed")
+        self.assertEqual(code, 0, out)
+        inner = build_release_set.sha256_file(self.ws.root / "innersrc" / "innersrc.txt")
+        self.assertIn(inner, (self.ws.out / "artifacts" / "release" / "a" / "a.bin").read_text())
+        self.assertEqual(len(git(self.ws.root / "mod-bare", "worktree", "list").splitlines()), 1)
+        self.assertEqual(len(git(self.ws.root / "mod-full", "worktree", "list").splitlines()), 1)
+        shutil.rmtree(self.ws.events)
+        code, out = self.ws.run(manifest(["mod-bare", "mod-half"]), "-AllowUnpushed", "-Plan")
+        self.assertEqual(code, 1, out)
+        self.assertIn("gate commits: FAIL", out)
+        self.assertIn("no checkout can make its tree with every submodule", out)
+        self.assertFalse(self.ws.events.exists())
+
     def builds(self):
-        return {b["id"]: (b["status"], bool(b.get("kept")), bool(b.get("carried"))) for b in self.ws.report()["builds"]}
+        return {b["id"]:(b["status"], bool(b.get("kept")), bool(b.get("carried"))) for b in self.ws.report()["builds"]}
 
     def test_a_gate_failed_run_keeps_the_earlier_builds(self):
         # BD-244: a run that stopped at the size gate wrote a report with no builds, and the next -Only run in the

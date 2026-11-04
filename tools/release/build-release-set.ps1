@@ -876,16 +876,18 @@ function Update-Measure {
 try {
     # Registrations of trees under -Work whose folder is gone (a -Keep run whose Work folder was deleted, a killed
     # job): git worktree add refuses their paths. Only those of this -Work go, never those of another lane (BD-264).
+    # A tree comes from the checkout that New-Tree picks (Get-Checkout -Tree, BD-285); an input of listed paths is an
+    # archive of the first checkout of its commit and makes no work tree.
     $treeRepos = @(foreach ($b in $planData.builds) {
-        , @($b.repo, $b.commit); , @($planData.recipe_repository, $b.recipe_commit)
-        foreach ($i in @(if ($b.inputs) { $b.inputs.Values })) { if ($i.repo -and $i.commit) { , @($i.repo, $i.commit) } }
+        , @($b.repo, $b.commit, $true); , @($planData.recipe_repository, $b.recipe_commit, $true)
+        foreach ($i in @(if ($b.inputs) { $b.inputs.Values })) { if ($i.repo -and $i.commit) { , @($i.repo, $i.commit, -not $i.paths) } }
     })
     $seen = @{}; $checkouts = @{}
     foreach ($pair in $treeRepos) {
-        $key = "$($pair[0])@$($pair[1])"
+        $key = "$($pair[0])@$($pair[1])@$($pair[2])"
         if ($seen.ContainsKey($key)) { continue }
         $seen[$key] = $true
-        $checkouts[(Get-Checkout $ctx $pair[0] $pair[1])] = $true
+        $checkouts[(Get-Checkout $ctx $pair[0] $pair[1] -Tree:$pair[2])] = $true
     }
     foreach ($c in $checkouts.Keys) {
         foreach ($p in @(Remove-StaleWorktrees $ctx $c $Work)) { "$(Get-Utc) removed the registration of $p in $c (its folder is gone)" }

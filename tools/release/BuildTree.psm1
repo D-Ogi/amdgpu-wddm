@@ -47,8 +47,12 @@ function Invoke-Locked($Context, [scriptblock]$Action) {
     }
 }
 
-function Get-Checkout($Context, [string]$Name, [string]$Commit) {
-    $out = & python $Context.Provenance locate --sources $Context.Sources --root $Context.Root --repo $Context.Repo $Name $Commit 2>&1
+# -Tree: the first checkout whose module stores also hold the commit of every submodule, recursively (BD-285). A
+# checkout that holds the commit but not a module of it is passed over; with none left, the message names each
+# checkout and what it lacks. The plan gate of build_release_set.py asks provenance.py the same question.
+function Get-Checkout($Context, [string]$Name, [string]$Commit, [switch]$Tree) {
+    $treeArg = @(if ($Tree) { '--tree' })
+    $out = & python $Context.Provenance locate --sources $Context.Sources --root $Context.Root --repo $Context.Repo @treeArg $Name $Commit 2>&1
     if ($LASTEXITCODE -ne 0) { throw "locate ${Name} ${Commit}: $out" }
     return ($out | Select-Object -Last 1).Trim()
 }
@@ -62,7 +66,7 @@ function Get-Checkout($Context, [string]$Name, [string]$Commit) {
 # holds every line of the fork (the DXVK engine reads v3.1.1-119-gc271e0e0 in a clone and v3.1.1-119-gc271e0e00 in
 # scratch\forksync\dxvk, and that string is in the image).
 function New-Tree($Context, [string]$Name, [string]$Commit, [string]$Dest, [switch]$Clone) {
-    $checkout = Get-Checkout $Context $Name $Commit
+    $checkout = Get-Checkout $Context $Name $Commit -Tree
     $common = (& git -C $checkout rev-parse --git-common-dir).Trim()
     if (-not [IO.Path]::IsPathRooted($common)) { $common = Join-Path $checkout $common }
     if ($Clone) {
@@ -259,7 +263,7 @@ function Remove-SharedBuildTree($Context, [string]$Name, [string]$Commit, [strin
         }
         $cursor = [IO.Path]::GetDirectoryName($cursor)
     }
-    $checkout = Get-Checkout $Context $Name $Commit
+    $checkout = Get-Checkout $Context $Name $Commit -Tree
     Invoke-Locked $Context {
         $listing = @(& git -C $checkout worktree list --porcelain)
         if ($LASTEXITCODE) { throw 'Cannot enumerate registered worktrees' }

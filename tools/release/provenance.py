@@ -44,8 +44,10 @@ Usage:
                       checkout of its repository. This one runs for a lab candidate as well, where the whole gate
                       above is off: it asks whether the id exists, never whether it is published.
   provenance.py digest <file>...     SHA-256 and Authenticode digest of PE files
-  provenance.py locate --sources ... --root ... --repo ... <repository name> <commit>
-                                     the checkout that holds the commit (used by rebuild-check.ps1)
+  provenance.py locate --sources ... --root ... --repo ... [--tree] <repository name> <commit>
+                                     the checkout that holds the commit (used by rebuild-check.ps1); with --tree
+                                     the first one whose module stores also hold the commit of every submodule,
+                                     recursively: the checkout that New-Tree makes a tree from (BD-285)
 """
 import argparse
 import hashlib
@@ -85,6 +87,53 @@ def git(cwd, *args, binary=False):
     if binary:
         return r.returncode, r.stdout
     return r.returncode, r.stdout.decode("utf-8", "replace").strip()
+
+
+def git_dir(gitdir, *args):
+    r = subprocess.run(["git", f"--git-dir={gitdir}", *args], capture_output=True)
+    return r.returncode, r.stdout.decode("utf-8", "replace").strip()
+
+
+def module_gaps(checkout, commit):
+    """What the module stores of the checkout lack for a tree of the commit with its submodules, as
+    Initialize-Submodules of BuildTree.psm1 makes it: each entry of .gitmodules at the commit needs the module store
+    <common dir>/modules/<name>, that store needs the gitlink commit, and the same holds inside it for the submodules
+    of that commit (<store>/modules/<name>). An empty list: the tree can be made offline from this checkout."""
+    code, common = git(checkout, "rev-parse", "--git-common-dir")
+    if code != 0:
+        return [f"git rev-parse --git-common-dir failed in {checkout}"]
+    common = Path(common)
+    if not common.is_absolute():
+        common = Path(checkout) / common
+    return _store_gaps(common, commit, common / "modules", "")
+
+
+def _store_gaps(gitdir, commit, module_base, prefix):
+    code, _ = git_dir(gitdir, "cat-file", "-e", f"{commit}:.gitmodules")
+    if code != 0:
+        return []
+    code, text = git_dir(gitdir, "config", "--blob", f"{commit}:.gitmodules", "--get-regexp", r"^submodule\..*\.path$")
+    gaps = []
+    for line in text.splitlines() if code == 0 else []:
+        m = re.match(r"^submodule\.(.+)\.path\s+(.+)$", line)
+        if not m:
+            continue
+        name, sub = m.group(1), m.group(2).strip()
+        where = f"{prefix}{sub}"
+        store = Path(module_base).joinpath(*name.split("/"))
+        if not store.exists():
+            gaps.append(f"submodule {where} has no module store ({store})")
+            continue
+        code, entry = git_dir(gitdir, "ls-tree", commit, "--", sub)
+        parts = entry.split()
+        if code != 0 or len(parts) < 3 or parts[1] != "commit":
+            continue
+        link = parts[2]
+        if git_dir(store, "cat-file", "-e", f"{link}^{{commit}}")[0] != 0:
+            gaps.append(f"submodule {where}: module store {store} has no commit {link[:8]}")
+            continue
+        gaps += _store_gaps(store, link, store / "modules", f"{where}/")
+    return gaps
 
 
 def sha256_bytes(data):
@@ -160,6 +209,7 @@ class Repositories:
         self.root = Path(root)
         self.recipe_repo_path = Path(recipe_repo_path)
         self._found = {}
+        self._trees = {}
         self._published = {}
 
     def checkouts(self, name):
@@ -182,6 +232,31 @@ class Repositories:
                     self._found[key] = c
                     break
         return self._found[key]
+
+    def find_all(self, name, commit):
+        """Every checkout that holds the commit, in the order of the table."""
+        out = []
+        for c in self.checkouts(name):
+            if c.exists() and git(c, "cat-file", "-e", f"{commit}^{{commit}}")[0] == 0:
+                out.append(c)
+        return out
+
+    def find_tree(self, name, commit):
+        """The checkout that New-Tree (BuildTree.psm1) makes a tree of the commit from: the first one that holds the
+        commit and whose module stores hold the gitlink commit of every submodule, recursively (BD-285). Returns
+        (checkout or None, [what each refused checkout lacks]). A checkout of the commit whose module store lacks a
+        module only fails a build once its tree is made, so the plan and the build ask this same question."""
+        key = (name, commit)
+        if key not in self._trees:
+            refused, chosen = [], None
+            for c in self.find_all(name, commit):
+                gaps = module_gaps(c, commit)
+                if not gaps:
+                    chosen = c
+                    break
+                refused.append(f"{c}: {'; '.join(gaps)}")
+            self._trees[key] = (chosen, refused)
+        return self._trees[key]
 
     def published(self, name, commit, url=None):
         """Remote-tracking branches that contain the commit, of remotes whose URL is the repository's URL (or the
@@ -832,6 +907,8 @@ def main():
     loc.add_argument("--sources", required=True)
     loc.add_argument("--root", required=True)
     loc.add_argument("--repo", required=True)
+    loc.add_argument("--tree", action="store_true",
+                     help="the first checkout whose module stores also hold every submodule commit (New-Tree)")
     loc.add_argument("name")
     loc.add_argument("commit")
     args = parser.parse_args()
@@ -855,7 +932,20 @@ def main():
         if args.name not in table:
             print(f"repository {args.name!r} is not in 'repositories'", file=sys.stderr)
             return 1
-        found = Repositories(table, args.root, args.repo).find(args.name, args.commit)
+        repos = Repositories(table, args.root, args.repo)
+        if args.tree:
+            found, refused = repos.find_tree(args.name, args.commit)
+            if found is None:
+                if refused:
+                    print(f"{args.name} {args.commit}: no checkout can make its tree with every submodule: "
+                          + " | ".join(refused), file=sys.stderr)
+                else:
+                    tried = ", ".join(str(c) for c in repos.checkouts(args.name))
+                    print(f"{args.name} {args.commit} is in no checkout ({tried})", file=sys.stderr)
+                return 1
+            print(found)
+            return 0
+        found = repos.find(args.name, args.commit)
         if found is None:
             print(f"{args.name} {args.commit} is in no checkout", file=sys.stderr)
             return 1
