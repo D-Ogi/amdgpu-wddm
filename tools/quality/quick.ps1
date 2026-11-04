@@ -326,6 +326,17 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # store with a time stamp), the signtool arguments, the read-back of a signature, which files take which signer, and
  # where build-release.ps1 signs the submission CAB and the single-file setup. No store is opened, nothing is signed.
  Check 'release-user-mode-signing' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-user-mode-signing.ps1" -WorkRoot "$Out\release-user-mode-signing" }
+ # Install update (docs/design/self-update.md). The writer: the content identities, the packs and the update manifest
+ # (nagi_update.py). The release side: the committed signed fixture, the signtool wrap and the pinned signer, with a
+ # changed byte, a signer that is not pinned and no signature as negative controls. The installer library under Windows
+ # PowerShell 5.1: the plan, the apps link switch on real junctions, the pack check and the transaction decision, each
+ # with mutants that the cases must catch, and the pinned list against the control application. End to end: apply.ps1
+ # on a stand-in install (an apps update, a bad app that goes back, refusals, a driver handoff). Nothing in
+ # %ProgramData% or the install folder of this PC is touched; every tree is under $Out.
+ Check 'nagi-update-writer' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\nagi-update-writer").FullName; & python -B -m unittest discover -s "$repo\tools\release" -p 'test_nagi_update.py' }
+ Check 'nagi-update-release' { & pwsh -NoProfile -File "$repo\tools\release\test-nagi-update-release.ps1" -WorkRoot "$Out\nagi-update-release" }
+ Check 'nagi-update-apply' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-nagi-update.ps1" -WorkRoot "$Out\nagi-update-apply" }
+ Check 'nagi-update-apply-e2e' { & pwsh -NoProfile -File "$repo\tools\release\test-nagi-update-apply.ps1" -WorkRoot "$Out\nagi-update-apply-e2e" }
  # BD-163: the setup unit tests catch the cleanup and the permission list of the code before 0fdd8179 (two mutations
  # of Payload.cs), in folders of their own. Nothing in %ProgramData% is touched.
  Check 'setup-bd163-controls' { & pwsh -NoProfile -File "$repo\tools\win\amdgpu_wddm_setup\test-bd163-controls.ps1" -Out "$Out\setup-bd163-controls" }
