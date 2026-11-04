@@ -417,7 +417,9 @@ namespace AmdgpuWddmControl
                 return error == null ? "settings.wallpaper.done" : "settings.wallpaper.failed";
             }));
             wallRestore = Ui.Button(Strings.T("settings.wallpaper.restore"), (s, e) => wallRun(() => NagiWallpaper.Restore(wallPrefs)));
-            wall.Add(Ui.Row(wallSet, wallRestore));
+            // The two buttons wrap: in English and Polish they are wider together than a narrow column (BD-291: 424
+            // px in a card of 417 on unit A), and a button does not wrap its own text.
+            wall.Add(Ui.WrapRow(wall.Inner, wallSet, wallRestore));
             wall.Add(wallResult);
             p.Controls.Add(wall);
 
