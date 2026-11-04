@@ -1404,12 +1404,12 @@ rocm.state.unknown|mt|d16948e7|Nie sprawdzono
 search.rocm.payload|mt|b6198d0f|ROCm / PyTorch
 
 # ---- processor temperature limit (the default cap of 90 C, docs/design/tuner.md) ----
-graphics.limit.title|mt|49db3253|Limit temperatury procesora (dławienie)
-graphics.limit.intro|mt|4cf75170|Procesor sam zwalnia, gdy osiągnie tę temperaturę. Niższy limit utrzymuje go chłodniejszym przy długim, dużym obciążeniu. Wyższy limit daje trochę więcej szybkości i więcej ciepła.
+graphics.limit.title|mt|49db3253|Limit temperatury procesora (throttling)
+graphics.limit.intro|mt|4cf75170|Procesor sam zwalnia, gdy osiągnie tę temperaturę. Niższy limit utrzymuje go chłodniejszym przy długim, dużym obciążeniu. Wyższy limit daje trochę więcej wydajności i więcej ciepła.
 graphics.limit.apply|mt|3aff98ba|Przetestuj ten limit
-tuner.limit.default|mt|5f68e9b0|Wartość domyślna to {0} °C. {1} °C to najwyższy własny limit procesora.
+tuner.limit.default|mt|5f68e9b0|Wartość domyślna to {0} °C. {1} °C to fabryczny limit procesora.
 tuner.limit.in-force.default|mt|0bbe6cf5|{0} °C (domyślnie)
-tuner.limit.off|mt|04306f74|Strojenie procesora jest wyłączone, więc obowiązuje własny limit procesora: {0} °C.
+tuner.limit.off|mt|04306f74|Strojenie procesora jest wyłączone, więc obowiązuje fabryczny limit procesora: {0} °C.
 search.graphics.cpu-limit|mt|c90220a5|Limit temperatury procesora
-search.graphics.cpu-limit.terms|mt|8aa04853|temperatura procesora|temperatura CPU|dławienie|limit termiczny|Tctl|gorący|przegrzewanie
-help.setting.cpu-limit|mt|34c700af|Temperatura, przy której procesor sam zwalnia. Wartość domyślna trzyma długie, duże obciążenie z dala od najwyższego własnego limitu procesora. Zmiana działa jako test, który sam się wycofuje, dopóki jej nie zachowasz.
+search.graphics.cpu-limit.terms|mt|8aa04853|temperatura procesora|temperatura CPU|throttling|dławienie|limit termiczny|Tctl|gorący|przegrzewanie
+help.setting.cpu-limit|mt|34c700af|Temperatura, przy której procesor sam zwalnia. Wartość domyślna trzyma procesor pod długim, dużym obciążeniem z dala od jego fabrycznego limitu. Zmiana działa jako test, który sam się wycofuje, dopóki jej nie zachowasz.
