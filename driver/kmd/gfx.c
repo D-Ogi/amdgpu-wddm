@@ -1411,9 +1411,11 @@ ULONG GfxQueueReset(_Inout_ BC250_DEVICE* Device, ULONG Vmid, BOOLEAN Compute, _
         for (i = 0; i < 2; i++)
         {
             GuardLog("gfx: queue reset compute hqd %s: active 0x%lX vmid 0x%lX persist 0x%lX base 0x%lX:%08lX "
-                     "ctl 0x%lX rptr 0x%lX wptr 0x%lX:%08lX db 0x%lX", i == 0 ? "before" : "after",
-                     w[i]->active, w[i]->vmid, w[i]->persistent_state, w[i]->pq_base_hi, w[i]->pq_base,
-                     w[i]->pq_control, w[i]->pq_rptr, w[i]->pq_wptr_hi, w[i]->pq_wptr_lo, w[i]->doorbell_control);
+                     "ctl 0x%lX", i == 0 ? "before" : "after", w[i]->active, w[i]->vmid, w[i]->persistent_state,
+                     w[i]->pq_base_hi, w[i]->pq_base, w[i]->pq_control);
+            GuardLog("gfx: queue reset compute hqd %s: rptr 0x%lX wptr 0x%lX:%08lX db 0x%lX",
+                     i == 0 ? "before" : "after", w[i]->pq_rptr, w[i]->pq_wptr_hi, w[i]->pq_wptr_lo,
+                     w[i]->doorbell_control);
             GuardLog("gfx: queue reset compute hqd %s: ib 0x%lX:%08lX rptr 0x%lX ctl 0x%lX dequeue req 0x%lX "
                      "status 0x%lX", i == 0 ? "before" : "after", w[i]->ib_base_hi, w[i]->ib_base, w[i]->ib_rptr,
                      w[i]->ib_control, w[i]->dequeue_request, w[i]->dequeue_status);
