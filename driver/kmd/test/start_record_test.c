@@ -307,7 +307,7 @@ typedef struct {
     void* Mmio;
     LONG RetainedPowerPhase;
     unsigned long long DisplayReservationEnd,RuntimeFramebufferLength;
-    LONG RuntimePostValid,RuntimeDisplayChanged,RuntimePlaneBlank;
+    LONG RuntimePostValid,RuntimeDisplayChanged;
     BOOLEAN SourceVisible, DcnWriteEnabled, PostDisplayStopAttempted;
     LONG StartVisibilityPending;
     NTSTATUS PostDisplayStopStatus;
@@ -383,7 +383,7 @@ static unsigned connectorPrepares,connectorStarts,connectorDirty;
 static NTSTATUS ConnectorBufferPrepare(BC250_DEVICE* d) {
     connectorPrepares++;
     if(d->DisplayReservationEnd || d->RuntimeFramebufferLength || d->RuntimePostValid ||
-       d->RuntimeDisplayChanged || d->RuntimePlaneBlank) connectorDirty++;
+       d->RuntimeDisplayChanged) connectorDirty++;
     return STATUS_SUCCESS;
 }
 /* dcn_cursor.c: the hardware pointer's surfaces follow the handoff buffer, and the stop turns the pointer off before
@@ -548,7 +548,7 @@ static void Reset(void)
     memset(vals, 0, sizeof(vals));
     memset(&dev, 0, sizeof(dev));
     dev.DisplayReservationEnd=1;dev.RuntimeFramebufferLength=1;
-    dev.RuntimePostValid=dev.RuntimeDisplayChanged=dev.RuntimePlaneBlank=1;
+    dev.RuntimePostValid=dev.RuntimeDisplayChanged=1;
     dev.DcnWriteEnabled = TRUE;
     memset(&iface, 0, sizeof(iface));
     trace[0] = 0; logCount = 0; lastStage = 0; durable = 0; earlierImageUnconfirmed = FALSE;

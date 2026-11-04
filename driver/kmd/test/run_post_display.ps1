@@ -14,7 +14,7 @@ if($LASTEXITCODE -ne 0){throw 'Source extraction failed'}
 if($OldRuntimeOrder) {
     $path="$Out\post_display_actual.c"
     $text=[IO.File]::ReadAllText($path)
-    $pattern='(?s)    // DCN201 selects dcn10_program_pipe.*?    InterlockedExchange\(&Device->RuntimePlaneBlank,0\);\r?\n'
+    $pattern='(?s)    // DCN201 selects dcn10_program_pipe.*?    status=Bc250Dcn201PlaneBlank\(&io,0\);\r?\n    if \(!NT_SUCCESS\(status\)\) goto failed;\r?\n'
     $runtimeEnd=$text.IndexOf("NTSTATUS DcnLinkSurfaceCapture(")
     if($runtimeEnd -lt 0){throw "Runtime scope anchor missing"}
     $matches=[regex]::Matches($text.Substring(0,$runtimeEnd),$pattern)

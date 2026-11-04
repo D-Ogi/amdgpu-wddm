@@ -1193,7 +1193,6 @@ static NTSTATUS DcnResumeOwnedFetch(_Inout_ BC250_DEVICE* Device)
     if (status >= 0 && (value & HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK))
         status = RuntimeWrite(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL,
             value & ~(HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK | HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK));
-    if (status >= 0) InterlockedExchange(&Device->RuntimePlaneBlank, 0);
     return (NTSTATUS)status;
 }
 
@@ -1707,7 +1706,6 @@ NTSTATUS DcnFaultBlank(_Inout_ BC250_DEVICE* Device)
     status = RuntimeRead(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &value);
     if (status >= 0)
     {
-        InterlockedExchange(&Device->RuntimePlaneBlank, 1);
         status = RuntimeWrite(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL,
                               value | HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK | HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK);
     }
@@ -1818,7 +1816,6 @@ static NTSTATUS DcnReservedSurfaceCore(_Inout_ BC250_DEVICE* Device, ULONG Width
         OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)));
     status=DcnSetVisibility(Device,FALSE);
     if (!NT_SUCCESS(status)) goto failed;
-    InterlockedExchange(&Device->RuntimePlaneBlank,1);
     status=Bc250Dcn201PlaneBlank(&io,1);
     if (!NT_SUCCESS(status)) goto failed;
     // Begin already proved a driver-owned bridge before publishing the writer. Only reserved buffers can be
@@ -1833,7 +1830,6 @@ static NTSTATUS DcnReservedSurfaceCore(_Inout_ BC250_DEVICE* Device, ULONG Width
     // output still blank, then prove the frame-latched address took effect.
     status=Bc250Dcn201PlaneBlank(&io,0);
     if (!NT_SUCCESS(status)) goto failed;
-    InterlockedExchange(&Device->RuntimePlaneBlank,0);
     for (;;) {
         status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL,&pending);
         if (NT_SUCCESS(status)) status=DcnReadScanoutPhysical(Device,&scanned);
@@ -1859,7 +1855,6 @@ failed:
     // Best-effort bounded cleanup. Preserve the original failure; a failed
     // MMIO cleanup cannot establish physical blanking or a drained plane.
     (void)DcnSetVisibility(Device,FALSE);
-    InterlockedExchange(&Device->RuntimePlaneBlank,1);
     (void)Bc250Dcn201PlaneBlank(&io,1);
     return status;
 }

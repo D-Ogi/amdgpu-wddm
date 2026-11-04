@@ -39,7 +39,7 @@ typedef struct _BC250_DEVICE {
     UCHAR* RuntimeFramebuffer;
     SIZE_T RuntimeFramebufferLength;
     PHYSICAL_ADDRESS RuntimeFramebufferPhysical;
-    volatile long RuntimeDisplayChanged,RuntimePostValid,RuntimePlaneBlank;
+    volatile long RuntimeDisplayChanged,RuntimePostValid;
     volatile long StartVisibilityPending;
     BOOLEAN DcnWriteEnabled,DcnFirmwareKnown,DcnDiverged,SystemDisplayReady,DcnBlanked;
     ULONG DcnFirmwarePitch,DcnCurrentPitch;
@@ -382,7 +382,7 @@ int main(void)
     writes=modeset_restores;
     CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
     CHECK(width==2 && height==2 && model.scanned==0x490000000ull && d.Post.Width==4);
-    CHECK(modeset_restores==writes && plane_blanks==1 && plane_unblanks==1 && !d.RuntimePlaneBlank);
+    CHECK(modeset_restores==writes && plane_blanks==1 && plane_unblanks==1);
     Bc250SystemDisplayWrite(&d,src,4,1,16,0,0);CHECK(fb[0]==1 && fb[1]==2 && fb[2]==0);
     // Ordinary allocation handoff preserves OTG visibility, but must release
     // HUBP so a later application flip can scan out without a cold unblank.
@@ -390,7 +390,7 @@ int main(void)
     model.blank=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK|OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
     memset(&writer,0,sizeof(writer));model.requested=0x123000;writes=model.writes;
     CHECK(DcnRuntimeSurface(&d,FALSE)==STATUS_SUCCESS);
-    CHECK(!d.RuntimePlaneBlank && plane_unblanks==2 && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
+    CHECK(plane_unblanks==2 && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
     CHECK(writer.resumes==1 && writer.writes_at_resume==writes && writer.requested_at_resume==0x123000);
     CHECK(model.scanned==0x490000000ull);
     memset(&writer,0,sizeof(writer));
@@ -402,7 +402,7 @@ int main(void)
     CHECK(DcnRuntimeSurface(&d,TRUE)==STATUS_IO_TIMEOUT);
     // The surface poll has its original 50 ms bound; initial and cleanup black
     // each observe a full model frame with one 100 us counter poll.
-    CHECK(d.RuntimePlaneBlank && plane_is_blank && plane_unblanks==4 && model.elapsed==50200);
+    CHECK(plane_is_blank && plane_unblanks==4 && model.elapsed==50200);
     CHECK(d.DcnBlanked && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
     {
         BC250_LINK_SURFACE saved,refused;
@@ -549,10 +549,10 @@ int main(void)
         CHECK(logged("dcnflip: stop: verified firmware scanout status 0x00000000"));
         // This driver's own blank (a detach or a fault: HUBP_BLANK_EN with HUBP_TTU_DISABLE) is undone through the
         // pipe's list, as hubp1_set_blank(false) does, and the address latches once the plane fetches again.
-        init(&d,fb);model.hubp=FIRMWARE_HUBP|HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK;plane_is_blank=1;d.RuntimePlaneBlank=1;
+        init(&d,fb);model.hubp=FIRMWARE_HUBP|HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK;plane_is_blank=1;
         CHECK(DcnStop(&d)==STATUS_SUCCESS && model.scanned==d.DcnFirmwareAddress);
         CHECK(model.hubp==(FIRMWARE_HUBP&~HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK) && hubp_writes==1 && !denied_writes);
-        CHECK(!plane_is_blank && !d.RuntimePlaneBlank && !d.DcnDiverged);
+        CHECK(!plane_is_blank && !d.DcnDiverged);
         CHECK(logged("dcnflip: stop: firmware known 1 diverged 1 address 470000000 pitch 32 post pitch 32 hubp 000F1003"));
         CHECK(logged("dcnflip: stop: verified firmware scanout status 0x00000000"));
         // ISM (verify-15-28, 26): the native-shape restore after the surface. Before, ModesetStop dropped its status

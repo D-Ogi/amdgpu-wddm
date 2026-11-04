@@ -143,7 +143,6 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     device->RuntimeFramebufferLength=0;
     device->RuntimePostValid=0;
     device->RuntimeDisplayChanged=0;
-    device->RuntimePlaneBlank=0;
 
     StartHealthBegin(device,WddmFullTableSelected());
     CuModeBegin(device);

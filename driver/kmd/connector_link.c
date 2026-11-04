@@ -821,7 +821,6 @@ static NTSTATUS DisableOwned(CONNECTOR_LINK* c)
     // replace the failing ATOM result with a later successful TX_OFF.
     if(c->Aux.Open) {LINK_CALL(c,BC250_LINK_AUX_CLOSE,CloseAux(c));}
     LINK_CALL(c,BC250_LINK_PLANE_BLANK,Bc250Dcn201PlaneBlank(&c->Io,1));
-    InterlockedExchange(&c->Device->RuntimePlaneBlank,1);
     LINK_CALL(c,BC250_LINK_VISIBILITY,DcnSetVisibility(c->Device,FALSE));
     if(c->Protocol==BC250_LINK_DP && c->NeedsDisable) {
         LINK_CALL(c,BC250_LINK_STREAM_BLANK,Bc250DpStreamBlank(&c->Io));
@@ -1161,7 +1160,7 @@ recover:
         LogFailure(&c->Failure,"recovery");
         if(!NT_SUCCESS(rollback)) {
             Begin(c,Snapshot->Generation,TRUE);(void)Bc250Dcn201PlaneBlank(&c->Io,1);
-            InterlockedExchange(&Device->RuntimePlaneBlank,1);InterlockedExchange(&Device->RuntimePostValid,0);
+            InterlockedExchange(&Device->RuntimePostValid,0);
             Device->SourceVisible=FALSE;Device->ModeActive=FALSE;c->Active=FALSE;
         }
         RetainRecovery(c,&originalFailure,&previousTarget,replayAttempted,rollback);

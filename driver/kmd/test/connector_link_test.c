@@ -62,7 +62,7 @@ typedef struct _BC250_DEVICE {
     ULONGLONG RuntimeFramebufferLength;
     LARGE_INTEGER RuntimeFramebufferPhysical;
     TEST_POST Post, RuntimePost;
-    volatile LONG RuntimePostValid, RuntimePlaneBlank, RuntimeDisplayChanged;
+    volatile LONG RuntimePostValid, RuntimeDisplayChanged;
     struct { volatile LONG SourceWidth, SourceHeight; ULONG Scaling,InheritedSupport;NTSTATUS InheritedPipeStatus;BC250_INHERITED_PIPE InheritedPipe; } Modeset;
     struct {unsigned Lock;BC250_CONNECTOR_OPEN_DIAG FirstOpen;BC250_CONNECTOR_TARGET_DIAG FirstAttempt;
         BC250_CONNECTOR_FAILURE_DIAG FirstFailure;BC250_CONNECTOR_RECOVERY_DIAG FirstRecovery;} Connector;
@@ -559,7 +559,7 @@ static NTSTATUS DcnRuntimeSurface(BC250_DEVICE* d,BOOLEAN unblank)
 { long s=boundary_step(d->ConnectorLink,unblank?"surface":"suspend-surface",0);CHECK(primary_locks);if(unblank)CHECK(crtc_enabled && d->RuntimePostValid);
   CHECK(pipe_plans==pipe_programs);if(unblank)CHECK(pipe_programs);   /* BD-197: the plan before every surface write */
   /* BD-179: an internal unblank cannot lift the startup hold (DcnSetVisibilityCore). */
-  if(!s) {scanned_surface=2;plane_blank=0;d->RuntimePlaneBlank=0;if(unblank && !d->StartVisibilityPending)otg_blank=0;}return s; }
+  if(!s) {scanned_surface=2;plane_blank=0;if(unblank && !d->StartVisibilityPending)otg_blank=0;}return s; }
 static NTSTATUS DcnRestorePostDisplay(BC250_DEVICE* d)
 {
     long status=boundary_step(d->ConnectorLink,"original-surface",0);
@@ -630,7 +630,7 @@ static void success(void)
         unsigned old_steps;D3DKMDT_VIDEO_SIGNAL_INFO signal;
         reset(kind);CHECK(commit()==0);balanced();CHECK(link.Active && !link.Inherited && link.Current.Valid);
         CHECK(link.Completed==1 && !link.Refused && link.Phase==6 && audio_starts==1);
-        CHECK(device.RuntimePostValid && device.SourceVisible && !plane_blank && !device.RuntimePlaneBlank && !otg_blank && !output_black);
+        CHECK(device.RuntimePostValid && device.SourceVisible && !plane_blank && !otg_blank && !output_black);
         CHECK(device.RuntimePost.Width==1920 && device.RuntimePost.Pitch==7680);
         CHECK(device.RuntimePost.PhysicAddress.QuadPart==device.RuntimeFramebufferPhysical.QuadPart);
         CHECK(link.Signal.PixelRate==148500000 && link.Signal.TotalSize.cx==2200);

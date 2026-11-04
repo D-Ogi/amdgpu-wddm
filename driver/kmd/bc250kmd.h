@@ -271,7 +271,6 @@ typedef struct _BC250_DEVICE {
     DXGK_DISPLAY_INFORMATION RuntimePost;
     volatile LONG RuntimePostValid;
     volatile LONG RuntimeDisplayChanged;
-    volatile LONG RuntimePlaneBlank;
     BOOLEAN SystemDisplayReady;        // bugcheck CPU writes only after verified scanout restore
     BOOLEAN PostDisplayStopAttempted;  // WddmStop restores before freeing scanout objects
     NTSTATUS PostDisplayStopStatus;    // separate from the ordinary StopDevice completion result
