@@ -74,6 +74,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `test-filesafe.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: equal-SHA256 skip, replacement of a file in use by rename, a re-run over a partial install, and the failed-step message with its re-run hint. |
 | `test-mesa-temp-cleanup-installer.ps1` | Called by `tools/quality/quick.ps1` under 5.1 (BD-211), inside a scratch folder. It checks which `MEMxxxx.TMP` files `installer\mesa-temp-cleanup.ps1` removes: the right name and older than a day. A file that is open or read-only stays. |
 | `test-marker-guard.ps1`, `marker_guard.py`, `marker-guard-sources.json` | Gate (build): no fix lost its comment on the way into this release. See "Marker guard" below. |
+| `test-winsys-lines.ps1`, `marker_guard.py lines`, `winsys-lines.json`, `test_winsys_lines.py` | Gate (build, quick): no fix marker is on one RADV WDDM line and not on the other (BD-204). See "Both lines" below. |
 | `test-kmd-compile.ps1` | Gate (build): `driver\kmd\build.ps1 -CompileOnly` against the WDK in `<BC250_ROOT>\toolchain\nuget`, so a release is never cut from kernel sources that do not compile. The same compile is the `kmd-compile` check of `tools\quality\quick.ps1`, which until 0.7.213 only exported the compile commands. |
 
 ```
@@ -271,6 +272,30 @@ would take the gate with it, and the commit is what was merged. A wagon gets its
 the release set. An id the head drops on purpose goes into `marker-guard-accept.txt`, one line per decision
 (`<id> <path> <reason>`); without that file the gate runs with no exceptions. The fork repositories take the same run
 with `--paths src`. One run over `driver` and `tools` takes about 15 s.
+
+## Both lines
+
+The release builds its Vulkan ICDs from more than one Mesa line. The system ICD (`vulkan_radeon.dll`) and the hosted
+ICD of the D3D11 and D3D12 shells (`amdgpu_wddm_radv.dll`) have their own lines. A fix can reach one line and not
+the other. The marker guard follows one line, so it does not see this (BD-204).
+
+`marker_guard.py lines` reads the commit that `release-sources.json` pins for the payload path of each line in
+`winsys-lines.json`. A marker is a BD id in a comment under the paths of the config. A BD id in the subject of a commit
+since the merge base of the pair is also a marker, when that commit touches those paths. For each pair of lines,
+the gate lists every marker that one line has and the other line does not have:
+
+| Finding | Meaning | Effect |
+|---|---|---|
+| `FAIL` | no entry of `accept` matches the difference | fails the gate and the release build |
+| `EQUIVALENT` | the other line has the fix under another name, and the entry names its commits | printed. A commit that is not in that line fails. |
+| `EQUIVALENT` | the other line has the same fix with a different name. Each commit of the entry must be in that line. | printed, fails when a commit is missing |
+| `OPEN` | the entry has the kind `open`: known drift that is not ported yet | printed on each run |
+| `STALE` | an entry matches no difference now. The fix is on both lines, or the marker is gone. | fails until the entry is removed |
+
+A named fix in `both_lines` must match its pattern under its path on each line. `test-winsys-lines.ps1` runs the
+gate in `build-release.ps1` on the sources of the package. `quick.ps1` runs it as `winsys-lines` when the workspace
+has `mesa-wddm`, and runs the controls of `test_winsys_lines.py` as `winsys-lines-controls`. The first config pairs
+the system line and the hosted line. The wow64 and desktop lines are not paired yet.
 
 ## Provenance
 

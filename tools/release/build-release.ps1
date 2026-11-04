@@ -732,6 +732,11 @@ $pwshExe = (Get-Process -Id $PID).Path
 $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'test-marker-guard.ps1'), '-Repo', $repo, '-Out', (Join-Path $Out 'marker-guard')) -TimeoutSeconds 600
 $r.text
 if ($r.code -ne 0) { throw 'marker guard: a fix named in a source revision has no comment in this release (see above)' }
+# BD-204: a fix marker on one RADV WDDM line of this package and not on the other (marker_guard.py lines,
+# winsys-lines.json), read from the Mesa commits that this package's sources pin.
+$r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'test-winsys-lines.ps1'), '-Sources', $sourcesPath, '-Root', $Root, '-Out', (Join-Path $Out 'winsys-lines')) -TimeoutSeconds 300
+$r.text
+if ($r.code -ne 0) { throw 'both lines: a fix marker is on one RADV WDDM line of this package and not on the other (see above)' }
 # The packaged INF's own settings against the defaults table this package carries (BD-091, tools\quality\inf_gates.py):
 # every immutable default the INF writes is the generated released value; runtime overrides belong to the shared
 # state generation and survive through the installer transaction. The packaged INF, not the repository's: it re-stamps

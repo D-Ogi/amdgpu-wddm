@@ -219,6 +219,11 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # The release gates read the commit that the package names: a dirty tree, or one that changes during a run, stops build-release.ps1 (BD-263).
  Check 'tree-state' { & pwsh -NoProfile -File "$repo\tools\release\test-tree-state.ps1" -Out (New-Item -ItemType Directory -Force "$Out\tree-state").FullName }
  Check 'release-build-set' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-build-set").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_build_release_set.py' }
+ # BD-204: a fix marker on one RADV WDDM line and not on the other (marker_guard.py lines, winsys-lines.json). The
+ # controls run on throwaway repositories; the gate reads the Mesa lines that release-sources.json pins, in the
+ # workspace's Mesa checkout, and build-release.ps1 runs it again on the package's own sources.
+ Check 'winsys-lines-controls' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\winsys-lines-controls").FullName; & python -B -m unittest discover -s "$repo\tools\release" -p 'test_winsys_lines.py' }
+ CheckIf 'winsys-lines' (Join-Path $Workspace 'mesa-wddm') { & python -B "$repo\tools\release\marker_guard.py" lines --config "$repo\tools\release\winsys-lines.json" --sources "$repo\tools\release\release-sources.json" --root $Workspace --json "$Out\winsys-lines.json" }
  Check 'release-driver-package' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-driver-package").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_driver_package.py' }
  Check 'release-source-versions' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-source-versions").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_source_versions.py' }
  # docs/testing/THIRD-PARTY.md names the commit of each payload file and the submodules of its build: the same commits
