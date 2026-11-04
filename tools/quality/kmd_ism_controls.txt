@@ -1,0 +1,14 @@
+# Positive controls of tools/quality/kmd_ism.py: candidates that a person confirmed as hidden state in the
+# implicit-state-machine audit of 2026-11-04 (the audit entry is named on each line). The kmd-ism gate fails when
+# one of these keys is not in its report, because then the detector cannot see a known case.
+#
+# One control a line: <candidate key><tab><what it is>. A fix that removes the hidden state also removes its
+# key: that fix moves the line below "## fixed", with the commit, so the history of the controls stays readable.
+dead _BC250_DEVICE.RetainedDownState	audit entry 1: power.c writes the down state, no D0 path reads it
+int-state _BC250_DEVICE.RetainedPowerPhase	audit entry 1: phases 0 to 4 in a LONG, no enum names them
+cluster _BC250_WDDM.RetainedPowerPause _BC250_WDDM.Stopping	audit entry 5: the retained-suspend pair, legal combinations only by comment
+cluster _BC250_DEVICE.RetainedPowerPhase _BC250_WDDM.Stopping	audit entries 1 and 5: GpuSetPowerRetained writes the phase, its callees the WDDM pause
+cluster _BC250_DEVICE.RetainedPowerPhase _BC250_WDDM.RetainedPowerPause	audit entries 1 and 5: the same transition, the second flag
+cluster _BC250_CPU_STATE.OnTrial _BC250_CPU_STATE.RevertOwed	audit entry 32: a trial and its revert debt, which CpuStart zeroes without the chip
+cluster _BC250_IH.Enabled _BC250_IH.SetUp	audit entry 13: the interrupt ring life cycle in two flags (IhIsActive is SetUp or Enabled)
+## fixed

@@ -1,0 +1,237 @@
+# kmd-ism ratchet baseline: the implicit-state-machine candidates of the kernel-mode driver on the day the
+# gate started (2026-11-04). The gate: tools/quality/kmd_ism.py, run by tools/quality/quick.ps1 (kmd-ism).
+# How to read a candidate: docs/testing/kmd-static-checks.md.
+#
+# One candidate key a line, without line numbers. A key that is not here fails the gate. A key here that the
+# driver no longer has is a note (--prune removes it). --accept writes the keys of today; the reviewer of
+# that change reads every new line and says why it is not a defect, or the code changes instead.
+cluster BC250_ATOM_RESULT.Status CONNECTOR_LINK.Active
+cluster BC250_ATOM_RESULT.Status CONNECTOR_LINK.Phase
+cluster BC250_ATOM_RESULT.Status CONNECTOR_LINK.RecoveryModeActive
+cluster BC250_ATOM_RESULT.Status CONNECTOR_LINK.RecoveryVisible
+cluster BC250_ATOM_RESULT.Status CONNECTOR_LINK.Suspended
+cluster BC250_ATOM_RESULT.Status LINK_MODE.Inherited
+cluster BC250_ATOM_RESULT.Status LINK_MODE.Valid
+cluster BC250_ATOM_RESULT.Status _BC250_DEVICE.ModeActive
+cluster BC250_ATOM_RESULT.Status _BC250_DEVICE.SourceVisible
+cluster BC250_ATOM_RESULT.Status _vcs_dpi_display_pipe_dest_params_st.drr_display
+cluster BC250_ATOM_RESULT.Status _vcs_dpi_display_pipe_dest_params_st.synchronize_timings
+cluster CONNECTOR_LINK.Active CONNECTOR_LINK.NeedsDisable
+cluster CONNECTOR_LINK.Active CONNECTOR_LINK.Phase
+cluster CONNECTOR_LINK.Active CONNECTOR_LINK.Suspended
+cluster CONNECTOR_LINK.Active LINK_MODE.Inherited
+cluster CONNECTOR_LINK.Active LINK_MODE.Valid
+cluster CONNECTOR_LINK.Active _BC250_DEVICE.ModeActive
+cluster CONNECTOR_LINK.Active _BC250_DEVICE.SourceVisible
+cluster CONNECTOR_LINK.Active _vcs_dpi_display_pipe_dest_params_st.drr_display
+cluster CONNECTOR_LINK.Active _vcs_dpi_display_pipe_dest_params_st.synchronize_timings
+cluster CONNECTOR_LINK.Active dc_crtc_timing.display_color_depth
+cluster CONNECTOR_LINK.Active dc_crtc_timing.pixel_encoding
+cluster CONNECTOR_LINK.ClockSession LINK_MODE.Inherited
+cluster CONNECTOR_LINK.ClockSession LINK_MODE.Valid
+cluster CONNECTOR_LINK.ClockSession _BC250_DEVICE.ModeActive
+cluster CONNECTOR_LINK.ClockSession _BC250_DEVICE.SourceVisible
+cluster CONNECTOR_LINK.ClockSession _vcs_dpi_display_pipe_dest_params_st.drr_display
+cluster CONNECTOR_LINK.ClockSession _vcs_dpi_display_pipe_dest_params_st.synchronize_timings
+cluster CONNECTOR_LINK.Inherited LINK_MODE.Inherited
+cluster CONNECTOR_LINK.Inherited LINK_MODE.Valid
+cluster CONNECTOR_LINK.Inherited _BC250_DEVICE.SourceVisible
+cluster CONNECTOR_LINK.Inherited _vcs_dpi_display_pipe_dest_params_st.drr_display
+cluster CONNECTOR_LINK.Inherited _vcs_dpi_display_pipe_dest_params_st.synchronize_timings
+cluster CONNECTOR_LINK.Inherited dc_crtc_timing.display_color_depth
+cluster CONNECTOR_LINK.Inherited dc_crtc_timing.pixel_encoding
+cluster CONNECTOR_LINK.NeedsDisable CONNECTOR_LINK.Phase
+cluster CONNECTOR_LINK.NeedsDisable LINK_MODE.Inherited
+cluster CONNECTOR_LINK.NeedsDisable LINK_MODE.Valid
+cluster CONNECTOR_LINK.NeedsDisable _BC250_DEVICE.ModeActive
+cluster CONNECTOR_LINK.NeedsDisable _BC250_DEVICE.SourceVisible
+cluster CONNECTOR_LINK.NeedsDisable _vcs_dpi_display_pipe_dest_params_st.drr_display
+cluster CONNECTOR_LINK.NeedsDisable _vcs_dpi_display_pipe_dest_params_st.synchronize_timings
+cluster CONNECTOR_LINK.NeedsDisable dc_crtc_timing.display_color_depth
+cluster CONNECTOR_LINK.NeedsDisable dc_crtc_timing.pixel_encoding
+cluster CONNECTOR_LINK.Phase LINK_MODE.Inherited
+cluster CONNECTOR_LINK.Phase LINK_MODE.Valid
+cluster CONNECTOR_LINK.Phase _BC250_DEVICE.ModeActive
+cluster CONNECTOR_LINK.Phase _BC250_DEVICE.SourceVisible
+cluster CONNECTOR_LINK.Phase _vcs_dpi_display_pipe_dest_params_st.drr_display
+cluster CONNECTOR_LINK.Phase _vcs_dpi_display_pipe_dest_params_st.synchronize_timings
+cluster CONNECTOR_LINK.Phase dc_crtc_timing.display_color_depth
+cluster CONNECTOR_LINK.Phase dc_crtc_timing.pixel_encoding
+cluster CONNECTOR_LINK.RecoveryModeActive LINK_MODE.Valid
+cluster CONNECTOR_LINK.RecoveryModeActive _BC250_DEVICE.ModeActive
+cluster CONNECTOR_LINK.RecoveryVisible LINK_MODE.Valid
+cluster CONNECTOR_LINK.RecoveryVisible _BC250_DEVICE.ModeActive
+cluster CONNECTOR_LINK.Suspended LINK_MODE.Valid
+cluster CONNECTOR_LINK.Suspended _BC250_DEVICE.ModeActive
+cluster LINK_MODE.Inherited LINK_MODE.Valid
+cluster LINK_MODE.Inherited _BC250_DEVICE.ModeActive
+cluster LINK_MODE.Inherited _BC250_DEVICE.SourceVisible
+cluster LINK_MODE.Inherited _vcs_dpi_display_pipe_dest_params_st.drr_display
+cluster LINK_MODE.Inherited _vcs_dpi_display_pipe_dest_params_st.synchronize_timings
+cluster LINK_MODE.Inherited dc_crtc_timing.display_color_depth
+cluster LINK_MODE.Inherited dc_crtc_timing.pixel_encoding
+cluster LINK_MODE.Valid _BC250_DEVICE.ModeActive
+cluster LINK_MODE.Valid _BC250_DEVICE.SourceVisible
+cluster LINK_MODE.Valid _vcs_dpi_display_pipe_dest_params_st.drr_display
+cluster LINK_MODE.Valid _vcs_dpi_display_pipe_dest_params_st.synchronize_timings
+cluster LINK_MODE.Valid dc_crtc_timing.display_color_depth
+cluster LINK_MODE.Valid dc_crtc_timing.pixel_encoding
+cluster _BC250_CPU_STATE.Confirmed _BC250_CPU_STATE.CoreConfirmed
+cluster _BC250_CPU_STATE.Confirmed _BC250_CPU_STATE.CorePending
+cluster _BC250_CPU_STATE.Confirmed _BC250_CPU_STATE.Pending
+cluster _BC250_CPU_STATE.CoreConfirmed _BC250_CPU_STATE.CorePending
+cluster _BC250_CPU_STATE.CoreConfirmed _BC250_CPU_STATE.Pending
+cluster _BC250_CPU_STATE.CorePending _BC250_CPU_STATE.Pending
+cluster _BC250_CPU_STATE.OnTrial _BC250_CPU_STATE.Proven
+cluster _BC250_CPU_STATE.OnTrial _BC250_CPU_STATE.RevertOwed
+cluster _BC250_CPU_STATE.Proven _BC250_CPU_STATE.RevertOwed
+cluster _BC250_CPU_STATE.Proven _BC250_CPU_STATE.StartWork
+cluster _BC250_CU_MODE_STATE.Confirmed _BC250_CU_MODE_STATE.Pending
+cluster _BC250_CU_MODE_STATE.Confirmed _BC250_CU_MODE_STATE.StockRecord
+cluster _BC250_CU_MODE_STATE.Pending _BC250_CU_MODE_STATE.StockRecord
+cluster _BC250_CU_MODE_STATE.Pending _BC250_CU_MODE_STATE.Valid
+cluster _BC250_DEVICE.GfxTlbBootstrap _BC250_GPUMEM.TlbDirty
+cluster _BC250_DEVICE.GpuStopUnconfirmed _BC250_DEVICE.IhQuiet
+cluster _BC250_DEVICE.IhQuiet _BC250_IH.Enabled
+cluster _BC250_DEVICE.IhQuiet _BC250_IH.PowerSuspended
+cluster _BC250_DEVICE.InheritedSignalValid _BC250_DEVICE.InheritedTmds
+cluster _BC250_DEVICE.InheritedSignalValid _BC250_MODESET.InheritedFixed
+cluster _BC250_DEVICE.InheritedTmds _BC250_MODESET.InheritedFixed
+cluster _BC250_DEVICE.ModeActive _BC250_DEVICE.SourceVisible
+cluster _BC250_DEVICE.ModeActive _BC250_MODESET.PipeChanged
+cluster _BC250_DEVICE.ModeActive _vcs_dpi_display_pipe_dest_params_st.drr_display
+cluster _BC250_DEVICE.ModeActive _vcs_dpi_display_pipe_dest_params_st.synchronize_timings
+cluster _BC250_DEVICE.ModeActive dc_crtc_timing.display_color_depth
+cluster _BC250_DEVICE.ModeActive dc_crtc_timing.pixel_encoding
+cluster _BC250_DEVICE.RetainedDownAction _BC250_WDDM.RetainedPowerPause
+cluster _BC250_DEVICE.RetainedDownAction _BC250_WDDM.Stopping
+cluster _BC250_DEVICE.RetainedDownAction _BC250_WDDM.VSyncArmed
+cluster _BC250_DEVICE.RetainedDownState _BC250_WDDM.RetainedPowerPause
+cluster _BC250_DEVICE.RetainedDownState _BC250_WDDM.Stopping
+cluster _BC250_DEVICE.RetainedDownState _BC250_WDDM.VSyncArmed
+cluster _BC250_DEVICE.RetainedPowerPhase _BC250_WDDM.RetainedPowerPause
+cluster _BC250_DEVICE.RetainedPowerPhase _BC250_WDDM.Stopping
+cluster _BC250_DEVICE.RetainedPowerPhase _BC250_WDDM.VSyncArmed
+cluster _BC250_DEVICE.SourceVisible _vcs_dpi_display_pipe_dest_params_st.drr_display
+cluster _BC250_DEVICE.SourceVisible _vcs_dpi_display_pipe_dest_params_st.synchronize_timings
+cluster _BC250_DEVICE.SourceVisible dc_crtc_timing.display_color_depth
+cluster _BC250_DEVICE.SourceVisible dc_crtc_timing.pixel_encoding
+cluster _BC250_DPM_SNAP.ComputeOn _BC250_DPM_SNAP.ComputeSet
+cluster _BC250_DPM_STATE.CurveConfirmed _BC250_DPM_STATE.CurvePending
+cluster _BC250_FAN_OWNER.PendingRenew _BC250_FAN_OWNER.PendingSet
+cluster _BC250_GART.Enabled _BC250_GART.PowerSuspended
+cluster _BC250_GFX.Failed _BC250_GFX.PagingReady
+cluster _BC250_GFX.Failed _BC250_GFX.PowerSuspended
+cluster _BC250_GFX.FencePage _BC250_GFX.PagingReady
+cluster _BC250_GFX.FencePage _BC250_GFX.PagingWindowReady
+cluster _BC250_GFX.PagingReady _BC250_GFX.PagingWindowReady
+cluster _BC250_HWMON_OWNER.LastValid _BC250_HWMON_OWNER.Online
+cluster _BC250_IH.Enabled _BC250_IH.PowerSuspended
+cluster _BC250_IH.Enabled _BC250_IH.SetUp
+cluster _BC250_IH.Enabled _BC250_SEQUENCE.Dpc
+cluster _BC250_MODESET.DownstreamRead _BC250_MODESET.DpcdValid
+cluster _BC250_MODESET.PipeChanged _BC250_MODESET.Suspended
+cluster _BC250_PSP.Loaded _BC250_PSP.PowerSuspended
+cluster _BC250_PSP.PowerSuspended _BC250_PSP.RingUp
+cluster _BC250_PSP.PowerSuspended _BC250_PSP.TmrUp
+cluster _BC250_PSP.RingUp _BC250_PSP.TmrUp
+cluster _BC250_SMU_METRICS.LoggedEnd bc250_smu_metrics_reader.state
+cluster _BC250_WDDM.ComputeDeferredValid _BC250_WDDM.DeferredValid
+cluster _BC250_WDDM.ComputeDeferredValid _BC250_WDDM.PagingDeferredValid
+cluster _BC250_WDDM.DeferredValid _BC250_WDDM.PagingDeferredValid
+cluster _BC250_WDDM.DesiredOwed _BC250_WDDM.PrimaryNeedsRestore
+cluster _BC250_WDDM.DesiredOwed _BC250_WDDM.WriterDeposit
+cluster _BC250_WDDM.PagingDiagnosticTaken _BC250_WDDM.PagingHwPending
+cluster _BC250_WDDM.PrimaryNeedsRestore _BC250_WDDM.WriterActive
+cluster _BC250_WDDM.PrimaryNeedsRestore _BC250_WDDM.WriterDeposit
+cluster _BC250_WDDM.PrimaryNeedsRestore _BC250_WDDM.WriterReady
+cluster _BC250_WDDM.PrimaryNeedsRestore _BC250_WDDM.WriterResumed
+cluster _BC250_WDDM.ReportActive _BC250_WDDM.ReportAgain
+cluster _BC250_WDDM.RetainedPowerPause _BC250_WDDM.Stopping
+cluster _BC250_WDDM.RetainedPowerPause _BC250_WDDM.VSyncArmed
+cluster _BC250_WDDM.Stopping _BC250_WDDM.VSyncArmed
+cluster _BC250_WDDM.WriterActive _BC250_WDDM.WriterDeposit
+cluster _BC250_WDDM.WriterActive _BC250_WDDM.WriterReady
+cluster _BC250_WDDM.WriterActive _BC250_WDDM.WriterResumed
+cluster _BC250_WDDM.WriterDeposit _BC250_WDDM.WriterReady
+cluster _BC250_WDDM.WriterDeposit _BC250_WDDM.WriterResumed
+cluster _BC250_WDDM.WriterReady _BC250_WDDM.WriterResumed
+cluster _DCN_CURSOR.ImageValid _DCN_CURSOR.Ready
+cluster _vcs_dpi_display_pipe_dest_params_st.drr_display _vcs_dpi_display_pipe_dest_params_st.synchronize_timings
+cluster _vcs_dpi_display_pipe_dest_params_st.drr_display dc_crtc_timing.display_color_depth
+cluster _vcs_dpi_display_pipe_dest_params_st.drr_display dc_crtc_timing.pixel_encoding
+cluster _vcs_dpi_display_pipe_dest_params_st.synchronize_timings dc_crtc_timing.display_color_depth
+cluster _vcs_dpi_display_pipe_dest_params_st.synchronize_timings dc_crtc_timing.pixel_encoding
+dead BC250_GFX_COMPLETION.Epoch
+dead BC250_HDMI_LINK.Restoring
+dead _BC250_AUX_SESSION.CleanupStatus
+dead _BC250_AUX_SESSION.LastReply
+dead _BC250_AUX_SESSION.LastResult
+dead _BC250_AUX_SESSION.LastStatus
+dead _BC250_CURSOR_PLACE.Left
+dead _BC250_CURSOR_PLACE.Top
+dead _BC250_DEVICE.RetainedDownState
+dead _BC250_DEVICE.RuntimePlaneBlank
+dead _BC250_RING_GAP.LongestQpc
+dead _BC250_WDDM.PagingDeferredFence
+dead _BC250_WDDM.PrimarySegment
+dead _BC250_WDDM_OBJECT.UmdHeap
+dead dc_crtc_timing.flags
+int-state CONNECTOR_LINK.Phase
+int-state _BC250_DEVICE.FramebufferCacheProtect
+int-state _BC250_DEVICE.RetainedPowerPhase
+int-state bc250_cu_decision.reason
+int-state bc250_dpm_decision.reason
+int-state bc250_hwmon_identity.reason
+int-state bc250_joint.reason
+int-state bc250_smu_metrics_reader.state
+sticky BC250_HIP_JOURNAL_OWNER.Enabled
+sticky _BC250_CPU_STATE.JointFault
+sticky _BC250_DEVICE.DcnFirmwareKnown
+sticky _BC250_DEVICE.DcnPipeConnector
+sticky _BC250_DEVICE.DcnPlaneFormats
+sticky _BC250_DEVICE.GartStopPrepared
+sticky _BC250_DEVICE.GfxAccessClosed
+sticky _BC250_DEVICE.GfxStopPrepared
+sticky _BC250_DEVICE.GpuStopUnconfirmed
+sticky _BC250_DEVICE.StopDone
+sticky _BC250_DPM_STATE.Confirmed
+sticky _BC250_DPM_STATE.GaveUp
+sticky _BC250_FAN_OWNER.BlindDone
+sticky _BC250_FAN_OWNER.Stored
+sticky _BC250_GART.SnapshotValid
+sticky _BC250_GFX.VmidProbed
+sticky _BC250_HWMON_OWNER.LastValid
+sticky _BC250_PRESENT_OBSERVATION.ListValid
+sticky _BC250_SEQUENCE.Dpc
+sticky _BC250_SMU_METRICS.LoggedEnd
+sticky _BC250_SMU_OWNER.SnapValid
+sticky _BC250_START_HEALTH_STATE.Closed
+sticky _BC250_START_HEALTH_STATE.Recovered
+sticky _BC250_WDDM_OBJECT.UmdAlloc
+sticky _BC250_WDDM_OBJECT.UmdContext
+sticky _DCN_CURSOR.EverReady
+sticky _DCN_CURSOR.ShapeValid
+sticky _DCN_CURSOR.Stopped
+switch WddmSubmitDpcCheck BC250_SUBMIT_OBSERVATION
+switch bc250_fw_locate bc250_fw_id
+switch bc250_kiq_map_queues amdgpu_ring_type
+switch dcn10_link_encoder_setup signal_type
+switch dpp201_cnv_setup surface_pixel_format
+switch enc1_stream_encoder_dp_set_stream_attribute dc_color_depth
+switch enc1_stream_encoder_dp_set_stream_attribute dc_color_space
+switch enc1_stream_encoder_dp_set_stream_attribute dc_pixel_encoding
+switch enc1_stream_encoder_set_stream_attribute_helper dc_pixel_encoding
+switch get_audio_clock_info dc_color_depth
+switch get_frontend_source engine_id
+switch hdmi_stream_registers dc_color_depth
+switch hubp1_program_pixel_format surface_pixel_format
+switch hubp1_program_surface_flip_and_addr dc_plane_addr_type
+switch opp2_set_disp_pattern_generator controller_dp_color_space
+switch opp2_set_disp_pattern_generator controller_dp_test_pattern
+switch opp2_set_disp_pattern_generator dc_color_depth
+switch opp2_set_disp_pattern_generator test_pattern_color_format
+switch set_avi_info_frame dc_aspect_ratio
+switch set_avi_info_frame dc_color_space
+switch set_avi_info_frame dc_pixel_encoding
+switch setup_panel_mode dp_panel_mode
