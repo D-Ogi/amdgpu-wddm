@@ -137,8 +137,6 @@ cluster _BC250_PSP.PowerSuspended _BC250_PSP.TmrUp
 cluster _BC250_PSP.RingUp _BC250_PSP.TmrUp
 cluster _BC250_SMU_METRICS.LoggedEnd bc250_smu_metrics_reader.state
 cluster _BC250_WDDM.ComputeDeferredValid _BC250_WDDM.DeferredValid
-cluster _BC250_WDDM.ComputeDeferredValid _BC250_WDDM.PagingDeferredValid
-cluster _BC250_WDDM.DeferredValid _BC250_WDDM.PagingDeferredValid
 cluster _BC250_WDDM.DesiredOwed _BC250_WDDM.PrimaryNeedsRestore
 cluster _BC250_WDDM.DesiredOwed _BC250_WDDM.WriterDeposit
 cluster _BC250_WDDM.PagingDiagnosticTaken _BC250_WDDM.PagingHwPending
@@ -163,7 +161,6 @@ cluster _vcs_dpi_display_pipe_dest_params_st.drr_display dc_crtc_timing.pixel_en
 cluster _vcs_dpi_display_pipe_dest_params_st.synchronize_timings dc_crtc_timing.display_color_depth
 cluster _vcs_dpi_display_pipe_dest_params_st.synchronize_timings dc_crtc_timing.pixel_encoding
 dead BC250_GFX_COMPLETION.Epoch
-dead BC250_HDMI_LINK.Restoring
 dead _BC250_AUX_SESSION.CleanupStatus
 dead _BC250_AUX_SESSION.LastReply
 dead _BC250_AUX_SESSION.LastResult
@@ -171,9 +168,7 @@ dead _BC250_AUX_SESSION.LastStatus
 dead _BC250_CURSOR_PLACE.Left
 dead _BC250_CURSOR_PLACE.Top
 dead _BC250_DEVICE.RetainedDownState
-dead _BC250_DEVICE.RuntimePlaneBlank
 dead _BC250_RING_GAP.LongestQpc
-dead _BC250_WDDM.PagingDeferredFence
 dead _BC250_WDDM.PrimarySegment
 dead _BC250_WDDM_OBJECT.UmdHeap
 dead dc_crtc_timing.flags
