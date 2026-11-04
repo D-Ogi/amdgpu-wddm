@@ -14,7 +14,10 @@ param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
     [string]$Out = "$Root\scratch\modeset",
     [string]$Kits = "$Root\toolchain\nuget",
-    [string]$KitVersion = '10.0.26100.0'
+    [string]$KitVersion = '10.0.26100.0',
+    # Negative control (Fails in quick.ps1): ModesetStop before ISM 26, which cleared PipeChanged and dropped the
+    # status of the native-shape restore. Only modeset_stop_test runs, and it must fail by a check.
+    [switch]$StopStatusDropped
 )
 
 $ErrorActionPreference = 'Stop'
@@ -61,6 +64,32 @@ $tests = [ordered]@{
 $extra = @{
     'mode_admit_test' = @('/fp:precise', "/I$repo\driver\shim\dml201")
     'dcn_plane_test'  = @('/fp:precise', "/I$repo\driver\shim\dml201")
+    'modeset_stop_test' = @("/I$Out")
+}
+# ISM 26: ModesetStop (modeset.c) unchanged, for modeset_stop_test.c.
+$tests['modeset_stop_test'] = @()
+$modesetSource = [IO.File]::ReadAllText((Join-Path $kmd 'modeset.c'))
+$stopMatches = [regex]::Matches($modesetSource, '(?ms)^NTSTATUS ModesetStop\(_Inout_ BC250_DEVICE\* Device\)\r?\n\{.*?^\}\r?\n')
+if ($stopMatches.Count -ne 1) { throw "Expected one ModesetStop definition, found $($stopMatches.Count)" }
+$stopBody = $stopMatches[0].Value
+if ($StopStatusDropped) {
+    $anchors = @('if (NT_SUCCESS(status)) m->PipeChanged = FALSE;', 'return status >= 0 ? STATUS_SUCCESS : (NTSTATUS)status;')
+    foreach ($a in $anchors) {
+        if (([regex]::Matches($stopBody, [regex]::Escape($a))).Count -ne 1) { throw 'ModesetStop mutation anchor changed' }
+    }
+    $stopBody = $stopBody.Replace($anchors[0], 'm->PipeChanged = FALSE; if (Device == NULL) {}').Replace($anchors[1],
+        'return STATUS_SUCCESS;')
+}
+[IO.File]::WriteAllText((Join-Path $Out 'modeset_stop_actual.inc'), $stopBody)
+if ($StopStatusDropped) {
+    $tobj = Join-Path $obj 'modeset_stop_test'
+    New-Item -ItemType Directory -Force $tobj | Out-Null
+    & $cl /nologo /TC /W4 /WX /O2 /MT "/I$Out" "/I$($msvc.FullName)\include" "/I$sdk\Include\$KitVersion\ucrt" `
+        "/Fo$tobj\" "/Fe$Out\modeset_stop_test.exe" (Join-Path $here 'modeset_stop_test.c') `
+        /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$sdklib\ucrt\x64" "/LIBPATH:$sdklib\um\x64"
+    if ($LASTEXITCODE -ne 0) { throw 'Host build of modeset_stop_test failed' }
+    . (Join-Path $here 'host_native.ps1')
+    Exit-NativeTest "$Out\modeset_stop_test.exe"
 }
 $failed = @()
 & python (Join-Path $repo 'tools\import\extract_display.py') --check

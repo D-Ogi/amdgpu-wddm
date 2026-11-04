@@ -730,6 +730,34 @@ static void disable_suspend_resume(void)
     reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkDisable(&device,7)==STATUS_DEVICE_NOT_READY && !primary_enters && !boundary_steps);balanced();
     reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkSuspend(&device)==STATUS_DEVICE_NOT_READY && !primary_enters && !boundary_steps);balanced();
 }
+/* ISM (verify-15-28, 23): an HPD edge moves the connector to generation 8 while the link carries generation 7's mode.
+ * A disable that fails partway leaves the link active with that mode. Before the fix, Begin had written 8 into
+ * link.Generation, so ConnectorLinkCurrentSignal gave the old sink's signal to the new generation. The link keeps
+ * the old sink's generation now, and answers NOT_READY until the worker's next disable takes the link off. */
+static void failed_disable_generation(void)
+{
+    D3DKMDT_VIDEO_SIGNAL_INFO s;unsigned kind,n,total;
+    for(kind=BC250_SINK_DP;kind<=BC250_SINK_DVI;++kind) {
+        reset(kind);CHECK(commit()==0);balanced();boundary_steps=0;
+        observed_generation=8;CHECK(ConnectorLinkDisable(&device,8)==STATUS_SUCCESS);balanced();total=boundary_steps;
+        CHECK(total && !link.Active);
+        for(n=1;n<=total;++n) {
+            reset(kind);CHECK(commit()==0);balanced();CHECK(link.Generation==7);
+            observed_generation=8;boundary_steps=0;event_count=0;fail_step=n;fault_triggered=0;
+            CHECK(!NT_SUCCESS(ConnectorLinkDisable(&device,8)));CHECK(fault_triggered);balanced();
+            CHECK(link.Active && link.Generation==7);
+            CHECK(ConnectorLinkCurrentSignal(&device,&s)==STATUS_DEVICE_NOT_READY);
+            /* The worker's re-arm: the next disable of generation 8 takes the link off. */
+            fail_step=0;CHECK(ConnectorLinkDisable(&device,8)==STATUS_SUCCESS);balanced();
+            CHECK(!link.Active && link.Generation==8);
+            CHECK(ConnectorLinkCurrentSignal(&device,&s)==STATUS_DEVICE_NOT_READY);
+        }
+    }
+    /* A disable that succeeds takes the new generation, as before. */
+    reset(BC250_SINK_HDMI);CHECK(commit()==0);observed_generation=8;
+    CHECK(ConnectorLinkDisable(&device,8)==STATUS_SUCCESS && !link.Active && link.Generation==8);balanced();
+    reset(BC250_SINK_HDMI);
+}
 /* The hardware pointer (docs/design/hardware-pointer.md): the plan budgets its cursor, a timing that DML refuses with
  * the cursor is planned again without it, the cursor goes off before the pipe changes and comes back on the new
  * pipe, and the inherited pipe gets the plan's cursor TTU from the cursor. */
@@ -1908,7 +1936,7 @@ int main(void)
     cold_recovery();
     cold_prepare();
     release_then_fresh_start();
-    success();refusal();failure_sweep();rollback();cancellation_and_power();disable_suspend_resume();changed_sink_resume();ownership_and_cleanup();retained_aux_journal();
+    success();refusal();failure_sweep();rollback();cancellation_and_power();disable_suspend_resume();failed_disable_generation();changed_sink_resume();ownership_and_cleanup();retained_aux_journal();
     detach_before_apply();
     hardware_pointer();
     keep_breadcrumbs();

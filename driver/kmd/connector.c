@@ -7,7 +7,7 @@
 #define CONNECTOR_TAG 'cC2B'
 #define CONNECTOR_DEBOUNCE_100NS (-500000LL) // one 50 ms settling interval
 #define CONNECTOR_DISCOVERY_US 250000ul
-#define CONNECTOR_BUSY_REARMS 3u // worker re-arms of one generation after a BUSY disable
+#define CONNECTOR_DISABLE_REARMS 3u // worker re-arms of one generation after a failed disable
 // BD-195: a DP sink can raise HPD before its AUX receiver answers (a monitor that wakes from standby on the plug).
 // Linux retrieve_link_cap waits for it: wake_up_aux_channel, then up to 20 DPCD reads 30 ms apart. The worker does the
 // same with whole discoveries, the operation mutex released between them, about 2 s in all.
@@ -19,21 +19,36 @@ static LONG ReadAtomic(volatile LONG* Value)
     return InterlockedCompareExchange(Value, 0, 0);
 }
 
-// BD-195: a disable that answered BUSY (the writer refused or another writer
-// held the plane) is tried again by the same worker path after the debounce,
-// at most CONNECTOR_BUSY_REARMS times for one generation. Before this, the
-// worker stopped there and a re-plug got no Indicate until the next HPD edge.
-// A new generation starts a new count. Operation held.
-static BOOLEAN ConnectorBusyRearm(BC250_CONNECTOR* c, ULONG Generation)
+// What the HPD worker does after its link disable answered. Operation held.
+typedef enum _CONNECTOR_DISABLE_NEXT {
+    CONNECTOR_DISABLE_PROCEED,      // the link is off: publish the detached state
+    CONNECTOR_DISABLE_REARM,        // failed: the worker runs again for this generation after the debounce
+    CONNECTOR_DISABLE_SPENT,        // failed, the re-arms of this generation are used up: the next HPD edge starts again
+    CONNECTOR_DISABLE_STOPPED,      // failed while the connector stops or suspends: nothing to re-arm
+} CONNECTOR_DISABLE_NEXT;
+
+// BD-195 gave a BUSY disable (the writer refused, or another writer held the plane) a bounded re-arm. Every other
+// failure stopped the worker there: no publish, no Indicate, and the snapshot of the old generation stayed
+// unreadable (ConnectorSnapshotAcquire), so each commit answered NOT_READY until a physical re-plug. BUSY is not the
+// only cause: the DP-audio stop debt (DpAudioQuiesced), a failed stop of the HDMI journal, an I/O or ATOM failure in
+// the disable itself. Each failure now gets the same bounded re-arm, at most CONNECTOR_DISABLE_REARMS times for one
+// generation; each try runs the whole disable again (DpAudioStop included). A new generation starts a new count. A
+// spent count is a named result with its own counter and log line, not a silent stop.
+static CONNECTOR_DISABLE_NEXT ConnectorDisableNext(BC250_CONNECTOR* c, ULONG Generation, NTSTATUS Status)
 {
-    if (c->BusyGeneration != Generation) {
-        c->BusyGeneration = Generation;
-        c->BusyRearms = 0;
+    if (NT_SUCCESS(Status)) return CONNECTOR_DISABLE_PROCEED;
+    if (c->DisableGeneration != Generation) {
+        c->DisableGeneration = Generation;
+        c->DisableRearms = 0;
     }
-    if (c->BusyRearms >= CONNECTOR_BUSY_REARMS || !ReadAtomic(&c->Running)) return FALSE;
-    c->BusyRearms++;
+    if (!ReadAtomic(&c->Running)) return CONNECTOR_DISABLE_STOPPED;
+    if (c->DisableRearms >= CONNECTOR_DISABLE_REARMS) {
+        InterlockedIncrement(&c->DisableSpent);
+        return CONNECTOR_DISABLE_SPENT;
+    }
+    c->DisableRearms++;
     InterlockedExchange(&c->Pending, 1);
-    return TRUE;
+    return CONNECTOR_DISABLE_REARM;
 }
 
 // A discovery that found no answer yet is tried again: an AUX or DDC timeout, a NACK, a spent stall budget. Not a
@@ -331,10 +346,22 @@ static void ConnectorWorker(PDEVICE_OBJECT Object, PVOID Context)
     WorkerKeep("disable", generation, sense);
     status = ConnectorLinkDisable(device, generation);
     GuardLog("connector: disable generation %lu status %08lX", generation, (ULONG)status);
-    if (status == STATUS_DEVICE_BUSY && ConnectorBusyRearm(c, generation))
-        GuardLog("connector: disable busy generation %lu re-arm %lu of %lu",
-            generation, c->BusyRearms, (ULONG)CONNECTOR_BUSY_REARMS);
-    if (!NT_SUCCESS(status)) goto done;
+    switch (ConnectorDisableNext(c, generation, status)) {
+    case CONNECTOR_DISABLE_PROCEED:
+        break;
+    case CONNECTOR_DISABLE_REARM:
+        GuardLog("connector: disable failed generation %lu status %08lX re-arm %lu of %lu",
+            generation, (ULONG)status, c->DisableRearms, (ULONG)CONNECTOR_DISABLE_REARMS);
+        goto done;
+    case CONNECTOR_DISABLE_SPENT:
+        GuardLog("connector: disable failed generation %lu status %08lX after %lu re-arms; no snapshot until the next "
+            "HPD edge (spent %ld)", generation, (ULONG)status, (ULONG)CONNECTOR_DISABLE_REARMS,
+            ReadAtomic(&c->DisableSpent));
+        goto done;
+    case CONNECTOR_DISABLE_STOPPED:
+    default:
+        goto done;
+    }
     if (!ConnectorGenerationCurrent(device, generation)) goto stale;
     // Publish the detached state before probing another sink. A failed discovery
     // must not leave the old EDID advertised after its stream was disabled.

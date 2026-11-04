@@ -532,19 +532,23 @@ static long RestoreNative(_Inout_ BC250_DEVICE* Device, _Out_ BC250_SCALER_RESUL
     return Bc250ScalerRestoreNative(&io, Device->Post.Width, Device->Post.Height, Result);
 }
 
-void ModesetStop(_Inout_ BC250_DEVICE* Device)
+// The status is the native-shape restore's, so that DcnStop can fold it into the display handoff (BD-090): a failed
+// restore leaves a scaled pipe to the next owner, and the handoff must not report success over it. PipeChanged stays
+// set after a failure, so that ResetDevice (ModesetRestoreQuiet) still knows that the pipe is not native.
+NTSTATUS ModesetStop(_Inout_ BC250_DEVICE* Device)
 {
     BC250_MODESET* m = &Device->Modeset;
     BC250_SCALER_RESULT result;
-    long status;
+    long status = STATUS_SUCCESS;
 
-    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) return;
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) return STATUS_SUCCESS;
     ExAcquireFastMutex(&m->Lock);
     if (m->PipeChanged)
     {
         status = RestoreNative(Device, &result);
         m->Restores++;
-        m->PipeChanged = FALSE;
+        if (NT_SUCCESS(status)) m->PipeChanged = FALSE;
+        else m->LastStatus = status;
         GuardLog("display modes: stop: native %ux%u shape restored 0x%08X (scl 0x%08X -> 0x%08X)",
                  Device->Post.Width, Device->Post.Height, (ULONG)status, result.SclModeBefore, result.SclModeAfter);
     }
@@ -554,6 +558,7 @@ void ModesetStop(_Inout_ BC250_DEVICE* Device)
     GuardLog("display modes: stop: %lu commits, %lu changes, %lu refusals, %lu busy, %lu underflows, %lu restores",
              m->Commits, m->Changes, m->Refusals, m->Busy, m->Underflows, m->Restores);
     ExReleaseFastMutex(&m->Lock);
+    return status >= 0 ? STATUS_SUCCESS : (NTSTATUS)status;
 }
 
 // Bugcheck (SystemDisplayEnable, after the firmware surface is back) and ResetDevice: any IRQL. The mutex may be

@@ -840,7 +840,7 @@ static NTSTATUS DisableOwned(CONNECTOR_LINK* c)
 
 NTSTATUS ConnectorLinkDisable(BC250_DEVICE* Device,ULONG Generation)
 {
-    CONNECTOR_LINK* c=Device->ConnectorLink;ULONG primary;NTSTATUS status,finish;KIRQL irql;
+    CONNECTOR_LINK* c=Device->ConnectorLink;ULONG primary,sinkGeneration;NTSTATUS status,finish;KIRQL irql;
     if(!c)return STATUS_DEVICE_NOT_READY;
     DcnCursorPipeGone(Device);  // before the early returns: the link is going away, whatever they answer
     DpAudioStop(Device);
@@ -851,7 +851,14 @@ NTSTATUS ConnectorLinkDisable(BC250_DEVICE* Device,ULONG Generation)
     if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_DISABLE,&primary))return STATUS_DEVICE_BUSY;
     // I3 before the flag below: later writers find this bridge current with HUBP blank.
     DcnLinkSurfaceAdopt(Device);
+    // c->Generation is this operation's generation while it runs (LinkOwned), and, after it, the sink generation of
+    // the mode that an active link carries (ConnectorLinkCurrentSignal, ConnectorLinkPlaneDml). A disable that fails
+    // partway (DisableOwned returns before Active=FALSE) leaves the old sink's mode on the link: it keeps the old
+    // sink's generation, so that those readers answer NOT_READY for the new sink and not the old signal. The worker
+    // runs the disable again (ConnectorDisableNext, connector.c).
+    sinkGeneration=c->Generation;
     Begin(c,Generation,TRUE);status=DisableOwned(c);End(c);
+    if(c->Active)c->Generation=sinkGeneration;
     // A detach ends the rollback scope. A later sink, even with the same mode,
     // must never receive the previous monitor's timing as error recovery.
     c->Current.Valid=FALSE;c->Previous.Valid=FALSE;c->Detached.Valid=FALSE;

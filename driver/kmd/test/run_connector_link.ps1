@@ -1,6 +1,6 @@
 param([Parameter(Mandatory)][string]$Out,[Parameter(Mandatory)][string]$Kits,
       [switch]$OmitGeneration,[switch]$OmitOpenCleanup,[switch]$OmitColdRecovery,[switch]$OmitPrepareCleanup,
-      [switch]$OmitFirstFailure,[switch]$NestedHdmiStop,[switch]$OmitDiagnosticReplay,[switch]$WriteRequestedValue,[switch]$WrongRecoveryTarget,[switch]$OmitSurfaceAdopt,[switch]$OmitDetachedMode,[switch]$DropOptcTerm,[switch]$OmitRateLimit,[switch]$OmitDtoCheck,[switch]$OmitInheritedTarget,[switch]$KeepResumeSuspended,[switch]$ExpectFailure)
+      [switch]$OmitFirstFailure,[switch]$NestedHdmiStop,[switch]$OmitDiagnosticReplay,[switch]$WriteRequestedValue,[switch]$WrongRecoveryTarget,[switch]$OmitSurfaceAdopt,[switch]$OmitDetachedMode,[switch]$DropOptcTerm,[switch]$OmitRateLimit,[switch]$OmitDtoCheck,[switch]$OmitInheritedTarget,[switch]$KeepResumeSuspended,[switch]$KeepDisableGeneration,[switch]$ExpectFailure)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path "$PSScriptRoot/../../..").Path
 New-Item -ItemType Directory -Force $Out | Out-Null
@@ -24,6 +24,7 @@ try {
     if($OmitRateLimit){$extract+='--omit-rate-limit'}
     if($OmitDtoCheck){$extract+='--omit-dto-check'}
     if($OmitInheritedTarget){$extract+='--omit-inherited-target'}
+    if($KeepDisableGeneration){$extract+='--keep-disable-generation'}
     & python @extract
     if($LASTEXITCODE){throw 'Connector transaction extraction failed'}
     $vs=& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -property installationPath
@@ -40,7 +41,7 @@ try {
     $result | Set-Content -Encoding UTF8 "$Out/result.log"
     $result | Write-Output
     if($ExpectFailure) {
-        if((!$OmitGeneration -and !$OmitOpenCleanup -and !$OmitColdRecovery -and !$OmitPrepareCleanup -and !$OmitFirstFailure -and !$NestedHdmiStop -and !$OmitDiagnosticReplay -and !$WriteRequestedValue -and !$WrongRecoveryTarget -and !$OmitSurfaceAdopt -and !$OmitDetachedMode -and !$DropOptcTerm -and !$OmitRateLimit -and !$OmitDtoCheck -and !$OmitInheritedTarget -and !$KeepResumeSuspended) -or $code -ne 1 -or !($result -match '^FAIL line ')){throw 'Negative control did not execute an assertion failure'}
+        if((!$OmitGeneration -and !$OmitOpenCleanup -and !$OmitColdRecovery -and !$OmitPrepareCleanup -and !$OmitFirstFailure -and !$NestedHdmiStop -and !$OmitDiagnosticReplay -and !$WriteRequestedValue -and !$WrongRecoveryTarget -and !$OmitSurfaceAdopt -and !$OmitDetachedMode -and !$DropOptcTerm -and !$OmitRateLimit -and !$OmitDtoCheck -and !$OmitInheritedTarget -and !$KeepResumeSuspended -and !$KeepDisableGeneration) -or $code -ne 1 -or !($result -match '^FAIL line ')){throw 'Negative control did not execute an assertion failure'}
         Write-Output 'Connector transaction negative control: expected assertion failure'
     } elseif($code){throw 'Connector transaction assertions failed'}
 } finally {$env:TEMP=$oldTemp;$env:TMP=$oldTmp}

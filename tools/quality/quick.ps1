@@ -627,6 +627,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='link-atom';s='driver\kmd\test\run_link_atom.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='connector-buffer';s='driver\kmd\test\run_connector_buffer.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='connector-replug';s='driver\kmd\test\run_connector_replug.ps1';a=@('-Kits',$Kits)}
+  # The HPD worker before the ISM fix: only a BUSY disable re-armed it, every other failure stopped it for good.
+  @{n='connector-replug-busy-only';s='driver\kmd\test\run_connector_replug.ps1';a=@('-Kits',$Kits,'-BusyOnly');Fails=$true}
   @{n='lab-gate';s='driver\kmd\test\run_lab_gate.ps1';a=@('-Kits',$Kits)}
   @{n='connector-modes';s='driver\kmd\test\run_connector_modes.ps1';a=@('-Root',$Workspace)}
   @{n='connector-link';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits)}
@@ -646,6 +648,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='connector-link-rate-limit';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitRateLimit','-ExpectFailure')}
   @{n='connector-link-dto-check';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitDtoCheck','-ExpectFailure')}
   @{n='connector-link-inherited-target';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitInheritedTarget','-ExpectFailure')}
+  @{n='connector-link-disable-generation';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-KeepDisableGeneration','-ExpectFailure')}
   @{n='dml201';s='driver\shim\test\run_dml201.ps1';a=@('-Kits',$Kits)}
   @{n='dcn201-pipe';s='driver\shim\test\run_dcn201_pipe.ps1';a=@('-Kits',$Kits)}
   @{n='dpaudio-start-debt';s='driver\kmd\test\run_dpaudio_debt.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
@@ -664,6 +667,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   # BD-090 (31 line): the firmware's HUBP_TTU_DISABLE is not a blank of this driver's own, and no DCN write names a
   # register that MmioDcnWriteEx refuses (the write-site check runs its own positive and negative controls first).
   @{n='post-display-ttu-means-blank';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-TtuMeansBlank');Fails=$true}
+  # A failed native-shape restore (ModesetStop) fails the display handoff; the pre-fix DcnStop dropped its status.
+  @{n='post-display-shape-status-dropped';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-ShapeStatusDropped');Fails=$true}
   @{n='dcn-write-sites';s='driver\kmd\test\run_dcn_write_sites.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-flip';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-flip-pending-only';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','PendingOnly');Fails=$true}
@@ -688,6 +693,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
 @{n='dcn-plane-state-pitch';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','OnPipeIgnoresPitch');Fails=$true}
 @{n='dcn-plane-state-staged';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','StagedKept');Fails=$true}
 @{n='dcn-plane-state-modeset';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','ModesetNoRestore');Fails=$true}
+  # ISM 26: ModesetStop before the fix cleared PipeChanged and dropped the native-shape restore's status.
+  @{n='modeset-stop-status-dropped';s='driver\kmd\test\run_modeset.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-StopStatusDropped');Fails=$true}
   @{n='flip-state';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   # Its deadline is 600 s in gate-inputs.json: 22 s to 92.3 s on 2026-10-28, half of the old 180 s under load.
   @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}

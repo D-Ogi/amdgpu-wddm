@@ -6,7 +6,8 @@ import sys
 
 
 def body(source, name):
-    found = list(re.finditer(r"(?m)^(?:static )?(?:NTSTATUS|void|LONG|int|BOOLEAN) " + name + r"\([^;]*?\)\s*\{", source))
+    found = list(re.finditer(r"(?m)^(?:static )?(?:NTSTATUS|void|LONG|int|BOOLEAN|CONNECTOR_DISABLE_NEXT) " + name +
+                             r"\([^;]*?\)\s*\{", source))
     if len(found) != 1:
         raise SystemExit(f"Expected one definition of {name}, found {len(found)}")
     start = found[0].start()
@@ -21,6 +22,8 @@ def body(source, name):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)
+    # Negative control: the BD-195 rule, which re-armed the worker only after a BUSY disable.
+    parser.add_argument("--busy-only", action="store_true")
     args = parser.parse_args()
     here = Path(__file__).resolve().parent
     connector = (here.parent / "connector.c").read_text(encoding="utf-8")
@@ -35,13 +38,23 @@ def main():
     covered = set(re.findall(r"case (BC250_\w+):", checks))
     if names != covered:
         raise SystemExit(f"Escape namespace check differs: missing {sorted(names-covered)}, extra {sorted(covered-names)}")
-    # BD-195: the BUSY re-arm bound comes with its helper, so that the test reads the shipped value.
-    bound = re.findall(r"(?m)^#define CONNECTOR_BUSY_REARMS .*$", connector)
+    # BD-195: the disable re-arm bound and its result type come with the decision, so that the test reads the
+    # shipped values.
+    bound = re.findall(r"(?m)^#define CONNECTOR_DISABLE_REARMS .*$", connector)
     if len(bound) != 1:
-        raise SystemExit(f"Expected one CONNECTOR_BUSY_REARMS, found {len(bound)}")
-    actual = "\n\n".join([bound[0]] + [body(connector, name) for name in
-                                       ("ReadAtomic", "ConnectorBusyRearm", "ConnectorDiscoveryRetryable",
-                                        "ConnectorDpc", "ConnectorReplug")])
+        raise SystemExit(f"Expected one CONNECTOR_DISABLE_REARMS, found {len(bound)}")
+    kinds = re.findall(r"(?ms)^typedef enum _CONNECTOR_DISABLE_NEXT \{.*?^\} CONNECTOR_DISABLE_NEXT;$", connector)
+    if len(kinds) != 1:
+        raise SystemExit(f"Expected one CONNECTOR_DISABLE_NEXT, found {len(kinds)}")
+    decision = body(connector, "ConnectorDisableNext")
+    if args.busy_only:
+        needle = "if (NT_SUCCESS(Status)) return CONNECTOR_DISABLE_PROCEED;"
+        if decision.count(needle) != 1:
+            raise SystemExit("Disable decision mutation anchor changed")
+        decision = decision.replace(needle, needle + "\n    if (Status != STATUS_DEVICE_BUSY) return CONNECTOR_DISABLE_STOPPED;")
+    actual = "\n\n".join([bound[0], kinds[0]] + [body(connector, name) for name in ("ReadAtomic",)] + [decision] +
+                         [body(connector, name) for name in
+                          ("ConnectorDiscoveryRetryable", "ConnectorDpc", "ConnectorReplug")])
     actual += "\n\n" + body(display, "ConnectorReplugEscape")
     template = (here / "connector_replug_test.c").read_text(encoding="utf-8")
     if template.count("/* ACTUAL_SOURCE */") != 1:

@@ -179,7 +179,8 @@ static void ModesetRestoreQuiet(BC250_DEVICE*d){CHECK(!d->DcnDiverged);++modeset
 /* DcnStop (BD-090): the PnP stop's restore with its self-check lines. ModesetStop and DcnUnmapScanout are counted;
  * GuardLog keeps the lines as the ring gets them. */
 static unsigned modeset_stops,scanout_unmaps;
-static void ModesetStop(BC250_DEVICE*d){(void)d;++modeset_stops;}
+static NTSTATUS modeset_stop_status;    /* the native-shape restore's result (modeset.c ModesetStop) */
+static NTSTATUS ModesetStop(BC250_DEVICE*d){(void)d;++modeset_stops;return modeset_stop_status;}
 static void DcnUnmapScanout(BC250_DEVICE*d){(void)d;++scanout_unmaps;}
 /* dcn_cursor.c (dcn_cursor_test.c tests the cursor itself): the bugcheck screen turns the hardware pointer off before
  * its restore, and DcnStop stops it before the scan-out mapping goes. */
@@ -262,6 +263,7 @@ static void init(BC250_DEVICE*d,ULONG*fb)
     memset(d,0,sizeof(*d));memset(&model,0,sizeof(model));memset(fb,0,96);
     memset(&writer,0,sizeof(writer));plane_is_blank=0;
     model.hubp=FIRMWARE_HUBP;denied_writes=hubp_writes=0;guard_count=0;modeset_stops=scanout_unmaps=0;
+    modeset_stop_status=STATUS_SUCCESS;
     cursor_offs=cursor_stops=cursor_stop_unmaps=0;
     d->Mmio=&model;d->Framebuffer=fb;d->FramebufferLength=96;
     d->VramEnabled=TRUE;d->VramPhysical.QuadPart=0x400000000ll;d->VramLength=0x100000000ull;
@@ -553,6 +555,23 @@ int main(void)
         CHECK(!plane_is_blank && !d.RuntimePlaneBlank && !d.DcnDiverged);
         CHECK(logged("dcnflip: stop: firmware known 1 diverged 1 address 470000000 pitch 32 post pitch 32 hubp 000F1003"));
         CHECK(logged("dcnflip: stop: verified firmware scanout status 0x00000000"));
+        // ISM (verify-15-28, 26): the native-shape restore after the surface. Before, ModesetStop dropped its status
+        // and DcnStop answered the surface's alone, so a failed restore reported a successful handoff and the next
+        // owner got a scaled pipe. Now a failed shape fails the handoff, and a failed surface stays the first cause.
+        init(&d,fb);d.DcnDiverged=FALSE;model.scanned=d.DcnFirmwareAddress;model.pitch=d.DcnFirmwarePitch/4-1;
+        modeset_stop_status=STATUS_IO_TIMEOUT;
+        CHECK(DcnStop(&d)==STATUS_IO_TIMEOUT && modeset_stops==1);
+        CHECK(logged("dcnflip: stop: verified firmware scanout status 0x00000000"));
+        CHECK(logged("dcnflip: stop: native shape restore 0xC00000B5 fails the handoff"));
+        init(&d,fb);d.DcnFirmwareKnown=0;modeset_stop_status=STATUS_IO_TIMEOUT;
+        {
+            NTSTATUS stopped=DcnStop(&d);
+            CHECK(!NT_SUCCESS(stopped) && stopped!=STATUS_IO_TIMEOUT && modeset_stops==1);
+            // The surface's line is the last one: no shape line replaced the first cause.
+            CHECK(guard_count && strstr(guard_lines[(guard_count-1)%8],"verified firmware scanout status")!=NULL);
+        }
+        init(&d,fb);d.DcnDiverged=FALSE;model.scanned=d.DcnFirmwareAddress;model.pitch=d.DcnFirmwarePitch/4-1;
+        CHECK(DcnStop(&d)==STATUS_SUCCESS && modeset_stops==1);
     }
     // Ordinary restore cannot bypass startup blanking, but a validated crash
     // display is an explicit ownership transfer and must remain available.

@@ -238,6 +238,7 @@
     },
     "flavour-controls": { "inputs": ["host"], "timeout": 1200 },
     "connector-replug": { "inputs": ["host"] },
+    "connector-replug-busy-only": { "inputs": ["host"] },
     "lab-gate": { "inputs": ["host"] },
     "dcn-flip-retire-stall": { "inputs": ["host"] },
     "dcn-flip-retire-deadline": { "inputs": ["host"] },
@@ -858,6 +859,11 @@
         "host"
       ]
     },
+    "connector-link-disable-generation": {
+      "inputs": [
+        "host"
+      ]
+    },
     "dml201": {
       "inputs": [
         "host"
@@ -914,6 +920,16 @@
       ]
     },
     "post-display-wrong-saved-surface": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "modeset-stop-status-dropped": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "post-display-shape-status-dropped": {
       "inputs": [
         "host"
       ]
