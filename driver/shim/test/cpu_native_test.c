@@ -717,6 +717,64 @@ static void test_resume_and_dropped_settings(void)
            native_firmware.limit_mhz);
 }
 
+/* BD-297: a start whose read stage does not answer keeps its start work. The next pass tries again and the default
+ * cap goes in; setters wait for it. After BC250_CPU_START_TRIES attempts the worker gives up, and a readback that
+ * answers gives the start back to it. */
+static void test_a_refused_start_read_is_tried_again(void)
+{
+    BC250_ESCAPE_CPU d;
+    unsigned int writes;
+
+    Boot();
+    Chip(1200u, 3500u);
+    native_firmware.refuse_getters = 1;
+    Load();                                                         /* attempt 1 refused */
+    CHECK(!device.Cpu.Proven && device.Cpu.StartWork && !device.Cpu.StartMissed);
+    CHECK(native_firmware.cap_c == 100u && native_firmware.writes == 0);
+    CHECK(native_log_has("tried again every"));
+    CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3200u, 0u);
+    CHECK(d.Status != BC250_ESCAPE_STATUS_DONE && d.NtStatus == (ULONG)STATUS_DEVICE_NOT_READY);
+    native_firmware.refuse_getters = 0;
+    /* A readback that answers proves queue 3 while the start is owed: setters still wait for the start apply. */
+    CpuEscape(&d, BC250_CPU_OP_READBACK, 0u, 0u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && device.Cpu.Proven && device.Cpu.StartWork);
+    CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3200u, 0u);
+    CHECK(d.Status != BC250_ESCAPE_STATUS_DONE && d.NtStatus == (ULONG)STATUS_DEVICE_NOT_READY);
+    CHECK(native_firmware.writes == 0);
+    Chip(1200u, 3500u);
+    CpuThread(&device);                                             /* the next pass: the stage answers */
+    CHECK(device.Cpu.Proven && !device.Cpu.StartWork && !device.Cpu.StartMissed);
+    CHECK(native_firmware.cap_c == BC250_CPU_TEMP_DEFAULT_C);
+    CHECK(device.Cpu.Applied.temp_given && device.Cpu.Applied.temp_c == BC250_CPU_TEMP_DEFAULT_C);
+    CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3200u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && native_firmware.limit_mhz == 3200u);
+    CpuStop(&device);
+
+    /* The worker's own retries, in one thread: they run out after BC250_CPU_START_TRIES attempts. */
+    Boot();
+    Chip(1200u, 3500u);
+    native_firmware.refuse_getters = 1;
+    native_wait_passes = 20u * BC250_CPU_START_TRIES;               /* 100 ms waits, 1000 ms between attempts */
+    Load();
+    native_wait_passes = 0u;
+    CHECK(!device.Cpu.Proven && !device.Cpu.StartWork && device.Cpu.StartMissed);
+    CHECK(native_log_has("did not answer in 30 attempts"));
+    CHECK(native_firmware.cap_c == 100u && native_firmware.writes == 0);
+    writes = (unsigned int)native_firmware.writes;
+    native_firmware.refuse_getters = 0;
+    Chip(1200u, 3500u);
+    CpuEscape(&d, BC250_CPU_OP_READBACK, 0u, 0u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && device.Cpu.StartWork && !device.Cpu.StartMissed);
+    CHECK(native_log_has("the start apply runs now"));
+    CHECK((unsigned int)native_firmware.writes == writes);         /* the readback itself sends no setter */
+    Chip(1200u, 3500u);
+    CpuThread(&device);
+    CHECK(native_firmware.cap_c == BC250_CPU_TEMP_DEFAULT_C && !device.Cpu.StartWork);
+    CpuStop(&device);
+    printf("  %-31s a refused start read is tried again; after %u attempts a readback restarts it\n",
+           "start_read_retry", (unsigned int)BC250_CPU_START_TRIES);
+}
+
 int main(void)
 {
     test_ramp();
@@ -737,6 +795,7 @@ int main(void)
     test_a_refused_restore_keeps_the_surface_shut();
     test_a_foreign_record_is_ignored();
     test_resume_and_dropped_settings();
+    test_a_refused_start_read_is_tried_again();
     printf("cpu native (the boost probe's sweep, the default cap, the boot record): %ld checks, %ld failures\n",
            native_checks, native_failures);
     return native_failures != 0 ? 1 : 0;

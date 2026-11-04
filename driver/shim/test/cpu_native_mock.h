@@ -70,6 +70,9 @@ static ULONG64 native_time;
 static ULONG64 native_stall_us;          /* microseconds spent in KeStallExecutionProcessor, any context */
 static ULONG64 native_sleep_ms;          /* milliseconds spent in KeDelayExecutionThread */
 static unsigned int native_stalls, native_sleeps;
+/* The worker's loop passes before its wait reports the stop event: 0, the default, ends CpuThread after one pass.
+ * A test that needs the worker's own retries (BD-297) sets it; each wait takes one pass. */
+static unsigned int native_wait_passes;
 
 static ULONG64 KeQueryInterruptTime(void) { return native_time; }
 
@@ -105,6 +108,7 @@ static struct {
     int sequence_open;
     int writes;                             /* any setter: the probe must send none */
     int refuse_core_reads;                  /* 1: message 0x43 is refused, for the no-answer arm */
+    int refuse_getters;                     /* 1: every getter is refused, as at the BD-297 boot (0x80000011) */
     int accept_writes;                      /* 1: a setter is taken (the start and reset arms), 0: refused */
     /* The chip's state, which outlives a driver stop and start as the real one does (BD-295): the clock limit of
      * message 0x8F (0 for none, as after a cold boot) holds every core reply under it; 0x50's curve scale. */
@@ -233,6 +237,10 @@ static NTSTATUS KeWaitForMultipleObjects(ULONG count, PVOID objects[], int type,
     UNREFERENCED_PARAMETER(alertable);
     UNREFERENCED_PARAMETER(blocks);
     if (timeout != NULL) native_time += (ULONG64)(-timeout->QuadPart);
+    if (native_wait_passes > 0u) {
+        native_wait_passes--;
+        return STATUS_TIMEOUT;
+    }
     return STATUS_WAIT_0;
 }
 
@@ -572,6 +580,7 @@ static NTSTATUS SmuCpuMessage(BC250_SMU_OWNER_NATIVE *owner, ULONG queue, ULONG 
         return STATUS_SUCCESS;
     }
     CHECK(allow_hot);                       /* every getter of cpu.c passes the hot gate */
+    if (native_firmware.refuse_getters) return STATUS_IO_DEVICE_ERROR;
     if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_READ_CORE_MHZ) {
         native_firmware.core_requests++;
         if (native_firmware.refuse_core_reads) return STATUS_IO_DEVICE_ERROR;

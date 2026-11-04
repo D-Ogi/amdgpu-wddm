@@ -19,6 +19,11 @@
 // the GPU busy - both pass by themselves, so the worker keeps asking. Slower than the poll interval on purpose:
 // a retry is a mailbox sequence, and a part that stays hot must not turn into one message every 100 ms.
 #define BC250_CPU_REVERT_RETRY_MS 1000u
+// BD-297: a start read stage that does not answer is tried again, BC250_CPU_REVERT_RETRY_MS apart, this many times in
+// all. The refusal seen on unit A (0x80000011, 3.6 s after boot) is a mailbox that is not ready yet, and a start that
+// gives up at once never sends the default cap. After the last attempt the start stays unproven until a readback
+// answers, and that readback gives the start back to the worker.
+#define BC250_CPU_START_TRIES 30u
 
 typedef struct _BC250_CPU_SNAP {
     ULONG Flags;                            // BC250_CPU_FLAG_*
@@ -45,6 +50,8 @@ typedef struct _BC250_CPU_STATE {
     BOOLEAN Pending, Confirmed;             // the stored settings' two marks
     BOOLEAN CorePending, CoreConfirmed;     // the core mask's two marks
     BOOLEAN StartWork;                      // the worker still owes the start readback and the stored apply
+    BOOLEAN StartMissed;                    // BD-297: the read stage did not answer in BC250_CPU_START_TRIES, so
+                                            // the start apply did not run; a readback that answers gives it back
     struct bc250_cpu_settings Applied;      // what this driver has sent (cached; the chip has no "what is set")
     struct bc250_cpu_settings Stored;       // the registry's values
     struct bc250_cpu_settings Baseline;     // what the firmware answered before the first write of this start
