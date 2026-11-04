@@ -17,6 +17,13 @@ carry, and every llama.cpp download got HTTP 404. This script finds that before 
                       component asset that the manifest names. Before the upload they must be in -LocalDir with the
                       manifest's size and SHA256. After the upload each one must answer 200 at -ReleaseBase.
                       -Download also compares the downloaded manifest with the file, byte for byte.
+  -PinsFrom <file>    with -Update: the nagi-update.ps1 of the release published before this one (git show
+                      v<previous>:tools/release/installer/nagi-update.ps1). The installed release checks the signature
+                      of the next manifest with its own list of pinned signers, so the signature in -LocalDir must pass
+                      Test-NagiManifestSignature of that file, with that file's list. A signer that the previous
+                      release does not pin strands every installed copy.
+  -FirstUpdate        with -Update and no -PinsFrom: no earlier release has the self-update (tester.37 only). The
+                      signature is checked with the package's own nagi-update.ps1.
 
 A component without a pin (no 64-digit SHA256) is listed and not checked: the installer refuses it and downloads
 nothing. One line per check, "ASSET ..." or "MODEL ...", then "check-release-assets: ok" or "... FAIL (<n>)".
@@ -34,6 +41,8 @@ param(
     [string]$Scratch = '',
     [int]$TimeoutSec = 60,
     [string]$Update = '',
+    [string]$PinsFrom = '',
+    [switch]$FirstUpdate,
     # The download folder of the release: SelfUpdate.cs DownloadUrl, with the tag of the release (v<release>).
     [string]$ReleaseBase = 'https://github.com/D-Ogi/amdgpu-wddm/releases/download/v{release}'
 )
@@ -160,6 +169,35 @@ if ($Update) {
                 } catch { Write-Output "UPDATE $($it.id) download FAIL: $($_.Exception.Message)"; $fails++ }
                 finally { Remove-Item -LiteralPath $dst -ErrorAction SilentlyContinue }
             }
+        }
+        # The signer, with the list of the release that will check it (the previous one). The signature is read from
+        # -LocalDir, or beside the manifest file: these are the bytes that go up with the release.
+        $sigFile = $null
+        foreach ($d in @($LocalDir, $updateDir) | Where-Object { $_ }) {
+            $c = Join-Path $d 'nagi-update.json.p7s'
+            if (Test-Path -LiteralPath $c -PathType Leaf) { $sigFile = $c; break }
+        }
+        $checker = $null
+        if ($PinsFrom) { $checker = $PinsFrom }
+        elseif ($FirstUpdate) { $checker = Join-Path $Package 'files\installer\nagi-update.ps1' }
+        if (-not $checker) {
+            Write-Output 'UPDATE signer FAIL: name the nagi-update.ps1 of the previous release (-PinsFrom), or -FirstUpdate for the first release with the self-update'
+            $fails++
+        } elseif (-not (Test-Path -LiteralPath $checker -PathType Leaf)) {
+            Write-Output "UPDATE signer FAIL: no file $checker"; $fails++
+        } elseif (-not $sigFile) {
+            Write-Output 'UPDATE signer FAIL: no nagi-update.json.p7s in -LocalDir or beside the manifest'; $fails++
+        } else {
+            # The checker's own function with the checker's own default list, as the installed release runs it.
+            $v = & {
+                param($Script, $Manifest, $Signature)
+                . $Script
+                $r = Test-NagiManifestSignature -ManifestPath $Manifest -SignaturePath $Signature
+                [pscustomobject]@{ ok = $r.ok; reason = $r.reason; thumbprint = $r.thumbprint; pinned = @($script:NagiPinnedSigners) }
+            } $checker ([IO.Path]::GetFullPath($Update)) $sigFile
+            $pins = (@($v.pinned) | ForEach-Object { ([string]$_).Substring(0, 8) }) -join ','
+            if ($v.ok) { Write-Output "UPDATE signer $($v.thumbprint) is pinned by $checker (pins $pins) ok" }
+            else { Write-Output "UPDATE signer FAIL: $($v.reason) (checker $checker, pins $pins)"; $fails++ }
         }
     }
 }

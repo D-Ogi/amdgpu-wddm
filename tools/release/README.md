@@ -414,12 +414,17 @@ checks the fourth:
    download of it got HTTP 404 (BD-278). The release flavour also carries the self-update assets (`nagi-update.json`,
    `nagi-update.json.p7s` and each component asset that the manifest names). `-Update <nagi-update.json>` checks
    them in the same two ways: before the upload in `-LocalDir`, after the upload at the download folder of the tag.
+   The installed release checks the signature of the next manifest with its own list of pinned signers. Thus
+   `-PinsFrom` names the `nagi-update.ps1` of the release published before this one, and the signature must pass
+   the signature check of that file. A signer that the previous release does not pin strands every installed copy.
+   Only the first release with the self-update (tester.37) uses `-FirstUpdate` in place of `-PinsFrom`.
 
 ```
 pwsh -File tools\release\build-release-set.ps1 -Manifest tools\release\release-tester.32.json -Out <dir> -Register
 git commit --only -- tools/release/release-sources.json docs/testing/THIRD-PARTY.md   (then push)
 pwsh -File tools\release\build-release-set.ps1 -Package -From <dir> -UmdSource <Mesa tree> -UmdBuild <its build>
-pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release\<name> -LocalDir <component zips> -Update <dist>\nagi-update.json
+git show v<previous release>:tools/release/installer/nagi-update.ps1 > <dir>\previous-nagi-update.ps1
+pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release\<name> -LocalDir <component zips> -Update <dist>\nagi-update.json -PinsFrom <dir>\previous-nagi-update.ps1
 pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release\<name> -Download -Update <dist>\nagi-update.json   (after the upload)
 ```
 
