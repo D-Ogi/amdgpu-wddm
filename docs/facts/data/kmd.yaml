@@ -2181,3 +2181,13 @@ facts:
     evidence: "[HIP llama.cpp parity, section LP](../evidence/windows/2026-10-31-hip-llama-parity/README.md)"
     edges:
       - {"type": "uses", "to": "M808"}
+  - id: M959
+    status: MEASURED
+    date: "2026-11-04"
+    claim: "On unit A a compute hang of node 2 that the stage-1 wave kill does not drain (vkd3d-proton `test_execute_indirect_multi_dispatch_root_descriptors`, 100 to 105 kills, 0 waves, the CP inside an indirect buffer) ends in a reported engine reset in 3 of 3 runs when the KMD follows the KIQ `UNMAP_QUEUES RESET_QUEUES` with `CP_HQD_DEQUEUE_REQUEST` = 1 under the queue select: the HQD goes inactive 3 to 5 us after that write, the queue is mapped again, its ring test passes, no wave of the VMID is left, and Windows logs 4101. After the KIQ unmap alone the HQD stays active for the whole 100 ms bound, and the same hang ends in 0x116"
+    status_text: "MEASURED (unit A, Windows 11 22631, lab-flavour KMD 4FB59574 and 8FEEA181, 3 runs with the direct dequeue and 1 without)"
+    detail: "Witness before the unmap and after the 100 ms poll: `CP_HQD_ACTIVE` 1, `CP_HQD_PQ_BASE` 0x5460 (the compute ring at 0x546000), `CP_HQD_PQ_RPTR` and `CP_HQD_PQ_WPTR_LO` 0, IB base 0x2_00601000 with IB read pointer 0x56, `CP_HQD_DEQUEUE_REQUEST` and `CP_HQD_DEQUEUE_STATUS` 0. The stage-2 step takes about 165 ms, most of it the 100 ms poll. A later D3D12 device completes a short dispatch after each run. The hung dispatch's results are lost (the test reads 0). amdgpu's `gfx_v10_0_reset_kcq` has no direct dequeue, and M944 measured it on a wave spin, not on this hang shape. Node 0 (GFX) was not measured"
+    evidence: "[Queue reset Q1/Q2](../evidence/windows/2026-11-04-queue-reset-q2/README.md)"
+    edges:
+      - {"type": "uses", "to": "M938"}
+      - {"type": "uses", "to": "M944"}

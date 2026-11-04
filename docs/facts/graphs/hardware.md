@@ -248,6 +248,8 @@ flowchart LR
   M896["M896"]
   M936["M936"]
   M937["M937"]
+  M938["M938"]
+  M959["M959<br/>kmd"]
   M2 --> M1
   M35 --> M333
   M43 --> M40
@@ -263,10 +265,11 @@ flowchart LR
   M937 --> M17
   M833 --> M817
   M894 --> M896
+  M959 --> M938
   M106 --> M79
   M117 --> M20
   M816 --> M52
   classDef other stroke-dasharray:4 3
-  class M17,M40,M53,M106,M117,M333,M348,M816,M822,M833,M887,M894 other
+  class M17,M40,M53,M106,M117,M333,M348,M816,M822,M833,M887,M894,M959 other
 ```
 

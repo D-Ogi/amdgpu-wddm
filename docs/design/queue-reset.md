@@ -1,7 +1,9 @@
 # Stage 2 of the hang recovery: KIQ queue resets for node 2 and node 0
 
-Status: IMPLEMENTED for the lab flavour only (tester.37 line), not measured on the lab yet. Stage S2 of [the TDR recovery plan](tdr-recovery-plan.md#52-stages). It
-replaces the section "Why there is no stage 2" of [hang-recovery.md](hang-recovery.md) when it lands.
+Status: IMPLEMENTED. Node 2 (compute) runs it in both flavours. Lab trial Q2 measured it (M959, section 11).
+Node 0 (GFX) runs it only with the lab selector, and no trial has measured that half yet. Stage S2 of
+[the TDR recovery plan](tdr-recovery-plan.md#52-stages). The section "Stage 2" of [hang-recovery.md](hang-recovery.md)
+points here.
 
 ## 1. Problem
 
@@ -72,17 +74,18 @@ The lab trials of section 8 measure those two.
 
 ## 4. Where it runs
 
-- In `ResetEngine` (wddm.c), for node 0 and node 2, when the stage-1 kill loop returns `NOT_DRAINED`, in the lab
-  flavour with `LabQueueReset` 1.
+- In `ResetEngine` (wddm.c), when the stage-1 kill loop returns `NOT_DRAINED` and `HangRecoveryMode` is not 0:
+  for node 2 in both flavours, and for node 0 only in the lab flavour with `LabQueueReset` 1
+  (`Bc250QueueResetWanted`).
   dxgkrnl calls `ResetEngine` at PASSIVE_LEVEL in first-level synchronization, so no other DDI of the adapter runs.
 - In `ResetFromTimeout`, before the S1 witnesses, for each of node 0 and node 2 whose ring has an unretired
   sequence and whose stage-1 record of this TDR says `NOT_DRAINED`. S1 then reads its witnesses again and keeps
   its rule: success only when they prove idle.
-- The selector is `LabQueueReset` (REG_DWORD under Parameters, read at DriverEntry, lab flavour only, the pattern of
-  `LabScaledPlane`), not a value 2 of `HangRecoveryMode`. A new allowed value of a catalog setting changes the
-  catalog identity, and a KMD of another catalog fails to begin over the installed package. When section 8 passes,
-  the catalog adds the setting and the release flavour takes the path. Without the selector, stage 1 and S1 are
-  exactly as before. `HangRecoveryMode` 0 turns stage 2 off too.
+- The selector of node 0 is `LabQueueReset` (REG_DWORD under Parameters, read at DriverEntry, lab flavour only,
+  the pattern of `LabScaledPlane`), not a value 2 of `HangRecoveryMode`. A new allowed value of a catalog setting
+  changes the catalog identity, and a KMD of another catalog fails to begin over the installed package. Node 2
+  needs no new setting: it follows `HangRecoveryMode`, which the catalog already has. `HangRecoveryMode` 0 turns
+  stage 2 off for both nodes.
 - The first code runs stage 2 in `ResetEngine` only. The `ResetFromTimeout` half is the next step, after Q2 and Q3
   show the `ResetEngine` half on the lab.
 - Node 1 (paging, SDMA) is out of scope. That is stage S3.
@@ -125,11 +128,15 @@ Every wait has a bound. The first failure ends the attempt (section 6).
 4. KIQ: `MAP_QUEUES` (engine select 4), commit, `bc250_gfx_ring_test(kiq)`.
 5. Proof on the queue itself: `bc250_gfx_ring_test(gfx ring)`.
 
-### 5.3 Fallback (lab arm only, not in the first code)
+### 5.3 Fallback (in the code since lab Q2)
 
-When step 3 of 5.1 times out, kfd's `kgd_hqd_destroy` (`amdgpu_amdkfd_gfx_v10.c:606-619`) has a direct
-handshake: `CP_HQD_DEQUEUE_REQUEST` with the reset type, poll `CP_HQD_ACTIVE`. The KMD already runs that handshake
-for the KIQ (`bc250_kiq_dequeue`). It is a separate lab arm, because amdgpu's queue reset does not use it.
+When the poll of step 3 of 5.1 times out, the code reads the HQD witness again and runs the direct handshake of
+kfd's `kgd_hqd_destroy` (`amdgpu_amdkfd_gfx_v10.c:606-619`): `CP_HQD_DEQUEUE_REQUEST` = 1 (DRAIN_PIPE), poll
+`CP_HQD_ACTIVE` for the same bound, then `CP_HQD_DEQUEUE_REQUEST` = 0. The KMD already runs that handshake for the
+KIQ (`bc250_kiq_dequeue`). Still under the queue select and in RLC safe mode. When the HQD goes inactive, the reset
+goes on with step 4. When it stays active, step 3 fails as before. amdgpu's queue reset does not have this step.
+Lab Q2 needs it: after the KIQ unmap the HQD stayed active for the whole bound, and after this write it went
+inactive in 3 to 5 us (M959).
 
 ### 5.4 After the queue reset (both nodes)
 
@@ -222,6 +229,25 @@ the wave proof, 10 for a register that the gfx sequence refused.
 - Whether `CP_VMID_RESET` clears a CP stalled on a no-retry fault (Q4). If not, the next candidate is the
   fault itself (section 1, the CPG write to `0x1001C8000`): a write target the KMD did not map is a KMD defect of
   its own and is checked from the paging journal of that boot.
-- Whether `UNMAP_QUEUES RESET_QUEUES` ends the CP-side wait of A7, or needs the fallback of 5.3.
+- Answered by Q2: `UNMAP_QUEUES RESET_QUEUES` does not end the CP-side wait of A7. The fallback of 5.3 does.
+  Why the KIQ request leaves the HQD active is not known (`CP_HQD_DEQUEUE_REQUEST` and `CP_HQD_DEQUEUE_STATUS` read
+  0 after it).
 - Re-emission of the packets of other contexts on the same ring (amdgpu does it). Not needed for dxgkrnl, which
   resubmits. To be checked by the fence counters of Q2 to Q4.
+- Node 0: a Windows client that makes a GFX CP-side wait (Q3) does not exist yet. The 3DMark fault of Q4 was fixed
+  with the residency hold of tester.36, so it does not hang node 0 any more.
+- The `ResetFromTimeout` half of section 4 is not implemented.
+
+## 11. Lab results (2026-11-04)
+
+Evidence: [2026-11-04-queue-reset-q2](../../evidence/windows/2026-11-04-queue-reset-q2/README.md), fact M959.
+
+| Trial | Result |
+|---|---|
+| Q1 | As predicted: stage 1 drains with one kill, event 4101, stage 2 not reached. |
+| Q2 r1 (no fallback) | Stage 2 fails at step 3: the HQD stays active for 100 ms after the KIQ unmap. S1 refuses (busy `0x2A`), bugcheck 0x116. |
+| Q2 r2 to r4 (fallback) | 3 of 3: `CP_HQD_DEQUEUE_REQUEST` 1 ends the HQD in 3 to 5 us. Then map, ring test and wave proof pass, with verdict `QUEUE_RESET` and event 4101. A later device works. About 165 ms per reset. |
+| Q3, Q4 | Not run (section 10). |
+
+The HQD witness shows the select of the right HQD (`CP_HQD_PQ_BASE` equals the ring base shifted by 8) and a CP
+inside an indirect buffer (IB read pointer `0x56`).

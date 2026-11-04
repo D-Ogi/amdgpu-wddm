@@ -1,0 +1,31 @@
+   1507    163.085 wddm: QueryDependentEngineGroup node 2 engine 0
+   1508    163.085 wddm: preemption queued fence 1 node 2 hardware pending 1 active submits 0
+   1509    163.124 hang record: path 1 verdict 0 seq 12038 fence 2 kills 0 0 us, persisted 0x00000000
+   1510    163.124 amdgpu[0]: waves mask se0 sa0 ccfff80000 user00000000 spi00000007 cc_active7 spi_active7 used7 user_ignored0
+   1511    163.124 amdgpu[0]: waves mask se0 sa1 ccfff80000 user00000000 spi00000007 cc_active7 spi_active7 used7 user_ignored0
+   1512    163.124 amdgpu[0]: waves mask se1 sa0 ccfff80000 user00000000 spi00000007 cc_active7 spi_active7 used7 user_ignored0
+   1513    163.124 amdgpu[0]: waves mask se1 sa1 ccfff80000 user00000000 spi00000007 cc_active7 spi_active7 used7 user_ignored0
+   1514    163.124 waves: restore reg 0x30800 wrote 0xE0000000 (write-only readback) status 0x00000000
+   1515    163.124 waves: restore reg 0x08DE0 requested 0x00000000 read 1 value 0x00000000 status 0x00000000
+   1516    163.125 waves: pre-kill seq 12038 vmid 11 count 0 flags 0x1 read 0x00000000 persisted 0x00000000
+   1517    163.125 wddm: soft recovery admit-to-kill 2065 us, waves 1
+   1518    163.135 gfx: soft recovery compute seq 12038 did not drain: 97 kill(s) of VMID 11 in 10443 us; ring stays closed
+   1519    163.135 wddm: ResetEngine node 2: stage 1 did not drain seq 12038, stage 2 queue reset of VMID 11
+   1520    163.297 amdgpu[2]: fail to wait on hqd deactivate
+   1521    163.297 gfx: queue reset compute witnesses: hqd active 0x1 rptr 0x0 wptr 0x0, poll 100000 us
+   1522    163.297 gfx: queue reset compute failed at step 3 (-62) after 161795 us; node stays closed
+   1523    163.297 wddm: stage 2 node 2: verdict 12, step 3, 161795 us
+   1524    163.298 hang record: path 1 verdict 12 seq 3 fence 2 kills 97 172238 us, persisted 0x00000000
+   1525    163.298 wddm: ResetEngine node 2: soft recovery verdict 12, refusing as before
+   1526    163.298 wddm: soft recovery refused: seq 3 fence 2 vmid 11, 97 kill(s) in 172238 us
+   1527    163.298 wddm: *** ResetEngine node 2 engine 0: refused, this part has no engine reset ***
+   1528    163.333 hang record: path 2 verdict 0 seq 0 fence 0 kills 0 0 us, persisted 0x00000000
+   1529    163.333 gfx: submission gate closed pending recovery (seq 12310 in flight, slot 0x3016)
+   1530    163.333 gfx: paging submission path failed, ring closed until an adapter recovery (seq 12281 in flight, slot 0x2FF9)
+   1531    163.343 gfx: soft recovery compute seq 12038 did not drain: 97 kill(s) of VMID 11 in 10206 us; ring stays closed
+   1532    163.343 wddm: adapter reset: node 2 kill on vmid 11: verdict 2 seq 12038, 97 kill(s) in 10206 us
+   1533    163.365 wddm: adapter reset witnesses: busy 0x002A, GRBM 0xA0003028 CP 0x00000000 CPC 0xA0000001 SDMA0 0x46DEED57
+   1534    163.365 wddm: adapter reset witnesses: SDMA0 rptr 0x00000000:00E4B240 wptr 0x00000000:00E4B240 (in use 1), rings 101
+   1535    163.365 hang record: path 2 verdict 10 seq 42 fence 0 kills 97 33585 us, persisted 0x00000000
+   1536    163.365 wddm: ResetFromTimeout: S1 refused, busy 0x002A after 33585 us (97 kill(s)); the old failure follows
+   1537    163.365 wddm: ResetFromTimeout failed: GPU memory access not proven stopped

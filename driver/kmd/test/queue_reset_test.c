@@ -33,9 +33,15 @@ static int test_wanted(void)
 {
     CHECK(Bc250QueueResetWanted(1, 1, 0, BC250_HANG_VERDICT_NOT_DRAINED, 1));
     CHECK(Bc250QueueResetWanted(1, 1, 2, BC250_HANG_VERDICT_NOT_DRAINED, 1));
-    CHECK(!Bc250QueueResetWanted(0, 1, 0, BC250_HANG_VERDICT_NOT_DRAINED, 1));   /* release flavour: always 0 */
+    CHECK(!Bc250QueueResetWanted(0, 1, 0, BC250_HANG_VERDICT_NOT_DRAINED, 1));   /* node 0: the lab selector only */
     CHECK(!Bc250QueueResetWanted(2, 1, 0, BC250_HANG_VERDICT_NOT_DRAINED, 1));   /* only the value 1 */
     CHECK(!Bc250QueueResetWanted(1, 0, 0, BC250_HANG_VERDICT_NOT_DRAINED, 1));   /* HangRecoveryMode 0 */
+    /* Node 2 in both flavours (Q2 of 2026-11-04): the selector (0 in the release flavour) does not matter. */
+    CHECK(Bc250QueueResetWanted(0, 1, 2, BC250_HANG_VERDICT_NOT_DRAINED, 1));
+    CHECK(Bc250QueueResetWanted(2, 1, 2, BC250_HANG_VERDICT_NOT_DRAINED, 1));
+    CHECK(!Bc250QueueResetWanted(0, 0, 2, BC250_HANG_VERDICT_NOT_DRAINED, 1));   /* HangRecoveryMode 0 */
+    CHECK(!Bc250QueueResetWanted(0, 1, 2, BC250_HANG_VERDICT_NOT_DRAINED, 0));   /* no kill loop ran */
+    CHECK(!Bc250QueueResetWanted(0, 1, 2, BC250_HANG_VERDICT_DRAINED, 1));
     CHECK(!Bc250QueueResetWanted(1, 1, 1, BC250_HANG_VERDICT_NOT_DRAINED, 1));   /* node 1: stage S3 */
     CHECK(!Bc250QueueResetWanted(1, 1, 0, BC250_HANG_VERDICT_NOT_DRAINED, 0));   /* no kill loop ran */
     CHECK(!Bc250QueueResetWanted(1, 1, 0, BC250_HANG_VERDICT_DRAINED, 1));

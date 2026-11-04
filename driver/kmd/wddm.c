@@ -8728,8 +8728,8 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             // recovered verdict means the end-of-pipe behind the killed waves fired and the ring drained to idle.
             verdict = node == BC250_WDDM_NODE_COMPUTE ? GfxComputeSoftRecover(device, vmid, &seq, &kills, &micros) :
                       GfxSoftRecover(device, vmid, &seq, &kills, &micros);
-            // Stage 2 (docs/design/queue-reset.md), lab flavour with LabQueueReset 1 only: the kills did not drain
-            // the ring, which is a CP-side stall that SQ_CMD cannot end (A7: a MEC wait with no wave; 3DMark: a CP
+            // Stage 2 (docs/design/queue-reset.md), node 2 in both flavours, node 0 with the lab selector
+            // LabQueueReset 1 only (Bc250QueueResetWanted): the kills did not drain the ring, which is a CP-side stall that SQ_CMD cannot end (A7: a MEC wait with no wave; 3DMark: a CP
             // stalled on a no-retry fault). The KIQ takes the queue off its HQD and maps it again on a clean ring.
             // The verdict replaces stage 1's: the record counts one outcome per attempt, so no stage-1 outcome is
             // written first. A failed stage 2 leaves the gates closed and the path is today's refusal. Its record

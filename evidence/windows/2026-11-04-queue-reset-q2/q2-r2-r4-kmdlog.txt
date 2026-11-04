@@ -1,0 +1,92 @@
+utc 2026-11-04T16:48:13.3102446Z boot 2026-11-04T16:42:59.5000000Z
+LabQueueReset now: 1
+== kmd log (selector, flavour, hang recovery)
+     2      0.000 kmd: BD-167 flavour lab (raw diagnostic escapes, test signing + LabDiagnostics)
+     6      0.000 lab: queue reset selector read (value 0x1, 0x00000000): stage 2 on
+    24      1.174 hwinfo: AMD Cyan Skillfish bios 113-AMDRBN-003 memory 8589934592
+    56      1.383 wddm: pre-kill wave capture on
+    57      1.383 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+    58      1.383 wddm: AdapterRecoveryMode 2: ResetFromTimeout kills hung waves, then succeeds only on idle engines
+   138      1.507 gfx: stage 2 (golden registers): rc 0, 83 writes so far, 24 us
+  1321    156.531 hang record: path 1 verdict 0 seq 9635 fence 2 kills 0 0 us, persisted 0x00000000
+  1328    156.533 waves: pre-kill seq 9635 vmid 8 count 0 flags 0x1 read 0x00000000 persisted 0x00000000
+  1329    156.533 wddm: soft recovery admit-to-kill 3053 us, waves 1
+  1330    156.544 gfx: soft recovery compute seq 9635 did not drain: 105 kill(s) of VMID 8 in 10473 us; ring stays closed
+  1331    156.544 wddm: ResetEngine node 2: stage 1 did not drain seq 9635, stage 2 queue reset of VMID 8
+  1332    156.709 gfx: queue reset compute witnesses: hqd active 0x1 rptr 0x0 wptr 0x0, poll 100000 us
+  1333    156.709 gfx: queue reset compute ring base 0x546000 (PQ_BASE wants 0x5460)
+  1334    156.709 gfx: queue reset compute hqd before: active 0x1 vmid 0x800 persist 0xBE05301 base 0x0:00005460 ctl 0xD030890A
+  1335    156.709 gfx: queue reset compute hqd before: rptr 0x0 wptr 0x0:00000000 db 0x0
+  1336    156.709 gfx: queue reset compute hqd before: ib 0x2:00601000 rptr 0x56 ctl 0x0 dequeue req 0x0 status 0x0
+  1337    156.709 gfx: queue reset compute hqd after: active 0x1 vmid 0x800 persist 0xBE05301 base 0x0:00005460 ctl 0xD030890A
+  1338    156.709 gfx: queue reset compute hqd after: rptr 0x0 wptr 0x0:00000000 db 0x0
+  1339    156.709 gfx: queue reset compute hqd after: ib 0x2:00601000 rptr 0x56 ctl 0x0 dequeue req 0x0 status 0x0
+  1340    156.709 gfx: queue reset compute fallback 1 (0 not run, 1 idle, 2 still active), poll 5 us
+  1347    156.709 gfx: queue reset compute wave proof: capture 0x00000000 flags 0x1 count 0, verdict 0
+  1348    156.709 gfx: queue reset compute: seq 9635 ended in 165531 us, VMID 8 released; awaiting commit
+  1349    156.709 wddm: stage 2 node 2: verdict 11, step 8, 165531 us
+  1351    156.710 hang record: path 1 verdict 11 seq 9635 fence 2 kills 105 176004 us, persisted 0x00000000
+  1352    156.710 wddm: *** ResetEngine node 2: SOFT RECOVERED, aborted fence 2, node reopened ***
+  1353    156.710 wddm: soft recovery: verdict 11 seq 9635 vmid 8, 105 kill(s) in 176004 us
+  1640    262.773 hang record: path 1 verdict 0 seq 10598 fence 5 kills 0 0 us, persisted 0x00000000
+  1647    262.775 waves: pre-kill seq 10598 vmid 9 count 0 flags 0x1 read 0x00000000 persisted 0x00000000
+  1648    262.775 wddm: soft recovery admit-to-kill 2073 us, waves 1
+  1649    262.785 gfx: soft recovery compute seq 10598 did not drain: 100 kill(s) of VMID 9 in 10509 us; ring stays closed
+  1650    262.785 wddm: ResetEngine node 2: stage 1 did not drain seq 10598, stage 2 queue reset of VMID 9
+  1651    262.951 gfx: queue reset compute witnesses: hqd active 0x1 rptr 0x0 wptr 0x0, poll 100000 us
+  1652    262.951 gfx: queue reset compute ring base 0x546000 (PQ_BASE wants 0x5460)
+  1653    262.951 gfx: queue reset compute hqd before: active 0x1 vmid 0x900 persist 0xBE05301 base 0x0:00005460 ctl 0xD030890A
+  1654    262.951 gfx: queue reset compute hqd before: rptr 0x0 wptr 0x0:00000000 db 0x0
+  1655    262.951 gfx: queue reset compute hqd before: ib 0x2:00601000 rptr 0x56 ctl 0x0 dequeue req 0x0 status 0x0
+  1656    262.951 gfx: queue reset compute hqd after: active 0x1 vmid 0x900 persist 0xBE05301 base 0x0:00005460 ctl 0xD030890A
+  1657    262.951 gfx: queue reset compute hqd after: rptr 0x0 wptr 0x0:00000000 db 0x0
+  1658    262.951 gfx: queue reset compute hqd after: ib 0x2:00601000 rptr 0x56 ctl 0x0 dequeue req 0x0 status 0x0
+  1659    262.951 gfx: queue reset compute fallback 1 (0 not run, 1 idle, 2 still active), poll 3 us
+  1666    262.952 gfx: queue reset compute wave proof: capture 0x00000000 flags 0x1 count 0, verdict 0
+  1667    262.952 gfx: queue reset compute: seq 10598 ended in 165284 us, VMID 9 released; awaiting commit
+  1668    262.952 wddm: stage 2 node 2: verdict 11, step 8, 165284 us
+  1670    262.953 hang record: path 1 verdict 11 seq 10598 fence 5 kills 100 175793 us, persisted 0x00000000
+  1671    262.953 wddm: *** ResetEngine node 2: SOFT RECOVERED, aborted fence 5, node reopened ***
+  1672    262.953 wddm: soft recovery: verdict 11 seq 10598 vmid 9, 100 kill(s) in 175793 us
+  1722    281.273 hang record: path 1 verdict 0 seq 11338 fence 8 kills 0 0 us, persisted 0x00000000
+  1729    281.275 waves: pre-kill seq 11338 vmid 10 count 0 flags 0x1 read 0x00000000 persisted 0x00000000
+  1730    281.275 wddm: soft recovery admit-to-kill 5116 us, waves 1
+  1731    281.285 gfx: soft recovery compute seq 11338 did not drain: 101 kill(s) of VMID 10 in 10471 us; ring stays closed
+  1732    281.285 wddm: ResetEngine node 2: stage 1 did not drain seq 11338, stage 2 queue reset of VMID 10
+  1733    281.449 gfx: queue reset compute witnesses: hqd active 0x1 rptr 0x0 wptr 0x0, poll 100000 us
+  1734    281.449 gfx: queue reset compute ring base 0x546000 (PQ_BASE wants 0x5460)
+  1735    281.449 gfx: queue reset compute hqd before: active 0x1 vmid 0xA00 persist 0xBE05301 base 0x0:00005460 ctl 0xD030890A
+  1736    281.449 gfx: queue reset compute hqd before: rptr 0x0 wptr 0x0:00000000 db 0x0
+  1737    281.449 gfx: queue reset compute hqd before: ib 0x2:00601000 rptr 0x56 ctl 0x0 dequeue req 0x0 status 0x0
+  1738    281.449 gfx: queue reset compute hqd after: active 0x1 vmid 0xA00 persist 0xBE05301 base 0x0:00005460 ctl 0xD030890A
+  1739    281.449 gfx: queue reset compute hqd after: rptr 0x0 wptr 0x0:00000000 db 0x0
+  1740    281.449 gfx: queue reset compute hqd after: ib 0x2:00601000 rptr 0x56 ctl 0x0 dequeue req 0x0 status 0x0
+  1741    281.449 gfx: queue reset compute fallback 1 (0 not run, 1 idle, 2 still active), poll 3 us
+  1748    281.450 gfx: queue reset compute wave proof: capture 0x00000000 flags 0x1 count 0, verdict 0
+  1749    281.450 gfx: queue reset compute: seq 11338 ended in 164272 us, VMID 10 released; awaiting commit
+  1750    281.450 wddm: stage 2 node 2: verdict 11, step 8, 164272 us
+  1752    281.452 hang record: path 1 verdict 11 seq 11338 fence 8 kills 101 174743 us, persisted 0x00000000
+  1753    281.452 wddm: *** ResetEngine node 2: SOFT RECOVERED, aborted fence 8, node reopened ***
+  1754    281.452 wddm: soft recovery: verdict 11 seq 11338 vmid 10, 101 kill(s) in 174743 us
+== HangRecovery record
+  Attempts = 13
+  LastFence = 8
+  LastKills = 101
+  LastMicros = 174743
+  LastPath = 1
+  LastSeq = 11338
+  LastTime = 134382844621031122
+  LastVerdict = 11
+  LastVersion = 458968
+  NotDrained = 4
+  Recovered = 4
+  Refused = 5
+  WavesPending = 0
+== events since boot
+2026-11-04T16:47:24.6154100Z 4101 Display driver bc250kmd stopped responding and has successfully recovered.
+2026-11-04T16:45:38.3898502Z 4101 Display driver bc250kmd stopped responding and has successfully recovered.
+== newest dump folder
+mft
+== loaded kmd
+sys 4FB59574 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_ba91a637ce669223\bc250kmd.sys
+desktop: dwm 1 process(es)

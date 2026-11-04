@@ -675,18 +675,13 @@ Five properties hold by construction:
   the witness staying closed for the rest of the boot. It is now a rule of its own, and only a new device start
   clears it.
 
-## Why there is no stage 2
+## Stage 2
 
-The stage-2 candidates are a KIQ queue reset (`gfx_v10_0_reset_kgq`, which re-initialises the queue) and a
-CP-only `GRBM_SOFT_RESET`. On this part both would be a second bring-up or a reset without a measured-good
-sequence. The facts are against that:
-
-- a second bring-up in one start fails at the KIQ (M44).
-- amdgpu's own recovery hangs the machine (M53).
-- a second init in one boot hangs unit A (M55).
-
-If stage 1 does not drain on gfx1013, the next step is the Linux measurement (wishlist L43), not a blind queue
-reset.
+Stage 2 is the KIQ queue reset of [queue-reset.md](queue-reset.md). It runs after a stage-1 kill loop that did not
+drain. It does not bring the KIQ up again and it does not reset the GPU, so M44, M53 and M55 do not apply to it
+(queue-reset.md section 3). Node 2 takes it in both flavours since M959: three of three compute hangs that
+stage 1 could not drain ended in a reported engine reset. Node 0 takes it only with the lab selector
+`LabQueueReset` 1 until a GFX trial has measured it. A CP-only `GRBM_SOFT_RESET` is still not a candidate.
 
 ## Limits
 

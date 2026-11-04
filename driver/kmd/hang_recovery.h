@@ -88,7 +88,8 @@ static __inline int Bc250KillVmidValid(unsigned vmid)
                                                    BC250_ADAPTER_BUSY_* mask, not a hardware sequence */
 #define BC250_HANG_VERDICT_QUEUE_RESET     11u  /* stage 2 (docs/design/queue-reset.md): stage 1 did not drain, the
                                                  * KIQ reset the queue, a ring test passed, no wave of the VMID is
-                                                 * left: reset reported, node open. Lab flavour, LabQueueReset 1. */
+                                                 * left: reset reported, node open. Node 2 in both
+                                                 * flavours, node 0 with LabQueueReset 1 (lab). */
 #define BC250_HANG_VERDICT_QUEUE_RESET_FAILED 12u /* stage 2 failed: refused as before (0x116). LastSeq is the failed
                                                  * step, enum bc250_qreset_step of bc250_gfx.h, or 9 for the wave
                                                  * proof and 10 for a register refused by the gfx sequence. */
@@ -274,13 +275,16 @@ static __inline int Bc250HangVerdictRecovered(unsigned verdict)
            verdict == BC250_HANG_VERDICT_ABORT_REPORTED || verdict == BC250_HANG_VERDICT_QUEUE_RESET;
 }
 
-/* Stage 2 (docs/design/queue-reset.md): only after a stage-1 kill loop that did not drain, only on the two IB
- * nodes, and only when the lab selector is on (it is 0 in the release flavour). */
+/* Stage 2 (docs/design/queue-reset.md): only after a stage-1 kill loop that did not drain, and never with
+ * HangRecoveryMode 0. Node 2 (compute) in both flavours: the lab Q2 trials of 2026-11-04 recovered 3 of 3 hangs
+ * that stage 1 could not drain (section 11). Node 0 (GFX) only with the lab selector (0 in the release flavour)
+ * until a GFX trial has measured it. Node 1 (paging, SDMA) is stage S3. */
 static __inline int Bc250QueueResetWanted(unsigned long labQueueReset, int hangRecoveryMode, unsigned nodeOrdinal,
                                           unsigned stage1Verdict, int killLoopRan)
 {
-    return labQueueReset == 1u && hangRecoveryMode != 0 && (nodeOrdinal == 0u || nodeOrdinal == 2u) &&
-           killLoopRan && stage1Verdict == BC250_HANG_VERDICT_NOT_DRAINED;
+    if (hangRecoveryMode == 0 || !killLoopRan || stage1Verdict != BC250_HANG_VERDICT_NOT_DRAINED) return 0;
+    if (nodeOrdinal == 2u) return 1;
+    return nodeOrdinal == 0u && labQueueReset == 1u;
 }
 
 /* Which counters of the record one write adds 1 to. Every attempt counts one Attempt in its first write (the

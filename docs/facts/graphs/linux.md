@@ -77,7 +77,6 @@ flowchart LR
   M113["M113<br/>kmd"]
   M114["M114<br/>kmd"]
   M139["M139<br/>icd"]
-  M264["M264<br/>icd"]
   M333["M333"]
   M388["M388"]
   M787["M787<br/>hardware"]
@@ -108,7 +107,7 @@ flowchart LR
   M943["M943"]
   M944["M944"]
   M947["M947"]
-  M948["M948"]
+  M959["M959<br/>kmd"]
   M18 --> M5
   M35 --> M333
   M43 --> M40
@@ -128,6 +127,7 @@ flowchart LR
   M113 --> M40
   M114 --> M40
   M934 --> M808
+  M959 --> M944
   M824 --> M821
   M825 --> M820
   M825 --> M822
@@ -165,22 +165,24 @@ flowchart LR
   M944 --> M53
   M944 --> M388
   M947 --> M56
-  M948 --> M264
   classDef other stroke-dasharray:4 3
-  class M18,M25,M35,M38,M43,M44,M47,M58,M59,M78,M95,M113,M114,M139,M264,M787,M788,M801,M804,M807,M812,M813,M823,M824,M825,M851,M852,M904,M934,M936,M937 other
+  class M18,M25,M35,M38,M43,M44,M47,M58,M59,M78,M95,M113,M114,M139,M787,M788,M801,M804,M807,M812,M813,M823,M824,M825,M851,M852,M904,M934,M936,M937,M959 other
 ```
 
 ### Part 2
 
 ```mermaid
 flowchart LR
+  M264["M264<br/>icd"]
   M508["M508<br/>icd"]
   M510["M510"]
   M515["M515<br/>icd"]
   M516["M516"]
+  M948["M948"]
   M510 --> M508
   M516 --> M515
+  M948 --> M264
   classDef other stroke-dasharray:4 3
-  class M508,M515 other
+  class M264,M508,M515 other
 ```
 

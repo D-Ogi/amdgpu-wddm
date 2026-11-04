@@ -280,10 +280,6 @@ flowchart LR
   M336["M336"]
   M348["M348"]
   M349["M349<br/>hardware"]
-  M376["M376"]
-  M377["M377"]
-  M465["M465"]
-  M467["M467"]
   M765["M765"]
   M766["M766"]
   M767["M767"]
@@ -292,6 +288,9 @@ flowchart LR
   M915["M915"]
   M933["M933<br/>icd"]
   M934["M934"]
+  M938["M938<br/>hardware"]
+  M944["M944<br/>linux"]
+  M959["M959"]
   M39 --> M37
   M349 --> M348
   M37 --> M33
@@ -325,31 +324,37 @@ flowchart LR
   M319 --> M257
   M320 --> M319
   M336 --> M329
-  M377 --> M376
-  M467 --> M465
   M766 --> M765
   M767 --> M766
   M914 --> M31
   M914 --> M179
   M915 --> M914
   M934 --> M808
+  M959 --> M938
+  M959 --> M944
   M84 --> M73
   M99 --> M77
   M202 --> M190
   M933 --> M934
   M40 --> M38
   classDef other stroke-dasharray:4 3
-  class M31,M33,M39,M40,M84,M99,M202,M349,M808,M933 other
+  class M31,M33,M39,M40,M84,M99,M202,M349,M808,M933,M938,M944 other
 ```
 
 ### Part 3
 
 ```mermaid
 flowchart LR
+  M376["M376"]
+  M377["M377"]
+  M465["M465"]
+  M467["M467"]
   M835["M835"]
   M836["M836"]
   M917["M917<br/>games"]
   M918["M918"]
+  M377 --> M376
+  M467 --> M465
   M836 --> M835
   M917 --> M918
   classDef other stroke-dasharray:4 3

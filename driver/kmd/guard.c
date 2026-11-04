@@ -435,8 +435,9 @@ BOOLEAN GuardLabPowerDownFault(ULONG Step)
 
 // Stage 2 of the hang recovery (docs/design/queue-reset.md), lab flavour only, not a catalog setting for the reason
 // of LabScaledPlane above. LabQueueReset (REG_DWORD, Parameters, read only at DriverEntry): 1 lets ResetEngine reset
-// the queue of node 0 or node 2 through the KIQ when the stage-1 wave kill did not drain. Any other value, absent or
-// not a REG_DWORD is 0, which keeps stage 1 exactly as before.
+// the queue of node 0 (GFX) through the KIQ when the stage-1 wave kill did not drain. Any other value, absent or
+// not a REG_DWORD is 0, which keeps node 0 at stage 1 only. Node 2 takes stage 2 in both flavours without the
+// selector since the lab Q2 trials of 2026-11-04 (hang_recovery.h, Bc250QueueResetWanted).
 static ULONG g_LabQueueReset = 0;
 
 void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject)
