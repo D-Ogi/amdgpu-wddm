@@ -437,11 +437,19 @@ of each flavour in `<dir>\package-notes\<flavour>` with `repack-notes.ps1` (BD-2
 2. The repack takes the committed notes of `docs\testing\release-notes` by the rules of `build-release.ps1`. The set
    of notes files must stay the same.
 3. `manifest.json` changes only in the sha256 and size of each notes entry. Every other file stays byte for byte.
-4. The tool makes the zip and the single exe again, with `make-setup-exe.ps1 -Check -ReleaseZip`.
-5. Then the flavour gate and the installer dry run run on the new package.
+4. The tool makes the zip and the single exe again, with `make-setup-exe.ps1 -Check -ReleaseZip`. It signs the
+   single exe with the signer of the old single exe, and `-CheckSigned` reads the signed file back (BD-294). The
+   signing inputs are those of `build-release.ps1`: `secrets\release`, or `-SigningSecrets <folder>`.
+5. A release flavour package carries the self-update assets. `nagi-update.json` pins the zip and
+   `files\manifest.json`, so the tool writes it again over the new zip with `nagi_update.py manifest`. Only these
+   three values can change. The tool copies the apps pack and signs the manifest (`signtool /p7`). Then it checks
+   the signature in Windows PowerShell 5.1 against the pinned list of the package's `installer\nagi-update.ps1`
+   (BD-294).
+6. Then the flavour gate and the installer dry run run on the new package.
 
-`<dir>\repack-report.json` gives the new zip and exe hashes. The driver hashes do not change, but a lab install of
-the new zip is still part of the release gates.
+`<dir>\repack-report.json` gives the new zip and exe hashes, the signer and the new update manifest. The new
+`nagi-update.json`, its `.p7s` and the apps pack lie in `<dir>\package-notes\release`: publish them, not the old
+ones. The driver hashes do not change, but a lab install of the new zip is still part of the release gates.
 
 ```
 pwsh -File tools\release\build-release-set.ps1 -RepackNotes -From <dir> [-Flavours release,lab]

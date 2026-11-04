@@ -59,7 +59,8 @@
 #    For each flavour, repack-notes.ps1 makes <Out>\package-notes\<flavour> from <Out>\package\<flavour> with the
 #    committed notes of this tree: every file but the notes and manifest.json byte for byte, manifest.json changed in
 #    the notes values only, the zip and the single exe made again. Then the flavour gate and the installer dry run on
-#    the new package. <Out>\repack-report.json holds the new zip and exe hashes (BD-265).
+#    the new package. <Out>\repack-report.json holds the new zip and exe hashes (BD-265). The repack signs the new
+#    single exe and, for the release flavour, writes and signs nagi-update.json over the new zip (BD-294).
 #    The tree must be clean and pushed, and its release-sources.json must hold every row of <Out> unchanged. For each
 #    flavour it builds the setup window, sets the router inputs of the quality gates and runs build-release.ps1 with
 #    -BuildRecords <Out>\artifacts (the release flavour also writes the submission CAB). <Out>\package\<flavour> holds
@@ -125,9 +126,12 @@ param(
     # The user-mode driver tree that the release gates of build-release.ps1 read (BC250_UMD_SOURCE, BC250_UMD_BUILD).
     [Parameter(ParameterSetName = 'Package', Mandatory)][string]$UmdSource,
     [Parameter(ParameterSetName = 'Package', Mandatory)][string]$UmdBuild,
+    # The folder of the PFX, its password file and the test certificate that -RepackNotes signs with (BD-294);
+    # default <PackageRoot>\secrets\release, as build-release.ps1 reads them. A host test gives a folder of its own.
+    [Parameter(ParameterSetName = 'Repack')][string]$SigningSecrets,
     # Unlanded ledger work this release carries on purpose (build-release.ps1 -AllowLedgerDebt).
     [Parameter(ParameterSetName = 'Package')][string]$LedgerDebtReason = '',
-    [Parameter(ParameterSetName = 'Package')][string]$PackageRoot = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
+    [Parameter(ParameterSetName = 'Package')][Parameter(ParameterSetName = 'Repack')][string]$PackageRoot = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [Parameter(ParameterSetName = 'Package')][string]$PackageGuard,
     # Build the flavours at the same time, each in its own process and worktree (see "5. Packages" above).
     [Parameter(ParameterSetName = 'Package')][switch]$Parallel,
@@ -358,12 +362,19 @@ if ($PSCmdlet.ParameterSetName -eq 'Repack') {
     $notesDir = Join-Path $repo 'docs\testing\release-notes'
     if (@(& git -C $repo status --porcelain -- docs/testing/release-notes).Count) { Stop-Repack "the notes in $notesDir are not committed" }
     $rr.notes_commit = (& git -C $repo rev-parse HEAD).Trim()
+    $signRoot = [IO.Path]::GetFullPath($PackageRoot)
+    $secrets = $(if ($SigningSecrets) { [IO.Path]::GetFullPath($SigningSecrets) } else { Join-Path $signRoot 'secrets\release' })
+    $signTool = Join-Path $signRoot 'toolchain\nuget\microsoft.windows.sdk.cpp\c\bin\10.0.26100.0\x64\signtool.exe'
     foreach ($flavour in @($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ })) {
         $logs = Join-Path $From "logs\repack-$flavour"
         New-Item -ItemType Directory -Force $logs | Out-Null
         $newDir = Join-Path $From "package-notes\$flavour"
         "$(Get-Utc) repack $flavour (log $logs\repack.log)"
-        & $shell -NoProfile -File (Join-Path $PSScriptRoot 'repack-notes.ps1') -Package (Join-Path $From "package\$flavour") -Out $newDir -NotesDir $notesDir *> (Join-Path $logs 'repack.log')
+        # The signing inputs of build-release.ps1 (secrets\release, the SDK signtool): the repack signs the single exe
+        # and, for the release flavour, the update manifest again (BD-294).
+        & $shell -NoProfile -File (Join-Path $PSScriptRoot 'repack-notes.ps1') -Package (Join-Path $From "package\$flavour") -Out $newDir -NotesDir $notesDir `
+            -SignTool $signTool -Pfx (Join-Path $secrets 'amdgpu-wddm-release.pfx') -PasswordFile (Join-Path $secrets 'amdgpu-wddm-release.pass') `
+            -TestCertificate (Join-Path $secrets 'amdgpu-wddm-release.cer') *> (Join-Path $logs 'repack.log')
         if ($LASTEXITCODE -ne 0) {
             @(Get-Content -LiteralPath (Join-Path $logs 'repack.log') -Tail 15) | ForEach-Object { "    $_" }
             Stop-Repack "repack-notes.ps1 $flavour exit $LASTEXITCODE (log $logs\repack.log)"
@@ -378,7 +389,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Repack') {
         if ($LASTEXITCODE -ne 0) { Stop-Repack "the flavour gate of the repacked $flavour package fails (log $logs\flavour-gate.log)" }
         & $shell -NoProfile -File (Join-Path $PSScriptRoot 'test-dryrun.ps1') -Package $top *> (Join-Path $logs 'dryrun.log')
         if ($LASTEXITCODE -ne 0) { Stop-Repack "the dry run of the repacked $flavour package fails (log $logs\dryrun.log)" }
-        $rr.flavours += [ordered]@{ flavour = $flavour; zip = $one.zip; exe = $one.exe; unchanged_files = $one.unchanged_files; notes = $one.notes }
+        $rr.flavours += [ordered]@{ flavour = $flavour; zip = $one.zip; exe = $one.exe; unchanged_files = $one.unchanged_files; notes = $one.notes; update = $one.update }
         "$(Get-Utc) $flavour zip $($one.zip.new), exe $($one.exe.new), $($one.unchanged_files) files unchanged"
     }
     $rr.status = 'ok'; $rr.finished_utc = Get-Utc

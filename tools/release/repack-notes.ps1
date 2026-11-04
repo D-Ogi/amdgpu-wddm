@@ -15,15 +15,33 @@
 #   3. The proof: the same file list, every file not a notes file or manifest.json byte for byte the old one, and
 #      every file against the new manifest.json.
 #   4. The zip with the build tool's own Compress-Archive, and the single exe with make-setup-exe.ps1 -Check
-#      -ReleaseZip, under the names of the old package. <Out>\repack-report.json holds the old and new hashes.
+#      -ReleaseZip, under the names of the old package. The single exe is then signed as build-release.ps1 signs it,
+#      by the signer of the old single exe (BD-294: up to tester.36 the repack left the exe unsigned), and
+#      make-setup-exe.ps1 -CheckSigned reads the signed bytes back.
+#   5. The self-update assets of a release flavour package (BD-294): nagi-update.json pins the sha256 and size of the
+#      driver zip and the sha256 of files\manifest.json, so the old manifest names the old zip. The repack copies the
+#      apps pack (no notes file is in it), writes nagi-update.json again over the new zip with nagi_update.py, and
+#      proves that only those three values changed. It signs it (signtool /p7, wrapped as a ContentInfo) and checks
+#      the signature in Windows PowerShell 5.1 with the pinned list of the package's own installer\nagi-update.ps1.
+#   <Out>\repack-report.json holds the old and new hashes.
 # build-release-set.ps1 -RepackNotes runs this for each flavour of a set and then the flavour gate and the installer
 # dry run on the new package. Exit 0 when the repack and its proof pass; a failure throws before the zip is written.
+# The signing inputs are those of build-release.ps1: the PFX, its password file and the test certificate of
+# secrets\release, or a store certificate (-UserModeSignerThumbprint with -TimestampUrl).
 param(
     [Parameter(Mandatory)][string]$Package,
     [Parameter(Mandatory)][string]$Out,
-    [string]$NotesDir = (Join-Path (Split-Path (Split-Path $PSScriptRoot)) 'docs\testing\release-notes')
+    [string]$NotesDir = (Join-Path (Split-Path (Split-Path $PSScriptRoot)) 'docs\testing\release-notes'),
+    [Parameter(Mandatory)][string]$SignTool,
+    [Parameter(Mandatory)][string]$Pfx,
+    [Parameter(Mandatory)][string]$PasswordFile,
+    [Parameter(Mandatory)][string]$TestCertificate,
+    [string]$UserModeSignerThumbprint,
+    [string]$TimestampUrl
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'user-mode-signing.ps1')
+foreach ($f in $SignTool, $Pfx, $PasswordFile, $TestCertificate) { if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "missing signing input $f" } }
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 function Get-Hash([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToUpperInvariant() }
 function Get-StreamHash([IO.Stream]$Stream) {
@@ -56,6 +74,44 @@ if ($exes.Count -gt 1) { throw "$Package holds $($exes.Count) single exes of $ve
 $suffix = if ($oldManifest.flavour -eq 'lab') { '-lab' } else { '' }
 $exeName = if ($exes.Count) { $exes[0].Name } else { "amdgpu-wddm-setup-$version$suffix.exe" }
 if ((Test-Path -LiteralPath $Out) -and @(Get-ChildItem -LiteralPath $Out -Force).Count) { throw "$Out is not empty" }
+
+# The signer: the one build-release.ps1 selects for this flavour, and the signer of the old single exe.
+$testThumb = (New-Object Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList $TestCertificate).Thumbprint
+$signer = Get-UserModeSigner -Thumbprint $UserModeSignerThumbprint -TimestampUrl $TimestampUrl -Flavour ([string]$oldManifest.flavour) -TestThumbprint $testThumb
+if ($exes.Count) {
+    $oldSig = Get-AuthenticodeSignature -LiteralPath $exes[0].FullName
+    $oldSigner = $(if ($oldSig.SignerCertificate) { [string]$oldSig.SignerCertificate.Thumbprint } else { '' })
+    if (-not $oldSigner) { throw "the old single exe $($exes[0].Name) is not signed (status $($oldSig.Status)): not a package of build-release.ps1" }
+    if ($oldSigner -ne $signer.thumbprint) { throw "the old single exe is signed by $oldSigner and the repack signer is $($signer.thumbprint)" }
+}
+"signer: $($signer.mode) $($signer.thumbprint)"
+
+# The self-update assets beside the old package (release flavour only), checked before anything is written.
+$oldUpdate = Join-Path $Package 'nagi-update.json'
+$update = $null
+if (Test-Path -LiteralPath $oldUpdate -PathType Leaf) {
+    if ($oldManifest.flavour -ne 'release') { throw "$oldUpdate lies beside a $($oldManifest.flavour) package: only the release flavour carries the self-update assets" }
+    $oldUpdateText = [IO.File]::ReadAllText($oldUpdate)
+    $oldUpdateJson = $oldUpdateText | ConvertFrom-Json
+    if ([string]$oldUpdateJson.release -ne $version) { throw "$oldUpdate names release $($oldUpdateJson.release), the package is $version" }
+    $oldDriver = @($oldUpdateJson.components | Where-Object { $_.kind -eq 'driver' })
+    $oldApps = @($oldUpdateJson.components | Where-Object { $_.kind -eq 'apps' })
+    if ($oldDriver.Count -ne 1 -or $oldApps.Count -ne 1) { throw "${oldUpdate}: one driver and one apps component expected" }
+    if ([string]$oldDriver[0].sha256 -ne (Get-Hash $oldZip)) { throw "$oldUpdate does not pin the old zip $oldZip" }
+    $appsPack = Join-Path $Package ([string]$oldApps[0].asset)
+    if (-not (Test-Path -LiteralPath $appsPack -PathType Leaf) -or (Get-Hash $appsPack) -ne [string]$oldApps[0].sha256) {
+        throw "the apps pack $appsPack is missing or does not match $oldUpdate"
+    }
+    if (-not (Test-Path -LiteralPath "$oldUpdate.p7s" -PathType Leaf)) { throw "no signature $oldUpdate.p7s beside the old manifest" }
+    $update = [ordered]@{ text = $oldUpdateText; json = $oldUpdateJson; apps = $appsPack }
+} elseif ($oldManifest.flavour -eq 'release' -and (Test-Path -LiteralPath (Join-Path $oldTop 'files\installer\nagi-update.ps1'))) {
+    throw "the release package $name ships the self-update but $Package has no nagi-update.json"
+}
+$pass = (Get-Content -LiteralPath $PasswordFile -Raw).Trim()
+function Invoke-SignTool([string[]]$Arguments, [string]$What) {
+    $text = (& $SignTool @Arguments 2>&1 | ForEach-Object { [string]$_ }) -join ' / '
+    if ($LASTEXITCODE -ne 0) { throw "signtool $What failed: $($text -replace [regex]::Escape($pass), '<redacted>')" }
+}
 
 # 1. The old package is the gated one: the top folder, its manifest and its zip agree file for file.
 $oldFiles = Get-TreeHashes $oldTop
@@ -163,11 +219,57 @@ Compress-Archive -Path $newTop -DestinationPath $zip
 $exe = Join-Path $Out $exeName
 & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $newTop -Out $exe -Check -ReleaseZip $zip | ForEach-Object { "  $_" }
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "make-setup-exe.ps1 wrote no $exe" }
-"single exe $exe SHA256 $(Get-Hash $exe)"
+# The single file is signed as a whole after it is written, as build-release.ps1 signs it (BD-160), and -CheckSigned
+# proves that the signed file is the checked file plus its certificate table.
+Invoke-SignTool (Get-SignToolSignArguments -Signer $signer -Path $exe -Pfx $Pfx -Password $pass) "sign $exe"
+Test-UserModeSignature -Signer $signer -Path $exe
+& (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $newTop -Out $exe -CheckSigned -ReleaseZip $zip | ForEach-Object { "  $_" }
+"single exe $exe SHA256 $(Get-Hash $exe), signed by $($signer.thumbprint)"
+
+# 5. The self-update assets of a release flavour package (BD-294).
+$updateReport = $null
+if ($update) {
+    $newApps = Join-Path $Out (Split-Path -Leaf $update.apps)
+    Copy-Item -LiteralPath $update.apps -Destination $newApps
+    $newUpdate = Join-Path $Out 'nagi-update.json'
+    $python = (Get-Command python -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+    $text = & $python -I (Join-Path $PSScriptRoot 'nagi_update.py') manifest --package (Join-Path $newTop 'files') --release-zip $zip `
+        --apps-pack $newApps --min-installed ([string]$update.json.min_installed) --out $newUpdate 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) { throw "nagi_update.py manifest failed: $text" }
+    # The proof: the new manifest names the new zip and the new files\manifest.json, and with the old values of these
+    # three fields put back it is the old manifest exactly.
+    $newJson = [IO.File]::ReadAllText($newUpdate) | ConvertFrom-Json
+    $d = @($newJson.components | Where-Object { $_.kind -eq 'driver' })[0]
+    if ([string]$d.sha256 -ne (Get-Hash $zip) -or [long]$d.size -ne (Get-Item -LiteralPath $zip).Length) { $bad.Add('nagi-update.json does not pin the new zip') }
+    if ([string]$d.driver.package_manifest_sha256 -ne (Get-Hash $manPath)) { $bad.Add('nagi-update.json does not pin the new files\manifest.json') }
+    $o = @($update.json.components | Where-Object { $_.kind -eq 'driver' })[0]
+    $d.sha256 = $o.sha256; $d.size = $o.size; $d.driver.package_manifest_sha256 = $o.driver.package_manifest_sha256
+    if (($newJson | ConvertTo-Json -Depth 30 -Compress) -cne ($update.json | ConvertTo-Json -Depth 30 -Compress)) {
+        $bad.Add('nagi-update.json differs from the old one outside the zip sha256, the zip size and the package manifest sha256')
+    }
+    if ($bad.Count) { $bad | ForEach-Object { "  $_" }; throw "the update manifest proof fails ($($bad.Count) problems)" }
+    $p7Dir = Join-Path $Out 'nagi-update-p7'
+    [void][IO.Directory]::CreateDirectory($p7Dir)
+    Invoke-SignTool (Get-ManifestSignToolArguments -Signer $signer -Path $newUpdate -OutDir $p7Dir -Pfx $Pfx -Password $pass) "/p7 $newUpdate"
+    $newSignature = "$newUpdate.p7s"
+    [IO.File]::WriteAllBytes($newSignature, (ConvertTo-CmsContentInfo ([IO.File]::ReadAllBytes((Join-Path $p7Dir 'nagi-update.json.p7')))))
+    Remove-Item -LiteralPath $p7Dir -Recurse -Force
+    # The check of the installed release: Windows PowerShell 5.1 and the pinned list of the package's own installer.
+    $q = { param($s) "'" + $s.Replace("'", "''") + "'" }
+    $check = "& { . $(& $q (Join-Path $newTop 'files\installer\nagi-update.ps1')); `$r = Test-NagiManifestSignature -ManifestPath $(& $q $newUpdate) -SignaturePath $(& $q $newSignature); " +
+        "if (`$r.ok) { 'signer ' + `$r.thumbprint + ' is pinned'; exit 0 }; `$r.reason; exit 1 }"
+    $text = & (Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe') -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command $check 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) { throw "the update manifest signature does not verify as the installed release checks it: $($text.Trim())" }
+    "update manifest $newUpdate SHA256 $(Get-Hash $newUpdate), $($text.Trim())"
+    $updateReport = [ordered]@{ manifest = [ordered]@{ old = (Get-Hash $oldUpdate); new = (Get-Hash $newUpdate); file = $newUpdate }
+        signature = $newSignature; apps = [ordered]@{ sha256 = (Get-Hash $newApps); file = $newApps } }
+}
+$pass = $null
 $report = [ordered]@{ tool = 'repack-notes'; utc = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'); version = $version
     flavour = $oldManifest.flavour; from = $Package; out = $Out; unchanged_files = $newFiles.Count - $changed.Count; notes = $changes
     manifest = [ordered]@{ old = $oldFiles['files\manifest.json']; new = $newFiles['files\manifest.json'] }
     zip = [ordered]@{ old = (Get-Hash $oldZip); new = (Get-Hash $zip); file = $zip }
-    exe = [ordered]@{ old = $(if ($exes.Count) { Get-Hash $exes[0].FullName }); new = (Get-Hash $exe); file = $exe } }
+    exe = [ordered]@{ old = $(if ($exes.Count) { Get-Hash $exes[0].FullName }); new = (Get-Hash $exe); file = $exe; signer = $signer.thumbprint }
+    update = $updateReport }
 [IO.File]::WriteAllText((Join-Path $Out 'repack-report.json'), ($report | ConvertTo-Json -Depth 6))
 "repack-notes: ok ($Out\repack-report.json)"
