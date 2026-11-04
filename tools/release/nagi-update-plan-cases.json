@@ -1,0 +1,1088 @@
+{
+ "schema": "nagi.plan-cases/1",
+ "note": "Answered by installer/nagi-update.ps1 Get-NagiApplyPlan (test-nagi-update.ps1) and by the control app's SelfUpdate.Plan (test/SelfUpdateTests.cs).",
+ "cases": [
+  {
+   "name": "same release is up to date",
+   "manifest": {
+    "release": "0.7.216.108-tester.36",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.108-tester.36",
+      "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.108-tester.36",
+      "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "up-to-date",
+    "reason": null,
+    "actions": [],
+    "restart": false
+   }
+  },
+  {
+   "name": "an older release is a downgrade",
+   "manifest": {
+    "release": "0.7.216.107-tester.35",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.107-tester.35",
+      "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.107-tester.35",
+      "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "refused",
+    "reason": "downgrade",
+    "actions": [],
+    "restart": false
+   }
+  },
+  {
+   "name": "a stable release ranks above its tester builds",
+   "manifest": {
+    "release": "0.7.216.108",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.108",
+      "content_id": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.108",
+      "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "apply",
+    "reason": null,
+    "actions": [
+     "driver"
+    ],
+    "restart": true
+   }
+  },
+  {
+   "name": "tester.29v2 ranks above tester.29",
+   "manifest": {
+    "release": "0.7.216.100-tester.29v2",
+    "min_installed": "0.7.216.100-tester.29",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.100-tester.29v2",
+      "content_id": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.100-tester.29v2",
+      "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.100-tester.29",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "apply",
+    "reason": null,
+    "actions": [
+     "driver"
+    ],
+    "restart": true
+   }
+  },
+  {
+   "name": "an install older than min_installed is too old",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.107-tester.35",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "refused",
+    "reason": "too-old",
+    "actions": [],
+    "restart": false
+   }
+  },
+  {
+   "name": "an unknown installed release is refused",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "lab-build",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "refused",
+    "reason": "unknown-installed",
+    "actions": [],
+    "restart": false
+   }
+  },
+  {
+   "name": "a new driver takes the whole package and needs a restart",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "apply",
+    "reason": null,
+    "actions": [
+     "driver"
+    ],
+    "restart": true
+   }
+  },
+  {
+   "name": "an unknown installed driver identity is a driver change",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": null,
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": null,
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "apply",
+    "reason": null,
+    "actions": [
+     "driver"
+    ],
+    "restart": true
+   }
+  },
+  {
+   "name": "only the apps changed: the apps pack, no restart",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "apply",
+    "reason": null,
+    "actions": [
+     "apps"
+    ],
+    "restart": false
+   }
+  },
+  {
+   "name": "nothing changed in a newer release: up to date",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "up-to-date",
+    "reason": null,
+    "actions": [],
+    "restart": false
+   }
+  },
+  {
+   "name": "new apps that do not speak the installed driver's ABI are refused",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D9"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "refused",
+    "reason": "incompatible",
+    "actions": [],
+    "restart": false
+   }
+  },
+  {
+   "name": "new apps that do not read the installed state schema are refused",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        3
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "refused",
+    "reason": "incompatible",
+    "actions": [],
+    "restart": false
+   }
+  },
+  {
+   "name": "a new driver with apps of its own ABI fits",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+      "driver": {
+       "kmd_abi": "0x000700D9",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D9"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "apply",
+    "reason": null,
+    "actions": [
+     "driver"
+    ],
+    "restart": true
+   }
+  },
+  {
+   "name": "a new driver that the release's apps do not speak is refused",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+      "driver": {
+       "kmd_abi": "0x000700D9",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "refused",
+    "reason": "incompatible",
+    "actions": [],
+    "restart": false
+   }
+  },
+  {
+   "name": "a new data pack is applied with the apps",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     },
+     {
+      "name": "profiles",
+      "kind": "data",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {}
+   },
+   "expect": {
+    "outcome": "apply",
+    "reason": null,
+    "actions": [
+     "apps",
+     "profiles"
+    ],
+    "restart": false
+   }
+  },
+  {
+   "name": "an installed data pack with the same content stays",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     },
+     {
+      "name": "profiles",
+      "kind": "data",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {
+     "profiles": {
+      "content_id": "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+     }
+    }
+   },
+   "expect": {
+    "outcome": "up-to-date",
+    "reason": null,
+    "actions": [],
+    "restart": false
+   }
+  },
+  {
+   "name": "a changed data pack alone, no restart",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     },
+     {
+      "name": "profiles",
+      "kind": "data",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {
+     "profiles": {
+      "content_id": "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+     }
+    }
+   },
+   "expect": {
+    "outcome": "apply",
+    "reason": null,
+    "actions": [
+     "profiles"
+    ],
+    "restart": false
+   }
+  },
+  {
+   "name": "a data pack rides with a driver change",
+   "manifest": {
+    "release": "0.7.216.109-tester.37",
+    "min_installed": "0.7.216.108-tester.36",
+    "components": [
+     {
+      "name": "driver",
+      "kind": "driver",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+      "driver": {
+       "kmd_abi": "0x000700D8",
+       "state_schema": 2
+      }
+     },
+     {
+      "name": "apps",
+      "kind": "apps",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "apps": {
+       "kmd_abis": [
+        "0x000700D8"
+       ],
+       "state_schemas": [
+        2
+       ]
+      }
+     },
+     {
+      "name": "profiles",
+      "kind": "data",
+      "version": "0.7.216.109-tester.37",
+      "content_id": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+     }
+    ]
+   },
+   "installed": {
+    "release": "0.7.216.108-tester.36",
+    "driver": {
+     "content_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "kmd_abi": "0x000700D8",
+     "state_schema": 2
+    },
+    "apps": {
+     "content_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "kmd_abis": [
+      "0x000700D8"
+     ],
+     "state_schemas": [
+      2
+     ]
+    },
+    "data": {
+     "profiles": {
+      "content_id": "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+     }
+    }
+   },
+   "expect": {
+    "outcome": "apply",
+    "reason": null,
+    "actions": [
+     "driver",
+     "profiles"
+    ],
+    "restart": true
+   }
+  }
+ ]
+}

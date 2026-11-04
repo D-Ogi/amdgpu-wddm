@@ -1,0 +1,63 @@
+{
+ "schema": "nagi.update/1",
+ "product": "Nagi",
+ "release": "0.7.216.109-tester.37",
+ "flavour": "release",
+ "built_utc": "2026-11-04T12:00:00.0000000Z",
+ "min_installed": "0.7.216.108-tester.36",
+ "components": [
+  {
+   "name": "driver",
+   "kind": "driver",
+   "version": "0.7.216.109-tester.37",
+   "asset": "amdgpu-wddm-tester-0.7.216.109-tester.37.zip",
+   "sha256": "4A70FE9AA6436E02C2DEA340FBD1E352E4EF2D8CE6CA52AD25D4B95471FC8BF2",
+   "size": 123456789,
+   "restart": true,
+   "content_id": "6512811957CE8AD8AB36FA2F48817665E866F06E036F3724FF97B943400B9C69",
+   "driver": {
+    "kmd_version": "40.7.216.109",
+    "kmd_abi": "0x000700D8",
+    "kmd_sha256": "C6E66EECDEE1684807B753959C58EC424CF8476C197F7D6FBD9C7DBC815B02AA",
+    "state_schema": 2,
+    "catalog_id": "652f55016243bf1b9f1bbea46d5749ef892dbe394e46de9d66ab1aacf0b4af57",
+    "package_manifest_sha256": "96F2F0811DF88D8FC36BBA1EBFE4E4841CE71B1E26C4AC0B77C860F26A37A763"
+   }
+  },
+  {
+   "name": "apps",
+   "kind": "apps",
+   "version": "0.7.216.109-tester.37",
+   "asset": "nagi-apps-0.7.216.109-tester.37.zip",
+   "sha256": "1338428053B656A82AE826352677F387150DA4D0A3335302470E7A7270A98A77",
+   "size": 2345678,
+   "restart": false,
+   "content_id": "9CC3F3A5D9C47991B4638E6C07B121F5002C7F48C4120D66D98B9BF46C61FAE1",
+   "apps": {
+    "kmd_abis": [
+     "0x000700D8"
+    ],
+    "state_schemas": [
+     2
+    ],
+    "files": [
+     {
+      "path": "amdgpu_wddm_control.exe",
+      "sha256": "9095BDB859308B62ACF04036FFD4ADFE366D7F737D276EB6C46AE434F3816C9B",
+      "size": 2711992
+     },
+     {
+      "path": "bc250control.dll",
+      "sha256": "0343B13708CD52D33ECBB1043B5AE145E73A532BDCCF7DE6925DB5CCE6054FD3",
+      "size": 230328
+     },
+     {
+      "path": "system-tuning/system-tuning.ps1",
+      "sha256": "495D7842AA80549AE4E957CC0472C6445AE74C771AD8CFFBAD65CA284BB45156",
+      "size": 1634
+     }
+    ]
+   }
+  }
+ ]
+}

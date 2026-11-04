@@ -77,6 +77,39 @@ function Get-SignToolSignArguments {
     $a + @('/tr', $Signer.timestamp_url, '/td', 'SHA256', $Path)
 }
 
+# The signtool arguments for the detached signature of the update manifest (docs/design/self-update.md): the same
+# signer as every user-mode file, with /p7 so that signtool writes <OutDir>\<file name>.p7, a CMS SignedData over the
+# file's bytes (content type data, detached), and leaves the file itself as it is. The time stamp arguments go: the
+# installed release checks the signature itself and the pinned signer, not the certificate's validity period.
+function Get-ManifestSignToolArguments {
+    param([Parameter(Mandatory)]$Signer, [Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$OutDir, [string]$Pfx, [string]$Password)
+    $a = @(Get-SignToolSignArguments -Signer $Signer -Path $Path -Pfx $Pfx -Password $Password)
+    $out = New-Object Collections.Generic.List[string]
+    for ($i = 0; $i -lt $a.Count - 1; $i++) {
+        if ($a[$i] -in '/tr', '/td') { $i++; continue }
+        $out.Add($a[$i])
+    }
+    $out.AddRange([string[]]@('/p7', $OutDir, '/p7co', '1.2.840.113549.1.7.1', '/p7ce', 'DetachedSignedData', $Path))
+    return $out.ToArray()
+}
+
+# signtool /p7 writes the bare SignedData structure (SEQUENCE, version 1, ...). A CMS reader (SignedCms.Decode in
+# Windows PowerShell 5.1 and in the control application) wants it inside a ContentInfo: SEQUENCE { signedData OID,
+# [0] EXPLICIT SignedData }. The release ships that standard form as nagi-update.json.p7s.
+function ConvertTo-CmsContentInfo([byte[]]$SignedData) {
+    function DerLength([int]$n) {
+        if ($n -lt 0x80) { return , [byte[]]@($n) }
+        $b = New-Object Collections.Generic.List[byte]
+        while ($n -gt 0) { $b.Insert(0, [byte]($n -band 0xFF)); $n = $n -shr 8 }
+        return , [byte[]](@([byte](0x80 -bor $b.Count)) + $b.ToArray())
+    }
+    if (-not $SignedData -or $SignedData.Length -lt 4 -or $SignedData[0] -ne 0x30) { throw 'the signtool output is not a DER SEQUENCE' }
+    $oid = [byte[]](0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x07, 0x02)
+    $inner = [byte[]](@([byte]0xA0) + (DerLength $SignedData.Length) + $SignedData)
+    $body = [byte[]]($oid + $inner)
+    return , [byte[]](@([byte]0x30) + (DerLength $body.Length) + $body)
+}
+
 # Checks the signature of a file the route signed, and throws when it is not the signer's. The store route needs a
 # signature that Windows trusts (Valid), the signer's thumbprint and a time stamp. The test route needs the test
 # certificate's thumbprint and a signature whose hash matches; its root is trusted only where the installer put it,

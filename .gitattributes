@@ -91,3 +91,5 @@ compute/ollama/patches/** -text
 # with the files. They are stored byte for byte, so a checkout gives the bytes the hashes name.
 driver/shim/dml201/reference/** -text
 driver/amdgpu-import/reference/** -text
+# The signed update manifest fixture: its signature covers the exact bytes (tools/release/test-nagi-update-release.ps1).
+tools/release/test-data/nagi-update/** binary
