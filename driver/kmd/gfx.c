@@ -1399,6 +1399,28 @@ ULONG GfxQueueReset(_Inout_ BC250_DEVICE* Device, ULONG Vmid, BOOLEAN Compute, _
 
     GuardLog("gfx: queue reset %s witnesses: hqd active 0x%lX rptr 0x%lX wptr 0x%lX, poll %lu us", ringName,
              res.hqd_active_before, res.rptr_before, res.wptr_before, res.hqd_poll_us);
+    if (Compute)
+    {
+        // The full HQD before the unmap and after the poll (bc250_gfx.h, struct bc250_hqd_witness), and what the
+        // fallback of queue-reset.md 5.3 did. The ring's own base is logged next to PQ_BASE, so a select of
+        // another HQD shows at once.
+        const struct bc250_hqd_witness* w[2] = { &res.before, &res.after };
+        ULONG i;
+        GuardLog("gfx: queue reset compute ring base 0x%llX (PQ_BASE wants 0x%llX)", (ULONGLONG)ring->gpu_addr,
+                 (ULONGLONG)(ring->gpu_addr >> 8));
+        for (i = 0; i < 2; i++)
+        {
+            GuardLog("gfx: queue reset compute hqd %s: active 0x%lX vmid 0x%lX persist 0x%lX base 0x%lX:%08lX "
+                     "ctl 0x%lX rptr 0x%lX wptr 0x%lX:%08lX db 0x%lX", i == 0 ? "before" : "after",
+                     w[i]->active, w[i]->vmid, w[i]->persistent_state, w[i]->pq_base_hi, w[i]->pq_base,
+                     w[i]->pq_control, w[i]->pq_rptr, w[i]->pq_wptr_hi, w[i]->pq_wptr_lo, w[i]->doorbell_control);
+            GuardLog("gfx: queue reset compute hqd %s: ib 0x%lX:%08lX rptr 0x%lX ctl 0x%lX dequeue req 0x%lX "
+                     "status 0x%lX", i == 0 ? "before" : "after", w[i]->ib_base_hi, w[i]->ib_base, w[i]->ib_rptr,
+                     w[i]->ib_control, w[i]->dequeue_request, w[i]->dequeue_status);
+        }
+        GuardLog("gfx: queue reset compute fallback %lu (0 not run, 1 idle, 2 still active), poll %lu us",
+                 res.fallback, res.fallback_poll_us);
+    }
     if (!NT_SUCCESS(fault))
     {
         ExFreePoolWithTag(snapshot, BC250_GFX_TAG);

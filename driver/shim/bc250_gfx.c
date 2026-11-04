@@ -1972,12 +1972,46 @@ u32 bc250_gfx_vmid_reset_value(const struct amdgpu_ring *ring, u32 vmid)
 	return tmp;
 }
 
+/* Under the caller's queue select. Read only. */
+static void bc250_hqd_witness_read(struct amdgpu_device *adev, struct bc250_hqd_witness *w)
+{
+	w->active = RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE);
+	w->vmid = RREG32_SOC15(GC, 0, mmCP_HQD_VMID);
+	w->persistent_state = RREG32_SOC15(GC, 0, mmCP_HQD_PERSISTENT_STATE);
+	w->pq_base = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_BASE);
+	w->pq_base_hi = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_BASE_HI);
+	w->pq_control = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_CONTROL);
+	w->pq_rptr = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_RPTR);
+	w->pq_wptr_lo = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_WPTR_LO);
+	w->pq_wptr_hi = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_WPTR_HI);
+	w->doorbell_control = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_DOORBELL_CONTROL);
+	w->ib_base = RREG32_SOC15(GC, 0, mmCP_HQD_IB_BASE_ADDR);
+	w->ib_base_hi = RREG32_SOC15(GC, 0, mmCP_HQD_IB_BASE_ADDR_HI);
+	w->ib_rptr = RREG32_SOC15(GC, 0, mmCP_HQD_IB_RPTR);
+	w->ib_control = RREG32_SOC15(GC, 0, mmCP_HQD_IB_CONTROL);
+	w->dequeue_request = RREG32_SOC15(GC, 0, mmCP_HQD_DEQUEUE_REQUEST);
+	w->dequeue_status = RREG32_SOC15(GC, 0, mmCP_HQD_DEQUEUE_STATUS);
+}
+
+/* Under the caller's queue select: microseconds until CP_HQD_ACTIVE bit 0 reads 0, or
+ * adev->usec_timeout when it never does. */
+static u32 bc250_hqd_poll_inactive(struct amdgpu_device *adev)
+{
+	u32 i;
+
+	for (i = 0; i < adev->usec_timeout; i++) {
+		if (!(RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE) & 1))
+			break;
+		bc250_shim_udelay(1);
+	}
+	return i;
+}
+
 int bc250_gfx_reset_kcq(struct amdgpu_ring *ring, struct bc250_qreset_result *res)
 {
 	struct amdgpu_device *adev;
 	struct amdgpu_ring *kiq_ring;
 	bool safe = false;
-	u32 i;
 	int r;
 
 	if (res == NULL)
@@ -1991,10 +2025,11 @@ int bc250_gfx_reset_kcq(struct amdgpu_ring *ring, struct bc250_qreset_result *re
 
 	/* Step 1: the witnesses before, under the queue select. */
 	nv_grbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
-	res->hqd_active_before = RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE);
-	res->rptr_before = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_RPTR);
-	res->wptr_before = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_WPTR_LO);
+	bc250_hqd_witness_read(adev, &res->before);
 	nv_grbm_select(adev, 0, 0, 0, 0);
+	res->hqd_active_before = res->before.active;
+	res->rptr_before = res->before.pq_rptr;
+	res->wptr_before = res->before.pq_wptr_lo;
 
 	/* Step 2: UNMAP_QUEUES RESET_QUEUES, then the KIQ ring test. */
 	r = amdgpu_ring_alloc(kiq_ring, BC250_UNMAP_QUEUES_SIZE);
@@ -2013,15 +2048,22 @@ int bc250_gfx_reset_kcq(struct amdgpu_ring *ring, struct bc250_qreset_result *re
 		return bc250_qreset_fail(res, BC250_QRESET_STEP_HQD, r);
 	}
 	nv_grbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
-	for (i = 0; i < adev->usec_timeout; i++) {
-		if (!(RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE) & 1))
-			break;
-		bc250_shim_udelay(1);
+	res->hqd_poll_us = bc250_hqd_poll_inactive(adev);
+	bc250_hqd_witness_read(adev, &res->after);
+	if (res->hqd_poll_us >= adev->usec_timeout) {
+		/* The fallback of queue-reset.md 5.3, which amdgpu's queue reset does not have: the
+		 * direct handshake of kgd_hqd_destroy() (amdgpu_amdkfd_gfx_v10.c:606-619), DRAIN_PIPE as
+		 * bc250_kiq_dequeue() writes it, then the request put back to 0 as there. Lab Q2: the KIQ
+		 * answered the unmap and the HQD stayed active for the whole bound. */
+		WREG32_SOC15(GC, 0, mmCP_HQD_DEQUEUE_REQUEST, 1);
+		res->fallback_poll_us = bc250_hqd_poll_inactive(adev);
+		WREG32_SOC15(GC, 0, mmCP_HQD_DEQUEUE_REQUEST, 0);
+		res->fallback = res->fallback_poll_us >= adev->usec_timeout ? BC250_QRESET_FALLBACK_ACTIVE :
+									      BC250_QRESET_FALLBACK_IDLE;
 	}
-	res->hqd_poll_us = i;
 	nv_grbm_select(adev, 0, 0, 0, 0);
 	bc250_gfx_rlc_safe_exit(adev, safe);
-	if (i >= adev->usec_timeout) {
+	if (res->hqd_poll_us >= adev->usec_timeout && res->fallback != BC250_QRESET_FALLBACK_IDLE) {
 		dev_err(adev->dev, "fail to wait on hqd deactivate\n");
 		return bc250_qreset_fail(res, BC250_QRESET_STEP_HQD, BC250_ETIME);
 	}

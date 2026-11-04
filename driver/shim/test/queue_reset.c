@@ -63,6 +63,7 @@ static struct amdgpu_ring *g_kiq, *g_kcq, *g_kgq;
 static u32 g_scratch, g_grbm_cntl, g_hqd_polls_until_idle, g_hqd_selected_reads;
 static unsigned int g_ring_tests, g_silent_test;	/* 1-based index of the ring test that fails */
 static int g_select_left_set;
+static u32 g_dequeue_writes, g_dequeue_last, g_fallback_frees;	/* the fallback of 5.3 */
 
 
 unsigned int bc250_shim_rreg(struct amdgpu_device *adev, unsigned int i)
@@ -93,6 +94,13 @@ void bc250_shim_wreg(struct amdgpu_device *adev, unsigned int i, unsigned int v)
 	}
 	if (i == (u32)SOC15_REG_OFFSET(GC, 0, mmGRBM_GFX_CNTL))
 		g_grbm_cntl = v;
+	if (i == (u32)SOC15_REG_OFFSET(GC, 0, mmCP_HQD_DEQUEUE_REQUEST)) {
+		g_dequeue_writes++;
+		g_dequeue_last = v;
+		/* a case can let the direct request end what the KIQ unmap did not */
+		if (v == 1 && g_fallback_frees && g_grbm_cntl != 0)
+			g_hqd_polls_until_idle = 2;
+	}
 	if (i < 0x40000u)
 		g_regs[i] = v;
 }
@@ -191,6 +199,14 @@ static void model_reset(void)
 	g_hqd_selected_reads = 0;
 	g_ring_tests = 0;
 	g_silent_test = 0;
+	g_dequeue_writes = 0;
+	g_dequeue_last = 0xFFFFFFFFu;
+	g_fallback_frees = 0;
+	{	/* the ring base and IB pointer that the witness must report */
+		struct amdgpu_device *adev = &g_adev;
+		g_regs[SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_BASE)] = 0x05000000u;
+		g_regs[SOC15_REG_OFFSET(GC, 0, mmCP_HQD_IB_RPTR)] = 0x123u;
+	}
 	(void)g_select_left_set;
 }
 
@@ -260,6 +276,37 @@ static void case_kcq_success(void)
 	check(g_hqd_selected_reads >= 4, "the HQD poll ran under the queue select until it read 0");
 	check(g_grbm_cntl == 0, "the queue select is back at 0");
 	check(res.hqd_active_before == 1, "the witness before reads the HQD active");
+	check(res.before.pq_base == 0x05000000u && res.before.ib_rptr == 0x123u,
+	      "the witness before reads PQ_BASE and IB_RPTR");
+	check(res.after.active == 0, "the witness after the poll reads the HQD inactive");
+	check(res.fallback == BC250_QRESET_FALLBACK_NONE && g_dequeue_writes == 0,
+	      "no direct dequeue request when the unmap made the HQD inactive");
+}
+
+/* The fallback of queue-reset.md 5.3: the HQD stays active after the KIQ unmap. */
+static void case_kcq_fallback(int frees)
+{
+	struct bc250_qreset_result res;
+	int r;
+
+	model_reset();
+	g_hqd_polls_until_idle = 0xFFFFFFFFu;
+	g_fallback_frees = (u32)frees;
+	r = bc250_gfx_reset_kcq(g_kcq, &res);
+	check(g_dequeue_writes == 2 && g_dequeue_last == 0,
+	      "the fallback writes DEQUEUE_REQUEST 1, then puts it back to 0");
+	check(res.after.active == 1, "the witness after the first poll reads the HQD still active");
+	check(g_grbm_cntl == 0, "the queue select is back at 0 after the fallback");
+	if (frees) {
+		check(r == 0 && res.step == BC250_QRESET_STEP_DONE && res.fallback == BC250_QRESET_FALLBACK_IDLE,
+		      "a fallback that ends the HQD lets the reset go on to DONE");
+		check(map_at(g_kiq_mem + 9, g_kcq, 0), "MAP_QUEUES follows the fallback");
+	} else {
+		check(r != 0 && res.step == BC250_QRESET_STEP_HQD && res.fallback == BC250_QRESET_FALLBACK_ACTIVE,
+		      "a fallback that does not end the HQD fails at HQD");
+		check(g_kiq_mem[9] == 0xCCCCCCCCu && g_kcq->wptr == 0x40,
+		      "no MAP_QUEUES and an untouched ring after a failed fallback");
+	}
 }
 
 static void case_kcq_fail(unsigned int silent, u32 polls, u32 want_step, const char *what)
@@ -365,6 +412,9 @@ int main(int argc, char **argv)
 	case_kcq_fail(1, 3, BC250_QRESET_STEP_UNMAP, "a silent KIQ after the unmap fails at UNMAP");
 	case_kcq_fail(0, 0xFFFFFFFFu, BC250_QRESET_STEP_HQD, "an HQD that stays active fails at HQD");
 	case_kcq_fail(2, 3, BC250_QRESET_STEP_MAP, "a silent KIQ after the map fails at MAP");
+	printf("\ncompute: the fallback of 5.3\n");
+	case_kcq_fallback(0);
+	case_kcq_fallback(1);
 	case_kcq_fail(3, 3, BC250_QRESET_STEP_RING_TEST, "a silent queue fails at RING_TEST");
 	case_kgq_success();
 	printf("\ngfx: each step fails in turn\n");

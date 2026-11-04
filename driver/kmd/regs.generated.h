@@ -1709,7 +1709,7 @@ static const unsigned long g_MmioPspAllow[BC250_MMIO_PSP_ALLOW_COUNT] = {
 
 // E11: what amdgpu wrote on unit A in this step (E03 trace, 0.0375 to 0.0385 s, 0.2495 to 0.2528 s, 0.5496 to 0.551 s, 1.56 to 1.562 s, names matching
 // ^(GC\.(?!GCVM_|GCMC_)|GC\.GCVM_INVALIDATE_ENG17_(REQ|ACK)$|GC\.GCMC_VM_CACHEABLE_DRAM_ADDRESS_END$|MMHUB\.MMVM_INVALIDATE_ENG17_(REQ|ACK|SEM)$|NBIO\.(RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN|BIF_SDMA[01]_DOORBELL_RANGE|BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_(BASE_LOW|BASE_HIGH|CNTL))$)), plus the registers it only polled. For the kernel command alone.
-#define BC250_MMIO_GFX_ALLOW_COUNT 295
+#define BC250_MMIO_GFX_ALLOW_COUNT 299
 static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x03780ul,   // NBIO.RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN
     0x0384Cul,   // NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_HIGH
@@ -1904,6 +1904,9 @@ static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x0C85Cul,   // GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI
     0x0C860ul,   // GC.CP_HQD_PQ_DOORBELL_CONTROL
     0x0C868ul,   // GC.CP_HQD_PQ_CONTROL
+    0x0C86Cul,   // GC.CP_HQD_IB_BASE_ADDR (not traced: queue reset witness, read only)
+    0x0C870ul,   // GC.CP_HQD_IB_BASE_ADDR_HI (not traced: queue reset witness, read only)
+    0x0C874ul,   // GC.CP_HQD_IB_RPTR (not traced: queue reset witness, read only)
     0x0C878ul,   // GC.CP_HQD_IB_CONTROL
     0x0C884ul,   // GC.CP_HQD_DEQUEUE_REQUEST (not traced: the undo's dequeue handshake, facts M44)
     0x0C8ACul,   // GC.CP_MQD_CONTROL
@@ -1912,6 +1915,7 @@ static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x0C8C0ul,   // GC.CP_HQD_EOP_CONTROL
     0x0C8FCul,   // GC.CP_HQD_PQ_WPTR_LO
     0x0C900ul,   // GC.CP_HQD_PQ_WPTR_HI
+    0x0C920ul,   // GC.CP_HQD_DEQUEUE_STATUS (not traced: queue reset witness, read only)
     0x0CC08ul,   // GC.GDS_VMID1_BASE
     0x0CC0Cul,   // GC.GDS_VMID1_SIZE
     0x0CC10ul,   // GC.GDS_VMID2_BASE

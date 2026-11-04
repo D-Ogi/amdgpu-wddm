@@ -340,6 +340,24 @@ enum bc250_qreset_step {
 	BC250_QRESET_STEP_DONE,
 };
 
+/* The compute HQD registers of one queue, read under its select (compute only). Lab Q2 of
+ * 2026-11-04 read CP_HQD_ACTIVE 1 with rptr 0 and wptr 0 on a ring at sequence 12038, and the HQD
+ * stayed active for 100 ms after an unmap that the KIQ answered: three registers cannot tell a CP
+ * that waits inside an indirect buffer from a select of another HQD. PQ_BASE against the ring's
+ * address says which HQD it is; the IB registers say where the CP is; DEQUEUE_REQUEST and
+ * DEQUEUE_STATUS say what happened to the request of the unmap. */
+struct bc250_hqd_witness {
+	u32 active, vmid, persistent_state, pq_base, pq_base_hi, pq_control, pq_rptr, pq_wptr_lo,
+	    pq_wptr_hi, doorbell_control, ib_base, ib_base_hi, ib_rptr, ib_control, dequeue_request,
+	    dequeue_status;
+};
+
+/* What the fallback of queue-reset.md 5.3 did: not run (the unmap alone made the HQD inactive),
+ * ran and the HQD went inactive, ran and the HQD stayed active. */
+#define BC250_QRESET_FALLBACK_NONE	0u
+#define BC250_QRESET_FALLBACK_IDLE	1u
+#define BC250_QRESET_FALLBACK_ACTIVE	2u
+
 struct bc250_qreset_result {
 	u32 step;		/* enum bc250_qreset_step */
 	int error;
@@ -347,6 +365,10 @@ struct bc250_qreset_result {
 	u32 rptr_before;
 	u32 wptr_before;
 	u32 hqd_poll_us;	/* compute only */
+	u32 fallback;		/* BC250_QRESET_FALLBACK_*, compute only */
+	u32 fallback_poll_us;
+	struct bc250_hqd_witness before;	/* compute only: step 1 */
+	struct bc250_hqd_witness after;	/* compute only: after the poll of step 3, before the fallback */
 };
 
 /* The KIQ submission of reset_kgq: WRITE_DATA (5), WAIT_REG_MEM on memory (7), WAIT_REG_MEM on

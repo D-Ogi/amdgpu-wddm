@@ -106,7 +106,13 @@ SEQUENCES = [
       # Stage 2 of the hang recovery (docs/design/queue-reset.md 5.2 step 1): the witnesses of the gfx queue before
       # its reset, read under the queue select. amdgpu does not read them in gfx_v10_0_reset_kgq; they are read only.
       ("GC", "mmCP_GFX_HQD_ACTIVE", "not traced: queue reset witness, read only"),
-      ("GC", "mmCP_GFX_HQD_WPTR", "not traced: queue reset witness, read only")]
+      ("GC", "mmCP_GFX_HQD_WPTR", "not traced: queue reset witness, read only"),
+      # The compute HQD witnesses of 5.1 that bring-up never touches: where the CP is inside an indirect buffer, and
+      # the state of a dequeue that the KIQ or the fallback of 5.3 requested (lab Q2, 2026-11-04). Read only.
+      ("GC", "mmCP_HQD_IB_BASE_ADDR", "not traced: queue reset witness, read only"),
+      ("GC", "mmCP_HQD_IB_BASE_ADDR_HI", "not traced: queue reset witness, read only"),
+      ("GC", "mmCP_HQD_IB_RPTR", "not traced: queue reset witness, read only"),
+      ("GC", "mmCP_HQD_DEQUEUE_STATUS", "not traced: queue reset witness, read only")]
      + VMID_PAGE_TABLE_BASE),
     # M6: navi10_ih_irq_init() on unit A, 0.252832 to 0.252845 s: the IH ring's registers, the dummy read address and
     # the bus master bit of the interrupt controller, the IH doorbell range. 19 accesses, nothing else in the window.
