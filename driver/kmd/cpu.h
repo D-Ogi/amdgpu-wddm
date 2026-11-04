@@ -101,9 +101,12 @@ typedef struct _BC250_CPU_STATE {
 // BD-295 lab arm: LabCpuRevertFault (REG_DWORD under Parameters, read once at DriverEntry, guard.c) is a bit mask.
 // Bit BC250_CPU_LAB_FAULT_STOP_REVERT makes the next revert that CpuStop runs report a refusal and send nothing.
 // Bit BC250_CPU_LAB_FAULT_LEFTOVER makes the first restore of a leftover at the next start report a refusal and send
-// nothing. Each bit fires once per load. In the release flavour, and in the host tests, the macro is FALSE.
+// nothing. Bit BC250_CPU_LAB_FAULT_START_READ (BD-297 arm) makes the first start read stage of the load report a
+// refusal and send nothing, so the worker's retry runs. Each bit fires once per load. In the release flavour, and in
+// the host tests, the macro is FALSE.
 #define BC250_CPU_LAB_FAULT_STOP_REVERT 1u
 #define BC250_CPU_LAB_FAULT_LEFTOVER 2u
+#define BC250_CPU_LAB_FAULT_START_READ 4u
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 BOOLEAN GuardLabCpuFault(ULONG Bit);
 #define BC250_CPU_LAB_FAULT(Bit) GuardLabCpuFault(Bit)

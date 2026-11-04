@@ -465,7 +465,8 @@ void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject)
 // mask of cpu.h (BC250_CPU_LAB_FAULT_*). Bit 1: the next revert that CpuStop runs reports a refusal and sends
 // nothing, so the stop leaves the trial in the chip and writes the leftover mark. Bit 2: the first restore of a
 // leftover at a start of this load reports a refusal and sends nothing, so the surface stays read-only until the
-// worker's retry. Each bit fires once per DriverEntry read. A disable and enable of the device runs DriverEntry
+// worker's retry. Bit 4 (BD-297): the first start read stage of this load reports a refusal and sends nothing, so
+// the worker tries it again. Each bit fires once per DriverEntry read. A disable and enable of the device runs DriverEntry
 // again, so the lab script deletes the value after the start that needs it. Absent, not a REG_DWORD or with no
 // known bit is 0 (no fault).
 static volatile LONG g_LabCpuFault = 0;
@@ -485,9 +486,10 @@ void GuardLabReadCpuRevertFault(_In_ PDRIVER_OBJECT DriverObject)
     ZwClose(key);
     if (status == STATUS_OBJECT_NAME_NOT_FOUND) return;     // the default: no line, every start would log it
     g_LabCpuFault = NT_SUCCESS(status)
-        ? (LONG)(value & (BC250_CPU_LAB_FAULT_STOP_REVERT | BC250_CPU_LAB_FAULT_LEFTOVER)) : 0;
+        ? (LONG)(value & (BC250_CPU_LAB_FAULT_STOP_REVERT | BC250_CPU_LAB_FAULT_LEFTOVER |
+                  BC250_CPU_LAB_FAULT_START_READ)) : 0;
     GuardLog("lab: CPU revert fault selector read (read only; value %lu, 0x%08X): mask %ld (1 stop revert, "
-             "2 leftover restore)", value, status, g_LabCpuFault);
+             "2 leftover restore, 4 start read)", value, status, g_LabCpuFault);
 }
 
 BOOLEAN GuardLabCpuFault(ULONG Bit)
@@ -496,7 +498,7 @@ BOOLEAN GuardLabCpuFault(ULONG Bit)
     // Only a bit that is set fires, and it fires once: the bit is cleared before the caller acts on it.
     before = InterlockedAnd(&g_LabCpuFault, ~(LONG)Bit);
     if (!(before & (LONG)Bit)) return FALSE;
-    GuardLog("cpu: lab fault %lu (LabCpuRevertFault, BD-295 arm): the restore reports a refusal and sends nothing",
+    GuardLog("cpu: lab fault %lu (LabCpuRevertFault, BD-295/BD-297 arm): the step reports a refusal and sends nothing",
              Bit);
     return TRUE;
 }

@@ -1094,7 +1094,10 @@ static void CpuThread(_In_ PVOID Context)
         if (work) {
             // The read stage first, always: it is what admits every setter of this start, and it is also what
             // records the baseline. The first queue 3 traffic of a start keeps the slow rate.
-            NTSTATUS status = CpuReadStage(device, TRUE, BC250_CPU_MESSAGE_GAP_MS);
+            // The BD-297 lab arm (LabCpuRevertFault bit 4, lab flavour only) refuses the first one. FALSE in the
+            // release flavour.
+            NTSTATUS status = BC250_CPU_LAB_FAULT(BC250_CPU_LAB_FAULT_START_READ)
+                ? STATUS_IO_DEVICE_ERROR : CpuReadStage(device, TRUE, BC250_CPU_MESSAGE_GAP_MS);
             BOOLEAN answered = NT_SUCCESS(status) ? TRUE : FALSE;
             startTries++;
             // BD-297: the start work stays owed until the read stage answers or the attempts run out. Up to
