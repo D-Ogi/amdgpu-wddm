@@ -714,6 +714,16 @@ if ($kmdRows.Count) {
     $gateList.Add([ordered]@{ name = 'umd-gate'; status = $(if ($umdLines.Count) { 'FAIL' } else { 'PASS' })
             lines = @($(if ($umdLines.Count) { $umdLines } else { "BC250_UMD_SOURCE=$env:BC250_UMD_SOURCE, BC250_UMD_BUILD=$env:BC250_UMD_BUILD, read by $($kmdRows.Count) KMD build(s)" })) })
 }
+# The work ledger gate that -Package runs, in release mode, before the first build: work deferred to this very release
+# or unlanded work that serves it refuses the package, and tester.37 found that only after its 78-minute set build.
+$ledgerTool = Join-Path $Root 'scratch\ledger\ledger.py'
+if (Test-Path -LiteralPath $ledgerTool) {
+    $ledgerOut = @(& $python $ledgerTool --root $Root check --release $planData.version 2>&1 | ForEach-Object { [string]$_ })
+    $ledgerExit = $LASTEXITCODE
+    $ledgerLines = @($ledgerOut | Where-Object { $_ -match '^\s*ERROR|error\(s\)' } | ForEach-Object { $_.Trim() })
+    $gateList.Add([ordered]@{ name = 'ledger'; status = $(if ($ledgerExit -eq 0) { 'PASS' } else { 'FAIL' })
+            lines = @($(if ($ledgerLines.Count) { $ledgerLines } else { "ledger.py check --release $($planData.version): exit $ledgerExit" })) })
+}
 foreach ($g in @($gateList | Select-Object -Skip $gates.gates.Count)) {
     "gate $($g.name): $($g.status)"
     foreach ($l in $g.lines) { "  $l" }
