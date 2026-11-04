@@ -1420,7 +1420,7 @@ rocm.state.error|src|-|Could not read
 rocm.state.unknown|src|-|Not checked
 search.rocm.payload|src|-|ROCm / PyTorch
 
-# ---- processor temperature limit (the default cap of 90 C, docs/design/tuner.md) ----
+# ---- processor temperature limit (the default cap of 87 C, docs/design/tuner.md) ----
 graphics.limit.title|src|-|Processor temperature limit (throttling)
 graphics.limit.intro|src|-|The processor slows itself down when it reaches this temperature. A lower limit keeps it cooler under a long, heavy load. A higher limit gives a little more speed and more heat.
 graphics.limit.apply|src|-|Test this limit

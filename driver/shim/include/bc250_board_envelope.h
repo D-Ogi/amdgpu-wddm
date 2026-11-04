@@ -20,9 +20,9 @@
 /* The cap a start applies when no CpuTempC is stored, and the value a reset or a revert puts back when nothing else
  * names one. Not the firmware's 100 C: on unit A the CPU test of 3DMark Time Spy took Tctl from 81 to 93.5 C in 12 s
  * at 3500 MHz and 1.21 V with the firmware's cap, past the lab's thermal stop; with an 85 C cap the firmware held
- * 86.2 C and the run completed (BD-180, 2026-11-03). The project decision of 2026-11-04 is 90 C. Any value of the
+ * 86.2 C and the run completed (BD-180, 2026-11-03). The project decision of 2026-11-04 is 87 C. Any value of the
  * band stays a choice: 100 C is the firmware's own cap. */
-#define BC250_CPU_TEMP_DEFAULT_C	90u
+#define BC250_CPU_TEMP_DEFAULT_C	87u
 #define BC250_CPU_REFUSE_MV		1300u
 #define BC250_CPU_PLAUSIBLE_MIN_MV	700u	/* a readback outside this band is not a voltage we understand */
 #define BC250_CPU_PLAUSIBLE_MAX_MV	1600u

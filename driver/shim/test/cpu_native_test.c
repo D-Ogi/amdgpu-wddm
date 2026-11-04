@@ -307,7 +307,7 @@ static void test_start_applies_the_default_cap(void)
     CHECK(device.Cpu.Baseline.temp_given && device.Cpu.Baseline.temp_c == 100u);   /* the firmware's, unchanged */
     CHECK(GuardQuerySetting(L"CpuTempC", &value) == STATUS_OBJECT_NAME_NOT_FOUND);
     CHECK(GuardQuerySetting(L"CpuLastReason", &value) == STATUS_OBJECT_NAME_NOT_FOUND);
-    CHECK(native_log_has("the default of 90 C goes in"));
+    CHECK(native_log_has("the default of 87 C goes in"));
     printf("  %-31s cap %lu C sent, baseline cap %u C\n", "start_default_cap", native_firmware.set[0].parameter,
            device.Cpu.Baseline.temp_c);
 }

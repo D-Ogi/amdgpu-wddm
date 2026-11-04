@@ -289,7 +289,7 @@ int main(int argc, char **argv)
     boardMode = 8; CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) < 0);
     boardMode = 9; CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) < 0);
     boardMode = 0; CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) == 0 && caps.AbiVersion == 3 && caps.OcTierCount == 3 &&
-                         caps.CpuDefaultTempC == 90);
+                         caps.CpuDefaultTempC == 87);
     boardMode = 0; escapeCalls = 0;
 
 

@@ -68,7 +68,7 @@ partial class UnitTests
         Check(CpuTuning.MinMHz == valid[17] && FanCurves.FloorPct == valid[30], "CPU/fan use provider");
         // ABI 3: the default CPU temperature cap, inside the band of the same reply.
         Equal(3u, valid[4], "provider answers board-caps ABI 3");
-        Equal(90u, CpuTuning.DefaultTempC, "provider advertises the 90 C default CPU cap");
+        Equal(87u, CpuTuning.DefaultTempC, "provider advertises the 87 C default CPU cap");
         Check(CpuTuning.ValidTemp(CpuTuning.DefaultTempC) && CpuTuning.DefaultTempC < CpuTuning.MaxTempC, "default cap inside the band, below the firmware cap");
         // An ABI 2 driver (tester.36 and older) applies no default cap: the firmware's own stays in force.
         var abi2 = (byte[])raw.Clone();
@@ -77,7 +77,7 @@ partial class UnitTests
         BoardCapabilities.Replace(BoardCapabilities.Parse(abi2));
         Equal(CpuTuning.MaxTempC, CpuTuning.DefaultTempC, "ABI 2 default cap is the firmware cap");
         BoardCapabilities.Replace(valid);
-        foreach (var w in new[] { new[] { 4u, 2u, 171u, 90u }, new[] { 4u, 3u, 171u, 0u }, new[] { 4u, 3u, 171u, 84u }, new[] { 4u, 3u, 171u, 101u }, new[] { 4u, 4u, 171u, 90u } }) {
+        foreach (var w in new[] { new[] { 4u, 2u, 171u, 87u }, new[] { 4u, 3u, 171u, 0u }, new[] { 4u, 3u, 171u, 84u }, new[] { 4u, 3u, 171u, 101u }, new[] { 4u, 4u, 171u, 87u } }) {
             byte[] bad = (byte[])raw.Clone();
             Array.Copy(BitConverter.GetBytes(w[1]), 0, bad, (int)w[0] * 4, 4);
             Array.Copy(BitConverter.GetBytes(w[3]), 0, bad, (int)w[2] * 4, 4);

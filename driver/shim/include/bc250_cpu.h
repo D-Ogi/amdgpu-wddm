@@ -192,7 +192,7 @@ unsigned int bc250_cpu_scale_argument(unsigned int uv_steps);
  *   *baseline  what the read stage of this start answered before the first write of this start.
  * A control neither of them names goes back to the driver's default: no undervolt, and the cap at
  * BC250_CPU_TEMP_DEFAULT_C. The cap skips *baseline for that reason: the baseline is what the firmware held
- * before this start wrote anything (100 C after a cold boot), and a reset must end at the shipped 90 C and not at
+ * before this start wrote anything (100 C after a cold boot), and a reset must end at the shipped 87 C and not at
  * the firmware's own cap. The clock limit has no such default - the firmware's own ceiling is what the baseline
  * read is for - so the return value is 0 when *from carries a clock limit that neither *before nor *baseline
  * can name. *out then holds every control that can be named, and the caller must say which one stays. */

@@ -618,7 +618,7 @@ static partial class UnitTests
     // every processor setting, and Standard puts the default back, not the firmware's own cap.
     static void CpuLimitCard()
     {
-        Equal(90u, CpuTuning.DefaultTempC, "limit: the provider's default cap");
+        Equal(87u, CpuTuning.DefaultTempC, "limit: the provider's default cap");
         string dflt = Strings.T("tuner.limit.in-force.default", CpuTuning.DefaultTempC);
 
         var off = new FakeTunerDriver(false);

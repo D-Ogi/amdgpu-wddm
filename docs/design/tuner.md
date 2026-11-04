@@ -186,7 +186,7 @@ locks, the worker thread, the registry and the message gaps. A harness for them,
 |---|---|---|
 | Maximum boost clock | 2800 to 3500 MHz | up to 4000 MHz, and only with at least four undervolt steps in the same request |
 | Undervolt | 0 to 16 curve-scale steps | the same |
-| Temperature cap | 85 to 100 C, 90 C when none is stored | the same |
+| Temperature cap | 85 to 100 C, 87 C when none is stored | the same |
 
 The release range is a **limit** before it is ever a raise: lowering the firmware's ceiling lowers the voltage the
 firmware chooses, so it cannot reach the hazard. 3500 MHz is the highest limit the release build takes. It is also
@@ -197,11 +197,13 @@ steps in the same request.
 
 ### The default temperature cap
 
-With no `CpuTempC` stored and `CpuTune` at 1, a start applies a cap of 90 C (`BC250_CPU_TEMP_DEFAULT_C` in
+With no `CpuTempC` stored and `CpuTune` at 1, a start applies a cap of 87 C (`BC250_CPU_TEMP_DEFAULT_C` in
 `driver/shim/include/bc250_board_envelope.h`). The reason is a measurement of BD-180 (2026-11-03). At the
 firmware's own cap of 100 C, the CPU test of Time Spy took Tctl from 81 C to 93.5 C in 12 s. The clock was 3500 MHz
-at 1.21 V, and the lab guard stopped the run. With a cap of 85 C the firmware held 86.2 C and the run completed. 90 C keeps
-that margin under a long load and gives up less clock than 85 C does.
+at 1.21 V, and the lab guard stopped the run. With a cap of 85 C the firmware held 86.2 C and the run completed. A run with the
+heatsink fins opened gave the same 93 C, so a better airflow alone does not remove the need for a cap. 87 C is the
+hot cap of the GPU thermal policy (`docs/design/dpm.md`): the CPU stays under the GPU's critical rule of 90 C, and
+the cap gives up less CPU clock than 85 C does.
 
 - The default goes in through the ordinary apply path of the start (`CpuApplyStart` in `driver/kmd/cpu.c`), after
   the read stage, so the read-first rule and the order of a change apply to it. A cap under the firmware's own is a
@@ -278,7 +280,7 @@ no-op on a harvested die, and either answer closes an open question.
 |---|---|
 | `CpuTune` | 1 opens the surface. The INF writes 1 from 0.7.216 (lab check of 2026-10-07: 4 undervolt steps, 1206 to 1175-1181 mV under load, reverted by the cancel). Absent or 0: read-only, no thread, no message. |
 | `CpuLab` | 1 admits the lab clock range, with an undervolt. |
-| `CpuMaxMHz`, `CpuUvSteps`, `CpuTempC` | the stored settings, applied at start, absent for none. An absent `CpuTempC` gives the default cap of 90 C. |
+| `CpuMaxMHz`, `CpuUvSteps`, `CpuTempC` | the stored settings, applied at start, absent for none. An absent `CpuTempC` gives the default cap of 87 C. |
 | `CpuTrialMs` | the window a set gets when it asks for none |
 | `CpuPending`, `CpuConfirmed` | the two guard marks of the stored settings |
 | `CpuLastReason` | 0 none, 1 applied, 2 refused, 3 an unconfirmed start, 4 the registry refused the mark, 5 `CpuTune` is 0, 6 queue 3 did not answer, 7 the firmware or the voltage readback refused |
@@ -347,7 +349,7 @@ closed then. While it is open, the page reads both escapes every 2 s (READ only,
 closed card reads nothing.
 
 One card stays outside the disclosure: "Processor temperature limit (throttling)" (`TunerView.CpuLimit`). It shows
-the processor temperature now, the cap in force, the default of the board capability query (90 C, marked as the
+the processor temperature now, the cap in force, the default of the board capability query (87 C, marked as the
 default when it is in force), and one picker over 85 to 100 C. It sends the same trial, Keep and Stop as the
 processor card, so a cap is never stored by trying it. It offers the readback while the processor has not answered
 on this start, and it offers to turn `CpuTune` on when it is 0.

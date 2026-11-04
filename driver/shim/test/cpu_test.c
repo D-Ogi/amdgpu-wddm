@@ -31,7 +31,7 @@ typedef char cpu_shape[(BC250_CPU_CORES == 8u && BC250_CPU_PSTATES == 8u && BC25
 			/* every step the search ever asks for is inside the admitted undervolt range */
 			BC250_CPU_SEARCH_MAX_STEPS <= BC250_CPU_UV_MAX_STEPS) ? 1 : -1];
 /* The default cap (test_default_cap) and the band it sits in, which the default does not move. */
-typedef char cpu_default_cap[(BC250_CPU_TEMP_DEFAULT_C == 90u && BC250_CPU_TEMP_MIN_C == 85u &&
+typedef char cpu_default_cap[(BC250_CPU_TEMP_DEFAULT_C == 87u && BC250_CPU_TEMP_MIN_C == 85u &&
 			      BC250_CPU_TEMP_MAX_C == 100u) ? 1 : -1];
 
 /* ---- the transport ------------------------------------------------------------------------------- */
@@ -534,7 +534,7 @@ static void test_restore(void)
 	/* Both steps raise the voltage the firmware chooses, so neither passes the hot gate on its own: only the
 	 * Restore flag of driver/kmd/cpu.c admits them, which is the whole reason that flag exists. The undervolt
 	 * goes away before the clock goes back up, so the higher clock never runs over the deeper undervolt. */
-	/* The cap of 95 C comes down to the default 90 C, which tightens it: it goes first of all, and it cools. */
+	/* The cap of 95 C comes down to the default 87 C, which tightens it: it goes first of all, and it cools. */
 	CHECK(p.step[0].kind == BC250_CPU_STEP_TEMP && p.step[0].parameter == BC250_CPU_TEMP_DEFAULT_C);
 	CHECK(p.step[0].cools == 1u);
 	CHECK(p.step[1].kind == BC250_CPU_STEP_UV && p.step[1].cools == 0u);
@@ -562,7 +562,7 @@ static void test_default_cap(void)
 	stored = set(0, 0, BC250_CPU_TEMP_DEFAULT_C);
 	CHECK(bc250_cpu_settings_check(&stored, 0) == BC250_CPU_OK);
 
-	/* Nothing stored (CpuTempC absent): the start applies 90 C, one tightening step that cools. */
+	/* Nothing stored (CpuTempC absent): the start applies 87 C, one tightening step that cools. */
 	memset(&stored, 0, sizeof(stored));
 	bc250_cpu_start_target(&stored, &start);
 	CHECK(start.temp_given && start.temp_c == BC250_CPU_TEMP_DEFAULT_C);
@@ -595,7 +595,7 @@ static void test_default_cap(void)
 	CHECK(bc250_cpu_settings_check(&start, 0) == BC250_CPU_ERROR_TEMP);
 
 	/* The baseline keeps its meaning: the firmware's own cap, read before the first write (100 C after a cold
-	 * boot). A reset (nothing given as the state before) still ends at 90 C. */
+	 * boot). A reset (nothing given as the state before) still ends at 87 C. */
 	baseline = set(3500u, 0, BC250_CPU_TEMP_MAX_C);
 	baseline.uv_given = 1;
 	memset(&before, 0, sizeof(before));
@@ -609,7 +609,7 @@ static void test_default_cap(void)
 	CHECK(bc250_cpu_restore_target(&applied, &before, &baseline, &out) == 1);
 	CHECK(bc250_cpu_plan(&applied, &out, 0, &p) == BC250_CPU_ERROR_NOTHING);
 
-	/* A trial on top of the default goes back to the default: the state before the trial is the applied 90 C. */
+	/* A trial on top of the default goes back to the default: the state before the trial is the applied 87 C. */
 	before = set(0, 0, BC250_CPU_TEMP_DEFAULT_C);
 	applied = set(0, 0, 95u);
 	CHECK(bc250_cpu_restore_target(&applied, &before, &baseline, &out) == 1);

@@ -53,7 +53,7 @@ int main(int argc,char** argv)
     CHECK(caps.FanPresets[1][4].TempC==85 && caps.FanPresets[2][3].DutyPct==100);
     for(i=0;i<ARRAYSIZE(caps.Reserved);++i)CHECK(!caps.Reserved[i]);
     /* ABI 3: the default CPU temperature cap (2026-11-04), inside the band the same reply names. */
-    CHECK(caps.AbiVersion==3 && caps.CpuDefaultTempC==90 && caps.CpuDefaultTempC>=caps.CpuTempMinC &&
+    CHECK(caps.AbiVersion==3 && caps.CpuDefaultTempC==87 && caps.CpuDefaultTempC>=caps.CpuTempMinC &&
           caps.CpuDefaultTempC<=caps.CpuTempMaxC);
     /* ABI 2: the overclock envelopes, and no tier on a start that decided none. */
     CHECK(caps.OcTierCount==3 && !caps.OcTier && !caps.OcStoredTier && !caps.OcReason && !caps.OcBoard);

@@ -30,7 +30,7 @@
 //                     admits up to 3900 MHz (air) or 4100 MHz (liquid), with the undervolt
 //                     bc250_oc_cpu_min_uv_steps asks for (bc250_cpu_settings_check_tier)
 //   CpuUvSteps        the stored undervolt, in curve-scale steps
-//   CpuTempC          the stored temperature cap; absent, a start applies BC250_CPU_TEMP_DEFAULT_C (90 C)
+//   CpuTempC          the stored temperature cap; absent, a start applies BC250_CPU_TEMP_DEFAULT_C (87 C)
 //   CpuTrialMs        the default trial window of a SET
 //   CpuPending        the mark of a start that applied the stored values and never became healthy
 //   CpuConfirmed      the mark a healthy start wrote
