@@ -402,6 +402,28 @@ static void test_the_stop_rule(void)
     CHECK(bc250_cpu_boost_probe_more(BC250_CPU_BOOST_PROBE_ROUNDS, 0u) == 0);
 }
 
+/* BD-293: a failed power transaction keeps the governor paused until the next start. The CPU surface then needs only
+ * its owner: the paused governor gates it in every other phase, and a missing owner gates it in FAILED too. */
+static void test_failed_transaction_admits_the_cpu(void)
+{
+    Reset();
+    CHECK(!CpuAdapterDown(&device));
+    device.Dpm.Paused = 1;
+    CHECK(CpuAdapterDown(&device));                         /* ACTIVE with the governor paused: on the way down */
+    device.RetainedPowerPhase = BC250_POWER_SUSPENDING;
+    CHECK(CpuAdapterDown(&device));
+    device.RetainedPowerPhase = BC250_POWER_RESTORING;
+    CHECK(CpuAdapterDown(&device));
+    device.RetainedPowerPhase = BC250_POWER_FAILED;
+    CHECK(!CpuAdapterDown(&device));                        /* the owner alone gates it now */
+    device.Smu.Online = FALSE;
+    CHECK(CpuAdapterDown(&device));
+    device.Smu.Online = TRUE;
+    device.Smu.CpuOnline = FALSE;
+    CHECK(CpuAdapterDown(&device));
+    printf("  %-31s the paused governor gates the CPU except in FAILED\n", "failed_transaction");
+}
+
 int main(void)
 {
     test_ramp();
@@ -415,6 +437,7 @@ int main(void)
     test_start_keeps_a_stored_cap();
     test_start_adds_the_cap_to_stored_settings();
     test_reset_returns_to_the_default_cap();
+    test_failed_transaction_admits_the_cpu();
     printf("cpu native (the boost probe's sweep, the default cap): %ld checks, %ld failures\n", native_checks,
            native_failures);
     return native_failures != 0 ? 1 : 0;

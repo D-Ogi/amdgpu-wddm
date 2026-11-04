@@ -442,6 +442,7 @@ static ULONG GuardReadSetting(const WCHAR *name, ULONG fallback)
 
 #include "bc250kmd_escape.h"
 #include "cpu.h"
+#include "../../kmd/power_phase.h"
 
 /* Only the fields cpu.c reaches for. The real structures carry much more, and none of it belongs in a CPU test. */
 typedef struct _BC250_START_HEALTH_NATIVE {
@@ -467,6 +468,7 @@ typedef struct _BC250_DEVICE {
     BC250_CPU_STATE Cpu;
     BOOLEAN FullWddm;
     ULONG OcTier;
+    volatile LONG RetainedPowerPhase;  /* BC250_POWER_* (power_phase.h): CpuAdapterDown reads FAILED (BD-293) */
 } BC250_DEVICE;
 
 /* The mailbox owner, as cpu.c sees it. The sequence flag is the real one's contract: SmuCpuBegin takes it or
