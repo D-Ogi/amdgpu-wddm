@@ -605,6 +605,14 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
  # kmd-analysis reads the database the kmd-compile gate of this same run writes, so it has no missing-input case:
  # a gate that ran before it in this profile either wrote the file or failed itself.
  Check 'kmd-analysis' { & python "$PSScriptRoot\msvc_analysis.py" --database "$Out\kmd\compile_commands.json" --match '/umd_blob.c$' --out "$Out\analysis-kmd" }
+ # kmd-tidy and kmd-ism read the same database (docs/testing/kmd-static-checks.md). kmd-tidy runs clang-tidy with the
+ # checks of driver\kmd\.clang-tidy; kmd-ism lists implicit-state-machine candidates (flag clusters, dead and sticky
+ # fields, integers that hold phases, switches without a case for each enum value) and holds its positive controls
+ # (kmd_ism_controls.txt). Both are ratchets: a finding or candidate outside kmd_tidy_baseline.txt or
+ # kmd_ism_baseline.txt fails the gate. 146 units at 2 jobs on 2026-11-04 with a release build on the machine:
+ # kmd-tidy 97 s, kmd-ism 101 s to 115 s; the deadline of each is 600 s in gate-inputs.json.
+ Check 'kmd-tidy' { & python "$PSScriptRoot\kmd_tidy.py" --database "$Out\kmd\compile_commands.json" --out "$Out\kmd-tidy" --llvm "$Workspace\toolchain\llvm-23.1.4-win64\bin" --jobs 4 }
+ Check 'kmd-ism' { & python "$PSScriptRoot\kmd_ism.py" --database "$Out\kmd\compile_commands.json" --out "$Out\kmd-ism" --llvm "$Workspace\toolchain\llvm-23.1.4-win64\bin" --jobs 4 }
  # The WDK headers reach the user-mode driver's own build through INCLUDE, not through a -I of its compile command
  # (tools\build\build-mesa.ps1 puts them there). A gate that replays one of those commands needs them there too,
  # or it dies on a missing d3d10umddi.h and says nothing about the code it was to judge, which is what it did in

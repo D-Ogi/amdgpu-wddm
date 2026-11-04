@@ -118,6 +118,16 @@
           "driver/kmd/umd_blob.c"
         ]
       }
+    ],
+    "clang-tidy-host": [
+      {
+        "root": "workspace",
+        "globs": [
+          "toolchain/llvm-23.1.4-win64/bin/clang-tidy.exe",
+          "toolchain/llvm-23.1.4-win64/bin/clang-cl.exe",
+          "toolchain/llvm-23.1.4-win64/lib/clang/**/*"
+        ]
+      }
     ]
   },
   "toolchain": [
@@ -763,6 +773,26 @@
       "depends": [
         "kmd-compile"
       ]
+    },
+    "kmd-tidy": {
+      "inputs": [
+        "host",
+        "clang-tidy-host"
+      ],
+      "depends": [
+        "kmd-compile"
+      ],
+      "timeout": 600
+    },
+    "kmd-ism": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ],
+      "depends": [
+        "kmd-compile"
+      ],
+      "timeout": 600
     },
     "host-suite-coverage": {
       "inputs": [
