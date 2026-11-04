@@ -76,6 +76,13 @@ struct RuntimeHeapImports::Record {
     DWORD authority{};                          // the thread whose runtime resource DDI runs (0: none)
     bool destroyed{};                           // that DDI destroys the resource
     DWORD releasing{};                          // the thread inside release() (0: none)
+    // BD-201 R v2: a release of this record ran without the proof of GPU retirement (release_owned with
+    // proved false). The mark is set before that release makes its first change and it is never cleared. If
+    // that release fails, the record goes back to records_ and every later release of it must also be a
+    // release without proof: release() passes proved = !unproved. Without the mark, the teardown walk after
+    // a failed deallocate with flags NONE asked for ASSUME_NOT_IN_USE and SYNCHRONOUS_DESTROY, while the GPU
+    // may still read the allocation.
+    bool unproved{};
     Record(D3D12DDI_HRTDEVICE d,const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb):allocation(d,cb) {}
 };
 namespace {
@@ -276,7 +283,8 @@ void RuntimeHeapImports::drain(bool all) noexcept {
         if(hr!=S_OK){
             // The mapping or the deallocation refused. The record keeps what it holds and is counted by
             // discard_metadata; it never goes back into the quarantine, where a failed release would be
-            // retried for ever.
+            // retried for ever. A release without proof has set Record::unproved, so the later release of the
+            // record by release() keeps the flags NONE.
             Exclusive held(lock_);
             front->next=records_;records_=front;front->releasing=0;
         } else delete front;
@@ -348,14 +356,17 @@ HRESULT RuntimeHeapImports::order_internal_submission(HANDLE context) noexcept {
 HRESULT RuntimeHeapImports::release(Record& record) noexcept {
     const DWORD self=GetCurrentThreadId();
     VkDeviceMemory memory=VK_NULL_HANDLE;
+    bool proved=true;
     {
         Exclusive held(lock_);
         free_report_.surface=record.surface;free_report_.adopted=record.adopted;
         if(!record.retired || record.busy || (record.releasing && record.releasing!=self))return E_UNEXPECTED;
         record.releasing=self;memory=record.imported.memory;record.imported.memory=VK_NULL_HANDLE;
+        // A record that an earlier release without proof left here keeps that form (Record::unproved).
+        proved=!record.unproved;
     }
     HRESULT hr=release_import(record,memory);
-    if(hr==S_OK)hr=release_owned(record);
+    if(hr==S_OK)hr=release_owned(record,proved);
     if(hr!=S_OK){Exclusive held(lock_);record.releasing=0;}
     return hr;
 }
@@ -400,6 +411,9 @@ HRESULT RuntimeHeapImports::release_owned(Record& record,bool proved) noexcept {
         // The runtime-resource form is the one release that cannot be deferred: close() refuses it without
         // a proof of retirement (allocation.h), and the runtime destroys a linear primary's allocation with
         // its own resource anyway, so such a record is kept and counted instead of released.
+        // The mark comes first: if this release fails, the record goes back to records_, and a later release
+        // of it must not ask for the retired form (Record::unproved).
+        {Exclusive held(lock_);record.unproved=true;}
         if(record.surface && !record.driver_surface){free_report_.owner_expired=true;return kOwnerExpired;}
         free_report_.adopted=record.adopted;free_report_.driver_surface=record.driver_surface;
         UINT64 reservation=0,reservation_bytes=0;
