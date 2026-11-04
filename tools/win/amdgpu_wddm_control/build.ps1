@@ -854,6 +854,12 @@ if (-not $NoSmoke) {
         $runs += , @("en-1-work$work", '1', '--work-area', $work, '--fixture', "`"$fixture`"")
     }
     $runs += , @('pl-1.5-work1920x1080', '1.5', '--lang', 'pl', '--work-area', '1920x1080', '--fixture', "`"$fixture`"")
+    # BD-291: a column of 417 px, as unit A's own render had it (2026-11-04), put the two wallpaper buttons of
+    # Settings 7 px past their card in English. A 720x540 working area gives a narrower column than that, in all four
+    # languages.
+    foreach ($lang in 'en', 'pl', 'ja', 'ko') {
+        $runs += , @("$lang-1-work720x540", '1', '--lang', $lang, '--work-area', '720x540', '--fixture', "`"$fixture`"")
+    }
     $failed = @()
     foreach ($r in $runs) {
         $dir = Join-Path $obj "render\$($r[0])"
@@ -869,7 +875,7 @@ if (-not $NoSmoke) {
         if ($p.ExitCode -ne 0) { $failed += "$($r[0]): $(Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue)" }
     }
     if ($failed.Count) { throw "render gates:`n$($failed -join "`n")" }
-    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on by default and two runs with her off, language switch, tuning states, 6 runs over five screen sizes from 800x600 up): no findings ($obj\render)"
+    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on by default and two runs with her off, language switch, tuning states, 6 runs over five screen sizes from 800x600 up, 4 runs at 720x540): no findings ($obj\render)"
 }
 # BD-166: the two native files of this build that the release ships carry their version resource from here. The
 # stamp is the last step, after every gate above has run against the images this build linked.
