@@ -1,12 +1,16 @@
 # CPU-only tests of the production replug request and its escape admission.
-param([Parameter(Mandatory)][string]$Out,[Parameter(Mandatory)][string]$Kits)
+# -BusyOnly is the negative control (Fails in quick.ps1): the worker's disable decision with the BD-195 rule, which
+# re-armed only after a BUSY disable. Its replug test must fail, and the runner stops there.
+param([Parameter(Mandatory)][string]$Out,[Parameter(Mandatory)][string]$Kits,[switch]$BusyOnly)
 $ErrorActionPreference='Stop'
 $kmd=(Resolve-Path "$PSScriptRoot/..").Path
 $oldTemp,$oldTmp=$env:TEMP,$env:TMP
 try {
     New-Item -ItemType Directory -Force $Out | Out-Null
     $env:TEMP=$Out;$env:TMP=$Out
-    & python -B "$PSScriptRoot/connector_replug_extract.py" --out "$Out/connector_replug_actual.c"
+    $extract=@('-B',"$PSScriptRoot/connector_replug_extract.py",'--out',"$Out/connector_replug_actual.c")
+    if($BusyOnly){$extract+='--busy-only'}
+    & python @extract
     if($LASTEXITCODE){throw 'Replug source extraction failed'}
     $vs=& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -property installationPath
     $msvc=Get-ChildItem "$vs/VC/Tools/MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
@@ -16,6 +20,10 @@ try {
         "/I$($msvc.FullName)/include" "/I$sdk/ucrt" "/Fo$Out/" "/Fe$Out/connector_replug_test.exe" `
         "$Out/connector_replug_actual.c" /link "/LIBPATH:$($msvc.FullName)/lib/x64" "/LIBPATH:$lib/ucrt/x64" "/LIBPATH:$lib/um/x64"
     if($LASTEXITCODE){throw 'Replug host build failed'}
+    if($BusyOnly) {
+        . "$PSScriptRoot/host_native.ps1"
+        Exit-NativeTest "$Out/connector_replug_test.exe"
+    }
     & "$Out/connector_replug_test.exe"
     if($LASTEXITCODE){throw 'Replug assertions failed'}
     # Exercise the complete dispatcher with the production CLI initializer and

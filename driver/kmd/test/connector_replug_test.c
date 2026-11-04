@@ -16,6 +16,9 @@ typedef unsigned char KIRQL;
 #define STATUS_INVALID_DEVICE_STATE ((NTSTATUS)0xc0000184L)
 #define STATUS_INVALID_PARAMETER ((NTSTATUS)0xc000000dL)
 #define STATUS_ACCESS_DENIED ((NTSTATUS)0xc0000022L)
+#define STATUS_DEVICE_BUSY ((NTSTATUS)0x80000011L)
+#define STATUS_DEVICE_DATA_ERROR ((NTSTATUS)0xc000009cL)
+#define STATUS_IO_DEVICE_ERROR ((NTSTATUS)0xc0000185L)
 #define NT_SUCCESS(x) ((NTSTATUS)(x) >= 0)
 #define RtlZeroMemory(p,n) memset(p,0,n)
 #define RTL_NUMBER_OF(a) (sizeof(a)/sizeof((a)[0]))
@@ -34,7 +37,8 @@ typedef struct {
     volatile LONG Running, Enabled, Generation, Pending, RxPending, Suspended;
     LONG Queued;
     void* WorkItem;
-    ULONG BusyGeneration, BusyRearms;   /* BD-195: ConnectorBusyRearm */
+    ULONG DisableGeneration, DisableRearms;   /* BD-195: ConnectorDisableNext */
+    volatile LONG DisableSpent;
 } BC250_CONNECTOR;
 typedef struct {
     BC250_CONNECTOR Connector;
@@ -134,19 +138,50 @@ int main(void)
     CHECK(!generation && !queued && !Queues);
     Reset(&d,&p);ConnectorReplugEscape(&d,&p,flags.Value);d.Connector.Running=0;ConnectorDpc(&d);
     CHECK(Queues==1 && WorkQueues==0); // Stop wins after the request, before its DPC.
-    /* BD-195: a BUSY disable re-arms the worker at most CONNECTOR_BUSY_REARMS (3) times for one generation. A new
+    /* BD-195: a failed disable re-arms the worker at most CONNECTOR_DISABLE_REARMS (3) times for one generation. A new
      * generation starts a new count, and a stopped connector is never re-armed. The literal 3 below holds the bound. */
     Reset(&d,&p);
-    for(i=1;i<=CONNECTOR_BUSY_REARMS;++i) {
+    for(i=1;i<=CONNECTOR_DISABLE_REARMS;++i) {
         d.Connector.Pending=0;
-        CHECK(ConnectorBusyRearm(&d.Connector,19) && d.Connector.Pending==1 && d.Connector.BusyRearms==i);
+        CHECK(ConnectorDisableNext(&d.Connector,19,STATUS_DEVICE_BUSY)==CONNECTOR_DISABLE_REARM);
+        CHECK(d.Connector.Pending==1 && d.Connector.DisableRearms==i);
     }
     d.Connector.Pending=0;
-    CHECK(!ConnectorBusyRearm(&d.Connector,19) && !d.Connector.Pending && d.Connector.BusyRearms==3);
-    CHECK(ConnectorBusyRearm(&d.Connector,20) && d.Connector.Pending==1);
-    CHECK(d.Connector.BusyGeneration==20 && d.Connector.BusyRearms==1);
+    CHECK(ConnectorDisableNext(&d.Connector,19,STATUS_DEVICE_BUSY)==CONNECTOR_DISABLE_SPENT);
+    CHECK(!d.Connector.Pending && d.Connector.DisableRearms==3 && d.Connector.DisableSpent==1);
+    CHECK(ConnectorDisableNext(&d.Connector,20,STATUS_DEVICE_BUSY)==CONNECTOR_DISABLE_REARM && d.Connector.Pending==1);
+    CHECK(d.Connector.DisableGeneration==20 && d.Connector.DisableRearms==1);
     d.Connector.Pending=0;d.Connector.Running=0;
-    CHECK(!ConnectorBusyRearm(&d.Connector,21) && !d.Connector.Pending && d.Connector.BusyRearms==0);
+    CHECK(ConnectorDisableNext(&d.Connector,21,STATUS_DEVICE_BUSY)==CONNECTOR_DISABLE_STOPPED);
+    CHECK(!d.Connector.Pending && d.Connector.DisableRearms==0 && d.Connector.DisableSpent==1);
+    /* ISM (verify-15-28, missed state machine): BUSY is not the only failure of a disable. The DP-audio stop debt
+     * (NOT_READY), a failed HDMI journal stop (DATA_ERROR) and an I/O or ATOM failure in the disable itself
+     * (IO_DEVICE_ERROR) re-arm the same bounded way. Before, they ended the worker with no re-arm, no publish and no
+     * Indicate: the snapshot stayed unreadable and each commit answered NOT_READY until a physical re-plug. */
+    {
+        static const NTSTATUS failures[]={STATUS_DEVICE_NOT_READY,STATUS_DEVICE_DATA_ERROR,STATUS_IO_DEVICE_ERROR};
+        unsigned f;
+        for(f=0;f<RTL_NUMBER_OF(failures);++f) {
+            Reset(&d,&p);
+            for(i=1;i<=CONNECTOR_DISABLE_REARMS;++i) {
+                d.Connector.Pending=0;
+                CHECK(ConnectorDisableNext(&d.Connector,19,failures[f])==CONNECTOR_DISABLE_REARM);
+                CHECK(d.Connector.Pending==1 && d.Connector.DisableRearms==i);
+            }
+            d.Connector.Pending=0;
+            CHECK(ConnectorDisableNext(&d.Connector,19,failures[f])==CONNECTOR_DISABLE_SPENT);
+            CHECK(!d.Connector.Pending && d.Connector.DisableSpent==1);
+        }
+        /* Mixed causes of one generation share one count: a BUSY then a NOT_READY are two of the three. */
+        Reset(&d,&p);
+        CHECK(ConnectorDisableNext(&d.Connector,19,STATUS_DEVICE_BUSY)==CONNECTOR_DISABLE_REARM);
+        CHECK(ConnectorDisableNext(&d.Connector,19,STATUS_DEVICE_NOT_READY)==CONNECTOR_DISABLE_REARM);
+        CHECK(d.Connector.DisableRearms==2);
+    }
+    /* A disable that succeeded proceeds and touches neither the count nor Pending. */
+    Reset(&d,&p);d.Connector.DisableGeneration=19;d.Connector.DisableRearms=2;
+    CHECK(ConnectorDisableNext(&d.Connector,19,STATUS_SUCCESS)==CONNECTOR_DISABLE_PROCEED);
+    CHECK(!d.Connector.Pending && d.Connector.DisableRearms==2 && !d.Connector.DisableSpent);
     CHECK(!Queues && !WorkQueues);
     /* BD-195: a DP sink that does not answer AUX yet after HPD (timeout, NACK, spent budget) is discovered again.
      * A failed pad cleanup, a refused register, a busy engine or a sink this driver does not drive is not. */

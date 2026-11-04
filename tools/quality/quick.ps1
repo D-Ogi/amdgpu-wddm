@@ -622,6 +622,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='link-atom';s='driver\kmd\test\run_link_atom.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='connector-buffer';s='driver\kmd\test\run_connector_buffer.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='connector-replug';s='driver\kmd\test\run_connector_replug.ps1';a=@('-Kits',$Kits)}
+  # The HPD worker before the ISM fix: only a BUSY disable re-armed it, every other failure stopped it for good.
+  @{n='connector-replug-busy-only';s='driver\kmd\test\run_connector_replug.ps1';a=@('-Kits',$Kits,'-BusyOnly');Fails=$true}
   @{n='lab-gate';s='driver\kmd\test\run_lab_gate.ps1';a=@('-Kits',$Kits)}
   @{n='connector-modes';s='driver\kmd\test\run_connector_modes.ps1';a=@('-Root',$Workspace)}
   @{n='connector-link';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits)}

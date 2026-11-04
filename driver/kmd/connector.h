@@ -26,9 +26,11 @@ typedef struct _BC250_CONNECTOR {
     volatile LONG Suspended, Restoring;
     LONG Queued;
     ULONG OperationGeneration;
-    // BD-195: the generation whose disable answered BUSY, and its worker re-arms
-    // (at most CONNECTOR_BUSY_REARMS). Operation held.
-    ULONG BusyGeneration, BusyRearms;
+    // BD-195: the generation whose disable failed, and its worker re-arms (at
+    // most CONNECTOR_DISABLE_REARMS). Operation held. DisableSpent counts the
+    // generations that used up their re-arms (ConnectorDisableNext).
+    ULONG DisableGeneration, DisableRearms;
+    volatile LONG DisableSpent;
     volatile LONG Interrupts, RxInterrupts, Workers, Discoveries, Publications;
     volatile LONG Refusals, Notifications, NotifyFailures, Stale, Rearms;
     volatile LONG DiscoveryRetries;     // BD-195: discoveries repeated for one generation (CONNECTOR_DISCOVERY_TRIES)
