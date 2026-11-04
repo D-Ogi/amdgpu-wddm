@@ -1,0 +1,134 @@
+# kmd-tidy ratchet baseline: the clang-tidy findings of the kernel-mode driver on the day this gate started
+# (2026-11-04). The checks and the reason for each excluded check: driver/kmd/.clang-tidy. The gate:
+# tools/quality/kmd_tidy.py, run by tools/quality/quick.ps1 (kmd-tidy).
+#
+# One line a finding kind: <count><tab><check><tab><file><tab><key><tab><message>. The key is a hash of the
+# message and the text of the source line, so a line move keeps the finding in its line. The message column
+# is for the reader only. The gate fails when a key has more findings than its count. --prune lowers counts
+# after a fix; --accept adds the findings of today, and the reviewer of that change reads each new line.
+1	bugprone-assignment-in-if-condition	driver/kmd/gfx.c	f81f97ade9fc9adc	an assignment within an 'if' condition is bug-prone
+1	bugprone-assignment-in-if-condition	driver/kmd/wddm.c	793861cd1ca8a47a	an assignment within an 'if' condition is bug-prone
+5	bugprone-assignment-in-if-condition	driver/kmd/wddm.c	a63e8132aa96e1e6	an assignment within an 'if' condition is bug-prone
+1	bugprone-assignment-in-if-condition	driver/kmd/wddm.c	bbc7d926cb7b2467	an assignment within an 'if' condition is bug-prone
+1	bugprone-assignment-in-if-condition	driver/kmd/wddm.c	ca6ce358f997415d	an assignment within an 'if' condition is bug-prone
+1	bugprone-assignment-in-if-condition	driver/kmd/wddm.c	e95e851ac841bc90	an assignment within an 'if' condition is bug-prone
+1	bugprone-assignment-in-if-condition	driver/shim/bc250_hpd.c	eb5cd70b20d581be	an assignment within an 'if' condition is bug-prone
+1	bugprone-assignment-in-if-condition	driver/shim/bc250_hpd.c	f65fefe64af51270	an assignment within an 'if' condition is bug-prone
+1	bugprone-branch-clone	driver/kmd/board_memory_detect.c	3c4853e95a3e33a8	repeated branch body in conditional chain
+1	bugprone-branch-clone	driver/kmd/cpu.c	9d7718b7c8023446	repeated branch body in conditional chain
+1	bugprone-branch-clone	driver/kmd/gfx.c	10dc86b7679f6765	repeated branch body in conditional chain
+1	bugprone-branch-clone	driver/shim/atom_interpreter.inc	07fd21ff319a4aa2	repeated branch body in conditional chain
+2	bugprone-branch-clone	driver/shim/atom_interpreter.inc	554fb03d2f9d423b	switch has 8 consecutive identical branches
+1	bugprone-branch-clone	driver/shim/atom_interpreter.inc	a08a72e37418bece	if with identical then and else branches
+1	bugprone-branch-clone	driver/shim/atom_interpreter.inc	e2bdf7c4cba8cf16	if with identical then and else branches
+2	bugprone-branch-clone	driver/shim/atom_interpreter.inc	ee370166b19c47d0	switch has 2 consecutive identical branches
+1	bugprone-branch-clone	driver/shim/atom_interpreter.inc	ef7e7914145bc9d8	if with identical then and else branches
+1	bugprone-branch-clone	driver/shim/bc250_cpu.c	a2c3ad36ed306eeb	switch has 2 consecutive identical branches
+1	bugprone-branch-clone	driver/shim/dml201/dcn20/display_mode_vba_20.c	3c2426cbac4968da	repeated branch body in conditional chain
+1	bugprone-branch-clone	driver/shim/dml201/dcn20/display_mode_vba_20.c	571ae1bd6a22dbf0	repeated branch body in conditional chain
+1	bugprone-branch-clone	driver/shim/dml201/dcn20/display_mode_vba_20.c	c00faeaf2fad91fb	repeated branch body in conditional chain
+1	bugprone-branch-clone	driver/shim/dml201/dcn20/display_mode_vba_20.c	c4af16f28961e5c6	repeated branch body in conditional chain
+2	bugprone-branch-clone	driver/shim/dml201/dcn20/display_mode_vba_20.c	e7a48fbfc1959c2a	repeated branch body in conditional chain
+1	bugprone-branch-clone	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	f7efff16435c541f	repeated branch body in conditional chain
+1	bugprone-branch-clone	driver/shim/dp_training_checks.inc	948730b54445994d	repeated branch body in conditional chain
+1	bugprone-branch-clone	driver/shim/dp_training_loops.inc	1aa10318528ea0c4	repeated branch body in conditional chain
+1	bugprone-branch-clone	driver/shim/hdmi_link_avi.inc	f00569ca32ad30a8	switch has 2 consecutive identical branches
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	0f28711edbff402d	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	2ee09fb356fdd820	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	328f7164a714d8f7	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	3880b6c903d9e4da	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	3decbcc91b348c15	result of integer division used in a floating point context; possible loss of precision
+2	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	7452fe1b6767f65a	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	8981dcae9c537932	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	8d7f8d5d088ec01c	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	9772dd3537269b43	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	a3296a9886f07d0f	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	aa385947ffdfbee2	result of integer division used in a floating point context; possible loss of precision
+2	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	cc2c41c60357297e	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	d57d6e2351a30f19	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	d645f00fb45b1886	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_mode_vba_20.c	fb59a74faed7ba1c	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	81375a44d42775bb	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/display_mode_vba.c	40b0a6dacb99fe7b	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-integer-division	driver/shim/dml201/display_mode_vba.c	ad93897958d0fb76	result of integer division used in a floating point context; possible loss of precision
+1	bugprone-invalid-enum-default-initialization	driver/kmd/wddm_allocation_identity.inc	0ac36f49b6a07ae0	enum value of type '_DXGK_HANDLE_TYPE' initialized with invalid value of 0, enum doesn't have a zero-value enumerator
+1	bugprone-invalid-enum-default-initialization	driver/kmd/wddm_allocation_identity.inc	512244bb77532961	enum value of type '_DXGK_HANDLE_TYPE' initialized with invalid value of 0, enum doesn't have a zero-value enumerator
+1	bugprone-misplaced-widening-cast	driver/kmd/wddm.c	b3d385ad96bac669	either cast from 'unsigned int' to 'LONG' (aka 'long') is ineffective, or there is loss of precision before the conversion
+1	bugprone-signed-char-misuse	driver/shim/link_detection.inc	64fd4b18d26fc94e	comparison between 'signed char' and 'unsigned char'
+1	bugprone-sizeof-expression	driver/kmd/connector.c	30ddecd8cac39e4f	suspicious usage of 'sizeof(...)' in pointer arithmetic; this scaled value will be scaled again by the '+' operator
+1	bugprone-sizeof-expression	driver/kmd/connector.c	9ec2ada09cd3e390	suspicious usage of 'sizeof(...)' in pointer arithmetic; this scaled value will be scaled again by the '+' operator
+1	bugprone-sizeof-expression	driver/kmd/dcn.c	04e5da9c5417ecb4	suspicious usage of 'sizeof(...)' in pointer arithmetic; this scaled value will be scaled again by the '+' operator
+1	bugprone-sizeof-expression	driver/kmd/dcn.c	c388a1bfe942b4c4	suspicious usage of 'sizeof(...)' in pointer arithmetic; this scaled value will be scaled again by the '+' operator
+1	bugprone-sizeof-expression	driver/shim/bc250_psp.c	292d7876bf7830ef	suspicious usage of 'sizeof(...)' in pointer arithmetic; this scaled value will be scaled again by the '+' operator
+1	bugprone-suspicious-memory-comparison	driver/shim/bc250_dcn201_pipe.c	3ea50a4b9fb18929	comparing object representation of type 'display_pipe_dest_params_st' (aka 'struct _vcs_dpi_display_pipe_dest_params_st') which does not have a unique object representation; consider comparing the members of the object manually
+2	bugprone-suspicious-memory-comparison	driver/shim/dml201/display_mode_vba.c	3060b49556f3cf65	comparing object representation of type 'struct _vcs_dpi_ip_params_st' which does not have a unique object representation; consider comparing the members of the object manually
+1	bugprone-suspicious-memory-comparison	driver/shim/dml201/display_mode_vba.c	3db75c86ebf88b33	comparing object representation of type 'struct _vcs_dpi_soc_bounding_box_st' which does not have a unique object representation; consider comparing the members of the object manually
+1	bugprone-suspicious-memory-comparison	driver/shim/dml201/display_mode_vba.c	ac20e4e3764534e9	comparing object representation of type 'struct _vcs_dpi_soc_bounding_box_st' which does not have a unique object representation; consider comparing the members of the object manually
+1	bugprone-switch-missing-default-case	driver/kmd/gfx.c	720f5a934b289c2d	switching on non-enum value without default case may not cover all cases
+1	bugprone-switch-missing-default-case	driver/kmd/ih.c	720f5a934b289c2d	switching on non-enum value without default case may not cover all cases
+1	bugprone-switch-missing-default-case	driver/kmd/psp.c	720f5a934b289c2d	switching on non-enum value without default case may not cover all cases
+1	bugprone-switch-missing-default-case	driver/kmd/surface_format.h	dd46ad3579afef98	switching on non-enum value without default case may not cover all cases
+5	bugprone-switch-missing-default-case	driver/shim/atom_interpreter.inc	6cafa6010eeac6ec	switching on non-enum value without default case may not cover all cases
+5	bugprone-switch-missing-default-case	driver/shim/atom_interpreter.inc	b9d4e63fc1ce1600	switching on non-enum value without default case may not cover all cases
+1	bugprone-too-small-loop-variable	driver/shim/hdmi_link_avi.inc	b39fff8101e3a924	loop variable has narrower type 'uint8_t' than iteration's upper bound '__size_t'
+1	bugprone-too-small-loop-variable	driver/shim/link_detection.inc	4a1bd7c4e807eccc	loop variable has narrower type 'uint8_t' than iteration's upper bound '__size_t'
+1	bugprone-unhandled-code-paths	driver/kmd/surface_format.h	d01f5f88478f1ee5	potential uncovered code path; add a default label
+5	bugprone-unhandled-code-paths	driver/shim/atom_interpreter.inc	1645f4d629e3aff8	potential uncovered code path; add a default label
+5	bugprone-unhandled-code-paths	driver/shim/atom_interpreter.inc	ddb4597fbb70b155	potential uncovered code path; add a default label
+1	clang-analyzer-core.NullDereference	driver/kmd/connector_link.c	183c95959dbb3acd	Access to field 'Owner' results in a dereference of a null pointer (loaded from variable 'c')
+1	clang-analyzer-core.NullDereference	driver/kmd/wddm.c	266570ac24740a52	Dereference of null pointer (loaded from variable 'private')
+1	clang-analyzer-core.NullDereference	driver/kmd/wddm.c	33b2d99c276eca72	Access to field 'Pitch' results in a dereference of a null pointer (loaded from field 'pCreateShadowSurfaceData')
+1	clang-analyzer-core.NullDereference	driver/kmd/wddm.c	ab2c9aa0d9ec5a57	Access to field 'Pitch' results in a dereference of a null pointer (loaded from field 'pCreateStagingSurfaceData')
+1	clang-analyzer-core.NullDereference	driver/kmd/wddm.c	c27ef935ce539b09	Access to field 'Pitch' results in a dereference of a null pointer (loaded from field 'pCreateGdiSurfaceData')
+1	clang-analyzer-core.UndefinedBinaryOperatorResult	driver/shim/bc250_cu_mode.c	55f776c815a85393	The left operand of '==' is a garbage value
+1	clang-analyzer-core.uninitialized.Assign	driver/kmd/guard_keep_prune.h	dbc353070bb2e98a	Assigned value is uninitialized
+1	clang-analyzer-deadcode.DeadStores	driver/kmd/amd_identity.c	04fa6be5e640b760	Value stored to 'before' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/kmd/gfx.c	d62a3b6b77b18385	Value stored to 'wptrBytes' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/kmd/wddm.c	854b8f6a56c9d25e	Value stored to 'begun' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/kmd/wddm.c	eccf86d27625746d	Value stored to 'why' during its initialization is never read
+2	clang-analyzer-deadcode.DeadStores	driver/shim/atom_interpreter.inc	87629d36d5ed1a9a	Value stored to 'dst' is never read
+2	clang-analyzer-deadcode.DeadStores	driver/shim/atom_interpreter.inc	d14320ed59c5dbcd	Value stored to 'val' during its initialization is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/atom_interpreter.inc	e7003bb1fadc816f	Value stored to 'old_val' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/bc250_gfx.c	4d35ba0c325dd280	Value stored to 'tmp' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	317b9133f2b5c3a9	Value stored to 'meta_chunk_threshold' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	3a22cdd4a9b70c53	Value stored to 'refcyc_per_line_delivery_l' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	4cd92fcd9a380715	Value stored to 'swath_width_pixels_ub_l' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	5eddb1053ee697ec	Value stored to 'refcyc_per_line_delivery_pre_l' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	8c244dba1d05d3c3	Value stored to 'line_wait' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	a2449c557459feeb	Value stored to 'refcyc_per_req_delivery_l' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	b1d1cb3677c4e0e2	Value stored to 'min_vblank' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	c48d35532991e941	Value stored to 'swath_width_pixels_ub_c' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	cacb1ae07724874a	Value stored to 'scaler_rec_in_width_c' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	d77caa2dbc724776	Value stored to 'full_recout_width' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	eaf3bb81b209f578	Value stored to 'scaler_rec_in_width_l' is never read
+1	clang-analyzer-deadcode.DeadStores	driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c	edd08e41736bc7ef	Value stored to 'refcyc_per_req_delivery_pre_l' is never read
+1	clang-diagnostic-switch-enum	driver/kmd/display.c	60fa92cd898e4845	4 enumeration values not explicitly handled in switch: 'D3DKMDT_VPPS_UNINITIALIZED', 'D3DKMDT_VPPS_RESERVED1', 'D3DKMDT_VPPS_UNPINNED'...
+1	clang-diagnostic-switch-enum	driver/kmd/gdi_walk.c	2b6259226f1d9dfb	enumeration value 'DXGK_GDIOP_ESCAPE' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/kmd/pnp.c	dd650454b8e63d34	enumeration values 'StatusUninitialized' and 'StatusMiracastConnection' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/kmd/wddm.c	18febdec226a66a2	28 enumeration values not explicitly handled in switch: 'DXGKQAITYPE_QUERYSEGMENT', 'DXGKQAITYPE_RESERVED', 'DXGKQAITYPE_QUERYSEGMENT2'...
+1	clang-diagnostic-switch-enum	driver/kmd/wddm.c	38ec2ccecc4f3f44	enumeration values 'D3DKMDT_STANDARDALLOCATION_VGPU' and 'D3DKMDT_STANDARDALLOCATION_FENCESTORAGE' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/kmd/wddm.c	5d3d34fb238da8d3	enumeration values 'BC250_SUBMIT_OBSERVATION_NONE' and 'BC250_SUBMIT_OBSERVATION_UNCHANGED' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/kmd/wddm.c	6d8524dd16cda8ba	16 enumeration values not explicitly handled in switch: 'DXGK_INTERRUPT_DMA_PREEMPTED', 'DXGK_INTERRUPT_DMA_FAULTED', 'DXGK_INTERRUPT_DISPLAYONLY_VSYNC'...
+1	clang-diagnostic-switch-enum	driver/shim/bc250_gfx.c	38c61e5a7a58e4c5	enumeration values 'AMDGPU_RING_TYPE_SDMA' and 'AMDGPU_RING_TYPE_KIQ' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/shim/bc250_psp.c	d136e2d5ad171ef7	7 enumeration values not explicitly handled in switch: 'BC250_FW_SDMA0', 'BC250_FW_SDMA1', 'BC250_FW_CP_CE'...
+1	clang-diagnostic-switch-enum	driver/shim/dp_phy_pattern.inc	19c40cf368128eba	enumeration value 'DP_PANEL_MODE_DEFAULT' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/shim/dp_stream.inc	00075da8edf61ed4	enumeration values 'PIXEL_ENCODING_UNDEFINED', 'PIXEL_ENCODING_RGB', and 'PIXEL_ENCODING_COUNT' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/shim/dp_stream.inc	0bb3b95b3e2bff56	6 enumeration values not explicitly handled in switch: 'COLOR_DEPTH_UNDEFINED', 'COLOR_DEPTH_141414', 'COLOR_DEPTH_161616'...
+1	clang-diagnostic-switch-enum	driver/shim/dp_stream.inc	3e44ce5fd83db5a2	enumeration value 'COLOR_SPACE_2020_YCBCR_FULL' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/shim/dp_stream.inc	6a0abdd7564423ca	5 enumeration values not explicitly handled in switch: 'COLOR_DEPTH_UNDEFINED', 'COLOR_DEPTH_141414', 'COLOR_DEPTH_999'...
+1	clang-diagnostic-switch-enum	driver/shim/generated/dc_cnvc_color.inc	ad758b9403da150a	6 enumeration values not explicitly handled in switch: 'SURFACE_PIXEL_FORMAT_GRPH_BEGIN', 'SURFACE_PIXEL_FORMAT_GRPH_ABGR2101010_XR_BIAS', 'SURFACE_PIXEL_FORMAT_GRPH_ABGR16161616'...
+1	clang-diagnostic-switch-enum	driver/shim/generated/dc_surface_layout.inc	ebe756abf053db66	enumeration values 'SURFACE_PIXEL_FORMAT_GRPH_BEGIN', 'SURFACE_PIXEL_FORMAT_VIDEO_CrYCbA1010102', and 'SURFACE_PIXEL_FORMAT_INVALID' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/shim/generated/dc_surface_sequence.inc	7ad969415f7faf45	enumeration values 'PLN_ADDR_TYPE_3DLUT' and 'PLN_ADDR_TYPE_RGBEA' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/shim/hdmi_audio.inc	6b61a4269ffa13e1	enumeration value 'COLOR_DEPTH_888' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/shim/hdmi_link_avi.inc	35e573bb00bf9721	enumeration value 'ASPECT_RATIO_FUTURE' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/shim/hdmi_link_avi.inc	bfad1a559c84528b	13 enumeration values not explicitly handled in switch: 'COLOR_SPACE_UNKNOWN', 'COLOR_SPACE_XR_RGB', 'COLOR_SPACE_SRGB_LIMITED'...
+1	clang-diagnostic-switch-enum	driver/shim/hdmi_link_avi.inc	d9258fcaf1272f47	enumeration values 'PIXEL_ENCODING_UNDEFINED' and 'PIXEL_ENCODING_COUNT' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/shim/hdmi_link_stream.inc	4b6dd12eb83216b4	6 enumeration values not explicitly handled in switch: 'COLOR_DEPTH_UNDEFINED', 'COLOR_DEPTH_666', 'COLOR_DEPTH_141414'...
+1	clang-diagnostic-switch-enum	driver/shim/hdmi_link_stream.inc	6eb808964320a562	5 enumeration values not explicitly handled in switch: 'PIXEL_ENCODING_UNDEFINED', 'PIXEL_ENCODING_RGB', 'PIXEL_ENCODING_YCBCR444'...
+1	clang-diagnostic-switch-enum	driver/shim/pipe_opp2.inc	08f8942d38f0aa9c	6 enumeration values not explicitly handled in switch: 'COLOR_DEPTH_UNDEFINED', 'COLOR_DEPTH_141414', 'COLOR_DEPTH_161616'...
+1	clang-diagnostic-switch-enum	driver/shim/pipe_opp2.inc	50e3f5a0037787b9	enumeration value 'CONTROLLER_DP_COLOR_SPACE_UDEFINED' not explicitly handled in switch
+3	clang-diagnostic-switch-enum	driver/shim/pipe_opp2.inc	63044f2bde21ca75	enumeration value 'TEST_PATTERN_COLOR_FORMAT_BPC_12' not explicitly handled in switch
+1	clang-diagnostic-switch-enum	driver/shim/pipe_opp2.inc	ab7209096b408ea3	6 enumeration values not explicitly handled in switch: 'CONTROLLER_DP_TEST_PATTERN_D102', 'CONTROLLER_DP_TEST_PATTERN_SYMBOLERROR', 'CONTROLLER_DP_TEST_PATTERN_PRBS7'...
+1	clang-diagnostic-switch-enum	driver/shim/pipe_route.inc	0ade1a9163ce3747	12 enumeration values not explicitly handled in switch: 'ENGINE_ID_UNKNOWN', 'ENGINE_ID_DACA', 'ENGINE_ID_DACB'...
+1	clang-diagnostic-switch-enum	driver/shim/pipe_route.inc	239bac00958f837c	enumeration values 'SIGNAL_TYPE_NONE', 'SIGNAL_TYPE_RGB', and 'SIGNAL_TYPE_VIRTUAL' not explicitly handled in switch
+1	misc-redundant-expression	driver/shim/dml201/dcn20/display_mode_vba_20.c	6efd59e7c9b90fc8	equivalent expression on both sides of logical operator

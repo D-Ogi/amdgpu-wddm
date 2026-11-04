@@ -1,0 +1,56 @@
+# clang-tidy checks of the kernel-mode driver (driver/kmd and driver/shim): tools/quality/kmd_tidy.py.
+# The set is chosen for state defects: values that nobody reads, branches that do the same thing, conditions that
+# are always true or always false, and switches that do not handle every state. tools/quality/kmd_tidy_baseline.json
+# records the findings of the day the gate started; a new finding fails the gate (docs/testing/kmd-static-checks.md).
+#
+# Disabled checks and the reason for each:
+#   clang-analyzer-security.*                    - insecureAPI asks for memcpy_s and friends, which the kernel CRT
+#                                                  does not have; nothing in it is about state.
+#   clang-analyzer-unix.*, clang-analyzer-cplusplus.*, clang-analyzer-osx.*, clang-analyzer-fuchsia.*,
+#   clang-analyzer-webkit.*, clang-analyzer-optin.*, clang-analyzer-nullability.*
+#                                                - APIs and annotations the driver does not use (POSIX, C++, Apple,
+#                                                  Fuchsia, WebKit); optin.* are portability and performance rules.
+#   bugprone-easily-swappable-parameters         - names the shape of the WDK DDIs (two ULONGs next to each other);
+#                                                  hundreds of findings, none of them a state defect.
+#   bugprone-reserved-identifier                 - the WDK naming style (_BC250_DEVICE) is the kit's convention.
+#   bugprone-narrowing-conversions               - register arithmetic with ULONG and UCHAR fields everywhere; /W4
+#                                                  of the build already sees the conversions that lose bits.
+#   bugprone-implicit-widening-of-multiplication-result
+#                                                - the same register arithmetic; no finding is about state.
+#   bugprone-macro-parentheses                   - style of macros, not behaviour; the imported AMD macros fail it.
+#   bugprone-multi-level-implicit-pointer-conversion, bugprone-casting-through-void
+#                                                - void** out-parameters are the WDK DDI convention.
+#   bugprone-signed-bitwise                      - C promotes every UCHAR and USHORT operand to int, so each shift
+#                                                  of a register byte is a finding; the build's /W4 sees real
+#                                                  sign problems.
+#   bugprone-suspicious-string-compare           - if (memcmp(...)) and if (!wcscmp(...)) are the driver's idiom
+#                                                  for "differs" and "equal"; the check wants an explicit != 0.
+#   bugprone-suspicious-include                  - the build includes .inc and .c parts on purpose (state_contract.c,
+#                                                  hdmi_link_stream.inc and the other split units).
+#   bugprone-assignment-in-if-condition is ON on purpose: an assignment in a condition is a write of state that a
+#                                                  reader does not see as one.
+#
+# Compiler warnings that are checks here: clang-diagnostic-switch (a switch over an enum without a case for a
+# value and without a default) and clang-diagnostic-switch-enum (a switch over an enum without a case for a value,
+# also with a default). kmd_tidy.py adds -Wswitch-enum to the command for the second one.
+Checks: >
+  -*,
+  clang-analyzer-core.*,
+  clang-analyzer-deadcode.*,
+  clang-analyzer-valist.*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-reserved-identifier,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-macro-parentheses,
+  -bugprone-multi-level-implicit-pointer-conversion,
+  -bugprone-casting-through-void,
+  -bugprone-signed-bitwise,
+  -bugprone-suspicious-string-compare,
+  -bugprone-suspicious-include,
+  misc-redundant-expression,
+  clang-diagnostic-switch,
+  clang-diagnostic-switch-enum
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*[\\/]driver[\\/](kmd|shim)[\\/].*'
