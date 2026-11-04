@@ -266,4 +266,23 @@ static __inline void Bc250GdiMasks(const BC250_STDALLOC_COUNTERS* C, BC250_GDI_M
         if (C->GdiOpened[i][1]) M->OpenRefused |= 1ul << i;
     }
 }
+
+// BD-292: GDI hardware acceleration needs the GPU desktop route. With the capability bit, GDI draws a window into a
+// standard texture (D3DKMDT_GDISURFACE_TEXTURE), which WddmGdiAllocationPolicy puts in local memory with no CPU view,
+// and the compositor opens that texture. The GPU compositor reads it with the GPU. The CPU compositor (the CPU UMD on
+// llvmpipe) must map it, Lock2 refuses an allocation with no CPU view, OpenResource then sets E_INVALIDARG, and the
+// runtime removes the compositor's device: a loop of device rebuilds, windows with no content. The router sends the
+// compositor to the CPU UMD when the two desktop switches are not both on (BC250_DESKTOP_ROUTE_SWITCHES_OFF), so the
+// capability follows the same two effective switches of this start. GpuDesktop is GpuPresentGate && CddDwmInterop
+// after InteropStart. The answer is also the Features\GdiHwAccel record of the control app: 1 on, 2 off by the switch
+// alone, 0 not possible on this start (no kernels in the image, or the desktop is on the CPU route).
+#define BC250_GDI_FEATURE_IMPOSSIBLE 0ul
+#define BC250_GDI_FEATURE_ON 1ul
+#define BC250_GDI_FEATURE_OFF_BY_SWITCH 2ul
+static __inline unsigned long Bc250GdiHwAccelFeature(int Gate, int Kernels, int GpuDesktop, int* Capability)
+{
+    *Capability = Gate && Kernels && GpuDesktop;
+    if (*Capability) return BC250_GDI_FEATURE_ON;
+    return Kernels && GpuDesktop ? BC250_GDI_FEATURE_OFF_BY_SWITCH : BC250_GDI_FEATURE_IMPOSSIBLE;
+}
 #endif

@@ -356,6 +356,28 @@ static void CreateRollback(void)
     }
 }
 
+// BD-292: the capability needs the gate, the kernels and the GPU desktop route; the record says why it is off.
+static void GdiHwAccelRoute(void)
+{
+    int gate, kernels, gpu, capability;
+    unsigned long feature;
+    for (gate = 0; gate < 2; gate++)
+        for (kernels = 0; kernels < 2; kernels++)
+            for (gpu = 0; gpu < 2; gpu++) {
+                capability = -1;
+                feature = Bc250GdiHwAccelFeature(gate, kernels, gpu, &capability);
+                CHECK(capability == (gate && kernels && gpu));
+                CHECK(feature == (capability ? BC250_GDI_FEATURE_ON :
+                                  kernels && gpu ? BC250_GDI_FEATURE_OFF_BY_SWITCH : BC250_GDI_FEATURE_IMPOSSIBLE));
+            }
+    // The case of the defect: switch on, kernels in the image, CPU desktop route.
+    feature = Bc250GdiHwAccelFeature(1, 1, 0, &capability);
+    CHECK(!capability && feature == BC250_GDI_FEATURE_IMPOSSIBLE);
+}
+// The record values are the ones the control app reads (DriverFeatures.cs: 1 on, 2 off by the switch).
+typedef char gdi_feature_values_check[(BC250_GDI_FEATURE_ON == 1ul && BC250_GDI_FEATURE_OFF_BY_SWITCH == 2ul &&
+                                       BC250_GDI_FEATURE_IMPOSSIBLE == 0ul) ? 1 : -1];
+
 static void Masks(void)
 {
     BC250_STDALLOC_COUNTERS c;
@@ -764,6 +786,7 @@ int main(int argc, char** argv)
     ReceivedBlobs();
     CreateRollback();
     Masks();
+    GdiHwAccelRoute();
     SizeQueryLeavesUnion();
     OddShapes();
     printf("gdi_admission_test: %d checks, %d failures\n", g_checks, g_failures);

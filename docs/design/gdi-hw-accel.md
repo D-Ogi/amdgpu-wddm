@@ -998,6 +998,19 @@ at a start. The capability follows the gate and the kernels together: with the g
 image that lost its kernels, a start reports the feature exactly as the release before this work
 did, and `DxgkDdiRenderGdi` returns at once without touching the DMA buffer.
 
+The capability also needs the GPU desktop route (BD-292). With the capability, GDI draws each
+window into a standard texture (`D3DKMDT_GDISURFACE_TEXTURE`). The driver puts that texture in
+local memory with no CPU view (`WddmGdiAllocationPolicy`), and the compositor opens it. The GPU
+compositor reads the texture with the GPU. The CPU compositor (the CPU UMD on llvmpipe) must map
+it with Lock2, and Lock2 refuses an allocation with no CPU view. OpenResource then sets
+E_INVALIDARG, the runtime removes the compositor's device, and no window gets its content. The
+router sends the compositor to the CPU UMD when the two desktop switches are not both on. So a
+start reports the capability only when `EnableGpuPresentBlit` and `EnableCddDwmInterop` are both
+in force after `InteropStart` (`Bc250GdiHwAccelFeature` in `gdi_admission.h`). On the CPU route
+the record `Features\GdiHwAccel` is 0 (not possible), and the control app hides the switch. Two
+other CPU routes stay outside this rule, because the kernel driver cannot see them at its start:
+the router's kill switch `DwmForceCpu` and a hosted open that failed in the compositor.
+
 ## Recorded contract gaps
 
 Four readings are interpretations and not quotations. Each one is recorded here, because a future

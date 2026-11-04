@@ -4176,16 +4176,24 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // and an image without them reports the capability exactly as the release before them did.
     //   The lab flavour also reads LabGdiHwAccel (guard.c), which can only open the gate: an arm that swaps
     // the KMD image into an installed package whose catalog does not have EnableGdiHwAccel yet.
+    //   BD-292: the capability also needs the GPU desktop route, the two effective switches that InteropStart
+    // latched above (Bc250GdiHwAccelFeature, gdi_admission.h). On the CPU route the compositor cannot read the
+    // standard GDI textures that the capability makes GDI draw into.
     wddm->GdiHwAccelGate = (BOOLEAN)(GuardReadSetting(L"EnableGdiHwAccel", 1) != 0 || GuardLabGdiHwAccel());
-    wddm->GdiHwAccel = (BOOLEAN)(wddm->GdiHwAccelGate && Bc250GdiKernelsPresent());
-    GuardLog("wddm: GDI hardware acceleration gate %u, kernels %u, capability %u",
-             (UINT)wddm->GdiHwAccelGate, (UINT)Bc250GdiKernelsPresent(), (UINT)wddm->GdiHwAccel);
-    // What this start can do with GDI acceleration, for the control app (the switch shows only where it has an
-    // effect): Features\GdiHwAccel, volatile, 1 on, 2 off by the switch alone (the kernels are in the image),
-    // 0 not possible (no kernels). A failed write leaves the switch hidden; the capability does not depend on it.
     {
-        ULONG feature = wddm->GdiHwAccel ? 1u : Bc250GdiKernelsPresent() ? 2u : 0u;
-        NTSTATUS written = GuardVolatileStore(L"Features", L"GdiHwAccel", feature);
+        int capability = 0;
+        // What this start can do with GDI acceleration, for the control app (the switch shows only where it has an
+        // effect): Features\GdiHwAccel, volatile, 1 on, 2 off by the switch alone, 0 not possible (no kernels, or
+        // the CPU desktop route). A failed write leaves the switch hidden; the capability does not depend on it.
+        ULONG feature = Bc250GdiHwAccelFeature(wddm->GdiHwAccelGate, Bc250GdiKernelsPresent(),
+                                               wddm->GpuPresentGate && wddm->CddDwmInterop, &capability);
+        NTSTATUS written;
+
+        wddm->GdiHwAccel = (BOOLEAN)(capability != 0);
+        GuardLog("wddm: GDI hardware acceleration gate %u, kernels %u, GPU desktop route %u, capability %u",
+                 (UINT)wddm->GdiHwAccelGate, (UINT)Bc250GdiKernelsPresent(),
+                 (UINT)(wddm->GpuPresentGate && wddm->CddDwmInterop), (UINT)wddm->GdiHwAccel);
+        written = GuardVolatileStore(L"Features", L"GdiHwAccel", feature);
 
         if (!NT_SUCCESS(written))
             GuardLog("wddm: Features\\GdiHwAccel %lu not written (0x%08X)", feature, written);
