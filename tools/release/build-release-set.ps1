@@ -456,6 +456,10 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
             --version $setVersion --flavour $flavour
         if ($LASTEXITCODE) { Stop-Package "source version resources failed ($flavour)" }
     }
+    # The third-party list of the package names the commit of each payload file. build-release.ps1 checks it after
+    # the setup window, minutes into the run; this is the same check before any of that (tester.37 package run 3).
+    & $python -I (Join-Path $PSScriptRoot 'third_party_doc.py') --repo $repo --workspace $Root
+    if ($LASTEXITCODE) { Stop-Package 'docs\testing\THIRD-PARTY.md does not name the commits of release-sources.json (the lines above; tools\release\third_party_doc.py --write, commit, push)' }
     foreach ($p in $UmdSource, $UmdBuild) { if (-not (Test-Path -LiteralPath $p)) { Stop-Package "user-mode driver tree missing: $p" } }
     $env:BC250_UMD_SOURCE = [IO.Path]::GetFullPath($UmdSource)
     $env:BC250_UMD_BUILD = [IO.Path]::GetFullPath($UmdBuild)
@@ -996,6 +1000,12 @@ if ($Register -and $report.status -eq 'ok') {
         --repo $repo --configs-out (Join-Path $Out 'configs') --receipt (Join-Path $Out 'register-receipt.json')
     if ($LASTEXITCODE -ne 0) { $report.status = 'failed' }
     $report.register = Join-Path $Out 'register-receipt.json'
+    # The third-party list names the commit of each payload file, so the new rows change it. -Package refuses a list
+    # that does not match release-sources.json; write it here, so that the same commit carries both files.
+    if ($report.status -eq 'ok') {
+        & $python -I (Join-Path $PSScriptRoot 'third_party_doc.py') --repo $repo --workspace $Root --write
+        if ($LASTEXITCODE -ne 0) { $report.status = 'failed' }
+    }
 }
 Write-Json $reportFile $report
 "build-release-set: $($report.status), $(@($report.builds | Where-Object { $_.status -eq 'ok' }).Count) of $($report.builds.Count) builds ok, $($report.rows.count) rows in $rowsFile, $($report.seconds) s (report $reportFile)"
