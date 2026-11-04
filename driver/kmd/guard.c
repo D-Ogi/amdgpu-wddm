@@ -1598,6 +1598,28 @@ void GuardRecordStartStarted(void)
 #define GUARD_BOOT_KEY L"GuardBoot"
 #define GUARD_BOOT_CONFIRMED L"Confirmed"
 
+// The unconfirmed GPU stop, kept for the rest of the boot (implicit-state-machine verification, 2026-11-04, entry 6).
+// GpuStopUnconfirmed and the adapter owner's poison (adapter_owner.c) live in this image and its device context. A
+// disable/enable or a driver update unloads the image, and the next image would start GART, PSP and the rings over
+// engines that no stop confirmed halted. So a remove with an unconfirmed stop also writes a volatile mark, and every
+// start of this boot refuses while it is there. The configuration manager drops the key at the reboot, which is
+// the only event that resets the GPU. PASSIVE_LEVEL only.
+#define GUARD_QUARANTINE_KEY L"AdapterQuarantine"
+#define GUARD_QUARANTINE_STOP L"StopUnconfirmed"
+
+void GuardMarkStopUnconfirmed(void)
+{
+    NTSTATUS status = GuardVolatileStore(GUARD_QUARANTINE_KEY, GUARD_QUARANTINE_STOP, 1);
+    GuardLog("guard: unconfirmed GPU stop kept for this boot 0x%08X", status);
+}
+
+BOOLEAN GuardStopUnconfirmedThisBoot(void)
+{
+    ULONG mark = 0;
+    NTSTATUS status = GuardVolatileQuery(GUARD_QUARANTINE_KEY, GUARD_QUARANTINE_STOP, &mark);
+    return NT_SUCCESS(status) && mark == 1;
+}
+
 static void GuardStartConfirmed(void)
 {
     NTSTATUS status;

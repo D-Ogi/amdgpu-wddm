@@ -432,6 +432,7 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'adapter-owner-admission-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner-admission-control" -Mutation admission }
  Check 'adapter-owner-cleanup-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner-cleanup-control" -Mutation cleanup }
  Check 'adapter-owner-quarantine-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner-quarantine-control" -Mutation poison }
+ Check 'adapter-owner-bootmark-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner-bootmark-control" -Mutation bootmark }
  Check 'hang-progress' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hang_progress.ps1" -Root $Workspace -Out "$Out\hang-progress" }
  Check 'wave-reader' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_wave.ps1" -Kits $Kits -Out "$Out\wave-reader" }
  Check 'wave-access' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_wave_access.ps1" -Kits $Kits -Out "$Out\wave-access" }

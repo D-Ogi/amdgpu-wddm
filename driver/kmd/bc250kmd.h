@@ -685,6 +685,8 @@ void GuardCleanup(void);
 void GuardStage(BC250_STAGE Stage);
 BC250_STAGE GuardLastStage(void);
 NTSTATUS GuardCheckAndCountStart(BOOLEAN RequireDurable); // full table needs a durably recorded start
+void GuardMarkStopUnconfirmed(void);        // a remove after an unconfirmed GPU stop: refuse starts until reboot
+BOOLEAN GuardStopUnconfirmedThisBoot(void);  // TRUE when an earlier image of this boot left that mark
 void GuardReleaseStart(void);       // orderly stop of a started device: give the count back in a confirmed boot (BD-090)
 void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx and the log ring; IRQL <= DISPATCH_LEVEL
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL

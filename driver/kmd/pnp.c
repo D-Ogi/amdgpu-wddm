@@ -68,7 +68,9 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
     DisplayUnmapFramebuffer(device);
     IhRemove(device);
     ConnectorDestroy(device);
-    // Keep admission closed until every cleanup above has completed.
+    // Keep admission closed until every cleanup above has completed. An unconfirmed stop also outlives this image
+    // (guard.c GuardMarkStopUnconfirmed): a reload in the same boot must not start over engines nobody halted.
+    if (device->GpuStopUnconfirmed) GuardMarkStopUnconfirmed();
     AdapterOwnerRelease(device->PhysicalDeviceObject, device->GpuStopUnconfirmed);
     ExFreePoolWithTag(device, BC250_TAG);
     return STATUS_SUCCESS;
@@ -109,6 +111,13 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         GuardStartStep(L"PreviousStopUnconfirmed");
         // This exit fails the start as surely as the goto failed paths do, so it leaves the stage every reader of
         // LastStage and StageHistory keys off, and the record's documented "Stage 91 for a failure" holds here too.
+        GuardStage(StageStartFailed);
+        GuardRecordStartFailed(STATUS_DEVICE_HARDWARE_ERROR);
+        return STATUS_DEVICE_HARDWARE_ERROR;
+    }
+    if (GuardStopUnconfirmedThisBoot()) {
+        GuardLog("start refused: an earlier driver image of this boot left a GPU stop unconfirmed; restart Windows");
+        GuardStartStep(L"EarlierImageStopUnconfirmed");
         GuardStage(StageStartFailed);
         GuardRecordStartFailed(STATUS_DEVICE_HARDWARE_ERROR);
         return STATUS_DEVICE_HARDWARE_ERROR;
