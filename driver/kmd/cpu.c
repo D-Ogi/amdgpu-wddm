@@ -37,6 +37,19 @@
 //   CpuLastReason     what this start did with the stored values
 //   CoreMask          119 (stock, 6 cores) or 255 (all 8); applied at start, visible after the next restart
 //   CoreMaskPending, CoreMaskConfirmed   the same two marks for the mask
+//
+// Two records of the volatile store (guard.c GuardVolatileStore: a REG_OPTION_VOLATILE key under the state root's
+// Volatile key, gone at the next boot, kernel-only and outside the state catalog), BD-295:
+//   CpuBoot       the boot baseline: what the read stage of the first start of this boot answered, before any
+//                 driver load of the boot had sent a setter. Version, MaxMHz (0 for none), CapC, TableMHz, BoostMHz;
+//                 Valid is written last and read first. Every later start of the boot, and the D0 after a power
+//                 transition, takes its baseline from this record and not from the chip, because the chip may
+//                 still hold a kept clock limit or a leftover, and a read of that is not the firmware's own value.
+//   CpuLeftover   the mark of a stop that left settings in the chip that the next start would not name: a revert
+//                 still owed, the joint arm's cap, or an earlier leftover not yet restored. What (bits), MaxMHz,
+//                 UvSteps, TempC (what Applied named at the stop, for the log), and Owed, written last. The next
+//                 start sends the boot baseline back before its stored settings and keeps every setter refused
+//                 until that restore goes through.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
 #include "state_kernel.h"
@@ -64,6 +77,21 @@
 #define CPU_REASON_NOT_PROVEN 6u        // queue 3 did not answer: nothing was sent
 #define CPU_REASON_HARDWARE 7u          // the firmware refused a message, or the voltage readback did
 
+// The two volatile records of BD-295 (the head of this file).
+#define CPU_BOOT_KEY L"CpuBoot"
+#define CPU_BOOT_VERSION 1u             // the layout of CpuBoot; a record of another version is ignored
+#define CPU_LEFTOVER_KEY L"CpuLeftover"
+#define CPU_LEFTOVER_REVERT 1u          // What: a revert was still owed at the stop
+#define CPU_LEFTOVER_JOINT 2u           // What: the joint arm's cap stayed in the chip
+#define CPU_LEFTOVER_EARLIER 4u         // What: an earlier leftover was still not restored (or dropped settings)
+
+// What this start knows about the CpuBoot record (BC250_CPU_STATE.BootRecord).
+#define CPU_BOOT_RECORD_UNREAD 0u       // the full read stage has not looked yet
+#define CPU_BOOT_RECORD_ABSENT 1u       // no record: this start is the first of the boot to record one
+#define CPU_BOOT_RECORD_IGNORED 2u      // a record of another version, a partial one or one out of range
+#define CPU_BOOT_RECORD_WRITTEN 3u      // this start wrote it from its own read
+#define CPU_BOOT_RECORD_ADOPTED 4u      // this start took its baseline from it
+
 // The worker waits this long before its first mailbox message, so that the read stage never shares the start
 // window with the clock transaction and the first frames.
 #define CPU_START_DELAY_MS 2000u
@@ -77,9 +105,10 @@ C_ASSERT(BC250_CPU_REQUEST_MASK_FULL == BC250_CPU_MASK_FULL);
 C_ASSERT(BC250_CPU_REQUEST_SEARCH_STEPS == BC250_CPU_SEARCH_MAX_STEPS);
 C_ASSERT(BC250_CPU_REQUEST_ERROR_COUNT == BC250_CPU_ERROR_COUNT);
 C_ASSERT(BC250_CPU_REQUEST_ERROR_NO_CEILING == BC250_CPU_ERROR_NO_CEILING);
+C_ASSERT(BC250_CPU_REQUEST_ERROR_LEFTOVER == BC250_CPU_ERROR_LEFTOVER);
 C_ASSERT(BC250_CPU_CORE_SLOTS == BC250_CPU_CORES);
 C_ASSERT(BC250_CPU_CORE_SLOTS == BC250_CPU_PSTATES);
-C_ASSERT(BC250_CPU_ERROR_COUNT == 7);
+C_ASSERT(BC250_CPU_ERROR_COUNT == 8);
 C_ASSERT(BC250_CPU_FAIL_COUNT == 6);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_CPU, Status) == FIELD_OFFSET(BC250_ESCAPE, Status) &&
          FIELD_OFFSET(BC250_ESCAPE_CPU, Version) == FIELD_OFFSET(BC250_ESCAPE, Version));
@@ -232,6 +261,158 @@ static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULO
     return CpuMessageEx(Device, Queue, Message, Parameter, Write, AllowHot, FALSE, Value);
 }
 
+// ---- the boot record and the leftover mark (BD-295) -------------------------------------------------------------
+// A driver stop and start inside one boot (a device disable and enable, a driver update) zeroes everything this
+// surface knows, and the chip keeps what it had: a kept clock limit, or the settings of a revert that the firmware
+// refused at the stop. Up to BD-295 the next start then recorded that leftover as the firmware baseline, so a reset
+// and a revert went back to the leftover and not to the firmware's own values. The record keeps the first answer of
+// the boot. The mark says that the chip holds something that this start must take back first. Everything here runs
+// at PASSIVE_LEVEL under Lock, and a store failure costs the record, never the start.
+
+static NTSTATUS CpuBootQuery(PCWSTR Name, ULONG* Value)
+{
+    return GuardVolatileQuery(CPU_BOOT_KEY, Name, Value);
+}
+
+// A clock of the record: 0 for none, or inside the release band, because bc250_cpu_baseline_read clamps every top.
+static BOOLEAN CpuBootClockValid(ULONG Mhz)
+{
+    return (Mhz == 0 || (Mhz >= BC250_CPU_MIN_MHZ && Mhz <= BC250_CPU_MAX_MHZ)) ? TRUE : FALSE;
+}
+
+// The record as a baseline: CPU_BOOT_RECORD_ABSENT, _IGNORED (with one line that says why) or _ADOPTED, and only
+// the last fills *Baseline and *Read. Valid is read first, because a writer stores it last.
+static ULONG CpuBootRecordRead(struct bc250_cpu_settings* Baseline, struct bc250_cpu_baseline* Read)
+{
+    ULONG valid = 0, version = 0, maxMhz = 0, cap = 0, table = 0, boost = 0;
+    NTSTATUS status = CpuBootQuery(L"Valid", &valid);
+    if (status == STATUS_OBJECT_NAME_NOT_FOUND) return CPU_BOOT_RECORD_ABSENT;
+    if (!NT_SUCCESS(status)) {
+        GuardLog("cpu: the boot record is not readable 0x%08X: this start keeps its own read", status);
+        return CPU_BOOT_RECORD_IGNORED;
+    }
+    if (valid != 1) {
+        GuardLog("cpu: the boot record is partial (Valid %lu): it is ignored, this start keeps its own read", valid);
+        return CPU_BOOT_RECORD_IGNORED;
+    }
+    status = CpuBootQuery(L"Version", &version);
+    if (NT_SUCCESS(status) && version != CPU_BOOT_VERSION) {
+        GuardLog("cpu: the boot record is version %lu, not %lu: it is ignored, this start keeps its own read",
+                 version, (ULONG)CPU_BOOT_VERSION);
+        return CPU_BOOT_RECORD_IGNORED;
+    }
+    if (NT_SUCCESS(status)) status = CpuBootQuery(L"MaxMHz", &maxMhz);
+    if (NT_SUCCESS(status)) status = CpuBootQuery(L"CapC", &cap);
+    if (NT_SUCCESS(status)) status = CpuBootQuery(L"TableMHz", &table);
+    if (NT_SUCCESS(status)) status = CpuBootQuery(L"BoostMHz", &boost);
+    if (!NT_SUCCESS(status) || cap < BC250_CPU_TEMP_MIN_C || cap > BC250_CPU_TEMP_MAX_C || !CpuBootClockValid(maxMhz) ||
+        !CpuBootClockValid(table) || !CpuBootClockValid(boost) || maxMhz != (boost > table ? boost : table)) {
+        GuardLog("cpu: the boot record is not usable 0x%08X (clock %lu, cap %lu, table %lu, boost %lu): ignored",
+                 status, maxMhz, cap, table, boost);
+        return CPU_BOOT_RECORD_IGNORED;
+    }
+    RtlZeroMemory(Baseline, sizeof(*Baseline));
+    Baseline->temp_given = 1;
+    Baseline->temp_c = cap;
+    Baseline->uv_given = 1;
+    Baseline->uv_steps = 0;
+    if (maxMhz) { Baseline->max_given = 1; Baseline->max_mhz = maxMhz; }
+    RtlZeroMemory(Read, sizeof(*Read));
+    Read->mhz = maxMhz;
+    Read->table_mhz = table;
+    Read->boost_mhz = boost;
+    Read->boost_given = boost ? 1 : 0;
+    return CPU_BOOT_RECORD_ADOPTED;
+}
+
+// TRUE when a usable record of this layout is there: an earlier start of this boot recorded one. CpuStart asks.
+static BOOLEAN CpuBootRecordPresent(void)
+{
+    struct bc250_cpu_settings b;
+    struct bc250_cpu_baseline read;
+    return CpuBootRecordRead(&b, &read) == CPU_BOOT_RECORD_ADOPTED ? TRUE : FALSE;
+}
+
+// The baseline of this start into the record. An update clears Valid first, so that a reader never takes one half
+// of the old record and one half of the new one.
+static void CpuBootRecordWrite(BC250_CPU_STATE* s)
+{
+    const BOOLEAN first = s->BootRecord == CPU_BOOT_RECORD_ABSENT ? TRUE : FALSE;
+    const ULONG maxMhz = s->Baseline.max_given ? s->Baseline.max_mhz : 0u;
+    NTSTATUS status = STATUS_SUCCESS;
+    if (!first) status = GuardVolatileStore(CPU_BOOT_KEY, L"Valid", 0);
+    if (NT_SUCCESS(status)) status = GuardVolatileStore(CPU_BOOT_KEY, L"Version", CPU_BOOT_VERSION);
+    if (NT_SUCCESS(status)) status = GuardVolatileStore(CPU_BOOT_KEY, L"MaxMHz", maxMhz);
+    if (NT_SUCCESS(status)) status = GuardVolatileStore(CPU_BOOT_KEY, L"CapC", s->Baseline.temp_c);
+    if (NT_SUCCESS(status)) status = GuardVolatileStore(CPU_BOOT_KEY, L"TableMHz", s->BaselineRead.table_mhz);
+    if (NT_SUCCESS(status)) status = GuardVolatileStore(CPU_BOOT_KEY, L"BoostMHz", s->BaselineRead.boost_mhz);
+    if (NT_SUCCESS(status)) status = GuardVolatileStore(CPU_BOOT_KEY, L"Valid", 1);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("cpu: the boot record did NOT reach the volatile store 0x%08X: later starts read the chip", status);
+        s->BootRecord = CPU_BOOT_RECORD_IGNORED;
+        return;
+    }
+    if (first) s->BootRecord = CPU_BOOT_RECORD_WRITTEN;
+    GuardLog("cpu: the boot record is %s: clock %lu MHz, cap %lu C, table %lu MHz, boost %lu MHz",
+             first ? "written" : "raised", maxMhz, s->Baseline.temp_c, s->BaselineRead.table_mhz,
+             s->BaselineRead.boost_mhz);
+}
+
+// The first full read stage of a start looks at the record before the boost probe decides (BD-295): an adopted
+// record has the boost answer of the boot already, and the probe then makes no heat for it. Under Lock.
+static void CpuAdoptBootRecord(BC250_CPU_STATE* s)
+{
+    struct bc250_cpu_settings b;
+    struct bc250_cpu_baseline read;
+    if (s->BaselineValid || s->Applied.max_given || s->Applied.uv_given || s->Applied.temp_given) return;
+    s->BootRecord = CpuBootRecordRead(&b, &read);
+    if (s->BootRecord != CPU_BOOT_RECORD_ADOPTED) return;
+    s->Baseline = b;
+    s->BaselineRead = read;
+    s->BaselineValid = TRUE;
+    GuardLog("cpu: this start adopts the boot record as its baseline: clock %s%lu MHz, undervolt 0 steps, cap %lu C",
+             b.max_given ? "" : "(not answered) ", b.max_mhz, b.temp_c);
+    GuardLog("cpu: the boot record's answers: P-state table top %lu MHz, per-core (boost) top %s%lu MHz",
+             read.table_mhz, read.boost_given ? "" : "(not answered) ", read.boost_mhz);
+}
+
+// The leftover mark of a stop: what the stop leaves in the chip, for the log of the next start. Owed goes last.
+static void CpuLeftoverWrite(BC250_CPU_STATE* s, ULONG What)
+{
+    const struct bc250_cpu_settings* a = &s->Applied;
+    NTSTATUS status = GuardVolatileStore(CPU_LEFTOVER_KEY, L"What", What);
+    if (NT_SUCCESS(status)) status = GuardVolatileStore(CPU_LEFTOVER_KEY, L"MaxMHz", a->max_given ? a->max_mhz : 0u);
+    if (NT_SUCCESS(status)) status = GuardVolatileStore(CPU_LEFTOVER_KEY, L"UvSteps", a->uv_given ? a->uv_steps : 0u);
+    if (NT_SUCCESS(status)) status = GuardVolatileStore(CPU_LEFTOVER_KEY, L"TempC", a->temp_given ? a->temp_c : 0u);
+    if (NT_SUCCESS(status)) status = GuardVolatileStore(CPU_LEFTOVER_KEY, L"Owed", 1);
+    if (NT_SUCCESS(status))
+        GuardLog("cpu: the leftover mark is written (what 0x%lX): the next start of this boot restores the boot "
+                 "baseline first", What);
+    else
+        GuardLog("cpu: the leftover mark did NOT reach the volatile store 0x%08X (what 0x%lX)", status, What);
+}
+
+// TRUE when an earlier stop of this boot left its mark. CpuStart asks, before the worker exists.
+static BOOLEAN CpuLeftoverRead(void)
+{
+    ULONG owed = 0, what = 0, maxMhz = 0, uv = 0, temp = 0;
+    if (!NT_SUCCESS(GuardVolatileQuery(CPU_LEFTOVER_KEY, L"Owed", &owed)) || owed != 1) return FALSE;
+    (void)GuardVolatileQuery(CPU_LEFTOVER_KEY, L"What", &what);
+    (void)GuardVolatileQuery(CPU_LEFTOVER_KEY, L"MaxMHz", &maxMhz);
+    (void)GuardVolatileQuery(CPU_LEFTOVER_KEY, L"UvSteps", &uv);
+    (void)GuardVolatileQuery(CPU_LEFTOVER_KEY, L"TempC", &temp);
+    GuardLog("cpu: an earlier stop of this boot left settings in the chip (what 0x%lX): clock %lu MHz, undervolt "
+             "%lu steps, cap %lu C", what, maxMhz, uv, temp);
+    return TRUE;
+}
+
+static void CpuLeftoverClear(void)
+{
+    NTSTATUS status = GuardVolatileStore(CPU_LEFTOVER_KEY, L"Owed", 0);
+    if (!NT_SUCCESS(status))
+        GuardLog("cpu: the leftover mark was not cleared 0x%08X: the next start restores once more", status);
+}
+
 // The baseline this start restores to, from what the firmware has just answered (0.7.211). Until this exists no
 // revert and no reset can name the clock limit, and 0.7.210 invented BC250_CPU_MAX_MHZ in its place, which is a
 // raise sold as a restore. Recorded only while this driver has sent nothing in this start:
@@ -263,6 +444,11 @@ static void CpuRecordBaseline(BC250_CPU_STATE* s, ULONG Cap, _In_opt_ const ULON
     ULONG previous;
     if (s->Applied.max_given || s->Applied.uv_given || s->Applied.temp_given) return;
     if (!s->BaselineValid && Pstate == NULL) return;    // the full stage records first: it has the cap and the table
+    // BD-295: a chip that holds an earlier start's settings answers those and not the firmware's own values, so
+    // nothing it answers raises the baseline. An adopted record with a boost answer is final for the same reason: a
+    // kept clock limit above it would read as a higher boost, and no reading tells the two apart.
+    if (s->BaselineValid && s->LeftoverOwed) return;
+    if (s->BaselineValid && s->BootRecord == CPU_BOOT_RECORD_ADOPTED && s->BaselineRead.boost_given) return;
     previous = (s->BaselineValid && s->Baseline.max_given) ? s->Baseline.max_mhz : 0u;
     bc250_cpu_baseline_read((const unsigned int*)Pstate, Pstate != NULL ? BC250_CPU_PSTATES : 0u,
                             (const unsigned int*)CoreMHz, BC250_CPU_CORES, &s->BaselineRead, &read);
@@ -273,6 +459,10 @@ static void CpuRecordBaseline(BC250_CPU_STATE* s, ULONG Cap, _In_opt_ const ULON
         s->Baseline.max_mhz = read.mhz;
         GuardLog("cpu: the baseline clock of this start rises to %lu MHz (was %lu): observed under load",
                  read.mhz, previous);
+        // The record follows while the chip has had nothing of any start of this boot (the start that wrote it),
+        // or while the record itself has no boost answer (the line above).
+        if (s->BootRecord == CPU_BOOT_RECORD_WRITTEN || s->BootRecord == CPU_BOOT_RECORD_ADOPTED)
+            CpuBootRecordWrite(s);
         return;
     }
     RtlZeroMemory(&b, sizeof(b));
@@ -291,6 +481,13 @@ static void CpuRecordBaseline(BC250_CPU_STATE* s, ULONG Cap, _In_opt_ const ULON
              b.max_given ? "" : "(not answered) ", b.max_mhz, b.temp_c);
     GuardLog("cpu: the baseline's answers: P-state table top %lu MHz, per-core (boost) top %s%lu MHz",
              read.table_mhz, read.boost_given ? "" : "(not answered) ", read.boost_mhz);
+    // BD-295: the first start of the boot keeps its read for every later start of the boot. A chip that holds the
+    // settings of an earlier start is not the firmware's own, so that read is not kept.
+    if (s->BootRecord == CPU_BOOT_RECORD_ABSENT) {
+        if (s->LeftoverOwed)
+            GuardLog("cpu: no boot record, and the chip holds an earlier start's settings: this read is not kept");
+        else CpuBootRecordWrite(s);
+    }
 }
 
 // The boost probe (0.7.216.24, BD-094). The read allowlist of docs/hardware.md carries no message that answers the
@@ -406,6 +603,8 @@ static NTSTATUS CpuReadStage(BC250_DEVICE* Device, BOOLEAN Full, ULONG GapMs)
             CpuWait(GapMs);
             (void)CpuMessage(Device, BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_GET_ENABLED_FEATURES, 0, FALSE, TRUE,
                              &features);
+            // BD-295: a later start of the boot takes the boot record as its baseline, before the probe decides.
+            CpuAdoptBootRecord(s);
             // The P-state table has answered, so the two tops of this stage are known: with no boost answer among
             // them the stage owes the probe (BD-094), and it runs inside this same sequence.
             if (CpuBoostUnknown(s, pstate, coreMHz)) CpuBoostProbe(Device, coreMHz);
@@ -664,7 +863,8 @@ static void CpuJointPublish(BC250_DEVICE* Device)
     if (from->max_given) base = from->max_mhz;
     else if (s->BaselineValid && s->Baseline.max_given) base = s->Baseline.max_mhz;
     KeAcquireSpinLock(&s->SnapLock, &irql);
-    ready = s->Enabled && s->Created && s->Proven && !s->OnTrial && !s->RevertOwed && !s->Search.running;
+    ready = s->Enabled && s->Created && s->Proven && !s->OnTrial && !s->RevertOwed && !s->LeftoverOwed &&
+            !s->Search.running;
     KeReleaseSpinLock(&s->SnapLock, irql);
     // The arm takes no cap it could only release as the P-state table's top (0.7.216.24, BD-094): with no limit
     // applied the release goes back to the baseline, and a baseline without a per-core answer is under the
@@ -814,6 +1014,55 @@ static void CpuApplyStart(BC250_DEVICE* Device)
     }
 }
 
+// One attempt at the leftover of an earlier start (BD-295), from the worker alone, under Lock, after a read stage
+// that answered. The target names every control, as `cpu reset` does: the baseline's clock limit (the boot record's,
+// when this start adopted one), no undervolt and the default cap. Nobody knows what the chip holds - CpuStart zeroed
+// Applied, and the earlier start's settings are still in the chip - so Applied is cleared before each attempt, and
+// the plan then sends every step, as a restore: each one passes the hot gate. A refusal keeps every setter refused
+// (BC250_CPU_ERROR_LEFTOVER), and the worker tries again every BC250_CPU_REVERT_RETRY_MS, as for an owed revert. On
+// success the mark goes, and the stored settings of this start follow when they waited for it.
+static void CpuLeftoverService(BC250_DEVICE* Device)
+{
+    BC250_CPU_STATE* s = &Device->Cpu;
+    struct bc250_cpu_settings every, none, back;
+    NTSTATUS status;
+    ULONG attempts;
+    KIRQL irql;
+
+    RtlZeroMemory(&every, sizeof(every));
+    RtlZeroMemory(&none, sizeof(none));
+    RtlZeroMemory(&back, sizeof(back));
+    every.max_given = every.uv_given = every.temp_given = 1;
+    KeAcquireSpinLock(&s->SnapLock, &irql);
+    attempts = ++s->Snap.RevertRetries;
+    KeReleaseSpinLock(&s->SnapLock, irql);
+    if (!bc250_cpu_restore_target(&every, &none, s->BaselineValid ? &s->Baseline : NULL, &back)) {
+        // No clock answered in this boot: the leftover clock limit cannot be named, so the surface stays shut.
+        status = STATUS_INVALID_DEVICE_STATE;
+    } else {
+        RtlZeroMemory(&s->Applied, sizeof(s->Applied));
+        status = BC250_CPU_LAB_FAULT(BC250_CPU_LAB_FAULT_LEFTOVER)
+                     ? STATUS_IO_DEVICE_ERROR : CpuApply(Device, &back, "the leftover restore", NULL, TRUE);
+    }
+    KeAcquireSpinLock(&s->SnapLock, &irql);
+    if (NT_SUCCESS(status)) s->LeftoverOwed = FALSE;
+    else s->Snap.RevertFailures++;
+    KeReleaseSpinLock(&s->SnapLock, irql);
+    if (!NT_SUCCESS(status)) {
+        if (attempts == 1 || attempts % 10 == 0)
+            GuardLog("cpu: the leftover restore is refused 0x%08X at attempt %lu: every setter stays refused, again "
+                     "in %lu ms", status, attempts, (ULONG)BC250_CPU_REVERT_RETRY_MS);
+        return;
+    }
+    CpuLeftoverClear();
+    GuardLog("cpu: the leftover of an earlier start is back at the boot baseline (attempt %lu): clock %lu MHz, "
+             "cap %lu C", attempts, back.max_mhz, back.temp_c);
+    if (s->LeftoverStartOwed) {
+        s->LeftoverStartOwed = FALSE;
+        CpuApplyStart(Device);
+    }
+}
+
 // ---- the worker thread ------------------------------------------------------------------------------------------
 // It owns the start sequence (the read stage, the stored values, the core mask) and every trial's deadline. Nothing
 // else in this file sends a message without holding Lock, and the thread holds it for one piece of work at a time.
@@ -835,7 +1084,7 @@ static void CpuThread(_In_ PVOID Context)
         return;
     }
     for (;;) {
-        BOOLEAN work, onTrial, over = FALSE, owed, joint;
+        BOOLEAN work, onTrial, over = FALSE, owed, joint, leftover;
         KIRQL irql;
         CpuLock(s);
         // While the adapter is paused or the owner is gone, the worker does nothing at all: the start work stays
@@ -853,9 +1102,15 @@ static void CpuThread(_In_ PVOID Context)
             if (!s->Proven) {
                 CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_NOT_PROVEN);
             } else {
-                // CpuReadStage has recorded the baseline from what the firmware answered. Applied was empty up to
-                // here: this driver had sent nothing yet. The stored settings and the default cap go in now.
-                CpuApplyStart(device);
+                // CpuReadStage has recorded the baseline from what the firmware answered, or adopted the boot
+                // record. Applied was empty up to here: this start had sent nothing yet. When an earlier start of
+                // this boot left settings in the chip, the boot baseline goes back first (BD-295), and the stored
+                // settings and the default cap follow it. Otherwise they go in now.
+                if (s->LeftoverOwed) {
+                    s->LeftoverStartOwed = TRUE;
+                    CpuLeftoverService(device);
+                    nextRetry = KeQueryInterruptTime() + 10000ull * BC250_CPU_REVERT_RETRY_MS;
+                } else CpuApplyStart(device);
                 // The core mask is the CU mode's shape: sent now, visible after the next restart.
                 if (s->CoreMask && s->CoreMask != BC250_CPU_MASK_STOCK) {
                     if (SmuCpuBegin(&device->Smu)) {
@@ -871,6 +1126,7 @@ static void CpuThread(_In_ PVOID Context)
         KeAcquireSpinLock(&s->SnapLock, &irql);
         onTrial = s->OnTrial;
         owed = s->RevertOwed;
+        leftover = s->LeftoverOwed;
         if (onTrial && KeQueryInterruptTime() >= s->TrialDeadline) over = TRUE;
         KeReleaseSpinLock(&s->SnapLock, irql);
         if (over && !CpuAdapterDown(device)) {
@@ -882,6 +1138,11 @@ static void CpuThread(_In_ PVOID Context)
             // took back. The part cools, the GPU goes quiet, and then this goes through (0.7.211).
             CpuRevertRetry(device);
             nextRetry = KeQueryInterruptTime() + 10000ull * BC250_CPU_REVERT_RETRY_MS;
+        } else if (leftover && s->Proven && !CpuAdapterDown(device) && KeQueryInterruptTime() >= nextRetry) {
+            // BD-295: the leftover of an earlier start is owed the same way, and nothing else of this surface
+            // runs until it goes through.
+            CpuLeftoverService(device);
+            nextRetry = KeQueryInterruptTime() + 10000ull * BC250_CPU_REVERT_RETRY_MS;
         }
         // The joint power arm (0.7.216.7) after the operator's own work: a trial's deadline and an owed revert come
         // first, and the arm takes no cap while either is open (CpuJointPublish). With DpmJointGovernor 0 nothing
@@ -889,12 +1150,14 @@ static void CpuThread(_In_ PVOID Context)
         CpuJointService(device);
         KeAcquireSpinLock(&s->SnapLock, &irql);
         owed = s->RevertOwed;
+        leftover = s->LeftoverOwed && s->Proven;
         KeReleaseSpinLock(&s->SnapLock, irql);
         joint = CpuJointOwed(s);
         CpuUnlock(s);
         timeout.QuadPart = -10000ll * (LONGLONG)BC250_CPU_POLL_MS;
         if (KeWaitForMultipleObjects(2, objects, WaitAny, Executive, KernelMode, FALSE,
-                                     onTrial || over || owed || joint ? &timeout : NULL, NULL) == STATUS_WAIT_0)
+                                     onTrial || over || owed || joint || leftover ? &timeout : NULL, NULL) ==
+            STATUS_WAIT_0)
             break;
     }
     PsTerminateSystemThread(STATUS_SUCCESS);
@@ -923,7 +1186,7 @@ void CpuStart(BC250_DEVICE* Device)
     HANDLE handle;
     NTSTATUS status;
     ULONG tune = 0, lab = 0, value = 0, pending = 0, confirmed = 0, mask = 0, corePending = 0, coreConfirmed = 0;
-    BOOLEAN pendingPresent, corePendingPresent, maskPresent;
+    BOOLEAN pendingPresent, corePendingPresent, maskPresent, dropped = FALSE;
 
     CpuLock(s);
     if (s->Created) { CpuUnlock(s); return; }
@@ -933,6 +1196,8 @@ void CpuStart(BC250_DEVICE* Device)
     RtlZeroMemory(&s->BaselineRead, sizeof(s->BaselineRead));
     RtlZeroMemory(&s->Search, sizeof(s->Search));
     s->BaselineValid = s->Proven = s->OnTrial = s->RevertOwed = FALSE;
+    s->LeftoverOwed = s->LeftoverStartOwed = FALSE;
+    s->BootRecord = CPU_BOOT_RECORD_UNREAD;
     s->Pending = s->Confirmed = s->CorePending = s->CoreConfirmed = FALSE;
     s->TrialDeadline = 0;
     s->Generation = Device->StartHealth.Generation;
@@ -1003,14 +1268,17 @@ void CpuStart(BC250_DEVICE* Device)
             CpuDeleteLogged(CPU_SETTING_CONFIRMED);
             CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_UNCONFIRMED);
             RtlZeroMemory(&s->Stored, sizeof(s->Stored));
+            dropped = TRUE;
         } else if (error != BC250_CPU_OK) {
             GuardLog("cpu: the stored settings are refused (error %d): the shipped settings stand", (int)error);
             CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_REFUSED);
             RtlZeroMemory(&s->Stored, sizeof(s->Stored));
+            dropped = TRUE;
         } else if (!NT_SUCCESS(GuardStoreSetting(CPU_SETTING_PENDING, CpuMark(&s->Stored)))) {
             GuardLog("cpu: the pending mark is not durable: the stored settings are not applied this start");
             CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_REGISTRY);
             RtlZeroMemory(&s->Stored, sizeof(s->Stored));
+            dropped = TRUE;
         } else {
             s->Pending = TRUE;
             s->Confirmed = confirmed == CpuMark(&s->Stored);
@@ -1041,6 +1309,15 @@ void CpuStart(BC250_DEVICE* Device)
     } else if (corePendingPresent && !maskPresent) {
         CpuDeleteLogged(CPU_SETTING_CORE_PENDING);
     }
+    // BD-295: what an earlier start of this boot left in the chip. Its stop wrote a mark; and stored settings that
+    // this start dropped may be in the chip when an earlier start of the boot sent them (the boot record says one
+    // ran). Either way the worker sends the boot baseline back before anything else, and every setter waits for it.
+    if (CpuLeftoverRead()) s->LeftoverOwed = TRUE;
+    if (dropped && !s->LeftoverOwed && CpuBootRecordPresent()) {
+        GuardLog("cpu: an earlier start of this boot may have sent the dropped settings: the boot baseline goes "
+                 "back first");
+        s->LeftoverOwed = TRUE;
+    }
     s->Cores = (ULONG)KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
     s->Threads = s->Cores;
     s->StartWork = TRUE;
@@ -1067,11 +1344,13 @@ void CpuStart(BC250_DEVICE* Device)
 
 // StopDevice (before SmuOwnerStop) and RemoveDevice. A trial never outlives the driver that watches it: the
 // settings before it come back here, while the mailbox is still ours. Settings somebody kept stay in the chip and
-// on disk: the next start reads them back. PASSIVE_LEVEL, idempotent.
+// on disk: the next start reads them back. What stays in the chip and the next start would not name - a revert the
+// firmware refused, the joint arm's cap - leaves the leftover mark (BD-295). PASSIVE_LEVEL, idempotent.
 void CpuStop(BC250_DEVICE* Device)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
-    BOOLEAN onTrial, owed;
+    BOOLEAN onTrial, owed, labFault;
+    ULONG what = 0;
     KIRQL irql;
 
     CpuLock(s);
@@ -1087,14 +1366,26 @@ void CpuStop(BC250_DEVICE* Device)
     onTrial = s->OnTrial;
     owed = s->RevertOwed;
     KeReleaseSpinLock(&s->SnapLock, irql);
-    if (onTrial) CpuRevert(Device, "stop");
+    // The BD-295 lab arm (LabCpuRevertFault bit 1, lab flavour only): this revert is refused before any message
+    // goes out, the way a hot part or a busy GPU refuses it. FALSE in the release flavour.
+    labFault = (onTrial || owed) ? BC250_CPU_LAB_FAULT(BC250_CPU_LAB_FAULT_STOP_REVERT) : FALSE;
+    if (labFault) {
+        KeAcquireSpinLock(&s->SnapLock, &irql);
+        if (onTrial) s->Snap.Reverts++;
+        s->OnTrial = FALSE;
+        s->TrialDeadline = 0;
+        s->TrialSerial++;
+        s->RevertOwed = TRUE;
+        s->Snap.RevertFailures++;
+        KeReleaseSpinLock(&s->SnapLock, irql);
+    } else if (onTrial) CpuRevert(Device, "stop");
     else if (owed) CpuRevertRetry(Device);          // the thread is gone: this is the last attempt there is
     KeAcquireSpinLock(&s->SnapLock, &irql);
     owed = s->RevertOwed;
     KeReleaseSpinLock(&s->SnapLock, irql);
     if (owed)
         GuardLog("cpu: a revert is still owed at the stop; the applied settings stay in the chip until the "
-                 "next cold boot");
+                 "next cold boot or the next start of this boot");
     // The joint arm's cap does not outlive the driver that set it (0.7.216.7). A trial cannot be open at the same
     // time (the arm takes no cap during one), so this is the only change left to take back.
     if (InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0) && !CpuAdapterDown(Device)) {
@@ -1103,6 +1394,12 @@ void CpuStop(BC250_DEVICE* Device)
             GuardLog("cpu: the joint arm's cap of %lu MHz stays in the chip after the stop 0x%08X; a lower limit "
                      "is the safe side", (ULONG)InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0), status);
     }
+    // BD-295: what stays in the chip and the next start of this boot would not name. Kept settings are not on this
+    // list: the next start reads them from the disk and sends them again.
+    if (owed) what |= CPU_LEFTOVER_REVERT;
+    if (InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0)) what |= CPU_LEFTOVER_JOINT;
+    if (s->LeftoverOwed) what |= CPU_LEFTOVER_EARLIER;
+    if (what) CpuLeftoverWrite(s, what);
     s->Proven = FALSE;
     CpuJointPublish(Device);
     CpuUnlock(s);
@@ -1150,6 +1447,10 @@ static void CpuResumeEx(BC250_DEVICE* Device, BOOLEAN Joint)
     RtlZeroMemory(&s->Baseline, sizeof(s->Baseline));
     RtlZeroMemory(&s->BaselineRead, sizeof(s->BaselineRead));
     s->BaselineValid = s->Proven = FALSE;
+    // BD-295: the next full read stage adopts the boot record again. A leftover of an earlier start stays owed: the
+    // restore costs three messages, and nothing here proves that the transition took it out of the chip.
+    s->BootRecord = CPU_BOOT_RECORD_UNREAD;
+    s->LeftoverStartOwed = FALSE;
     KeAcquireSpinLock(&s->SnapLock, &irql);
     s->OnTrial = FALSE;
     s->TrialDeadline = 0;
@@ -1224,9 +1525,10 @@ void CpuLogSummary(BC250_DEVICE* Device)
     // Four lines, by the rule of the guardlog-width gate: the state and voltages line is 207 characters at its
     // widest and the counter line 166, and a log line holds 159 (BD-070). Every line begins "cpu: summary", so
     // a reader takes the block and not one line of it.
-    GuardLog("cpu: summary %s%s%s %lu mV (GPU %lu mV)",
+    GuardLog("cpu: summary %s%s%s%s %lu mV (GPU %lu mV)",
              s->Enabled ? "on" : "off", s->Proven ? ", queue 3 proven" : ", queue 3 silent",
-             s->OnTrial ? ", on trial" : "", snap.VoltageMv, snap.GpuVoltageMv);
+             s->OnTrial ? ", on trial" : "", s->LeftoverOwed ? ", leftover owed" : "", snap.VoltageMv,
+             snap.GpuVoltageMv);
     GuardLog("cpu: summary cap %lu C, cores %lu/%lu, mask 0x%02X", snap.CapC,
              bc250_cpu_mask_cores(s->CoreMask), (ULONG)BC250_CPU_CORES, s->CoreMask);
     CpuLogSettings("summary applied", &s->Applied);
@@ -1322,7 +1624,13 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
         else if (!s->Enabled || !s->Created) status = STATUS_INVALID_DEVICE_STATE;
         else if (CpuAdapterDown(Device)) status = STATUS_DEVICE_NOT_READY;
         else if (op != BC250_CPU_OP_READBACK && !s->Proven) status = STATUS_DEVICE_NOT_READY;
-        else if (!CpuJointYield(Device, op)) status = STATUS_DEVICE_BUSY;
+        else if (op != BC250_CPU_OP_READBACK && s->LeftoverOwed) {
+            // BD-295: the chip holds an earlier start's settings and the worker has not taken them back yet. A
+            // setter planned from the zeroed Applied would be a plan over a state nobody knows, and a reset would
+            // send nothing. A readback changes nothing, so it stays open.
+            status = STATUS_INVALID_DEVICE_STATE;
+            error = BC250_CPU_ERROR_LEFTOVER;
+        } else if (!CpuJointYield(Device, op)) status = STATUS_DEVICE_BUSY;
         else if (op == BC250_CPU_OP_READBACK) {
             // The first full stage of a start keeps the slow rate, whether the worker's own stage answered or
             // not: it is what records the baseline, and it is the first queue 3 traffic this part ever sees.
@@ -1513,7 +1821,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
     onTrial = s->OnTrial;
     serial = s->TrialSerial;
     searching = s->Search.running ? TRUE : FALSE;
-    revertOwed = s->RevertOwed;
+    revertOwed = (s->RevertOwed || s->LeftoverOwed) ? TRUE : FALSE;     // BD-295: a leftover is a way back owed
     searchStep = s->Search.step;
     searchBest = s->Search.best;
     searchFail = s->Search.fail;

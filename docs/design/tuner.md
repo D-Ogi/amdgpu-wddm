@@ -154,6 +154,31 @@ identifier scaled freely, and its own ceiling is 1.325 V. The driver's answer:
   asks for the clock limit together with them is refused whole, because an operator sent it and must see why.
   The stored settings of the start are the one exception. They go in without their clock limit.
 
+### The boot record and the leftover mark (BD-295)
+
+A stop and a start of the driver inside one boot leave the chip as it was. A device disable and enable does this,
+and so does a driver update. The chip keeps a kept clock limit, and it keeps the settings of a revert that the
+firmware refused at the stop. The new start knows none of them. Up to BD-295 it recorded such a leftover as the
+firmware baseline, so a reset and a revert went back to the leftover and not to the boost.
+
+- The first start of a boot writes its baseline to the `CpuBoot` record. The record is in the driver's volatile
+  store, so it ends with the boot, and the state catalog does not list it. Its values are `Version`, `MaxMHz`, `CapC`,
+  `TableMHz` and `BoostMHz`. `Valid` is written last and read first.
+- A later start of the same boot takes its baseline from the record and not from the chip. The D0 after a power
+  transition does the same. The read stage still runs, because it is the gate of every setter. With a boost answer
+  in the record, no read of this start raises the baseline. A kept limit above the record would read as a higher
+  boost, and no reading tells the two apart.
+- A record of another version, a partial record and an unreadable store are not a baseline. The start then keeps its
+  own read and leaves the record as it is.
+- A stop that leaves a revert owed, or the cap of the joint power arm, writes the `CpuLeftover` mark. Stored settings
+  that a start drops after an earlier start of the boot are a leftover too.
+- The next start sends the boot baseline back before its stored settings: the baseline clock, no undervolt and the
+  default cap. The chip state is not known, so every one of the three steps goes out, as a restore.
+- Until that restore goes through, every write but a readback is refused with `BC250_CPU_ERROR_LEFTOVER`. The reply
+  carries `BC250_CPU_FLAG_REVERT_OWED`, and the worker tries again every second.
+- The lab flavour has `LabCpuRevertFault` for the lab arm. Bit 1 refuses the next revert of a stop. Bit 2 refuses the
+  first leftover restore of a start. The release flavour does not contain it.
+
 ### The allowlist
 
 A getter sent as a setter and a setter sent as a getter are both refused, so a caller cannot mislabel a message.

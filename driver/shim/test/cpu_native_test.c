@@ -19,7 +19,18 @@
  *   hot        the part is at or above BC250_CLOCK_HOT_MC: no probe at all, and the clock control stays refused.
  *   refused    message 0x43 answers nothing: the stage records no ceiling and says so.
  *
- * Every arm also asserts the probe's discipline: it pins itself to the processor it runs on and reverts, it sends
+ * The BD-295 arms drive whole driver loads of one boot (CpuStart, one pass of the worker, the escape, CpuStop)
+ * against a chip whose clock limit, curve scale and cap outlive the load, and a volatile store that does too:
+ *
+ *   boot record    the first start of a boot writes its read; a later start adopts it, so a kept 3000 MHz limit in
+ *                  the chip does not become the baseline, and a reset gives 3500 MHz back.
+ *   leftover       a revert refused at the stop writes the mark; the next start sends every control of the boot
+ *                  baseline before its own settings and clears the mark. Refused again, every setter is refused
+ *                  with BC250_CPU_ERROR_LEFTOVER until the worker's retry goes through.
+ *   foreign        a record of another version, a partial one and an unreadable store are not a baseline.
+ *   resume         the D0 after a power transition adopts the record; dropped stored settings count as a leftover.
+ *
+ * Every arm of the probe also asserts the probe's discipline: it pins itself to the processor it runs on and reverts, it sends
  * no setter, and its stalls stay inside the bound its own comment claims.
  */
 #define WIN32_NO_STATUS
@@ -88,6 +99,7 @@ static void Reset(void)
     native_affinity_reverts = 0;
     native_processor = 3;
     NativeClearSettings();
+    NativeBoot();                           /* a cold boot: no record of an earlier start (BD-295) */
     for (i = 0; i < BC250_CPU_PSTATES; i++) native_firmware.pstate_mhz[i] = i == 0 ? 3200u : 1600u;
     native_firmware.cpu_mv = 1300u;
     native_firmware.gpu_mv = 820u;
@@ -424,6 +436,287 @@ static void test_failed_transaction_admits_the_cpu(void)
     printf("  %-31s the paused governor gates the CPU except in FAILED\n", "failed_transaction");
 }
 
+/* ---- BD-295: the boot record and the leftover mark ----------------------------------------------------------- */
+/* A driver stop and start inside one boot: the device structure and every cached value of the surface go, and the
+ * chip (native_firmware's limit, scale and cap) and the volatile store stay. The worker runs as the real one does,
+ * one pass of CpuThread per call: the mock's waits time out and its stop event ends the loop after the pass. */
+
+/* The firmware's answers for the next read stage: an idle stage, then the probe's window. The clock limit of the
+ * chip holds every reply under it (cpu_native_mock.h). */
+static void Chip(unsigned int stage_mhz, unsigned int probe_mhz)
+{
+    memset(native_firmware.window, 0, sizeof(native_firmware.window));
+    native_firmware.windows = 0;
+    native_firmware.at = 0;
+    native_firmware.spent_us = 0;
+    StageWindow(stage_mhz);
+    ProbeWindow(probe_mhz, 0);
+}
+
+/* A cold boot: the chip is at its own values (cap 100 C, no limit), the volatile store is empty, CpuTune is 1. */
+static void Boot(void)
+{
+    Reset();
+    NativeBoot();
+    NativeSetSetting(L"CpuTune", 1u);
+    native_firmware.cap_c = 100u;
+    native_firmware.accept_writes = 1;
+}
+
+/* One driver load of the same boot: a new device, CpuStart, and the worker's first pass. */
+static void Load(void)
+{
+    memset(&device, 0, sizeof(device));
+    CpuInitialize(&device);
+    device.FullWddm = TRUE;
+    device.Smu.Online = TRUE;
+    device.Smu.CpuOnline = TRUE;
+    native_lines = 0;
+    CpuStart(&device);
+    CHECK(device.Cpu.Created);
+    CpuThread(&device);
+    CHECK(native_firmware.sequence_open == 0);
+}
+
+static void CpuEscape(BC250_ESCAPE_CPU *d, ULONG op, ULONG given, ULONG max_mhz, ULONG uv_steps)
+{
+    D3DDDI_ESCAPEFLAGS flags;
+
+    memset(d, 0, sizeof(*d));
+    memset(&flags, 0, sizeof(flags));
+    if (op == BC250_CPU_OP_READ) flags.NoAdapterSynchronization = 1;
+    else flags.HardwareAccess = 1;
+    d->AbiVersion = BC250_CPU_ABI;
+    d->Op = op;
+    d->Given = given;
+    d->MaxMHz = max_mhz;
+    d->UvSteps = uv_steps;
+    d->ExpectedGeneration = device.Cpu.Generation;
+    CpuRequest(&device, d, sizeof(*d), TRUE, flags.Value);
+}
+
+/* A value of the volatile store, or MAXULONG when it is not there. */
+static ULONG Volatile(const WCHAR *key, const WCHAR *name)
+{
+    ULONG value = 0;
+
+    return NT_SUCCESS(GuardVolatileQuery(key, name, &value)) ? value : MAXULONG;
+}
+
+/* The first start of a boot keeps its read in the record, and a clean stop leaves no mark. */
+static void test_first_start_writes_the_boot_record(void)
+{
+    Boot();
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(device.Cpu.Proven);
+    CHECK(device.Cpu.Baseline.max_given && device.Cpu.Baseline.max_mhz == 3500u);
+    CHECK(Volatile(L"CpuBoot", L"Valid") == 1u && Volatile(L"CpuBoot", L"Version") == 1u);
+    CHECK(Volatile(L"CpuBoot", L"MaxMHz") == 3500u && Volatile(L"CpuBoot", L"CapC") == 100u);
+    CHECK(Volatile(L"CpuBoot", L"TableMHz") == 3200u && Volatile(L"CpuBoot", L"BoostMHz") == 3500u);
+    CHECK(native_log_has("the boot record is written"));
+    CHECK(native_firmware.cap_c == BC250_CPU_TEMP_DEFAULT_C);      /* the start went on as before */
+    CpuStop(&device);
+    CHECK(Volatile(L"CpuLeftover", L"Owed") == MAXULONG);
+    printf("  %-31s record clock %lu MHz, cap %lu C, boost %lu MHz\n", "boot_record_written",
+           Volatile(L"CpuBoot", L"MaxMHz"), Volatile(L"CpuBoot", L"CapC"), Volatile(L"CpuBoot", L"BoostMHz"));
+}
+
+/* THE REGRESSION, case 2 of BD-295: a kept clock limit stays in the chip across a driver restart. The probe of the
+ * next start then sees the limit, and up to BD-295 that start recorded the limit (or the P-state top over it) as the
+ * firmware baseline, so a reset went back there and not to the boost. */
+static void test_a_kept_limit_does_not_become_the_baseline(void)
+{
+    BC250_ESCAPE_CPU d;
+
+    Boot();
+    Chip(1200u, 3500u);
+    Load();
+    CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3000u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && native_firmware.limit_mhz == 3000u);
+    CpuEscape(&d, BC250_CPU_OP_KEEP, 0u, 0u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE);
+    CpuStop(&device);
+    CHECK(Volatile(L"CpuLeftover", L"Owed") == MAXULONG);         /* kept settings are not a leftover */
+
+    Chip(1200u, 3500u);                                             /* the chip keeps its 3000 MHz limit */
+    Load();
+    CHECK(native_log_has("adopts the boot record"));
+    CHECK(device.Cpu.Baseline.max_mhz == 3500u);                    /* the boot's, not the limit's 3000 or 3200 */
+    CHECK(device.Cpu.BaselineRead.boost_given == 1 && device.Cpu.BaselineRead.boost_mhz == 3500u);
+    CHECK(native_firmware.limit_mhz == 3000u);                      /* the stored limit went in again */
+    CHECK(!native_log_has("the boost probe kept one core busy"));  /* the record answered the boost */
+    CpuEscape(&d, BC250_CPU_OP_RESET, 0u, 0u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE);
+    CHECK(native_firmware.limit_mhz == 3500u);                      /* reset gives the boost back */
+    CHECK(d.BaselineMaxMHz == 3500u);
+    printf("  %-31s baseline %u MHz after a kept 3000 MHz, reset sent %u MHz\n", "kept_limit_adopts_record",
+           device.Cpu.Baseline.max_mhz, native_firmware.limit_mhz);
+}
+
+/* One load that ends with a trial the firmware will not take back: the stop leaves the trial in the chip. */
+static void LoadAndStopWithRevertRefused(void)
+{
+    BC250_ESCAPE_CPU d;
+
+    Boot();
+    Chip(1200u, 3500u);
+    Load();
+    CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX | BC250_CPU_GIVEN_UV, 3000u, 2u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && (d.Flags & BC250_CPU_FLAG_ON_TRIAL));
+    CHECK(native_firmware.limit_mhz == 3000u && native_firmware.scale == bc250_cpu_scale_argument(2u));
+    native_firmware.accept_writes = 0;
+    CpuStop(&device);
+    CHECK(native_log_has("a revert is still owed at the stop"));
+    CHECK(native_log_has("the leftover mark is written"));
+    CHECK(Volatile(L"CpuLeftover", L"Owed") == 1u && Volatile(L"CpuLeftover", L"What") == 1u);
+    CHECK(Volatile(L"CpuLeftover", L"MaxMHz") == 3000u && Volatile(L"CpuLeftover", L"UvSteps") == 2u);
+    CHECK(native_firmware.limit_mhz == 3000u);                      /* the trial is still in the chip */
+}
+
+/* Case 1 of BD-295: a revert refused at the stop. The next start sends the boot baseline back, every control of it,
+ * before its own settings, and clears the mark. */
+static void test_a_refused_revert_is_restored_at_the_next_start(void)
+{
+    BC250_ESCAPE_CPU d;
+    int before;
+
+    LoadAndStopWithRevertRefused();
+    native_firmware.accept_writes = 1;
+    before = native_firmware.writes;
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(native_log_has("an earlier stop of this boot left settings in the chip"));
+    CHECK(native_log_has("is back at the boot baseline"));
+    CHECK(!device.Cpu.LeftoverOwed && !device.Cpu.LeftoverStartOwed);
+    CHECK(Volatile(L"CpuLeftover", L"Owed") == 0u);
+    CHECK(native_firmware.limit_mhz == 3500u);
+    CHECK(native_firmware.scale == bc250_cpu_scale_argument(0u));
+    CHECK(native_firmware.cap_c == BC250_CPU_TEMP_DEFAULT_C);
+    CHECK(native_firmware.writes - before == 3);                    /* all three, and the default cap sends nothing */
+    CHECK(device.Cpu.Applied.max_mhz == 3500u && device.Cpu.Applied.uv_steps == 0u);
+    printf("  %-31s %d setters at the start, chip at %u MHz, scale 0x%X, cap %u C\n", "leftover_restored",
+           native_firmware.writes - before, native_firmware.limit_mhz, native_firmware.scale, native_firmware.cap_c);
+    CpuEscape(&d, BC250_CPU_OP_READ, 0u, 0u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && !(d.Flags & BC250_CPU_FLAG_REVERT_OWED));
+    CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3200u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && native_firmware.limit_mhz == 3200u);
+}
+
+/* The restore refused as well: every setter is refused with the reason the CLI names, a readback still runs, and the
+ * worker's next pass sends the restore again. A stop in that state writes the mark again. */
+static void test_a_refused_restore_keeps_the_surface_shut(void)
+{
+    BC250_ESCAPE_CPU d;
+
+    LoadAndStopWithRevertRefused();
+    Chip(1200u, 3500u);
+    Load();                                                         /* the firmware still refuses every setter */
+    CHECK(device.Cpu.LeftoverOwed && device.Cpu.LeftoverStartOwed);
+    CHECK(native_log_has("the leftover restore is refused"));
+    CHECK(native_firmware.limit_mhz == 3000u);
+    CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3200u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_REFUSED && d.Error == BC250_CPU_REQUEST_ERROR_LEFTOVER);
+    CHECK(d.NtStatus == (ULONG)STATUS_INVALID_DEVICE_STATE && (d.Flags & BC250_CPU_FLAG_REVERT_OWED));
+    CpuEscape(&d, BC250_CPU_OP_RESET, 0u, 0u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_REFUSED && d.Error == BC250_CPU_REQUEST_ERROR_LEFTOVER);
+    CpuEscape(&d, BC250_CPU_OP_READBACK, 0u, 0u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE);
+    CHECK(device.Cpu.Baseline.max_mhz == 3500u);                    /* the readback did not move the baseline */
+    CHECK(Volatile(L"CpuLeftover", L"Owed") == 1u);
+
+    native_firmware.accept_writes = 1;
+    CpuThread(&device);                                             /* the worker's next pass: the retry */
+    CHECK(!device.Cpu.LeftoverOwed && !device.Cpu.LeftoverStartOwed);
+    CHECK(Volatile(L"CpuLeftover", L"Owed") == 0u);
+    CHECK(native_firmware.limit_mhz == 3500u && native_firmware.scale == bc250_cpu_scale_argument(0u));
+    CHECK(device.Cpu.Applied.temp_given && device.Cpu.Applied.temp_c == BC250_CPU_TEMP_DEFAULT_C);
+    CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3200u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && native_firmware.limit_mhz == 3200u);
+
+    /* A stop while the restore is still owed carries the mark on. */
+    LoadAndStopWithRevertRefused();
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(device.Cpu.LeftoverOwed);
+    CpuStop(&device);
+    CHECK(Volatile(L"CpuLeftover", L"Owed") == 1u && (Volatile(L"CpuLeftover", L"What") & 4u));
+    printf("  %-31s setters refused with error %lu, the retry restored %u MHz\n", "leftover_restore_refused",
+           (ULONG)BC250_CPU_REQUEST_ERROR_LEFTOVER, 3500u);
+}
+
+/* A record this build does not know, or a partial one, is not a baseline: the start reads the chip, as before
+ * BD-295, and leaves the record as it is. */
+static void test_a_foreign_record_is_ignored(void)
+{
+    Boot();
+    (void)GuardVolatileStore(L"CpuBoot", L"Version", 2u);
+    (void)GuardVolatileStore(L"CpuBoot", L"MaxMHz", 3500u);
+    (void)GuardVolatileStore(L"CpuBoot", L"CapC", 100u);
+    (void)GuardVolatileStore(L"CpuBoot", L"TableMHz", 3200u);
+    (void)GuardVolatileStore(L"CpuBoot", L"BoostMHz", 3500u);
+    (void)GuardVolatileStore(L"CpuBoot", L"Valid", 1u);
+    native_firmware.limit_mhz = 3000u;
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(native_log_has("the boot record is version 2, not 1"));
+    CHECK(!native_log_has("adopts the boot record"));
+    CHECK(device.Cpu.Baseline.max_mhz == 3200u);                    /* this start's own read */
+    CHECK(Volatile(L"CpuBoot", L"Version") == 2u && Volatile(L"CpuBoot", L"MaxMHz") == 3500u);
+
+    Boot();
+    (void)GuardVolatileStore(L"CpuBoot", L"Version", 1u);
+    (void)GuardVolatileStore(L"CpuBoot", L"MaxMHz", 3000u);
+    (void)GuardVolatileStore(L"CpuBoot", L"Valid", 0u);             /* a writer stopped before Valid */
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(native_log_has("the boot record is partial"));
+    CHECK(device.Cpu.Baseline.max_mhz == 3500u && Volatile(L"CpuBoot", L"Valid") == 0u);
+
+    Boot();
+    native_volatile_fail = STATUS_INVALID_DEVICE_STATE;              /* a store that is not ready */
+    Chip(1200u, 3500u);
+    Load();
+    native_volatile_fail = STATUS_SUCCESS;
+    CHECK(device.Cpu.Proven && device.Cpu.Baseline.max_mhz == 3500u);
+    CHECK(native_log_has("the boot record is not readable"));
+    printf("  %-31s version 2, partial and unreadable records: the start keeps its own read\n", "foreign_record");
+}
+
+/* The D0 after a power transition takes the record too, and so does a start whose stored settings were dropped
+ * after an earlier start of the boot may have sent them. */
+static void test_resume_and_dropped_settings(void)
+{
+    BC250_ESCAPE_CPU d;
+
+    Boot();
+    Chip(1200u, 3500u);
+    Load();
+    CpuPause(&device);
+    CpuResume(&device);
+    native_lines = 0;
+    native_firmware.limit_mhz = 3000u;
+    Chip(1200u, 3500u);
+    CpuThread(&device);
+    CHECK(native_log_has("adopts the boot record") && device.Cpu.Baseline.max_mhz == 3500u);
+
+    Boot();
+    Chip(1200u, 3500u);
+    Load();
+    CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3000u, 0u);
+    CpuEscape(&d, BC250_CPU_OP_KEEP, 0u, 0u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE);
+    CpuStop(&device);
+    NativeSetSetting(L"CpuPending", 0x1234u);                       /* the kept set never became healthy */
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(native_log_has("may have sent the dropped settings"));
+    CHECK(!device.Cpu.Stored.max_given && !device.Cpu.LeftoverOwed);
+    CHECK(native_firmware.limit_mhz == 3500u);                      /* the dropped limit is out of the chip */
+    printf("  %-31s resume adopts the record; a dropped kept limit goes back to %u MHz\n", "resume_dropped",
+           native_firmware.limit_mhz);
+}
+
 int main(void)
 {
     test_ramp();
@@ -438,7 +731,13 @@ int main(void)
     test_start_adds_the_cap_to_stored_settings();
     test_reset_returns_to_the_default_cap();
     test_failed_transaction_admits_the_cpu();
-    printf("cpu native (the boost probe's sweep, the default cap): %ld checks, %ld failures\n", native_checks,
-           native_failures);
+    test_first_start_writes_the_boot_record();
+    test_a_kept_limit_does_not_become_the_baseline();
+    test_a_refused_revert_is_restored_at_the_next_start();
+    test_a_refused_restore_keeps_the_surface_shut();
+    test_a_foreign_record_is_ignored();
+    test_resume_and_dropped_settings();
+    printf("cpu native (the boost probe's sweep, the default cap, the boot record): %ld checks, %ld failures\n",
+           native_checks, native_failures);
     return native_failures != 0 ? 1 : 0;
 }

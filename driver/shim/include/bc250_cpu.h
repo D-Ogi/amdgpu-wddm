@@ -141,6 +141,9 @@ enum bc250_cpu_error {
 	BC250_CPU_ERROR_PLAN = 5,	/* the plan would need more steps than BC250_CPU_PLAN_MAX */
 	BC250_CPU_ERROR_NO_CEILING = 6,	/* a clock limit, and this start does not know the firmware's own ceiling:
 					 * the limit could not be given back (struct bc250_cpu_baseline) */
+	BC250_CPU_ERROR_LEFTOVER = 7,	/* an earlier start of this boot left settings in the chip, and the restore
+					 * to the boot baseline has not gone through yet (BD-295, driver/kmd/cpu.c):
+					 * every setter waits for it */
 	BC250_CPU_ERROR_COUNT
 };
 /* Ranges alone, against the release bound or the lab bound (lab=1 admits up to BC250_CPU_MAX_MHZ_LAB and needs

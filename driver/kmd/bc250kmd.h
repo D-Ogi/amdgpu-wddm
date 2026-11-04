@@ -713,6 +713,9 @@ void GuardLabReadScaledPlane(_In_ PDRIVER_OBJECT DriverObject);
 // when Step is the named step, else FALSE (BC250_POWER_DOWN_STEP, power_phase.h). PASSIVE_LEVEL, like the way down.
 void GuardLabReadPowerDownFault(_In_ PDRIVER_OBJECT DriverObject);
 BOOLEAN GuardLabPowerDownFault(ULONG Step);
+// Lab flavour only (BD-295 arm): LabCpuRevertFault (REG_DWORD under Parameters, read only in DriverEntry), the bit
+// mask of cpu.h BC250_CPU_LAB_FAULT_*. GuardLabCpuFault (declared in cpu.h) clears one bit and returns TRUE once.
+void GuardLabReadCpuRevertFault(_In_ PDRIVER_OBJECT DriverObject);
 ULONGLONG GuardLabCommitPagingRingStart(void);
 extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
 extern int bc250_ring_boundary_pad;                     // shim/bc250_ring.c, 0 only in a lab control run

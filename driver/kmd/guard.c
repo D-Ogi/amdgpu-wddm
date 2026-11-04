@@ -461,6 +461,46 @@ void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject)
     GuardLog("lab: queue reset selector read (value 0x%lX, 0x%08X): stage 2 %s", value, status,
              g_LabQueueReset ? "on" : "off");
 }
+// BD-295 lab arm, lab flavour only: LabCpuRevertFault (REG_DWORD, Parameters, read only at DriverEntry) is the bit
+// mask of cpu.h (BC250_CPU_LAB_FAULT_*). Bit 1: the next revert that CpuStop runs reports a refusal and sends
+// nothing, so the stop leaves the trial in the chip and writes the leftover mark. Bit 2: the first restore of a
+// leftover at a start of this load reports a refusal and sends nothing, so the surface stays read-only until the
+// worker's retry. Each bit fires once per DriverEntry read. A disable and enable of the device runs DriverEntry
+// again, so the lab script deletes the value after the start that needs it. Absent, not a REG_DWORD or with no
+// known bit is 0 (no fault).
+static volatile LONG g_LabCpuFault = 0;
+
+void GuardLabReadCpuRevertFault(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status;
+    ULONG value = 0;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("lab: CPU revert fault selector: Parameters key not opened for reading (0x%08X), no fault", status);
+        return;
+    }
+    status = ParameterDword(key, L"LabCpuRevertFault", &value);
+    ZwClose(key);
+    if (status == STATUS_OBJECT_NAME_NOT_FOUND) return;     // the default: no line, every start would log it
+    g_LabCpuFault = NT_SUCCESS(status)
+        ? (LONG)(value & (BC250_CPU_LAB_FAULT_STOP_REVERT | BC250_CPU_LAB_FAULT_LEFTOVER)) : 0;
+    GuardLog("lab: CPU revert fault selector read (read only; value %lu, 0x%08X): mask %ld (1 stop revert, "
+             "2 leftover restore)", value, status, g_LabCpuFault);
+}
+
+BOOLEAN GuardLabCpuFault(ULONG Bit)
+{
+    LONG before;
+    // Only a bit that is set fires, and it fires once: the bit is cleared before the caller acts on it.
+    before = InterlockedAnd(&g_LabCpuFault, ~(LONG)Bit);
+    if (!(before & (LONG)Bit)) return FALSE;
+    GuardLog("cpu: lab fault %lu (LabCpuRevertFault, BD-295 arm): the restore reports a refusal and sends nothing",
+             Bit);
+    return TRUE;
+}
+
 // StartDevice, after the boot-loop guard passed: the seed for this start's first fresh SDMA0 bring-up, or 0. The
 // nonce is written and flushed first; any failure on the way gives 0. Without a seed, a marker of an earlier seed is
 // deleted, so the internal state holds nothing once the lab script has removed the seed.

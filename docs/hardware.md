@@ -164,6 +164,9 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   0.7.216.14 the table alone set the limit, and every restore capped the boost at 3200 MHz until a restart. The driver
   records the baseline only while it has sent nothing in the start. A later read stage of the same start can raise it
   and cannot lower it.
+- Boot baseline (BD-295): the first start of a boot keeps its baseline in a volatile record, and every later start of
+  that boot uses the record. A chip that still holds the settings of an earlier start gets the boot baseline back
+  before anything else is sent. `docs/design/tuner.md` describes the record and the leftover mark.
 - The boost probe (KMD 0.7.216.24, BD-094): `0x43` answers the clock of the moment, so an idle start reads 900 to
   1400 MHz, the band refuses those answers, and the baseline falls back to the table's 3200 MHz, which is under the
   boost. The allowlist above holds no message that answers the boost ceiling itself, so the full read stage makes

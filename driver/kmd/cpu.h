@@ -53,6 +53,11 @@ typedef struct _BC250_CPU_STATE {
                                             // table_mhz is what a loaded core is judged against with no limit
                                             // applied, boost_mhz is the firmware's own ceiling, and boost_given
                                             // says whether a clock limit can be given back at all (BD-094)
+    ULONG BootRecord;                       // BD-295: CPU_BOOT_RECORD_* (cpu.c), what this start did with CpuBoot
+    BOOLEAN LeftoverOwed;                  // BD-295: an earlier start of this boot left settings in the chip, and
+                                            // the restore to the boot baseline has not gone through: every setter
+                                            // is refused and the worker retries it every BC250_CPU_REVERT_RETRY_MS
+    BOOLEAN LeftoverStartOwed;              // BD-295: the stored settings of this start wait for that restore
     struct bc250_cpu_settings TrialBefore;  // what a revert puts back
     ULONG TrialMs;                          // the window a SET gets by default (CpuTrialMs)
     ULONG TrialSerial;                      // one more for every SET, KEEP, CANCEL and revert
@@ -79,3 +84,16 @@ typedef struct _BC250_CPU_STATE {
 } BC250_CPU_STATE;
 // A refused change of the arm is tried again this often, as an owed revert is.
 #define BC250_CPU_JOINT_RETRY_MS BC250_CPU_REVERT_RETRY_MS
+
+// BD-295 lab arm: LabCpuRevertFault (REG_DWORD under Parameters, read once at DriverEntry, guard.c) is a bit mask.
+// Bit BC250_CPU_LAB_FAULT_STOP_REVERT makes the next revert that CpuStop runs report a refusal and send nothing.
+// Bit BC250_CPU_LAB_FAULT_LEFTOVER makes the first restore of a leftover at the next start report a refusal and send
+// nothing. Each bit fires once per load. In the release flavour, and in the host tests, the macro is FALSE.
+#define BC250_CPU_LAB_FAULT_STOP_REVERT 1u
+#define BC250_CPU_LAB_FAULT_LEFTOVER 2u
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+BOOLEAN GuardLabCpuFault(ULONG Bit);
+#define BC250_CPU_LAB_FAULT(Bit) GuardLabCpuFault(Bit)
+#else
+#define BC250_CPU_LAB_FAULT(Bit) FALSE
+#endif

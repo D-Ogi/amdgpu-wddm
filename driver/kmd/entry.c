@@ -99,6 +99,7 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING Regi
     GuardLabReadScaledPlane(DriverObject);         // BD-223 scaled plane arm: read only, latched at WddmStart
     GuardLabReadPowerDownFault(DriverObject);      // BD-293 arm: read only, taken by the next retained way down
     GuardLabReadQueueReset(DriverObject);          // stage 2 of the hang recovery: read only (queue-reset.md)
+    GuardLabReadCpuRevertFault(DriverObject);      // BD-295 arm: read only, taken by CpuStop and the next start
 #else
     GuardLog("kmd: BD-167 flavour release (no raw diagnostic escapes)");
 #endif

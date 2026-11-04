@@ -3788,12 +3788,13 @@ static int DpmCurve(int argc, WCHAR **argv)
 // step at a time; the load between the steps is the caller's business, so the wrapper script runs it.
 //
 // The whole surface is off until the effective CpuTune setting is 1. Every write needs an administrator.
-#define CPU_ERRORS 7
+#define CPU_ERRORS 8
 C_ASSERT(CPU_ERRORS == BC250_CPU_REQUEST_ERROR_COUNT);   // a new reason must not reach an operator as "?"
 static const char *const g_CpuError[CPU_ERRORS] = {
     "none", "the clock is outside the admitted range", "the undervolt is deeper than the maximum",
     "the temperature cap is outside its band", "nothing to change", "the plan needs too many steps",
-    "this start does not know the firmware's own boost ceiling, so a clock limit could not be given back"
+    "this start does not know the firmware's own boost ceiling, so a clock limit could not be given back",
+    "an earlier start of this boot left settings in the chip, and the restore to the boot baseline is still owed"
 };
 #define CPU_FAILS 6
 static const char *const g_CpuFail[CPU_FAILS] = {
@@ -3934,6 +3935,10 @@ static int CpuWrite(unsigned long op, const BC250_ESCAPE_CPU *in, const char *na
                    "the band, and the boost probe did not make it answer either, so the way back out of the chip "
                    "could only be the P-state top, under the boost. A Windows restart is the way out; the "
                    "undervolt and the temperature cap still work\n");
+        else if (c.Error == BC250_CPU_REQUEST_ERROR_LEFTOVER)
+            printf("# BD-295: the driver stopped earlier in this boot with a revert or the joint arm's cap still in "
+                   "the chip. This start sends the boot baseline back first and refused that restore so far; it "
+                   "retries every second. A readback still works, and a Windows restart clears the chip\n");
         else if (c.NtStatus == 0xC0000184ul)
             printf("# STATUS_INVALID_DEVICE_STATE: the effective CpuTune setting must be 1, and a keep or "
                    "a cancel needs a trial in flight\n");

@@ -83,7 +83,7 @@ static ULONG64 KeQueryInterruptTime(void) { return native_time; }
  * stays open. The model opens the next window once the driver's stalls have spent `us` microseconds in this one,
  * which is how the probe's BC250_CPU_BOOST_PROBE_MS busy window ends. */
 #define NATIVE_WINDOWS 6
-#define NATIVE_SETS 8
+#define NATIVE_SETS 16
 struct native_window {
     unsigned int core_mhz[BC250_CPU_CORES];
     ULONG64 us;                             /* 0 for the last window, which never closes */
@@ -106,6 +106,9 @@ static struct {
     int writes;                             /* any setter: the probe must send none */
     int refuse_core_reads;                  /* 1: message 0x43 is refused, for the no-answer arm */
     int accept_writes;                      /* 1: a setter is taken (the start and reset arms), 0: refused */
+    /* The chip's state, which outlives a driver stop and start as the real one does (BD-295): the clock limit of
+     * message 0x8F (0 for none, as after a cold boot) holds every core reply under it; 0x50's curve scale. */
+    unsigned int limit_mhz, scale;
     struct { ULONG queue, message, parameter; } set[NATIVE_SETS];  /* the setters, in the order they came */
 } native_firmware;
 
@@ -131,6 +134,9 @@ static unsigned int NativeFirmwareCoreMHz(unsigned int core)
     if (core >= BC250_CPU_CORES) return 0;
     native_firmware.core_reads++;
     if (native_firmware.at < NATIVE_WINDOWS) native_firmware.core_reads_per_window[native_firmware.at]++;
+    if (native_firmware.limit_mhz != 0 &&
+        native_firmware.window[native_firmware.at].core_mhz[core] > native_firmware.limit_mhz)
+        return native_firmware.limit_mhz;
     return native_firmware.window[native_firmware.at].core_mhz[core];
 }
 
@@ -201,6 +207,9 @@ static NTSTATUS KeWaitForSingleObject(PVOID object, int reason, int mode, BOOLEA
     KMUTEX *mutex = (KMUTEX *)object;
 
     UNREFERENCED_PARAMETER(reason);
+    /* CpuStop waits for the worker thread, whose object is the mock's (PVOID)1 (ObReferenceObjectByHandle). The
+     * worker of this test has already returned, so the wait is over at once. */
+    if (object == (PVOID)(ULONG_PTR)1) return STATUS_SUCCESS;
     UNREFERENCED_PARAMETER(mode);
     UNREFERENCED_PARAMETER(alertable);
     if (timeout != NULL) {
@@ -431,6 +440,47 @@ static NTSTATUS GuardDeleteSetting(const WCHAR *name)
     return STATUS_SUCCESS;
 }
 
+/* The volatile store (guard.c GuardVolatileStore), which outlives a driver stop and start and ends with the boot
+ * (BD-295). NativeBoot is the next boot. native_volatile_fail makes every access fail, as a store that is not
+ * ready does. */
+#define NATIVE_VOLATILES 32
+static struct { const WCHAR *Key; const WCHAR *Name; ULONG Value; } native_volatile[NATIVE_VOLATILES];
+static NTSTATUS native_volatile_fail;
+
+static void NativeBoot(void) { memset(native_volatile, 0, sizeof(native_volatile)); }
+
+static NTSTATUS GuardVolatileQuery(const WCHAR *key, const WCHAR *name, ULONG *value)
+{
+    int i;
+
+    *value = 0;
+    if (!NT_SUCCESS(native_volatile_fail)) return native_volatile_fail;
+    for (i = 0; i < NATIVE_VOLATILES; i++)
+        if (native_volatile[i].Key != NULL && wcscmp(native_volatile[i].Key, key) == 0 &&
+            wcscmp(native_volatile[i].Name, name) == 0) {
+            *value = native_volatile[i].Value;
+            return STATUS_SUCCESS;
+        }
+    return STATUS_OBJECT_NAME_NOT_FOUND;
+}
+
+static NTSTATUS GuardVolatileStore(const WCHAR *key, const WCHAR *name, ULONG value)
+{
+    int i;
+
+    if (!NT_SUCCESS(native_volatile_fail)) return native_volatile_fail;
+    for (i = 0; i < NATIVE_VOLATILES; i++)
+        if (native_volatile[i].Key == NULL ||
+            (wcscmp(native_volatile[i].Key, key) == 0 && wcscmp(native_volatile[i].Name, name) == 0)) {
+            native_volatile[i].Key = key;
+            native_volatile[i].Name = name;
+            native_volatile[i].Value = value;
+            return STATUS_SUCCESS;
+        }
+    CHECK(0);
+    return STATUS_INSUFFICIENT_RESOURCES;
+}
+
 static ULONG GuardReadSetting(const WCHAR *name, ULONG fallback)
 {
     ULONG value = 0;
@@ -517,6 +567,8 @@ static NTSTATUS SmuCpuMessage(BC250_SMU_OWNER_NATIVE *owner, ULONG queue, ULONG 
         native_firmware.writes++;
         if (!native_firmware.accept_writes) return STATUS_NOT_SUPPORTED;
         if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_SET_CAP_C) native_firmware.cap_c = parameter;
+        if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_SET_MAX_MHZ) native_firmware.limit_mhz = parameter;
+        if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_SET_CURVE_SCALE) native_firmware.scale = parameter;
         return STATUS_SUCCESS;
     }
     CHECK(allow_hot);                       /* every getter of cpu.c passes the hot gate */
