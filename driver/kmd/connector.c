@@ -92,8 +92,8 @@ BOOLEAN ConnectorGenerationCurrent(BC250_DEVICE* Device, ULONG Generation)
     BC250_CONNECTOR* c = &Device->Connector;
     return (ReadAtomic(&c->Running) != 0 || ReadAtomic(&c->Restoring) != 0) &&
         (ULONG)ReadAtomic(&c->Generation) == Generation &&
-        (ReadAtomic(&Device->RetainedPowerPhase) == 0 ||
-         (ReadAtomic(&c->Restoring) && ReadAtomic(&Device->RetainedPowerPhase) == 3));
+        (ReadAtomic(&Device->RetainedPowerPhase) == BC250_POWER_ACTIVE ||
+         (ReadAtomic(&c->Restoring) && ReadAtomic(&Device->RetainedPowerPhase) == BC250_POWER_RESTORING));
 }
 
 static int DiscoveryCurrent(void* Context)
@@ -714,7 +714,7 @@ NTSTATUS ConnectorResumeDisplay(BC250_DEVICE* Device)
     NTSTATUS status=STATUS_SUCCESS;
     BOOLEAN same=FALSE;
     if (!ConnectorIsEnabled(Device) || !ReadAtomic(&c->Suspended) ||
-        ReadAtomic(&Device->RetainedPowerPhase)!=3) return STATUS_INVALID_DEVICE_STATE;
+        ReadAtomic(&Device->RetainedPowerPhase)!=BC250_POWER_RESTORING) return STATUS_INVALID_DEVICE_STATE;
     ConnectorOperationAcquire(Device);
     KeAcquireSpinLock(&c->Lock,&irql);
     old=c->Snapshot;
@@ -776,7 +776,7 @@ NTSTATUS ConnectorResumeNotifications(BC250_DEVICE* Device)
     BC250_CONNECTOR* c=&Device->Connector;
     NTSTATUS status;
     if (!ConnectorIsEnabled(Device) || !ReadAtomic(&c->Suspended) ||
-        ReadAtomic(&Device->RetainedPowerPhase)!=0) return STATUS_INVALID_DEVICE_STATE;
+        ReadAtomic(&Device->RetainedPowerPhase)!=BC250_POWER_ACTIVE) return STATUS_INVALID_DEVICE_STATE;
     ConnectorOperationAcquire(Device);
     InterlockedExchange(&c->Running,1);
     InterlockedExchange(&c->Suspended,0);

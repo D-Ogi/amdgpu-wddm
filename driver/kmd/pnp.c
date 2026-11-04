@@ -270,7 +270,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     HdmiLinkStartAudio(device,FALSE);
     GuardStage(StageStartMmioDone);
 
-    InterlockedExchange(&device->RetainedPowerPhase,0);
+    InterlockedExchange(&device->RetainedPowerPhase,BC250_POWER_ACTIVE);
     // The initial admission keeps the inherited timing, with visibility held false. Subsequent HPD events
     // go through the passive owner and an OS-selected VidPN transaction.
     GuardStartStep(L"ConnectorStart");
@@ -697,8 +697,9 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
             // engines (power.c, BD-188).
             status=PowerAdapterDown(device,DevicePowerState,ActionType);
         } else status=GpuSetPowerRetained(device,DevicePowerState,ActionType);
-        // A failed transition down keeps the device in D0 with the desktop up: the committed shape goes back at once,
-        // or the smaller surface of that desktop would be read through the native viewport.
+        // After a failed transition down the committed shape goes back at once, or the smaller surface of the desktop
+        // would be read through the native viewport while the call returns. The bus takes the power all the same
+        // (dispmprt.md), and the phase is FAILED: the pauses above stay until the next start (power_phase.h, BD-293).
         if (DevicePowerState!=PowerDeviceD0 && !NT_SUCCESS(status) && !ConnectorIsEnabled(device)) {
             ModesetPowerUp(device);
             HdmiLinkStartAudio(device,TRUE);

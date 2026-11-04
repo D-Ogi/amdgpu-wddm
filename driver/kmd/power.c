@@ -60,21 +60,21 @@ NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POW
         return STATUS_INVALID_DEVICE_STATE;
     if (State<PowerDeviceD0 || State>PowerDeviceD3) return STATUS_INVALID_PARAMETER;
     phase=InterlockedCompareExchange(&Device->RetainedPowerPhase,0,0);
-    if (State==PowerDeviceD0 && phase==0) return STATUS_SUCCESS;
-    if (State!=PowerDeviceD0 && phase==2) return STATUS_SUCCESS;
-    if ((State==PowerDeviceD0 && phase!=2) || (State!=PowerDeviceD0 && phase!=0)) {
-        // A D0 after a failed transition (phase 4) restores nothing: the log must say so (BD-188).
+    if (State==PowerDeviceD0 && phase==BC250_POWER_ACTIVE) return STATUS_SUCCESS;
+    if (State!=PowerDeviceD0 && phase==BC250_POWER_SUSPENDED) return STATUS_SUCCESS;
+    if ((State==PowerDeviceD0 && phase!=BC250_POWER_SUSPENDED) || (State!=PowerDeviceD0 && phase!=BC250_POWER_ACTIVE)) {
+        // A D0 after a failed transition (FAILED) restores nothing: the log must say so (BD-188).
         GuardLog("power: state %u refused in phase %ld",(ULONG)State,phase);
         return STATUS_INVALID_DEVICE_STATE;
     }
     report=(BC250_ESCAPE_PSP*)ExAllocatePool2(POOL_FLAG_NON_PAGED,sizeof(*report),BC250_POWER_TAG);
     if (!report) {
-        // BD-188: a way down that saves nothing must not leave phase 0. The D0
+        // BD-188: a way down that saves nothing must not stay ACTIVE. The D0
         // after it would find nothing to restore and report the engines as up.
         if (State!=PowerDeviceD0) {
             StartHealthClose(Device);
             SmuOwnerStop(&Device->Smu);
-            InterlockedExchange(&Device->RetainedPowerPhase,4);
+            InterlockedExchange(&Device->RetainedPowerPhase,BC250_POWER_FAILED);
         }
         GuardLog("power: state %u no report memory, phase %ld",(ULONG)State,Device->RetainedPowerPhase);
         return STATUS_INSUFFICIENT_RESOURCES;
@@ -83,7 +83,7 @@ NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POW
     if (State!=PowerDeviceD0) {
         Device->RetainedDownState=State;
         Device->RetainedDownAction=Action;
-        InterlockedExchange(&Device->RetainedPowerPhase,1);
+        InterlockedExchange(&Device->RetainedPowerPhase,BC250_POWER_SUSPENDING);
         StartHealthClose(Device);
         SmuOwnerStop(&Device->Smu); // joins no-synchronization telemetry before power loss
         status=WddmSuspendRetained(Device);
@@ -96,11 +96,11 @@ NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POW
         if (!NT_SUCCESS(status)) goto Failed;
         status=GartSetPowerRetained(Device,FALSE);
         if (!NT_SUCCESS(status)) goto Failed;
-        InterlockedExchange(&Device->RetainedPowerPhase,2);
+        InterlockedExchange(&Device->RetainedPowerPhase,BC250_POWER_SUSPENDED);
         goto Done;
     }
     // Action on D0 is not authoritative: use the retained down-transition state.
-    InterlockedExchange(&Device->RetainedPowerPhase,3);
+    InterlockedExchange(&Device->RetainedPowerPhase,BC250_POWER_RESTORING);
     status=SmuOwnerStart(&Device->Smu,Device->Mmio);
     if (!NT_SUCCESS(status)) goto Failed;
     status=SmuPrepareClock(&Device->Smu,&clock);
@@ -122,7 +122,7 @@ NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POW
     status=WddmResumeRetained(Device);
     if (!NT_SUCCESS(status)) goto Failed;
     StartHealthResumeReady(Device,Device->ModeActive);
-    InterlockedExchange(&Device->RetainedPowerPhase,0);
+    InterlockedExchange(&Device->RetainedPowerPhase,BC250_POWER_ACTIVE);
     if (ConnectorIsEnabled(Device)) {
         status=ConnectorResumeNotifications(Device);
         if (!NT_SUCCESS(status)) goto Failed;
@@ -132,7 +132,7 @@ Failed:
     // No destructive PnP unwind and no synthetic completion of accepted work.
     StartHealthClose(Device);
     SmuOwnerStop(&Device->Smu);
-    InterlockedExchange(&Device->RetainedPowerPhase,4);
+    InterlockedExchange(&Device->RetainedPowerPhase,BC250_POWER_FAILED);
 Done:
     GuardLog("power: state %u prior action %u phase %ld result 0x%08X",(ULONG)State,
         (ULONG)Device->RetainedDownAction,Device->RetainedPowerPhase,status);

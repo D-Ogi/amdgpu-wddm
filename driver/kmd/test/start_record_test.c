@@ -18,6 +18,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <wchar.h>
+#include "power_phase.h"
 
 typedef unsigned long ULONG;
 typedef long NTSTATUS;

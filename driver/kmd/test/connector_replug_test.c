@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "bc250kmd_escape.h"
 #include "display_io.h"
+#include "power_phase.h"
 typedef unsigned char BOOLEAN;
 typedef unsigned long ULONG;
 typedef long LONG, NTSTATUS;

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "power_phase.h"
 typedef int NTSTATUS,BOOLEAN;
 typedef long LONG;
 typedef unsigned long ULONG;

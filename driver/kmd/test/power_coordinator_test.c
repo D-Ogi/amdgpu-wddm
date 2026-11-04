@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "power_phase.h"
 typedef int NTSTATUS,BOOLEAN,DEVICE_POWER_STATE,POWER_ACTION;
 typedef long LONG;
 typedef unsigned long ULONG;

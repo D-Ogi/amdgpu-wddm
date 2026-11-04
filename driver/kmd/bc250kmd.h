@@ -70,6 +70,7 @@
 #include "smu.h"
 #include "start_health.h"
 #include "progress.h"
+#include "power_phase.h"
 #include "cumode.h"
 #include "dpm.h"
 #include "hwmon.h"
@@ -221,7 +222,7 @@ typedef struct _BC250_DEVICE {
     // ask for afterwards: the context is freed and ConnectorLink is NULL, so a second release answers SUCCESS.
     // A caller that has to know whether the hardware is still as the firmware left it reads this as well.
     NTSTATUS ConnectorLinkCleanup;
-    volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
+    volatile LONG RetainedPowerPhase; // BC250_POWER_* (power_phase.h): ACTIVE, SUSPENDING, SUSPENDED, RESTORING, FAILED
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
     PDEVICE_OBJECT PhysicalDeviceObject;
