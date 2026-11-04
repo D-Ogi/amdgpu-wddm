@@ -384,7 +384,7 @@ static void test_reset_returns_to_the_default_cap(void)
     CHECK(device.Cpu.Applied.temp_c == BC250_CPU_TEMP_MAX_C);
     device.Cpu.Enabled = TRUE;
     device.Cpu.Created = TRUE;
-    device.Cpu.Proven = TRUE;                               /* the worker sets it after the stage answered */
+    device.Cpu.Start = BC250_CPU_START_PROVEN;              /* the worker sets it after the stage answered */
     ResetEscape(&d);
     CHECK(d.Status == BC250_ESCAPE_STATUS_DONE);
     CHECK(native_firmware.writes == 2 && CapSent(1, BC250_CPU_TEMP_DEFAULT_C));
@@ -509,7 +509,7 @@ static void test_first_start_writes_the_boot_record(void)
     Boot();
     Chip(1200u, 3500u);
     Load();
-    CHECK(device.Cpu.Proven);
+    CHECK(device.Cpu.Start == BC250_CPU_START_PROVEN);
     CHECK(device.Cpu.Baseline.max_given && device.Cpu.Baseline.max_mhz == 3500u);
     CHECK(Volatile(L"CpuBoot", L"Valid") == 1u && Volatile(L"CpuBoot", L"Version") == 1u);
     CHECK(Volatile(L"CpuBoot", L"MaxMHz") == 3500u && Volatile(L"CpuBoot", L"CapC") == 100u);
@@ -678,7 +678,7 @@ static void test_a_foreign_record_is_ignored(void)
     Chip(1200u, 3500u);
     Load();
     native_volatile_fail = STATUS_SUCCESS;
-    CHECK(device.Cpu.Proven && device.Cpu.Baseline.max_mhz == 3500u);
+    CHECK(device.Cpu.Start == BC250_CPU_START_PROVEN && device.Cpu.Baseline.max_mhz == 3500u);
     CHECK(native_log_has("the boot record is not readable"));
     printf("  %-31s version 2, partial and unreadable records: the start keeps its own read\n", "foreign_record");
 }
@@ -729,21 +729,21 @@ static void test_a_refused_start_read_is_tried_again(void)
     Chip(1200u, 3500u);
     native_firmware.refuse_getters = 1;
     Load();                                                         /* attempt 1 refused */
-    CHECK(!device.Cpu.Proven && device.Cpu.StartWork && !device.Cpu.StartMissed);
+    CHECK(device.Cpu.Start == BC250_CPU_START_OWED);
     CHECK(native_firmware.cap_c == 100u && native_firmware.writes == 0);
     CHECK(native_log_has("tried again every"));
     CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3200u, 0u);
     CHECK(d.Status != BC250_ESCAPE_STATUS_DONE && d.NtStatus == (ULONG)STATUS_DEVICE_NOT_READY);
     native_firmware.refuse_getters = 0;
-    /* A readback that answers proves queue 3 while the start is owed: setters still wait for the start apply. */
+    /* A readback that answers while the start is owed: setters still wait for the start apply. */
     CpuEscape(&d, BC250_CPU_OP_READBACK, 0u, 0u, 0u);
-    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && device.Cpu.Proven && device.Cpu.StartWork);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && device.Cpu.Start == BC250_CPU_START_OWED);
     CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3200u, 0u);
     CHECK(d.Status != BC250_ESCAPE_STATUS_DONE && d.NtStatus == (ULONG)STATUS_DEVICE_NOT_READY);
     CHECK(native_firmware.writes == 0);
     Chip(1200u, 3500u);
     CpuThread(&device);                                             /* the next pass: the stage answers */
-    CHECK(device.Cpu.Proven && !device.Cpu.StartWork && !device.Cpu.StartMissed);
+    CHECK(device.Cpu.Start == BC250_CPU_START_PROVEN);
     CHECK(native_firmware.cap_c == BC250_CPU_TEMP_DEFAULT_C);
     CHECK(device.Cpu.Applied.temp_given && device.Cpu.Applied.temp_c == BC250_CPU_TEMP_DEFAULT_C);
     CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3200u, 0u);
@@ -757,19 +757,19 @@ static void test_a_refused_start_read_is_tried_again(void)
     native_wait_passes = 20u * BC250_CPU_START_TRIES;               /* 100 ms waits, 1000 ms between attempts */
     Load();
     native_wait_passes = 0u;
-    CHECK(!device.Cpu.Proven && !device.Cpu.StartWork && device.Cpu.StartMissed);
+    CHECK(device.Cpu.Start == BC250_CPU_START_MISSED);
     CHECK(native_log_has("did not answer in 30 attempts"));
     CHECK(native_firmware.cap_c == 100u && native_firmware.writes == 0);
     writes = (unsigned int)native_firmware.writes;
     native_firmware.refuse_getters = 0;
     Chip(1200u, 3500u);
     CpuEscape(&d, BC250_CPU_OP_READBACK, 0u, 0u, 0u);
-    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && device.Cpu.StartWork && !device.Cpu.StartMissed);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && device.Cpu.Start == BC250_CPU_START_OWED);
     CHECK(native_log_has("the start apply runs now"));
     CHECK((unsigned int)native_firmware.writes == writes);         /* the readback itself sends no setter */
     Chip(1200u, 3500u);
     CpuThread(&device);
-    CHECK(native_firmware.cap_c == BC250_CPU_TEMP_DEFAULT_C && !device.Cpu.StartWork);
+    CHECK(native_firmware.cap_c == BC250_CPU_TEMP_DEFAULT_C && device.Cpu.Start == BC250_CPU_START_PROVEN);
     CpuStop(&device);
     printf("  %-31s a refused start read is tried again; after %u attempts a readback restarts it\n",
            "start_read_retry", (unsigned int)BC250_CPU_START_TRIES);

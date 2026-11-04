@@ -25,6 +25,16 @@
 // answers, and that readback gives the start back to the worker.
 #define BC250_CPU_START_TRIES 30u
 
+// Where the start of the CPU surface is (BD-297). One field, not flags: up to 0.7.216.109 a Proven flag and a
+// StartWork flag held this together, and a readback could set Proven while the start apply never ran.
+typedef enum _BC250_CPU_START {
+    BC250_CPU_START_NONE = 0,               // no start, or stopped: queue 3 not proven, nothing owed
+    BC250_CPU_START_OWED,                   // the worker owes the start read stage and the start apply
+    BC250_CPU_START_MISSED,                 // the read stage did not answer in BC250_CPU_START_TRIES: the start
+                                            // apply did not run; a readback that answers makes it owed again
+    BC250_CPU_START_PROVEN                  // the read stage answered and the start apply ran: setters admitted
+} BC250_CPU_START;
+
 typedef struct _BC250_CPU_SNAP {
     ULONG Flags;                            // BC250_CPU_FLAG_*
     ULONG VoltageMv, GpuVoltageMv, CapC, Features;
@@ -46,12 +56,9 @@ typedef struct _BC250_CPU_STATE {
     BOOLEAN Enabled;                        // CpuTune 1: without it every write is refused
     BOOLEAN Lab;                            // CpuLab 1: the lab's own bound (BC250_CPU_MAX_MHZ_LAB)
     ULONG OcTier;                           // the overclock tier of this start (oc_tier.c), read at CpuStart
-    BOOLEAN Proven;                         // queue 3 answered a getter in this start: setters are admitted
     BOOLEAN Pending, Confirmed;             // the stored settings' two marks
     BOOLEAN CorePending, CoreConfirmed;     // the core mask's two marks
-    BOOLEAN StartWork;                      // the worker still owes the start readback and the stored apply
-    BOOLEAN StartMissed;                    // BD-297: the read stage did not answer in BC250_CPU_START_TRIES, so
-                                            // the start apply did not run; a readback that answers gives it back
+    BC250_CPU_START Start;                  // the start of this surface (BC250_CPU_START_*)
     struct bc250_cpu_settings Applied;      // what this driver has sent (cached; the chip has no "what is set")
     struct bc250_cpu_settings Stored;       // the registry's values
     struct bc250_cpu_settings Baseline;     // what the firmware answered before the first write of this start

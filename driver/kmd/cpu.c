@@ -9,7 +9,7 @@
 // Three rules it enforces, in this order:
 //   1. CpuTune must be 1. Without it the whole surface is read-only: no mailbox message is ever sent, and every
 //      write is refused with STATUS_INVALID_DEVICE_STATE. A machine that nobody opted in does not even get a thread.
-//   2. No setter runs before this start's read stage has answered (Proven). Queue 3 has never been spoken to on
+//   2. No setter runs before this start's read stage has answered (START_PROVEN). Queue 3 has never been spoken to on
 //      this part, and every range in the shim's header is REPORTED and not measured, so the first thing that
 //      happens is a read.
 //   3. A SET is a trial. The kernel owns the deadline, so a killed tool, a hung tool, a lost remote session and a
@@ -863,7 +863,7 @@ static void CpuJointPublish(BC250_DEVICE* Device)
     if (from->max_given) base = from->max_mhz;
     else if (s->BaselineValid && s->Baseline.max_given) base = s->Baseline.max_mhz;
     KeAcquireSpinLock(&s->SnapLock, &irql);
-    ready = s->Enabled && s->Created && s->Proven && !s->StartWork && !s->OnTrial && !s->RevertOwed &&
+    ready = s->Enabled && s->Created && s->Start == BC250_CPU_START_PROVEN && !s->OnTrial && !s->RevertOwed &&
             !s->LeftoverOwed && !s->Search.running;
     KeReleaseSpinLock(&s->SnapLock, irql);
     // The arm takes no cap it could only release as the P-state table's top (0.7.216.24, BD-094): with no limit
@@ -1090,22 +1090,23 @@ static void CpuThread(_In_ PVOID Context)
         CpuLock(s);
         // While the adapter is paused or the owner is gone, the worker does nothing at all: the start work stays
         // owed and a deadline that passes is served at the next wake-up with the mailbox back.
-        work = s->StartWork && !CpuAdapterDown(device) && KeQueryInterruptTime() >= nextStart;
+        work = s->Start == BC250_CPU_START_OWED && !CpuAdapterDown(device) && KeQueryInterruptTime() >= nextStart;
         if (work) {
             // The read stage first, always: it is what admits every setter of this start, and it is also what
             // records the baseline. The first queue 3 traffic of a start keeps the slow rate.
             NTSTATUS status = CpuReadStage(device, TRUE, BC250_CPU_MESSAGE_GAP_MS);
-            s->Proven = NT_SUCCESS(status) ? TRUE : FALSE;
+            BOOLEAN answered = NT_SUCCESS(status) ? TRUE : FALSE;
             startTries++;
             // BD-297: the start work stays owed until the read stage answers or the attempts run out. Up to
             // 0.7.216.109 one refusal ended the start, and the default cap and the stored settings never went in.
-            if (s->Proven || startTries >= BC250_CPU_START_TRIES) s->StartWork = FALSE;
-            if (s->Proven || startTries == 1u || !s->StartWork)
+            if (answered) s->Start = BC250_CPU_START_PROVEN;
+            else if (startTries >= BC250_CPU_START_TRIES) s->Start = BC250_CPU_START_MISSED;
+            if (answered || startTries == 1u || s->Start != BC250_CPU_START_OWED)
                 GuardLog("cpu: the read stage %s (0x%08X, attempt %lu of %lu): %lu mV, GPU %lu mV, cap %lu C",
-                         s->Proven ? "answered" : "did NOT answer", status, startTries,
+                         answered ? "answered" : "did NOT answer", status, startTries,
                          (ULONG)BC250_CPU_START_TRIES, device->Cpu.Snap.VoltageMv, device->Cpu.Snap.GpuVoltageMv,
                          device->Cpu.Snap.CapC);
-            if (s->StartWork) {
+            if (s->Start == BC250_CPU_START_OWED) {
                 nextStart = KeQueryInterruptTime() + 10000ull * BC250_CPU_REVERT_RETRY_MS;
                 if (startTries == 1u)
                     GuardLog("cpu: the start read stage is tried again every %lu ms; the start settings wait for it",
@@ -1114,13 +1115,11 @@ static void CpuThread(_In_ PVOID Context)
                 startTries = 0;
                 nextStart = 0;
             }
-            if (!s->Proven && !s->StartWork) {
-                s->StartMissed = TRUE;
+            if (s->Start == BC250_CPU_START_MISSED) {
                 GuardLog("cpu: the start read stage did not answer in %lu attempts: start settings and default cap "
                          "NOT applied; a readback that answers runs the start", (ULONG)BC250_CPU_START_TRIES);
                 CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_NOT_PROVEN);
-            } else if (s->Proven) {
-                s->StartMissed = FALSE;
+            } else if (answered) {
                 // CpuReadStage has recorded the baseline from what the firmware answered, or adopted the boot
                 // record. Applied was empty up to here: this start had sent nothing yet. When an earlier start of
                 // this boot left settings in the chip, the boot baseline goes back first (BD-295), and the stored
@@ -1156,7 +1155,7 @@ static void CpuThread(_In_ PVOID Context)
             // took back. The part cools, the GPU goes quiet, and then this goes through (0.7.211).
             CpuRevertRetry(device);
             nextRetry = KeQueryInterruptTime() + 10000ull * BC250_CPU_REVERT_RETRY_MS;
-        } else if (leftover && s->Proven && !CpuAdapterDown(device) && KeQueryInterruptTime() >= nextRetry) {
+        } else if (leftover && s->Start == BC250_CPU_START_PROVEN && !CpuAdapterDown(device) && KeQueryInterruptTime() >= nextRetry) {
             // BD-295: the leftover of an earlier start is owed the same way, and nothing else of this surface
             // runs until it goes through.
             CpuLeftoverService(device);
@@ -1168,10 +1167,10 @@ static void CpuThread(_In_ PVOID Context)
         CpuJointService(device);
         KeAcquireSpinLock(&s->SnapLock, &irql);
         owed = s->RevertOwed;
-        leftover = s->LeftoverOwed && s->Proven;
+        leftover = s->LeftoverOwed && s->Start == BC250_CPU_START_PROVEN;
         KeReleaseSpinLock(&s->SnapLock, irql);
         joint = CpuJointOwed(s);
-        starting = s->StartWork && startTries > 0u && !CpuAdapterDown(device);
+        starting = s->Start == BC250_CPU_START_OWED && startTries > 0u && !CpuAdapterDown(device);
         CpuUnlock(s);
         timeout.QuadPart = -10000ll * (LONGLONG)BC250_CPU_POLL_MS;
         if (KeWaitForMultipleObjects(2, objects, WaitAny, Executive, KernelMode, FALSE,
@@ -1215,7 +1214,8 @@ void CpuStart(BC250_DEVICE* Device)
     RtlZeroMemory(&s->Baseline, sizeof(s->Baseline));
     RtlZeroMemory(&s->BaselineRead, sizeof(s->BaselineRead));
     RtlZeroMemory(&s->Search, sizeof(s->Search));
-    s->BaselineValid = s->Proven = s->OnTrial = s->RevertOwed = FALSE;
+    s->BaselineValid = s->OnTrial = s->RevertOwed = FALSE;
+    s->Start = BC250_CPU_START_NONE;
     s->LeftoverOwed = FALSE;
     s->BootRecord = CPU_BOOT_RECORD_UNREAD;
     s->Pending = s->Confirmed = s->CorePending = s->CoreConfirmed = FALSE;
@@ -1340,7 +1340,7 @@ void CpuStart(BC250_DEVICE* Device)
     }
     s->Cores = (ULONG)KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
     s->Threads = s->Cores;
-    s->StartWork = TRUE;
+    s->Start = BC250_CPU_START_OWED;
     InitializeObjectAttributes(&attributes, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
     status = PsCreateSystemThread(&handle, THREAD_ALL_ACCESS, &attributes, NULL, NULL, CpuThread, Device);
     if (NT_SUCCESS(status)) {
@@ -1421,7 +1421,7 @@ void CpuStop(BC250_DEVICE* Device)
     if (InterlockedCompareExchange(&s->JointAppliedMHz, 0, 0)) what |= CPU_LEFTOVER_JOINT;
     if (s->LeftoverOwed) what |= CPU_LEFTOVER_EARLIER;
     if (what) CpuLeftoverWrite(s, what);
-    s->Proven = FALSE;
+    s->Start = BC250_CPU_START_NONE;
     CpuJointPublish(Device);
     CpuUnlock(s);
     CpuLogSummary(Device);
@@ -1467,7 +1467,7 @@ static void CpuResumeEx(BC250_DEVICE* Device, BOOLEAN Joint)
     RtlZeroMemory(&s->Applied, sizeof(s->Applied));
     RtlZeroMemory(&s->Baseline, sizeof(s->Baseline));
     RtlZeroMemory(&s->BaselineRead, sizeof(s->BaselineRead));
-    s->BaselineValid = s->Proven = FALSE;
+    s->BaselineValid = FALSE;
     // BD-295: the next full read stage adopts the boot record again. A leftover of an earlier start stays owed: the
     // restore costs three messages, and nothing here proves that the transition took it out of the chip.
     s->BootRecord = CPU_BOOT_RECORD_UNREAD;
@@ -1478,7 +1478,7 @@ static void CpuResumeEx(BC250_DEVICE* Device, BOOLEAN Joint)
     RtlZeroMemory(&s->TrialBefore, sizeof(s->TrialBefore));
     RtlZeroMemory(&s->Search, sizeof(s->Search));
     KeReleaseSpinLock(&s->SnapLock, irql);
-    s->StartWork = TRUE;
+    s->Start = BC250_CPU_START_OWED;
     // The joint arm's cap is gone from the chip with the rest; the arm waits for the read stage again (0.7.216.7).
     InterlockedExchange(&s->JointAppliedMHz, 0);
     RtlZeroMemory(&s->JointBefore, sizeof(s->JointBefore));
@@ -1546,7 +1546,7 @@ void CpuLogSummary(BC250_DEVICE* Device)
     // widest and the counter line 166, and a log line holds 159 (BD-070). Every line begins "cpu: summary", so
     // a reader takes the block and not one line of it.
     GuardLog("cpu: summary %s%s%s %lu mV (GPU %lu mV)",
-             s->Enabled ? "on" : "off", s->Proven ? ", queue 3 proven" : ", queue 3 silent",
+             s->Enabled ? "on" : "off", s->Start == BC250_CPU_START_PROVEN ? ", queue 3 proven" : ", queue 3 silent",
              s->OnTrial ? ", on trial" : "", snap.VoltageMv, snap.GpuVoltageMv);
     if (s->LeftoverOwed) GuardLog("cpu: summary the leftover of an earlier start is still owed (BD-295)");
     GuardLog("cpu: summary cap %lu C, cores %lu/%lu, mask 0x%02X", snap.CapC,
@@ -1643,9 +1643,9 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
         if (expected != s->Generation) status = STATUS_RETRY;
         else if (!s->Enabled || !s->Created) status = STATUS_INVALID_DEVICE_STATE;
         else if (CpuAdapterDown(Device)) status = STATUS_DEVICE_NOT_READY;
-        else if (op != BC250_CPU_OP_READBACK && (!s->Proven || s->StartWork)) {
-            // BD-297: the worker's start apply comes before any setter of this start. A readback that answers
-            // while the start is still owed proves queue 3, but the default cap is not in the chip yet.
+        else if (op != BC250_CPU_OP_READBACK && s->Start != BC250_CPU_START_PROVEN) {
+            // The start's read stage and the start apply come before any setter (BD-297: a readback that
+            // answers proves queue 3, but the default cap is not in the chip until the worker has sent it).
             status = STATUS_DEVICE_NOT_READY;
         }
         else if (op != BC250_CPU_OP_READBACK && s->LeftoverOwed) {
@@ -1661,15 +1661,13 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
             status = CpuReadStage(Device, TRUE, s->BaselineValid ? BC250_CPU_GETTER_GAP_MS
                                                                 : BC250_CPU_MESSAGE_GAP_MS);
             if (NT_SUCCESS(status)) {
-                s->Proven = TRUE;
-                if (s->StartMissed) {
+                if (s->Start == BC250_CPU_START_MISSED) {
                     // BD-297: the worker gave up on this start's read stage, so the start apply never ran. The
                     // mailbox answers now: the worker runs the whole start, with the default cap, at once.
-                    s->StartMissed = FALSE;
-                    s->StartWork = TRUE;
+                    s->Start = BC250_CPU_START_OWED;
                     KeSetEvent(&s->Wake, IO_NO_INCREMENT, FALSE);
                     GuardLog("cpu: the readback answered after a start without proof: the start apply runs now");
-                } else if (s->StartWork) KeSetEvent(&s->Wake, IO_NO_INCREMENT, FALSE);
+                } else if (s->Start == BC250_CPU_START_OWED) KeSetEvent(&s->Wake, IO_NO_INCREMENT, FALSE);
             }
         } else if (op == BC250_CPU_OP_SET) {
             ULONG window = Data->TrialMs ? Data->TrialMs : s->TrialMs;
@@ -1917,7 +1915,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                   ((stored.max_given || stored.uv_given || stored.temp_given) ? BC250_CPU_FLAG_STORED : 0) |
                   (s->Pending ? BC250_CPU_FLAG_PENDING : 0) |
                   (s->Confirmed ? BC250_CPU_FLAG_CONFIRMED : 0) |
-                  (s->Proven ? BC250_CPU_FLAG_QUEUE3_PROVEN : 0) |
+                  (s->Start == BC250_CPU_START_PROVEN ? BC250_CPU_FLAG_QUEUE3_PROVEN : 0) |
                   (s->Enabled ? BC250_CPU_FLAG_TUNE_ON : 0) |
                   (searching ? BC250_CPU_FLAG_SEARCHING : 0) |
                   (s->CorePending ? BC250_CPU_FLAG_CORE_PENDING : 0) |

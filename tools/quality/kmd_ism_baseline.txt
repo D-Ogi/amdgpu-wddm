@@ -82,10 +82,9 @@ cluster _BC250_CPU_STATE.Confirmed _BC250_CPU_STATE.Pending
 cluster _BC250_CPU_STATE.CoreConfirmed _BC250_CPU_STATE.CorePending
 cluster _BC250_CPU_STATE.CoreConfirmed _BC250_CPU_STATE.Pending
 cluster _BC250_CPU_STATE.CorePending _BC250_CPU_STATE.Pending
-cluster _BC250_CPU_STATE.OnTrial _BC250_CPU_STATE.Proven
 cluster _BC250_CPU_STATE.OnTrial _BC250_CPU_STATE.RevertOwed
-cluster _BC250_CPU_STATE.Proven _BC250_CPU_STATE.RevertOwed
-cluster _BC250_CPU_STATE.Proven _BC250_CPU_STATE.StartWork
+cluster _BC250_CPU_STATE.OnTrial _BC250_CPU_STATE.Start
+cluster _BC250_CPU_STATE.RevertOwed _BC250_CPU_STATE.Start
 cluster _BC250_CU_MODE_STATE.Confirmed _BC250_CU_MODE_STATE.Pending
 cluster _BC250_CU_MODE_STATE.Confirmed _BC250_CU_MODE_STATE.StockRecord
 cluster _BC250_CU_MODE_STATE.Pending _BC250_CU_MODE_STATE.StockRecord
