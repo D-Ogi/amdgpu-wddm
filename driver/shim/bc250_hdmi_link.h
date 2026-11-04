@@ -13,7 +13,7 @@ typedef struct BC250_HDMI_RESTORE_DETAIL {
 typedef struct BC250_HDMI_LINK {
     BC250_ATOM_CALLBACKS Io;
     uint32_t Offset[BC250_HDMI_LINK_REGS], Before[BC250_HDMI_LINK_REGS];
-    unsigned Count, Dirty, Restoring, PacketDirty, Active, PacketAdmitted;
+    unsigned Count, Dirty, PacketDirty, Active, PacketAdmitted;
     uint32_t FailureRegister, RestoreRegister;
     uint32_t FailureOperation, FailureWanted, FailureReadback, FailureMask;
     int Error;

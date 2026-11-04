@@ -367,7 +367,7 @@ int Bc250HdmiLinkRestore(BC250_HDMI_LINK *l)
 {
     unsigned i; int result=0; uint32_t after;
     if (!l || !l->Dirty) return 0;
-    l->Restoring=1; l->RestoreRegister=0;
+    l->RestoreRegister=0;
     if(l->PacketDirty && stopPacket0(l))result=-1;
     // Restore configuration, including the original bank selector, clock and
     // power. Try all entries but retain debt after any failed stop operation.
@@ -381,7 +381,7 @@ int Bc250HdmiLinkRestore(BC250_HDMI_LINK *l)
             result=-1;
         }
     }
-    l->Restoring=0; l->Active=0;
+    l->Active=0;
     if (!result) { l->Dirty=0; l->Count=0; l->PacketDirty=0; l->PacketAdmitted=0; }
     return result;
 }
