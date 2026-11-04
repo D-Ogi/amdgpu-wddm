@@ -20,7 +20,8 @@ namespace AmdgpuWddmControl
         public const string Action = "oc-tier";
 
         static BoardCapabilities C { get { return BoardCapabilities.Current; } }
-        static bool Abi2 { get { return C[4] == 2; } }
+        // ABI 2 and later carry the overclock words (ABI 3 adds the default CPU temperature cap after them).
+        static bool Abi2 { get { return C[4] >= 2; } }
 
         // The board can take a tier: a supported BC-250 with the GPU and CPU controls admitted, and a driver that
         // reports the overclock words and a board fingerprint.

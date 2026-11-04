@@ -27,6 +27,7 @@ namespace AmdgpuWddmControl
         public static readonly SearchEntry[] Index =
         {
             E("graphics.clock-auto", "graphics"), E("graphics.clock-ceiling", "graphics"), E("graphics.cores", "graphics"), E("graphics.reset", "graphics"),
+            E("graphics.cpu-limit", "graphics"),
             E("graphics.tuning", "graphics"), E("graphics.cpu-tuning", "graphics"), E("graphics.cpu-cores", "graphics"),
             // The settings for all games (GraphicsSettings.cs); a game's own ones are on the Games page.
             E("graphics.fps", "graphics"), E("graphics.vsync", "graphics"), E("graphics.af", "graphics"), E("graphics.latency", "graphics"),

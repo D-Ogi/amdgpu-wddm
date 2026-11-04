@@ -59,6 +59,10 @@ namespace AmdgpuWddmControl
             bool must = TunerView.MustShow(c, u);
             bool open = _tuningOpen || must;
 
+            // The processor temperature limit stays in sight, outside "Advanced tuning": it is a setting a person
+            // looks for when the processor runs hot, not a tuning experiment.
+            page.Controls.Add(BuildCpuLimitCard(width, installed));
+
             var head = new CardPanel(Strings.T("graphics.tuning.title"), width);
             Mark("graphics.tuning", head);
             head.Add(Ui.Dim(Strings.T("graphics.tuning.intro"), head.Inner));
@@ -285,6 +289,73 @@ namespace AmdgpuWddmControl
             return card;
         }
 
+        // The processor temperature limit (TunerView.CpuLimit): the temperature now, the limit in force, the default and
+        // one picker. Apply, Keep and Stop are the processor card's own actions, so a limit runs as a trial too.
+        CardPanel BuildCpuLimitCard(int width, bool installed)
+        {
+            var card = new CardPanel(Strings.T("graphics.limit.title"), width);
+            Mark("graphics.cpu-limit", card);
+            var v = TunerView.CpuLimit(CpuNow, installed, _snap.P("CpuTune"), _snap.P("CpuLastReason"), _cpuTempEdit, _trials.Cpu);
+            card.Add(Ui.Dim(Strings.T("graphics.limit.intro"), card.Inner));
+            switch (v.Card)
+            {
+                case TuneCard.NotInstalled: card.Add(Ui.Dim(Strings.T("graphics.not-installed"), card.Inner)); return card;
+                case TuneCard.NoReading: card.Add(Ui.Dim(Strings.T("perf.no-reading"), card.Inner)); return card;
+                case TuneCard.Off:
+                case TuneCard.OnAfterRestart:
+                    card.Add(Ui.Label(v.Status, null, v.StatusWarn ? Theme.Warn : Theme.Dim, card.Inner));
+                    var offer = Ui.WrapRow(card.Inner);
+                    if (v.EnableOffered) offer.Controls.Add(Ui.Button(Strings.T("graphics.cpu.enable"), (s, e) => RunAction("cpu-enable"), true));
+                    offer.Controls.Add(Explain("cpu-limit", Strings.T("graphics.limit.title")));
+                    card.Add(offer);
+                    return card;
+            }
+            if (v.Status != null)
+            {
+                var status = Ui.Label(v.Status, Theme.Bold, v.StatusWarn ? Theme.Warn : (Color?)null, card.Inner);
+                _live["tuner.limit.status"] = status;
+                card.Add(status);
+            }
+            if (v.OnTrial) card.Add(Ui.Label(Strings.T("graphics.tuning.unsaved"), null, Theme.Warn, card.Inner));
+            if (v.Outcome != null) card.Add(Ui.Label(v.Outcome, Theme.Bold, v.OutcomeGood ? Theme.Good : Theme.Warn, card.Inner));
+            card.Pair(Strings.T("tuner.cpu.temp.label"), v.Now);
+            card.Pair(Strings.T("graphics.cpu.cap.label"), v.Limit, null);
+            card.Add(Ui.Dim(v.Default, card.Inner));
+
+            var apply = Ui.Button(Strings.T("graphics.limit.apply"), (s, e) => RunAction("cpu-trial", TunerView.CpuRequest(null, null, _cpuTempEdit), null, null, false, ok => ClearCpuEdit()), true);
+            apply.Enabled = v.ApplyEnabled;
+            var temp = new ValuePicker(v.TempChoices, " °C", Strings.T("graphics.cpu.temp.label"));
+            temp.Value = v.Temp;
+            temp.Stepped += (s, e) =>
+            {
+                _cpuTempEdit = temp.Value;
+                _trials.Forget(false, true);
+                apply.Enabled = TunerView.CpuLimit(CpuNow, installed, _snap.P("CpuTune"), _snap.P("CpuLastReason"), _cpuTempEdit, TrialEnd.None).ApplyEnabled;
+            };
+            card.Add(Ui.WrapRow(card.Inner, PickerName(Strings.T("graphics.cpu.temp.label"), card.Inner), temp));
+
+            var row = Ui.WrapRow(card.Inner);
+            if (!v.Proven)
+            {
+                // Read first (docs/design/tuner.md): nothing goes to the processor before one readback answered.
+                var read = Ui.Button(Strings.T("graphics.cpu.readback"), (s, e) => RunAction("cpu-readback"), true);
+                read.Enabled = v.ReadEnabled;
+                row.Controls.Add(read);
+            }
+            row.Controls.Add(apply);
+            var keep = Ui.Button(Strings.T("graphics.tuning.keep"), (s, e) => RunAction("cpu-keep", null, null, null, false, ok => ClearCpuEdit()));
+            keep.Enabled = v.KeepEnabled;
+            row.Controls.Add(keep);
+            var stop = Ui.Button(Strings.T("graphics.tuning.stop"), (s, e) => RunAction("cpu-stop", null, null, null, false, ok => { if (ok) _trials.Did(true, TrialEnd.Stopped); ClearCpuEdit(); }));
+            stop.Enabled = v.StopEnabled;
+            row.Controls.Add(stop);
+            if (v.Edited) row.Controls.Add(Ui.Button(Strings.T("tuner.discard"), (s, e) => ClearCpuEdit()));
+            row.Controls.Add(Explain("cpu-limit", Strings.T("graphics.limit.title")));
+            card.Add(row);
+            if (!v.Proven) card.Add(Ui.Label(Strings.T("graphics.cpu.need-readback"), null, Theme.Warn, card.Inner));
+            return card;
+        }
+
         // The name in front of a picker, one width for all three so that the pickers line up in one column.
         static Label PickerName(string text, int inner)
         {
@@ -343,6 +414,7 @@ namespace AmdgpuWddmControl
             if (cv.Live != null && _live.TryGetValue("tuner.curve.live", out l)) l.Text = cv.Live;
             var uv = TunerView.Cpu(u, _snap.DriverInstalled, _snap.P("CpuTune"), _snap.P("CpuLastReason"), _cpuClockEdit, _cpuUvEdit, _cpuTempEdit, _trials.Cpu);
             if (uv.Status != null && _live.TryGetValue("tuner.cpu.status", out l)) l.Text = uv.Status;
+            if (uv.OnTrial && _live.TryGetValue("tuner.limit.status", out l)) l.Text = uv.Status;
         }
 
         // The tuning lines of the support report and the status card: what is in force, what is on trial, what is

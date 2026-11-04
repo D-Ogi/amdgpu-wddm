@@ -124,6 +124,19 @@ namespace AmdgpuWddmControl
         public readonly List<TuneRow> InForce = new List<TuneRow>();
     }
 
+    // The processor temperature limit card of the Graphics page. It is outside "Advanced tuning", so a person sees the
+    // limit without opening the tuning cards. It is a view of the same processor surface: the same trial, the same
+    // Keep and Stop, and the same temperature edit as the processor card.
+    public sealed class CpuLimitView
+    {
+        public TuneCard Card;
+        public string Status, Now, Limit, Default, Outcome;
+        public bool StatusWarn, OutcomeGood, OnTrial, Proven, Edited;
+        public bool ReadEnabled, ApplyEnabled, KeepEnabled, StopEnabled, EnableOffered;
+        public uint Temp;
+        public uint[] TempChoices;
+    }
+
     public static class TunerView
     {
         static uint[] Reference(uint[] v, uint[] fallback)
@@ -299,9 +312,12 @@ namespace AmdgpuWddmControl
             if (u.Has(CpuState.FlagStored))
                 v.InForce.Add(new TuneRow(Strings.T("tuner.cpu.saved.label"), Strings.T("tuner.cpu.settings",
                     Own(u.StoredMaxMHz, " MHz"), CpuTuning.StepsText(u.StoredUvSteps), Own(u.StoredTempC, " °C"))));
+            // The standard row is what Reset puts back: the recorded clock and undervolt, and the default temperature
+            // cap where the driver has one (board-caps ABI 3). A driver without a default puts the recorded cap back.
+            uint standardTempC = BoardCapabilities.Current[171] != 0 ? CpuTuning.DefaultTempC : u.BaselineTempC;
             v.InForce.Add(new TuneRow(Strings.T("tuner.cpu.baseline.label"), u.BaselineMaxMHz == 0 && u.BaselineTempC == 0
                 ? Strings.T("tuner.cpu.baseline.none")
-                : Strings.T("tuner.cpu.settings", Own(u.BaselineMaxMHz, " MHz"), CpuTuning.StepsText(u.BaselineUvSteps), Own(u.BaselineTempC, " °C"))));
+                : Strings.T("tuner.cpu.settings", Own(u.BaselineMaxMHz, " MHz"), CpuTuning.StepsText(u.BaselineUvSteps), Own(standardTempC, " °C"))));
 
             // The pickers start at what is in force; a value outside the driver's list (a baseline above the
             // release's highest limit) is never shown as a choice, the picker shows the nearest allowed one. With
@@ -309,7 +325,7 @@ namespace AmdgpuWddmControl
             // tier widens the list, it does not move the default.
             v.Clock = clockEdit ?? Nearest(v.ClockChoices, u.AppliedMaxMHz != 0 ? u.AppliedMaxMHz : OcUnlock.CpuMaxMHz(OcUnlock.None));
             v.Steps = uvEdit ?? Nearest(v.StepChoices, u.AppliedUvSteps);
-            v.Temp = tempEdit ?? Nearest(v.TempChoices, u.AppliedTempC != 0 ? u.AppliedTempC : u.CapC != 0 ? u.CapC : CpuTuning.MaxTempC);
+            v.Temp = tempEdit ?? Nearest(v.TempChoices, u.AppliedTempC != 0 ? u.AppliedTempC : u.CapC != 0 ? u.CapC : CpuTuning.DefaultTempC);
             v.Edited = clockEdit != null || uvEdit != null || tempEdit != null;
 
             if (!v.OnTrial && !v.Edited) { v.Outcome = EndText(end, true); v.OutcomeGood = end == TrialEnd.Kept; }
@@ -319,7 +335,36 @@ namespace AmdgpuWddmControl
             v.ApplyEnabled = v.Proven && !v.Busy && v.Edited;
             v.KeepEnabled = v.OnTrial && v.Proven && !v.Busy;
             v.StopEnabled = v.OnTrial && v.Proven && !v.Busy;
-            v.ResetEnabled = v.Proven && !v.Busy && (u.Has(CpuState.FlagStored) || v.OnTrial || u.AppliedMaxMHz != 0 || u.AppliedUvSteps != 0 || u.AppliedTempC != 0);
+            // The default cap in force is standard: a start applies it with nothing stored (docs/design/tuner.md).
+            v.ResetEnabled = v.Proven && !v.Busy && (u.Has(CpuState.FlagStored) || v.OnTrial || u.AppliedMaxMHz != 0 || u.AppliedUvSteps != 0 ||
+                (u.AppliedTempC != 0 && u.AppliedTempC != CpuTuning.DefaultTempC));
+            return v;
+        }
+
+        // The temperature limit card: the temperature now, the limit in force, the default, and one picker. The
+        // trial and its buttons are those of the processor card (Cpu above), so both cards agree at every moment.
+        public static CpuLimitView CpuLimit(CpuState u, bool installed, uint? tuneStored, uint? lastReason, uint? tempEdit, TrialEnd end)
+        {
+            var c = Cpu(u, installed, tuneStored, lastReason, null, null, tempEdit, end);
+            var v = new CpuLimitView
+            {
+                Card = c.Card, TempChoices = c.TempChoices, Temp = c.Temp, OnTrial = c.OnTrial, Proven = c.Proven,
+                Edited = tempEdit != null, EnableOffered = c.Card == TuneCard.Off && c.EnableOffered,
+                Default = Strings.T("tuner.limit.default", CpuTuning.DefaultTempC, CpuTuning.MaxTempC),
+            };
+            if (c.Card == TuneCard.Off) { v.Status = Strings.T("tuner.limit.off", CpuTuning.MaxTempC); return v; }
+            if (c.Card != TuneCard.Ready) { v.Status = c.Status; v.StatusWarn = c.Card == TuneCard.OnAfterRestart; return v; }
+            if (c.OnTrial) { v.Status = c.Status; v.StatusWarn = true; }
+            v.Outcome = c.Outcome; v.OutcomeGood = c.OutcomeGood;
+            string none = Strings.T("perf.no-reading");
+            v.Now = u.Has(CpuState.FlagTempValid) ? Temperature(u.TemperatureMc) ?? none : none;
+            // In force: what the driver applied, else the cap the firmware reported. The default is named as such.
+            uint limit = u.AppliedTempC != 0 ? u.AppliedTempC : u.CapC;
+            v.Limit = limit == 0 ? none : Strings.T(limit == CpuTuning.DefaultTempC ? "tuner.limit.in-force.default" : "tuner.temp", limit);
+            v.ReadEnabled = c.ReadEnabled && !c.Proven;
+            v.ApplyEnabled = c.Proven && !c.Busy && tempEdit != null;
+            v.KeepEnabled = c.KeepEnabled;
+            v.StopEnabled = c.StopEnabled;
             return v;
         }
 

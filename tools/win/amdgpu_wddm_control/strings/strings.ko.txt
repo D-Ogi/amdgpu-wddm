@@ -1400,3 +1400,14 @@ rocm.state.recovery|mt|4f222673|복구 필요
 rocm.state.error|mt|cf91d056|읽을 수 없음
 rocm.state.unknown|mt|d16948e7|확인되지 않음
 search.rocm.payload|mt|b6198d0f|ROCm / PyTorch
+
+# ---- processor temperature limit (the default cap of 90 C, docs/design/tuner.md) ----
+graphics.limit.title|mt|49db3253|프로세서 온도 제한(스로틀링)
+graphics.limit.intro|mt|4cf75170|프로세서는 이 온도에 도달하면 스스로 속도를 낮춥니다. 제한이 낮을수록 길고 무거운 부하에서도 더 시원하게 유지됩니다. 제한이 높을수록 속도가 조금 오르고 열이 늘어납니다.
+graphics.limit.apply|mt|3aff98ba|이 제한 테스트
+tuner.limit.default|mt|5f68e9b0|기본값은 {0} °C입니다. {1} °C는 프로세서 자체의 최고 제한입니다.
+tuner.limit.in-force.default|mt|0bbe6cf5|{0} °C(기본값)
+tuner.limit.off|mt|04306f74|프로세서 튜닝이 꺼져 있으므로 프로세서 자체 제한인 {0} °C가 적용됩니다.
+search.graphics.cpu-limit|mt|c90220a5|프로세서 온도 제한
+search.graphics.cpu-limit.terms|mt|8aa04853|CPU 온도|온도|스로틀링|열 제한|Tctl|뜨거움|과열
+help.setting.cpu-limit|mt|34c700af|프로세서가 스스로 속도를 낮추는 온도입니다. 기본값은 길고 무거운 부하에서도 프로세서 자체의 최고 제한과 거리를 둡니다. 변경은 유지할 때까지 스스로 되돌아오는 테스트로 실행됩니다.

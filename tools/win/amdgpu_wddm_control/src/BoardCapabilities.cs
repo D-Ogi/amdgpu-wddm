@@ -43,9 +43,10 @@ namespace AmdgpuWddmControl
             var w = new uint[192];
             for (int i = 0; i < w.Length; ++i) w[i] = BitConverter.ToUInt32(b, i * 4);
             // ABI 1 is a driver older than the overclock tiers: words 139 and up are zero. ABI 2 carries them
-            // (driver/kmd/bc250kmd_escape.h, OcTier .. OcCpuMinUvSteps) and keeps 171 and up zero.
-            Require(w[0] == KmdReply.Magic && w[1] == 33 && w[2] == 0 && w[3] == 0 && (w[4] == 1 || w[4] == 2));
-            Require((w[6] & ~31u) == 0 && w[7] <= 2 && w.Skip(w[4] == 1 ? 139 : 171).All(x => x == 0));
+            // (driver/kmd/bc250kmd_escape.h, OcTier .. OcCpuMinUvSteps) and keeps 171 and up zero. ABI 3 adds the
+            // default CPU temperature cap in word 171 (CpuDefaultTempC) and keeps 172 and up zero.
+            Require(w[0] == KmdReply.Magic && w[1] == 33 && w[2] == 0 && w[3] == 0 && w[4] >= 1 && w[4] <= 3);
+            Require((w[6] & ~31u) == 0 && w[7] <= 2 && w.Skip(w[4] == 1 ? 139 : w[4] == 2 ? 171 : 172).All(x => x == 0));
             if (w[5] == 0) { Require(w[6] == 0 && w[7] == 1 && w.Skip(8).All(x => x == 0)); return new BoardCapabilities(w); }
             Require(w[5] == 1 && (w[6] & 1) != 0 && w[7] != 1 && (w[7] == 0 || w[6] == 1));
             Require(w[8] > 0 && w[8] <= w[9] && w[9] <= w[10] && w[11] > 0 && w[12] > 0 && w[12] <= 16);
@@ -64,7 +65,9 @@ namespace AmdgpuWddmControl
                 if (i != 0) Require(w[o+1] >= w[o-2]);
             }
             Require(w[38 + ((int)w[12]-1)*3] == w[10] && w[137] >= w[9] && w[137] <= w[10] && (w[137] - w[8]) % w[11] == 0 && (w[9] - w[8]) % w[11] == 0);
-            if (w[4] == 2) ParseOverclock(w);
+            if (w[4] >= 2) ParseOverclock(w);
+            // The cap that the driver applies when no CpuTempC is stored: a value of the band above.
+            if (w[4] == 3) Require(w[171] >= w[22] && w[171] <= w[23]);
             for (int p = 0; p < 3; p++) {
                 Require(w[86+p] >= w[33] && w[86+p] <= w[34]);
                 for (int i = 0; i < 8; i++) {

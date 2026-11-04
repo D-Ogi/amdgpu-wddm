@@ -28,7 +28,7 @@ static partial class UnitTests
         Strings.Language = "en";
         var raw = File.ReadAllBytes(Environment.GetEnvironmentVariable("AMDGPU_WDDM_BOARD_FIXTURE"));
         var fixture = BoardCapabilities.Parse(raw);
-        Equal(2u, fixture[4], "the provider fixture is ABI 2");
+        Equal(3u, fixture[4], "the provider fixture is ABI 3, which keeps the overclock words of ABI 2");
         Equal(3u, fixture[143], "three tiers");
         // The envelopes as the driver compiles them (driver/shim/include/bc250_board_envelope.h).
         BoardCapabilities.Replace(fixture);

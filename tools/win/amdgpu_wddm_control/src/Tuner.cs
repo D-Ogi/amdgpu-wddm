@@ -202,6 +202,9 @@ namespace AmdgpuWddmControl
         public static uint MaxSteps { get { return OcUnlock.CpuUvMaxSteps(OcUnlock.Effective); } }
         public static uint MinTempC { get { return BoardCapabilities.Current[22]; } }
         public static uint MaxTempC { get { return BoardCapabilities.Current[23]; } }
+        // The cap that the driver applies when no CpuTempC is stored (BC250_CPU_TEMP_DEFAULT_C, board-caps ABI 3).
+        // A driver of ABI 1 or 2 applies no default: the firmware's own cap, the top of the band, stays in force.
+        public static uint DefaultTempC { get { return BoardCapabilities.Current[171] != 0 ? BoardCapabilities.Current[171] : MaxTempC; } }
         public static uint MaskStock { get { return BoardCapabilities.Current[25]; } }
         public static uint MaskFull { get { return BoardCapabilities.Current[26]; } }
         public static uint StockCores { get { return BoardCapabilities.Current[138]; } }

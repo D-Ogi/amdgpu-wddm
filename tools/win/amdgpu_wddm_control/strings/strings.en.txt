@@ -1419,3 +1419,14 @@ rocm.state.recovery|src|-|Recovery required
 rocm.state.error|src|-|Could not read
 rocm.state.unknown|src|-|Not checked
 search.rocm.payload|src|-|ROCm / PyTorch
+
+# ---- processor temperature limit (the default cap of 90 C, docs/design/tuner.md) ----
+graphics.limit.title|src|-|Processor temperature limit (throttling)
+graphics.limit.intro|src|-|The processor slows itself down when it reaches this temperature. A lower limit keeps it cooler under a long, heavy load. A higher limit gives a little more speed and more heat.
+graphics.limit.apply|src|-|Test this limit
+tuner.limit.default|src|-|The default is {0} °C. {1} °C is the processor’s own highest limit.
+tuner.limit.in-force.default|src|-|{0} °C (default)
+tuner.limit.off|src|-|Processor tuning is off, so the processor’s own limit of {0} °C is in force.
+search.graphics.cpu-limit|src|-|Processor temperature limit
+search.graphics.cpu-limit.terms|src|-|CPU temperature|CPU temp|throttling|thermal limit|Tctl|hot|overheating
+help.setting.cpu-limit|src|-|The temperature at which the processor slows itself down. The default keeps a long, heavy load away from the processor’s own highest limit. A change runs as a test that comes back by itself until you keep it.

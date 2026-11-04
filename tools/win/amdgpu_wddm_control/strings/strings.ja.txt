@@ -1400,3 +1400,14 @@ rocm.state.recovery|mt|4f222673|復旧が必要です
 rocm.state.error|mt|cf91d056|読み取れません
 rocm.state.unknown|mt|d16948e7|未確認
 search.rocm.payload|mt|b6198d0f|ROCm / PyTorch
+
+# ---- processor temperature limit (the default cap of 90 C, docs/design/tuner.md) ----
+graphics.limit.title|mt|49db3253|プロセッサの温度上限（スロットリング）
+graphics.limit.intro|mt|4cf75170|プロセッサはこの温度に達すると自分で速度を下げます。上限を低くすると、長く重い負荷でも温度が低く保たれます。上限を高くすると、速度が少し上がり、発熱が増えます。
+graphics.limit.apply|mt|3aff98ba|この上限をテスト
+tuner.limit.default|mt|5f68e9b0|既定値は {0} °C です。{1} °C はプロセッサ自身の最高上限です。
+tuner.limit.in-force.default|mt|0bbe6cf5|{0} °C（既定）
+tuner.limit.off|mt|04306f74|プロセッサのチューニングがオフのため、プロセッサ自身の上限 {0} °C が適用されています。
+search.graphics.cpu-limit|mt|c90220a5|プロセッサの温度上限
+search.graphics.cpu-limit.terms|mt|8aa04853|CPU温度|温度|スロットリング|サーマル|Tctl|熱い|過熱
+help.setting.cpu-limit|mt|34c700af|プロセッサが自分で速度を下げる温度です。既定値により、長く重い負荷でもプロセッサ自身の最高上限から離れた温度に保たれます。変更は、保持するまで自動で元に戻るテストとして動きます。

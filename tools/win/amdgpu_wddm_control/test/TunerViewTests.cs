@@ -55,7 +55,8 @@ sealed class FakeTunerDriver
         long tune;
         _tuneOn = Snap.Parameters.TryGetValue("CpuTune", out tune) && tune == 1;
         _proven = false; _cpuTrial = false;
-        _aMax = _sMax; _aUv = _sUv; _aTemp = _sTemp;
+        // A start with tuning on applies the default temperature cap when none is stored (driver/kmd/cpu.c).
+        _aMax = _sMax; _aUv = _sUv; _aTemp = _sTemp != 0 ? _sTemp : _tuneOn ? CpuTuning.DefaultTempC : 0;
         _bMax = _bUv = _bTemp = 0;
         Snap.Health.Generation = Generation;
     }
@@ -170,7 +171,8 @@ sealed class FakeTunerDriver
                 return true;
             case "cpu-reset":
                 if (!_proven) return false;
-                _aMax = _aUv = _aTemp = 0; _sMax = _sUv = _sTemp = 0; _cpuStored = false; _cpuTrial = false; _cpuSerial++;
+                // The recorded clock and undervolt come back, and the temperature cap goes to its default.
+                _aMax = _aUv = 0; _aTemp = CpuTuning.DefaultTempC; _sMax = _sUv = _sTemp = 0; _cpuStored = false; _cpuTrial = false; _cpuSerial++;
                 return true;
             case "core-mask":
                 if (!_proven) return false;
@@ -222,6 +224,7 @@ static partial class UnitTests
         CpuOffToReady();
         CpuTrials();
         CpuLimitsAndStates();
+        CpuLimitCard();
         TuningSummaryAndPoll();
     }
 
@@ -458,7 +461,9 @@ static partial class UnitTests
         Equal("3600, 2800, 1600 MHz", v.Readings.First(r => r.Key == Strings.T("tuner.cpu.steps-now.label")).Value, "cpu: the speed steps");
         Equal("58 °C", v.Readings.First(r => r.Key == Strings.T("tuner.cpu.temp.label")).Value, "cpu: the temperature");
         Equal("1050 mV", v.Readings.First(r => r.Key == Strings.T("graphics.cpu.voltage.label")).Value, "cpu: the voltage");
-        Check(v.InForce.Last().Value.Contains("3600 MHz") && v.InForce.Last().Value.Contains("95 °C"), "cpu: the standard of this start is named: " + v.InForce.Last().Value);
+        // The standard is the recorded clock (3600 MHz) with the default cap, not the 95 C the firmware reported.
+        Check(v.InForce.Last().Value.Contains("3600 MHz") && v.InForce.Last().Value.Contains(CpuTuning.DefaultTempC + " °C"), "cpu: the standard of this start is named: " + v.InForce.Last().Value);
+        Check(v.InForce[0].Value.Contains(CpuTuning.DefaultTempC + " °C") && !v.ResetEnabled, "cpu: the default cap in force is standard: " + v.InForce[0].Value);
         CpuAgree(d, v, null, null, null, "cpu proven");
 
         // The pickers offer the driver's lists and nothing else; a baseline above the release's highest limit
@@ -583,6 +588,107 @@ static partial class UnitTests
         }
         Equal("", string.Join(" | ", PlainWords.Findings(texts)), "G-NOINT: the tuning cards name no internals");
         Check(PlainWords.Findings(new[] { "CpuTune" }).Any(), "G-NOINT: the processor setting's own name counts as an internal");
+    }
+
+    static CpuLimitView LimitOf(FakeTunerDriver d, TrialWatch w, uint? temp = null)
+    {
+        var s = d.Read();
+        w.Observe(s.Curve, s.Cpu);
+        return TunerView.CpuLimit(s.Cpu, true, s.P("CpuTune"), null, temp, w.Cpu);
+    }
+
+    // The temperature limit card has no button of its own: each one is a processor-card action, and its plan stands.
+    static void LimitAgree(FakeTunerDriver d, CpuLimitView v, uint? temp, string what)
+    {
+        var s = d.Read();
+        if (v.Card != TuneCard.Ready)
+        {
+            Check(!v.ApplyEnabled && !v.KeepEnabled && !v.StopEnabled && !v.ReadEnabled, what + ": no write button outside the ready card");
+            Equal(v.EnableOffered, v.Card == TuneCard.Off && !TunePlan("cpu-enable", s).Refused, what + ": Turn on and its plan agree");
+            return;
+        }
+        if (!v.Proven) Equal(v.ReadEnabled, !TunePlan("cpu-readback", s).Refused, what + ": Read and its plan agree");
+        else Check(!v.ReadEnabled, what + ": the read button goes once the processor answered");
+        Equal(v.ApplyEnabled, temp != null && !TunePlan("cpu-trial", s, TunerView.CpuRequest(null, null, temp)).Refused, what + ": Apply and its plan agree");
+        Equal(v.KeepEnabled, !TunePlan("cpu-keep", s).Refused, what + ": Keep and its plan agree");
+        Equal(v.StopEnabled, !TunePlan("cpu-stop", s).Refused, what + ": Stop and its plan agree");
+    }
+
+    // The default temperature cap (docs/design/tuner.md): visible outside "Advanced tuning", tested and kept like
+    // every processor setting, and Standard puts the default back, not the firmware's own cap.
+    static void CpuLimitCard()
+    {
+        Equal(90u, CpuTuning.DefaultTempC, "limit: the provider's default cap");
+        string dflt = Strings.T("tuner.limit.in-force.default", CpuTuning.DefaultTempC);
+
+        var off = new FakeTunerDriver(false);
+        var w = new TrialWatch();
+        var v = LimitOf(off, w);
+        Equal(TuneCard.Off, v.Card, "limit off: processor tuning is off");
+        Equal(Strings.T("tuner.limit.off", CpuTuning.MaxTempC), v.Status, "limit off: the processor's own limit is named");
+        Check(v.EnableOffered, "limit off: the card offers to turn tuning on");
+        LimitAgree(off, v, null, "limit off");
+
+        var d = new FakeTunerDriver(true);
+        w = new TrialWatch();
+        v = LimitOf(d, w, 95u);
+        Equal(TuneCard.Ready, v.Card, "limit: ready with tuning on");
+        Check(v.ReadEnabled && !v.ApplyEnabled && v.Now == Strings.T("perf.no-reading"), "limit: read first, no reading guessed");
+        LimitAgree(d, v, 95u, "limit: before the readback");
+
+        Check(d.Run(TunePlan("cpu-readback", d.Read())), "limit: the readback runs");
+        v = LimitOf(d, w);
+        Equal("58 °C", v.Now, "limit: the temperature now");
+        Equal(dflt, v.Limit, "limit: the default cap is in force and named as the default");
+        Equal(CpuTuning.DefaultTempC, v.Temp, "limit: the picker starts at the default");
+        Check(v.Default.Contains(CpuTuning.DefaultTempC + " °C") && v.Default.Contains(CpuTuning.MaxTempC + " °C"), "limit: the default and the highest limit are named: " + v.Default);
+        Check(!v.ApplyEnabled && v.Status == null && v.Outcome == null, "limit: nothing to test without an edit");
+        Check(TunePlan("cpu-reset", d.Read()).Refused, "limit: the default cap is standard, so Standard has nothing to do");
+        LimitAgree(d, v, null, "limit: proven");
+
+        v = LimitOf(d, w, 95u);
+        Check(v.Edited && v.ApplyEnabled && v.Temp == 95u, "limit: an edit can be tested");
+        LimitAgree(d, v, 95u, "limit: edited");
+        var plan = TunePlan("cpu-trial", d.Read(), TunerView.CpuRequest(null, null, 95u));
+        Check(!plan.Refused && plan.Tune.TempC == 95u && plan.Tune.MaxMHz == null && plan.Tune.UvSteps == null, "limit: only the temperature travels");
+        Check(d.Run(plan), "limit: the trial runs");
+        v = LimitOf(d, w);
+        Check(v.OnTrial && v.StatusWarn && v.KeepEnabled && v.StopEnabled && v.Limit == "95 °C", "limit: on trial, countdown, Keep and Stop: " + v.Limit);
+        Equal(TunerView.Cpu(d.Read().Cpu, true, 1, null, null, null, null, w.Cpu).Status, v.Status, "limit: the same countdown as the processor card");
+        LimitAgree(d, v, null, "limit: on trial");
+
+        Check(d.Run(TunePlan("cpu-keep", d.Read())), "limit: keep runs");
+        v = LimitOf(d, w);
+        Equal("95 °C", v.Limit, "limit: the kept limit is in force");
+        Check(v.OutcomeGood, "limit: the card says kept");
+        Check(TunerView.Cpu(d.Read().Cpu, true, 1, null, null, null, null, w.Cpu).ResetEnabled, "limit: a kept limit can go back to standard");
+        d.Restart();
+        d.Run(TunePlan("cpu-readback", d.Read()));
+        Equal("95 °C", LimitOf(d, w).Limit, "limit: a stored limit wins over the default at the next start");
+
+        Check(d.Run(TunePlan("cpu-reset", d.Read())), "limit: Standard runs");
+        v = LimitOf(d, w);
+        Equal(dflt, v.Limit, "limit: Standard puts the default cap back, not the firmware's own");
+        Check(!TunerView.Cpu(d.Read().Cpu, true, 1, null, null, null, null, w.Cpu).ResetEnabled, "limit: nothing left to reset");
+        d.Restart();
+        d.Run(TunePlan("cpu-readback", d.Read()));
+        Equal(dflt, LimitOf(d, w).Limit, "limit: the next start applies the default again");
+
+        // An ABI 2 driver (tester.36 and older) applies no default: its standard is the firmware's own cap.
+        var saved = BoardCapabilities.Current;
+        var raw = new byte[BoardCapabilities.Bytes];
+        for (int i = 0; i < BoardCapabilities.Bytes / 4; i++) Array.Copy(BitConverter.GetBytes(saved[i]), 0, raw, i * 4, 4);
+        Array.Copy(BitConverter.GetBytes(2u), 0, raw, 16, 4);
+        Array.Copy(BitConverter.GetBytes(0u), 0, raw, 171 * 4, 4);
+        BoardCapabilities.Replace(BoardCapabilities.Parse(raw));
+        Equal(CpuTuning.MaxTempC, CpuTuning.DefaultTempC, "limit ABI 2: the default is the firmware's cap");
+        BoardCapabilities.Replace(saved);
+
+        var texts = new List<string> { v.Now, v.Limit, v.Default };
+        foreach (var lang in Strings.Languages)
+            foreach (var id in new[] { "graphics.limit.title", "graphics.limit.intro", "graphics.limit.apply", "tuner.limit.default", "tuner.limit.in-force.default", "tuner.limit.off", "help.setting.cpu-limit" })
+                texts.Add(Strings.In(lang, id));
+        Equal("", string.Join(" | ", PlainWords.Findings(texts)), "G-NOINT: the limit card names no internals");
     }
 
     static void TuningSummaryAndPoll()

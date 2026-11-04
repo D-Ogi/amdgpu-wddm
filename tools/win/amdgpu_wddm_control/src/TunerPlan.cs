@@ -271,10 +271,12 @@ namespace AmdgpuWddmControl
                     p.OfferRestart = true;
                     break;
                 default:
+                    // The default temperature cap in force is a default setting: a start applies it with nothing stored.
                     if (!u.Has(CpuState.FlagStored) && !u.Has(CpuState.FlagOnTrial) && u.AppliedMaxMHz == 0 &&
-                        u.AppliedUvSteps == 0 && u.AppliedTempC == 0)
+                        u.AppliedUvSteps == 0 && (u.AppliedTempC == 0 || u.AppliedTempC == CpuTuning.DefaultTempC))
                         return No(p, "The processor has its default settings already.", "tuner.refuse.cpu-already-standard");
-                    p.Change = "the stored processor settings are removed and the firmware's own values come back";
+                    p.Change = "the stored processor settings are removed, the recorded clock comes back and the temperature cap goes to its default of "
+                        + CpuTuning.DefaultTempC + " C";
                     p.Preview.Add(Strings.T("tuner.cpu.preview.reset"));
                     break;
             }
