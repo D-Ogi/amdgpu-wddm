@@ -574,8 +574,9 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
             @(Get-Content -LiteralPath (Join-Path $logs 'build-release.log') -Tail 15) | ForEach-Object { "    $_" }
             Stop-Package "build-release.ps1 $flavour exit $code (log $logs\build-release.log)"
         }
-        $zip = @(Get-ChildItem -LiteralPath $pkgOut -File -Filter '*.zip')
-        if ($zip.Count -ne 1) { Stop-Package "$pkgOut holds $($zip.Count) zips, 1 expected" }
+        # The driver package only: the self-update assets (nagi-apps-<version>.zip and the manifest) lie beside it.
+        $zip = @(Get-ChildItem -LiteralPath $pkgOut -File -Filter 'amdgpu-wddm-tester-*.zip')
+        if ($zip.Count -ne 1) { Stop-Package "$pkgOut holds $($zip.Count) driver package zips (amdgpu-wddm-tester-*.zip), 1 expected" }
         $f.zip = [ordered]@{ file = $zip[0].FullName; sha256 = (Get-FileHash -LiteralPath $zip[0].FullName).Hash; size = $zip[0].Length }
         if ($flavour -eq 'release') { $f.cab = [ordered]@{ file = $cab; sha256 = (Get-FileHash -LiteralPath $cab).Hash } }
         $f.top = Join-Path $pkgOut ([IO.Path]::GetFileNameWithoutExtension($zip[0].Name))
