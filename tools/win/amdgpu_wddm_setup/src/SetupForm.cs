@@ -396,9 +396,7 @@ namespace AmdgpuWddmSetup
             SuspendLayout();
             ClearAndDispose(this);
             Text = Strings.T("ui.window-title");
-            var languages = new[] { new[] { "en", "EN", "English" }, new[] { "pl", "PL", "Polski" }, new[] { "ja", "日本語", "日本語" }, new[] { "ko", "한국어", "한국어" } };
-            _chrome = new ChromeBar(this, Program.ProductName, Theme.S(ChromeHeight), code => Strings.Language = code, languages,
-                Strings.T("ui.minimise"), Strings.T("ui.close-window"));
+            _chrome = new ChromeBar(this, Program.ProductName, Theme.S(ChromeHeight), ChooseLanguage, Strings.T("ui.minimise"), Strings.T("ui.close-window"));
             _rail = new Panel { Dock = DockStyle.Left, Width = Theme.S(RailWidth), BackColor = Theme.Nav, Padding = Theme.Pad(0, 22, 0, 0) };
             // The rule: on a small screen the guide panel is not in the window at all, and the
             // width it would have taken goes to the screen's own column. The panel object stays (the tab order and
@@ -515,8 +513,17 @@ namespace AmdgpuWddmSetup
             }
         }
 
-        // The language was switched, usually by a button of the title bar: the frame is rebuilt after that button's
-        // own click has finished, because the rebuild disposes it.
+        // A language chosen in the title bar: the window switches at once, and the choice is stored where the control
+        // app keeps its own (HKCU\Software\amdgpu-wddm\Control, Language), so the app opens in the same language. A
+        // render or a test stores nothing.
+        void ChooseLanguage(string code)
+        {
+            Strings.Language = code;
+            if (!_smoke) Native.SaveChosenLanguage(Strings.Language);
+        }
+
+        // The language was switched, usually by the language choice of the title bar: the frame is rebuilt after that
+        // menu's own click has finished, because the rebuild disposes the button under it.
         void OnLanguageChanged()
         {
             if (_smoke || !IsHandleCreated) { Relanguage(); return; }
@@ -1876,11 +1883,23 @@ namespace AmdgpuWddmSetup
                     if (string.IsNullOrWhiteSpace(b.AccessibleName)) w.AppendLine("chrome: a window glyph has no accessible name");
                     if (b.Right > _chrome.Width || b.Left < 0 || b.Bottom > _chrome.Height) w.AppendLine("chrome: a window glyph is outside the title bar");
                 }
-                var pills = _chrome.Controls.Cast<Control>().OfType<FlowLayoutPanel>().SelectMany(p => p.Controls.Cast<Control>())
-                    .Where(p => (p.Tag as string) == "lang").ToList();
-                if (pills.Count != Strings.Languages.Length) w.AppendLine("chrome: " + pills.Count + " language choices, " + Strings.Languages.Length + " expected");
-                if (glyphs.Count > 0 && pills.Count > 0 && pills.Max(p => p.Parent.Left + p.Right) > glyphs.Min(b => b.Left))
-                    w.AppendLine("chrome: the language choice runs into the window glyphs");
+                // G-LANG: one language choice with the globe, named by the label that keeps the English word, and a
+                // list of every language by its own name.
+                var choices = _chrome.Controls.Cast<Control>().Where(p => (p.Tag as string) == "lang").ToList();
+                var lang = _chrome.Language;
+                if (choices.Count != 1 || lang == null || choices[0] != lang) w.AppendLine("chrome: " + choices.Count + " language choices, 1 expected");
+                else
+                {
+                    if (lang.Glyph != Icons.Globe) w.AppendLine("chrome: the language choice has no globe");
+                    if (!lang.Text.StartsWith(Strings.Endonym(Strings.Language), StringComparison.Ordinal)) w.AppendLine("chrome: the language choice reads \"" + lang.Text + "\", not the language's own name");
+                    if (lang.AccessibleName == null || !lang.AccessibleName.StartsWith(Strings.LanguageLabel(), StringComparison.Ordinal) || lang.AccessibleName.IndexOf("Language", StringComparison.Ordinal) < 0)
+                        w.AppendLine("chrome: the language choice's name \"" + lang.AccessibleName + "\" lacks the label with the English word");
+                    if (!ChromeBar.LanguageNames().SequenceEqual(Strings.Languages.Select(Strings.Endonym))) w.AppendLine("chrome: the language list is not every language by its own name");
+                    if (lang.Left < 0 || lang.Bottom > _chrome.Height || lang.Top < 0) w.AppendLine("chrome: the language choice is outside the title bar");
+                    if (glyphs.Count > 0 && lang.Right > glyphs.Min(b => b.Left)) w.AppendLine("chrome: the language choice runs into the window glyphs");
+                    var markLeft = Theme.S(20) + Theme.S(26) + Theme.S(14) + Gfx.Measure(Program.ProductName, Theme.Brand, _chrome.Width).Width;
+                    if (lang.Left < markLeft + Theme.S(8)) w.AppendLine("chrome: the language choice runs into the product name");
+                }
             }
             foreach (Control c in _rail.Controls)
                 foreach (Control row in c.Controls)

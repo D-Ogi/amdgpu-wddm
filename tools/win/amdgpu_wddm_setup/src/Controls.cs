@@ -141,9 +141,10 @@ namespace AmdgpuWddmSetup
                 TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.Left | TextFormatFlags.NoPadding);
             x += text.Width;
             if (Chevron) Gfx.Glyph(g, Icons.Chevron, new Rectangle(x + Theme.S(6), (Height - IconSize) / 2, IconSize, IconSize), face, (int)(IconSize * 0.8f));
-            // A pill shows the chosen language with the accent underline of the mockup. The underline clears the
+            // A text pill shows the chosen value with the accent underline of the mockup (the globe pill of the language
+            // choice names the language itself and draws none). The underline clears the
             // descenders of the text itself, so a Korean or Japanese glyph does not sit on it.
-            if (Kind == ButtonKind.Pill && Selected)
+            if (Kind == ButtonKind.Pill && Selected && Glyph == null)
             {
                 int under = Math.Min(Height - Math.Max(1, Theme.S(2)), (Height + text.Height) / 2 + Theme.S(2));
                 using (var b = new SolidBrush(Theme.Accent))

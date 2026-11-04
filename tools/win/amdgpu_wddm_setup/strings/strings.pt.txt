@@ -1,0 +1,380 @@
+# Brazilian Portuguese (pt-BR) strings of Nagi Setup. Every pt-* language of Windows uses this table. Machine translation
+# (mt / mt-safe) until a native review. Format: src/Strings.cs.
+
+# ---- frame ----
+install.pending-removals-cancelled|mt|4a977944|O Setup cancelou remoções deixadas pela desinstalação anterior. Estes arquivos de instalação continuam após o Windows reiniciar.
+ui.close|mt|7d9eb7ac|Fechar
+ui.back|mt|76900f1b|Voltar
+ui.cancel|mt|19766ed6|Cancelar
+ui.choose-folder|mt|826c7dcd|Escolher pasta...
+ui.language.label|mt-safe|a4fe6526|Idioma
+ui.minimise|mt|20f082e9|Minimizar
+ui.close-window|mt|8b9de9c0|Fechar janela
+ui.window-title|mt|229174f8|Nagi Setup - driver de vídeo para a BC-250
+ui.unexpected|mt|88790f84|O Setup parou porque algo deu errado na janela dele. Nada mais foi alterado. Inicie-o de novo.
+rail.welcome|mt|0e2226b5|Boas-vindas
+rail.check|mt|9d60841e|Verificar
+rail.plan|mt|aff0766a|Revisar
+rail.install|mt|569ca49f|Instalar
+rail.finish|mt|a6c7a84b|Concluir
+rail.folder|mt|74ccd433|Pasta
+rail.prepare|mt|ee820467|Preparar
+rail.current|mt|3d59ee1e|etapa atual
+rail.done|mt|a4c3ed04|concluída
+rail.failed|mt|a1f6bdb2|parou aqui
+elevation.declined|mt|0a586e33|O Setup precisa de permissão de administrador para instalar ou reparar o driver. Nada foi alterado. Inicie o Setup de novo e escolha Sim quando o Windows perguntar.
+payload.damaged|mt|44795d7b|Este arquivo do Setup está danificado: os arquivos de instalação que ele traz não são os mesmos com que foi criado. Nada foi alterado. Baixe a versão de novo.
+payload.already-running|mt|45dca71f|O Setup já está em execução neste PC. Conclua a instalação na janela que está aberta; nada foi alterado aqui.
+payload.folder|mt|78be926d|O Setup não consegue preparar a pasta onde guarda os arquivos de instalação: ela pertence a outra conta deste PC ou não é uma pasta comum. Nada foi alterado. Remova essa pasta, indicada no arquivo de suporte, e inicie este arquivo de novo.
+loading.starting|mt|ff87e28a|Preparando o Setup.
+loading.permission|mt|2d672b09|Agora o Windows pergunta se o Setup pode fazer alterações neste PC. Escolha Sim para continuar.
+loading.unpacking|mt|a96e5550|Descompactando e verificando os arquivos de instalação. Isso leva alguns segundos.
+
+# ---- welcome ----
+welcome.title|mt|1d5a1bfb|Instale a Nagi, o driver de vídeo da ASRock BC-250
+welcome.body|mt|37fc056a|O Setup instala o driver de vídeo e o Nagi Control App. Primeiro ele verifica este PC e mostra tudo o que vai alterar antes de alterar qualquer coisa.
+welcome.repair.title|mt|ccc0cf87|Reparar o driver de vídeo Nagi
+welcome.repair.body|mt|25153ac9|O Setup instala a mesma versão de novo, a partir da cópia guardada neste PC. Suas configurações são mantidas.
+welcome.dry-run|mt|42af2b21|Teste: o Setup passa por todas as etapas, mas não altera nada.
+welcome.version|mt|9699394c|Versão {0}
+welcome.files-missing|mt|938e9bd4|Faltam os arquivos desta versão. Descompacte o arquivo zip inteiro em uma pasta e inicie o setup.exe dessa pasta: ele precisa da pasta files ao lado.
+welcome.source.title|mt|1623a97a|De onde vêm os arquivos
+welcome.source.package|mt|61e09644|Os arquivos deste Setup
+welcome.source.kept|mt|9ea897ba|A cópia guardada neste PC
+welcome.source.prepared|mt|1c2cec8d|Uma pasta preparada para um PC sem internet
+welcome.prepared.path|mt|a79aab12|Pasta preparada
+welcome.prepared.choose|mt|40e8823f|Escolha a pasta preparada.
+welcome.prepared.ok|mt|6203a8e5|Pasta preparada com a versão {0}. Não é preciso internet.
+welcome.prepare-link|mt|5868e4fc|Preparar uma pasta para um PC sem internet...
+welcome.check|mt|7c97d062|Verificar este PC
+welcome.promise.driver|mt|d8eb7961|O driver de vídeo e o Nagi Control App, instalados juntos.
+welcome.promise.shown|mt|0f886d7e|Cada alteração é mostrada antes de qualquer mudança neste PC.
+welcome.promise.offline|mt|bb2a3e49|Uma pasta preparada instala a mesma versão sem internet.
+folder.missing|mt|219fdbbd|Esta pasta não existe.
+folder.not-prepared|mt|c9f12282|Esta não é uma pasta preparada. Escolha a pasta que o Setup preparou ou prepare uma antes.
+folder.unknown|mt|6c91a6f6|Esta pasta foi preparada por outra versão do Setup e não pode ser usada. Prepare-a de novo.
+folder.incomplete|mt|73bc7acc|Esta pasta preparada está incompleta. Prepare-a de novo.
+
+# ---- checking ----
+checking.title|mt|cae3765d|Verificando este PC
+checking.body|mt|8fff775a|Isso pode levar até um minuto. Nada é alterado.
+checking.list|mt|de07d072|Verificações
+checking.waiting|mt|db75f750|Iniciando as verificações...
+
+# ---- checks (one per check of the installer) ----
+check.other|mt|6b757578|Outra verificação (detalhes no arquivo de suporte).
+check.mark.ok|mt|436fe71b|Aprovada
+check.mark.warn|mt|d8da2c49|Observação
+check.mark.fail|mt|cb5b28f8|Não aprovada
+check.package.ok|mt|3a077fcf|Os arquivos do Setup estão completos.
+check.package.damaged|mt|8eaa1e54|Os arquivos do Setup estão danificados ou incompletos.
+check.admin.ok|mt|a3e85529|O Setup está rodando com permissão de administrador.
+check.admin.dry-run|mt|83161cfe|O Setup está rodando sem permissão de administrador, então algumas configurações não puderam ser lidas.
+check.admin.missing|mt|3da431e1|O Setup precisa de permissão de administrador.
+check.windows.ok|mt|7d1c4fbb|Esta versão do Windows é compatível.
+check.windows.not-x64|mt|1c9550cb|Este Windows não é de 64 bits. O driver precisa do Windows 11 de 64 bits.
+check.windows.too-old|mt|b44ce700|Esta versão do Windows é antiga demais. O driver precisa do Windows 11.
+check.windows.below-supported|mt|71688b75|Esta versão do Windows é mais antiga que as versões em que o driver é testado: Windows 11 23H2, 24H2 e 25H2. Atualize o Windows. A instalação continua.
+check.windows.insider|mt|2b892990|Esta é uma versão Insider do Windows, que não é compatível. O driver é testado no Windows 11 23H2, 24H2 e 25H2. A instalação continua.
+check.windows.ltsc|mt|346c19f0|Esta edição do Windows (LTSC) não é testada com este driver. A instalação continua.
+check.gpu.ok|mt|f61b25ac|O chip gráfico da ASRock BC-250 foi encontrado.
+check.gpu.missing|mt|7ac6bcb8|Nenhum chip gráfico da ASRock BC-250 foi encontrado. Este driver funciona apenas na BC-250.
+check.gpu.several|mt|57bff6a6|Foi encontrado mais de um chip gráfico da BC-250. Só um é compatível.
+check.gpu.ignored|mt|cced4549|Nenhum chip gráfico da BC-250 foi encontrado; este teste continua mesmo assim.
+check.secureboot.off|mt|a107f361|O Secure Boot está desligado.
+check.secureboot.on|mt|1a594fe8|O Secure Boot está ligado. Desligue-o nas configurações de firmware do PC antes de instalar.
+check.secureboot.unknown|mt|349a2c6d|O Setup não conseguiu ler se o Secure Boot está ligado.
+check.testsigning.active|mt|f6138193|O modo de teste do Windows está ligado.
+check.testsigning.inactive|mt|1f2ea753|O modo de teste do Windows está desligado. O Setup o liga durante a instalação.
+check.bitlocker.ok|mt|f6019261|O BitLocker não precisa de atenção.
+check.bitlocker.on|mt|833d9bbb|O BitLocker está ligado. O Setup o pausa durante as reinicializações da instalação e ele volta a ligar sozinho.
+check.bitlocker.unknown|mt|74c5d56a|O Setup não conseguiu ler o estado do BitLocker. Se o BitLocker estiver ligado, tenha sua chave de recuperação à mão.
+check.hvci.off|mt|c5375084|A integridade da memória está desligada.
+check.hvci.on|mt|038dce93|A integridade da memória está ligada. Se o driver não iniciar, desligue-a em Segurança do Windows (Isolamento de núcleo).
+check.smartappcontrol.off|mt|d0c27ee8|O Controle Inteligente de Aplicativos está desligado.
+check.smartappcontrol.on|mt|78cca160|O Controle Inteligente de Aplicativos está ligado. Enquanto ele estiver ligado, o Windows bloqueia este Setup e os programas do driver de vídeo. Desligue-o antes de instalar.
+check.smartappcontrol.evaluation|mt|8d341ff5|O Controle Inteligente de Aplicativos está em modo de avaliação. Se o Windows ligá-lo depois, ele bloqueia os programas do driver de vídeo, e a área de trabalho e os jogos perdem o driver. Desligue-o agora.
+check.smartappcontrol.unknown|mt|4ce54139|O Setup não conseguiu ler se o Controle Inteligente de Aplicativos está ligado.
+check.vcruntime.ok|mt|da7b7ffe|O runtime do Microsoft Visual C++ está instalado.
+check.vcruntime.missing|mt|e96604a7|O runtime do Microsoft Visual C++ 2015-2022 (x64) está faltando ou é antigo demais. O Setup o instala com o arquivo que traz junto.
+check.vcruntime.no-installer|mt|a1670c32|É preciso instalar o runtime do Microsoft Visual C++ 2015-2022 (x64), e este conjunto de arquivos não traz o programa da Microsoft que faz isso. Baixe a versão de novo.
+check.space.ok|mt|fc218428|Há espaço livre suficiente em disco.
+check.space.low|mt|e473eee3|Não há espaço livre suficiente na unidade C:. O Setup precisa de 2 GB.
+check.firmware.download-ok|mt|11f01474|O firmware da GPU pode ser baixado.
+check.firmware.unreachable|mt|2126305d|O firmware da GPU não pode ser baixado. Conecte este PC à internet ou use uma pasta preparada.
+check.firmware.folder-ok|mt|1703f1b6|Os arquivos de firmware da GPU na pasta estão completos.
+check.firmware.folder-bad|mt|e11eec4f|Alguns arquivos de firmware da GPU na pasta estão faltando ou são diferentes.
+check.firmware.no-list|mt|de36633a|Os arquivos do Setup não dizem qual firmware da GPU é necessário. Baixe a versão de novo.
+check.lab-install.present|mt|c4ebe135|Este PC tem uma instalação de desenvolvimento do driver. O Setup não a altera.
+check.lab-install.forced|mt|711bb1d9|Este PC tem uma instalação de desenvolvimento do driver; o Setup continua porque você pediu.
+check.state.ok|mt|52525a38|Foi encontrada uma instalação anterior da Nagi.
+check.existing.no-state|mt|a46215ab|O driver está instalado sem os registros do Setup. Desinstale-o primeiro e inicie o Setup de novo.
+check.driver-rank.ok|mt|e792821d|O Windows pode passar o chip gráfico para o driver deste pacote.
+check.driver-rank.not-above|mt|39cb4710|O Windows manteria o driver instalado agora, porque este pacote não tem uma versão de driver mais nova. Desinstale o driver primeiro, reinicie o PC e inicie o Setup de novo.
+check.driver-rank.unreadable|mt|7961fbb0|O Setup não conseguiu ler qual driver o chip gráfico usa agora. Desinstale o driver primeiro, reinicie o PC e inicie o Setup de novo.
+check.prepare.destination-inside|mt|08b96974|A pasta está dentro dos arquivos do Setup. Escolha uma pasta em outro lugar.
+check.prepare.destination-file|mt|3d875a78|Já existe um arquivo com este nome. Escolha uma pasta.
+check.prepare.destination-not-empty|mt|5a6961d7|A pasta não está vazia. Escolha uma pasta vazia ou uma pasta preparada antes.
+
+# ---- plan ----
+plan.install.title|mt|6dd7ca20|Pronto para instalar a versão {0}
+plan.upgrade.title|mt|8222a9d0|Pronto para atualizar da versão {0} para a {1}
+plan.repair.title|mt|2dbf2997|Pronto para reparar a versão {0}
+plan.resume.title|mt|f105505d|Pronto para concluir a instalação da versão {0}
+plan.already.title|mt|92b25209|A versão {0} já está instalada e verificada
+plan.already.body|mt|9ea445c4|Não há nada a fazer. Escolha Reparar para instalar a mesma versão de novo.
+plan.verify.title|mt|e593d4b9|A versão {0} está instalada e aguarda uma reinicialização
+plan.verify.body|mt|1deb5208|Depois que o Windows reiniciar, o Setup verifica se o driver funciona.
+plan.repair-again|mt|1196b6c5|Reparar
+plan.checks.title|mt|de07d072|Verificações
+plan.checks.ok|mt|eb2f3d98|Todas as verificações foram aprovadas.
+plan.checks.attention|mt|e6885bff|Verificações que precisam da sua atenção: {0}
+plan.what.title|mt|70fbb54b|O que acontece
+plan.restarts.0|mt|b0a2c82a|Não é preciso reiniciar o Windows.
+plan.restarts.1|mt|2ae11afb|O Windows reinicia uma vez. Depois que você entrar de novo, o Setup continua sozinho.
+plan.restarts.2|mt|efc32bc9|O Windows reinicia duas vezes. Depois de cada entrada, o Setup continua sozinho.
+plan.restarts.many|mt|40c9ca93|O Windows vai reiniciar {0} vezes. O Setup continua depois de cada entrada.
+plan.restarts.choice|mt|e2801100|Cada reinicialização começa sozinha após uma curta contagem regressiva. Você pode reiniciar na hora ou adiar.
+plan.change.test-mode|mt|7c5a1301|O Windows passa para o modo de teste, para poder carregar este driver.
+plan.change.test-mode.note|mt|9a9c5086|Aí aparece "Modo de Teste" em um canto da área de trabalho. Remover o driver o desliga de novo.
+plan.change.test-mode.on|mt|cf315297|O Windows já roda em modo de teste, então nada muda aí.
+plan.change.bitlocker|mt|f43553fa|A proteção do BitLocker é pausada durante as reinicializações desta instalação e volta a ligar sozinha, para que o Windows não peça a chave de recuperação.
+plan.change.bitlocker.unknown|mt|67f2277e|O Setup não conseguiu ler o estado do BitLocker deste PC. Ele continua mesmo assim: tenha sua chave de recuperação à mão caso o Windows a peça após uma reinicialização.
+plan.change.vcruntime|mt|65d68876|Primeiro é instalado o runtime do Microsoft Visual C++ 2015-2022 (x64), porque os programas do driver precisam dele.
+shortcuts.title|mt|19544092|Atalhos e Nagi
+shortcuts.start-menu|mt|f7bdc16b|No menu Iniciar
+shortcuts.desktop|mt|b1e0eb2c|Na área de trabalho
+shortcuts.note|mt|e8f6f141|Os atalhos abrem o Nagi Control App. O menu Iniciar também ganha uma entrada de recuperação. Desmarque uma opção se não quiser. O driver é instalado de qualquer forma.
+shortcuts.wallpaper|mt|ce6e26e6|Usar o papel de parede da Nagi
+shortcuts.wallpaper.note|mt|14a12464|O papel de parede é aplicado uma vez para cada pessoa que entrar, depois que o driver for verificado. O Nagi Control App pode trazer de volta o fundo anterior.
+shortcuts.boot-logo|mt|c125e22c|Mostrar a Nagi enquanto o Windows inicia
+shortcuts.boot-logo.note|mt|3c8dd869|A Nagi aparece acima do anel de pontos na tela de inicialização. O Nagi Control App pode desligá-la depois.
+plan.firmware.download|mt|7051aa7f|O firmware da GPU é baixado do arquivo oficial de firmware do Linux e verificado.
+plan.firmware.folder|mt|3afc555b|O firmware da GPU vem da pasta que você escolheu e é verificado.
+plan.firmware.package-folder|mt|576cf803|O firmware da GPU vem da pasta preparada. Não é preciso internet.
+plan.notes.title|mt|3a048d0b|O que há de novo nesta versão
+plan.notes.english|mt|e9981e5c|Estas notas estão em inglês.
+plan.notes.none|mt|e9bf28c9|Esta versão não tem notas de versão.
+plan.settings.title|mt|7760b023|Suas configurações
+plan.settings.summary|mt|e3ba042c|{0} mantidas, {1} novas, {2} alteradas para um novo valor recomendado, {3} sem alteração.
+plan.settings.none|mt|5fa2509b|O Setup não conseguiu listar as configurações que altera. Nada é alterado antes de você continuar.
+plan.settings.note|mt|d7133201|As configurações que você mesmo alterou são mantidas.
+plan.go.install|mt|569ca49f|Instalar
+plan.go.upgrade|mt|c1c1009d|Atualizar
+plan.go.repair|mt|1196b6c5|Reparar
+plan.go.resume|mt|31fbef16|Continuar
+settings.clock-limit|mt|9d16b4b1|Limite de clock gráfico: {0} MHz
+settings.auto-clock.on|mt|499702fd|Clock gráfico automático: ligado
+settings.auto-clock.off|mt|3df7a04f|Clock gráfico automático: desligado
+settings.cores|mt|36cd7560|Núcleos gráficos: {0}
+settings.desktop-path|mt|b1b92ad5|Área de trabalho no chip gráfico
+settings.desktop.gpu|mt|7befc32c|Área de trabalho desenhada pelo chip gráfico
+settings.desktop.cpu|mt|0fcc82b2|Área de trabalho desenhada pelo processador (modo seguro)
+settings.desktop.cpu-until-repair|mt|ed1263ad|Área de trabalho desenhada pelo processador até o driver voltar a desenhá-la
+settings.d3d11.gpu|mt|c45dd50d|Jogos e aplicativos Direct3D 11 e 10.1 desenhados pelo chip gráfico (os aplicativos do próprio Windows e os aplicativos Direct3D 10.0 ficam no processador)
+settings.d3d11.listed|mt|747f87a0|Jogos e aplicativos Direct3D 11 desenhados pelo processador, exceto os da lista
+settings.game|mt|f203abf1|Configurações recomendadas para {0}
+settings.other|mt|b4abd830|{0} outras configurações do driver, {1} delas novas ou alteradas
+settings.decision.set|mt|11507a0e|nova
+settings.decision.same|mt|aaa8d3c8|sem alteração
+settings.decision.update|mt|bae122db|novo valor recomendado
+settings.decision.kept|mt|b4865f1f|seu valor é mantido
+settings.decision.command|mt|898239d8|como você escolheu para esta instalação
+settings.decision.reopened|mt|4342e37e|restaurada por este reparo (o driver a tinha desligado)
+settings.decision.driver-closed|mt|cff55d7f|desligada pelo driver. Um reparo a restaura
+settings.decision.cores-driver-closed|mt|6f8a9a7c|o driver voltou a este número sozinho. Um reparo restaura o número da versão
+settings.decision.cores-reopened|mt|282a0682|restaurado por este reparo (o driver tinha voltado a menos núcleos)
+
+# ---- consents ----
+
+# ---- working ----
+working.title|mt|8749b169|Instalando
+working.repair.title|mt|e2c5201c|Reparando
+working.continue.title|mt|d0432a88|Continuando a instalação
+working.prepare.title|mt|28edcf49|Preparando a pasta
+working.body|mt|dccb0ab7|Aguarde. Mantenha o PC ligado.
+working.prepare.body|mt|aa356215|O Setup copia os arquivos dele e o firmware da GPU e verifica cada um.
+working.stages|mt|1de3df70|Etapas
+working.elapsed|mt|409cb488|Tempo até agora: {0}
+working.cancel.available|mt|0031d59c|Você ainda pode cancelar. Nada foi alterado até agora.
+working.cancel.unavailable|mt|42461b9b|Não é possível cancelar agora: o Setup precisa concluir esta parte antes.
+working.cancel.requested|mt|3caf86ac|Parando no próximo ponto seguro...
+working.close-blocked|mt|10e529bd|O Setup está trabalhando. A janela pode ser fechada quando esta parte terminar.
+stage.other|mt|80de8143|Outra etapa
+stage.preflight|mt|de07d072|Verificações
+stage.test-signing|mt|61d7aae4|Modo de teste do Windows
+stage.install|mt|c9fb4313|Preparando a instalação
+stage.firmware|mt|46d4dd63|Firmware da GPU
+stage.files|mt|3ffd2d35|Arquivos do driver
+stage.driver|mt|fc465aa6|Driver de vídeo
+stage.settings|mt|74a883a0|Configurações
+stage.extras|mt|800ae5e9|Programas extras
+stage.components|mt|5f69dcb7|Instalando os programas extras
+stage.finish|mt|0052205c|Concluindo
+stage.verify|mt|11d4d5ab|Verificando o driver
+stage.prepare-check|mt|0f35d10d|Arquivos do Setup e pasta
+stage.copy|mt|ff9e3c81|Copiando os arquivos
+
+# ---- restart ----
+restart.now|mt|09af1002|Reiniciar agora
+restart.later|mt|73b6e48a|Depois
+restart.save-work|mt|16909f23|Salve seu trabalho antes. O Windows pede aos programas abertos que fechem; ele não os força.
+restart.countdown|mt|e8ce24a7|O Windows reinicia sozinho em {0} s.
+restart.countdown.over|mt|7af75060|A contagem regressiva terminou. O Setup não reinicia mais o Windows sozinho.
+restart.later.done|mt|a38787ae|O Setup continua sozinho depois da próxima reinicialização do Windows. Você pode fechar esta janela.
+restart.failed|mt|56d3b9cd|O Windows não iniciou a reinicialização. Reinicie o PC pelo menu Iniciar.
+
+# ---- results ----
+result.none.title|mt|58c58ece|O Setup parou de forma inesperada
+result.none.body|mt|8ae282a1|O Setup não informou como terminou.
+result.other.title|mt|493698ce|O Setup terminou
+result.other.body|mt|3cf8a086|O arquivo de suporte tem os detalhes.
+result.planned.title|mt|5fa7aac5|Pronto
+result.planned.body|mt|d714c256|O Setup verificou este PC.
+result.needs-consent.title|mt|b2f19443|É preciso a sua concordância
+result.needs-consent.body|mt|ecacb024|O Setup precisa da sua concordância antes de continuar.
+result.dry-run-complete.title|mt|f54c1b03|Teste concluído
+result.dry-run-complete.body|mt|9ea5d7b2|O Setup passou por todas as etapas e não alterou nada.
+result.dry-run-verify.title|mt|f54c1b03|Teste concluído
+result.dry-run-verify.body|mt|d1555a0f|Esta versão aguarda uma reinicialização. Depois dela, uma execução real verifica o driver.
+result.already.title|mt|eb0999fb|Esta versão já está instalada e verificada
+result.already.body|mt|886b4b43|Não há nada a fazer. Escolha Reparar para instalá-la de novo.
+result.restart-test-signing.title|mt|14fc8bc7|Reinicie o Windows para continuar
+result.restart-test-signing.body|mt|2258d814|O modo de teste do Windows liga com a reinicialização. Depois que você entrar de novo, o Setup continua sozinho.
+result.restart-driver.title|mt|14fc8bc7|Reinicie o Windows para continuar
+result.restart-driver.body|mt|de5ef092|O driver está instalado e inicia com a reinicialização. Depois que você entrar de novo, o Setup continua sozinho.
+result.installed-restart.title|mt|93aab4b5|Reinicie o Windows para concluir
+result.installed-restart.body|mt|42a56d9a|Tudo está instalado. Depois da reinicialização, o Setup verifica se o driver funciona.
+result.testsigning-not-active.title|mt|7fcee967|O modo de teste do Windows ainda não está ligado
+result.testsigning-not-active.body|mt|3213b661|O Windows não ligou o modo de teste na última inicialização. Reinicie o Windows mais uma vez. Se esta mensagem voltar, verifique se o Secure Boot está desligado.
+result.testsigning-secureboot.title|mt|e160b4ae|O Secure Boot bloqueia o modo de teste do Windows
+result.testsigning-secureboot.body|mt|5ab0b106|O Windows informa que o Secure Boot está ligado. O Windows não permite o modo de teste de que este driver precisa enquanto o Secure Boot estiver ligado. O firmware padrão da BC-250 não tem a opção Secure Boot, então este computador tem um firmware modificado: desligue o Secure Boot nas configurações dele, geralmente em Security > Secure Boot, e inicie o Setup de novo. Algumas versões modificadas não têm essa opção: defina OS Type como "Other OS" ou apague as chaves do Secure Boot. Para ver o estado você mesmo, abra Informações do Sistema pelo menu Iniciar e leia a linha Secure Boot.
+result.restart-still-pending.title|mt|9676613e|O Windows ainda não reiniciou
+result.restart-still-pending.body|mt|e79d291f|O Setup continua depois da próxima reinicialização do Windows.
+result.verify-before-restart.title|mt|93aab4b5|Reinicie o Windows para concluir
+result.verify-before-restart.body|mt|ff335b2d|O driver é verificado depois que o Windows reiniciar.
+result.install-unfinished.title|mt|905e1ac5|A instalação ainda não foi concluída
+result.install-unfinished.body|mt|0e894d61|Execute o Setup de novo para concluir a instalação. Depois disso o driver é verificado.
+result.verified.title|mt|243117f3|O driver Nagi está instalado e funciona
+result.verified.body|mt|10c96356|Tudo pronto. O Nagi Control App está no menu Iniciar.
+result.verified-with-warnings.title|mt|b0c2d18c|O driver Nagi está instalado e funciona, com observações
+result.verified-with-warnings.body|mt|687cef5d|Tudo pronto. Algumas verificações tiveram observações; o arquivo de suporte tem os detalhes.
+result.preflight-refused.title|mt|6a7ab8d2|O Setup não pode instalar neste PC agora
+result.preflight-refused.body|mt|435efe20|Estas verificações não foram aprovadas. Corrija-as e inicie o Setup de novo.
+result.preflight-error.title|mt|7f549710|O Setup não conseguiu verificar este PC
+result.preflight-error.body|mt|0cdc865d|Tente de novo. Se acontecer outra vez, salve o arquivo de suporte e relate o problema.
+result.needs-admin.title|mt|a7547d5e|O Setup precisa de permissão de administrador
+result.needs-admin.body|mt|c300742e|Inicie o Setup de novo e escolha Sim quando o Windows perguntar.
+result.package-damaged.title|mt|9605d07e|Os arquivos do Setup estão danificados
+result.package-damaged.body|mt|3b352587|Baixe a versão de novo, descompacte-a e inicie o Setup da nova pasta.
+result.firmware-folder-bad.title|mt|7a0ca40b|Os arquivos de firmware da GPU não estão completos
+result.firmware-folder-bad.body|mt|8e7f3bf0|Alguns arquivos de firmware na pasta estão faltando ou são diferentes. Prepare a pasta de novo ou deixe o Setup baixar os arquivos.
+result.firmware-unreachable.title|mt|9a30fe38|O firmware da GPU não pode ser baixado
+result.firmware-unreachable.body|mt|f36a7aec|Verifique a conexão com a internet e tente de novo, ou use uma pasta preparada em outro PC.
+result.prepare-destination.title|mt|80d7e19c|Esta pasta não pode ser usada
+result.prepare-destination.body|mt|537024c6|Escolha uma pasta vazia, ou uma pasta preparada antes, fora dos arquivos do Setup.
+result.busy.title|mt|2a14eee7|O Setup já está em execução
+result.busy.body|mt|f31e735e|Outra instalação ou reparo está em execução neste PC. Aguarde até terminar e tente de novo.
+result.verify-failed.title|mt|dd7e4790|O driver não funciona como esperado
+result.verify-failed.body|mt|ffe45976|O Setup verificou o driver depois da reinicialização e encontrou um problema. Repare-o, ou salve o arquivo de suporte e relate o problema.
+result.step-failed.title|mt|aac11030|O Setup parou antes de concluir
+result.step-failed.body|mt|bda9b715|Uma etapa não foi concluída.
+result.cancelled.title|mt|5efba629|O Setup foi cancelado
+result.cancelled.body|mt|60ecbf18|O Setup parou em um ponto seguro.
+result.cancelled-after-changes.title|mt|5efba629|O Setup foi cancelado
+result.cancelled-after-changes.body|mt|7e3e0e36|O Setup parou em um ponto seguro depois de ter começado a alterar este PC.
+result.deadline.title|mt|37bea89c|O Setup parou: limite de tempo atingido
+result.deadline.body|mt|99cbc2bc|O Setup atingiu o limite de tempo que recebeu e parou em um ponto seguro.
+result.deadline-after-changes.title|mt|37bea89c|O Setup parou: limite de tempo atingido
+result.deadline-after-changes.body|mt|b329d221|O Setup atingiu o limite de tempo que recebeu e parou em um ponto seguro depois de ter começado a alterar este PC.
+result.offline-prepared.title|mt|58c76c43|A pasta está pronta
+result.offline-prepared.body|mt|2a59d535|Copie a pasta para o PC sem internet e inicie o Setup dela. Lá, escolha "Uma pasta preparada para um PC sem internet".
+result.failed-checks|mt|ecefee18|Verificações não aprovadas
+result.nothing-changed|mt|54ca5460|Nada foi alterado.
+result.already-installed|mt|c90b9352|Este PC já tem a versão {0} do driver.
+result.changes-made|mt|b7ee935f|Algumas alterações foram feitas antes de o Setup parar, e elas ficam como estão. Inicie o Setup de novo para concluir ou use Reparar no Nagi Control App.
+result.changes-unknown|mt|88bf7384|O Setup não sabe dizer se algo foi alterado. Inicie o Setup de novo; ele continua onde puder.
+result.support|mt|3e9e40b3|O arquivo de suporte tem os detalhes para um relato de problema. Nada é enviado automaticamente.
+result.support.diagnostics|mt|a739d1a9|Os detalhes do chip gráfico que não iniciou foram coletados para você. Eles estão nesse arquivo.
+result.support.saved|mt|73cd7e8c|Salvo: {0}
+result.support.failed|mt|d2f9f531|Não foi possível salvar o arquivo de suporte. Escolha outro lugar.
+result.save-support|mt|884d47cb|Salvar arquivo de suporte...
+result.retry|mt|d8b8392e|Tentar de novo
+result.repair|mt|1196b6c5|Reparar
+
+# ---- prepare a folder for a PC without internet ----
+prepare.title|mt|27a6234d|Preparar uma pasta para um PC sem internet
+prepare.body|mt|7cd7fbff|O Setup copia os arquivos dele e o firmware da GPU para uma pasta. Copie essa pasta para o PC sem internet e inicie o Setup lá.
+prepare.destination|mt|7788ee99|Pasta a preparar
+prepare.destination.hint|mt|d7d3d807|Escolha uma pasta vazia ou uma pasta preparada antes (ela é substituída).
+prepare.firmware.title|mt|46d4dd63|Firmware da GPU
+prepare.use-firmware|mt|d8e7a9bd|Já tenho os arquivos de firmware da GPU em uma pasta
+prepare.firmware.folder|mt|5c1a3bc9|Pasta do firmware
+prepare.firmware.download-note|mt|6ec53a34|Sem uma pasta, o Setup baixa o firmware, então este PC precisa de internet agora.
+prepare.firmware.folder-note|mt|bb8b6a97|O Setup confere cada arquivo de firmware com a lista desta versão.
+prepare.go|mt|ee820467|Preparar
+
+# ---- guide panel (plan v7 section 6; text only, the panel repeats what the screen says) ----
+guide.title|mt|5506739a|Dica da Nagi
+guide.title.plain|mt|a4245a3c|Dica
+guide.welcome|mt|65339917|Nada muda até você clicar em Instalar. O Setup mostra cada alteração antes.
+guide.prepare|mt|9ee5d83f|Uma pasta preparada funciona em qualquer BC-250 sem internet, também para um reparo mais tarde.
+guide.page-tip|mt|267a0cc9|As configurações que você alterou no Nagi Control App são mantidas ao atualizar.
+guide.work-in-progress|mt|f3e8ef82|Estou trabalhando nisso. Pode levar alguns minutos.
+guide.checking|mt|687b400d|Estou verificando este PC. Pode levar até um minuto.
+guide.pending-restart|mt|d31250df|Suas alterações estão salvas. O Setup continua depois da próxima reinicialização do Windows.
+guide.install-stopped|mt|47319a31|O Setup não terminou. A página diz o que fazer em seguida.
+guide.verification-failed|mt|1abe91c5|O driver não passou nas verificações. Um reparo costuma resolver.
+guide.upgrade-done|mt|7ed192a1|Pronto! O driver está instalado e verificado. Divirta-se!
+guide.name|mt|58a9149a|Nagi significa {0}. Sim, o N é a Nagi de novo.
+brand.expansion|mt-safe|8b8af7be|Nagi's AMD Graphics Infrastructure
+# Optional Windows tuning
+tuning.title|mt|a1f6198e|Ajustes do Windows
+tuning.opt-in|mt|d229d14d|Aplicar ajustes opcionais do Windows
+tuning.details|mt|36ae26fb|Aplica configurações recomendadas para reduzir a atividade do Windows em segundo plano.
+tuning.restore|mt|3fb261c1|Revise cada configuração e restaure os valores salvos no Nagi Control App. A remoção também oferece restaurar as configurações de todo o computador.
+
+# ---- help cards (HelpCards.cs): a check the user fixes in Windows, in steps ----
+help.sac.title|mt|abf79205|Como desligar o Controle Inteligente de Aplicativos
+help.sac.on.body|mt|83e5ce37|O Controle Inteligente de Aplicativos só executa programas que um editor assina e em que a Microsoft confia. Esta versão de teste tem uma assinatura de teste. Desligue o Controle Inteligente de Aplicativos e tente de novo.
+help.sac.evaluation.body|mt|425fde85|Desligue o Controle Inteligente de Aplicativos antes de continuar. Quando ele está desligado, o Windows não o liga sozinho.
+help.sac.unknown.body|mt|41f88dc0|Se o Windows bloquear o Setup ou o driver, desligue o Controle Inteligente de Aplicativos com estas etapas.
+help.sac.step.open|mt|53dc10bb|Selecione Abrir configurações do Controle Inteligente de Aplicativos abaixo. A Segurança do Windows abre a página do Controle Inteligente de Aplicativos.
+help.sac.step.off|mt|1ad754d0|Selecione Desativado.
+help.sac.step.confirm|mt|b7aa45b9|O Windows pergunta "Tem certeza?". Selecione "Sim, tenho certeza". Depois selecione Sim no aviso de administrador.
+help.sac.step.done|mt|f4dc8b8a|Agora a página mostra Desativado como opção selecionada. Você não pode mais selecionar Ativado ou Avaliação.
+help.sac.step.retry|mt|1751eaf5|Volte para esta janela e selecione Tentar de novo.
+help.sac.step.install|mt|6ecd7bba|Volte para esta janela e continue.
+help.sac.note|mt|39238865|Depois de desligar o Controle Inteligente de Aplicativos, você não pode ligá-lo de novo nem selecionar o modo de avaliação até redefinir este PC pelas opções de recuperação do Windows. O Windows avisa isso antes da alteração.
+help.sac.open|mt|6f158fa2|Abrir configurações do Controle Inteligente de Aplicativos
+help.open-failed|mt|680624a8|A Segurança do Windows não abriu. Abra a Segurança do Windows pelo menu Iniciar. Depois selecione Controle de aplicativos e do navegador e, em seguida, Configurações do Controle Inteligente de Aplicativos.
+help.picture|mt|fd7b7a5d|Imagem da etapa {0}
+help.pictures-english|mt|1eacacfc|As imagens mostram o Windows em inglês.
+
+# ---- an update from the control app (setup.exe --apply, ApplyUpdate.cs, docs/design/self-update.md) ----
+apply.working.title|mt|27974dfa|Instalando a atualização
+apply.working.body|mt|d0e12901|O Nagi Setup está instalando a atualização que o Nagi Control App baixou. Isso leva um ou dois minutos. Não desligue o computador.
+apply.done.title|mt|295af56e|A atualização está instalada
+apply.done.body|mt|a7ae3618|A nova versão dos aplicativos Nagi está pronta. Abra o Nagi Control App de novo para usá-la. Não é preciso reiniciar.
+apply.up-to-date.title|mt|b5700156|A Nagi já está atualizada
+apply.up-to-date.body|mt|f738356a|Esta atualização já está neste computador. Nada foi alterado.
+apply.refused-signature.title|mt|906d860f|A atualização não foi instalada
+apply.refused-signature.body|mt|75fa87b4|O Setup não conseguiu confirmar que a atualização vem do projeto Nagi, então não a usou. Nada foi alterado. Procure atualizações de novo mais tarde.
+apply.refused-hash.title|mt|906d860f|A atualização não foi instalada
+apply.refused-hash.body|mt|03f1fcfd|Os arquivos baixados estão danificados ou incompletos. Nada foi alterado. Procure atualizações de novo para baixá-los outra vez.
+apply.refused-downgrade.title|mt|906d860f|A atualização não foi instalada
+apply.refused-downgrade.body|mt|e1283f89|Esta atualização é mais antiga que a versão deste computador. Nada foi alterado.
+apply.refused-too-old.title|mt|8a55309f|Esta atualização precisa do instalador completo
+apply.refused-too-old.body|mt|8a1be265|A versão deste computador é antiga demais para ser atualizada desta forma. Nada foi alterado. Baixe a versão completa na página da versão e instale-a.
+apply.refused-incompatible.title|mt|8a55309f|Esta atualização precisa do instalador completo
+apply.refused-incompatible.body|mt|5df711de|Os novos aplicativos Nagi não funcionam com o driver deste computador. Nada foi alterado. Baixe a versão completa na página da versão e instale-a.
+apply.refused-unknown-installed.title|mt|8a55309f|Esta atualização precisa do instalador completo
+apply.refused-unknown-installed.body|mt|261fb208|O Setup não sabe dizer qual versão da Nagi está neste computador. Nada foi alterado. Baixe a versão completa na página da versão e instale-a.
+apply.busy.title|mt|3c21a94f|Feche os aplicativos Nagi antes
+apply.busy.body|mt|89af49ca|Um aplicativo Nagi ainda está aberto, então o Setup não pôde substituí-lo. Nada foi alterado. Feche o Nagi Control App e todas as outras janelas da Nagi e procure atualizações de novo.
+apply.rolled-back.title|mt|a187e7b8|A versão anterior está de volta
+apply.rolled-back.body|mt|ef09d191|Os novos aplicativos Nagi não iniciaram, então o Setup restaurou a versão anterior. Seu computador funciona como antes.
+apply.driver-handoff.title|mt|c9b3acf3|A atualização inclui um novo driver
+apply.driver-handoff.body|mt|ebef72f8|Agora o Setup abre o instalador da nova versão. Siga-o até o fim; o Windows reinicia durante a instalação. Se o novo driver não iniciar duas vezes, o driver anterior volta sozinho.
+apply.failed.title|mt|e3b2ad5f|A atualização não terminou
+apply.failed.body|mt|f7d37c9d|A atualização parou antes de terminar, e a versão deste computador continua em uso. Tente de novo ou baixe a versão completa na página da versão e instale-a.

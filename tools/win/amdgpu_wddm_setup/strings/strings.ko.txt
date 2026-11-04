@@ -6,7 +6,7 @@ ui.close|mt-safe|7d9eb7ac|닫기
 ui.back|mt-safe|76900f1b|뒤로
 ui.cancel|mt-safe|19766ed6|취소
 ui.choose-folder|mt-safe|826c7dcd|폴더 선택...
-ui.language|mt-safe|a6567634|언어: {0}
+ui.language.label|mt-safe|a4fe6526|언어
 ui.minimise|mt-safe|20f082e9|최소화
 ui.close-window|mt-safe|8b9de9c0|창 닫기
 ui.window-title|mt|229174f8|Nagi Setup - BC-250용 그래픽 드라이버

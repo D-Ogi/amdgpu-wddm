@@ -7,6 +7,7 @@
 // name, a focus ring and a default action.
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -56,7 +57,55 @@ namespace AmdgpuWddmSetup
         readonly Form _form;
         readonly string _brand;
 
-        public ChromeBar(Form form, string brand, int height, Action<string> chooseLanguage, string[][] languages, string minimiseName, string closeName)
+        // The language choice of the bar (G-CHROME reads it).
+        public FlatButton Language { get; private set; }
+
+        // The names the language list shows, in its order: every language by its own name.
+        public static string[] LanguageNames() { return Strings.Languages.Select(Strings.Endonym).ToArray(); }
+
+        // The list of languages as a menu under the button, in the window's palette; the current one is checked.
+        static void OpenLanguages(Control under, Action<string> chooseLanguage)
+        {
+            var menu = new ContextMenuStrip { ShowImageMargin = false, ShowCheckMargin = true, BackColor = Theme.Nav, ForeColor = Theme.Text, Font = Theme.Body, Renderer = new DarkMenu() };
+            menu.AccessibleName = Strings.LanguageLabel();
+            menu.Items.Add(new ToolStripLabel(Strings.LanguageLabel()) { ForeColor = Theme.Dim, Font = Theme.Small });
+            menu.Items.Add(new ToolStripSeparator());
+            ToolStripMenuItem chosen = null;
+            foreach (var code in Strings.Languages)
+            {
+                string c = code;
+                var item = new ToolStripMenuItem(Strings.Endonym(code)) { ForeColor = Theme.Text, Checked = code == Strings.Language };
+                if (item.Checked) chosen = item;
+                item.Click += (s, e) => { if (c != Strings.Language) chooseLanguage(c); };
+                menu.Items.Add(item);
+            }
+            menu.Closed += (s, e) => { if (under.IsHandleCreated && !under.IsDisposed) under.BeginInvoke((Action)menu.Dispose); else menu.Dispose(); };
+            menu.Show(under, new Point(0, under.Height));
+            if (chosen != null) chosen.Select();
+        }
+
+        sealed class DarkMenu : ToolStripProfessionalRenderer
+        {
+            public DarkMenu() : base(new Colors()) { RoundedEdges = false; }
+
+            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e) { if (!(e.Item is ToolStripLabel)) e.TextColor = Theme.Text; base.OnRenderItemText(e); }
+
+            sealed class Colors : ProfessionalColorTable
+            {
+                public override Color ToolStripDropDownBackground { get { return Theme.Nav; } }
+                public override Color MenuBorder { get { return Theme.Line; } }
+                public override Color MenuItemBorder { get { return Theme.Line; } }
+                public override Color MenuItemSelected { get { return Theme.CardHi; } }
+                public override Color ImageMarginGradientBegin { get { return Theme.Nav; } }
+                public override Color ImageMarginGradientMiddle { get { return Theme.Nav; } }
+                public override Color ImageMarginGradientEnd { get { return Theme.Nav; } }
+                public override Color CheckBackground { get { return Theme.Nav; } }
+                public override Color CheckSelectedBackground { get { return Theme.CardHi; } }
+                public override Color SeparatorDark { get { return Theme.Line; } }
+            }
+        }
+
+        public ChromeBar(Form form, string brand, int height, Action<string> chooseLanguage, string minimiseName, string closeName)
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             _form = form;
@@ -77,45 +126,30 @@ namespace AmdgpuWddmSetup
             minimise.Location = new Point(close.Left - minimise.Width - Theme.S(2), close.Top);
             close.Anchor = minimise.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
-            var pills = Ui.Row();
-            pills.Margin = Theme.Pad(0);
-            pills.BackColor = Color.Transparent;
-            pills.AccessibleName = "";
+            // The language choice: one button with a globe and the current language's own name, which opens the list of
+            // every language, each by its own name (Strings.Endonym) and never translated, under a label that keeps the
+            // English word. A person who cannot read the current language finds it by the globe.
             // The tab order of the bar follows what the eye sees, left to right: the language choice, then minimise,
             // then close. WinForms orders children of the same tab index by their z-order, which put "Close window"
             // first; every index here is explicit, and the window gives the bar the last index of all (AssignTabOrder),
             // so the first Tab of the window never lands on the close glyph.
-            int tab = 0;
-            bool first = true;
-            foreach (var l in languages)
+            var current = Strings.Endonym(Strings.Language);
+            var language = new FlatButton
             {
-                var code = l[0];
-                // A thin bar between the languages, as the mockup separates them. It is a panel with no name of its
-                // own and no tab stop: a separator is not a control a user reaches.
-                if (!first)
-                    pills.Controls.Add(new Panel
-                    {
-                        Size = new Size(Math.Max(1, Theme.S(1)), Theme.S(14)), BackColor = Theme.Line, TabStop = false,
-                        AccessibleName = "", Margin = Theme.Pad(0, 8, 4, 0), Tag = "separator",
-                    });
-                first = false;
-                var b = new FlatButton
-                {
-                    Text = l[1], Font = Theme.Small, Kind = ButtonKind.Pill, Selected = Strings.Language == code,
-                    Margin = Theme.Pad(0, 0, 4, 0), AccessibleName = Strings.T("ui.language", l[2]), Tag = "lang", TabIndex = tab++,
-                };
-                b.Click += (s, e) => chooseLanguage(code);
-                pills.Controls.Add(b);
-            }
-            pills.TabIndex = 0;
+                Text = current + " \u25BE", Font = Theme.Small, Kind = ButtonKind.Pill, Glyph = Icons.Globe, Selected = true, Margin = Theme.Pad(0),
+                AccessibleName = Strings.LanguageLabel() + ": " + current, AccessibleRole = AccessibleRole.ComboBox, Tag = "lang", TabIndex = 0,
+            };
+            language.Click += (s, e) => OpenLanguages(language, chooseLanguage);
+            language.KeyDown += (s, e) => { if (e.KeyCode == Keys.F4 || (e.Alt && e.KeyCode == Keys.Down)) { e.Handled = true; OpenLanguages(language, chooseLanguage); } };
+            Language = language;
             minimise.TabIndex = 1;
             close.TabIndex = 2;
-            Controls.Add(pills);
+            Controls.Add(language);
             Controls.Add(minimise);
             Controls.Add(close);
-            pills.PerformLayout();
-            pills.Location = new Point(minimise.Left - pills.PreferredSize.Width - Theme.S(16), (Height - pills.PreferredSize.Height) / 2);
-            pills.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            language.Size = language.GetPreferredSize(Size.Empty);
+            language.Location = new Point(minimise.Left - language.Width - Theme.S(16), (Height - language.Height) / 2);
+            language.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         }
 
         // The bar itself drags the window; its buttons keep their own clicks.

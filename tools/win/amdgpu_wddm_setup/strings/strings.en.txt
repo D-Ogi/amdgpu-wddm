@@ -8,7 +8,7 @@ ui.close|src|-|Close
 ui.back|src|-|Back
 ui.cancel|src|-|Cancel
 ui.choose-folder|src|-|Choose folder...
-ui.language|src|-|Language: {0}
+ui.language.label|src|-|Language
 ui.minimise|src|-|Minimise
 ui.close-window|src|-|Close window
 ui.window-title|src|-|Nagi Setup - graphics driver for the BC-250

@@ -1,5 +1,5 @@
 // G-NOINT (plan v7 R1): words a user of the setup window never sees. The check runs over every string table and over
-// the text of every rendered screen, in all four languages (Latin technical terms show up in JA and KO text too).
+// the text of every rendered screen, in all six languages (Latin technical terms show up in JA and KO text too).
 // The product name amdgpu-wddm is allowed; the release notes are release content and exempt, the support file is
 // English technical detail and never shown in the window.
 using System.Collections.Generic;

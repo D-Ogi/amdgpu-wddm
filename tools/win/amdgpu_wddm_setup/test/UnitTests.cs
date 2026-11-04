@@ -86,6 +86,42 @@ static partial class UnitTests
             foreach (var t in Strings.Tables[lang].Entries.Values)
                 if (t.Text.Contains("amdgpu-wddm")) Check(false, "Nagi: " + lang + " " + t.Id + " still names amdgpu-wddm");
         }
+        // G-LANG: every language of the list shows its own name in its own script under every current language, the
+        // label of the choice keeps the English word, and Windows' language maps every pt-* and es-* culture.
+        var endonyms = new[] { "English", "Polski", "Português (Brasil)", "Español", "日本語", "한국어" };
+        var languageBefore = Strings.Language;
+        foreach (var ui in Strings.Languages)
+        {
+            Strings.Language = ui;
+            Check(Strings.Languages.Select(Strings.Endonym).SequenceEqual(endonyms), "G-LANG: under " + ui + " every language shows its own name");
+            var label = Strings.LanguageLabel();
+            Check(label.Contains("Language") && (ui == "en" || label.Contains(" / ")), "G-LANG: under " + ui + " the language label keeps the English word (" + label + ")");
+        }
+        Strings.Language = languageBefore;
+        var cultureBefore = System.Threading.Thread.CurrentThread.CurrentUICulture;
+        try
+        {
+            foreach (var pair in new[] { "pt-BR:pt", "pt-PT:pt", "es-ES:es", "es-MX:es", "es-419:es", "es-AR:es", "pl-PL:pl", "ja-JP:ja", "ko-KR:ko", "en-GB:en", "de-DE:en", "fr-FR:en" })
+            {
+                var p = pair.Split(':');
+                System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo(p[0]);
+                Equal(p[1], Strings.SystemLanguage(), "G-LANG: Windows in " + p[0] + " opens in " + p[1]);
+            }
+        }
+        finally { System.Threading.Thread.CurrentThread.CurrentUICulture = cultureBefore; }
+        // Every listed language has a table that holds every English id, and the gate fails a listed language whose
+        // table is missing or lacks an id.
+        foreach (var lang in Strings.Languages)
+            Check(Strings.Tables.ContainsKey(lang) && Strings.Tables[lang].Errors.Count == 0 && Strings.Tables["en"].Entries.Keys.All(Strings.Tables[lang].Entries.ContainsKey),
+                "G-STR: " + lang + " has a table with every English id");
+        var probeEn = Strings.Parse("en", "a.b|src|-|One\nc.d|src|-|Two\n");
+        var probe = new System.Collections.Generic.Dictionary<string, StringTable> { { "en", probeEn } };
+        foreach (var lang in Strings.Languages.Where(l => l != "en" && l != "pt"))
+            probe[lang] = Strings.Parse(lang, "a.b|mt|" + Strings.Hash8("One") + "|1\n" + (lang == "es" ? "" : "c.d|mt|" + Strings.Hash8("Two") + "|2\n"));
+        var probeFound = Strings.Validate(probe);
+        Check(probeFound.Contains("pt: table missing"), "G-STR: a listed language without a table fails");
+        Check(probeFound.Contains("es: c.d missing"), "G-STR: a listed language without an id fails");
+        Equal(2, probeFound.Count, "G-STR: only the missing table and the missing id fail (" + string.Join("; ", probeFound) + ")");
         var queue = Strings.ReviewQueue(Strings.Tables);
         Console.WriteLine("G-STR review queue: " + queue.Count + " translations not reviewed");
     }
@@ -435,7 +471,7 @@ static partial class UnitTests
     }
 
     // The help card of Smart App Control (HelpCards.cs): a card for each of its check ids, words for everything it
-    // names in the four languages, at most three pictures, the refusal before the notes, and the pictures the build
+    // names in the six languages, at most three pictures, the refusal before the notes, and the pictures the build
     // embeds, printed for build.ps1 as the guide art is.
     static void HelpCardTests()
     {
@@ -733,7 +769,7 @@ static partial class UnitTests
         // The words of the removed controls are gone from every table, so neither can come back by itself.
         foreach (var id in InstallFlow.RemovedConsentIds)
             Check(!Strings.Has(id), "no confirmations: " + id + " is gone from the string tables");
-        // The countdown of the restart screen: 15 s, one sentence with the seconds in it, in all four languages.
+        // The countdown of the restart screen: 15 s, one sentence with the seconds in it, in all six languages.
         Equal(15, InstallFlow.RestartCountdownSeconds, "no confirmations: the countdown");
         foreach (var lang in Strings.Languages)
         {
@@ -1000,7 +1036,7 @@ static partial class UnitTests
         var beforeUi = System.Threading.Thread.CurrentThread.CurrentUICulture;
         try
         {
-            foreach (var name in new[] { "en-US", "pl-PL", "es-ES", "ja-JP", "ko-KR" })
+            foreach (var name in new[] { "en-US", "pl-PL", "pt-BR", "pt-PT", "es-ES", "es-MX", "ja-JP", "ko-KR" })
             {
                 System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo(name);
                 System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo(name);

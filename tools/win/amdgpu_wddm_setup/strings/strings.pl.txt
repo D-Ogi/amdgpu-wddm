@@ -8,7 +8,7 @@ ui.close|rev|7d9eb7ac|Zamknij
 ui.back|rev|76900f1b|Wstecz
 ui.cancel|rev|19766ed6|Anuluj
 ui.choose-folder|rev|826c7dcd|Wybierz folder...
-ui.language|rev|a6567634|Język: {0}
+ui.language.label|mt-safe|a4fe6526|Język
 ui.minimise|rev|20f082e9|Minimalizuj
 ui.close-window|rev|8b9de9c0|Zamknij okno
 ui.window-title|mt|229174f8|Nagi Setup - sterownik grafiki dla BC-250

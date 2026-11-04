@@ -68,7 +68,10 @@ and unpacks the payload into a plain folder with no administrator rights, for th
 The window draws its own title bar and every widget in it (`src/Theme.cs` for the tokens, `src/Controls.cs` for the
 widgets, `src/Chrome.cs` for the frame), in the visual language of the accepted control-app mockup: a dark window
 with rounded corners, a step rail with an icon per step, cards with a border and a soft shadow, Fluent glyphs, a red
-gradient on the primary action and the guide's tip in a speech bubble over her picture.
+gradient on the primary action and the guide's tip in a speech bubble over her picture. The title bar carries the
+language choice: a globe with the current language's own name, which opens the list of the six languages, each in
+its own script and under a label that keeps the English word. A choice redraws the window at once and is stored as
+the control app's `Language` value, so the app opens in the same language (docs/gui/interfaces.md section 5).
 
 A tester clicks `setup.exe` in the unpacked folder, which is this window. The package root's `install.cmd` opens it
 as well when it is started with no argument, so an advanced user in the folder `files` also reaches the window.
@@ -138,7 +141,7 @@ pwsh tools\release\build-release.ps1 ... -SetupApp P:\BC-250\scratch\build\gui-s
 ```
 
 The build is the gate (its header lists the five steps): unit tests, the compile, the engine client against a
-scripted fake engine (`test/fake-engine.ps1`) and every screen drawn headless at 96, 120, 144 and 192 DPI in four
+scripted fake engine (`test/fake-engine.ps1`) and every screen drawn headless at 96, 120, 144 and 192 DPI in six
 languages, at a 150 % text size, without the guide character and in the high-contrast palette (`--high-contrast`,
 which a PC without high contrast on could otherwise never draw). No step shows a window. `tools/release/test-dryrun.ps1` also runs the built window
 against the real engine (plan and dry run). Every release package carries the window from 0.7.216.100-tester.28 on:
@@ -181,7 +184,8 @@ monitor, and after a screen or DPI change. Six render runs name the screen the w
 directions of the rule.
 
 Translations: `strings/strings.<lang>.txt`. A new or redone translation gets `?` as its hash and `strings/stamp.ps1`
-stamps it; a line whose English text changed fails G-STR until it is retranslated. Polish, Japanese and Korean are
+stamps it; a line whose English text changed fails G-STR until it is retranslated. Polish, Brazilian Portuguese (`pt`, for
+every `pt-*` Windows), Spanish (`es`, neutral Latin American, for every `es-*` Windows), Japanese and Korean are
 machine-translated (`mt`) until a reviewer marks them `rev`.
 
 Mierz siły na zamiary: the setup window promises only what the engine reported.
