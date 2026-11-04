@@ -90,6 +90,7 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'compatibility.ps1')
 . (Join-Path $here 'mft-h264.ps1')
 . (Join-Path $here 'system-tuning.ps1')
+. (Join-Path $here 'nagi-update.ps1')
 . (Join-Path $here 'mesa-temp-cleanup.ps1')
 . (Join-Path $here 'components.ps1')
 . (Join-Path $here 'state-lifecycle.ps1')
@@ -1049,6 +1050,16 @@ if ($script:VerifyOnly) {
     $r = Invoke-Verify
     $bad = @($r | Where-Object { -not $_.pass })
     if (-not $DryRun) { Save-Phase $(if ($bad.Count) { 'verify-failed' } else { 'verified' }) }
+    # The verify result of this boot is an observation of a self-update's driver transaction (nagi-update.ps1): a
+    # start that the confirmation passed commits only with a passing verify in the same boot.
+    if (-not $DryRun) {
+        try {
+            $kmdNow = $null; try { $kmdNow = [string](Get-RunningKmdReading -Cli $null).image.sha256 } catch { }
+            $line = Invoke-NagiUpdateStepHere -InstallRoot $InstallRoot -Boot ([string](Get-BootIdentity).boot_id) -KmdSha256 $kmdNow `
+                -Verify $(if ($bad.Count) { 'verify-failed' } else { 'verified' })
+            if ($line -ne 'update transaction: none') { Write-Log "   $line" }
+        } catch { Write-Log "   update transaction: $($_.Exception.Message)" }
+    }
     # The running-release witness of this boot (release-witness.ps1): written only when the loaded KMD image and the
     # driver's reply match this release; the control application reads it.
     if (-not $DryRun) {
@@ -1569,6 +1580,27 @@ Invoke-Change 'keep the files of this installation from being removed at the nex
 } | Out-Null
 foreach ($d in $dirs) {
     $src = Join-Path $package "payload\$d"
+    # Self-update (docs/design/self-update.md) makes the control folder a junction into apps\<version>. A full install
+    # then puts its control application into apps\<package version> and switches the junction to it, so that the folder
+    # of the earlier apps stays whole for a rollback; a copy through the link would change that folder in place.
+    if ($d -eq 'control' -and -not $script:DryRunMode) {
+        $appsRepair = Repair-NagiAppsSwitch -InstallRoot $InstallRoot
+        if ($appsRepair -notin 'none', 'clean') { Write-Info "an interrupted switch of the control folder was $appsRepair" }
+        $appsLayout = Get-NagiAppsLayout -InstallRoot $InstallRoot
+        if ($appsLayout.kind -eq 'junction') {
+            $appsLeaf = $(if ($packageVersion -and (ConvertTo-NagiRelease $packageVersion)) { $packageVersion } else { 'installed-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') })
+            $appsDest = Join-Path $InstallRoot "apps\$appsLeaf"
+            Invoke-Change "copy payload\control -> $appsDest and switch $InstallRoot\control to it (it was the link to apps\$($appsLayout.target_leaf))" {
+                if ($appsLayout.target_leaf -eq $appsLeaf) { Copy-TreeSafe -Source $src -Destination $appsDest }
+                else {
+                    if (Test-Path -LiteralPath $appsDest) { Remove-PathOrSchedule $appsDest }
+                    Copy-TreeSafe -Source $src -Destination $appsDest
+                    Write-Info "control folder: $(Switch-NagiApps -InstallRoot $InstallRoot -To $appsLeaf) to apps\$appsLeaf"
+                }
+            } | Out-Null
+            continue
+        }
+    }
     Invoke-Change "copy payload\$d -> $InstallRoot\$d (same SHA256: kept; in use: replaced by rename)" {
         Copy-TreeSafe -Source $src -Destination (Join-Path $InstallRoot $d)
     } | Out-Null

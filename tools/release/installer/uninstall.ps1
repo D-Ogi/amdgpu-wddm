@@ -325,6 +325,15 @@ if ($hipOnPath.Count) {
         Set-MachinePath $v $p.kind
     } | Out-Null
 }
+# An install that self-update switched has a control folder that is a junction into apps\ (docs/design/self-update.md),
+# and an interrupted switch can leave control.new or control.prev. The links go first, as links, so that the removal
+# of the install root walks each file once and never through a link.
+foreach ($leaf in 'control', 'control.new', 'control.prev') {
+    $link = Join-Path $root $leaf
+    if ((Test-Path -LiteralPath $link) -and ((Get-Item -LiteralPath $link -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        Invoke-Change "remove the link $link (its apps folder under $root\apps goes with the install root)" { [IO.Directory]::Delete($link) } | Out-Null
+    }
+}
 Invoke-Change "remove $root" { Remove-PathOrSchedule $root } | Out-Null
 # The D3D9 stub in System32 and its x86 copy in SysWOW64 (BD-064), each kept when it was there before the install.
 # This release installs no stub (D3D9 goes through D3D9On12). The releases up to 0.7.213.102-tester.17 did; an install
@@ -407,9 +416,13 @@ $controlData = Join-Path $dataRoot 'control'
 # window that finishes an installation removes its own; this removes what an interrupted run, or an installation made
 # by a release before that folder was cleaned up, left behind.
 $setupData = Join-Path $dataRoot 'setup'
-Invoke-Change "remove the installer state $($script:StateDir) (with the kept repair sets and the running-release witness), $setupData, $dataRoot\start-confirm.log and $dataRoot\dwm-baseline.json" {
+# The self-update folder (docs/design/self-update.md): the update record, the transaction and the release packages
+# that an update handed to their setup window. Nothing in it is the tester's.
+$updateData = Join-Path $dataRoot 'update'
+Invoke-Change "remove the installer state $($script:StateDir) (with the kept repair sets and the running-release witness), $setupData, $updateData, $dataRoot\start-confirm.log and $dataRoot\dwm-baseline.json" {
     Remove-PathOrSchedule $script:StateDir
     if (Test-Path -LiteralPath $setupData) { Remove-PathOrSchedule $setupData }
+    if (Test-Path -LiteralPath $updateData) { Remove-PathOrSchedule $updateData }
     Remove-Item -LiteralPath (Join-Path $dataRoot 'start-confirm.log') -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath (Join-Path $dataRoot 'dwm-baseline.json') -Force -ErrorAction SilentlyContinue
     if ((Test-Path -LiteralPath $dataRoot) -and -not @(Get-ChildItem -LiteralPath $dataRoot -Force).Count) { Remove-Item -LiteralPath $dataRoot -Force }

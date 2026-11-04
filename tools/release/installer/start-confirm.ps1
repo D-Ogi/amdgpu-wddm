@@ -292,4 +292,17 @@ try {
     $why = Write-RunningReleaseWitness -InstallRoot (Split-Path $here) -RecordedBy 'start-confirm'
     Write-StartConfirmLog $(if ($why) { "running-release witness: not written, $why" } else { "running-release witness: written, $($script:WitnessPath)" })
 } catch { Write-StartConfirmLog "running-release witness: $($_.Exception.Message)" }
+# The driver transaction of a self-update (nagi-update.ps1, docs/design/self-update.md): this run's exit code and the
+# KMD image of this boot are one observation of it. Two failed starts of the new driver take the earlier one back. It
+# never changes this run's exit code; a script that is not there (an install before self-update) is no transaction.
+try {
+    $nagi = Join-Path $here 'nagi-update.ps1'
+    if (Test-Path -LiteralPath $nagi) {
+        . $nagi
+        $bootId = $null; try { $bootId = [string](Get-BootIdentity).boot_id } catch { }
+        $kmdNow = $null; try { $kmdNow = [string](Get-RunningKmdReading -Cli $null).image.sha256 } catch { }
+        $line = Invoke-NagiUpdateStepHere -InstallRoot (Split-Path $here) -Boot $bootId -KmdSha256 $kmdNow -Confirm $script:exitCode
+        if ($line -ne 'update transaction: none') { Write-StartConfirmLog $line }
+    }
+} catch { Write-StartConfirmLog "update transaction: $($_.Exception.Message)" }
 exit $script:exitCode
