@@ -1525,10 +1525,10 @@ void CpuLogSummary(BC250_DEVICE* Device)
     // Four lines, by the rule of the guardlog-width gate: the state and voltages line is 207 characters at its
     // widest and the counter line 166, and a log line holds 159 (BD-070). Every line begins "cpu: summary", so
     // a reader takes the block and not one line of it.
-    GuardLog("cpu: summary %s%s%s%s %lu mV (GPU %lu mV)",
+    GuardLog("cpu: summary %s%s%s %lu mV (GPU %lu mV)",
              s->Enabled ? "on" : "off", s->Proven ? ", queue 3 proven" : ", queue 3 silent",
-             s->OnTrial ? ", on trial" : "", s->LeftoverOwed ? ", leftover owed" : "", snap.VoltageMv,
-             snap.GpuVoltageMv);
+             s->OnTrial ? ", on trial" : "", snap.VoltageMv, snap.GpuVoltageMv);
+    if (s->LeftoverOwed) GuardLog("cpu: summary the leftover of an earlier start is still owed (BD-295)");
     GuardLog("cpu: summary cap %lu C, cores %lu/%lu, mask 0x%02X", snap.CapC,
              bc250_cpu_mask_cores(s->CoreMask), (ULONG)BC250_CPU_CORES, s->CoreMask);
     CpuLogSettings("summary applied", &s->Applied);
