@@ -46,6 +46,8 @@ namespace AmdgpuWddmSetup
             Application.ThreadException += (s, e) => Unexpected(a, e.Exception);
             AppDomain.CurrentDomain.UnhandledException += (s, e) => Unexpected(a, e.ExceptionObject as Exception);
             Strings.Language = Native.ChosenLanguage() ?? Strings.SystemLanguage();
+            // An update the control application downloaded (docs/design/self-update.md): its own small window.
+            if (a.Mode == "apply") return ApplyWindow.Run(a, argv);
             Theme.Fonts();
             // The loading window first, before anything reads the file or asks Windows for anything (StartSequence.cs,
             // LoadingWindow.cs). Then, as before: a single file that carries the whole package (Payload.cs, owner

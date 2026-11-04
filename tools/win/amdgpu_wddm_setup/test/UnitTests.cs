@@ -49,6 +49,7 @@ static partial class UnitTests
             Quoting();
             NativeLayout();
             Redaction();
+            ApplyTests(repo);
         }
         catch (Exception e) { _failed++; Console.WriteLine("FAIL exception: " + e); }
         Console.WriteLine(_passed + " passed, " + _failed + " failed");
@@ -481,6 +482,68 @@ static partial class UnitTests
         Console.WriteLine("help images: " + string.Join(" ", HelpCards.Images));
         Console.WriteLine("help images required: " + string.Join(" ", HelpCards.RequiredImages));
         Console.WriteLine("help image limits: " + HelpCards.ImagePixels + " " + HelpCards.ImageBytes);
+    }
+
+    // setup.exe --apply (ApplyUpdate.cs, docs/design/self-update.md): the arguments, the script it runs, the result of
+    // installer\apply.ps1 and its words. Every message id and refusal reason the engine can write has words in the four
+    // languages; a result that is not the engine's own, or names an id with no words, reads as a failed update.
+    static void ApplyTests(string repo)
+    {
+        var a = SetupArgs.Parse(new[] { "--apply", @"C:\Users\x\AppData\Local\amdgpu-wddm\update\0.7.216.110-tester.38", "--wait-pid", "4242" });
+        Check(a.Error == null && a.Mode == "apply" && a.WaitPid == 4242 && a.UpdateDir.EndsWith("tester.38", StringComparison.Ordinal) && !a.Headless, "apply args: --apply <dir> --wait-pid <n>");
+        Check(SetupArgs.Parse(new[] { "--apply" }).Error != null, "apply args: --apply needs a folder");
+        Check(SetupArgs.Parse(new[] { "--apply", @"relative\dir" }).Error != null, "apply args: a relative folder is refused");
+        Check(SetupArgs.Parse(new[] { "--wait-pid", "12" }).Error != null, "apply args: --wait-pid only with --apply");
+        Check(SetupArgs.Parse(new[] { "--apply", @"C:\u", "--wait-pid", "-3" }).Error != null, "apply args: a bad process id is refused");
+        Check(SetupArgs.Parse(new[] { "--apply", @"C:\u", "--repair" }).Error != null, "apply args: --apply and --repair together are refused");
+        Check(SetupArgs.Parse(new[] { "--apply", @"C:\u", "--dry-run" }).Error != null, "apply args: --apply takes no --dry-run");
+
+        // The script: --package first, then the package root beside a kept repair set's setup.exe, then the unpacked release.
+        var have = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { @"D:\rel\files\installer\apply.ps1", @"P:\set\installer\apply.ps1" };
+        Equal(@"D:\rel\files\installer\apply.ps1", ApplyUpdate.FindScript(@"D:\rel", null, have.Contains), "apply script: the unpacked release");
+        Equal(@"P:\set\installer\apply.ps1", ApplyUpdate.FindScript(@"P:\set", null, have.Contains), "apply script: a kept repair set");
+        Equal(@"P:\set\installer\apply.ps1", ApplyUpdate.FindScript(@"D:\rel", @"P:\set", have.Contains), "apply script: --package first");
+        Equal<string>(null, ApplyUpdate.FindScript(@"E:\none", null, have.Contains), "apply script: none");
+        var args = ApplyUpdate.EngineArguments(@"C:\Program Data\a.ps1", @"C:\u d", @"C:\r.json");
+        Check(args.StartsWith("-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"C:\\Program Data\\a.ps1\"", StringComparison.Ordinal) &&
+            args.Contains("-UpdateDir \"C:\\u d\"") && args.EndsWith("-ResultFile C:\\r.json", StringComparison.Ordinal), "apply engine arguments: " + args);
+
+        // The result file.
+        var r = ApplyUpdate.ParseResult("{\"schema\":\"nagi.apply-result/1\",\"outcome\":\"handoff\",\"message\":\"apply.driver-handoff\",\"restart\":true," +
+            "\"handoff_setup\":\"C:\\\\ProgramData\\\\amdgpu-wddm\\\\update\\\\driver\\\\0.7.216.110-tester.38\\\\amdgpu-wddm-tester-0.7.216.110-tester.38\\\\setup.exe\"}");
+        Check(r != null && r.Outcome == "handoff" && r.Restart && ApplyUpdate.ExitCodeOf(r) == 0, "apply result: a driver handoff");
+        Check(ApplyUpdate.HandoffAllowed(r, @"C:\ProgramData\amdgpu-wddm\update"), "apply result: the handoff setup under the update folder is started");
+        Check(!ApplyUpdate.HandoffAllowed(r, @"C:\ProgramData\elsewhere"), "apply result negative control: a handoff setup outside the update folder is not started");
+        var evil = ApplyUpdate.ParseResult("{\"schema\":\"nagi.apply-result/1\",\"outcome\":\"handoff\",\"handoff_setup\":\"C:\\\\ProgramData\\\\amdgpu-wddm\\\\update\\\\driver\\\\..\\\\..\\\\x\\\\setup.exe\"}");
+        Check(evil != null && !ApplyUpdate.HandoffAllowed(evil, @"C:\ProgramData\amdgpu-wddm\update"), "apply result negative control: a handoff setup that climbs out of the update folder is not started");
+        Equal<ApplyResult>(null, ApplyUpdate.ParseResult("{\"schema\":\"nagi.apply-result/2\",\"outcome\":\"applied\"}"), "apply result: another schema is no result");
+        Equal<ApplyResult>(null, ApplyUpdate.ParseResult("{\"schema\":\"nagi.apply-result/1\",\"outcome\":\"installed\"}"), "apply result: an unknown outcome is no result");
+        Equal<ApplyResult>(null, ApplyUpdate.ParseResult("not json"), "apply result: not JSON is no result");
+        Equal(6, ApplyUpdate.ExitCodeOf(null), "apply result: no result is a failed update");
+        Equal("apply.failed", ApplyUpdate.MessageOf(null), "apply words: no result reads as a failed update");
+        Equal("apply.failed", ApplyUpdate.MessageOf(new ApplyResult { Outcome = "refused", MessageId = "apply.refused-nonsense" }), "apply words: an id without words reads as a failed update");
+        Equal("apply.failed", ApplyUpdate.MessageOf(new ApplyResult { Outcome = "refused", MessageId = "result.verified" }), "apply words: an id of another family reads as a failed update");
+        Equal("apply.busy", ApplyUpdate.MessageOf(new ApplyResult { Outcome = "refused", MessageId = "apply.busy" }), "apply words: an id with words is used");
+        foreach (var o in new[] { "refused", "rolled-back", "failed", "applied", "up-to-date" })
+            Equal(o == "refused" ? 2 : o == "rolled-back" ? 3 : o == "failed" ? 6 : 0, ApplyUpdate.ExitCodeOf(new ApplyResult { Outcome = o }), "apply exit code of " + o);
+
+        // Every id the engine writes has words in every language, and no internals: the literal ids of apply.ps1 and
+        // apply.refused-<reason> for each refusal reason of the plan (nagi-update.ps1).
+        var dir = Path.Combine(repo, "tools", "release", "installer");
+        var apply = File.ReadAllText(Path.Combine(dir, "apply.ps1"));
+        var lib = File.ReadAllText(Path.Combine(dir, "nagi-update.ps1"));
+        var ids = new HashSet<string>(Regex.Matches(apply, @"'(apply\.[a-z-]+)'").Cast<Match>().Select(m => m.Groups[1].Value));
+        Check(apply.Contains("\"apply.refused-$($plan.reason)\""), "apply words: apply.ps1 names a refusal by the plan's reason");
+        foreach (Match m in Regex.Matches(lib, @"Plan 'refused' '([a-z-]+)'")) ids.Add("apply.refused-" + m.Groups[1].Value);
+        Check(ids.Count >= 10, "apply words: ids found in the engine (" + ids.Count + ")");
+        foreach (var id in ids.Concat(new[] { "apply.working" }))
+            foreach (var lang in Strings.Languages)
+                foreach (var part in new[] { ".title", ".body" })
+                {
+                    var text = Strings.In(lang, id + part);
+                    Check(!string.IsNullOrEmpty(text) && !text.StartsWith("[", StringComparison.Ordinal), "apply words: " + lang + " " + id + part);
+                    Check(NoInternals.Find(text).Count == 0, "apply words: G-NOINT " + lang + " " + id + part);
+                }
     }
 
     static void Arguments()

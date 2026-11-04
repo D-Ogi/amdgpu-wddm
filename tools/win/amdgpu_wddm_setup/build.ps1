@@ -79,7 +79,7 @@ $exe = Join-Path $Out 'amdgpu_wddm_setup.exe'
 
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll',
     'System.IO.Compression.FileSystem.dll', 'System.Web.Extensions.dll' | ForEach-Object { "/reference:$fx\$_" }
-$pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs', 'SmallScreen.cs', 'InstallFlow.cs', 'Payload.cs', 'HelpCards.cs' | ForEach-Object { Join-Path $here "src\$_" }
+$pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs', 'SmallScreen.cs', 'InstallFlow.cs', 'Payload.cs', 'HelpCards.cs', 'ApplyUpdate.cs' | ForEach-Object { Join-Path $here "src\$_" }
 # The order of the start: the loading window before every slow step (LoadingWindow.cs).
 $pure += 'StartSequence.cs' | ForEach-Object { Join-Path $here "src\$_" }
 # What the progress screen shows, and which engine events change it in place (WorkingView.cs).

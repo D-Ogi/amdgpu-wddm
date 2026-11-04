@@ -349,3 +349,31 @@ help.sac.open|mt|6f158fa2|スマート アプリ コントロールの設定を�
 help.open-failed|mt|680624a8|Windows セキュリティが開きませんでした。スタート メニューから開き、[アプリとブラウザー コントロール]、[スマート アプリ コントロールの設定] の順に選んでください。
 help.picture|mt|fd7b7a5d|手順 {0} の画像
 help.pictures-english|mt|1eacacfc|画像は英語版の Windows です。
+
+# ---- an update from the control app (setup.exe --apply, ApplyUpdate.cs, docs/design/self-update.md) ----
+apply.working.title|mt|27974dfa|更新をインストールしています
+apply.working.body|mt|d0e12901|Nagi Control App がダウンロードした更新を Nagi セットアップがインストールしています。1、2 分かかります。コンピューターの電源を切らないでください。
+apply.done.title|mt|295af56e|更新がインストールされました
+apply.done.body|mt|a7ae3618|新しいバージョンの Nagi アプリの準備ができました。Nagi Control App をもう一度起動してお使いください。再起動は必要ありません。
+apply.up-to-date.title|mt|b5700156|Nagi はすでに最新です
+apply.up-to-date.body|mt|f738356a|この更新はすでにこのコンピューターにあります。何も変更されていません。
+apply.refused-signature.title|mt|906d860f|更新はインストールされませんでした
+apply.refused-signature.body|mt|75fa87b4|更新が Nagi プロジェクトから提供されたものであることを確認できなかったため、セットアップは更新を使用しませんでした。何も変更されていません。後でもう一度更新を確認してください。
+apply.refused-hash.title|mt|906d860f|更新はインストールされませんでした
+apply.refused-hash.body|mt|03f1fcfd|ダウンロードしたファイルが破損しているか、不完全です。何も変更されていません。もう一度更新を確認して、ダウンロードし直してください。
+apply.refused-downgrade.title|mt|906d860f|更新はインストールされませんでした
+apply.refused-downgrade.body|mt|e1283f89|この更新は、このコンピューターにあるバージョンより古いものです。何も変更されていません。
+apply.refused-too-old.title|mt|8a55309f|この更新には完全なインストーラーが必要です
+apply.refused-too-old.body|mt|8a1be265|このコンピューターにあるバージョンは古すぎるため、この方法では更新できません。何も変更されていません。リリース ページから完全版をダウンロードしてインストールしてください。
+apply.refused-incompatible.title|mt|8a55309f|この更新には完全なインストーラーが必要です
+apply.refused-incompatible.body|mt|5df711de|新しい Nagi アプリは、このコンピューターのドライバーでは動作しません。何も変更されていません。リリース ページから完全版をダウンロードしてインストールしてください。
+apply.refused-unknown-installed.title|mt|8a55309f|この更新には完全なインストーラーが必要です
+apply.refused-unknown-installed.body|mt|261fb208|このコンピューターにある Nagi のバージョンをセットアップが判断できません。何も変更されていません。リリース ページから完全版をダウンロードしてインストールしてください。
+apply.busy.title|mt|3c21a94f|先に Nagi アプリを閉じてください
+apply.busy.body|mt|89af49ca|Nagi アプリが開いたままのため、セットアップは置き換えられませんでした。何も変更されていません。Nagi Control App とほかの Nagi のウィンドウをすべて閉じてから、もう一度更新を確認してください。
+apply.rolled-back.title|mt|a187e7b8|以前のバージョンに戻しました
+apply.rolled-back.body|mt|ef09d191|新しい Nagi アプリが起動しなかったため、セットアップは以前のバージョンに戻しました。コンピューターはこれまでどおり動作します。
+apply.driver-handoff.title|mt|c9b3acf3|更新には新しいドライバーが含まれています
+apply.driver-handoff.body|mt|ebef72f8|セットアップは新しいバージョンのインストーラーを開きます。最後まで進めてください。インストール中に Windows が再起動します。新しいドライバーが 2 回起動しなかった場合は、以前のドライバーに自動的に戻ります。
+apply.failed.title|mt|e3b2ad5f|更新は完了しませんでした
+apply.failed.body|mt|f7d37c9d|更新は完了する前に停止しました。このコンピューターでは現在のバージョンが引き続き使われます。もう一度お試しいただくか、リリース ページから完全版をダウンロードしてインストールしてください。

@@ -351,3 +351,31 @@ help.sac.open|mt|6f158fa2|Otwórz ustawienia inteligentnej kontroli aplikacji
 help.open-failed|mt|680624a8|Zabezpieczenia Windows nie otworzyły się. Otwórz je z menu Start. Potem wybierz Kontrola aplikacji i przeglądarki, a następnie Ustawienia inteligentnej kontroli aplikacji.
 help.picture|mt|fd7b7a5d|Ilustracja kroku {0}
 help.pictures-english|mt|1eacacfc|Ilustracje pokazują Windows w języku angielskim.
+
+# ---- an update from the control app (setup.exe --apply, ApplyUpdate.cs, docs/design/self-update.md) ----
+apply.working.title|mt|27974dfa|Instalowanie aktualizacji
+apply.working.body|mt|d0e12901|Instalator Nagi instaluje aktualizację pobraną przez Nagi Control App. To potrwa minutę lub dwie. Nie wyłączaj komputera.
+apply.done.title|mt|295af56e|Aktualizacja jest zainstalowana
+apply.done.body|mt|a7ae3618|Nowa wersja aplikacji Nagi jest gotowa. Uruchom ponownie Nagi Control App, aby z niej korzystać. Ponowne uruchomienie komputera nie jest potrzebne.
+apply.up-to-date.title|mt|b5700156|Nagi jest już aktualny
+apply.up-to-date.body|mt|f738356a|Ta aktualizacja jest już na tym komputerze. Nic nie zostało zmienione.
+apply.refused-signature.title|mt|906d860f|Aktualizacja nie została zainstalowana
+apply.refused-signature.body|mt|75fa87b4|Instalator nie mógł potwierdzić, że aktualizacja pochodzi od projektu Nagi, więc jej nie użył. Nic nie zostało zmienione. Sprawdź aktualizacje ponownie później.
+apply.refused-hash.title|mt|906d860f|Aktualizacja nie została zainstalowana
+apply.refused-hash.body|mt|03f1fcfd|Pobrane pliki są uszkodzone lub niekompletne. Nic nie zostało zmienione. Sprawdź aktualizacje ponownie, aby pobrać je jeszcze raz.
+apply.refused-downgrade.title|mt|906d860f|Aktualizacja nie została zainstalowana
+apply.refused-downgrade.body|mt|e1283f89|Ta aktualizacja jest starsza niż wersja na tym komputerze. Nic nie zostało zmienione.
+apply.refused-too-old.title|mt|8a55309f|Ta aktualizacja wymaga pełnego instalatora
+apply.refused-too-old.body|mt|8a1be265|Wersja na tym komputerze jest zbyt stara, aby zaktualizować ją w ten sposób. Nic nie zostało zmienione. Pobierz pełne wydanie ze strony wydań i zainstaluj je.
+apply.refused-incompatible.title|mt|8a55309f|Ta aktualizacja wymaga pełnego instalatora
+apply.refused-incompatible.body|mt|5df711de|Nowe aplikacje Nagi nie działają ze sterownikiem na tym komputerze. Nic nie zostało zmienione. Pobierz pełne wydanie ze strony wydań i zainstaluj je.
+apply.refused-unknown-installed.title|mt|8a55309f|Ta aktualizacja wymaga pełnego instalatora
+apply.refused-unknown-installed.body|mt|261fb208|Instalator nie może ustalić, która wersja Nagi jest na tym komputerze. Nic nie zostało zmienione. Pobierz pełne wydanie ze strony wydań i zainstaluj je.
+apply.busy.title|mt|3c21a94f|Najpierw zamknij aplikacje Nagi
+apply.busy.body|mt|89af49ca|Aplikacja Nagi jest nadal otwarta, więc instalator nie mógł jej zastąpić. Nic nie zostało zmienione. Zamknij Nagi Control App i wszystkie inne okna Nagi, a następnie ponownie sprawdź aktualizacje.
+apply.rolled-back.title|mt|a187e7b8|Przywrócono poprzednią wersję
+apply.rolled-back.body|mt|ef09d191|Nowe aplikacje Nagi nie uruchomiły się, więc instalator przywrócił poprzednią wersję. Komputer działa tak jak wcześniej.
+apply.driver-handoff.title|mt|c9b3acf3|Aktualizacja zawiera nowy sterownik
+apply.driver-handoff.body|mt|ebef72f8|Instalator otworzy teraz instalację nowej wersji. Przejdź ją do końca; w trakcie instalacji Windows uruchomi się ponownie. Jeśli nowy sterownik dwa razy się nie uruchomi, poprzedni sterownik wróci sam.
+apply.failed.title|mt|e3b2ad5f|Aktualizacja nie została ukończona
+apply.failed.body|mt|f7d37c9d|Aktualizacja zatrzymała się przed końcem, a na komputerze nadal działa dotychczasowa wersja. Spróbuj ponownie albo pobierz pełne wydanie ze strony wydań i zainstaluj je.

@@ -351,3 +351,31 @@ help.sac.open|src|-|Open Smart App Control settings
 help.open-failed|src|-|Windows Security did not open. Open Windows Security from the Start menu. Then select App & browser control, and then Smart App Control settings.
 help.picture|src|-|Picture of step {0}
 help.pictures-english|src|-|The pictures show Windows in English.
+
+# ---- an update from the control app (setup.exe --apply, ApplyUpdate.cs, docs/design/self-update.md) ----
+apply.working.title|src|-|Installing the update
+apply.working.body|src|-|Nagi Setup is installing the update that Nagi Control App downloaded. This takes a minute or two. Do not turn off the computer.
+apply.done.title|src|-|The update is installed
+apply.done.body|src|-|The new version of the Nagi apps is ready. Start Nagi Control App again to use it. No restart is necessary.
+apply.up-to-date.title|src|-|Nagi is already up to date
+apply.up-to-date.body|src|-|This update is already on this computer. Nothing was changed.
+apply.refused-signature.title|src|-|The update was not installed
+apply.refused-signature.body|src|-|Setup could not confirm that the update comes from the Nagi project, so it did not use it. Nothing was changed. Check for updates again later.
+apply.refused-hash.title|src|-|The update was not installed
+apply.refused-hash.body|src|-|The downloaded files are damaged or incomplete. Nothing was changed. Check for updates again to download them again.
+apply.refused-downgrade.title|src|-|The update was not installed
+apply.refused-downgrade.body|src|-|This update is older than the version on this computer. Nothing was changed.
+apply.refused-too-old.title|src|-|This update needs the full installer
+apply.refused-too-old.body|src|-|The version on this computer is too old to update in this way. Nothing was changed. Download the full release from the release page and install it.
+apply.refused-incompatible.title|src|-|This update needs the full installer
+apply.refused-incompatible.body|src|-|The new Nagi apps do not work with the driver on this computer. Nothing was changed. Download the full release from the release page and install it.
+apply.refused-unknown-installed.title|src|-|This update needs the full installer
+apply.refused-unknown-installed.body|src|-|Setup cannot tell which version of Nagi is on this computer. Nothing was changed. Download the full release from the release page and install it.
+apply.busy.title|src|-|Close the Nagi apps first
+apply.busy.body|src|-|A Nagi app is still open, so Setup could not replace it. Nothing was changed. Close Nagi Control App and every other Nagi window, then check for updates again.
+apply.rolled-back.title|src|-|The previous version is back
+apply.rolled-back.body|src|-|The new Nagi apps did not start, so Setup put the previous version back. Your computer works as before.
+apply.driver-handoff.title|src|-|The update includes a new driver
+apply.driver-handoff.body|src|-|Setup now opens the installer of the new version. Follow it to the end; Windows restarts during the installation. If the new driver does not start two times, the previous driver comes back by itself.
+apply.failed.title|src|-|The update did not finish
+apply.failed.body|src|-|The update stopped before it was finished, and the version on this computer stays in use. Try again, or download the full release from the release page and install it.

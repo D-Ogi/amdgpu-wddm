@@ -4,6 +4,9 @@
 //   amdgpu_wddm_setup.exe --continue          after a restart (RunOnce): the engine continues at once
 //   amdgpu_wddm_setup.exe --repair            from the control app's Help (Release\RepairSetup): repair
 //   amdgpu_wddm_setup.exe --prepare-offline   prepare a folder for a PC without internet (no administrator needed)
+//   amdgpu_wddm_setup.exe --apply <dir> [--wait-pid <n>]
+//                                             from the control app's update check (docs/design/self-update.md): install
+//                                             the checked update in <dir> after process <n> has ended (ApplyUpdate.cs)
 //   [--no-start-menu-shortcut]                the Start menu option of the plan screen starts off (default: on)
 //   [--no-desktop-shortcut]                   the desktop option of the plan screen starts off (default: on)
 //   [--package <dir>]                         another package folder than the one the exe is in
@@ -46,6 +49,9 @@ namespace AmdgpuWddmSetup
         public string[] Raw = new string[0];
         public string Mode = "welcome";
         public string Package, RunRoot, Error;
+        // --apply: the folder the control application downloaded the update into, and the process to wait for.
+        public string UpdateDir;
+        public int WaitPid;
         // Set by Program when this exe carried the package inside itself and unpacked it (Payload.cs): the folder
         // the window removes when the run ends with no restart pending. Never a command-line option.
         public string PayloadPackage;
@@ -110,6 +116,16 @@ namespace AmdgpuWddmSetup
                     case "--continue": a.SetMode("continue"); break;
                     case "--repair": a.SetMode("repair"); break;
                     case "--prepare-offline": a.SetMode("prepare-offline"); break;
+                    case "--apply":
+                        a.SetMode("apply");
+                        a.UpdateDir = next();
+                        if (a.UpdateDir == null || !System.IO.Path.IsPathRooted(a.UpdateDir)) a.Error = "--apply needs the full path of a folder";
+                        break;
+                    case "--wait-pid":
+                        int pid;
+                        if (!int.TryParse(next(), NumberStyles.Integer, CultureInfo.InvariantCulture, out pid) || pid <= 0) a.Error = "--wait-pid needs a process id";
+                        else a.WaitPid = pid;
+                        break;
                     case "--dry-run": a.DryRun = true; break;
                     case "--package": a.Package = next(); if (a.Package == null) a.Error = "--package needs a folder"; break;
                     case "--run-root": a.RunRoot = next(); if (a.RunRoot == null) a.Error = "--run-root needs a folder"; break;
@@ -187,6 +203,8 @@ namespace AmdgpuWddmSetup
             if (a.Error == null && a.HighContrast && a.Mode != "smoke-render") a.Error = "--high-contrast only with --smoke-render";
             if (a.Error == null && a.WorkWidth > 0 && a.Mode != "smoke-render") a.Error = "--work-area only with --smoke-render";
             if (a.Error == null && a.Handover != null && a.Headless) a.Error = "--loading-handover only with a window";
+            if (a.Error == null && a.WaitPid > 0 && a.Mode != "apply") a.Error = "--wait-pid only with --apply";
+            if (a.Error == null && a.Mode == "apply" && (a.DryRun || a.Handover != null)) a.Error = "--apply takes no --dry-run and no --loading-handover";
             return a;
         }
 

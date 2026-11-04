@@ -349,3 +349,31 @@ help.sac.open|mt|6f158fa2|스마트 앱 컨트롤 설정 열기
 help.open-failed|mt|680624a8|Windows 보안이 열리지 않았습니다. 시작 메뉴에서 연 다음 [앱 및 브라우저 컨트롤], [스마트 앱 컨트롤 설정]을 차례로 선택하세요.
 help.picture|mt|fd7b7a5d|{0}단계 그림
 help.pictures-english|mt|1eacacfc|그림은 영어 Windows를 보여 줍니다.
+
+# ---- an update from the control app (setup.exe --apply, ApplyUpdate.cs, docs/design/self-update.md) ----
+apply.working.title|mt|27974dfa|업데이트를 설치하는 중
+apply.working.body|mt|d0e12901|Nagi 설치 프로그램이 Nagi Control App에서 다운로드한 업데이트를 설치하고 있습니다. 1~2분 정도 걸립니다. 컴퓨터를 끄지 마세요.
+apply.done.title|mt|295af56e|업데이트가 설치되었습니다
+apply.done.body|mt|a7ae3618|새 버전의 Nagi 앱이 준비되었습니다. Nagi Control App을 다시 실행하여 사용하세요. 컴퓨터를 다시 시작할 필요는 없습니다.
+apply.up-to-date.title|mt|b5700156|Nagi가 이미 최신 상태입니다
+apply.up-to-date.body|mt|f738356a|이 업데이트는 이미 이 컴퓨터에 있습니다. 변경된 내용이 없습니다.
+apply.refused-signature.title|mt|906d860f|업데이트가 설치되지 않았습니다
+apply.refused-signature.body|mt|75fa87b4|업데이트가 Nagi 프로젝트에서 제공된 것인지 확인할 수 없어 설치 프로그램이 사용하지 않았습니다. 변경된 내용이 없습니다. 나중에 다시 업데이트를 확인하세요.
+apply.refused-hash.title|mt|906d860f|업데이트가 설치되지 않았습니다
+apply.refused-hash.body|mt|03f1fcfd|다운로드한 파일이 손상되었거나 완전하지 않습니다. 변경된 내용이 없습니다. 업데이트를 다시 확인하여 다시 다운로드하세요.
+apply.refused-downgrade.title|mt|906d860f|업데이트가 설치되지 않았습니다
+apply.refused-downgrade.body|mt|e1283f89|이 업데이트는 이 컴퓨터에 있는 버전보다 오래된 것입니다. 변경된 내용이 없습니다.
+apply.refused-too-old.title|mt|8a55309f|이 업데이트에는 전체 설치 프로그램이 필요합니다
+apply.refused-too-old.body|mt|8a1be265|이 컴퓨터에 있는 버전은 너무 오래되어 이 방법으로 업데이트할 수 없습니다. 변경된 내용이 없습니다. 릴리스 페이지에서 전체 릴리스를 다운로드하여 설치하세요.
+apply.refused-incompatible.title|mt|8a55309f|이 업데이트에는 전체 설치 프로그램이 필요합니다
+apply.refused-incompatible.body|mt|5df711de|새 Nagi 앱은 이 컴퓨터의 드라이버와 함께 작동하지 않습니다. 변경된 내용이 없습니다. 릴리스 페이지에서 전체 릴리스를 다운로드하여 설치하세요.
+apply.refused-unknown-installed.title|mt|8a55309f|이 업데이트에는 전체 설치 프로그램이 필요합니다
+apply.refused-unknown-installed.body|mt|261fb208|설치 프로그램이 이 컴퓨터에 있는 Nagi 버전을 확인할 수 없습니다. 변경된 내용이 없습니다. 릴리스 페이지에서 전체 릴리스를 다운로드하여 설치하세요.
+apply.busy.title|mt|3c21a94f|먼저 Nagi 앱을 닫으세요
+apply.busy.body|mt|89af49ca|Nagi 앱이 아직 열려 있어 설치 프로그램이 교체하지 못했습니다. 변경된 내용이 없습니다. Nagi Control App과 다른 모든 Nagi 창을 닫은 다음 업데이트를 다시 확인하세요.
+apply.rolled-back.title|mt|a187e7b8|이전 버전으로 되돌렸습니다
+apply.rolled-back.body|mt|ef09d191|새 Nagi 앱이 시작되지 않아 설치 프로그램이 이전 버전으로 되돌렸습니다. 컴퓨터는 이전과 같이 작동합니다.
+apply.driver-handoff.title|mt|c9b3acf3|업데이트에 새 드라이버가 포함되어 있습니다
+apply.driver-handoff.body|mt|ebef72f8|이제 설치 프로그램이 새 버전의 설치 프로그램을 엽니다. 끝까지 진행하세요. 설치 중에 Windows가 다시 시작됩니다. 새 드라이버가 두 번 시작되지 않으면 이전 드라이버가 자동으로 돌아옵니다.
+apply.failed.title|mt|e3b2ad5f|업데이트가 완료되지 않았습니다
+apply.failed.body|mt|f7d37c9d|업데이트가 완료되기 전에 중지되었으며 이 컴퓨터에서는 현재 버전이 계속 사용됩니다. 다시 시도하거나 릴리스 페이지에서 전체 릴리스를 다운로드하여 설치하세요.

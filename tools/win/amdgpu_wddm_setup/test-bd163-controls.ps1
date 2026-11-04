@@ -22,7 +22,7 @@ $Out = (Resolve-Path $Out).Path
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll',
     'System.IO.Compression.FileSystem.dll', 'System.Web.Extensions.dll' | ForEach-Object { "/reference:$fx\$_" }
 $names = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs', 'SmallScreen.cs',
-    'InstallFlow.cs', 'Payload.cs', 'HelpCards.cs', 'StartSequence.cs', 'WorkingView.cs', 'Native.cs'
+    'InstallFlow.cs', 'Payload.cs', 'HelpCards.cs', 'StartSequence.cs', 'WorkingView.cs', 'Native.cs', 'ApplyUpdate.cs'
 $tests = 'UnitTests.cs', 'StartTests.cs', 'WorkingTests.cs' | ForEach-Object { Join-Path $here "test\$_" }
 $payload = Get-Content -LiteralPath (Join-Path $here 'src\Payload.cs') -Raw
 
