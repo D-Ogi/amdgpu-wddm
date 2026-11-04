@@ -147,12 +147,19 @@ class PackageContextTests(unittest.TestCase):
     def test_actual_quick_rejects_mixed_kits_in_both_profiles(self):
         other = self.base / "other-kits"
         other.mkdir(exist_ok=True)
+        # quick.ps1 refuses a run without the two user-mode tree variables before it resolves the kits (commit
+        # 129b6473). Give it two empty directories, so that the run reaches the kits check that this test is about.
+        env = self.env.copy()
+        for name in ("BC250_UMD_SOURCE", "BC250_UMD_BUILD"):
+            tree = self.base / ("umd-" + name.rsplit("_", 1)[1].lower())
+            tree.mkdir(exist_ok=True)
+            env[name] = str(tree)
         for selected in ("Full", "KmdPackage"):
             out = self.base / ("refused-" + selected)
             run = subprocess.run(["pwsh", "-NoProfile", "-File", str(ROOT / "tools/quality/quick.ps1"),
                                   "-Workspace", str(self.workspace), "-RepoRoot", str(ROOT),
                                   "-Kits", str(other), "-Out", str(out), "-Profile", selected],
-                                 capture_output=True, text=True, env=self.env, timeout=30)
+                                 capture_output=True, text=True, env=env, timeout=30)
             self.assertNotEqual(run.returncode, 0)
             self.assertIn("inconsistent compiler", run.stderr)
             self.assertNotIn(" PASS ", run.stdout)

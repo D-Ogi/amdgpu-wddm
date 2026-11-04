@@ -1,6 +1,6 @@
 # clang-tidy checks of the kernel-mode driver (driver/kmd and driver/shim): tools/quality/kmd_tidy.py.
 # The set is chosen for state defects: values that nobody reads, branches that do the same thing, conditions that
-# are always true or always false, and switches that do not handle every state. tools/quality/kmd_tidy_baseline.json
+# are always true or always false, and switches that do not handle every state. tools/quality/kmd_tidy_baseline.txt
 # records the findings of the day the gate started; a new finding fails the gate (docs/testing/kmd-static-checks.md).
 #
 # Disabled checks and the reason for each:
