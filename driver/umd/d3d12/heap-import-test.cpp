@@ -26,6 +26,7 @@ static D3DKMT_HANDLE next_allocation=50;
 static bool pending=false,fail_free=false,fail_import=false,unlock_on_free=false,fail_deallocate=false;
 static bool resident_pending=false,fail_wait=false,fail_evict=false;
 static bool lock_on_import=false;
+static unsigned fail_deallocate_count=0;       // the next N deallocate callbacks fail, then they succeed again
 static bool fail_lock=false,fail_unlock=false;  // BD-045: the kernel refuses Lock2 or Unlock2
 static HRESULT resident_result=S_OK;
 static unsigned surfaces=0;
@@ -185,7 +186,9 @@ static HRESULT APIENTRY deallocate_cb(D3D12DDI_HRTDEVICE,const D3D12DDICB_DEALLO
   events+='R';return fail_deallocate?E_FAIL:S_OK;
  }
  assert(a->NumAllocations==1 && a->HandleList && (unsigned(a->Flags)==3u || !unsigned(a->Flags)));
- events+=unsigned(a->Flags)?'D':'O';return fail_deallocate?E_FAIL:S_OK;
+ events+=unsigned(a->Flags)?'D':'O';
+ if(fail_deallocate_count){--fail_deallocate_count;return E_FAIL;}
+ return fail_deallocate?E_FAIL:S_OK;
 }
 static HRESULT APIENTRY paging_create(HANDLE d,D3DDDICB_CREATEPAGINGQUEUE* a){assert(d==handle<void*>(1));++creates;a->hPagingQueue=9;a->hSyncObject=10;a->FenceValueCPUVirtualAddress=&completed;return S_OK;}
 static HRESULT APIENTRY paging_destroy(HANDLE,const D3DDDI_DESTROYPAGINGQUEUE*){events+='P';return S_OK;}
@@ -1245,6 +1248,30 @@ int main(){
    assert(!gated.leaked_reservations() && !gated.leaked_reservation_bytes());
    assert(gated.discard_metadata()==0);
   }
+  // 5b. BD-201 R v2, the failed release without proof. The teardown drain releases an import whose progress
+  // never retired with flags NONE ('O'), and that deallocate fails once. The record goes back to records_, and
+  // the teardown walk that follows releases it again. That second release has no more proof than the first,
+  // so it must also be 'O'. Before Record::unproved the walk asked for the retired form 'D' (ASSUME_NOT_IN_USE
+  // and SYNCHRONOUS_DESTROY) and the GPU could still read the destroyed memory: events "ODP", not "OOP".
+  {
+   ImportReleasePolicy policy{};policy.progress_gate=true;
+   RuntimeHeapImports unproven(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,policy);
+   unproven.bind_progress({&unproven,progress_snapshot_cb,progress_retired_cb});
+   assert(unproven.initialize()==S_OK);
+   progress_retired_flag=false;
+   events.clear();assert(unproven.allocate(&req,&b)==S_OK && events=="AMZIE");
+   events.clear();assert(unproven.free(&b)==S_OK && events=="V" && unproven.held_count()==1);
+   fail_deallocate_count=1;events.clear();
+   const HRESULT closed=unproven.close_after_engine_retirement();
+   std::printf("heap-import unproven teardown: events=%s close=%08lx\n",events.c_str(),static_cast<unsigned long>(closed));
+   std::fflush(stdout);                         // the line stays visible when an assertion below ends the run
+   assert(!fail_deallocate_count);
+   assert(events.find('D')==std::string::npos);
+   assert(closed==S_OK && events=="OOP" && unproven.forced_releases()==1 && !unproven.held_count());
+   assert(!unproven.leaked_reservations() && !unproven.leaked_reservation_bytes());
+   assert(unproven.discard_metadata()==0);
+   progress_retired_flag=true;
+  }
   // 6. The driver's defaults, as the switches leave them: the gate is on and holds three releases.
   {
    const auto defaults=ImportReleasePolicy::from_switches();
@@ -1523,7 +1550,7 @@ int main(){
  }
  std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, a CPU lock the ICD left unlocked by the release (retried at close after a failure), ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
   "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation, "
-  "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress whose unproved teardown release goes through the OS: no evict, no VA free, deallocate flags 0, an ordinary mapping's range left to the destroy and a reservation kept and counted), "
+  "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress whose unproved teardown release goes through the OS: no evict, no VA free, deallocate flags 0, an ordinary mapping's range left to the destroy and a reservation kept and counted; after its deallocate fails, the teardown walk releases it with flags 0 again), "
   "BD-075/BD-217 shared resources (the shareable envelope unchanged, positive LB7A selection before an ordinary allocation, the shared surface's "
   "LB7A and E26R v3 records with the three view flags and every refusal by name, and an adopted allocation that is borrowed: no allocate or deallocate "
   "callback, no quarantine, no backing to lend, one record per allocation handle), "
