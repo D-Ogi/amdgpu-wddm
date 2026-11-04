@@ -64,6 +64,8 @@ NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POW
     if (State!=PowerDeviceD0 && phase==BC250_POWER_SUSPENDED) return STATUS_SUCCESS;
     if ((State==PowerDeviceD0 && phase!=BC250_POWER_SUSPENDED) || (State!=PowerDeviceD0 && phase!=BC250_POWER_ACTIVE)) {
         // A D0 after a failed transition (FAILED) restores nothing: the log must say so (BD-188).
+        // BD-293: a way down in FAILED stops the owner that PowerFailedThermal started, before the power goes.
+        if (State!=PowerDeviceD0 && phase==BC250_POWER_FAILED) SmuOwnerStop(&Device->Smu);
         GuardLog("power: state %u refused in phase %ld",(ULONG)State,phase);
         return STATUS_INVALID_DEVICE_STATE;
     }
@@ -138,6 +140,25 @@ Done:
         (ULONG)Device->RetainedDownAction,Device->RetainedPowerPhase,status);
     ExFreePoolWithTag(report,BC250_POWER_TAG);
     return status;
+}
+
+// BD-293: a D0 that ends in FAILED (a failed way down before it, or a failed restore) leaves the pauses of
+// Bc250SetPowerState in force until the next start, and the transaction has stopped the SMU owner. The bus has given
+// the power back, so the CPU runs at its firmware limits. The owner starts again here for the CPU surface alone:
+// the read stage, the stored settings and the driver's temperature cap go in again. The governor, the fan and the
+// hang detector stay paused, and every escape that tests the phase still refuses. PASSIVE_LEVEL.
+void PowerFailedThermal(BC250_DEVICE* Device)
+{
+    NTSTATUS status=STATUS_SUCCESS;
+    if (InterlockedCompareExchange(&Device->RetainedPowerPhase,0,0)!=BC250_POWER_FAILED) return;
+    if (!Device->Smu.Online) status=SmuOwnerStart(&Device->Smu,Device->Mmio);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("power: the failed transaction leaves no SMU owner (0x%08X): the CPU stays at its firmware limits",
+            status);
+        return;
+    }
+    CpuResumeAlone(Device);
+    GuardLog("power: the failed transaction keeps the pauses; the SMU owner serves the CPU surface alone (BD-293)");
 }
 
 // The way down of a started full-WDDM adapter (pnp.c's Bc250SetPowerState, after the pauses): the display half,

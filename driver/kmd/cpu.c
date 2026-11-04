@@ -171,10 +171,14 @@ static ULONG CpuBusyPermille(BC250_DEVICE* Device)
 
 // No mailbox traffic while the adapter is on its way out of D0 or already there, and none without the owner: the
 // governor's own paused flag is the one the power path sets first (pnp.c, DpmPause), and this surface honours it.
+// BD-293: a failed power transaction (BC250_POWER_FAILED) keeps the governor paused until the next start. After its
+// D0 the power path starts the owner again for this surface alone (PowerFailedThermal), and the owner is then the
+// only gate. Every way down stops that owner before the power goes (power.c, the refusal in GpuSetPowerRetained).
 static BOOLEAN CpuAdapterDown(BC250_DEVICE* Device)
 {
-    return (!Device->Smu.Online || !Device->Smu.CpuOnline ||
-            InterlockedCompareExchange(&Device->Dpm.Paused, 0, 0) != 0) ? TRUE : FALSE;
+    if (!Device->Smu.Online || !Device->Smu.CpuOnline) return TRUE;
+    if (!InterlockedCompareExchange(&Device->Dpm.Paused, 0, 0)) return FALSE;
+    return InterlockedCompareExchange(&Device->RetainedPowerPhase, 0, 0) != BC250_POWER_FAILED ? TRUE : FALSE;
 }
 
 // One message of an open sequence (the caller holds SmuCpuBegin). Everything the support report wants about it is
@@ -1136,7 +1140,7 @@ void CpuPause(BC250_DEVICE* Device)
 // baseline all describe a state that is gone (0.7.211; without this the driver reported an undervolt the chip
 // did not have, and re-applying it was refused as "this setting is in use already"). The worker therefore owes
 // the whole start sequence again: the read stage, the new baseline and the stored settings. PASSIVE_LEVEL.
-void CpuResume(BC250_DEVICE* Device)
+static void CpuResumeEx(BC250_DEVICE* Device, BOOLEAN Joint)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
     KIRQL irql;
@@ -1158,11 +1162,24 @@ void CpuResume(BC250_DEVICE* Device)
     InterlockedExchange(&s->JointAppliedMHz, 0);
     RtlZeroMemory(&s->JointBefore, sizeof(s->JointBefore));
     s->JointNextTry = 0;
-    s->JointPaused = FALSE;
+    s->JointPaused = Joint ? FALSE : TRUE;
     CpuJointPublish(Device);
     CpuUnlock(s);
     KeSetEvent(&s->Wake, IO_NO_INCREMENT, FALSE);
-    GuardLog("cpu: the power transition is over; the read stage and the stored settings run again");
+    GuardLog("cpu: the power transition is over; the read stage and the stored settings run again%s",
+             Joint ? "" : " (the joint arm stays off: the governor is paused)");
+}
+
+void CpuResume(BC250_DEVICE* Device)
+{
+    CpuResumeEx(Device, TRUE);
+}
+
+// BD-293: after a failed power transaction the governor stays paused, so the joint arm has no governor to follow.
+// The read stage, the stored settings and the temperature cap go in all the same. PASSIVE_LEVEL.
+void CpuResumeAlone(BC250_DEVICE* Device)
+{
+    CpuResumeEx(Device, FALSE);
 }
 
 // A durably confirmed start confirms this surface's two guards, in the guard's order: the pending mark away first,

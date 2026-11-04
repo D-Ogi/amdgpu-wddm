@@ -699,11 +699,13 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
         } else status=GpuSetPowerRetained(device,DevicePowerState,ActionType);
         // After a failed transition down the committed shape goes back at once, or the smaller surface of the desktop
         // would be read through the native viewport while the call returns. The bus takes the power all the same
-        // (dispmprt.md), and the phase is FAILED: the pauses above stay until the next start (power_phase.h, BD-293).
+        // (dispmprt.md), and the phase is FAILED: the pauses above stay until the next start (power_phase.h). The D0
+        // after it gives the CPU surface its owner back (PowerFailedThermal, BD-293).
         if (DevicePowerState!=PowerDeviceD0 && !NT_SUCCESS(status) && !ConnectorIsEnabled(device)) {
             ModesetPowerUp(device);
             HdmiLinkStartAudio(device,TRUE);
         }
+        if (DevicePowerState==PowerDeviceD0 && !NT_SUCCESS(status)) PowerFailedThermal(device);
         if (DevicePowerState==PowerDeviceD0 && NT_SUCCESS(status)) {
             if (!InterlockedCompareExchange(&device->RuntimeDisplayChanged,0,0) &&
                 !InterlockedCompareExchange(&device->Connector.Pending,0,0)) ModesetPowerUp(device);

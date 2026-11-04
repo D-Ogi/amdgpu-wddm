@@ -576,6 +576,7 @@ void CpuStart(BC250_DEVICE* Device);
 void CpuStop(BC250_DEVICE* Device);
 void CpuPause(BC250_DEVICE* Device);
 void CpuResume(BC250_DEVICE* Device);
+void CpuResumeAlone(BC250_DEVICE* Device);     // BD-293: CpuResume with the joint arm kept off
 NTSTATUS CpuConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 void CpuLogSummary(BC250_DEVICE* Device);
 void CpuRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
@@ -1088,6 +1089,8 @@ BOOLEAN GfxPowerIsSuspended(const BC250_DEVICE* Device);
 NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POWER_ACTION Action);
 // The way down: display half, then GpuSetPowerRetained, which runs whatever the display half answers (BD-188).
 NTSTATUS PowerAdapterDown(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POWER_ACTION Action);
+// BD-293: after a D0 that ends in BC250_POWER_FAILED, the SMU owner again for the CPU surface alone.
+void PowerFailedThermal(BC250_DEVICE* Device);
 NTSTATUS GfxSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume);
 BOOLEAN PspPowerIsSuspended(const BC250_DEVICE* Device);
 NTSTATUS GartSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume);

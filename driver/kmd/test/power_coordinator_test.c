@@ -72,6 +72,8 @@ int main(void){BC250_DEVICE d;
  CHECK(!strcmp(trace,"scdvbtpigwh"));CHECK(!d.SourceVisible);
  setup(&d);CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='g';
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==-9&&d.RetainedPowerPhase==4);CHECK(!strchr(trace,'w')&&!strchr(trace,'h'));resetTrace();CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==STATUS_INVALID_DEVICE_STATE&&!pos);
+ // BD-293: a way down in FAILED is refused too, and stops the owner that the D0 gave to the CPU surface.
+ resetTrace();CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==STATUS_INVALID_DEVICE_STATE&&!strcmp(trace,"S")&&d.RetainedPowerPhase==BC250_POWER_FAILED);
  setup(&d);CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();postMismatch=1;CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==STATUS_GRAPHICS_INVALID_VIDPN&&!strchr(trace,'t'));
  setup(&d);CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='v';
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==-9&&d.RetainedPowerPhase==4);
