@@ -427,6 +427,18 @@ Each exit path calls `bc250_fan_handback()` with its reason, through `driver/kmd
 uses the full handshake and checks the result. A give-back that fails keeps `CONTROLLING` set, so the next
 exit path, the fault retry and the bugcheck callback still try.
 
+A give-back that fails at a stop also sets the restore debt (`enum bc250_fan_debt` in `bc250_fan.h`). The
+stop removes the watchdog and the bugcheck callback, so nothing else in that start tries again. The debt
+survives `bc250_fan_init`, as the restore record does. The next `FanStart` calls `bc250_fan_settle()` before
+the first step: one give-back with the full handshake, also when the stored mode is the board's and also
+with `EnableFanControl` 0, because a give-back is the direction that the rule asks for. The give-back needs
+the reader online and the chip identified. If either is missing, the debt stays for the next start, and the
+state is `fault`, not `board`. If the give-back itself fails, `CONTROLLING` is also set, and the fault retry
+tries again every 10 s while the control runs. A start also gives the fan back when the chip shows
+our mode bit and the controller owes nothing: a driver before this device object held the fan (a remove or
+an unload frees the controller with the device memory). Only a give-back that reads back correctly clears
+the debt. The blind give-back sets it.
+
 | Exit path | Where | Reason |
 | --- | --- | --- |
 | device stop and remove | `FanStop` from `Bc250StopDevice` and `Bc250RemoveDevice`, after `DpmStop` | `stop` |
@@ -449,7 +461,7 @@ All are `REG_DWORD` under `Services\bc250kmd\Parameters`.
 
 | Setting | Meaning |
 | --- | --- |
-| `EnableFanControl` | 1 (the default, written by the INF and by the release installer) lets the driver take the fan. 0, and any other value, means the driver never writes the chip. This is the bisect switch |
+| `EnableFanControl` | 1 (the default, written by the INF and by the release installer) lets the driver take the fan. 0, and any other value, means the driver never takes the fan. This is the bisect switch. A start still gives back a fan that the driver held before (the restore debt, see the exit paths) |
 | `FanMode` | the stored choice: 0 the board's curve, 1 the driver's curve. Absent means the driver's curve |
 | `FanProfile` | with `FanMode` 1: 1 Standard (also when absent), 2 Quiet, 3 Performance, 0 custom |
 | `FanCurvePoints`, `FanCurve0` to `FanCurve7` | with `FanProfile` 0: the point count (2 to 8) and each point as `(degrees C << 8) \| percent` |
@@ -461,7 +473,8 @@ The INF writes `EnableFanControl` only. The control application's own check box 
 `Store` 1. A stored choice that the policy refuses runs the Standard curve, and the log says so.
 
 The control also needs the reader of Part A online and the chip identified as unit A's. A start that
-fails either condition publishes a gate and writes nothing:
+fails either condition publishes a gate and writes nothing. The one exception is the give-back of a
+restore debt, which needs only these two conditions and not the switch:
 
 | Gate | Meaning |
 | --- | --- |

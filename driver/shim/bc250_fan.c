@@ -175,11 +175,16 @@ static void forget_rise(struct bc250_fan_ctl *ctl)
 void bc250_fan_init(struct bc250_fan_ctl *ctl, int enabled, const struct bc250_fan_request *start)
 {
 	struct bc250_fan_restore restore = ctl->restore;
+	/* The restore debt (bc250_fan.h). A controller that still holds the fan here was not given back verified, and
+	 * the memset below clears `controlling`, so that case also becomes the debt. */
+	unsigned int debt = ctl->debt != BC250_FAN_DEBT_NONE || ctl->controlling ? BC250_FAN_DEBT_OWED :
+										BC250_FAN_DEBT_NONE;
 	struct bc250_fan_request standard;
 	struct bc250_fan_curve resolved;
 
 	memset(ctl, 0, sizeof(*ctl));
 	ctl->restore = restore;			/* rule 2: once per power-on, so a stop and a start keep it */
+	ctl->debt = debt;			/* the debt survives as the record does; bc250_fan_settle pays it */
 	ctl->enabled = enabled ? 1u : 0u;
 	ctl->boost_enabled = 1u;		/* rule 10: on unless FanLoadBoost says otherwise */
 	memset(&standard, 0, sizeof(standard));
@@ -426,14 +431,17 @@ int bc250_fan_handback(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ct
 		ctl->last_error = status;
 		if (status != 0) {
 			/* The fan may still be ours. Keep saying so: the next exit path, the bugcheck callback and the
-			 * fault retry all key on `controlling`, and a false "given back" would switch all three off. */
+			 * fault retry all key on `controlling`, and a false "given back" would switch all three off. A stop
+			 * removes the last two, so the debt carries the restore to the next start. */
 			ctl->failures++;
 			ctl->fault = 1;
 			ctl->fault_retry_ms = 0;
+			ctl->debt = BC250_FAN_DEBT_OWED;
 			ctl->state = BC250_FAN_STATE_FAULT;
 			return status;
 		}
 		ctl->controlling = 0;
+		ctl->debt = BC250_FAN_DEBT_NONE;
 		ctl->handbacks++;
 	}
 	ctl->written_raw = 0;
@@ -477,7 +485,73 @@ void bc250_fan_handback_blind(const struct bc250_hwmon_io *io, struct bc250_fan_
 	(void)bc250_hwmon_write8(io, BC250_HWMON_REG_MODE, mode & ~FAN_BIT & 0xFFu);
 	(void)bc250_hwmon_write8(io, BC250_HWMON_REG_FAN_CTRL, BC250_HWMON_FAN_CFG_DONE);
 	ctl->controlling = 0;
+	/* Nothing read the chip back, so the restore is not verified: the debt stays until a restore is. */
+	ctl->debt = BC250_FAN_DEBT_OWED;
 	ctl->reason = BC250_FAN_REASON_BUGCHECK;
+}
+
+/* ---- the restore debt ---------------------------------------------------------------------------------------- */
+
+unsigned int bc250_fan_debt_action(unsigned int debt, int reachable, int chip_bit)
+{
+	/* Without the reader or an identified board there is no restore and no reading of the chip. */
+	if (!reachable)
+		return debt != BC250_FAN_DEBT_NONE ? BC250_FAN_SETTLE_KEEP : BC250_FAN_SETTLE_NONE;
+	if (debt != BC250_FAN_DEBT_NONE)
+		return BC250_FAN_SETTLE_RESTORE;
+	/* Our bit and no debt in this controller: a driver before this device object held the fan. Rule 2 names the
+	 * same case for a takeover; this start may not take the fan at all, so it gives the fan back here. */
+	if (chip_bit == 1)
+		return BC250_FAN_SETTLE_FOUND;
+	return BC250_FAN_SETTLE_NONE;
+}
+
+/* The debt stays: the fan may be ours, so the state is FAULT and not BOARD until a restore works. `reached` says that
+ * this start could talk to the chip. Only then is `controlling` set, so that the fault retry, the next exit path
+ * and the bugcheck callback try again. A start that cannot reach the chip leaves `controlling` clear: a stop or a
+ * pause then does not try a chip that the gate closed, and the debt alone carries the restore to the next start. */
+static void keep_debt(struct bc250_fan_ctl *ctl, int reached)
+{
+	ctl->debt = BC250_FAN_DEBT_OWED;
+	if (reached)
+		ctl->controlling = 1;
+	ctl->fault = 1;
+	ctl->fault_retry_ms = 0;
+	ctl->state = BC250_FAN_STATE_FAULT;
+}
+
+int bc250_fan_settle(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ctl, int reachable, unsigned int *action)
+{
+	unsigned int mode = 0, next;
+	int chip_bit = -1, status;
+
+	if (reachable && bc250_hwmon_read8(io, BC250_HWMON_REG_MODE, &mode) == 0)
+		chip_bit = (mode & FAN_BIT) != 0u ? 1 : 0;
+	next = bc250_fan_debt_action(ctl->debt, reachable, chip_bit);
+	if (action != NULL)
+		*action = next;
+	if (next == BC250_FAN_SETTLE_NONE)
+		return 0;
+	if (next == BC250_FAN_SETTLE_KEEP) {
+		keep_debt(ctl, 0);
+		return BC250_FAN_E_UNREACHABLE;
+	}
+	/* RESTORE and FOUND: the full restore with its read-back, as at a stop. The record of an earlier start is used
+	 * if there is one; a new controller has none, and chip_restore then writes the M803 rest target. */
+	status = chip_restore(io, &ctl->restore);
+	ctl->last_error = status;
+	if (status != 0) {
+		ctl->failures++;
+		keep_debt(ctl, 1);
+		return status;
+	}
+	ctl->debt = BC250_FAN_DEBT_NONE;
+	ctl->controlling = 0;
+	ctl->fault = 0;
+	ctl->handbacks++;
+	ctl->reason = BC250_FAN_REASON_STOP;	/* the stop's hand-back, made late */
+	ctl->state = ctl->enabled ? BC250_FAN_STATE_BOARD : BC250_FAN_STATE_OFF;
+	return 0;
 }
 
 /* ---- the control step ---------------------------------------------------------------------------------------- */
@@ -762,6 +836,7 @@ int bc250_fan_tick(const struct bc250_hwmon_io *io, struct bc250_fan_ctl *ctl, c
 		ctl->last_error = status;
 		if (status == 0) {
 			ctl->controlling = 0;
+			ctl->debt = BC250_FAN_DEBT_NONE;
 			ctl->handbacks++;
 		}
 		return status;

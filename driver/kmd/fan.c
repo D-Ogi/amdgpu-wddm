@@ -21,10 +21,13 @@
 //   a lease runs out         inside the policy, at the step that sees it
 //   a bugcheck               the classic bugcheck callback and Bc250ResetDevice: port writes only, no lock, a bounded
 //                            poll, no verification (bc250_fan_handback_blind)
+//   an owed restore          FanStart, before the first step: the give-back that a failed stop or a blind restore
+//                            left owed, or our mode bit found in the chip (bc250_fan_settle, the restore debt)
 //
 // Settings, REG_DWORD through the shared state resolver:
 //   EnableFanControl   1 (the default, and what the INF and the release write) lets the driver take the fan. 0, and
-//                      any other value, means this file never writes the chip: that is the bisect switch.
+//                      any other value, means this file never takes the fan: that is the bisect switch. The one
+//                      write it still makes is the give-back of a restore debt at a start (bc250_fan_settle).
 //   FanMode            the stored choice: 0 the board's curve, 1 the driver's curve. Absent is the driver's curve.
 //   FanProfile         with FanMode 1: 1 standard (absent), 2 quiet, 3 performance, 0 custom.
 //   FanCurvePoints     with FanProfile 0: 2..8, and FanCurve0..FanCurve7 each (degrees C << 8) | percent.
@@ -481,22 +484,29 @@ void FanInitialize(BC250_DEVICE* Device)
 #include "fan_choice.h"
 
 // StartDevice, PASSIVE_LEVEL, after the start can no longer fail and before the governor thread exists. Never fails
-// the start: a closed gate is one log line and a control that writes nothing.
+// the start: a closed gate is one log line and a control that writes nothing, after the give-back of a restore debt.
 void FanStart(BC250_DEVICE* Device)
 {
     BC250_FAN_OWNER* owner = &Device->Fan;
     struct bc250_fan_request start;
-    BOOLEAN stored, setting;
+    BC250_HWMON_PORTS ports;
+    struct bc250_hwmon_io io;
+    BOOLEAN stored, setting, chip;
     ULONG points = 0, gate, boost = 0, riseConfirm = 0;
+    unsigned int settled = BC250_FAN_SETTLE_NONE;
+    int debtStatus;
     NTSTATUS choiceStatus;
     KIRQL irql;
 
     owner->Hwmon = &Device->Hwmon;
     setting = GuardReadSetting(FAN_SETTING_ENABLE, 1) == 1;
+    // The chip this driver may talk to: the reader is online and the board is identified. It is the gate without
+    // EnableFanControl, and the restore of the debt below needs it and nothing more.
+    chip = Device->Hwmon.Online &&
+           (Device->Hwmon.IdPinned || Device->Hwmon.Identity.customer_id == BC250_FAN_CUSTOMER_UNIT_A);
     if (!setting) gate = BC250_FAN_GATE_SETTING;
     else if (!Device->Hwmon.Online) gate = BC250_FAN_GATE_READER;
-    else if (!Device->Hwmon.IdPinned && Device->Hwmon.Identity.customer_id != BC250_FAN_CUSTOMER_UNIT_A)
-        gate = BC250_FAN_GATE_CHIP;
+    else if (!chip) gate = BC250_FAN_GATE_CHIP;
     else gate = BC250_FAN_GATE_OK;
     choiceStatus = FanReadConfiguredChoice(&start, &points, &boost, &riseConfirm);
     stored = NT_SUCCESS(choiceStatus);
@@ -508,6 +518,21 @@ void FanStart(BC250_DEVICE* Device)
     // The load feed-forward (rule 10), on unless this start's registry says otherwise.
     bc250_fan_load_boost(&owner->Ctl, boost == 1);
     bc250_fan_rise_confirm(&owner->Ctl, riseConfirm == 1);
+    // The restore debt (bc250_fan.h), before the gate and the stored mode have any effect: no step runs yet, and a
+    // start in the board's mode or with the gate closed never writes the chip after this point. The restore is the
+    // direction the hand-back rule asks for, so EnableFanControl 0 does not stop it; a chip this driver cannot talk
+    // to does, and the debt then waits for the next start.
+    HwmonWriteIo(&ports, owner->Hwmon, &io, FALSE);
+    debtStatus = bc250_fan_settle(&io, &owner->Ctl, chip, &settled);
+    if (settled == BC250_FAN_SETTLE_KEEP)
+        GuardLog("fan: start: a hand-back is owed and the chip cannot be reached (%s): the debt stays",
+                 g_FanGate[gate]);
+    else if (settled != BC250_FAN_SETTLE_NONE && debtStatus != 0)
+        GuardLog("fan: start: the owed hand-back FAILED (%d): the fan may still be ours, the debt stays", debtStatus);
+    else if (settled != BC250_FAN_SETTLE_NONE)
+        GuardLog("fan: start: owed hand-back done (%s): fan %lu is the board's again",
+                 settled == BC250_FAN_SETTLE_FOUND ? "our mode bit was set in the chip" : "the last restore failed",
+                 (ULONG)BC250_FAN_CHANNEL);
     KeAcquireSpinLock(&owner->SnapLock, &irql);
     owner->Stored = stored;
     owner->StoredMode = stored ? start.mode : 0u;
@@ -571,8 +596,11 @@ void FanStop(BC250_DEVICE* Device, ULONG Reason)
     (void)FanHandBack(Device, Reason, bc250_fan_reason_name(Reason));
     FanPublish(Device, NULL);
     if (owner->BugCheckRegistered) {
-        // Before the device memory goes. A restore that failed above is still the board's problem after this; the
-        // log says so, and the record survives in the controller for the next start's first handback.
+        // Before the device memory goes. After a restore that failed above, nothing in this start tries again: the
+        // watchdog is gone and this callback goes now. The controller keeps `controlling` and the restore debt
+        // (bc250_fan.h), and the next FanStart on this device object restores before anything else (bc250_fan_settle),
+        // also in the board's mode and with EnableFanControl 0. A remove frees the controller with the device memory;
+        // the next device object finds our mode bit in the chip instead and restores for the same reason.
         (void)KeDeregisterBugCheckCallback(&owner->BugCheck);
         owner->BugCheckRegistered = FALSE;
     }
