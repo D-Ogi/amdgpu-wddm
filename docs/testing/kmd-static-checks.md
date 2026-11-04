@@ -73,3 +73,20 @@ Fix the code first. Accept a finding only when the code is right as it is.
 
 After a fix, run the gate with `--prune`. The tool removes the lines that the code does not have any more. A
 baseline line that the code does not have is a note, not a failure.
+
+## Findings that a person examined
+
+The table records the result of each examination. The baseline keeps the findings that stay in the code. The
+reason is here, because a baseline line has no space for it.
+
+| Finding | Result | Reason |
+|---|---|---|
+| `clang-analyzer-core.NullDereference` in `connector_link.c`, `Begin` from `ConnectorLinkPrepare` | Not a defect | Each `goto failed` path of `OpenContext` keeps an error status, and `OpenResult` returns that status. The analyzer does not follow `OpenResult`, so it assumes a success. |
+| `clang-analyzer-core.NullDereference` in `wddm.c`, the `Pitch` writes of the shadow, staging and GDI surfaces | Not a defect | `Bc250StdAllocDecide` refuses a request whose union member is NULL (`gdi_admission.h`). The function returns before the `Pitch` writes. |
+| `clang-analyzer-core.NullDereference` in `wddm.c`, `object->Allocation = *private` | Not a defect | `Bc250Lb7aAdmit` gives `BC250_LB7A_UNREAD` for a NULL blob. Only `BC250_LB7A_ADMITTED` gets to the copy. |
+| `clang-analyzer-core.UndefinedBinaryOperatorResult` in `bc250_cu_mode.c`, `write_and_verify` | Not a defect | The start sets `sa_count` to `se_count * sh_per_se`. The caller fills each of those entries before the call. |
+| `sticky _DCN_CURSOR.Stopped` | Intended | `Stopped` ends the cursor for one start. `DcnCursorRelease` frees the object, and the next `DcnCursorPrepare` makes a new object with all fields zero. |
+| `cluster` of the writer fields of `_BC250_WDDM` (`WriterActive`, `WriterReady`, `WriterResumed`, `WriterDeposit`, `DesiredOwed`) | Explicit machine | `flip_state.h` holds the edge table, and `docs/design/vidpn-flip.md` section 7.2 holds the design. All fields change under the lock L. `WddmPrimaryExclusiveBegin` and `WddmPrimaryExclusiveEnd` set all of them together. |
+| `int-state CONNECTOR_LINK.Phase` | Not state | `Phase` is a progress mark for the log and the failure record. No condition reads it. |
+| `dead _BC250_DEVICE.RuntimePlaneBlank` | Removed | The driver wrote the field in eight places and read it in none. `DcnStop` reads the plane blank from `HUBP0_DCHUBP_CNTL`. |
+| `dead _BC250_WDDM.PagingDeferredFence` and the clusters of `PagingDeferredValid` | Removed | `WddmCompleteSoftware` returns before it can set them, because node 1 sends its software fence through the paging FIFO. `PagingDeferredValid` was always FALSE, but the power-idle check still read it. |
