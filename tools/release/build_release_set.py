@@ -409,6 +409,10 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
     for r in rows:
         visit(r["id"], [])
     patterns = [p for p in (only or []) if p]
+    # --keep-from without --only: the run builds only the rows that changed since that earlier release set. A row
+    # whose earlier build stands for it (the same rule as below) is imported, every other row is built, and so is
+    # every row that takes a payload of a row that is built (its inputs change with that build).
+    auto = bool(keep_from) and not patterns
     if patterns:
         selected = {rid for rid in by_id if any(fnmatch.fnmatchcase(rid, p) for p in patterns)}
         for p in patterns:
@@ -444,10 +448,10 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         return r
 
     own = previous_builds(out)
-    earlier = own if patterns else {}
+    earlier = own if patterns or auto else {}
     # --keep-from: the ok builds of another output directory (an earlier round), imported only by name, after a hash
     # check, and only where this directory has no build of the row that stands for it (BD-244).
-    foreign = previous_builds(keep_from) if keep_from and patterns else {}
+    foreign = previous_builds(keep_from) if keep_from else {}
     if foreign:
         # A round directory is often copied or moved after its run: its report names the -Out of that run.
         was = load_json(Path(keep_from) / REPORT).get("out")
@@ -481,6 +485,26 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         if old.get("jobs"):
             definition["jobs"] = old["jobs"]
         return definition, None
+
+    changed = {}
+    if auto:
+        selected = set()
+        for rid in order:
+            reasons = []
+            for entry in (earlier.get(rid), foreign.get(rid)):
+                if entry is not None:
+                    definition, why = stands_for(entry, rid)
+                    if definition is not None:
+                        break
+                    reasons.append(why)
+            else:
+                selected.add(rid)
+                changed[rid] = reasons[0] if reasons else "no earlier build of the row"
+                continue
+            fed = [d for d in deps[rid] if d in selected]
+            if fed:
+                selected.add(rid)
+                changed[rid] = f"it takes a payload of {', '.join(fed)}, which this run builds"
 
     kept, refused = [], {}
     for rid in order:
@@ -566,7 +590,7 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         "sources": str(Path(sources_path).resolve()) if sources_path else None,
         "recipe_repository": recipe_repo, "recipe_commit": manifest["recipe_commit"], "repositories": table,
         "max_parallel": max_parallel, "logical_processors": logical, "jobs_per_slot": jobs_per_slot,
-        "only": patterns, "builds": builds, "kept": kept, "carried": carried,
+        "only": patterns, "changed": changed, "builds": builds, "kept": kept, "carried": carried,
         "keep_from": str(Path(keep_from).resolve()) if keep_from else None, "shared_trees": list(shared.values()),
         "recipes": [{"repo": a, "commit": b, "recipe": c} for a, b, c in recipes],
         "rows_in_manifest": [r["id"] for r in rows],

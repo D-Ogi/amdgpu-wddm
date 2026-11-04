@@ -869,7 +869,38 @@ class ReleaseSetRuns(unittest.TestCase):
         self.assertFalse(self.ws.events.exists(), out)
         code, out = self.ws.run(manifest, "-KeepFrom", str(round1))
         self.assertEqual(code, 1, out)
-        self.assertIn("-KeepFrom needs -Only", out)
+        self.assertIn("is gone or changed", out)
+        self.assertTreesGone()
+
+    def test_keep_from_without_only_builds_only_the_changed_rows(self):
+        # tester.38 built all 60 rows for a change of 6. -KeepFrom alone imports every row whose earlier build
+        # stands for it and builds the changed row and the rows that take its payload.
+        rows = [self.ws.row("a", sleep=0), self.ws.row("b", sleep=0, extra=["-Payload", "{payload:payload/a.bin}"]),
+                self.ws.row("c", sleep=0)]
+        code, out = self.ws.run(self.ws.manifest(rows))
+        self.assertEqual(code, 0, out)
+        round1 = self.ws.root / "round1"
+        self.ws.out.rename(round1)
+        moved = self.ws.commit("a moves", name="a-moves.txt")
+        git(self.ws.repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+        rows[0] = self.ws.row("a", sleep=0, commit=moved)
+        code, out = self.ws.run(self.ws.manifest(rows), "-KeepFrom", str(round1))
+        self.assertEqual(code, 0, out)
+        self.assertIn("build a: the manifest row changed", out)
+        self.assertIn("build b: it takes a payload of a, which this run builds", out)
+        report = self.ws.report()
+        kept = {b["id"]: bool(b.get("kept")) for b in report["builds"]}
+        self.assertEqual(kept, {"a": False, "b": False, "c": True}, out)
+        c = next(b for b in report["builds"] if b["id"] == "c")
+        self.assertEqual(c["imported_from"]["out"], str(round1))
+        # Nothing changed: nothing is built.
+        round2 = self.ws.root / "round2"
+        self.ws.out.rename(round2)
+        shutil.rmtree(self.ws.events, ignore_errors=True)
+        code, out = self.ws.run(self.ws.manifest(rows), "-KeepFrom", str(round2))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("  build ", out)
+        self.assertFalse(self.ws.events.exists(), out)
         self.assertTreesGone()
 
     def test_a_moved_recipe_commit_keeps_the_build_when_the_recipe_is_the_same(self):

@@ -80,7 +80,10 @@
 # did not start) keeps the earlier builds of every row in release-report.json, so the next run still finds them.
 # -KeepFrom <earlier -Out> imports the ok builds of that directory for the rows that -Only does not name and -Out has
 # no build of: the same rule, a SHA-256 check of every file at the source, a copy into <Out>\artifacts and the same
-# check on the copy, before any build starts (BD-244).
+# check on the copy, before any build starts (BD-244). -KeepFrom without -Only builds only what changed: each row
+# that an earlier build in -Out or -KeepFrom stands for (the rule above) is kept or imported, and every other row is
+# built, together with each row that takes a payload of a row that is built. Give the set directory of the release
+# before (for example scratch\t37\release\set): a release that moves two rows then builds two rows, not all of them.
 # Exit 0 when every gate passes and every build ends well (with -Compare: and every output that claims a deterministic
 # build matches); 1 otherwise.
 [CmdletBinding(DefaultParameterSetName = 'Set')]
@@ -645,10 +648,7 @@ $planArgs = @($buildReleaseSet, 'plan', '--manifest', $Manifest, '--root', $Root
 if ($Sources) { $planArgs += @('--sources', [IO.Path]::GetFullPath($Sources)) }
 if ($Only.Count) { $planArgs += @('--only', ($Only -join ',')) }
 if ($Version) { $planArgs += @('--version', $Version) }
-if ($KeepFrom) {
-    if (-not $Only.Count) { "build-release-set: -KeepFrom needs -Only (without it every row is built)"; exit 1 }
-    $planArgs += @('--keep-from', [IO.Path]::GetFullPath($KeepFrom))
-}
+if ($KeepFrom) { $planArgs += @('--keep-from', [IO.Path]::GetFullPath($KeepFrom)) }
 & $python @planArgs
 if ($LASTEXITCODE -ne 0) { "build-release-set: the manifest does not plan (see above)"; exit 1 }
 $planData = Read-Json $planFile
@@ -768,7 +768,8 @@ function Get-PayloadMap($Build, $Results) {
     return $m
 }
 "build-release-set: $($planData.builds.Count) builds$(if ($planData.kept.Count) { ", $($planData.kept.Count) kept from the last run" }), -MaxParallel $MaxParallel, $($planData.jobs_per_slot) jobs per slot ($($planData.logical_processors) logical processors), work $Work"
-foreach ($k in $planData.kept) { "  kept $($k.id): $(@($k.outputs | ForEach-Object { "$($_.sha256.Substring(0, 8)) $($_.path)" }) -join ', ')$(if ($k.imported_from) { " (imported from $($k.imported_from.artifact))" })" }
+if ($planData.changed) { foreach ($p in $planData.changed.GetEnumerator()) { "  build $($p.Key): $($p.Value)" } }
+foreach ($k in $planData.kept) { "  kept $($k.id):$(@($k.outputs | ForEach-Object { "$($_.sha256.Substring(0, 8)) $($_.path)" }) -join ', ')$(if ($k.imported_from) { " (imported from $($k.imported_from.artifact))" })" }
 # The builds of the report: the kept rows, then the result of each planned row. A planned row that did not start keeps
 # its earlier ok build (planData.carried): this run did not touch its artifact, and the next run in -Out must still
 # find it (BD-244). A kept row that was to be imported and was not (a run that ended before the import) is left out,
