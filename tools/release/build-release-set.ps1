@@ -700,6 +700,20 @@ try {
 $foreign = @(Get-Process -Name ninja, clang-cl, cl, lld-link, link, meson -ErrorAction SilentlyContinue)
 $gateList.Add([ordered]@{ name = 'host'; status = $(if ($foreign.Count) { 'WARN' } else { 'PASS' })
         lines = @($(if ($foreign.Count) { "$($foreign.Count) compiler processes of other builds run now ($(($foreign | Group-Object Name | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', ')): they share the cores" } else { 'no other compiler runs' })) })
+# The KMD recipe runs the fast quality gates (tools\quality\quick.ps1), which read the user-mode driver tree of the
+# release from BC250_UMD_SOURCE and BC250_UMD_BUILD. Without them the KMD build fails minutes into the run and stops
+# every other build (tester.37, 2026-11-04), so the gate refuses the set before the first build.
+$kmdRows = @($planData.builds | Where-Object { $_.recipe -eq 'driver/kmd/build.ps1' -or $_.recipe -eq 'driver\kmd\build.ps1' })
+if ($kmdRows.Count) {
+    $umdLines = [Collections.Generic.List[string]]::new()
+    foreach ($n in 'BC250_UMD_SOURCE', 'BC250_UMD_BUILD') {
+        $v = [Environment]::GetEnvironmentVariable($n)
+        if (-not $v) { $umdLines.Add("$n is not set: set it to the umd-gate tree of the release (Mesa at the zink-umd row commit, and its configured build)") }
+        elseif (-not (Test-Path -LiteralPath $v -PathType Container)) { $umdLines.Add("$n=$v is not a folder") }
+    }
+    $gateList.Add([ordered]@{ name = 'umd-gate'; status = $(if ($umdLines.Count) { 'FAIL' } else { 'PASS' })
+            lines = @($(if ($umdLines.Count) { $umdLines } else { "BC250_UMD_SOURCE=$env:BC250_UMD_SOURCE, BC250_UMD_BUILD=$env:BC250_UMD_BUILD, read by $($kmdRows.Count) KMD build(s)" })) })
+}
 foreach ($g in @($gateList | Select-Object -Skip $gates.gates.Count)) {
     "gate $($g.name): $($g.status)"
     foreach ($l in $g.lines) { "  $l" }
