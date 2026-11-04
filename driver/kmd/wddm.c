@@ -571,9 +571,6 @@ typedef struct _BC250_WDDM {
     BOOLEAN PagingHwPending;
     ULONG PagingHwSeq;                  // gfx.c's PagingSubmitSeq of the submission in flight
     UINT PagingHwFence;
-    // Legacy software-deferral fields; queued node-1 software work now uses FIFO jobs.
-    BOOLEAN PagingDeferredValid;
-    UINT PagingDeferredFence;
     KTIMER PagingSubmitTimer;
     KDPC PagingSubmitDpc;
     KTIMER PagingDrainTimer;            // KMD172: the drain's quota requeue (WddmRequeuePagingDrain)
@@ -1534,8 +1531,7 @@ static void WddmPreemptFence(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT No
 
 // A completion that did not come from the hardware. While a hardware submission is in flight ON THAT NODE it
 // waits for it: the two nodes run on different rings, with different fences and different watchdogs, and node
-// 1's completion has no business waiting behind node 0's packet or being published under node 0's ordinal (the
-// PagingDeferredValid field's own comment).
+// 1's completion has no business waiting behind node 0's packet or being published under node 0's ordinal.
 static BOOLEAN WddmSubmitPagingHardwareRoot(BC250_DEVICE* Device, BC250_WDDM* Wddm,
     const void* PrivateData, ULONG PrivateBytes, ULONGLONG Start,
     ULONG ByteCount, BOOLEAN VirtualAddress, UINT FenceId, ULONGLONG Root);
@@ -1567,9 +1563,9 @@ static void WddmCompleteSoftware(_Inout_ BC250_DEVICE* Device, UINT FenceId, UIN
         KeReleaseSpinLock(&wddm->Lock, irql);
         return; // no later software fence may retire uncompleted work on a faulted node
     }
-    deferred = paging ? (wddm->PagingHead != NULL) : WddmRingPendingLocked(wddm, NodeOrdinal);
-    if (deferred && paging) { wddm->PagingDeferredValid = TRUE; wddm->PagingDeferredFence = FenceId; }
-    else if (deferred && NodeOrdinal == BC250_WDDM_NODE_COMPUTE)
+    // Node 1 returned above: its software fence goes through the paging FIFO (WddmSubmitPagingHardware).
+    deferred = WddmRingPendingLocked(wddm, NodeOrdinal);
+    if (deferred && NodeOrdinal == BC250_WDDM_NODE_COMPUTE)
     { wddm->ComputeDeferredValid = TRUE; wddm->ComputeDeferredFence = FenceId; }
     else if (deferred) { wddm->DeferredValid = TRUE; wddm->DeferredFence = FenceId; }
     else WddmRecordCompletionLocked(wddm, FenceId, NodeOrdinal);
@@ -1592,9 +1588,8 @@ static void WddmFailSubmission(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT 
     first=!wddm->RefusalPending[Node];
     wddm->RefusalPending[Node]=TRUE;
     wddm->WatchdogFaulted[Node]=TRUE;
-    if (Node==BC250_WDDM_NODE_COPY) wddm->PagingDeferredValid=FALSE;
-    else if (Node==BC250_WDDM_NODE_COMPUTE) wddm->ComputeDeferredValid=FALSE;
-    else wddm->DeferredValid=FALSE;
+    if (Node==BC250_WDDM_NODE_COMPUTE) wddm->ComputeDeferredValid=FALSE;
+    else if (Node!=BC250_WDDM_NODE_COPY) wddm->DeferredValid=FALSE;
     if (Node==BC250_WDDM_NODE_COPY) GfxPagingSubmitFail(Device);
     else if (Node==BC250_WDDM_NODE_COMPUTE) GfxComputeClose(Device);     // node 2 does not witness the start
     else GfxSubmitFail(Device);
@@ -4468,7 +4463,7 @@ static BOOLEAN WddmPowerIdleLocked(const BC250_WDDM* Wddm)
     UINT node;
     if (Wddm->HwPending || Wddm->DeferredValid || Wddm->ComputeHwPending || Wddm->ComputeDeferredValid ||
         Wddm->PagingHwPending ||
-        Wddm->PagingHead || Wddm->PagingTail || Wddm->PagingDeferredValid ||
+        Wddm->PagingHead || Wddm->PagingTail ||
         Wddm->ReportActive || Wddm->ReportAgain) return FALSE;
     for (node=0;node<BC250_WDDM_NODE_COUNT_MAX;node++) {
         if (Wddm->ActiveSubmissions[node] || Wddm->CompletionPending[node] ||
@@ -8420,7 +8415,6 @@ static BOOLEAN WddmAdapterReset(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM
     }
     Wddm->DeferredValid = FALSE;
     Wddm->ComputeDeferredValid = FALSE;
-    Wddm->PagingDeferredValid = FALSE;
     // The paging node opens again now, for VidMm's cleanup (see the head of this section). Its ring is idle by the
     // witnesses, so GfxPagingReopenAfterReset only clears the flags of the close in step 1.
     pagingOpen = GfxPagingReopenAfterReset(Device);

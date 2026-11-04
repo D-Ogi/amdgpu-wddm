@@ -23,7 +23,7 @@ typedef struct {long long QuadPart;} LARGE_INTEGER;
 typedef struct {
  int Lock,Stopping,RetainedPowerPause,HwPending,DeferredValid,PagingHwPending;
  void *PagingHead,*PagingTail;
- int PagingDeferredValid,ReportActive,ReportAgain;
+ int ReportActive,ReportAgain;
  /* Node 2's channel (compute-node.md): a job on the compute ring or a fence held for it is outstanding work. */
  int ComputeHwPending,ComputeDeferredValid,ComputeTimer,ComputeDpc;
  int ActiveSubmissions[3],CompletionPending[3],PreemptionPending[3];
@@ -73,7 +73,7 @@ static void retained(BC250_WDDM*w,const BC250_WDDM*before){
 }
 int main(void){
  BC250_DEVICE d;BC250_WDDM w,before;unsigned i;
- const size_t scalar[]={offsetof(BC250_WDDM,HwPending),offsetof(BC250_WDDM,DeferredValid),offsetof(BC250_WDDM,PagingHwPending),offsetof(BC250_WDDM,PagingDeferredValid),offsetof(BC250_WDDM,ReportActive),offsetof(BC250_WDDM,ReportAgain),
+ const size_t scalar[]={offsetof(BC250_WDDM,HwPending),offsetof(BC250_WDDM,DeferredValid),offsetof(BC250_WDDM,PagingHwPending),offsetof(BC250_WDDM,ReportActive),offsetof(BC250_WDDM,ReportAgain),
                          offsetof(BC250_WDDM,ComputeHwPending),offsetof(BC250_WDDM,ComputeDeferredValid)};
  const size_t arrays[]={offsetof(BC250_WDDM,ActiveSubmissions),offsetof(BC250_WDDM,CompletionPending),offsetof(BC250_WDDM,PreemptionPending),offsetof(BC250_WDDM,RefusalPending),offsetof(BC250_WDDM,RejectedPending),offsetof(BC250_WDDM,WatchdogFaulted)};
  setup(&d,&w);before=w;

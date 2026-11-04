@@ -49,7 +49,7 @@ typedef struct {
     /* BD-114: the submit watchdog's budget, its cadence and its staleness window, types as in wddm.c. The budget
      * is latched in WddmStart, which is above the extracted region, so main() sets it the way a start would. */
     ULONG SubmitBudgetMs, SubmitTickMs;
-    int PagingHwPending, PagingDiagnosticTaken, PagingDeferredValid;
+    int PagingHwPending, PagingDiagnosticTaken;
     ULONG PagingHwFence, PagingHwSeq;
     ULONGLONG PagingDeadline;
     LONG PagingHwTimeouts;
@@ -384,14 +384,14 @@ int main(void)
      * duplicate queued timer is bounded to one diagnostic; a late real fence
      * remains retirable. Stop/reset suppress diagnostics from stale timers. */
     memset(&w,0,sizeof(w)); mock_now=100; completed=reported=failures=0;
-    w.PagingHwPending=1; w.PagingDeferredValid=1; w.PagingHwSeq=55;
+    w.PagingHwPending=1; w.PagingHwSeq=55;
     w.PagingHwFence=88; w.PagingDeadline=200; w.SubmitBudgetMs=12000;
     WddmPagingSubmitDpcCheck(NULL,&d,NULL,NULL);
     CHECK(!w.PagingDiagnosticTaken && !w.PagingHwTimeouts);
     mock_now=200;
     WddmPagingSubmitDpcCheck(NULL,&d,NULL,NULL);
     CHECK(w.PagingDiagnosticTaken && w.PagingHwTimeouts==1);
-    CHECK(w.PagingHwPending && w.PagingDeferredValid && !w.WatchdogFaulted[1] && failures==0 && reported==0);
+    CHECK(w.PagingHwPending && !w.WatchdogFaulted[1] && failures==0 && reported==0);
     WddmPagingSubmitDpcCheck(NULL,&d,NULL,NULL);
     CHECK(w.PagingHwTimeouts==1);
     completed=55;
