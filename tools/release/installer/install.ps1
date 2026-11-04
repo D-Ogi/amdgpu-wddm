@@ -260,13 +260,15 @@ function Invoke-Preflight {
     else { Add-Check 'Memory integrity' 'ok' $hvci 'hvci.off' }
 
     # Smart App Control on: Windows blocks the test-signed setup exe and our user-mode driver DLLs in every process,
-    # DWM included (Code Integrity 3033/3077, measured on 26100), so the run stops here, before its first change (the
-    # class of BD-192). Evaluation can turn into on by itself: a warning that asks to turn it off now.
+    # DWM included (Code Integrity 3033/3077, measured on 26100; BD-192), and evaluation can turn into on by itself.
+    # For both the installer turns it off before its first program runs (Invoke-SmartAppControlOff below): the plan
+    # states it as information, and Install is the consent. A change that does not hold refuses the run, as this
+    # check did before (smartappcontrol.not-off).
     $sac = Read-SmartAppControlState
-    $sacSteps = 'open Windows Security > App & browser control > Smart App Control settings, select Off, then "Yes, I''m sure", then Yes in the administrator prompt (see INSTALL.md, section Smart App Control and SmartScreen)'
-    if ($sac.state -eq 'on') { Add-Check 'Smart App Control' 'fail' "$($sac.detail): while it is on, Windows blocks the test-signed setup program and the programs of the graphics driver, so the desktop and games cannot use the driver. Turn Smart App Control off first: $sacSteps." 'smartappcontrol.on' }
-    elseif ($sac.state -eq 'evaluation') { Add-Check 'Smart App Control' 'warn' "$($sac.detail): if Windows turns Smart App Control on later, Windows blocks the programs of the graphics driver, and the desktop and games lose the driver. Turn it off now: $sacSteps." 'smartappcontrol.evaluation' }
-    elseif ($sac.state -eq 'unknown') { Add-Check 'Smart App Control' 'warn' "state unknown: $($sac.detail). If Windows blocks the setup or the driver, $sacSteps." 'smartappcontrol.unknown' }
+    $script:SacState = $sac.state
+    if ($sac.state -eq 'on') { Add-Check 'Smart App Control' 'ok' "$($sac.detail): the installer turns it off before its first program runs. $($script:SacTurnOffText)" 'smartappcontrol.on' }
+    elseif ($sac.state -eq 'evaluation') { Add-Check 'Smart App Control' 'ok' "$($sac.detail): the installer turns it off before its first program runs, so Windows cannot turn it on later. $($script:SacTurnOffText)" 'smartappcontrol.evaluation' }
+    elseif ($sac.state -eq 'unknown') { Add-Check 'Smart App Control' 'warn' "state unknown: $($sac.detail). If Windows blocks the setup or the driver, $($script:SacSteps)." 'smartappcontrol.unknown' }
     else { Add-Check 'Smart App Control' 'ok' $sac.detail 'smartappcontrol.off' }
 
     # The Microsoft Visual C++ runtime our programs need. A PC without it is no longer refused: the package carries Microsoft's own installer and phase 2 runs it. The only
@@ -1206,6 +1208,10 @@ if ($Plan) {
         Write-Host '      Windows test mode is turned on, and "Test Mode" then shows on the desktop. Uninstall turns it off again.' -ForegroundColor White
         Write-Host ('      ' + (Get-BitLockerPlan -State $script:BitLockerState -Requested $BitLocker -Restarts $restarts).message) -ForegroundColor White
     }
+    # Smart App Control on or in evaluation: the run turns it off (Invoke-SmartAppControlOff), and the plan says so.
+    if ($action.action -in @('install', 'upgrade', 'repair', 'resume') -and $script:SacState -in @('on', 'evaluation')) {
+        Write-Host ('      ' + $script:SacTurnOffText) -ForegroundColor White
+    }
     Exit-Engine -Code 0 -Outcome 'planned' -MessageId 'result.planned'
 }
 # A consent the window did not give still stops a window run before any change. The list is empty today (nothing is
@@ -1286,6 +1292,31 @@ if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
 }
 Set-CancelAvailable $true 'before-changes'
 Invoke-CancelPoint 'before-changes'
+
+# ---- Smart App Control off ---------------------------------------------------------------------------------------
+# The first change of an install, an upgrade, a repair or a resume, before the first program of ours that Smart App
+# Control blocks (the state worker amdgpu-state-installer.exe, the INF staging and the installed programs): the
+# preflight read on or evaluation, and the plan said that it is turned off (common.ps1, Disable-SmartAppControl).
+# A change that does not hold stops the run here, before any program of ours, with the steps to do it by hand: the
+# same refusal and help card as the preflight check before 2026-11-04 (smartappcontrol.not-off).
+function Invoke-SmartAppControlOff {
+    if ($script:SacState -notin @('on', 'evaluation')) { return }
+    Write-Step 'Smart App Control'
+    $desc = "turn Smart App Control off ($($script:SacState) now): CI\Policy VerifiedAndReputablePolicyState = 0 (DWORD), CiTool.exe --refresh --json, and the value read back"
+    Write-Info $script:SacTurnOffText
+    # A dry run changes nothing; with AMDGPU_WDDM_TEST_SAC it walks the stand-ins of Disable-SmartAppControl instead.
+    if ($script:DryRunMode -and -not $env:AMDGPU_WDDM_TEST_SAC) { Invoke-Change $desc { } | Out-Null; return }
+    $off = $null
+    if ($script:DryRunMode) { [void](Invoke-Change $desc { }); $off = Disable-SmartAppControl }
+    else { $off = Invoke-Change $desc { Disable-SmartAppControl } }
+    if ($off.ok) { Write-Info "Smart App Control is off: $($off.detail)"; $script:SacState = 'off'; return }
+    Write-Fail "Smart App Control did not turn off: $($off.detail)"
+    Write-Host ''
+    Write-Host "The installer stopped before any program of the driver ran. Turn Smart App Control off by hand: $($script:SacSteps). Then run the installer again." -ForegroundColor Red
+    $script:EngineFailedChecks = @('smartappcontrol.not-off')
+    Exit-Engine -Code 2 -Outcome 'refused' -MessageId 'result.preflight-refused' -Detail "Smart App Control: the change to off did not hold ($($off.detail)). Turn it off by hand: $($script:SacSteps)."
+}
+if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) { Invoke-SmartAppControlOff }
 
 switch ($action.action) {
     'already' { Write-Host $action.message -ForegroundColor White; Exit-Engine -Code 0 -Outcome 'already' -MessageId 'result.already' }

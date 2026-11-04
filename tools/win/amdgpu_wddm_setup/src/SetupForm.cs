@@ -1013,7 +1013,10 @@ namespace AmdgpuWddmSetup
             // The Microsoft Visual C++ runtime the driver's programs need: when the plan found it missing or too
             // old, the install brings it, and this screen says so before it happens.
             bool vcMissing = _plan != null && _plan.Checks.Any(c => c.Id == "vcruntime.missing");
-            foreach (var id in InstallFlow.PlanChangeIds(testModeOff, PlanBitLocker(), vcMissing))
+            // Smart App Control on or in evaluation mode: the install turns it off, as information like the lines
+            // above. There is no box to tick and no other question: Install is the consent.
+            bool sacOff = _plan != null && _plan.Checks.Any(c => InstallFlow.SmartAppControlOffChecks.Contains(c.Id));
+            foreach (var id in InstallFlow.PlanChangeIds(testModeOff, PlanBitLocker(), vcMissing, sacOff))
             {
                 switch (id)
                 {
@@ -1021,6 +1024,7 @@ namespace AmdgpuWddmSetup
                     case "plan.change.test-mode.on": steps.Row(Icons.Check, Theme.Good, Strings.T(id)); break;
                     case "plan.change.bitlocker": steps.Row(Icons.Shield, Theme.Teal, Strings.T(id)); break;
                     case "plan.change.vcruntime": steps.Row(Icons.Download, Theme.Teal, Strings.T(id)); break;
+                    case "plan.change.smartappcontrol": steps.Row(Icons.Shield, Theme.Teal, Strings.T(id)); break;
                     default: steps.Row(Icons.Shield, Theme.Warn, Strings.T(id)); break;
                 }
             }

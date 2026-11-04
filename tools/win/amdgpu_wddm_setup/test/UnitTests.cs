@@ -136,6 +136,9 @@ static partial class UnitTests
         foreach (Match m in Regex.Matches(install, @"Add-Check\s+'[^']*'\s+'(ok|warn|fail)'[^\r\n]*?'([a-z0-9-]+\.[a-z0-9-]+)'\s*\)?\s*\}?\s*(?:else|$)", RegexOptions.Multiline)) checkIds.Add(m.Groups[2].Value);
         foreach (Match m in Regex.Matches(install, @"'(testsigning\.(active|inactive))'")) checkIds.Add(m.Groups[1].Value);
         foreach (Match m in Regex.Matches(prepare, @"Stop-Refused\s+'([a-z0-9-]+\.[a-z0-9-]+)'")) checkIds.Add(m.Groups[1].Value);
+        // A refusal of the run after the preflight names its check without a preflight line (smartappcontrol.not-off).
+        foreach (Match m in Regex.Matches(install, @"EngineFailedChecks\s*=\s*@\('([a-z0-9-]+\.[a-z0-9-]+)'\)")) checkIds.Add(m.Groups[1].Value);
+        Check(checkIds.Contains("smartappcontrol.not-off"), "engine contract: the run's Smart App Control refusal is a check id the window knows");
         Check(checkIds.Count >= 30, "engine contract: check ids found in the scripts (" + checkIds.Count + ")");
         foreach (var id in checkIds) Check(Strings.Has("check." + id), "engine contract: check." + id + " has words");
         foreach (Match m in Regex.Matches(install + prepare, @"Enter-Stage\s+'([a-z-]+)'")) Check(Strings.Has("stage." + m.Groups[1].Value), "engine contract: stage." + m.Groups[1].Value + " has words");
@@ -272,9 +275,10 @@ static partial class UnitTests
         Check(!V("refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"lab-install.present\"]").RetryHelps, "retry: a development installation is not fixed by a new try");
         Check(!V("refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"gpu.missing\",\"secureboot.on\"]").RetryHelps, "retry: no BC-250 and Secure Boot on");
         Check(V("refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"gpu.missing\",\"space.low\"]").RetryHelps, "retry: one fixable check keeps Try again the default");
-        // Smart App Control: the user turns it off in Windows Security while the window stays open, so a new try helps.
-        Check(V("refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"smartappcontrol.on\"]").RetryHelps, "retry: Smart App Control on keeps Try again the default");
-        Check(!ResultView.RetryCannotFix.Contains("smartappcontrol.on"), "retry: smartappcontrol.on is not a check a new try cannot fix");
+        // Smart App Control that did not turn off: the user turns it off in Windows Security while the window stays
+        // open, so a new try helps.
+        Check(V("refused", 2, "result.preflight-refused", true, ",\"failed_checks\":[\"smartappcontrol.not-off\"]").RetryHelps, "retry: Smart App Control that did not turn off keeps Try again the default");
+        Check(!ResultView.RetryCannotFix.Contains("smartappcontrol.not-off"), "retry: smartappcontrol.not-off is not a check a new try cannot fix");
         Check(V("refused", 2, "result.firmware-unreachable", false, ",\"failed_checks\":[\"firmware.unreachable\"]").RetryHelps, "retry: an unreachable download can work on a new try");
         Check(V("refused", 2, "result.preflight-error", false).RetryHelps, "retry: an error without failed checks keeps Try again");
         Check(!V("refused", 2, "result.package-damaged", false).RetryHelps, "retry: damaged setup files need a new download");
@@ -496,20 +500,30 @@ static partial class UnitTests
         Check(Strings.In("en", "help.sac.step.confirm").Contains("\"Are you sure?\"") && Strings.In("en", "help.sac.step.confirm").Contains("\"Yes, I'm sure\""), "help: the confirm step quotes the question and the button of Windows");
         Check(Strings.In("en", "help.sac.note").Contains("reset this PC from the Windows recovery options") && !Strings.In("en", "help.sac.note").Contains("some versions"), "help: the note states the reset of Windows without a hedge");
         // The check line above the card says what Windows blocks; the card's body does not repeat it.
-        Check(Strings.In("en", "check.smartappcontrol.evaluation").Contains("Windows blocks the programs of the graphics driver, and the desktop and games lose the driver"), "help: evaluation says what the user loses if Windows turns it on");
-        Check(Strings.In("en", "check.smartappcontrol.on").Contains("Windows blocks this setup program and the programs of the graphics driver"), "help: on says what Windows blocks");
-        foreach (var b in new[] { "help.sac.on.body", "help.sac.evaluation.body" })
-            Check(!Strings.In("en", b).Contains("programs of the graphics driver"), "help: " + b + " does not repeat the check line");
-        // The refusal ends with Try again, the two notes with going on: the button each screen has.
-        Equal("help.sac.step.retry", HelpCards.For("smartappcontrol.on").Steps.Last().TextId, "help: the refusal's last step is Try again");
+        Check(Strings.In("en", "check.smartappcontrol.not-off").Contains("Windows blocks this setup program and the programs of the graphics driver"), "help: a change that did not hold says what Windows blocks");
+        Check(!Strings.In("en", "help.sac.not-off.body").Contains("programs of the graphics driver"), "help: help.sac.not-off.body does not repeat the check line");
+        // The refusal ends with Try again, the note of an unread state with going on: the button each screen has.
+        Equal("help.sac.step.retry", HelpCards.For("smartappcontrol.not-off").Steps.Last().TextId, "help: the refusal's last step is Try again");
         Check(Strings.In("en", "help.sac.step.retry").Contains(Strings.In("en", "result.retry")), "help: the refusal's last step names the Try again button by its own words");
-        Equal("help.sac.step.install", HelpCards.For("smartappcontrol.evaluation").Steps.Last().TextId, "help: evaluation's last step is to go on");
         Equal("help.sac.step.install", HelpCards.For("smartappcontrol.unknown").Steps.Last().TextId, "help: an unread state's last step is to go on");
         Check(Strings.In("en", "help.sac.step.open").Contains(Strings.In("en", "help.sac.open")), "help: the first step names the button by its own words");
-        Equal("smartappcontrol.on", HelpCards.ForChecks(new[] { "space.low", "smartappcontrol.unknown", "smartappcontrol.on" }).CheckId, "help: one card for a screen, the refusal first");
-        Equal("smartappcontrol.evaluation", HelpCards.ForChecks(new[] { "bitlocker.unknown", "smartappcontrol.evaluation" }).CheckId, "help: the plan screen's note has its card");
+        Equal("smartappcontrol.not-off", HelpCards.ForChecks(new[] { "space.low", "smartappcontrol.unknown", "smartappcontrol.not-off" }).CheckId, "help: one card for a screen, the refusal first");
+        Equal("smartappcontrol.unknown", HelpCards.ForChecks(new[] { "bitlocker.unknown", "smartappcontrol.unknown" }).CheckId, "help: the plan screen's note has its card");
         Check(HelpCards.ForChecks(new[] { "secureboot.on", "gpu.missing" }) == null, "help: no card for checks without one");
         Check(HelpCards.ForChecks(null) == null && HelpCards.For("smartappcontrol.off") == null, "help: no card for nothing, or for Smart App Control off");
+        // Smart App Control on or in evaluation mode: the install turns it off. The plan states
+        // it as information in plain words, with no card and no question, and the check line says so.
+        foreach (var id in InstallFlow.SmartAppControlOffChecks)
+        {
+            Check(HelpCards.For(id) == null && HelpCards.ForChecks(new[] { id }) == null, "sac off: " + id + " has no help card");
+            Check(Strings.In("en", "check." + id).Contains("Setup turns it off before it installs the driver"), "sac off: check." + id + " says that setup turns it off");
+        }
+        Equal("Smart App Control will be turned off. Windows can turn it back on only by a reset of the system.", Strings.In("en", "plan.change.smartappcontrol"), "sac off: the plan line is the owner's sentence");
+        foreach (var lang in Strings.Languages)
+            Check(Strings.In(lang, "plan.change.smartappcontrol") != Strings.In("en", "plan.change.smartappcontrol") || lang == "en", "sac off: the plan line has its own words in " + lang);
+        Check(InstallFlow.PlanChangeIds(true, "off", false, true).SequenceEqual(new[] { "plan.change.smartappcontrol", "plan.change.test-mode" }), "sac off: the plan states the turn-off first, the first change of the run");
+        Check(InstallFlow.PlanChangeIds(false, "on", true, true).SequenceEqual(new[] { "plan.change.smartappcontrol", "plan.change.test-mode.on", "plan.change.vcruntime" }), "sac off: the line also comes with test mode on and the runtime");
+        Check(!InstallFlow.PlanChangeIds(true, "off").Contains("plan.change.smartappcontrol"), "sac off: a PC with Smart App Control off reads no line about it");
         // Every picture is a PNG under the build's size limits, and the ones a card cannot do without are named.
         Check(HelpCards.Images.All(i => Regex.IsMatch(i, @"^[a-z0-9-]+\.png$")), "help: picture names are plain PNG names");
         Check(HelpCards.RequiredImages.All(i => HelpCards.Images.Contains(i)) && HelpCards.RequiredImages.Any(), "help: the required pictures are pictures of a card");

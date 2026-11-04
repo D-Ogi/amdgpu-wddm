@@ -92,9 +92,10 @@ check.bitlocker.unknown|mt|74c5d56a|La instalación no pudo leer el estado de Bi
 check.hvci.off|mt|c5375084|La integridad de memoria está desactivada.
 check.hvci.on|mt|038dce93|La integridad de memoria está activada. Si el controlador no inicia, desactívela en Seguridad de Windows (Aislamiento del núcleo).
 check.smartappcontrol.off|mt|d0c27ee8|Control inteligente de aplicaciones está desactivado.
-check.smartappcontrol.on|mt|78cca160|Control inteligente de aplicaciones está activado. Mientras esté activado, Windows bloquea este programa de instalación y los programas del controlador de gráficos. Desactívelo antes de instalar.
-check.smartappcontrol.evaluation|mt|8d341ff5|Control inteligente de aplicaciones está en modo de evaluación. Si Windows lo activa más tarde, bloqueará los programas del controlador de gráficos, y el escritorio y los juegos perderán el controlador. Desactívelo ahora.
+check.smartappcontrol.on|mt|e942bb33|Control inteligente de aplicaciones está activado. La instalación lo desactiva antes de instalar el controlador.
+check.smartappcontrol.evaluation|mt|6d2a3b91|Control inteligente de aplicaciones está en modo de evaluación. La instalación lo desactiva antes de instalar el controlador, así Windows no puede activarlo más tarde.
 check.smartappcontrol.unknown|mt|4ce54139|La instalación no pudo leer si Control inteligente de aplicaciones está activado.
+check.smartappcontrol.not-off|mt|0e4a27ff|La instalación no pudo desactivar Control inteligente de aplicaciones. Mientras esté activado, Windows bloquea este programa de instalación y los programas del controlador de gráficos. No se instaló nada del controlador.
 check.vcruntime.ok|mt|da7b7ffe|El runtime de Microsoft Visual C++ está instalado.
 check.vcruntime.missing|mt|e96604a7|El runtime de Microsoft Visual C++ 2015-2022 (x64) falta o es demasiado antiguo. La instalación lo instala desde el archivo que trae consigo.
 check.vcruntime.no-installer|mt|a1670c32|Hay que instalar el runtime de Microsoft Visual C++ 2015-2022 (x64), y este conjunto de archivos no incluye el programa de Microsoft que lo hace. Descargue la versión de nuevo.
@@ -141,6 +142,7 @@ plan.change.test-mode.on|mt|cf315297|Windows ya se ejecuta en modo de prueba, as
 plan.change.bitlocker|mt|f43553fa|La protección de BitLocker se pausa durante los reinicios de esta instalación y se vuelve a activar sola, así Windows no pide la clave de recuperación.
 plan.change.bitlocker.unknown|mt|67f2277e|La instalación no pudo leer el estado de BitLocker de esta PC. Continúa de todos modos: tenga a mano su clave de recuperación por si Windows la pide después de un reinicio.
 plan.change.vcruntime|mt|65d68876|Primero se instala el runtime de Microsoft Visual C++ 2015-2022 (x64), porque los programas del controlador lo necesitan.
+plan.change.smartappcontrol|mt|90e7f550|Control inteligente de aplicaciones se desactivará. Windows solo puede volver a activarlo con un restablecimiento del sistema.
 shortcuts.title|mt|19544092|Accesos directos y Nagi
 shortcuts.start-menu|mt|f7bdc16b|En el menú Inicio
 shortcuts.desktop|mt|b1e0eb2c|En el escritorio
@@ -336,8 +338,7 @@ tuning.restore|mt|3fb261c1|Revise cada configuración y restaure los valores gua
 
 # ---- help cards (HelpCards.cs): a check the user fixes in Windows, in steps ----
 help.sac.title|mt|abf79205|Cómo desactivar Control inteligente de aplicaciones
-help.sac.on.body|mt|83e5ce37|Control inteligente de aplicaciones solo ejecuta los programas que firma un editor y en los que Microsoft confía. Esta versión de prueba tiene una firma de prueba. Desactive Control inteligente de aplicaciones e intente de nuevo.
-help.sac.evaluation.body|mt|425fde85|Desactive Control inteligente de aplicaciones antes de continuar. Cuando está desactivado, Windows no lo activa por sí solo.
+help.sac.not-off.body|mt|83d88902|Control inteligente de aplicaciones solo ejecuta los programas que firma un editor y en los que Microsoft confía. Esta versión de prueba tiene una firma de prueba, y la instalación no pudo desactivar Control inteligente de aplicaciones por sí sola. Desactívelo con estos pasos e intente de nuevo.
 help.sac.unknown.body|mt|41f88dc0|Si Windows bloquea la instalación o el controlador, desactive Control inteligente de aplicaciones con estos pasos.
 help.sac.step.open|mt|53dc10bb|Seleccione Abrir la configuración de Control inteligente de aplicaciones, abajo. Seguridad de Windows abre la página de Control inteligente de aplicaciones.
 help.sac.step.off|mt|1ad754d0|Seleccione Desactivado.

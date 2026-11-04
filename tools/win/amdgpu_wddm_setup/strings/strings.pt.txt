@@ -92,9 +92,10 @@ check.bitlocker.unknown|mt|74c5d56a|O Setup não conseguiu ler o estado do BitLo
 check.hvci.off|mt|c5375084|A integridade da memória está desligada.
 check.hvci.on|mt|038dce93|A integridade da memória está ligada. Se o driver não iniciar, desligue-a em Segurança do Windows (Isolamento de núcleo).
 check.smartappcontrol.off|mt|d0c27ee8|O Controle Inteligente de Aplicativos está desligado.
-check.smartappcontrol.on|mt|78cca160|O Controle Inteligente de Aplicativos está ligado. Enquanto ele estiver ligado, o Windows bloqueia este Setup e os programas do driver de vídeo. Desligue-o antes de instalar.
-check.smartappcontrol.evaluation|mt|8d341ff5|O Controle Inteligente de Aplicativos está em modo de avaliação. Se o Windows ligá-lo depois, ele bloqueia os programas do driver de vídeo, e a área de trabalho e os jogos perdem o driver. Desligue-o agora.
+check.smartappcontrol.on|mt|e942bb33|O Controle Inteligente de Aplicativos está ligado. O Setup o desliga antes de instalar o driver.
+check.smartappcontrol.evaluation|mt|6d2a3b91|O Controle Inteligente de Aplicativos está em modo de avaliação. O Setup o desliga antes de instalar o driver, para que o Windows não possa ligá-lo depois.
 check.smartappcontrol.unknown|mt|4ce54139|O Setup não conseguiu ler se o Controle Inteligente de Aplicativos está ligado.
+check.smartappcontrol.not-off|mt|0e4a27ff|O Setup não conseguiu desligar o Controle Inteligente de Aplicativos. Enquanto ele estiver ligado, o Windows bloqueia este Setup e os programas do driver de vídeo. Nada do driver foi instalado.
 check.vcruntime.ok|mt|da7b7ffe|O runtime do Microsoft Visual C++ está instalado.
 check.vcruntime.missing|mt|e96604a7|O runtime do Microsoft Visual C++ 2015-2022 (x64) está faltando ou é antigo demais. O Setup o instala com o arquivo que traz junto.
 check.vcruntime.no-installer|mt|a1670c32|É preciso instalar o runtime do Microsoft Visual C++ 2015-2022 (x64), e este conjunto de arquivos não traz o programa da Microsoft que faz isso. Baixe a versão de novo.
@@ -141,6 +142,7 @@ plan.change.test-mode.on|mt|cf315297|O Windows já roda em modo de teste, então
 plan.change.bitlocker|mt|f43553fa|A proteção do BitLocker é pausada durante as reinicializações desta instalação e volta a ligar sozinha, para que o Windows não peça a chave de recuperação.
 plan.change.bitlocker.unknown|mt|67f2277e|O Setup não conseguiu ler o estado do BitLocker deste PC. Ele continua mesmo assim: tenha sua chave de recuperação à mão caso o Windows a peça após uma reinicialização.
 plan.change.vcruntime|mt|65d68876|Primeiro é instalado o runtime do Microsoft Visual C++ 2015-2022 (x64), porque os programas do driver precisam dele.
+plan.change.smartappcontrol|mt|90e7f550|O Controle Inteligente de Aplicativos será desligado. O Windows só pode ligá-lo de novo com uma redefinição do sistema.
 shortcuts.title|mt|19544092|Atalhos e Nagi
 shortcuts.start-menu|mt|f7bdc16b|No menu Iniciar
 shortcuts.desktop|mt|b1e0eb2c|Na área de trabalho
@@ -336,8 +338,7 @@ tuning.restore|mt|3fb261c1|Revise cada configuração e restaure os valores salv
 
 # ---- help cards (HelpCards.cs): a check the user fixes in Windows, in steps ----
 help.sac.title|mt|abf79205|Como desligar o Controle Inteligente de Aplicativos
-help.sac.on.body|mt|83e5ce37|O Controle Inteligente de Aplicativos só executa programas que um editor assina e em que a Microsoft confia. Esta versão de teste tem uma assinatura de teste. Desligue o Controle Inteligente de Aplicativos e tente de novo.
-help.sac.evaluation.body|mt|425fde85|Desligue o Controle Inteligente de Aplicativos antes de continuar. Quando ele está desligado, o Windows não o liga sozinho.
+help.sac.not-off.body|mt|83d88902|O Controle Inteligente de Aplicativos só executa programas que um editor assina e em que a Microsoft confia. Esta versão de teste tem uma assinatura de teste, e o Setup não conseguiu desligar o Controle Inteligente de Aplicativos sozinho. Desligue-o com estas etapas e tente de novo.
 help.sac.unknown.body|mt|41f88dc0|Se o Windows bloquear o Setup ou o driver, desligue o Controle Inteligente de Aplicativos com estas etapas.
 help.sac.step.open|mt|53dc10bb|Selecione Abrir configurações do Controle Inteligente de Aplicativos abaixo. A Segurança do Windows abre a página do Controle Inteligente de Aplicativos.
 help.sac.step.off|mt|1ad754d0|Selecione Desativado.

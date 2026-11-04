@@ -91,9 +91,10 @@ check.bitlocker.unknown|mt|74c5d56a|BitLocker 상태를 읽을 수 없었습니�
 check.hvci.off|mt|c5375084|메모리 무결성이 꺼져 있습니다.
 check.hvci.on|mt|038dce93|메모리 무결성이 켜져 있습니다. 드라이버가 시작되지 않으면 Windows 보안(코어 격리)에서 끄세요.
 check.smartappcontrol.off|mt|d0c27ee8|스마트 앱 컨트롤이 꺼져 있습니다.
-check.smartappcontrol.on|mt|78cca160|스마트 앱 컨트롤이 켜져 있습니다. 켜져 있는 동안 Windows가 이 설치 프로그램과 그래픽 드라이버의 프로그램을 차단합니다. 설치하기 전에 끄세요.
-check.smartappcontrol.evaluation|mt|8d341ff5|스마트 앱 컨트롤이 평가 모드입니다. 나중에 Windows가 켜면 그래픽 드라이버의 프로그램이 차단되어 바탕 화면과 게임에서 드라이버를 사용할 수 없게 됩니다. 지금 끄세요.
+check.smartappcontrol.on|mt|e942bb33|스마트 앱 컨트롤이 켜져 있습니다. 설치 프로그램이 드라이버를 설치하기 전에 끕니다.
+check.smartappcontrol.evaluation|mt|6d2a3b91|스마트 앱 컨트롤이 평가 모드입니다. 설치 프로그램이 드라이버를 설치하기 전에 끄므로 나중에 Windows가 켤 수 없습니다.
 check.smartappcontrol.unknown|mt|4ce54139|스마트 앱 컨트롤이 켜져 있는지 읽을 수 없었습니다.
+check.smartappcontrol.not-off|mt|0e4a27ff|설치 프로그램이 스마트 앱 컨트롤을 끄지 못했습니다. 켜져 있는 동안 Windows가 이 설치 프로그램과 그래픽 드라이버의 프로그램을 차단합니다. 드라이버는 아무것도 설치되지 않았습니다.
 check.vcruntime.ok|mt|da7b7ffe|Microsoft Visual C++ 런타임이 설치되어 있습니다.
 check.vcruntime.missing|mt|e96604a7|Microsoft Visual C++ 2015-2022 런타임(x64)이 없거나 너무 오래되었습니다. 설치 프로그램이 함께 가져온 파일로 설치합니다.
 check.vcruntime.no-installer|mt|a1670c32|Microsoft Visual C++ 2015-2022 런타임(x64)을 설치해야 하지만 이 파일 모음에는 해당 Microsoft 프로그램이 없습니다. 릴리스를 다시 다운로드하세요.
@@ -140,6 +141,7 @@ plan.change.test-mode.on|mt|cf315297|Windows가 이미 테스트 모드로 실�
 plan.change.bitlocker|mt|f43553fa|BitLocker 보호는 이 설치의 다시 시작 동안만 일시 중지되고 이후 자동으로 다시 켜지므로 Windows가 복구 키를 묻지 않습니다.
 plan.change.bitlocker.unknown|mt|67f2277e|이 PC의 BitLocker 상태를 읽을 수 없었습니다. 설치는 계속합니다. 다시 시작한 후 Windows가 요청할 경우를 대비해 복구 키를 준비해 두세요.
 plan.change.vcruntime|mt|65d68876|드라이버 프로그램에 필요하므로 Microsoft Visual C++ 2015-2022 런타임(x64)을 먼저 설치합니다.
+plan.change.smartappcontrol|mt|90e7f550|스마트 앱 컨트롤이 꺼집니다. Windows에서 다시 켜려면 시스템을 초기화해야 합니다.
 shortcuts.title|mt-safe|19544092|바로 가기와 Nagi
 shortcuts.start-menu|mt-safe|f7bdc16b|시작 메뉴
 shortcuts.desktop|mt-safe|b1e0eb2c|바탕 화면
@@ -335,8 +337,7 @@ tuning.restore|mt|3fb261c1|Nagi Control App에서 개별 설정을 확인하고 
 
 # ---- help cards (HelpCards.cs) ----
 help.sac.title|mt|abf79205|스마트 앱 컨트롤을 끄는 방법
-help.sac.on.body|mt|83e5ce37|스마트 앱 컨트롤은 Microsoft가 신뢰하는 게시자가 서명한 프로그램만 실행합니다. 이 테스트 버전은 테스트 서명을 사용합니다. 스마트 앱 컨트롤을 끈 다음 다시 시도하세요.
-help.sac.evaluation.body|mt|425fde85|계속하기 전에 스마트 앱 컨트롤을 끄세요. 꺼져 있으면 Windows가 스스로 켜지 않습니다.
+help.sac.not-off.body|mt|83d88902|스마트 앱 컨트롤은 Microsoft가 신뢰하는 게시자가 서명한 프로그램만 실행합니다. 이 테스트 버전은 테스트 서명을 사용하며, 설치 프로그램이 스마트 앱 컨트롤을 자동으로 끄지 못했습니다. 다음 단계에 따라 끈 다음 다시 시도하세요.
 help.sac.unknown.body|mt|41f88dc0|Windows가 설치 프로그램이나 드라이버를 차단하면 다음 단계에 따라 스마트 앱 컨트롤을 끄세요.
 help.sac.step.open|mt|53dc10bb|아래의 [스마트 앱 컨트롤 설정 열기]를 선택합니다. Windows 보안이 [스마트 앱 컨트롤] 페이지를 엽니다.
 help.sac.step.off|mt|1ad754d0|[끄기]를 선택합니다.

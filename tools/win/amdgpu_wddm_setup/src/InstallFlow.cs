@@ -43,9 +43,14 @@ namespace AmdgpuWddmSetup
         //   bitLockerState: the state the engine's decision reports
         //   vcRuntimeMissing: the plan found the Microsoft Visual C++ runtime missing or too old, so the install
         //                     installs it from the file the package carries (check vcruntime.missing)
-        public static string[] PlanChangeIds(bool testModeOff, string bitLockerState, bool vcRuntimeMissing = false)
+        //   smartAppControlOff: the plan found Smart App Control on or in evaluation mode, so the install turns it
+        //                       off before its first program runs (checks smartappcontrol.on and .evaluation;
+        //                       install.ps1, Invoke-SmartAppControlOff). It is the first change of the run, so its
+        //                       line comes first.
+        public static string[] PlanChangeIds(bool testModeOff, string bitLockerState, bool vcRuntimeMissing = false, bool smartAppControlOff = false)
         {
             var ids = new List<string>();
+            if (smartAppControlOff) ids.Add("plan.change.smartappcontrol");
             if (!testModeOff) ids.Add("plan.change.test-mode.on");
             else
             {
@@ -56,6 +61,9 @@ namespace AmdgpuWddmSetup
             if (vcRuntimeMissing) ids.Add("plan.change.vcruntime");
             return ids.ToArray();
         }
+
+        // The preflight lines that make the install turn Smart App Control off.
+        public static readonly string[] SmartAppControlOffChecks = { "smartappcontrol.on", "smartappcontrol.evaluation" };
 
         // The shortcuts of the control application. Both are on, and neither answer holds the install back: the switches
         // below only choose where the shortcuts go. An answer the window shows is stated on the command line, so

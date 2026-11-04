@@ -24,11 +24,12 @@ Close. Try again is not the default when every failed check is one a new try can
 causes as transient, so the window decides by check id.
 
 When a check needs a change of a Windows setting, it gets a help card under the checks (`src/HelpCards.cs`). Today that is
-Smart App Control: `smartappcontrol.on` on the Done screen, `smartappcontrol.evaluation` and
-`smartappcontrol.unknown` on the Review screen. The card gives the steps, up to three pictures of Windows Security,
-and the button "Open Smart App Control settings", which opens the Smart App Control page of Windows Security and
-changes nothing. While Smart App Control is on, Windows blocks this test-signed exe before its window opens, so the
-`smartappcontrol.on` card is for a setup that Windows lets start. The pictures are English screenshots.
+Smart App Control: `smartappcontrol.not-off` on the Done screen (the install could not turn it off) and
+`smartappcontrol.unknown` on the Review screen. When the plan reads Smart App Control on or in evaluation mode, the
+install turns it off, and the Review screen states that as information (`plan.change.smartappcontrol`), with no card
+and no question. The card gives the steps, up to three pictures of Windows Security, and the button "Open Smart App
+Control settings", which opens the Smart App Control page of Windows Security and changes nothing. The pictures are
+English screenshots.
 `art/make-help-art.py` scales them for the card into `art/help` and writes the WebP pictures of
 `docs/testing/INSTALL.md` from the same files.
 

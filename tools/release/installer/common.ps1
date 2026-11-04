@@ -1395,15 +1395,18 @@ function Get-MemoryIntegrityState {
 # the PC and can turn it on by itself). Microsoft documents no API for it: a Windows without the value has no Smart App
 # Control and reads as off. CiTool prints the state as translated text, so nothing here asks it (GitHub #35).
 # The registry reader is a parameter for the host test (test-engine-units.ps1). A dry run reads AMDGPU_WDDM_TEST_SAC
-# instead (on, evaluation, off, missing, or a number), so the host tests can walk the refusal on a PC that has it off.
+# instead (on, evaluation, off, missing, change-not-held, or a number), so the host tests can walk every path on a PC
+# that has it off. change-not-held reads as on, and Disable-SmartAppControl below then reads the value back as 1.
 # Returns { state = on|evaluation|off|unknown; detail }.
+$script:SacPolicyKey = 'HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\CI\Policy'
+$script:SacValueName = 'VerifiedAndReputablePolicyState'
 function Read-SmartAppControlState {
-    param([scriptblock]$ReadRegistry = { [Microsoft.Win32.Registry]::GetValue('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\CI\Policy', 'VerifiedAndReputablePolicyState', $null) })
+    param([scriptblock]$ReadRegistry = { [Microsoft.Win32.Registry]::GetValue($script:SacPolicyKey, $script:SacValueName, $null) })
     function Result([string]$State, [string]$Detail) { [pscustomobject]@{ state = $State; detail = $Detail } }
     $name = 'CI\Policy VerifiedAndReputablePolicyState'
     if ($script:DryRunMode -and $env:AMDGPU_WDDM_TEST_SAC) {
         $n = 0
-        $fake = switch ([string]$env:AMDGPU_WDDM_TEST_SAC) { 'on' { 1 } 'evaluation' { 2 } 'off' { 0 } 'missing' { $null } default { if ([int]::TryParse($_, [ref]$n)) { $n } else { $_ } } }
+        $fake = switch ([string]$env:AMDGPU_WDDM_TEST_SAC) { 'on' { 1 } 'change-not-held' { 1 } 'evaluation' { 2 } 'off' { 0 } 'missing' { $null } default { if ([int]::TryParse($_, [ref]$n)) { $n } else { $_ } } }
         $ReadRegistry = { $fake }.GetNewClosure()
     }
     try { $v = & $ReadRegistry }
@@ -1417,6 +1420,58 @@ function Read-SmartAppControlState {
     }
     return (Result 'unknown' "$name holds an unexpected value: $v")
 }
+# The installer turns Smart App Control off by itself (the follow-up of BD-192): the plan says so,
+# and Install (or running install.cmd or uninstall.cmd) is the consent. It does so before the first program of ours
+# that Smart App Control blocks. Three actions: VerifiedAndReputablePolicyState = 0 (DWORD), CiTool.exe --refresh
+# --json (Code Integrity reads its policies again), and a read-back of the value. Measured on 26300 and 26100: the
+# refresh gives OperationResult 0 and the value stays 0. Windows turns Smart App Control on again only after a reset.
+# The change holds only when all three pass: the write, the refresh (exit 0 and OperationResult 0 in its JSON), and
+# the read-back (0). The caller refuses otherwise, as the preflight did before this change. The three actions are
+# parameters for the host test. In a dry run with AMDGPU_WDDM_TEST_SAC, stand-ins do the work: the write does
+# nothing, the refresh gives OperationResult 0, and the value reads back 0 (1 for change-not-held).
+# Returns { ok; written; citool_code; citool_result; after; detail }; detail names each action and its answer.
+function Disable-SmartAppControl {
+    param(
+        [scriptblock]$WriteRegistry = { [Microsoft.Win32.Registry]::SetValue($script:SacPolicyKey, $script:SacValueName, 0, [Microsoft.Win32.RegistryValueKind]::DWord) },
+        [scriptblock]$RunCiTool = { Invoke-NativeBounded -File (Join-Path $env:windir 'System32\CiTool.exe') -Arguments @('--refresh', '--json') -TimeoutSeconds 120 },
+        [scriptblock]$ReadRegistry = { [Microsoft.Win32.Registry]::GetValue($script:SacPolicyKey, $script:SacValueName, $null) })
+    if ($script:DryRunMode -and $env:AMDGPU_WDDM_TEST_SAC) {
+        $back = if ([string]$env:AMDGPU_WDDM_TEST_SAC -eq 'change-not-held') { 1 } else { 0 }
+        $WriteRegistry = { }
+        $RunCiTool = { @{ code = 0; text = '{"OperationResult":0}'; timed_out = $false } }
+        $ReadRegistry = { $back }.GetNewClosure()
+    }
+    $r = [ordered]@{ ok = $false; written = $false; citool_code = $null; citool_result = $null; after = $null; detail = '' }
+    $parts = New-Object System.Collections.Generic.List[string]
+    try { & $WriteRegistry | Out-Null; $r.written = $true; $parts.Add("$($script:SacValueName) = 0 (DWORD) written") }
+    catch { $parts.Add("the write of $($script:SacValueName) = 0 failed: $($_.Exception.GetType().FullName): $($_.Exception.Message)") }
+    if ($r.written) {
+        try {
+            $n = & $RunCiTool
+            $r.citool_code = $n.code
+            $text = [string]$n.text
+            $i = $text.IndexOf('{'); $j = $text.LastIndexOf('}')
+            if ($i -ge 0 -and $j -gt $i) {
+                try { $json = $text.Substring($i, $j - $i + 1) | ConvertFrom-Json; if ($null -ne $json.OperationResult) { $r.citool_result = [int64]$json.OperationResult } } catch { }
+            }
+            $shown = ($text -replace '\s+', ' ').Trim()
+            if ($shown.Length -gt 200) { $shown = $shown.Substring(0, 200) + '...' }
+            $parts.Add("CiTool.exe --refresh --json: $(if ($n.timed_out) { 'no answer within its time bound' } else { "exit $($n.code)" }), OperationResult $(if ($null -eq $r.citool_result) { 'not found' } else { $r.citool_result }) ($shown)")
+        } catch { $parts.Add("CiTool.exe --refresh --json did not run: $($_.Exception.Message)") }
+    }
+    try {
+        $v = & $ReadRegistry
+        $r.after = $v
+        $parts.Add("read back: $(if ($null -eq $v) { 'no value' } else { $v })")
+    } catch { $parts.Add("the read-back failed: $($_.Exception.GetType().FullName)") }
+    $r.ok = $r.written -and ($r.citool_code -eq 0) -and ($r.citool_result -eq 0) -and ($r.after -is [int]) -and ($r.after -eq 0)
+    $r.detail = $parts -join '; '
+    return [pscustomobject]$r
+}
+# The one text both engines show for the change, in the console and in the log (the setup window has its own words,
+# plan.change.smartappcontrol, in six languages).
+$script:SacTurnOffText = 'Smart App Control will be turned off. Windows can turn it back on only by a reset of the system.'
+$script:SacSteps = 'open Windows Security > App & browser control > Smart App Control settings, select Off, then "Yes, I''m sure", then Yes in the administrator prompt (see INSTALL.md, section Smart App Control and SmartScreen)'
 # ---- the shortcuts of the control application -------------------------------------------------------------------
 # The setup window offers both, both on by default, and neither of them gates the Install button. On the
 # command line -NoStartMenuShortcut and -NoDesktopShortcut leave one or the other out.

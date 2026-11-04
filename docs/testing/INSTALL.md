@@ -15,8 +15,9 @@ Use this package only on a BC-250. The installer stops on every other computer a
   Insider programme that runs one of the three tested builds reads no such line. Windows 10 and older are refused.
 - A local account with administrator rights.
 - Secure Boot off. The stock BC-250 BIOS has no Secure Boot option, so it is already off (see "Secure Boot" below).
-- Smart App Control off. While it is on, Windows blocks the setup program and the driver (see "Smart App Control
-  and SmartScreen" below).
+- Smart App Control off, or the installer turns it off. While it is on, Windows blocks the setup program and the
+  driver. The installer and the uninstaller turn it off by themselves before they run a program of the driver (see
+  "Smart App Control and SmartScreen" below).
 - If BitLocker is on: your BitLocker recovery key, in case something goes wrong. The installer pauses BitLocker
   by itself for the restarts it needs and tells you that it did.
 - Nothing to install first. The driver's programs need the Microsoft Visual C++ 2015-2022 Redistributable (x64),
@@ -37,8 +38,9 @@ Use this package only on a BC-250. The installer stops on every other computer a
 1. Make a backup of all data on the BC-250 that you want to keep.
 2. Write down your BitLocker recovery key if BitLocker is on: open a command prompt as administrator and type
    `manage-bde -protectors -get C:`.
-3. Make sure that Smart App Control is off. A new installation of Windows 11 can have it on or in evaluation mode.
-   While it is on, Windows blocks the setup program and the driver. See "Smart App Control and SmartScreen" below.
+3. Know that the installer turns Smart App Control off when it is on or in evaluation mode. After that, only a reset
+   of Windows can turn it on again. If Windows blocks the setup program before its window opens, turn Smart App
+   Control off by hand first. See "Smart App Control and SmartScreen" below.
 4. Take one of the two downloads of the release:
    - **One file** - `amdgpu-wddm-setup-<version>.exe`. Copy it to a local folder and double-click it. It carries the
      whole package inside itself, unpacks it where only administrators may write, checks every file, and installs
@@ -92,7 +94,8 @@ If you start the setup and Windows shows this message, Smart App Control is on:
 ![Smart App Control blocked an app that may be unsafe, with the buttons Okay and Get apps from the Store](../media/sac-1-blocked.webp)
 
 The message comes 30 to 60 seconds after you start the setup. It has no button that starts the setup. Select
-"Okay", turn Smart App Control off with the steps below, and then start the setup again.
+"Okay", turn Smart App Control off with the steps below, and then start the setup again. The installer cannot do
+this for you here, because Windows stops the setup program before it runs.
 
 Smart App Control is a part of Windows 11 22H2 and later. It runs only the programs that a publisher signs and
 Microsoft trusts. A new installation of Windows 11 can have it on, or in evaluation mode. While it is on, Windows
@@ -103,17 +106,29 @@ blocks two parts of this release:
   (DWM). The desktop and games then cannot use the driver.
 
 In evaluation mode, Windows can turn Smart App Control on later by itself. Then Windows blocks the user-mode drivers
-in the same way, and the desktop and games lose the driver. Turn Smart App Control off before you install.
+in the same way, and the desktop and games lose the driver. On a PC with 26200 (25H2), Windows turned it on by
+itself after an installation and then blocked the kernel driver (`bc250kmd.sys`, problem code 31) and
+`bc250kmd_cli.exe`.
 
-The installer reads the state of Smart App Control before it changes anything:
+The installer reads the state of Smart App Control in the preflight and acts on it:
 
-- On: the preflight shows a `fail` line for Smart App Control and stops. The installer changes nothing. The
-  console (`install.cmd -Console`) shows the steps in the `fail` line.
-- Evaluation: the preflight shows a `warn` line, and the installation continues. The setup window shows the steps
-  below and the button "Open Smart App Control settings".
+- On or evaluation: the preflight shows an `ok` line that says the installer turns it off, and the plan says
+  "Smart App Control will be turned off. Windows can turn it back on only by a reset of the system." There is no
+  box to tick and no other question: Install (or running `install.cmd`) is your consent. Before it runs a program
+  of the driver, the installer sets `VerifiedAndReputablePolicyState` under
+  `HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy` to 0, runs `CiTool.exe --refresh --json`, and reads the value
+  again. The log shows the three results.
+- If the value does not read 0 again, or CiTool fails, the installer stops before any program of the driver runs.
+  The setup window shows the steps below and the button "Open Smart App Control settings". The console shows the
+  steps in a `FAIL` line. Turn it off by hand, then start the setup again.
+- Unknown (the installer could not read the state): the preflight shows a `warn` line and changes nothing. If
+  Windows blocks the setup or the driver, turn Smart App Control off by hand.
 - Off, or no Smart App Control on this Windows: the preflight shows an `ok` line.
 
-To turn Smart App Control off:
+The uninstaller (`uninstall.cmd`) does the same before it runs the programs of the driver, because Smart App Control
+blocks them too. If the change does not hold, it stops before it removes anything.
+
+To turn Smart App Control off by hand:
 
 1. Open Windows Security. To find it, type `Windows Security` in the Start menu. In the setup window, the button
    "Open Smart App Control settings" opens the page of step 3 directly.
@@ -170,7 +185,8 @@ The usual way is the setup window:
    `files` beside it. The window asks for administrator rights itself: accept the prompt. (`install.cmd` in the
    folder `files`, started with no switch, opens the same window.) If Windows shows "Windows protected your PC",
    select "More info" and then "Run anyway". If Windows shows "Smart App Control blocked an app that may be
-   unsafe", turn Smart App Control off first (see "Smart App Control and SmartScreen").
+   unsafe", turn Smart App Control off by hand first (see "Smart App Control and SmartScreen"). When the window
+   opens, the installer turns it off by itself.
 2. The window checks the computer first. The check changes nothing. Then the window shows the checks that need
    attention, what it will change, the restarts and the release notes.
 3. Press "Install". The window asks you for nothing else. It says what it will change - Windows test mode on,
@@ -441,9 +457,10 @@ the whole description.
 ## If something fails
 
 - Preflight `fail`: correct the item that the table names, then run `install.cmd` again.
-- Windows shows "Smart App Control blocked an app that may be unsafe" after you start the setup, or the installer
-  stops with "An Application Control policy has blocked this file": Smart App Control is on. Turn it off (see
-  "Smart App Control and SmartScreen"), then start the setup again. The installer continues at the step that failed.
+- Windows shows "Smart App Control blocked an app that may be unsafe" after you start the setup, the installer
+  stops with "Smart App Control did not turn off", or a step stops with "An Application Control policy has blocked
+  this file": Smart App Control is on. Turn it off by hand (see "Smart App Control and SmartScreen"), then start the
+  setup again. The installer continues at the step that failed.
 - Preflight `fail` on `GPU firmware`, or the installer stops at the firmware step: the computer cannot reach the
   download addresses, or a file has a different SHA256. Connect the computer to the internet, or use
   `-FirmwareDir` (see "GPU firmware").
