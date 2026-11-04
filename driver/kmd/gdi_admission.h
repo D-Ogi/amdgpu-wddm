@@ -161,7 +161,7 @@ typedef struct _BC250_STDALLOC_COUNTERS {
     volatile long GdiRequests[BC250_GDI_SLOTS][2];          // GDI type x phase, on entry (union member present)
     volatile long GdiAnswers[BC250_GDI_SLOTS][BC250_STDALLOC_STATUSES];
     volatile long GdiCreated[BC250_GDI_SLOTS][3];           // CreateAllocation per LB7A allocation, BC250_CREATE_*
-    volatile long GdiOpened[BC250_GDI_SLOTS][2];            // OpenAllocation per LB7A allocation: opened, NULL handle
+    volatile long GdiOpened[BC250_GDI_SLOTS][2];            // OpenAllocation per LB7A allocation: opened, refused (BD-205: the call failed)
     volatile long CreateCalls[BC250_CREATE_OUTCOMES];       // CreateAllocation calls by final outcome
 } BC250_STDALLOC_COUNTERS;
 
@@ -248,7 +248,7 @@ rollback:
 
 // One bit per GDI slot (bit 9 = any other type), for a gate that asserts "no refused standard GDI type" after DWM
 // started: requested (either phase), refused by the standard answer, refused at CreateAllocation (its own failure),
-// rolled back at CreateAllocation, NULL at open.
+// rolled back at CreateAllocation, refused at open (BD-205: STATUS_INVALID_PARAMETER, before it a NULL handle).
 typedef struct _BC250_GDI_MASKS {
     unsigned long Requested, Refused, CreateRefused, CreateRolledBack, OpenRefused;
 } BC250_GDI_MASKS;

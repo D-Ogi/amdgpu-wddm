@@ -487,6 +487,8 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'open-allocation-success-null' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation-success-null" -Kits "$Kits" -Mutation '--success-null' -ExpectFailure }
  Check 'open-allocation-keep-earlier' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation-keep-earlier" -Kits "$Kits" -Mutation '--keep-earlier' -ExpectFailure }
  Check 'open-allocation-count-at-once' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation-count-at-once" -Kits "$Kits" -Mutation '--count-at-once' -ExpectFailure }
+ Check 'open-allocation-refusal-null' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation-refusal-null" -Kits "$Kits" -Mutation '--refusal-null' -ExpectFailure }
+ Check 'open-allocation-refusal-uncounted' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation-refusal-uncounted" -Kits "$Kits" -Mutation '--refusal-uncounted' -ExpectFailure }
  Check 'gdi-render' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_render.ps1" -Root $Workspace -Out "$Out\gdi-render" -Kits "$Kits" }
  # BD-306: the same-surface order for any count. The negative controls bring back the 32-item limit of the
  # first version and break the sorted window; the strip scrolls and the random comparison must see them.

@@ -655,6 +655,16 @@
         "host"
       ]
     },
+    "open-allocation-refusal-null": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "open-allocation-refusal-uncounted": {
+      "inputs": [
+        "host"
+      ]
+    },
     "display-modes": {
       "inputs": [
         "host"

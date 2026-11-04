@@ -693,6 +693,7 @@ typedef struct _BC250_WDDM {
     // separately from the GDI path, so a desktop present cannot spend the evidence.
     volatile LONG UmdAllocs;
     volatile LONG UmdAllocRefused;
+    volatile LONG UmdOpenRefused;          // BD-205: OpenAllocation of a BC2A blob that does not parse (call failed)
     // Memory manager stage 1c (0.7.216.8): EnableSharedResidency, latched at WddmStart, and the UMD
     // allocations by the segment sets they got (umd_blob.c UmdBlobPlacement): local or aperture alone, or
     // local first with the aperture as VidMm's demotion target.
@@ -3489,6 +3490,14 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->SubmitQueueMaxMs);
     GuardLog("wddm summary: umd: %ld allocs (%ld refused), %ld contexts, %ld submits on the ring, %ld not run",
              Wddm->UmdAllocs, Wddm->UmdAllocRefused, Wddm->UmdContexts, Wddm->UmdSubmitHw, Wddm->UmdSubmitSoft);
+    // BD-205: the opens that failed their call with STATUS_INVALID_PARAMETER, BC2A and LB7A (all type slots). Both
+    // are 0 on a driver that created every blob it is asked to open; the LB7A count per type is on the lb7a lines.
+    {
+        LONG lb7a = 0;
+        ULONG slot;
+        for (slot = 0; slot < BC250_GDI_SLOTS; slot++) lb7a += Wddm->StdAlloc.GdiOpened[slot][1];
+        GuardLog("wddm summary: OpenAllocation refused (invalid parameter): umd %ld, lb7a %ld", Wddm->UmdOpenRefused, lb7a);
+    }
     // A line of its own, so that the line above keeps the text its readers parse.
     GuardLog("wddm summary: umd placement (shared residency %s): local %ld, local+aperture %ld, aperture %ld",
              Wddm->SharedResidency ? "on" : "off", Wddm->UmdAllocsLocalOnly, Wddm->UmdAllocsShared,
@@ -6549,7 +6558,7 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
 {
     BC250_WDDM_OBJECT* parent = WddmObject(hDevice, BC250_WDDM_MAGIC_DEVICE);
     BC250_WDDM* wddm;
-    LONG opens[BC250_GDI_SLOTS][2];     // this call's LB7A outcomes, added to StdAlloc.GdiOpened only when it succeeds
+    LONG opens[BC250_GDI_SLOTS];        // this call's LB7A opens, added to StdAlloc.GdiOpened[*][0] only when it succeeds
     UINT i, slot;
 
     if (parent == NULL) return STATUS_INVALID_PARAMETER;
@@ -6571,10 +6580,9 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
         if (UmdBlobIsAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize))
         {
             struct umd_alloc_view view;
+            const int parsed = UmdBlobParseAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize, &view);
 
-            // Same blob CreateAllocation already accepted. A refusal here leaves a NULL handle, as a bad
-            // GDI blob does, rather than failing the open: dxgkrnl opened what it created.
-            if (UmdBlobParseAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize, &view) == UMD_BLOB_OK)
+            if (parsed == UMD_BLOB_OK)
             {
                 admitted = TRUE;
                 opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
@@ -6586,11 +6594,15 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
                     opened->UmdRequestedVa = view.requested_va;
                 }
             }
+            else if (wddm != NULL && InterlockedIncrement(&wddm->UmdOpenRefused) <= BC250_WDDM_LOG_CALLS)
+                GuardLog("wddm: OpenAllocation [%u] of %u: umd blob refused, %s, private %u: call failed (invalid parameter)",
+                         i, pOpenAllocation->NumAllocations, UmdBlobStatusText(parsed), info->PrivateDriverDataSize);
         }
         else
         {
-            int admission = Bc250Lb7aAdmit(info->pPrivateDriverData, info->PrivateDriverDataSize, 0, 0, 1,
-                                           &gdiType, &policy);
+            const int admission = Bc250Lb7aAdmit(info->pPrivateDriverData, info->PrivateDriverDataSize, 0, 0, 1,
+                                                 &gdiType, &policy);
+            slot = admission != BC250_LB7A_UNREAD ? Bc250GdiSlot(gdiType) : BC250_GDI_SLOTS - 1;
             if (admission == BC250_LB7A_ADMITTED)
             {
                 admitted = TRUE;
@@ -6598,18 +6610,27 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
                 if (opened != NULL) {
                     opened->Allocation = *private;
                     opened->GdiType=gdiType;
+                    opens[slot]++;
                 }
             }
-            // BD-060: a refused LB7A open leaves a NULL handle and still returns success; counted with the call.
-            opens[admission != BC250_LB7A_UNREAD ? Bc250GdiSlot(gdiType) : BC250_GDI_SLOTS - 1][opened != NULL ? 0 : 1]++;
+            else if (wddm != NULL && InterlockedIncrement(&wddm->StdAlloc.GdiOpened[slot][1]) <= BC250_WDDM_LOG_CALLS)
+                GuardLog("wddm: OpenAllocation [%u] of %u: lb7a %s, slot %u, private %u: call failed (invalid parameter)",
+                         i, pOpenAllocation->NumAllocations, admission == BC250_LB7A_UNREAD ? "unread" : "refused", slot,
+                         info->PrivateDriverDataSize);
         }
         // DxgkDdiOpenAllocation: STATUS_SUCCESS promises a non-NULL hDeviceSpecificAllocation for every allocation
-        // (d3dkmddi.md). A blob this driver does not admit keeps the BD-060 NULL handle above. An admitted blob
-        // whose object could not be allocated fails the whole call with STATUS_NO_MEMORY, a listed return. The
-        // objects this call already opened are freed first, and their handles cleared: none was published yet.
-        // The call's counts are dropped with them, so an allocation that failed for memory is never counted as a
-        // refused open.
-        if (admitted && opened == NULL)
+        // (ref/ddi-display/d3dkmddi.md, DxgkDdiOpenAllocation remarks), so no entry of a successful call is NULL.
+        //   BD-205: a blob this driver does not admit fails the whole call with STATUS_INVALID_PARAMETER ("parameters
+        // ... contained errors"). Before, it got a NULL handle in a call that succeeded (BD-060). dxgkrnl gives
+        // OpenAllocation the private data of the CreateAllocation that made the allocation, and CreateAllocation
+        // refuses every blob that is refused here: the same UmdBlobParseAlloc for BC2A, and for LB7A the same
+        // Bc250Lb7aAdmit with a policy that the CPU hints cannot refuse (WddmGdiAllocationPolicy fails only for a
+        // type above 4) and with the aperture offered. So a refusal here means private data that this driver did
+        // not create. It is counted (UmdOpenRefused, StdAlloc.GdiOpened[*][1]) and logged, for the lab summary.
+        //   An admitted blob whose object could not be allocated fails the whole call with STATUS_NO_MEMORY, a listed
+        // return. In both failures the objects that this call already opened are freed first, and their handles
+        // cleared: none was published yet. Their open counts are dropped with them.
+        if (!admitted || opened == NULL)
         {
             UINT j;
             for (j = 0; j < i; j++)
@@ -6619,6 +6640,7 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
                 pOpenAllocation->pOpenAllocation[j].hDeviceSpecificAllocation = NULL;
             }
             info->hDeviceSpecificAllocation = NULL;
+            if (!admitted) return STATUS_INVALID_PARAMETER;
             GuardLog("wddm: OpenAllocation [%u] of %u: no object for an admitted blob, call failed (no memory)",
                      i, pOpenAllocation->NumAllocations);
             return STATUS_NO_MEMORY;
@@ -6634,10 +6656,7 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
     }
     if (wddm != NULL)
         for (slot = 0; slot < BC250_GDI_SLOTS; slot++)
-        {
-            if (opens[slot][0] != 0) InterlockedAdd(&wddm->StdAlloc.GdiOpened[slot][0], opens[slot][0]);
-            if (opens[slot][1] != 0) InterlockedAdd(&wddm->StdAlloc.GdiOpened[slot][1], opens[slot][1]);
-        }
+            if (opens[slot] != 0) InterlockedAdd(&wddm->StdAlloc.GdiOpened[slot][0], opens[slot]);
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiOpenAllocation))
         GuardLog("wddm: OpenAllocation %u allocations flags 0x%08X", pOpenAllocation->NumAllocations, pOpenAllocation->Flags.Value);
     return STATUS_SUCCESS;
@@ -6652,7 +6671,8 @@ static NTSTATUS Bc250WddmCloseAllocation(_In_ const HANDLE hDevice, _In_ const D
     if (parent == NULL) return STATUS_INVALID_PARAMETER;
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiCloseAllocation))
         GuardLog("wddm: CloseAllocation %u allocations", pCloseAllocation->NumAllocations);
-    // pOpenHandleList carries what OpenAllocation handed out: our opened objects, or NULL where it handed out nothing.
+    // pOpenHandleList carries what OpenAllocation handed out: our opened objects (BD-205: a successful open hands out
+    // no NULL, but a NULL is still harmless here).
     // Looked up in the object index before being freed, as the blit does, never dereferenced as given.
     for (i = 0; i < pCloseAllocation->NumAllocations; i++)
         WddmFreeObject(WddmIndexedObject((BC250_WDDM*)parent->Device->Wddm, pCloseAllocation->pOpenHandleList[i], BC250_WDDM_MAGIC_OPENED));
