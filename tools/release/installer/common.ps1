@@ -3260,7 +3260,8 @@ function Test-LogonTaskPlan {
         if ([string]$w.arguments -notlike "*`"$([string]$w.script)`"*") { [void]$bad.Add("the window does not run its own script ($($w.script)): $($w.arguments)") }
     } else {
         if ([string]$w.arguments -notmatch '^--start-window -Seconds \d+$') { [void]$bad.Add("the window's host is not asked for --start-window -Seconds N: '$($w.arguments)'") }
-        $hosted = Join-Path (Split-Path (Split-Path $we -Parent) -Parent) 'tools\start-window.ps1'
+        # String operations only: Join-Path refuses a drive that this computer does not have, and the plan can name one.
+        $hosted = [IO.Path]::Combine([IO.Path]::GetDirectoryName([IO.Path]::GetDirectoryName($we)), 'tools\start-window.ps1')
         if ($hosted -ne [string]$w.script) { [void]$bad.Add("the window's host starts $hosted, not its own script $($w.script): the host and the script are of different installs") }
         $sub = Get-PeSubsystem $we
         if (($null -ne $sub) -and ($sub -ne 2)) { [void]$bad.Add("the window's host $we is a console program (PE subsystem $sub, not 2): Windows gives it a console window at sign-in (M899)") }
