@@ -388,6 +388,37 @@ inline HANDLE launch_mark(const Inputs& in,bool& counted) {
     return mark;
 }
 
+// The launch marks this module made, kept until the module unloads (BD-315). A mark that stayed open until the
+// process ended was a handle the module never closed: Application Verifier stops on it (0x901, a leaked handle)
+// when the D3D runtime unloads the shell. The destructor runs at the module's DLL_PROCESS_DETACH, after the worker
+// has let go of its module reference, so no commit runs at the same time; at process end it closes what the system
+// would close anyway. One holder per module: the header is compiled into each shell.
+class MarkHolder {
+public:
+    MarkHolder()=default;
+    MarkHolder(const MarkHolder&)=delete;
+    MarkHolder& operator=(const MarkHolder&)=delete;
+    ~MarkHolder(){for(const HANDLE h:marks_)CloseHandle(h);}
+    // False when the mark cannot be kept (no memory): the caller then closes it, and this note only loses its mark.
+    bool keep(HANDLE mark) noexcept {
+        AcquireSRWLockExclusive(&lock_);
+        bool kept=true;
+        try {marks_.push_back(mark);} catch(...) {kept=false;}
+        ReleaseSRWLockExclusive(&lock_);
+        return kept;
+    }
+    size_t count() noexcept {
+        AcquireSRWLockShared(&lock_);
+        const size_t n=marks_.size();
+        ReleaseSRWLockShared(&lock_);
+        return n;
+    }
+private:
+    SRWLOCK lock_=SRWLOCK_INIT;
+    std::vector<HANDLE> marks_;
+};
+inline MarkHolder held_marks;
+
 // One launch note: the bounded commit protocol of docs/design/recent-launches.md.
 inline Outcome commit(const Inputs& in,uint32_t api) {
     if(in.exe.empty() || in.store_dir.empty())return Outcome::NoStore;
@@ -427,7 +458,7 @@ inline Outcome commit(const Inputs& in,uint32_t api) {
     if(own && (old->apis&api)==api)return Outcome::Merged;
     const Outcome o=apply(entries,in.exe,in.start,in.pid,api);
     if(!serialize(entries,text) || !write_store(in.store_dir,text,in.after_temp_open,in.hook_context))return Outcome::Failed;
-    if(!counted)mark.release(); // open until the process ends: its launch is in the list
+    if(!counted && held_marks.keep(mark.get()))mark.release(); // open until this module unloads: its launch is in the list
     return o;
 }
 

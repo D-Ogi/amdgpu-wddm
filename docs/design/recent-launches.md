@@ -130,14 +130,17 @@ profile; the application must say so and must not suggest separate settings.
    read only up to its fixed first 64 bytes, which hold the header line. A list of a later version, of any
    size: stop. A torn version 1 list (also one over 8 MiB) counts as empty.
 7. Apply. One process is one launch, whichever shell notes it first and whatever the clock says: the shell that
-   counts the launch keeps a launch mark open until the process ends, a named event
+   counts the launch keeps a launch mark open until that shell unloads (at the latest when the process ends), a named event
    `Local\amdgpu-wddm-recent-launch-<start>-<pid>-<list>` (`<list>`: a hash of the store directory). If the event
    cannot be created (another object or an event without full access holds the name, or no memory): stop, this
    note is lost (`failed`). With the mark already present, the process's own entry (equal `start` and `pid`) gets
    its API bit and keeps `starts`; when the entry meanwhile shows a later process of the path, or the list was
    cleared, nothing is written. With a new mark: another process of the same path counts a start, sets `start`,
    `pid` and `apis` and moves the entry to the front; a new path goes to the front with `starts` 1. Keep at most
-   64. Nothing changed: stop without writing.
+   64. Nothing changed: stop without writing. The mark closes with the shell module that made it, because a handle that
+   stays open after its module is unloaded is a leak (Application Verifier stop 0x901, BD-315). A shell that the
+   runtime loads again in the same process finds no mark: the process's own entry merges as above. Only a Clear
+   between the unload and the next load can bring that launch back.
 8. Write the new list to the temporary file and rename it over the list in one step (`FileRenameInfoEx` with
    replace and POSIX semantics, `MoveFileExW` with replace where those are not offered). A reader sees the old
    list or the new one.

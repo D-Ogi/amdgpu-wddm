@@ -24,6 +24,9 @@ try {
     try {
         Invoke-Bc250UmdCompiler $cc @flags /Fe:recent-launch-test.exe "$repo\driver\umd\recent-launch\recent-launch-test.cpp"
         if ($LASTEXITCODE -ne 0) { throw 'Recent-launch test build failed' }
+        # The fixture DLL compiles the helper in, as each shell does; the test unloads it and checks its launch mark.
+        Invoke-Bc250UmdCompiler $cc @flags /LD /Fe:recent-launch-fixture.dll "$repo\driver\umd\recent-launch\recent-launch-fixture.cpp"
+        if ($LASTEXITCODE -ne 0) { throw 'Recent-launch fixture build failed' }
         & .\recent-launch-test.exe
         if ($LASTEXITCODE -ne 0) { throw 'Recent-launch tests failed' }
     } finally { Pop-Location }
