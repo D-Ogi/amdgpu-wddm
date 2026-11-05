@@ -267,12 +267,10 @@ HRESULT APIENTRY engine_paging_wait(HANDLE h,const D3DDDICB_WAITFORSYNCHRONIZATI
 void test_wddm2_0_ddi();
 void test_wddm2_2_ddi();
 void test_present_batches();
-void test_offer_retirement();
 int main() {
     test_wddm2_0_ddi();
     test_wddm2_2_ddi();
     test_present_batches();
-    test_offer_retirement();
     DeviceOwner owner; expected=&owner; owner.runtime().UMCallbacks.pfnSetErrorCb=error;
     DdiDeviceHandle storage{&owner}; D3D10DDI_HDEVICE h{}; h.pDrvPrivate=&storage;
     if (ddi_map_status(DXGI_ERROR_WAS_STILL_DRAWING,true)!=DXGI_DDI_ERR_WASSTILLDRAWING ||

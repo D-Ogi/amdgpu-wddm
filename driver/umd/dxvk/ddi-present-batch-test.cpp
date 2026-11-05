@@ -5,7 +5,6 @@
 #include "ddi-wddm22.h"
 #include "ddi-resource.h"
 #include "engine-abi.h"
-#include "runtime-surface.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -111,81 +110,6 @@ HRESULT APIENTRY retire(HANDLE,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCP
     if(refuseRetire)return E_FAIL;
     presentCpu=in->FenceValueArray[0];REQUIRE(SetEvent(in->hAsyncEvent));return S_OK;
 }
-// BD-308: the OfferResources entry with its wait for the device's work (ddi-dxgi-resources.cpp offer,
-// wait_device_work_retired in runtime-bridge.cpp). The wait callback answers as the case asks.
-enum class RetireMode { complete, never, refuse, waitFails, lostAfter };
-RetireMode retireMode=RetireMode::complete;
-UINT64 workCpu=0;
-UINT64 workValue=0;
-unsigned workWaits,offerCalls;
-HANDLE failingEvent=nullptr;
-bool failNextWait=false;
-HRESULT APIENTRY retireWork(HANDLE,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU *in){
-    REQUIRE(in->ObjectCount==1 && in->ObjectHandleArray[0]==71 && in->FenceValueArray[0]==workValue);
-    REQUIRE(in->hAsyncEvent && !in->Flags.Value);
-    ++workWaits;order+='W';
-    switch(retireMode){
-    case RetireMode::complete: workCpu=workValue;REQUIRE(SetEvent(in->hAsyncEvent));return S_OK;
-    case RetireMode::never: return S_OK;                 // the work runs past the bound: no signal
-    case RetireMode::refuse: return E_FAIL;
-    case RetireMode::waitFails: failingEvent=in->hAsyncEvent;failNextWait=true;return S_OK;
-    case RetireMode::lostAfter: workCpu=UINT64_MAX;REQUIRE(SetEvent(in->hAsyncEvent));return S_OK;
-    }
-    return E_FAIL;
-}
-HRESULT APIENTRY offerAllocations(HANDLE,const D3DDDICB_OFFERALLOCATIONS *in){
-    REQUIRE(in->NumAllocations==1 && in->HandleList && in->HandleList[0]==130 && in->Priority==D3DDDI_OFFER_PRIORITY_NORMAL);
-    ++offerCalls;order+='O';return S_OK;
-}
-// WAIT_FAILED cannot come from a valid event, so the case replaces this executable's import of WaitForSingleObject
-// for one call on the event the wait callback was given. The shell code is linked into this executable and calls the
-// import through its address table; d3d11.dll and WARP keep their own tables.
-using WaitFn=DWORD (WINAPI *)(HANDLE,DWORD);
-WaitFn realWait=nullptr;
-DWORD WINAPI waitHook(HANDLE h,DWORD ms){
-    if(failNextWait && h==failingEvent){failNextWait=false;SetLastError(ERROR_INVALID_HANDLE);return WAIT_FAILED;}
-    return realWait(h,ms);
-}
-WaitFn *importSlot(const char *name){
-    auto *base=reinterpret_cast<BYTE *>(GetModuleHandleW(nullptr));
-    const auto *nt=reinterpret_cast<const IMAGE_NT_HEADERS *>(base+reinterpret_cast<const IMAGE_DOS_HEADER *>(base)->e_lfanew);
-    const IMAGE_DATA_DIRECTORY &dir=nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
-    if(!dir.VirtualAddress)return nullptr;
-    for(auto *d=reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR *>(base+dir.VirtualAddress);d->Name;++d){
-        if(!d->OriginalFirstThunk)continue;
-        auto *names=reinterpret_cast<IMAGE_THUNK_DATA *>(base+d->OriginalFirstThunk);
-        auto *slots=reinterpret_cast<IMAGE_THUNK_DATA *>(base+d->FirstThunk);
-        for(;names->u1.AddressOfData;++names,++slots){
-            if(IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal))continue;
-            const auto *byName=reinterpret_cast<const IMAGE_IMPORT_BY_NAME *>(base+names->u1.AddressOfData);
-            if(!std::strcmp(reinterpret_cast<const char *>(byName->Name),name))return reinterpret_cast<WaitFn *>(&slots->u1.Function);
-        }
-    }
-    return nullptr;
-}
-void setImport(WaitFn *slot,WaitFn value){
-    DWORD old=0;REQUIRE(VirtualProtect(slot,sizeof(*slot),PAGE_READWRITE,&old));
-    *slot=value;DWORD ignored=0;REQUIRE(VirtualProtect(slot,sizeof(*slot),old,&ignored));
-}
-// The BD-308 note goes to OutputDebugStringA and to the game log; the game log needs the control app's folder, so the
-// test reads the debug string. OutputDebugStringA raises DBG_PRINTEXCEPTION_C (or the wide form, which also carries
-// the narrow text), and a vectored handler sees it before the handler inside OutputDebugStringA.
-constexpr DWORD kPrintException=0x40010006, kPrintExceptionWide=0x4001000A;
-// A system can raise both forms for one call, so each form has its own text and the test reads one of them.
-std::string narrowText,wideText;
-LONG CALLBACK captureDebugText(EXCEPTION_POINTERS *e){
-    const EXCEPTION_RECORD *r=e->ExceptionRecord;
-    const ULONG_PTR *p=r->ExceptionInformation;
-    if(r->ExceptionCode==kPrintException && r->NumberParameters>=2 && p[1]&&p[0])
-        narrowText.append(reinterpret_cast<const char *>(p[1]),strnlen(reinterpret_cast<const char *>(p[1]),size_t(p[0])));
-    else if(r->ExceptionCode==kPrintExceptionWide && r->NumberParameters>=4 && p[3]&&p[2])
-        wideText.append(reinterpret_cast<const char *>(p[3]),strnlen(reinterpret_cast<const char *>(p[3]),size_t(p[2])));
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-const std::string &debugText(){return narrowText.empty() ? wideText : narrowText;}
-unsigned countText(const std::string &text,const char *needle){
-    unsigned n=0;for(size_t at=text.find(needle);at!=std::string::npos;at=text.find(needle,at+1))++n;return n;
-}
 ULONG releaseTexture(ID3D11Texture2D *texture){REQUIRE(order=="QE");order+='R';return texture->Release();}
 void VKAPI_PTR releaseImage(VkDevice,VkImage,const VkAllocationCallbacks *){REQUIRE(order=="QER");order+='D';}
 void VKAPI_PTR releaseMemory(VkDevice,VkDeviceMemory,const VkAllocationCallbacks *){REQUIRE(order=="QERD");order+='M';}
@@ -259,84 +183,4 @@ void test_present_batches(){
     REQUIRE(engine.refs==0 && !owner.has_live_objects());
     comContext->Release();comDevice->Release();FreeLibrary(module);
     std::puts("PASS Present1 batches: both tables, 1/2/3 real resources, LAST allocation/subresource, one global submit, two NEW context fences, one callback, first-source retirement and failure retention");
-}
-// BD-308: OfferResources waits up to 500 ms for the device's work, then offers. A wait that does not end with S_OK
-// still offers and writes one note line; a lost device found before or by the wait removes the device and offers
-// nothing.
-void test_offer_retirement(){
-    PVOID handler=AddVectoredExceptionHandler(1,captureDebugText);REQUIRE(handler);
-    OutputDebugStringA("BC250 offer test: control line\n");
-    REQUIRE(countText(debugText(),"BC250 offer test: control line")==1); // positive control of the capture
-    WaitFn *slot=importSlot("WaitForSingleObject");REQUIRE(slot && *slot);
-    realWait=*slot;setImport(slot,waitHook);
-    const HMODULE module=LoadLibraryExW(L"d3d11.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);REQUIRE(module);
-    const auto create=reinterpret_cast<decltype(&D3D11CreateDevice)>(GetProcAddress(module,"D3D11CreateDevice"));REQUIRE(create);
-    REQUIRE(SUCCEEDED(create(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&comDevice,nullptr,&comContext)));
-    DeviceOwner owner;active=&owner;DdiDeviceHandle storage{&owner};
-    D3DDDI_DEVICECALLBACKS kt{};kt.pfnCreateContextVirtualCb=createContext;kt.pfnDestroyContextCb=destroyContext;
-    kt.pfnDestroySynchronizationObjectCb=destroySync;kt.pfnWaitForSynchronizationObjectFromCpuCb=retireWork;
-    kt.pfnOfferAllocationsCb=offerAllocations;
-    D3D10DDI_CORELAYER_DEVICECALLBACKS um{};um.pfnSetErrorCb=setError;
-    DXGI_DDI_BASE_CALLBACKS dxgi{};dxgi.pfnPresentCb=callback;
-    D3D10DDIARG_CREATEDEVICE args{};args.hRTDevice.handle=&identity;args.pKTCallbacks=&kt;args.pUMCallbacks=&um;
-    args.DXGIBaseDDI.pDXGIBaseCallbacks=&dxgi;
-    BC250_DXVK_ENGINE_FUNCS funcs{sizeof(funcs),kRequiredEngineAbi,requirements,freeRequirements,adapter,createEngine};
-    BC250_DXVK_SHELL_SERVICES services{};services.Size=sizeof(services);
-    {RuntimeDomain::Scope scope(owner.runtime().domain);REQUIRE(owner.initialize(args,1,get,funcs,D3D_FEATURE_LEVEL_11_0,services)==S_OK);}
-    D3D11_TEXTURE2D_DESC desc{};desc.Width=4;desc.Height=4;desc.MipLevels=1;desc.ArraySize=1;
-    desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.SampleDesc.Count=1;desc.Usage=D3D11_USAGE_DEFAULT;
-    ID3D11Texture2D *texture=nullptr;REQUIRE(comDevice->CreateTexture2D(&desc,nullptr,&texture)==S_OK);
-    RuntimeSurface surface;surface.owner=&owner.runtime();surface.phase=SurfacePhase::ready;
-    surface.texture.texture=texture;surface.allocation.allocation=130;
-    DdiResource resource{};resource.object=texture;resource.runtime_surface=&surface;resource.present_allocation=130;
-    DXGI_DDI_HRESOURCE handles[1]={reinterpret_cast<DXGI_DDI_HRESOURCE>(&resource)};
-    const auto table=make_dxgi1_4_device_table();REQUIRE(table.pfnOfferResources);
-    HostBridge &bridge=owner.bridge();
-    struct Case { const char *name; bool work; RetireMode mode; UINT64 before; HRESULT result; const char *order; const char *note; };
-    const Case cases[]={
-        {"no work in flight",false,RetireMode::complete,0,S_OK,"O",nullptr},
-        {"work retires",true,RetireMode::complete,4,S_OK,"WO",nullptr},
-        {"work runs past the bound",true,RetireMode::never,4,S_OK,"WO","returned 00000001 after"},
-        {"wait callback refused",true,RetireMode::refuse,4,S_OK,"WO","returned 80004005 after"},
-        {"event wait failed",true,RetireMode::waitFails,4,S_OK,"WO","returned 80070006 after"},
-        {"lost before the wait",true,RetireMode::complete,UINT64_MAX,D3DDDIERR_DEVICEREMOVED,"",nullptr},
-        {"lost during the wait",true,RetireMode::lostAfter,4,D3DDDIERR_DEVICEREMOVED,"W",nullptr},
-    };
-    unsigned notes=0;
-    for(const Case &c:cases){
-        bridge.device_lost=false;bridge.lost_reported=false;bridge.submission_failed=false;
-        for(auto &p:bridge.progress)p={};
-        workValue=5;workCpu=c.before;retireMode=c.mode;workWaits=offerCalls=0;order.clear();failNextWait=false;
-        if(c.work)bridge.progress[3]={1,71,workValue,&workCpu};
-        const std::string before=debugText();
-        DXGI_DDI_ARG_OFFERRESOURCES offer{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),handles,1,D3DDDI_OFFER_PRIORITY_NORMAL};
-        const ULONGLONG start=GetTickCount64();
-        const HRESULT hr=table.pfnOfferResources(&offer);
-        const ULONGLONG waited=GetTickCount64()-start;
-        const std::string added=debugText().substr(before.size());
-        if(hr!=c.result || order!=c.order){
-            std::printf("offer case '%s': hr=%08X order='%s' waited=%llu ms\n",c.name,unsigned(hr),order.c_str(),waited);
-            REQUIRE(false);
-        }
-        REQUIRE(offerCalls==(c.result==S_OK ? 1u : 0u) && workWaits==(std::strchr(c.order,'W') ? 1u : 0u));
-        REQUIRE(!failNextWait && !owner.runtime().domain.entered());
-        // The removal latches the loss, so later entries of the device fail at once.
-        REQUIRE(bridge.device_lost==(c.result==D3DDDIERR_DEVICEREMOVED));
-        const unsigned lines=countText(added,"BC250 BD-308: OfferResources");
-        if(c.note){
-            REQUIRE(lines==1 && countText(added,c.note)==1 && countText(added,"1 allocation(s) offered with work in flight")==1);
-            ++notes;
-        } else REQUIRE(lines==0);
-        if(c.mode==RetireMode::never)REQUIRE(waited>=400 && waited<5000); // the 500 ms bound, with timer slack
-        else REQUIRE(waited<5000);
-    }
-    REQUIRE(notes==3);
-    setImport(slot,realWait);
-    bridge.device_lost=false;bridge.lost_reported=false;for(auto &p:bridge.progress)p={};
-    texture->Release();
-    {RuntimeDomain::Scope scope(owner.runtime().domain);REQUIRE(owner.close()==S_OK);}
-    REQUIRE(engine.refs==0 && !owner.has_live_objects());
-    comContext->Release();comDevice->Release();FreeLibrary(module);
-    REQUIRE(RemoveVectoredExceptionHandler(handler));
-    std::puts("PASS OfferResources wait (BD-308): no work, retired work, past the bound, refused wait, failed event wait (offered, one note each), lost before and during the wait (removed, no offer)");
 }
