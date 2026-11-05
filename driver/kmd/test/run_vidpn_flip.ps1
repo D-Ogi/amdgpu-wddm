@@ -30,6 +30,9 @@ param(
                  'exclusive-refused-success', 'writer-refusal-uncounted',
                  'unsafe-next-vsync-deposit', 'unsafe-immediate-deposit',
                  'shape-not-a-change', 'null-drops-shape', 'shape-without-allocation',
+                 'mpo3-report-off', 'mpo3-report-type', 'mpo3-legacy-kept', 'mpo3-refused-tracked', 'mpo3-not-converted',
+                 'mpo3-keep-unlocked', 'mpo3-immediate-lost', 'mpo3-extra-layer-shown', 'mpo3-check-scanout-skipped',
+                 'mpo3-check-gate-skipped',
                  'witness-before-decision', 'witness-changes-answer', 'witness-stale-compared',
                  'witness-lost-uncounted')][string]$Mutation = '',
     [switch]$Lab
@@ -160,6 +163,35 @@ $mutations = [ordered]@{
     'shape-without-allocation' = @{ find = 'if (flip->Shape && (args->hAllocation == NULL || !device->VidPnFlipEnabled)) status = STATUS_NOT_SUPPORTED;'
         with = ''
         why = 'a shape is programmed with no allocation to hold it to' }
+    # BD-307: plane 0 of the MPO3 DDIs.
+    'mpo3-report-off' = @{ find = 'if (!WddmMpo3Notify(notify->Device, &notify->Data)) WddmNotifyCall(notify->Device, &notify->Data);'
+        with = 'if (((void)WddmMpo3Notify, 1)) WddmNotifyCall(notify->Device, &notify->Data);'
+        why = 'an MPO3 flip is reported by its address, which does not retire it' }
+    'mpo3-report-type' = @{ find = 'mpo.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2;'
+        with = 'mpo.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC;'
+        why = 'the PresentId report goes out under the CRTC_VSYNC type' }
+    'mpo3-legacy-kept' = @{ find = '            Bc250Mpo3Legacy(&flip->Wddm->Mpo3);'; with = '            (void)0;'
+        why = 'a legacy flip leaves the MPO3 report on' }
+    'mpo3-refused-tracked' = @{ find = '    if (NT_SUCCESS(flip->Result))'; with = '    if (((void)flip->Result, 1))'
+        why = 'the PresentId of a flip the transaction refused is reported' }
+    'mpo3-not-converted' = @{ find = '        if (!plane->InputFlags.FlipImmediate) { plane->OutputFlags.FlipConvertedToImmediate = 1;'
+        with = '        if (((void)plane, 0)) { plane->OutputFlags.FlipConvertedToImmediate = 1;'
+        why = 'a next-VSync disable completes on return without saying so' }
+    'mpo3-keep-unlocked' = @{ find = '    section = WddmSection(Device, WddmMpo3KeepLocked, &keep);'
+        with = '    section = ((void)Device, (void)WddmMpo3KeepLocked(&keep), STATUS_SUCCESS);'
+        why = 'the tracker is written outside L at low IRQL' }
+    'mpo3-immediate-lost' = @{ find = '    flip.Flags.FlipImmediate = plane->InputFlags.FlipImmediate ? 1 : 0;'
+        with = '    flip.Flags.FlipImmediate = plane->InputFlags.FlipImmediate ? 0 : 0;'
+        why = 'an immediate MPO3 flip is programmed for the next VSync' }
+    'mpo3-extra-layer-shown' = @{ find = '        if (p->InputFlags.Enabled) { InterlockedIncrement(&wddm->Mpo3Refused); return STATUS_INVALID_PARAMETER; }'
+        with = ''
+        why = 'an enabled plane of another layer is answered as shown' }
+    'mpo3-check-scanout-skipped' = @{ find = 'if (scanout != BC250_SCANOUT_ADMIT_OK) verdict = BC250_MPO3_SCANOUT;'
+        with = 'if (((void)scanout, 0)) verdict = BC250_MPO3_SCANOUT;'
+        why = 'Check approves an allocation the scan-out rule refuses' }
+    'mpo3-check-gate-skipped' = @{ find = 'else if (!device->VidPnFlipEnabled) verdict = BC250_MPO3_GATE;'
+        with = 'else if (((void)device, 0)) verdict = BC250_MPO3_GATE;'
+        why = 'Check approves a plane with the flip gate closed' }
 }
 
 # The lab flavour's controls (-Lab): the witnesses read after the shipping decision and never change it.

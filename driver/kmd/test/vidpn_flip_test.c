@@ -17,6 +17,7 @@
 #include "scanout_admit.h"
 #include "flip_state.h"
 #include "dcn_scale.h"   /* BD-223: BC250_SCALER_PLAN, the shape of a multiplane-overlay plane 0 */
+#include "mpo3_track.h"  /* BD-307: plane 0 of the MPO3 DDIs */
 typedef int32_t NTSTATUS;
 typedef long LONG;
 typedef unsigned long ULONG;
@@ -53,6 +54,12 @@ typedef unsigned DXGK_INTERRUPT_TYPE;
 #define DXGK_INTERRUPT_DMA_COMPLETED 1
 #define DXGK_INTERRUPT_CRTC_VSYNC 3
 #define DXGK_INTERRUPT_DMA_PAGE_FAULTED 9
+#define DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2 10
+/* BD-307: DXGK_MULTIPLANE_OVERLAY_VSYNC_INFO2 (shared/d3dkmddi.h 10.0.26100 line 780), the payload of the type 10
+ * report, with its flags as one UINT. */
+typedef unsigned long DWORD;
+typedef struct { DWORD LayerIndex; ULONGLONG PresentId; struct { UINT Value; } Flags; } DXGK_MULTIPLANE_OVERLAY_VSYNC_INFO2;
+#define RTL_NUMBER_OF(a) (sizeof(a)/sizeof((a)[0]))
 /* E5's payload (shared/d3dkmddi.h 10.0.26100 DmaPageFaulted, line 1064 on) and its types and values (shared/d3dkmdt.h
  * 10.0.26100, line 2297 on): the UNKNOWN values, the page fault flags, and DXGK_FAULT_ERROR_CODE with UINT in place of
  * the enum bit field, which /W4 calls nonstandard. wddm.c gets ULONGLONG_MAX the same way (limits.h). */
@@ -86,7 +93,13 @@ typedef struct {
             DXGK_FAULT_ERROR_CODE FaultErrorCode;
             HANDLE FaultedProcessHandle;
         } DmaPageFaulted;
+        struct {
+            unsigned VidPnTargetId, PhysicalAdapterMask, MultiPlaneOverlayVsyncInfoCount;
+            DXGK_MULTIPLANE_OVERLAY_VSYNC_INFO2 *pMultiPlaneOverlayVsyncInfo;
+            ULONGLONG GpuFrequency, GpuClockCounter;
+        } CrtcVsyncWithMultiPlaneOverlay2;
     };
+    struct { UINT Value; } Flags;       /* DXGKCB_NOTIFY_INTERRUPT_DATA_FLAGS */
 } DXGKARGCB_NOTIFY_INTERRUPT_DATA;
 #define WddmDdiSetVidPnSourceAddress 0
 #define WddmDdiDestroyAllocation 1
@@ -121,8 +134,70 @@ typedef struct {
         };
         unsigned Value;
     } Flags;
+    UINT Duration;
 } DXGKARG_SETVIDPNSOURCEADDRESS;
 typedef NTSTATUS DXGKDDI_SETVIDPNSOURCEADDRESS(const HANDLE, const DXGKARG_SETVIDPNSOURCEADDRESS*);
+/* BD-307: the MPO3 DDIs' arguments (shared/d3dkmddi.h 10.0.26100, lines 6248-6600 and 6781-6818), the members the
+ * driver reads, in their declaration order. The bit fields are the WDK's; Plane3InputFlagBits() asserts them. Rotation
+ * and ColorSpaceType are the enums' values as UINT (D3DDDI_ROTATION_IDENTITY 1, RGB_FULL_G22_NONE_P709 0). */
+typedef struct { LONG left, top, right, bottom; } RECT;
+typedef int BOOL;
+#define D3DDDI_ROTATION_IDENTITY 1u
+#define D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 0u
+typedef struct {
+    struct { UINT Value; } Flags;
+    RECT SrcRect, DstRect, ClipRect;
+    UINT Rotation;
+    union { struct { UINT AlphaBlend:1; UINT Reserved:31; }; UINT Value; } Blend;
+    UINT ColorSpaceType, StretchQuality, SDRWhiteLevel, DirtyRectCnt;
+    const RECT *pDirtyRects;
+} DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES3;
+typedef struct { struct { UINT Value; } Flags; RECT SrcRect, DstRect; UINT Rotation; } DXGK_MULTIPLANE_OVERLAY_POST_COMPOSITION;
+typedef struct { HANDLE hContext, hAllocation; unsigned short SegmentId; PHYSICAL_ADDRESS SegmentAddress; } DXGK_PRIMARYCONTEXTDATA;
+typedef struct {
+    UINT LayerIndex;
+    ULONGLONG PresentId;
+    union {
+        struct {
+            UINT Enabled:1; UINT FlipImmediate:1; UINT FlipOnNextVSync:1; UINT SharedPrimaryTransition:1;
+            UINT IndependentFlipExclusive:1; UINT FlipImmediateNoTearing:1; UINT Reserved:26;
+        };
+        UINT Value;
+    } InputFlags;
+    union {
+        struct { UINT FlipConvertedToImmediate:1; UINT PostPresentNeeded:1; UINT HsyncInterruptCompletion:1; UINT Reserved:29; };
+        UINT Value;
+    } OutputFlags;
+    UINT MaxImmediateFlipLine, ContextCount;
+    DXGK_PRIMARYCONTEXTDATA **ppContextData;
+    UINT DriverPrivateDataSize;
+    void *pDriverPrivateData;
+    DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES3 PlaneAttributes;
+} DXGK_MULTIPLANE_OVERLAY_PLANE3;
+typedef struct {
+    unsigned VidPnSourceId;
+    struct { UINT Value; } InputFlags, OutputFlags;
+    UINT PlaneCount;
+    DXGK_MULTIPLANE_OVERLAY_PLANE3 **ppPlanes;
+    DXGK_MULTIPLANE_OVERLAY_POST_COMPOSITION *pPostComposition;
+    UINT Duration;
+    void *pHDRMetaData;
+    UINT64 TargetFlipTime;
+} DXGKARG_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY3;
+typedef struct { unsigned VidPnTargetId; UINT PhysicalAdapterMask; DWORD LayerIndex; ULONGLONG PresentID; } DXGKARG_POSTMULTIPLANEOVERLAYPRESENT;
+typedef struct { HANDLE hAllocation; unsigned VidPnSourceId; UINT LayerIndex; DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES3 PlaneAttributes; } DXGK_MULTIPLANE_OVERLAY_PLANE_WITH_SOURCE2;
+typedef struct { unsigned VidPnSourceId; DXGK_MULTIPLANE_OVERLAY_POST_COMPOSITION PostComposition; } DXGK_MULTIPLANE_OVERLAY_POST_COMPOSITION_WITH_SOURCE;
+typedef struct {
+    UINT PlaneCount;
+    DXGK_MULTIPLANE_OVERLAY_PLANE_WITH_SOURCE2 **ppPlanes;
+    UINT PostCompositionCount;
+    DXGK_MULTIPLANE_OVERLAY_POST_COMPOSITION_WITH_SOURCE **ppPostComposition;
+    BOOL Supported;
+    union { struct { UINT FailingPlane:4; UINT TryAgain:1; UINT Reserved:27; }; UINT Value; } ReturnInfo;
+} DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3;
+typedef NTSTATUS DXGKDDI_CHECKMULTIPLANEOVERLAYSUPPORT3(const HANDLE, DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3*);
+typedef NTSTATUS DXGKDDI_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY3(const HANDLE, DXGKARG_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY3*);
+typedef NTSTATUS DXGKDDI_POSTMULTIPLANEOVERLAYPRESENT(const HANDLE, const DXGKARG_POSTMULTIPLANEOVERLAYPRESENT*);
 /* The part of DXGKARG_PRESENT that WddmPresentDmaFlip reads: DXGK_PRESENTFLAGS in the WDK's declaration order
  * (shared/d3dkmddi.h 10.0.26100, Blt 0x1, ColorFill 0x2, Flip 0x4, FlipWithNoWait 0x8), the DMA buffer and its size. */
 typedef struct {
@@ -228,6 +303,14 @@ typedef struct {
     BOOLEAN ScanoutAdmitGate;       /* EnableScanoutAdmit, absent = on (WddmStart) */
     int VSyncEnabled;
     unsigned VSyncTargetId;
+    /* BD-307: plane 0 of the MPO3 DDIs (wddm.c says what each field is). */
+    BC250_MPO3_TRACK Mpo3;
+    volatile LONG Mpo3Checks[BC250_MPO3_VERDICTS];
+    volatile LONG Mpo3Flips, Mpo3Kept, Mpo3Empty, Mpo3Refused, Mpo3Failed, Mpo3Converted;
+    volatile LONG Mpo3Reports, Mpo3ReportsEmpty, Mpo3PostPresents, Mpo3Notes;
+    volatile LONG Mpo3FlipVerdicts[BC250_MPO3_VERDICTS];
+    volatile LONG Mpo3FlipOddTaken;
+    BC250_MPO3_PLANE Mpo3FlipOdd;
 } BC250_WDDM;
 /* BD-170: bc250kmd.h's immediate-flip record, for the summary's copy of it (WddmImmediateRecordCopy). */
 #define BC250_DCN_IMMEDIATE_RECORDS 8u
@@ -307,6 +390,9 @@ static void (*after_section)(BC250_DEVICE*);
  * payload), and DPC requests. */
 static unsigned reports,faults_notified,dpcs;
 static LONGLONG reported;
+/* BD-307: CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2 reports with plane 0 (the last PresentId) and without a plane. */
+static unsigned mpo_reports,mpo_empty,mpo_target;
+static ULONGLONG mpo_id;
 static DXGKARGCB_NOTIFY_INTERRUPT_DATA fault_data;
 static unsigned arms,logs,stalls1,stalls10;
 static NTSTATUS TestSync(HANDLE h,PKSYNCHRONIZE_ROUTINE routine,PVOID context,ULONG message,BOOLEAN *returned)
@@ -334,6 +420,15 @@ static void TestNotify(HANDLE h,const DXGKARGCB_NOTIFY_INTERRUPT_DATA *data)
     CHECK(in_lock);
     if(data->InterruptType==DXGK_INTERRUPT_CRTC_VSYNC){reports++;reported=data->CrtcVsync.PhysicalAddress.QuadPart;}
     else if(data->InterruptType==DXGK_INTERRUPT_DMA_PAGE_FAULTED){faults_notified++;fault_data=*data;}
+    else if(data->InterruptType==DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2){
+        /* BD-307: at most plane 0, with its layer and a PresentId; no plane means no pointer. */
+        const unsigned count=data->CrtcVsyncWithMultiPlaneOverlay2.MultiPlaneOverlayVsyncInfoCount;
+        const DXGK_MULTIPLANE_OVERLAY_VSYNC_INFO2 *info=data->CrtcVsyncWithMultiPlaneOverlay2.pMultiPlaneOverlayVsyncInfo;
+        CHECK(count<=1 && (count==0)==(info==NULL));
+        mpo_target=data->CrtcVsyncWithMultiPlaneOverlay2.VidPnTargetId;
+        if(count){CHECK(info->LayerIndex==0 && info->Flags.Value==0);++mpo_reports;mpo_id=info->PresentId;}
+        else ++mpo_empty;
+    }
     else CHECK(!"another interrupt type");
 }
 static BOOLEAN TestQueueDpc(HANDLE h){(void)h;++dpcs;return TRUE;}
@@ -620,6 +715,7 @@ static void Setup(BC250_DEVICE *d,BC250_WDDM *w,int level)
     irq=level?TEST_DIRQL:0;in_lock=0;syncs=sync_refusals=sync_refuse_at=0;sync_no_callback=0;
     sync_refuse_routine=after_section_routine=NULL;before_section=after_section=NULL;
     reports=faults_notified=dpcs=0;reported=0;memset(&fault_data,0,sizeof(fault_data));
+    mpo_reports=mpo_empty=mpo_target=0;mpo_id=0;
     arms=logs=stalls1=stalls10=0;
     freed=journaled=hardware=healthCompletions=pairedVsyncReports=0;healthSequence=0;
     hardware_result=STATUS_SUCCESS;
@@ -2074,9 +2170,9 @@ static void Witnesses(int level)
 static NTSTATUS ShapedFlip(BC250_DEVICE *d,const DXGKARG_SETVIDPNSOURCEADDRESS *request,const BC250_SCALER_PLAN *shape)
 {
     NTSTATUS status;
-    if(irq<=DISPATCH_LEVEL) return WddmFlipEntry(d,request,shape);
+    if(irq<=DISPATCH_LEVEL) return WddmFlipEntry(d,request,shape,FALSE,0);
     CHECK(!in_lock);
-    in_lock=1;status=WddmFlipEntry(d,request,shape);in_lock=0;
+    in_lock=1;status=WddmFlipEntry(d,request,shape,FALSE,0);in_lock=0;
     return status;
 }
 static void PlaneShapeFlips(int level)
@@ -2157,6 +2253,258 @@ static void LatchProbeOwner(void)
     CHECK(NT_SUCCESS(End(&d,generation,FALSE)));
 }
 #endif
+/* BD-307: the MPO3 flip DDI as dxgmms2 calls it, like Flip: without L at or below DISPATCH_LEVEL, inside L above it
+ * (the ...MultiPlaneOverlayAtISR frame of the 0x139 stack). */
+static NTSTATUS Flip3(BC250_DEVICE *d,DXGKARG_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY3 *request)
+{
+    NTSTATUS status;
+    if(irq<=DISPATCH_LEVEL) return Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(d,request);
+    CHECK(!in_lock);
+    in_lock=1;status=Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(d,request);in_lock=0;
+    return status;
+}
+/* The whole 1366x768 source mode of Setup, unscaled, sRGB. */
+static void Mpo3Attributes(DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES3 *a)
+{
+    memset(a,0,sizeof(*a));
+    a->SrcRect.right=a->DstRect.right=a->ClipRect.right=1366;
+    a->SrcRect.bottom=a->DstRect.bottom=a->ClipRect.bottom=768;
+    a->Rotation=D3DDDI_ROTATION_IDENTITY;a->ColorSpaceType=D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+}
+static void Mpo3Desktop(BC250_WDDM_OBJECT *o)
+{
+    memset(o,0,sizeof(*o));
+    o->Magic=BC250_WDDM_MAGIC_ALLOCATION;o->Serial=0x7101;
+    o->Allocation.Width=1366;o->Allocation.Height=768;o->Allocation.Pitch=5632;
+    o->Allocation.Format=D3DDDIFMT_A8R8G8B8;o->Allocation.Size=5632ull*768;
+}
+/* The bit fields of DXGK_PLANE_SPECIFIC_INPUT_FLAGS and _OUTPUT_FLAGS land where the WDK's comments put them. */
+static void Plane3InputFlagBits(void)
+{
+    DXGK_MULTIPLANE_OVERLAY_PLANE3 p;
+    memset(&p,0,sizeof(p));
+    p.InputFlags.Enabled=1;CHECK(p.InputFlags.Value==0x1u);p.InputFlags.Value=0;
+    p.InputFlags.FlipImmediate=1;CHECK(p.InputFlags.Value==0x2u);p.InputFlags.Value=0;
+    p.InputFlags.FlipOnNextVSync=1;CHECK(p.InputFlags.Value==0x4u);p.InputFlags.Value=0;
+    p.InputFlags.SharedPrimaryTransition=1;CHECK(p.InputFlags.Value==0x8u);p.InputFlags.Value=0;
+    p.InputFlags.IndependentFlipExclusive=1;CHECK(p.InputFlags.Value==0x10u);p.InputFlags.Value=0;
+    p.InputFlags.FlipImmediateNoTearing=1;CHECK(p.InputFlags.Value==0x20u);
+    p.OutputFlags.FlipConvertedToImmediate=1;CHECK(p.OutputFlags.Value==0x1u);p.OutputFlags.Value=0;
+    p.OutputFlags.PostPresentNeeded=1;CHECK(p.OutputFlags.Value==0x2u);p.OutputFlags.Value=0;
+    p.OutputFlags.HsyncInterruptCompletion=1;CHECK(p.OutputFlags.Value==0x4u);
+}
+/* BD-307, at PASSIVE and above DISPATCH alike. The disable-planes flip of CddDisable (the 0x139 of 2026-11-05) writes
+ * nothing, completes on return and is named by the next report; a one-plane flip goes through the transaction of
+ * SetVidPnSourceAddress and is retired by its PresentId only on the report that shows its surface; a legacy flip
+ * ends the mode. */
+static void Mpo3Flips(int level)
+{
+    BC250_WDDM w;BC250_DEVICE d;
+    DXGKARG_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY3 set;
+    DXGK_MULTIPLANE_OVERLAY_PLANE3 plane,other,*planes[2];
+    DXGK_PRIMARYCONTEXTDATA data,*contexts[1];
+    BC250_WDDM_OBJECT desktop;
+    DXGKARG_SETVIDPNSOURCEADDRESS legacy={0};
+    unsigned before,written,sections;
+
+    Setup(&d,&w,level);
+    Mpo3Desktop(&desktop);
+    memset(&set,0,sizeof(set));memset(&plane,0,sizeof(plane));memset(&other,0,sizeof(other));memset(&data,0,sizeof(data));
+    planes[0]=&plane;planes[1]=&other;contexts[0]=&data;
+    Mpo3Attributes(&plane.PlaneAttributes);Mpo3Attributes(&other.PlaneAttributes);
+    data.hAllocation=&desktop;data.SegmentId=BC250_WDDM_SEGMENT_VRAM;
+
+    /* Before any MPO3 request the report is CRTC_VSYNC with the address. */
+    before=reports;Vblank(&d);
+    CHECK(reports==before+1 && reported==0x1000 && mpo_reports==0 && mpo_empty==0);
+
+    /* The disable-planes flip: plane 0 disabled, next VSync asked. Nothing written, success at once, converted to
+     * immediate; the next report names its id, with the surface the plane keeps. */
+    set.PlaneCount=1;set.ppPlanes=planes;
+    plane.PresentId=100;plane.InputFlags.FlipOnNextVSync=1;
+    written=hardware;sections=syncs;
+    CHECK(Flip3(&d,&set)==STATUS_SUCCESS);
+    CHECK(hardware==written && plane.OutputFlags.Value==0x1u && set.OutputFlags.Value==0);
+    CHECK(w.Mpo3Kept==1 && w.Mpo3Converted==1 && w.Mpo3Flips==0 && w.PrimaryAddress.QuadPart==0x1000 && !w.DesiredOwed);
+    CHECK(syncs==sections+(level?0u:1u) && !in_lock);       /* low: one section; high: inside dxgmms2's L */
+    before=reports;Vblank(&d);
+    CHECK(reports==before && mpo_reports==1 && mpo_id==100 && mpo_target==0);
+    /* An immediate disable was immediate already: not converted. */
+    plane.InputFlags.Value=0;plane.InputFlags.FlipImmediate=1;plane.PresentId=101;
+    CHECK(Flip3(&d,&set)==STATUS_SUCCESS && plane.OutputFlags.Value==0 && w.Mpo3Kept==2 && w.Mpo3Converted==1);
+    Vblank(&d);
+    CHECK(mpo_reports==2 && mpo_id==101 && hardware==written);
+
+    /* One enabled plane 0, next VSync: the transaction programs the surface from the first context's data. The old
+     * buffer's report still names 101; the report that shows 0x20000 names 110 and pays the owed success. */
+    plane.InputFlags.Value=0;plane.InputFlags.Enabled=1;plane.InputFlags.FlipOnNextVSync=1;plane.PresentId=110;
+    plane.ContextCount=1;plane.ppContextData=contexts;data.SegmentAddress.QuadPart=0x20000;
+    CHECK(Flip3(&d,&set)==STATUS_SUCCESS);
+    CHECK(hardware==written+1 && plane_card==0x20000 && !programmed_immediate && w.PrimaryAddress.QuadPart==0x20000);
+    CHECK(w.DesiredOwed && plane.OutputFlags.Value==0 && w.Mpo3Flips==1 && w.Mpo3FlipVerdicts[BC250_MPO3_OK]==1);
+    displayed=0x1000;pending=0;Vblank(&d);
+    CHECK(mpo_reports==3 && mpo_id==101 && w.DesiredOwed);
+    displayed=0x20000;Vblank(&d);
+    CHECK(mpo_reports==4 && mpo_id==110 && !w.DesiredOwed && w.OwedReported==1);
+
+    /* An immediate one is complete on return: the next report names it. */
+    plane.InputFlags.Value=0;plane.InputFlags.Enabled=1;plane.InputFlags.FlipImmediate=1;plane.PresentId=111;
+    data.SegmentAddress.QuadPart=0x30000;
+    CHECK(Flip3(&d,&set)==STATUS_SUCCESS);
+    CHECK(hardware==written+2 && plane_card==0x30000 && programmed_immediate && w.ScanoutFlipFlags[1]==1);
+    displayed=0x30000;Vblank(&d);
+    CHECK(mpo_id==111);
+
+    /* FlipImmediateNoTearing asks for no tear: a next-VSync flip here. */
+    plane.InputFlags.Value=0;plane.InputFlags.Enabled=1;plane.InputFlags.FlipImmediateNoTearing=1;plane.PresentId=115;
+    data.SegmentAddress.QuadPart=0x38000;
+    CHECK(Flip3(&d,&set)==STATUS_SUCCESS && !programmed_immediate && w.DesiredOwed);
+    displayed=0x38000;Vblank(&d);
+    CHECK(mpo_id==115 && !w.DesiredOwed);
+
+    /* A disable while a next-VSync flip is pending waits for that flip's surface, and then names the later id. */
+    plane.InputFlags.Value=0;plane.InputFlags.Enabled=1;plane.InputFlags.FlipOnNextVSync=1;plane.PresentId=120;
+    data.SegmentAddress.QuadPart=0x40000;
+    CHECK(Flip3(&d,&set)==STATUS_SUCCESS);
+    plane.InputFlags.Value=0;plane.InputFlags.FlipOnNextVSync=1;plane.PresentId=121;
+    CHECK(Flip3(&d,&set)==STATUS_SUCCESS && plane.OutputFlags.FlipConvertedToImmediate==1);
+    Vblank(&d);                         /* the plane still reads 0x38000 */
+    CHECK(mpo_id==115);
+    displayed=0x40000;Vblank(&d);
+    CHECK(mpo_id==121);
+
+    /* A disabled plane of another layer next to plane 0 asks for nothing and is complete on return; an enabled one is
+     * refused before the transaction, and nothing is written. */
+    set.PlaneCount=2;other.LayerIndex=1;other.PresentId=7;other.InputFlags.FlipOnNextVSync=1;
+    plane.InputFlags.Value=0;plane.InputFlags.Enabled=1;plane.InputFlags.FlipOnNextVSync=1;plane.PresentId=130;
+    data.SegmentAddress.QuadPart=0x48000;
+    CHECK(Flip3(&d,&set)==STATUS_SUCCESS && other.OutputFlags.FlipConvertedToImmediate==1);
+    displayed=0x48000;Vblank(&d);
+    CHECK(mpo_id==130);
+    written=hardware;
+    other.InputFlags.Enabled=1;plane.PresentId=131;data.SegmentAddress.QuadPart=0x50000;
+    CHECK(Flip3(&d,&set)==STATUS_INVALID_PARAMETER && hardware==written && w.Mpo3Refused==1);
+    CHECK(w.PrimaryAddress.QuadPart==0x48000);
+    set.PlaneCount=1;
+    /* A source other than 0, and planes with no array, are refused too. */
+    set.VidPnSourceId=1;
+    CHECK(Flip3(&d,&set)==STATUS_INVALID_PARAMETER && hardware==written);
+    set.VidPnSourceId=0;set.ppPlanes=NULL;
+    CHECK(Flip3(&d,&set)==STATUS_INVALID_PARAMETER && hardware==written && w.Mpo3Refused==2);
+    set.ppPlanes=planes;
+
+    /* A plane the rule would not approve is still flipped in full (the OS's own flip may come without a Check), and
+     * counted by verdict with the first one kept. */
+    plane.PlaneAttributes.DstRect.right=1280;plane.PresentId=140;data.SegmentAddress.QuadPart=0x58000;
+    CHECK(Flip3(&d,&set)==STATUS_SUCCESS && hardware==written+1 && plane_card==0x58000);
+    CHECK(w.Mpo3FlipVerdicts[BC250_MPO3_GEOMETRY]==1 && w.Mpo3FlipOddTaken && w.Mpo3FlipOdd.Dst.Right==1280);
+    plane.PlaneAttributes.DstRect.right=1366;
+    displayed=0x58000;Vblank(&d);
+    CHECK(mpo_id==140);
+
+    /* A flip the transaction refuses changes nothing: the id is not taken, the report keeps the last one. */
+    hardware_result=STATUS_ACCESS_DENIED;plane.PresentId=150;data.SegmentAddress.QuadPart=0x60000;
+    CHECK(Flip3(&d,&set)==STATUS_ACCESS_DENIED && w.Mpo3Failed==1);
+    hardware_result=STATUS_SUCCESS;
+    Vblank(&d);
+    CHECK(mpo_id==140 && w.PrimaryAddress.QuadPart==0x58000);
+
+    /* A legacy flip ends the mode: CRTC_VSYNC with the address again, no MPO3 report. */
+    before=reports;written=mpo_reports;
+    legacy.PrimaryAddress.QuadPart=0x68000;legacy.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;legacy.hAllocation=&desktop;
+    CHECK(Flip(&d,&legacy)==STATUS_SUCCESS);
+    displayed=0x68000;Vblank(&d);
+    CHECK(reports==before+1 && reported==0x68000 && mpo_reports==written && !w.Mpo3.Active);
+
+    /* PlaneCount 0: no plane at all. Success, nothing written, and the reports carry no plane. */
+    Setup(&d,&w,level);
+    memset(&set,0,sizeof(set));
+    CHECK(Flip3(&d,&set)==STATUS_SUCCESS && hardware==0 && w.Mpo3Empty==1);
+    before=reports;Vblank(&d);
+    CHECK(reports==before && mpo_empty==1 && mpo_reports==0);
+
+    /* At or below DISPATCH_LEVEL a failed section runs nothing, and the request fails like a legacy one. */
+    if(!level){
+        Setup(&d,&w,0);
+        memset(&set,0,sizeof(set));memset(&plane,0,sizeof(plane));
+        set.PlaneCount=1;set.ppPlanes=planes;planes[0]=&plane;plane.PresentId=5;
+        sync_refusals=1;
+        CHECK(Flip3(&d,&set)==STATUS_UNSUCCESSFUL && w.LowSyncFailed==1 && !w.Mpo3.Active);
+    }
+}
+/* BD-307, PASSIVE_LEVEL: Check3 approves the full-size plane 0 that SetVidPnSourceAddress programs and nothing else,
+ * logs each call with its answer, and PostMultiPlaneOverlayPresent is answered and counted. */
+static void Mpo3Checks(void)
+{
+    BC250_WDDM w;BC250_DEVICE d;
+    DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3 c;
+    DXGK_MULTIPLANE_OVERLAY_PLANE_WITH_SOURCE2 p,q,*pp[2];
+    DXGK_MULTIPLANE_OVERLAY_POST_COMPOSITION_WITH_SOURCE post,*posts[1];
+    DXGKARG_POSTMULTIPLANEOVERLAYPRESENT pres={0};
+    BC250_WDDM_OBJECT desktop,game;
+    unsigned logged;
+    int i;
+
+    Setup(&d,&w,0);
+    Mpo3Desktop(&desktop);
+    game=desktop;game.UmdAlloc=1;game.ScanoutRequested=1;game.ScanoutWidth=1366;game.ScanoutHeight=768;
+    game.ScanoutPitch=5632;game.ScanoutFormat=D3DDDIFMT_A8B8G8R8;game.UmdBytes=5632ull*768;
+    memset(&c,0,sizeof(c));memset(&p,0,sizeof(p));memset(&q,0,sizeof(q));memset(&post,0,sizeof(post));
+    pp[0]=&p;pp[1]=&q;posts[0]=&post;
+    p.hAllocation=&desktop;Mpo3Attributes(&p.PlaneAttributes);q=p;q.LayerIndex=1;
+    c.PlaneCount=1;c.ppPlanes=pp;
+    logged=logs;
+    CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && c.Supported && c.ReturnInfo.Value==0);
+    CHECK(w.Mpo3Checks[BC250_MPO3_OK]==1 && logs==logged+3);
+    /* A client's scan-out buffer of the mode's size is the independent flip's request. */
+    p.hAllocation=&game;
+    CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && c.Supported);
+    /* The operator's scan-out switch off: refused by the scan-out rule. */
+    w.ScanoutAdmitGate=FALSE;
+    CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && !c.Supported);
+    CHECK(w.Mpo3Checks[BC250_MPO3_SCANOUT]==1 && c.ReturnInfo.FailingPlane==0);
+    w.ScanoutAdmitGate=TRUE;p.hAllocation=&desktop;
+    /* No allocation: nothing to scan out. */
+    p.hAllocation=NULL;
+    CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && !c.Supported);
+    CHECK(w.Mpo3Checks[BC250_MPO3_SCANOUT]==2);
+    p.hAllocation=&desktop;
+    /* The flip gate closed: no flip reaches the plane. */
+    d.VidPnFlipEnabled=0;
+    CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && !c.Supported && w.Mpo3Checks[BC250_MPO3_GATE]==1);
+    d.VidPnFlipEnabled=1;
+    /* A scaled plane, a second plane (the second one fails), none at all. */
+    p.PlaneAttributes.DstRect.right=1280;
+    CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && !c.Supported);
+    CHECK(w.Mpo3Checks[BC250_MPO3_GEOMETRY]==1 && c.ReturnInfo.FailingPlane==0);
+    p.PlaneAttributes.DstRect.right=1366;
+    c.PlaneCount=2;
+    CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && !c.Supported);
+    CHECK(w.Mpo3Checks[BC250_MPO3_COUNT]==1 && c.ReturnInfo.FailingPlane==1);
+    c.PlaneCount=0;
+    CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && !c.Supported && w.Mpo3Checks[BC250_MPO3_COUNT]==2);
+    c.PlaneCount=1;
+    /* A post-composition of source 0 that mirrors is refused; one of another source is not this source's. */
+    c.PostCompositionCount=1;c.ppPostComposition=posts;
+    post.PostComposition.Flags.Value=2;post.PostComposition.Rotation=D3DDDI_ROTATION_IDENTITY;
+    post.PostComposition.SrcRect=post.PostComposition.DstRect=p.PlaneAttributes.DstRect;
+    CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && !c.Supported && w.Mpo3Checks[BC250_MPO3_POST]==1);
+    post.VidPnSourceId=1;
+    CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && c.Supported);
+    post.VidPnSourceId=0;post.PostComposition.Flags.Value=0;
+    CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && c.Supported);
+    /* Three lines a call for the first BC250_WDDM_MPO3_LOG_CALLS calls of the three DDIs, then none. */
+    CHECK(w.Mpo3Notes==11 && logs==logged+33);
+    for(i=0;i<40;i++) (void)Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c);
+    CHECK(logs==logged+96);
+    /* PostMultiPlaneOverlayPresent: counted, success. */
+    pres.PresentID=9;
+    CHECK(Bc250WddmPostMultiPlaneOverlayPresent(&d,&pres)==STATUS_SUCCESS && w.Mpo3PostPresents==1);
+    /* No adapter state yet: not ready, nothing answered as supported. */
+    d.Wddm=NULL;c.Supported=TRUE;
+    CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_DEVICE_NOT_READY && !c.Supported);
+    CHECK(Bc250WddmPostMultiPlaneOverlayPresent(&d,&pres)==STATUS_DEVICE_NOT_READY);
+}
 int main(void)
 {
     int level;
@@ -2175,7 +2523,10 @@ int main(void)
         GateClosed(level);
         Exclusive(level);
         PlaneShapeFlips(level);
+        Mpo3Flips(level);
     }
+    Plane3InputFlagBits();
+    Mpo3Checks();
     FlipFlagBits();
     PlaneFormatFlips();
     FaultDpcs();
