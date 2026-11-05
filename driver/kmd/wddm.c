@@ -5046,12 +5046,18 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     UINT nodeCount = (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT;
 
     if (Query->OutputDataSize < sizeof(*caps) || caps == NULL) return STATUS_BUFFER_TOO_SMALL;
-    // The caller's buffer, not our sizeof: this driver is compiled at WDDM 2.0 and will run under a dxgkrnl that
+    // The caller's buffer, not our sizeof: this driver is compiled at interface 2.9 and will run under a dxgkrnl that
     // knows a longer DXGK_DRIVERCAPS. Zeroing all of it means the members we have never heard of read as zero
     // rather than as whatever was on the stack. The same rule applies everywhere below.
     RtlZeroMemory(caps, Query->OutputDataSize);
 
-    caps->WDDMVersion = DXGKDDI_WDDMv2;                 // ADR 0008 point 2: the version that introduced GpuMmu
+    // ADR 0019 stage B4 (BD-307): the feature level of the 2.9 interface this binary is compiled at. Static reading of
+    // dxgkrnl 22621.6199 (the lab's 22631) and 26100.9549: both accept 0x2900, and no load check keyed on 2.1-2.9
+    // names a DDI that a full adapter must fill; each new DDI is tested for NULL before use (scratch plan
+    // t38/wddm-b4). What the level changes without a new DDI: the D3D11 runtime asks our UMD for its WDDM 2.2
+    // table (KMT version >= 2.2, BD-153), display state synchronization is the 2.3 one, and the type 16 answer
+    // below becomes necessary. Every optional 2.1-2.9 cap stays zero (RtlZeroMemory above).
+    caps->WDDMVersion = DXGKDDI_WDDMv2_9;
     caps->HighestAcceptableAddress.QuadPart = -1;       // no addressing limit; too low a value fails the load
     caps->SupportNonVGA = TRUE;
     caps->NumberOfSwizzlingRanges = 0;                  // swizzling range support has been removed from WDDM
@@ -5076,10 +5082,12 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     // BD-223: MaxOverlayPlanes counts the primary, so 1 is plane 0 alone (LabScaledPlane bit 2 asks 2, a lab
     // question; Check still refuses a second plane). The count is the trailer's (WddmMpoFlags), which the front
-    // reports too. WDDM 2.0 has no MPO immediate-flip cap.
+    // reports too. No MPO immediate-flip cap. One flip-on-vsync in flight per plane: WHCP
+    // Device.Graphics.WDDM21.FlipQueueLatency asks MaxQueuedMultiPlaneOverlayFlipVSync = 1 of such hardware.
     if (Device->Wddm && (((BC250_WDDM*)Device->Wddm)->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK)) {
         caps->SupportMultiPlaneOverlay = TRUE;
         caps->MaxOverlayPlanes = bc250_scanout_mpo_planes(WddmMpoFlags(((BC250_WDDM*)Device->Wddm)->ScaledPlane));
+        caps->MaxQueuedMultiPlaneOverlayFlipVSync = 1;
     }
 #endif
     caps->InterruptMessageNumber = 0;                   // the INF asks for one MSI message, so it is message 0 (M38)
@@ -5367,6 +5375,17 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         // reading of 26100.9549, BD-134). Zero: this driver has 32-bit user-mode drivers too. VirtualBox's WDDM
         // miniport also answers this type with a zeroed buffer.
         if (QueryAdapterInfo->pOutputData == NULL || QueryAdapterInfo->OutputDataSize < sizeof(UINT)) { status = STATUS_BUFFER_TOO_SMALL; break; }
+        RtlZeroMemory(QueryAdapterInfo->pOutputData, QueryAdapterInfo->OutputDataSize);
+        status = STATUS_SUCCESS;
+        break;
+    case DXGKQAITYPE_DISPLAY_DRIVERCAPS_EXTENSION:
+        // Every bit zero: no secure display, no virtual modes, no HDR scan-out, no HDR10 metadata, no virtual refresh
+        // rate. The answer is needed from WDDMVersion 2.2 on: when this type fails there, dxgkrnl sets
+        // VirtualModeSupport by itself (ADAPTER_DISPLAY::Initialize, static reading of 22621.6197 and 26100.9549),
+        // and our scan-out path does not scale virtual modes. At 2.0 the refusal read as zero (facts M65), so this
+        // answer keeps the display behaviour of 2.0. HDR (M15.4) sets its bits here when it exists.
+        if (QueryAdapterInfo->pOutputData == NULL ||
+            QueryAdapterInfo->OutputDataSize < sizeof(DXGK_DISPLAY_DRIVERCAPS_EXTENSION)) { status = STATUS_BUFFER_TOO_SMALL; break; }
         RtlZeroMemory(QueryAdapterInfo->pOutputData, QueryAdapterInfo->OutputDataSize);
         status = STATUS_SUCCESS;
         break;
@@ -11972,7 +11991,7 @@ static void WddmCheckReserved(_In_ const DRIVER_INITIALIZATION_DATA* Data)
     for (i = 0; i < RTL_NUMBER_OF(reserved); i++)
         if (*(PVOID* const*)((const UCHAR*)Data + reserved[i].Offset) != NULL)
             GuardLog("wddm: table member %s must be zero and is not", reserved[i].Name);
-    // ADR 0019 B1: every WDDM 2.1-3.1 member stays NULL while WDDMVersion is 2.0 (see the asserts above).
+    // ADR 0019 B1/B4: every WDDM 2.1-3.1 member stays NULL; at WDDMVersion 2.9 dxgkrnl tests each one before use.
     for (offset = BC250_WDDM_TABLE_TAIL_START; offset < sizeof(*Data); offset += sizeof(PVOID))
         if (*(PVOID const*)((const UCHAR*)Data + offset) != NULL)
             GuardLog("wddm: table member at offset %u (after the WDDM 2.0 block) must be NULL and is not", (ULONG)offset);
@@ -12059,7 +12078,7 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
 {
     RtlZeroMemory(Data, sizeof(*Data));
     // ADR 0019 B1: the table version is the compiled interface version (bc250kmd.h says why 2.9); the WDDM
-    // feature level is DXGK_DRIVERCAPS.WDDMVersion, which stays 2.0 until stage B4.
+    // feature level is DXGK_DRIVERCAPS.WDDMVersion, 2.9 since stage B4 (WddmDriverCaps).
     Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_9;
 
     // The 28 pointers the display-only table already has; since 0.7.6 the child and VidPN ones go through the
@@ -12162,7 +12181,9 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     // doorbell DDIs (no native fence, no user-mode submission), the flip-queue DDIs, SetTargetGamma and
     // SetTargetAdjustedColorimetry (not before stage B4), and the diagnostic DDIs, which dxgkrnl requires in
     // pairs (QueryDiagnosticTypesSupport with ControlDiagnosticReporting, from WDDMVersion 2.4). The interface
-    // version alone obliges none of them; WDDMVersion stays 2.0 (ADR 0019 B1). QueryInterface, ControlEtwLogging,
+    // version alone obliges none of them, and neither does WDDMVersion 2.9 for a full adapter (ADR 0019 B4: the
+    // dxgkrnl reading finds no load check that names one; the WHCP requirements are a separate list, BD-307).
+    // QueryInterface, ControlEtwLogging,
     // NotifyAcpiEvent, SetPalette, NotifySurpriseRemoval, SetPowerComponentFState,
     // PowerRuntimeControlRequest and PowerRuntimeSetDeviceHandle stay NULL exactly as they are in the
     // display-only table today. ControlInterrupt, GetScanLine and GetChildContainerId are **not** in this list
