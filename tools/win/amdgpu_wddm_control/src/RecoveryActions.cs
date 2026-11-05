@@ -34,6 +34,7 @@ using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
+using AmdgpuWddm;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 
@@ -112,6 +113,7 @@ namespace AmdgpuWddmControl
                     s.RequireKmdSwitches = Dword(k, "RequireKmdSwitches");
                 }
             }
+            ReadDriverRouteCopy(s);
             var interop = Kmd.Interop();
             var health = Kmd.StartHealth();
             var dpm = Kmd.Dpm();
@@ -254,6 +256,23 @@ namespace AmdgpuWddmControl
                 }
             }
             catch (Exception e) { s.HardwarePointerError = e.Message; }
+        }
+
+        // BD-296: the driver's copy of the desktop route's kill switch (RouteSwitch.cs), read raw from the driver's
+        // Parameters key like the hardware pointer: it is not in the state catalog.
+        public static void ReadDriverRouteCopy(RecoverySnapshot s)
+        {
+            try
+            {
+                using (var k = SettingsStore.Machine.OpenSubKey(RouteSwitch.DriverPath))
+                {
+                    if (k == null) { s.DriverRouteCopy = "no-key"; return; }
+                    var c = RouteSwitch.ReadCopy(k);
+                    s.DriverRouteCopy = !c.Present ? "absent" : c.Dword ? "dword" : "type " + c.Kind;
+                    if (c.Present && c.Dword) s.DwmForceCpuDriver = c.Number;
+                }
+            }
+            catch (Exception e) { s.DriverRouteCopy = "error: " + e.Message; }
         }
 
         // Where the game logs go: %ProgramData%\amdgpu-wddm\logs\games (GameLog.cs). Every user may read it, so the
@@ -1609,6 +1628,8 @@ namespace AmdgpuWddmControl
         {
             if (w.DeleteKey) { RemoveEmptyKey(w.Path); return; }
             if (!Recovery.Allowed(w.Path, w.Name)) throw new InvalidOperationException(w.Name + " is not a value this app may write");
+            // BD-296: never one copy of the kill switch alone. Apply and Rollback give the pair to RouteSwitch.Write.
+            if (Recovery.IsRouteWrite(w)) throw new InvalidOperationException(w.Name + " is written only by RouteSwitch.Write, both copies in one call");
             // The two boot settings of the full-resolution start go through bcdedit (ScaledStart.cs).
             if (ScaledStart.Owns(w.Path)) { RecoveryProbe.Boot.Write(w); return; }
             if (DriverStateKey.IsStateValue(w.Path, w.Name))
@@ -1685,14 +1706,33 @@ namespace AmdgpuWddmControl
         // rollback then touches only what this run changed: a value that still reads as its backup is left alone.
         // (BD-181, lab 2026-10-21: writing everything before reading anything back deleted InteropClosedReason before
         // a refused delete stopped the action, and the rollback could not write the record again.)
+        // BD-296: the two copies of DwmForceCpu come as a pair (Recovery.RoutePairError, checked before the first
+        // write) and go to RouteSwitch.Write in one call, which writes both, reads both back and puts both back on a
+        // failure of its own. The rollback of a later failure writes the pair again, with the value of the backup.
         static bool Apply(List<RegWrite> writes, BackupRecord backup, DriverStateBatch batch)
         {
+            var pairError = Recovery.RoutePairError(writes);
+            if (pairError != null) { Log("write refused before any write: " + pairError); return false; }
             var touched = new List<RegWrite>();
             try
             {
                 RouteRecordBefore(writes);
-                foreach (var w in writes)
+                for (int i = 0; i < writes.Count; i++)
                 {
+                    var w = writes[i];
+                    if (Recovery.IsRouteWrite(w))
+                    {
+                        var twin = writes[++i];
+                        touched.Add(w); touched.Add(twin);
+                        Log("wrote: " + RouteSwitch.Write(SettingsStore.Machine, w.Delete ? (uint?)null : (uint)w.Number));
+                        foreach (var x in new[] { w, twin })
+                        {
+                            bool copyBack = ReadsBack(x, batch);
+                            Log((copyBack ? "read back OK: " : "read back MISMATCH: ") + x);
+                            if (!copyBack) throw new InvalidOperationException("stopped before the remaining writes");
+                        }
+                        continue;
+                    }
                     touched.Add(w);
                     Write(w, batch);
                     Log("wrote: " + w);
@@ -1704,7 +1744,16 @@ namespace AmdgpuWddmControl
                 return true;
             }
             catch (Exception e) { Log("write failed: " + e.Message); }
-            foreach (var v in backup.Values.Where(v => touched.Any(w => w.Path == v.Path && w.Name == v.Name)))
+            if (touched.Any(Recovery.IsRouteWrite))
+                try
+                {
+                    var before = Recovery.RouteBackupValue(backup.Values);
+                    var pair = Recovery.RouteWrites(before);
+                    if (pair.All(x => ReadsBack(x, batch))) Log("unchanged, nothing to restore: both copies of " + RouteSwitch.ValueName);
+                    else Log("restored: " + RouteSwitch.Write(SettingsStore.Machine, before));
+                }
+                catch (Exception e) { Log("restore failed: " + RouteSwitch.ValueName + ": " + e.Message); }
+            foreach (var v in backup.Values.Where(v => !RouteSwitch.Owns(v.Path, v.Name) && touched.Any(w => w.Path == v.Path && w.Name == v.Name)))
                 try
                 {
                     var r = v.Existed ? new RegWrite { Path = v.Path, Name = v.Name, Kind = v.Kind, Number = v.Number, Text = v.Text } : RegWrite.Remove(v.Path, v.Name);

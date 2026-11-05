@@ -103,6 +103,10 @@ $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recove
 $pure += 'SingleInstance.cs', 'LaunchSequence.cs' | ForEach-Object { Join-Path $here "src\$_" }
 # Install update: the manifest, its signature, the plan and the download (docs/design/self-update.md).
 $pure += 'SelfUpdate.cs' | ForEach-Object { Join-Path $here "src\$_" }
+# The one writer of the desktop route's kill switch (BD-296). It lives with the installer, which compiles the same
+# file with Add-Type, so the app and the installer write DwmForceCpu with the same code.
+$routeSwitch = Join-Path $repo 'tools\release\installer\RouteSwitch.cs'
+$pure += $routeSwitch
 
 # Build the capability fixture from the actual provider and shipping shim tables, without adapter access.
 $providerOut = Join-Path $obj 'board-provider'
@@ -276,7 +280,7 @@ if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application ico
 $resources += "/resource:$icon,nagi.ico"
 $csFlavour = @(if ($Lab) { '/define:AMDGPU_WDDM_LAB_FLAVOUR' })
 # One list of sources for both compiles: this one and, in a release build, the lab twin below.
-$appSources = @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
+$appSources = @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object) + $routeSwitch
 # /debug:portable: the application ships, so it gets a portable PDB, which the release archives beside the
 # candidate and the manifest names by the GUID of the exe's own debug directory. csc has no /PDBALTPATH, and it
 # records the full path of the PDB even when it is given a relative name. /pathmap replaces the output directory with

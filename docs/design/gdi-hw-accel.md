@@ -1097,9 +1097,27 @@ E_INVALIDARG, the runtime removes the compositor's device, and no window gets it
 router sends the compositor to the CPU UMD when the two desktop switches are not both on. So a
 start reports the capability only when `EnableGpuPresentBlit` and `EnableCddDwmInterop` are both
 in force after `InteropStart` (`Bc250GdiHwAccelFeature` in `gdi_admission.h`). On the CPU route
-the record `Features\GdiHwAccel` is 0 (not possible), and the control app hides the switch. Two
-other CPU routes stay outside this rule, because the kernel driver cannot see them at its start:
-the router's kill switch `DwmForceCpu` and a hosted open that failed in the compositor.
+the record `Features\GdiHwAccel` is 0 (not possible), and the control app hides the switch.
+
+The router's kill switch `DwmForceCpu` is a third input of the same rule (BD-296). The router reads
+it from `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`. The kernel driver may not open that hive by an
+absolute path: Driver Verifier's driver isolation rules 33 and 36 forbid it, and no driver handle
+reaches it. So the switch has a second copy in the driver's own `Parameters` key. `guard.c`
+(`GuardReadDesktopKillSwitch`) reads that copy once, in `DriverEntry`, through
+`IoOpenDriverRegistryKey`, and `WddmStart` gives it to `Bc250GdiHwAccelFeature`. With the switch
+on, the capability is 0. An absent or unreadable copy keeps the answer of the release before BD-296
+(off), and the driver writes one log line about it. The value is a raw value outside the state
+catalog, like `EnableHardwarePointer`, because the switch is the recovery route of a broken desktop
+and a plain registry write must set it without the state worker.
+
+One writer keeps the two copies equal: `RouteSwitch.Write` (`tools/release/installer/RouteSwitch.cs`).
+The control app's route actions and the installer give it both copies in one call. A person who
+writes the copies by hand follows `docs/testing/INSTALL.md`. If only the router's copy is set, the
+desktop is on the CPU route and the driver still reports the capability. For that case the CPU UMD
+has a safety net of its own: an `OpenResource` whose only failure is the Lock2 of a surface with no
+CPU view opens the surface without content (cleared, log line `BC250 NoContent open`), instead of
+E_INVALIDARG and a removed device. The same net covers the last CPU route that the kernel driver
+cannot see: a hosted open that failed in the compositor.
 
 ## Recorded contract gaps
 

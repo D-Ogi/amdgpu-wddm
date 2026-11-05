@@ -2175,7 +2175,17 @@ if ($mftAction -eq 'register') {
 # The *Wow paths are what the x86 router (32-bit processes) loads; the policy values are shared (BD-064).
 $desktopPaths = if ($driverStoreUmd) { @{} } else { [ordered]@{ CpuUmdPath = (Join-Path $InstallRoot 'desktop\bc250d3d.dll'); CpuUmdPathWow = (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll') } }
 $appPaths = if ($driverStoreUmd) { @{} } else { [ordered]@{ GpuUmdPath = (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll'); GpuUmdPathWow = (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll') } }
-Invoke-RegistryDefaults "$($script:SoftwareKey)\DesktopRouter" $regDefaults.defaults.desktop_router $applied.desktop_router @{} $desktopPaths
+# BD-296: DwmForceCpu has a second copy in the driver's Parameters key, which the KMD reads at its start (it reports no
+# GDI hardware acceleration while the switch is on). The router's table decides the value as for every other default,
+# and RouteSwitch.cs writes it into both copies in one call, so the two copies are the same after every install,
+# also when the plan keeps the tester's value. The table write leaves the name out.
+$routerKey = "$($script:SoftwareKey)\DesktopRouter"
+$routerPlan = Get-RegistryDefaultPlan -Defaults $regDefaults.defaults.desktop_router -Previous $applied.desktop_router -Current (Read-RegistryValues $routerKey) -Owned $desktopPaths
+$routeValue = Get-RouteSwitchValue @($routerPlan | Where-Object { $_.name -eq 'DwmForceCpu' })[0]
+Invoke-Change ("${routerKey}: " + (Format-RegistryPlan $routerPlan) + "; DwmForceCpu $(if ($null -eq $routeValue) { 'absent' } else { $routeValue }) in both copies (router and $($script:ParametersKey))") {
+    Write-RegistryPlan $routerKey @($routerPlan | Where-Object { $_.name -ne 'DwmForceCpu' })
+    Write-Log (Write-RouteSwitch $routeValue)
+} | Out-Null
 Invoke-RegistryDefaults "$($script:SoftwareKey)\AppRouter" $regDefaults.defaults.app_router $applied.app_router @{} $appPaths
 if (-not $driverStoreUmd -and $state.PSObject.Properties['umd_migration']) {
     Invoke-Change 'restore the retained legacy UMD registration overrides for the rollback package' {

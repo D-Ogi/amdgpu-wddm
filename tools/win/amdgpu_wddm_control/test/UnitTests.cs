@@ -549,7 +549,9 @@ static partial class UnitTests
         // The allow-list.
         foreach (var n in Recovery.ParameterNames) Check(Recovery.Allowed(Recovery.ParametersPath, n), "allowed " + n);
         Check(Recovery.Allowed(Recovery.RouterPath, "DwmForceCpu"), "allowed DwmForceCpu");
-        foreach (var n in new[] { "UnconfirmedStarts", "EnableMmio", "EnableFullWddm", "KeepLog", "CuMode", "DpmPending", "InteropSession", "DwmForceCpu", "ImagePath" })
+        // BD-296: the driver's copy of the kill switch is the one raw Parameters value of the route (RouteSwitchTests).
+        Check(Recovery.Allowed(Recovery.ParametersPath, "DwmForceCpu"), "allowed: the driver's copy of DwmForceCpu");
+        foreach (var n in new[] { "UnconfirmedStarts", "EnableMmio", "EnableFullWddm", "KeepLog", "CuMode", "DpmPending", "InteropSession", "ImagePath" })
             Check(!Recovery.Allowed(Recovery.ParametersPath, n), "not allowed: Parameters " + n);
         foreach (var path in new[] { @"SYSTEM\CurrentControlSet\Services\bc250kmd", @"SYSTEM\CurrentControlSet\Control\CI\Policy", @"SOFTWARE\amdgpu-wddm\AppRouter" })
             Check(!Recovery.Allowed(path, "EnableGpuPresentBlit") && !Recovery.Allowed(path, "DwmForceCpu"), "not allowed: " + path);
@@ -593,7 +595,7 @@ static partial class UnitTests
         var noRouter = Open(); noRouter.RouterInstalled = false;
         Check(Recovery.Plan("desktop-gpu", noRouter).Refusal.Contains("router"), "GPU route refused without the router");
         p = Recovery.Plan("desktop-gpu", Open());
-        Check(!p.Refused && Writes(p, "DwmForceCpu=0") && p.OfferRestart && p.Effect == "at the next restart of Windows" && p.Undoable, "GPU route: DwmForceCpu 0, at the next restart, restart offered");
+        Check(!p.Refused && Writes(p, "DwmForceCpu=0", "DwmForceCpu=0") && p.OfferRestart && p.Effect == "at the next restart of Windows" && p.Undoable, "GPU route: DwmForceCpu 0, at the next restart, restart offered");
         Check(p.Notes.Contains(Recovery.Bd060Note) && !p.Text().Contains("restart DWM"), "GPU route: no DWM restart, BD-060 named");
         var onGpu = Open(); onGpu.DwmForceCpu = 0; onGpu.DwmRoute = "gpu";
         Check(Recovery.Plan("desktop-gpu", onGpu).Refusal.Contains("already"), "GPU route refused when DWM is on it already");
@@ -606,7 +608,7 @@ static partial class UnitTests
         Check(Recovery.Plan("desktop-cpu", cpuUnknown).Refusal.Contains("selected already: restart Windows"), "CPU route stored, running route unknown: refused, restart Windows");
         cpuUnknown.DwmForceCpu = 0;
         p = Recovery.Plan("desktop-cpu", cpuUnknown);
-        Check(!p.Refused && Writes(p, "DwmForceCpu=1") && p.OfferRestart && p.Effect == "at the next restart of Windows" && p.Notes.Contains(Recovery.Bd060Note), "CPU route: DwmForceCpu 1, at the next restart, BD-060 named");
+        Check(!p.Refused && Writes(p, "DwmForceCpu=1", "DwmForceCpu=1") && p.OfferRestart && p.Effect == "at the next restart of Windows" && p.Notes.Contains(Recovery.Bd060Note), "CPU route: DwmForceCpu 1, at the next restart, BD-060 named");
         Check(!Recovery.Plan("desktop-cpu", onGpu).Refused, "CPU route allowed from the GPU route");
 
         // 3. Confirm.
@@ -648,7 +650,7 @@ static partial class UnitTests
 
         // 5. Reset.
         p = Recovery.Plan("reset-defaults", Closed());
-        Check(!p.Refused && Writes(p, "EnableGpuPresentBlit=1", "EnableCddDwmInterop=1", "DpmMode=1", "DpmMaxMHz=1500", "DwmForceCpu=1", "InteropClosedReason-"), "reset writes the manifest defaults");
+        Check(!p.Refused && Writes(p, "EnableGpuPresentBlit=1", "EnableCddDwmInterop=1", "DpmMode=1", "DpmMaxMHz=1500", "DwmForceCpu=1", "DwmForceCpu=1", "InteropClosedReason-"), "reset writes the manifest defaults");
         Check(p.Notes.Count(n => n.Contains("left to the installer")) == 1, "reset names the defaults it leaves to the installer, once");
         Check(p.OfferRestart && p.Undoable, "reset: next restart, undoable");
         var noDefaults = Closed(); noDefaults.DefaultParameters = null; noDefaults.DefaultsError = "manifest.json has no \"defaults\"";
@@ -684,7 +686,7 @@ static partial class UnitTests
         Equal(b3.File, Recovery.UndoTarget(new[] { b1, b2, u1, b3 }).File, "newest undoable wins");
         Check(Recovery.Plan("undo", Closed(), null, null, new[] { b3 }).Refusal.Contains("GPU desktop path is closed"), "undo onto the GPU route refused while the switches are closed");
         p = Recovery.Plan("undo", Open(), null, null, new[] { b3 });
-        Check(!p.Refused && Writes(p, "DwmForceCpu=0") && p.OfferRestart && p.Effect == "at the next restart of Windows" && p.Notes.Contains(Recovery.Bd060Note), "undo onto the GPU route: at the next restart, no DWM restart");
+        Check(!p.Refused && Writes(p, "DwmForceCpu=0", "DwmForceCpu=0") && p.OfferRestart && p.Effect == "at the next restart of Windows" && p.Notes.Contains(Recovery.Bd060Note), "undo onto the GPU route: at the next restart, no DWM restart");
         var old = rec("backup-20260103T130500000Z.json", "desktop-cpu", true, null, b3.Values.ToArray()); old.RestartsDwm = true;
         Check(Recovery.Plan("undo", Open(), null, null, new[] { old }).OfferRestart, "undo of a 0.3 backup that restarted DWM: also at the next restart");
         var evil = rec("backup-20260103T140000000Z.json", "reopen-gpu-path", true, null, new[] { new BackupValue { Path = Recovery.ParametersPath, Name = "UnconfirmedStarts", Existed = true, Kind = "DWord", Number = 2 } });
@@ -839,7 +841,7 @@ static partial class UnitTests
         var back = json.Deserialize<RecoverySnapshot>(json.Serialize(Closed()));
         Check(back.Health.ReadyAgeMs == 70000 && back.Interop.ClosedReason == 4 && back.P("InteropLastState") == 0x300 && back.DwmForceCpu == 1 &&
             back.DefaultParameters["DpmMaxMHz"] == 1500, "snapshot JSON round-trip");
-        Check(Writes(Recovery.Plan("reset-defaults", back), "EnableGpuPresentBlit=1", "EnableCddDwmInterop=1", "DpmMode=1", "DpmMaxMHz=1500", "DwmForceCpu=1", "InteropClosedReason-"), "plans from a round-tripped snapshot match");
+        Check(Writes(Recovery.Plan("reset-defaults", back), "EnableGpuPresentBlit=1", "EnableCddDwmInterop=1", "DpmMode=1", "DpmMaxMHz=1500", "DwmForceCpu=1", "DwmForceCpu=1", "InteropClosedReason-"), "plans from a round-tripped snapshot match");
         var bb = json.Deserialize<BackupRecord>(json.Serialize(b1));
         Check(bb.Values.Count == 3 && bb.Values[1].Number == 4 && !bb.Values[2].Existed && bb.Undoable, "backup JSON round-trip");
 
@@ -1396,6 +1398,7 @@ static partial class UnitTests
         OcUnlockTests();
         DriverFeatureTests(args[0]);
         HardwarePointerTests(args[0]);
+        RouteSwitchTests(args[0]);
         ScaledStartTests(args[0]);
         GameLogTests(args[0]);
         HangRecordTests(args[0]);

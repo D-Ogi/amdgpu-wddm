@@ -18,6 +18,7 @@ python tools\win\lab-emerg\lab-emerg.py put LOCAL REMOTE        write a file
 python tools\win\lab-emerg\lab-emerg.py copy|move REMOTE_SRC REMOTE_DST
 python tools\win\lab-emerg\lab-emerg.py delete|mkdir|list|acl|tail REMOTE [N]
 python tools\win\lab-emerg\lab-emerg.py desktop-cpu             route the desktop to the CPU at the next boot
+                                                                (DwmForceCpu 1 in both copies, router and driver)
 python tools\win\lab-emerg\lab-emerg.py kill-dwm accept-bd060   last resort for a hung compositor
 python tools\win\lab-emerg\lab-emerg.py usb-boot status|windows|linux:N
 python tools\win\lab-emerg\lab-emerg.py reboot reboot-now

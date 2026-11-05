@@ -84,6 +84,12 @@ function Run-Action([string]$action, [string]$arg, [byte[]]$body) {
             # DWM is not restarted (BD-060: a forced DWM restart breaks WinUI pointer input until Windows restarts);
             # 'reboot reboot-now' applies it, 'kill-dwm accept-bd060' is the last resort for a hung compositor.
             $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
+            # BD-296: the driver's copy too (Parameters DwmForceCpu, read by the KMD at its start), the manual form of
+            # RouteSwitch.cs: this channel runs without the release's files. A missing service key is not fatal here:
+            # the router's copy alone still puts the desktop on the CPU route.
+            $p = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters', $true)
+            $driverCopy = 'no Parameters key'
+            if ($p) { try { $p.SetValue('DwmForceCpu', 1, [Microsoft.Win32.RegistryValueKind]::DWord); $p.Flush(); $driverCopy = $p.GetValue('DwmForceCpu') } finally { $p.Dispose() } }
             $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SOFTWARE\amdgpu-wddm\DesktopRouter', $true)
             if (-not $k) { throw 'router key missing' }
             try {
@@ -92,9 +98,9 @@ function Run-Action([string]$action, [string]$arg, [byte[]]$body) {
                     $k.SetValue($v[0], $v[1], [Microsoft.Win32.RegistryValueKind]::String)
                 }
                 $k.Flush()
-                $back = [ordered]@{ DwmForceCpu = $k.GetValue('DwmForceCpu'); RoutePending = $k.GetValue('RoutePending'); RoutePendingBoot = $k.GetValue('RoutePendingBoot') }
+                $back = [ordered]@{ DwmForceCpu = $k.GetValue('DwmForceCpu'); DwmForceCpuDriver = $driverCopy; RoutePending = $k.GetValue('RoutePending'); RoutePendingBoot = $k.GetValue('RoutePendingBoot') }
             } finally { $k.Dispose() }
-            Log 'desktop-cpu: DwmForceCpu 1, cpu pending until Windows restarts'
+            Log "desktop-cpu: DwmForceCpu 1 (driver copy: $driverCopy), cpu pending until Windows restarts"
             return [ordered]@{ written = $back; effect = 'cpu at the next restart of Windows (reboot reboot-now); DWM not restarted (BD-060)' }
         }
         'kill-dwm' {

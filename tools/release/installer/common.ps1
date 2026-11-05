@@ -853,6 +853,30 @@ function Write-RegistryPlan([string]$Key, $Plan) {
     }
 }
 
+# BD-296: the desktop route's kill switch DwmForceCpu has two copies, the router's (DesktopRouter) and the driver's
+# (Parameters). RouteSwitch.cs is their one writer, for the control application and for this installer alike: Write
+# writes both copies in one call, reads both back and leaves both as they were when it fails. $Value is a number or
+# $null (both copies removed). The router's table step leaves the name out of Write-RegistryPlan and calls this.
+function Initialize-RouteSwitch {
+    if (-not ('AmdgpuWddm.RouteSwitch' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'RouteSwitch.cs') }
+}
+function Write-RouteSwitch($Value) {
+    Initialize-RouteSwitch
+    $hklm = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64)
+    try {
+        $v = if ($null -eq $Value) { [Nullable[uint32]]$null } else { [Nullable[uint32]][uint32]$Value }
+        return [AmdgpuWddm.RouteSwitch]::Write($hklm, $v)
+    } finally { $hklm.Dispose() }
+}
+# Pure: the value the installer writes into both copies, from the router's plan entry. A value the plan keeps is the
+# router's own: a DWORD stays itself, and a value of another type is the CPU route for the router, so it becomes 1.
+function Get-RouteSwitchValue($Entry) {
+    if ($null -eq $Entry -or $null -eq $Entry.value) { return $null }
+    $v = $Entry.value
+    if ($v -is [int] -or $v -is [long] -or $v -is [uint32]) { return [uint32]([int64]$v -band 0xFFFFFFFFL) }
+    return [uint32]1
+}
+
 # ---------------------------------------------------------------------------------------------------------------
 # SHA256 through .NET: works whatever modules the host process can load.
 function Get-Sha256([string]$Path) {

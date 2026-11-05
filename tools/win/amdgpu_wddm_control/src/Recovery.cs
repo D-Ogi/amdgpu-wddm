@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using AmdgpuWddm;
 
 namespace AmdgpuWddmControl
 {
@@ -32,6 +33,12 @@ namespace AmdgpuWddmControl
         public int StateSchema { get; set; }                        // 2: common service state; 0: old saved snapshot
         public Dictionary<string, long> ParameterOverrides { get; set; } // raw values, distinct from effective defaults
         public long? DwmForceCpu { get; set; }
+        // BD-296: the driver's copy of the kill switch (Parameters DwmForceCpu, RouteSwitch.cs). DriverRouteCopy says
+        // what the probe found: "absent", "dword" (the number is in DwmForceCpuDriver), "no-key" (no Parameters key),
+        // "type <kind>" or "error: <text>". Null: an older recorded snapshot that did not read it; the plans then
+        // judge the router's copy alone, as before BD-296.
+        public string DriverRouteCopy { get; set; }
+        public long? DwmForceCpuDriver { get; set; }
         public long? RequireKmdSwitches { get; set; }
         public string DriverError { get; set; }                     // null when the escapes answered
         public bool ReadFailed { get; set; }                        // the probe itself failed: nothing is known (497.4)
@@ -493,6 +500,7 @@ namespace AmdgpuWddmControl
 
         public static bool Allowed(string path, string name)
         {
+            if (RouteSwitch.Owns(path, name)) return true;
             if (HardwarePointerSetting.Allowed(path, name)) return true;
             if (ScaledStart.Allowed(path, name)) return true;
             if (string.Equals(path, ParametersPath, StringComparison.OrdinalIgnoreCase)) return ParameterNames.Contains(name);
@@ -500,6 +508,74 @@ namespace AmdgpuWddmControl
             if (TdrSetting.Allowed(path, name)) return true;
             if (GameLog.Allowed(path, name)) return true;
             return GraphicsSettings.Allowed(path, name);
+        }
+
+        // ---- the desktop route's kill switch (BD-296) ----------------------------------------------------------
+        // DwmForceCpu has two copies, the router's and the driver's (RouteSwitch.cs). A plan never names one copy
+        // alone: every plan that changes the route adds both through RouteWrites, the router's copy first, and the
+        // helper writes the pair with one RouteSwitch.Write call (RecoveryActions.Apply). RoutePairError is the
+        // rule; the helper checks it before it writes anything, and the unit tests check it over every plan.
+        public static RegWrite[] RouteWrites(uint? value)
+        {
+            return RouteSwitch.Paths.Select(path => value == null ? RegWrite.Remove(path, RouteSwitch.ValueName)
+                : RegWrite.Dword(path, RouteSwitch.ValueName, value.Value)).ToArray();
+        }
+
+        public static bool IsRouteWrite(RegWrite w) { return w != null && !w.DeleteKey && RouteSwitch.Owns(w.Path, w.Name); }
+
+        // Null when every route write of the list is a pair: the router's copy, then at once the driver's copy with
+        // the same change. Else the reason.
+        public static string RoutePairError(IList<RegWrite> writes)
+        {
+            for (int i = 0; i < writes.Count; i++)
+            {
+                var w = writes[i];
+                if (!IsRouteWrite(w)) continue;
+                if (RouteSwitch.IsDriverCopy(w.Path))
+                    return "the driver's copy of " + RouteSwitch.ValueName + " is planned without the router's copy before it";
+                var twin = i + 1 < writes.Count ? writes[i + 1] : null;
+                if (!IsRouteWrite(twin) || !RouteSwitch.IsDriverCopy(twin.Path))
+                    return "the router's copy of " + RouteSwitch.ValueName + " is planned without the driver's copy after it";
+                if (twin.Delete != w.Delete || (!w.Delete && (twin.Kind != "DWord" || w.Kind != "DWord" || twin.Number != w.Number)))
+                    return "the two copies of " + RouteSwitch.ValueName + " are planned with different changes (" + w + "; " + twin + ")";
+                i++;
+            }
+            return null;
+        }
+
+        // The value an undo or a rollback puts back into both copies, from the backup of the router's copy (the
+        // driver's copy when a backup has no router copy). Absent stays absent; a DWORD stays itself; a value of
+        // another type was the CPU route for the router, so it comes back as 1.
+        public static uint? RouteBackupValue(IEnumerable<BackupValue> values)
+        {
+            var copies = values.Where(v => RouteSwitch.Owns(v.Path, v.Name)).ToList();
+            var v0 = copies.FirstOrDefault(v => !RouteSwitch.IsDriverCopy(v.Path)) ?? copies.FirstOrDefault();
+            if (v0 == null || !v0.Existed) return null;
+            return v0.Kind == "DWord" && v0.Number >= 0 && v0.Number <= uint.MaxValue ? (uint)v0.Number : 1u;
+        }
+
+        // The driver's copy holds value (null: absent). An older snapshot that did not read the copy answers yes, so
+        // its plans judge the router's copy alone.
+        static bool DriverCopyHolds(RecoverySnapshot s, uint? value)
+        {
+            if (s.DriverRouteCopy == null) return true;
+            if (value == null) return s.DriverRouteCopy == "absent";
+            return s.DriverRouteCopy == "dword" && s.DwmForceCpuDriver == value.Value;
+        }
+
+        // The two copies differ (BD-296). Null when the snapshot did not read the driver's copy.
+        public static bool? RouteCopiesDiffer(RecoverySnapshot s)
+        {
+            if (s.DriverRouteCopy == null) return null;
+            return !DriverCopyHolds(s, s.DwmForceCpu == null ? (uint?)null : (uint)s.DwmForceCpu.Value);
+        }
+
+        public static string DriverRouteCopyText(RecoverySnapshot s)
+        {
+            if (s.DriverRouteCopy == null) return "not read";
+            if (s.DriverRouteCopy == "dword") return (s.DwmForceCpuDriver ?? 0).ToString(CultureInfo.InvariantCulture);
+            if (s.DriverRouteCopy == "no-key") return "no Parameters key";
+            return s.DriverRouteCopy;
         }
 
         // The CU setter's set only (G-PLAN): CuMode written as 40 or as 24, and CuDisableWgp, CuModeConfirmed and
@@ -1193,6 +1269,24 @@ namespace AmdgpuWddmControl
                     : "GPU route selected; the active route cannot be read.") +
                     " If the desktop goes black or restarts, put it back on the CPU route (desktop-cpu) and restart Windows." + seen, "info", null, null);
 
+            // BD-296: the two copies of the kill switch. The router reads its own copy; the driver reads its copy at
+            // its start and reports no GDI hardware acceleration while it is on. A difference has one repair: the
+            // route action of the router's choice, which writes both copies.
+            var differ = RouteCopiesDiffer(s);
+            if (s.RouterInstalled && differ != null)
+            {
+                string routerCopy = s.DwmForceCpu == null ? "absent" : s.DwmForceCpu.Value.ToString(CultureInfo.InvariantCulture);
+                string copies = "DwmForceCpu: router copy " + routerCopy + ", driver copy " + DriverRouteCopyText(s) + ".";
+                bool routerCpu = (s.DwmForceCpu ?? 0) != 0;
+                if (differ == true)
+                    add("Desktop route switch", copies + " The two copies differ: the desktop follows the router's copy, and the driver " +
+                        (routerCpu ? "keeps GDI hardware acceleration on although the desktop is on the CPU route." : "turns GDI hardware acceleration off at its next start.") +
+                        " Write the router's choice into both copies.", "warn", routerCpu ? "desktop-cpu" : "desktop-gpu",
+                        routerCpu ? "Desktop on the CPU route" : "Desktop on the GPU route");
+                else
+                    add("Desktop route switch", copies + " Both copies agree.", "ok", null, null);
+            }
+
             // Clock control.
             uint? mode = s.P("DpmMode"), max = s.P("DpmMaxMHz"), lastMode = s.P("DpmLastMode"), lastReason = s.P("DpmLastReason");
             uint runReason = s.Dpm != null ? s.Dpm.Reason : lastReason ?? 0;
@@ -1283,6 +1377,8 @@ namespace AmdgpuWddmControl
 
         static bool Same(RecoverySnapshot s, RegWrite w)
         {
+            if (IsRouteWrite(w) && RouteSwitch.IsDriverCopy(w.Path))
+                return DriverCopyHolds(s, w.Delete ? (uint?)null : (uint)w.Number);
             if (!string.Equals(w.Path, ParametersPath, StringComparison.OrdinalIgnoreCase))
                 return w.Name == "DwmForceCpu" && !w.Delete && s.DwmForceCpu == w.Number;
             var now = s.P(w.Name);
@@ -1378,7 +1474,8 @@ namespace AmdgpuWddmControl
                 case "desktop-cpu":
                     bool gpu = action == "desktop-gpu";
                     p.Title = gpu ? "Desktop composition on the GPU" : "Desktop composition on the CPU";
-                    p.Change = "Sets DwmForceCpu " + (gpu ? 0 : 1) + ": the desktop (DWM) uses the " + (gpu ? "GPU" : "CPU") + " route from the next restart of Windows.";
+                    p.Change = "Sets DwmForceCpu " + (gpu ? 0 : 1) + " in both copies (the router's and the driver's): the desktop (DWM) uses the " + (gpu ? "GPU" : "CPU") +
+                        " route from the next restart of Windows.";
                     p.Effect = "at the next restart of Windows";
                     if (!s.RouterInstalled) return Refuse(p, "The release's desktop router is not installed.");
                     if (gpu)
@@ -1388,11 +1485,16 @@ namespace AmdgpuWddmControl
                             return Refuse(p, "The GPU desktop path is closed for this start. Use \"Reopen the GPU desktop path\" first, then restart Windows.");
                         if (!s.GpuDesktopModules) return Refuse(p, "The GPU desktop files of the release are missing. Run the release installer again.");
                     }
-                    p.Writes.Add(RegWrite.Dword(RouterPath, "DwmForceCpu", gpu ? 0u : 1u));
-                    if (Same(s, p.Writes[0]) && s.DwmRoute == (gpu ? "gpu" : "cpu"))
+                    // Both copies (BD-296). A plan with the router's copy right but the driver's copy wrong is not
+                    // refused: it writes both, which puts the two copies back in step.
+                    p.Writes.AddRange(RouteWrites(gpu ? 0u : 1u));
+                    bool selectedAlready = p.Writes.All(w => Same(s, w));
+                    if (selectedAlready && s.DwmRoute == (gpu ? "gpu" : "cpu"))
                         return Refuse(p, "The desktop already runs on the " + (gpu ? "GPU" : "CPU") + " route.");
-                    if (Same(s, p.Writes[0]))
+                    if (selectedAlready)
                         return Refuse(p, "The " + (gpu ? "GPU" : "CPU") + " route is selected already: restart Windows to use it.");
+                    if (Same(s, p.Writes[0]))
+                        p.Notes.Add("The router's copy of DwmForceCpu already selects this route; the driver's copy (" + DriverRouteCopyText(s) + ") differs, and this action writes both.");
                     p.Notes.Add(Bd060Note);
                     p.OfferRestart = true;
                     break;
@@ -1478,7 +1580,7 @@ namespace AmdgpuWddmControl
                     }
                     long cpu;
                     if (!s.DefaultRouter.TryGetValue("DwmForceCpu", out cpu) || (cpu != 0 && cpu != 1)) return Refuse(p, "The release defaults have no valid DwmForceCpu.");
-                    p.Writes.Add(RegWrite.Dword(RouterPath, "DwmForceCpu", (uint)cpu));
+                    p.Writes.AddRange(RouteWrites((uint)cpu));          // both copies (BD-296)
                     if (s.DefaultParameters["EnableGpuPresentBlit"] == 1 && s.DefaultParameters["EnableCddDwmInterop"] == 1 && s.P("InteropClosedReason") != null)
                         p.Writes.Add(RegWrite.Remove(ParametersPath, "InteropClosedReason"));
                     // The waiting time for the graphics, when the installed release names one (manifest.json
@@ -1556,7 +1658,9 @@ namespace AmdgpuWddmControl
                     else p.Notes.Add("Per-game settings are kept.");
                     if (p.Writes.All(w => Same(s, w)) && p.Cu == null && p.GameWrites.Count == 0 && p.TuneSteps.Count == 0)
                         return Refuse(p, "All these settings have their release defaults already.");
-                    p.Change = "Sets " + string.Join(", ", p.Writes.Take(gfxFrom).Select(w => w.Delete ? "removes " + w.Name : w.Name + " " + w.Number)) +
+                    // The driver's copy of DwmForceCpu goes with the router's and is not named twice.
+                    p.Change = "Sets " + string.Join(", ", p.Writes.Take(gfxFrom).Where(w => !(IsRouteWrite(w) && RouteSwitch.IsDriverCopy(w.Path)))
+                        .Select(w => w.Delete ? "removes " + w.Name : w.Name + " " + w.Number)) +
                         (gfxCount > 0 ? "; graphics settings for games: " + gfxCount + " changes back to \"Application decides\"" : "") +
                         (p.Cu != null ? "; graphics cores: " + (p.Cu.Target == CuMode.Full ? "All (40)" : "Standard (24)") : "") +
                         (p.GameWrites.Count > 0 ? "; game settings: " + p.GameWrites.Count + " games" : "") +
@@ -1571,11 +1675,20 @@ namespace AmdgpuWddmControl
                     p.Undoable = false;
                     if (target == null) return Refuse(p, "There is no action to undo.");
                     p.UndoOf = target.File;
+                    bool routeDone = false;
                     foreach (var v in target.Values)
                     {
                         string image = GameImage(v.Path);
                         if (image != null && v.Name == Profiles.ValueName) { p.GameWrites[image] = v.Existed ? v.Text ?? "" : ""; continue; }
                         if (!Allowed(v.Path, v.Name)) return Refuse(p, "The backup names " + v.Name + ", which this app does not change.");
+                        // BD-296: the kill switch goes back into both copies, at the place of its first copy in the
+                        // backup. A backup of a release before BD-296 holds the router's copy only.
+                        if (RouteSwitch.Owns(v.Path, v.Name))
+                        {
+                            if (!routeDone) p.Writes.AddRange(RouteWrites(RouteBackupValue(target.Values)));
+                            routeDone = true;
+                            continue;
+                        }
                         p.Writes.Add(v.Existed ? new RegWrite { Path = v.Path, Name = v.Name, Kind = v.Kind, Number = v.Number, Text = v.Text } : RegWrite.Remove(v.Path, v.Name));
                     }
                     if (s.GfxKeys != null) GraphicsSettings.AddKeyRemovals(p.Writes, s.GfxKeys);
