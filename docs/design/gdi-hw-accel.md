@@ -967,10 +967,21 @@ surface:
   sub-rectangles, and in one nonpaged pool block for more. If that block is not available, the
   command is drawn in the given order and counted as `unordered`. The edges are not stored. The
   function finds them again with a sorted window on one axis. The window holds the blocks whose low
-  edge is within the longest block's extent. On a host CPU, 12287 sub-rectangles (the most that a
-  192 KiB command buffer holds) take about 3 ms for chains of strips or cells in either direction.
-  The worst case, a tall block and a wide block that make the window the whole span, takes
-  about 170 ms.
+  edge is within the longest block's extent.
+- The order runs in `DxgkDdiRenderKm` at `PASSIVE_LEVEL` (`Bc250WddmRenderGdi` refuses any other
+  IRQL) and holds no spin lock: `GdiDmaLock` is held only for the claim and for the publish. It is
+  CPU work before the submission, so it cannot cause a TDR. A slow order delays only that GDI command.
+  Cost on the host CPU (b0fd3eba):
+
+  | Case | Time |
+  |---|---|
+  | 40-strip scroll | median 2.1 us, maximum 48 us |
+  | 3000 random commands of up to 201 items | median 4.4 us, maximum 106 us |
+  | 12287 sub-rectangles (the most that a 192 KiB command buffer holds), chains of strips or cells | about 2.5 ms |
+  | 12287, a tall block and a wide block that make the window the whole span (constructed worst case) | 163 to 177 ms |
+
+  There is no time cap. A fallback would draw in the given order and can give wrong pixels. A
+  picture with no wrong pixels and a rare delay is the better result.
 - The hazards are all write-after-read: no pixel of the result depends on a pixel that the same
   command wrote. So no cache invalidation is necessary between bands or items for correctness, only
   the completion of the earlier reads.
