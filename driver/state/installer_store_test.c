@@ -279,6 +279,83 @@ static void RemovalRecords(const BYTE *snapshot,UINT bytes)
     CHECK(!Handles && !LockCount);
     HeapFree(GetProcessHeap(),0,other);HeapFree(GetProcessHeap(),0,record);HeapFree(GetProcessHeap(),0,pending);
 }
+// BD-298: the handoff of an install that stopped before its acknowledgment moves aside as evidence.
+static void AbandonRecords(const BYTE *snapshot,UINT bytes)
+{
+    static const WCHAR pending[]=L"fixture\\amdgpu-wddm\\StateV2\\pending.bin",
+        retired_name[]=L"fixture\\amdgpu-wddm\\StateV2\\retired-01010101010101010101010101010101-pending.bin";
+    BYTE tx[16],other_tx[16],device[32],*other=HeapAlloc(GetProcessHeap(),0,bytes);char version[32]={0},newer[32]={0};
+    UINT i,total;DWORD error;FAKE_FILE *f;
+    memset(tx,1,16);memset(other_tx,2,16);memset(device,7,32);strcpy_s(version,32,"0.7.216.102");strcpy_s(newer,32,"0.7.216.110");
+    memcpy(other,snapshot,bytes);OtherCatalog(other,bytes);
+    // The handoff of this transaction moves aside with its bytes; a retry and a computer without a handoff succeed.
+    Reset();CHECK(!AmdgpuWindowsPublishHandoff(snapshot,bytes));
+    CHECK(!AmdgpuWindowsAbandonHandoff(tx,device,version));CHECK(!Find(pending) && Holds(retired_name,snapshot,bytes));
+    CHECK(!Handles && !LockCount);
+    CHECK(!AmdgpuWindowsAbandonHandoff(tx,device,version));CHECK(Holds(retired_name,snapshot,bytes));
+    Reset();CHECK(!AmdgpuWindowsAbandonHandoff(tx,device,version));CHECK(!Find(retired_name) && !Handles && !LockCount);
+    // The handoff of another state catalog: the stopped install was of another release.
+    Reset();Put(pending,other,bytes);CHECK(!AmdgpuWindowsAbandonHandoff(tx,device,version));
+    CHECK(!Find(pending) && Holds(retired_name,other,bytes));
+    // The handoff of another transaction, device or product stays.
+    Reset();Put(pending,other,bytes);
+    CHECK(AmdgpuWindowsAbandonHandoff(other_tx,device,version)==ERROR_REVISION_MISMATCH);
+    device[0]^=1;CHECK(AmdgpuWindowsAbandonHandoff(tx,device,version)==ERROR_REVISION_MISMATCH);device[0]^=1;
+    CHECK(AmdgpuWindowsAbandonHandoff(tx,device,newer)==ERROR_REVISION_MISMATCH);
+    CHECK(Holds(pending,other,bytes) && !Find(retired_name) && !Handles && !LockCount);
+    // Damage of either catalog, a short file and a wrong ACL stop the step, and the file stays.
+    Reset();Put(pending,other,bytes);Find(pending)->data[0]^=1;
+    CHECK(AmdgpuWindowsAbandonHandoff(tx,device,version)==ERROR_INVALID_DATA);CHECK(Find(pending) && !Find(retired_name));
+    Reset();Put(pending,other,bytes);Find(pending)->data[bytes-1]^=1;
+    CHECK(AmdgpuWindowsAbandonHandoff(tx,device,version)==ERROR_INVALID_DATA);CHECK(Find(pending) && !Find(retired_name));
+    Reset();Put(pending,snapshot,bytes);Find(pending)->data[bytes-1]^=1;
+    CHECK(AmdgpuWindowsAbandonHandoff(tx,device,version)==ERROR_INVALID_DATA);CHECK(Find(pending) && !Find(retired_name));
+    Reset();Put(pending,snapshot,16);
+    CHECK(AmdgpuWindowsAbandonHandoff(tx,device,version)==ERROR_INVALID_DATA);CHECK(Find(pending) && !Find(retired_name));
+    Reset();Put(pending,snapshot,bytes);Find(pending)->security=2;
+    CHECK(AmdgpuWindowsAbandonHandoff(tx,device,version)==ERROR_INVALID_SECURITY_DESCR);CHECK(Find(pending) && !Find(retired_name));
+    CHECK(!Handles && !LockCount);
+    // Evidence is never overwritten.
+    Reset();Put(pending,snapshot,bytes);Put(retired_name,other,bytes);
+    CHECK(AmdgpuWindowsAbandonHandoff(tx,device,version)==ERROR_ALREADY_EXISTS);
+    CHECK(Holds(pending,snapshot,bytes) && Holds(retired_name,other,bytes));
+    // The same transaction published its handoff again after an earlier abandon: a retired copy with the same bytes
+    // completes the step, and the pending file goes after the byte compare. The retired copy stays.
+    Reset();Put(pending,snapshot,bytes);Put(retired_name,snapshot,bytes);
+    CHECK(!AmdgpuWindowsAbandonHandoff(tx,device,version));CHECK(!Find(pending) && Holds(retired_name,snapshot,bytes));
+    CHECK(!Handles && !LockCount);
+    Reset();Put(pending,other,bytes);Put(retired_name,other,bytes);
+    CHECK(!AmdgpuWindowsAbandonHandoff(tx,device,version));CHECK(!Find(pending) && Holds(retired_name,other,bytes));
+    // One changed byte in the retired copy: both files stay.
+    Reset();Put(pending,snapshot,bytes);Put(retired_name,snapshot,bytes);Find(retired_name)->data[bytes-1]^=1;
+    CHECK(AmdgpuWindowsAbandonHandoff(tx,device,version)==ERROR_ALREADY_EXISTS);CHECK(Holds(pending,snapshot,bytes) && Find(retired_name));
+    Reset();Put(pending,snapshot,bytes);Put(retired_name,snapshot,bytes-1);
+    CHECK(AmdgpuWindowsAbandonHandoff(tx,device,version)==ERROR_ALREADY_EXISTS);CHECK(Holds(pending,snapshot,bytes));
+    // A retired copy with a wrong ACL is not evidence of this step.
+    Reset();Put(pending,snapshot,bytes);Put(retired_name,snapshot,bytes);Find(retired_name)->security=2;
+    CHECK(AmdgpuWindowsAbandonHandoff(tx,device,version)==ERROR_INVALID_SECURITY_DESCR);CHECK(Holds(pending,snapshot,bytes));
+    CHECK(!Handles && !LockCount);
+    // Every IO fault of the compare path keeps the pending file or completes the step, and a retry completes it.
+    Reset();Put(pending,snapshot,bytes);Put(retired_name,snapshot,bytes);IoCount=0;
+    CHECK(!AmdgpuWindowsAbandonHandoff(tx,device,version));total=IoCount;
+    for(i=1;i<=total;i++) {
+        Reset();Put(pending,snapshot,bytes);Put(retired_name,snapshot,bytes);IoCount=0;FailAt=i;
+        error=AmdgpuWindowsAbandonHandoff(tx,device,version);FailAt=0;
+        CHECK(error!=0);CHECK(Holds(retired_name,snapshot,bytes) && (!Find(pending) || Holds(pending,snapshot,bytes)));
+        CHECK(!Handles && !LockCount);
+        CHECK(!AmdgpuWindowsAbandonHandoff(tx,device,version));CHECK(!Find(pending) && Holds(retired_name,snapshot,bytes));
+    }
+    // Every IO fault leaves the handoff under exactly one of its two names, and no handle or lock open.
+    Reset();Put(pending,snapshot,bytes);IoCount=0;CHECK(!AmdgpuWindowsAbandonHandoff(tx,device,version));total=IoCount;
+    for(i=1;i<=total;i++) {
+        Reset();Put(pending,snapshot,bytes);IoCount=0;FailAt=i;error=AmdgpuWindowsAbandonHandoff(tx,device,version);FailAt=0;
+        CHECK(error!=0);f=Find(pending);
+        CHECK((f && !Find(retired_name) && Holds(pending,snapshot,bytes)) || (!f && Holds(retired_name,snapshot,bytes)));
+        CHECK(!Handles && !LockCount);
+        CHECK(!AmdgpuWindowsAbandonHandoff(tx,device,version));CHECK(!Find(pending) && Holds(retired_name,snapshot,bytes));
+    }
+    HeapFree(GetProcessHeap(),0,other);
+}
 int main(void)
 {
     BYTE *snapshot=HeapAlloc(GetProcessHeap(),0,AMDGPU_TRANSFER_MAX_BYTES);AMDGPU_TRANSFER_HEADER h={0};UINT bytes=0,total,i;
@@ -332,6 +409,7 @@ int main(void)
         if(read)HeapFree(GetProcessHeap(),0,read);CHECK(!Handles && !LockCount);
     }
     RemovalRecords(snapshot,bytes);
+    AbandonRecords(snapshot,bytes);
     Reset();CHECK(!AmdgpuWindowsPublishHandoff(snapshot,bytes));IoCount=0;
     CHECK(!AmdgpuWindowsAcknowledgeHandoff(h.transaction,h.device_hash,h.destination_version));total=IoCount;
     for(i=1;i<=total;i++) {

@@ -15,6 +15,10 @@ static BYTE saved[AMDGPU_TRANSFER_MAX_BYTES],removed[AMDGPU_TRANSFER_MAX_BYTES];
 static UINT saved_bytes,removed_bytes,origin,failure,freeze,stop,publish,archives,captured,checks,strict_opens,source_opens;
 static DWORD board_error,pending_error,remove_error,origin_error,device_error,removal_moves,removal_keeps,removal_own;static BOOL current_package;
 static int failed;
+// BD-298: the writer lock depth, the owner of the store freeze (the first byte of its transaction, 0 for none), and the
+// pending.bin that the abandon step moved aside.
+static UINT lock_depth,frozen_by,thawed,pending_damaged,retired_pending_bytes;static DWORD thaw_error;
+static BYTE retired_pending[AMDGPU_TRANSFER_MAX_BYTES];
 ULONG AmdgpuInstallerTestBoot=91;
 static BYTE rollback[AMDGPU_ROLLBACK_MAX],completed[AMDGPU_ROLLBACK_MAX],active_rollback[AMDGPU_ROLLBACK_MAX];
 static DWORD rb_bytes,complete_bytes,active_bytes,restores,retired,enabled,source_removed,target_error,restore_error,retire_error,complete_error;
@@ -24,7 +28,13 @@ static void Reset(UINT source)
     saved_bytes=removed_bytes=failure=freeze=stop=publish=archives=captured=strict_opens=source_opens=0;
     board_error=pending_error=remove_error=origin_error=device_error=removal_moves=removal_keeps=removal_own=0;origin=source;current_package=FALSE;
     rb_bytes=complete_bytes=active_bytes=restores=retired=enabled=source_removed=target_error=restore_error=retire_error=complete_error=0;
+    lock_depth=frozen_by=thawed=pending_damaged=retired_pending_bytes=0;thaw_error=0;
     AmdgpuInstallerTestBoot=91;
+}
+static DWORD RunAs(PCWSTR op,PCWSTR transaction,PCWSTR product)
+{
+    WCHAR *args[]={L"test",(WCHAR*)op,(WCHAR*)transaction,(WCHAR*)product,L"PCI\\VEN_1002&DEV_13FE\\FIXTURE"};
+    return AmdgpuInstallerTestExecute(5,args);
 }
 static DWORD Roll(PCWSTR op)
 {
@@ -65,7 +75,20 @@ void AmdgpuWindowsStateClose(AMDGPU_WINDOWS_STATE *s){(void)s;}
 UINT AmdgpuWindowsStateIdentity(AMDGPU_WINDOWS_STATE *s,BYTE generation[16],DWORD *error)
 {(void)s;memset(generation,2,16);*error=failure==2?ERROR_REVISION_MISMATCH:0;return *error?AMDGPU_STATE_SCHEMA:0;}
 UINT AmdgpuWindowsStateFreeze(AMDGPU_WINDOWS_STATE *s,const BYTE tx[16],DWORD *error)
-{(void)s;(void)tx;freeze++;*error=failure==3?ERROR_WRITE_FAULT:0;return *error?AMDGPU_STATE_IO:0;}
+{(void)s;freeze++;*error=failure==3?ERROR_WRITE_FAULT:0;if(!*error && !frozen_by)frozen_by=tx[0];return *error?AMDGPU_STATE_IO:0;}
+UINT AmdgpuWindowsStateFreezeOwner(AMDGPU_WINDOWS_STATE *s,const BYTE tx[16],DWORD *error)
+{(void)s;CHECK(lock_depth==1);*error=0;return !frozen_by?AMDGPU_STATE_INCOMPLETE:frozen_by==tx[0]?0:AMDGPU_STATE_SCHEMA;}
+// The freeze is released only after the handoff moved aside: the KMD never finds a handoff without its freeze.
+UINT AmdgpuWindowsStateCancelFreeze(AMDGPU_WINDOWS_STATE *s,const BYTE tx[16],DWORD *error)
+{
+    (void)s;CHECK(lock_depth==1 && !saved_bytes);*error=thaw_error;if(*error)return AMDGPU_STATE_IO;
+    if(frozen_by!=tx[0])return frozen_by?AMDGPU_STATE_SCHEMA:AMDGPU_STATE_INCOMPLETE;frozen_by=0;thawed++;return 0;
+}
+// The device identity of the Device fixture. The abandon step computes it without the device.
+unsigned int AmdgpuStateDeviceIdentity(const unsigned short *id,unsigned int characters,unsigned char hash[32])
+{(void)id;if(!characters)return AMDGPU_STATE_INVALID_ARGUMENT;memset(hash,7,32);return 0;}
+DWORD AmdgpuStateWriterLock(HANDLE *lock){lock_depth++;*lock=(HANDLE)1;return 0;}
+void AmdgpuStateWriterUnlock(HANDLE lock){if(lock)lock_depth--;}
 UINT AmdgpuWindowsStateRetire(AMDGPU_WINDOWS_STATE *s,const BYTE tx[16],DWORD *error)
 {(void)s;(void)tx;CHECK(restores && !enabled);*error=retire_error;if(*error)return AMDGPU_STATE_IO;retired++;origin=AMDGPU_TRANSFER_LEGACY;return 0;}
 // The installed generation holds the hang recovery record of an earlier 0x116 (docs/design/hang-recovery.md):
@@ -223,6 +246,80 @@ DWORD AmdgpuWindowsAcknowledgeHandoff(const BYTE tx[16],const BYTE device[32],co
     AMDGPU_TRANSFER_HEADER h;if(AmdgpuTransferCheck(saved,saved_bytes,&h))return ERROR_INVALID_DATA;
     return memcmp(tx,h.transaction,16)||memcmp(device,h.device_hash,32)||strcmp(version,h.destination_version)?ERROR_REVISION_MISMATCH:0;
 }
+// The rules of the production adapter (installer_store_test.c tests its files): no handoff is success, a damaged one
+// and the handoff of another transaction stay, and a retired name is never overwritten.
+DWORD AmdgpuWindowsAbandonHandoff(const BYTE tx[16],const BYTE device[32],const char version[32])
+{
+    AMDGPU_TRANSFER_HEADER h;CHECK(lock_depth==1);
+    if(pending_error)return pending_error;if(!saved_bytes)return 0;if(pending_damaged)return ERROR_INVALID_DATA;
+    memcpy(&h,saved,sizeof(h));
+    if(memcmp(tx,h.transaction,16)||memcmp(device,h.device_hash,32)||memcmp(version,h.destination_version,32))return ERROR_REVISION_MISMATCH;
+    if(retired_pending_bytes) {
+        if(retired_pending_bytes!=saved_bytes || memcmp(retired_pending,saved,saved_bytes))return ERROR_ALREADY_EXISTS;
+        saved_bytes=0;return 0;
+    }
+    memcpy(retired_pending,saved,saved_bytes);retired_pending_bytes=saved_bytes;saved_bytes=0;return 0;
+}
+// BD-298: an install that stopped after its prepare is abandoned before an uninstall or the install of another package.
+static void AbandonTests(void)
+{
+    static const WCHAR tx[]=L"01010101010101010101010101010101",other[]=L"02020202020202020202020202020202";
+    AMDGPU_TRANSFER_HEADER h;UINT published,opens;
+    // An update in place: the handoff and the freeze of the transaction. Both go, the handoff first; a retry finds
+    // nothing more to do. The install of another package then prepares its own transaction.
+    Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!Run(L"prepare",tx));CHECK(saved_bytes && frozen_by==1);published=saved_bytes;
+    CHECK(!Run(L"abandon",tx));CHECK(!saved_bytes && retired_pending_bytes==published && !frozen_by && thawed==1 && !lock_depth);
+    CHECK(!AmdgpuTransferCheck(retired_pending,retired_pending_bytes,&h) && h.transaction[0]==1);
+    CHECK(!Run(L"abandon",tx));CHECK(thawed==1 && retired_pending_bytes==published && !lock_depth);
+    freeze=0;CHECK(!RunAs(L"prepare",other,L"0.7.216.110"));CHECK(freeze==1 && publish==2 && frozen_by==2 && saved_bytes);
+    CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h) && h.transaction[0]==2 && !strcmp(h.destination_version,"0.7.216.110"));
+    // The KMD applied the handoff (Active names the transaction, the store holds no freeze): only the file moves.
+    Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!Run(L"prepare",tx));frozen_by=0;
+    CHECK(!Run(L"abandon",tx));CHECK(!saved_bytes && retired_pending_bytes && !thawed && !lock_depth);
+    // A prepare that froze the store and failed before it published: the freeze is released.
+    Reset(AMDGPU_TRANSFER_CURRENT);failure=5;CHECK(Run(L"prepare",tx)==ERROR_WRITE_FAULT);failure=0;CHECK(!saved_bytes && frozen_by==1);
+    CHECK(!Run(L"abandon",tx));CHECK(!frozen_by && thawed==1 && !retired_pending_bytes);
+    // No installed state (a fresh or legacy install): the handoff moves; the store is not opened.
+    Reset(AMDGPU_TRANSFER_FRESH);CHECK(!Run(L"prepare",tx));opens=source_opens+strict_opens;
+    CHECK(!Run(L"abandon",tx));CHECK(!saved_bytes && retired_pending_bytes && source_opens+strict_opens==opens && !thawed);
+    Reset(AMDGPU_TRANSFER_LEGACY);CHECK(!Run(L"prepare",tx));CHECK(!Run(L"abandon",tx));CHECK(!saved_bytes && retired_pending_bytes);
+    // No handoff and no freeze: nothing to do.
+    Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!Run(L"abandon",tx));CHECK(!thawed && !retired_pending_bytes && !lock_depth);
+    // The handoff of another transaction, product or device stays, and the freeze stays with it.
+    Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!Run(L"prepare",tx));published=saved_bytes;frozen_by=0;
+    CHECK(Run(L"abandon",other)==ERROR_REVISION_MISMATCH);CHECK(saved_bytes==published && !retired_pending_bytes);
+    CHECK(RunAs(L"abandon",tx,L"0.7.216.103")==ERROR_REVISION_MISMATCH);CHECK(saved_bytes==published);
+    saved[offsetof(AMDGPU_TRANSFER_HEADER,device_hash)]^=1;
+    CHECK(Run(L"abandon",tx)==ERROR_REVISION_MISMATCH);CHECK(saved_bytes==published && !lock_depth);
+    // A freeze of another transaction stops the step before any change.
+    Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!Run(L"prepare",tx));frozen_by=9;
+    CHECK(Run(L"abandon",tx)==ERROR_REVISION_MISMATCH);CHECK(saved_bytes && !retired_pending_bytes && frozen_by==9 && !lock_depth);
+    // A damaged handoff, or one that cannot be read, stays, and so does the freeze.
+    Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!Run(L"prepare",tx));pending_damaged=1;
+    CHECK(Run(L"abandon",tx)==ERROR_INVALID_DATA);CHECK(saved_bytes && frozen_by==1 && !thawed && !lock_depth);
+    pending_damaged=0;pending_error=ERROR_ACCESS_DENIED;
+    CHECK(Run(L"abandon",tx)==ERROR_ACCESS_DENIED);CHECK(saved_bytes && frozen_by==1);pending_error=0;
+    // A retired name that exists already stops the move; the evidence is not overwritten.
+    retired_pending_bytes=1;CHECK(Run(L"abandon",tx)==ERROR_ALREADY_EXISTS);CHECK(saved_bytes && frozen_by==1 && retired_pending_bytes==1);
+    // A retired copy with the same bytes completes the step: the pending file goes and the freeze is released.
+    memcpy(retired_pending,saved,saved_bytes);retired_pending_bytes=saved_bytes;
+    CHECK(!Run(L"abandon",tx));CHECK(!saved_bytes && !frozen_by && thawed==1 && retired_pending_bytes && !lock_depth);
+    // A failed release of the freeze is retried: the handoff has moved already, and the next run releases the freeze.
+    Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!Run(L"prepare",tx));thaw_error=ERROR_WRITE_FAULT;
+    CHECK(Run(L"abandon",tx)==ERROR_WRITE_FAULT);CHECK(!saved_bytes && frozen_by==1 && !lock_depth);
+    thaw_error=0;CHECK(!Run(L"abandon",tx));CHECK(!frozen_by && thawed==1);
+    // The installed state and the service of the store must be readable.
+    Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!Run(L"prepare",tx));origin_error=ERROR_ACCESS_DENIED;
+    CHECK(Run(L"abandon",tx)==ERROR_ACCESS_DENIED);CHECK(saved_bytes && frozen_by==1 && !lock_depth);
+    origin_error=0;failure=1;CHECK(Run(L"abandon",tx)==ERROR_ACCESS_DENIED);CHECK(saved_bytes && frozen_by==1 && !lock_depth);failure=0;
+    // The abandon step does not need the device: a device error does not stop it.
+    device_error=ERROR_NOT_FOUND;CHECK(!Run(L"abandon",tx));CHECK(!saved_bytes && !frozen_by);device_error=0;
+    // A rollback in progress, a zero transaction and an invalid product stop the step before it reads anything.
+    Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!Run(L"prepare",tx));active_bytes=1;
+    CHECK(Run(L"abandon",tx)==ERROR_BUSY);CHECK(saved_bytes && frozen_by==1);active_bytes=0;
+    CHECK(Run(L"abandon",L"00000000000000000000000000000000")==ERROR_INVALID_PARAMETER);
+    CHECK(RunAs(L"abandon",tx,L"0.7.216")==ERROR_INVALID_PARAMETER);CHECK(saved_bytes && frozen_by==1 && !lock_depth);
+}
 int main(void)
 {
     static const WCHAR tx[]=L"01010101010101010101010101010101";
@@ -347,5 +444,6 @@ int main(void)
     CHECK(Roll(L"rollback-capture")==ERROR_WRITE_FAULT);CHECK(stop && !enabled && !rb_bytes);
     Reset(AMDGPU_TRANSFER_CURRENT);current_package=TRUE;board_error=ERROR_INVALID_DATA;
     CHECK(Roll(L"rollback-capture")==ERROR_INVALID_DATA);CHECK(!rb_bytes && !source_removed && !enabled);
+    AbandonTests();
     printf("installer worker: %u checks, %u failures\n",checks,failed);return failed?1:0;
 }

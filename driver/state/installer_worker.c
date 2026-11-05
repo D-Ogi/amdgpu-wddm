@@ -13,6 +13,7 @@
 #include "identity.h"
 #include "installer_rollback.h"
 #include "installer_history.h"
+#include "windows_lock.h"
 #include <bcrypt.h>
 #include <newdev.h>
 
@@ -407,6 +408,32 @@ static UINT ArchiveFetch(void *context,UINT source,const AMDGPU_STATE_SPEC *spec
     if(!result){if(value->bytes>capacity)return AMDGPU_STATE_BUFFER;memcpy(out,data,value->bytes);}
     return result;
 }
+// BD-298: abandon <transaction> <product> <device>. An install stopped after its prepare and before its
+// acknowledgment (a power loss, a blocked program) leaves its handoff and, for an update in place, its freeze. The
+// installer abandons that transaction before an uninstall or the install of another package. Under the writer lock:
+// a freeze of another transaction stops the step before any change; the pending.bin of this transaction moves aside
+// as evidence; the freeze of this transaction is released. If the KMD has already applied the handoff, Active names
+// this transaction and the store holds no freeze: only the file moves. The step does not need the device present,
+// and a retry after any failure repeats only what remains.
+static DWORD Abandon(PCWSTR device,AMDGPU_TRANSFER_HEADER *h)
+{
+    AMDGPU_WINDOWS_STATE *state=NULL;HANDLE lock=NULL;DWORD error;UINT origin=0,result,owner=AMDGPU_STATE_ABSENT;
+    if(wcslen(device)>MAX_DEVICE_ID_LEN ||
+       AmdgpuStateDeviceIdentity((const unsigned short*)device,(UINT)wcslen(device),h->device_hash))return ERROR_INVALID_PARAMETER;
+    error=AmdgpuStateWriterLock(&lock);if(error)return error;
+    error=Origin(&origin);if(error)goto done;
+    if(origin==AMDGPU_TRANSFER_CURRENT) {
+        // The installed generation can be of an earlier catalog, or of the catalog of the stopped install.
+        result=AmdgpuWindowsStateOpenSource(&state,1,&error);if(result){error=AsError(result,error);goto done;}
+        owner=AmdgpuWindowsStateFreezeOwner(state,h->transaction,&error);
+        if(owner==AMDGPU_STATE_SCHEMA){error=ERROR_REVISION_MISMATCH;goto done;}
+        if(owner!=AMDGPU_STATE_OK && owner!=AMDGPU_STATE_INCOMPLETE && owner!=AMDGPU_STATE_ABSENT){error=AsError(owner,error);goto done;}
+    }
+    error=AmdgpuWindowsAbandonHandoff(h->transaction,h->device_hash,h->destination_version);if(error)goto done;
+    if(owner==AMDGPU_STATE_OK){result=AmdgpuWindowsStateCancelFreeze(state,h->transaction,&error);if(result)error=AsError(result,error);}
+done:
+    if(state)AmdgpuWindowsStateClose(state);AmdgpuStateWriterUnlock(lock);return error;
+}
 static DWORD Execute(DWORD argc,WCHAR **argv)
 {
     AMDGPU_TRANSFER_HEADER h={0},previous;AMDGPU_WINDOWS_STATE *state=NULL;
@@ -416,11 +443,12 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
     // ServiceMain receives service name followed by this fixed four-argument
     // protocol. All source state is read by this process, never from caller data.
     if(argc!=5 || (!wcscmp(argv[1],L"prepare")?FALSE:
-       !wcscmp(argv[1],L"ack")?FALSE:!wcscmp(argv[1],L"archive")?FALSE:TRUE) ||
+       !wcscmp(argv[1],L"ack")?FALSE:!wcscmp(argv[1],L"archive")?FALSE:!wcscmp(argv[1],L"abandon")?FALSE:TRUE) ||
        !Hex(argv[2],h.transaction) || !Version(argv[3],h.destination_version))return ERROR_INVALID_PARAMETER;
     error=AmdgpuWindowsRollbackRead(NULL,2,&pending,&pending_bytes);
     if(!error){HeapFree(GetProcessHeap(),0,pending);return ERROR_BUSY;}
     if(error!=ERROR_FILE_NOT_FOUND)return error;
+    if(!wcscmp(argv[1],L"abandon"))return Abandon(argv[4],&h);
     archive=!wcscmp(argv[1],L"archive");
     error=Device(argv[4],&h,FALSE);if(error)return error;
     if(!wcscmp(argv[1],L"ack"))return AmdgpuWindowsAcknowledgeHandoff(h.transaction,h.device_hash,h.destination_version);
