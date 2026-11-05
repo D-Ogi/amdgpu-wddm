@@ -467,7 +467,7 @@ is loaded), `--smoke-perf <file>` (the window built hidden: no live timer, no ti
 5 s, private memory under 300 MB), `--smoke-loading <file>` (the loading window in both its states, six
 languages, four scales, text at 100, 150 and 225 %, a 1024x768 and a large screen, with the checks of the sign-in
 notice) and `--smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--no-nagi]
-[--switch-to xx] [--fixture <snapshot.json>] [--work-area <w>x<h>]` in 58 runs: six languages at 1, 1.25, 1.5 and 2, with
+[--switch-to xx] [--fixture <snapshot.json>] [--work-area <w>x<h>]` in 75 runs: six languages at 1, 1.25, 1.5 and 2, with
 `test/snapshot-bd059.json` and the tuning snapshots as the fixtures, text at 150 %, two runs with the guide
 character off (she is on in every other run, as she is after an install), four language
 switches, and six runs that name the screen the window is drawn for (`--work-area`, in logical units: 800x600,
