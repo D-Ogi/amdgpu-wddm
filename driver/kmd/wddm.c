@@ -39,6 +39,19 @@
 #ifndef ULONGLONG_MAX
 #define ULONGLONG_MAX ULLONG_MAX
 #endif
+
+// ADR 0019 stage B4: a lab bisection compiles fixed images with /DBC250_WDDM_LEVEL=0x2100 and similar values in
+// place of the default DXGK_DRIVERCAPS.WDDMVersion (WddmDriverCaps); there is no runtime setting yet. The level must
+// be one that dxgkrnl knows and that this table and these answers were read against. Without the define the image
+// is the default one, which tools/wddm_contract_check reads.
+#ifdef BC250_WDDM_LEVEL
+C_ASSERT(BC250_WDDM_LEVEL == DXGKDDI_WDDMv2 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_1 ||
+         BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_2 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_3 ||
+         BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_4 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_5 ||
+         BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_6 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_7 ||
+         BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_8 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_9);
+#endif
+
 #include "bc250kmd_escape.h"     // BC250_PJ_* record kinds of the paging journal
 #include "regs.generated.h"      // the CP/GRBM/GCVM offsets of the timeout snapshot (tools/regcalc)
 #include "ih_fault.h"            // GCVM_L2_PROTECTION_FAULT_STATUS field decode and the gfxhub CID names
@@ -5057,7 +5070,11 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // (Bc250UpdateMonitorLinkInfo, lab arm 1 of 352c4210). What the level changes without a new DDI: the D3D11
     // runtime asks our UMD for its WDDM 2.2 table (KMT version >= 2.2, BD-153), display state synchronization is the
     // 2.3 one, and the type 16 answer below becomes necessary. Every optional 2.1-2.9 cap stays zero (RtlZeroMemory above).
+#ifdef BC250_WDDM_LEVEL
+    caps->WDDMVersion = (DXGK_WDDMVERSION)BC250_WDDM_LEVEL;   // a lab bisection image (the define above)
+#else
     caps->WDDMVersion = DXGKDDI_WDDMv2_9;
+#endif
     caps->HighestAcceptableAddress.QuadPart = -1;       // no addressing limit; too low a value fails the load
     caps->SupportNonVGA = TRUE;
     caps->NumberOfSwizzlingRanges = 0;                  // swizzling range support has been removed from WDDM

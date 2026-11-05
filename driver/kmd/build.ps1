@@ -36,7 +36,8 @@ param(
     [switch]$CompileOnly,           # compile and link, no quality gates, no catalog, no signature (a gate)
     [switch]$Lab,                   # Compatibility alias for -Flavour lab (-Lab:$false means release).
                                     # When both are explicit they must agree. Flavour alone controls the build.
-    [string]$QualityWorkspace = ''
+    [string]$QualityWorkspace = '',
+    [string]$WddmLevel = ''         # lab flavour only: /DBC250_WDDM_LEVEL for a fixed bisection image, e.g. 0x2400
 )
 
 $ErrorActionPreference = 'Stop'
@@ -157,6 +158,14 @@ $clFlags = @('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/we4013', '/we40
     "/Fo$obj\", "/Fd$obj\cl.pdb")
 # BD-167: the lab flavour adds the raw diagnostic escapes; the release flavour (the default) does not contain them.
 if ($Flavour -eq 'lab') { $clFlags += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
+# ADR 0019 stage B4: a lab bisection image reports this DXGK_DRIVERCAPS.WDDMVersion in place of the default
+# (wddm.c BC250_WDDM_LEVEL, whose C_ASSERT names the accepted set). A release package never takes it.
+if ($WddmLevel) {
+    if ($WddmLevel -notmatch '^0x2[0-9]00$') { throw "-WddmLevel must look like 0x2400, not '$WddmLevel'" }
+    if ($Flavour -ne 'lab') { throw '-WddmLevel builds a lab bisection image; use -Flavour lab' }
+    $clFlags += "/DBC250_WDDM_LEVEL=$WddmLevel"
+    Write-Host "wddm level: $WddmLevel (lab bisection image)"
+}
 Write-Host ("flavour: {0}" -f ($(if ($Flavour -eq 'lab') { 'LAB (raw diagnostic escapes compiled in, gated by test signing + LabDiagnostics)' } else { 'RELEASE (no raw diagnostic escapes)' })))
 # Emit the exact per-file commands for targeted static analysis and build auditing.
 # Only these DC adapters require C11 static assertions/compound literals. Keep
