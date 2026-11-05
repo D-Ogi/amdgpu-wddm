@@ -1024,6 +1024,20 @@
           ],
           "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
           "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        },
+        {
+          "name": "memory-allocation-abi",
+          "run": "tools/build/test-umd-memory-allocation-abi.ps1",
+          "args": [
+            "-MesaSource",
+            "{src}",
+            "-OutputDir",
+            "{testout}/memory-abi",
+            "-Arch",
+            "x64"
+          ],
+          "requires": "src/amd/vulkan/radv_bc250_memory.h",
+          "pass": "^PASS memory allocation ABI"
         }
       ]
     },
@@ -1092,6 +1106,20 @@
           ],
           "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
           "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        },
+        {
+          "name": "memory-allocation-abi",
+          "run": "tools/build/test-umd-memory-allocation-abi.ps1",
+          "args": [
+            "-MesaSource",
+            "{src}",
+            "-OutputDir",
+            "{testout}/memory-abi",
+            "-Arch",
+            "x86"
+          ],
+          "requires": "src/amd/vulkan/radv_bc250_memory.h",
+          "pass": "^PASS memory allocation ABI"
         }
       ]
     },
@@ -1472,6 +1500,20 @@
           "requires": "src/util/tests/cache_win32/build-tests.py",
           "summary": "^\\[ +(?:OK|FAILED) +\\] \\w+\\.\\w+ \\(",
           "pass": "^\\[  PASSED  \\] \\d+ tests?\\."
+        },
+        {
+          "name": "memory-allocation-abi",
+          "run": "tools/build/test-umd-memory-allocation-abi.ps1",
+          "args": [
+            "-MesaSource",
+            "{src}",
+            "-OutputDir",
+            "{testout}/memory-abi",
+            "-Arch",
+            "x64"
+          ],
+          "requires": "src/amd/vulkan/radv_bc250_memory.h",
+          "pass": "^PASS memory allocation ABI"
         }
       ]
     },
@@ -1541,6 +1583,20 @@
           ],
           "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
           "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        },
+        {
+          "name": "memory-allocation-abi",
+          "run": "tools/build/test-umd-memory-allocation-abi.ps1",
+          "args": [
+            "-MesaSource",
+            "{src}",
+            "-OutputDir",
+            "{testout}/memory-abi",
+            "-Arch",
+            "x86"
+          ],
+          "requires": "src/amd/vulkan/radv_bc250_memory.h",
+          "pass": "^PASS memory allocation ABI"
         }
       ]
     },
