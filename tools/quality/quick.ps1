@@ -795,10 +795,6 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='dpm-log-cadence';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace)}
   @{n='dpm-log-cadence-no-idle';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace,'-NoIdleCadence');Fails=$true}
   @{n='dpm-log-cadence-60s';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace,'-IdleSixtySeconds');Fails=$true}
-  # ADR 0019 stage B4: the WDDMVersion of a start from WddmVersionCap (wddm_level.h), with the catalog's allowed set.
-  @{n='wddm-level';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace)}
-  @{n='wddm-level-no-clamp';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace,'-NoClamp');Fails=$true}
-  @{n='wddm-level-with-2-3';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace,'-WithLevel23');Fails=$true}
   @{n='hang-recovery';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace)}
   @{n='hang-recovery-no-fence-guard';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreFenceGuard');Fails=$true}
   @{n='hang-recovery-any-vmid';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreVmidGuard');Fails=$true}

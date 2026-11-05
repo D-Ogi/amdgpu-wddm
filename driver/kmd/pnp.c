@@ -151,8 +151,6 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     // compiled at the newest layout: copy what was given, not what we could hold.
     RtlZeroMemory(&device->Dxgk, sizeof(device->Dxgk));
     RtlCopyMemory(&device->Dxgk, DxgkInterface, min((SIZE_T)DxgkInterface->Size, sizeof(device->Dxgk)));
-    // The DXGK_DRIVERCAPS.WDDMVersion of this start (ADR 0019 stage B4): fixed before dxgkrnl first asks for it.
-    WddmLevelStart(device);
 
     GuardStartStep(L"DxgkCbGetDeviceInformation");
     status = device->Dxgk.DxgkCbGetDeviceInformation(device->Dxgk.DeviceHandle, &device->DeviceInfo);

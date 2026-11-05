@@ -229,10 +229,6 @@ typedef struct _BC250_DEVICE {
     DXGKRNL_INTERFACE Dxgk;
     DXGK_START_INFO StartInfo;
     DXGK_DEVICE_INFO DeviceInfo;
-    // ADR 0019 stage B4: the DXGK_DRIVERCAPS.WDDMVersion of this start and where it came from (wddm_level.h), set by
-    // WddmLevelStart once per start.
-    ULONG WddmLevel;
-    ULONG WddmLevelSource;
 
     BOOLEAN Started;
     // >= 0 counts watchdog MMIO samplers; -1 owns the wave selectors or retains
@@ -1515,7 +1511,6 @@ BOOLEAN WddmFullTableSelected(void);            // pure getter, never consumes a
 BOOLEAN WddmGateOpen(void);                     // EnableFullWddm, read once in DriverEntry
 void WddmGateConsume(void);                     // BD-185: one-shot closure, after state activation
 void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data);
-void WddmLevelStart(_Inout_ BC250_DEVICE* Device);  // StartDevice: the WDDMVersion of this start (WddmVersionCap)
 NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device);   // required resources fail before paging DDIs begin
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
 void WddmStop(_Inout_ BC250_DEVICE* Device);

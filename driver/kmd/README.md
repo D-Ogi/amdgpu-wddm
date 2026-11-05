@@ -191,15 +191,11 @@ versions, and so are every member of `DXGK_DRIVERCAPS`, `DXGKARG_QUERYADAPTERINF
 ADR 0019 stage B1 moved the interface version from 0x5023 to 0xE003 (WDDM 2.9), the newest public version below
 the `DRIVER_INITIALIZATION_DATA.Version` 0xF002 rule that would require the aperture segment in every CpuVisible
 non-primary allocation; 0x10004 (3.1) was built as KMD 186-189 and never deployed, because VidMm at that version
-refuses the VRAM-only CpuVisible shadow. Stage B4 (BD-307) makes `DXGK_DRIVERCAPS.WDDMVersion` a value of the start:
-the setting `WddmVersionCap` of the driver settings state store (`bc250kmd_cli state set WddmVersionCap 0x2900`, next
-start) picks one of 2.0, 2.1, 2.2, 2.4 ... 2.9. The default is 2.0. `wddm_level.h` lowers a value above the interface
-of the start (`DXGKRNL_INTERFACE.Version`) or under an OS build below 22621, and the log line `wddm: level` says the
-level, its source (default, state or clamp) and the clamp. 2.3 is not in the set. Every DDI the
+refuses the VRAM-only CpuVisible shadow. Stage B4 (BD-307) sets `DXGK_DRIVERCAPS.WDDMVersion` to 2.9. Every DDI the
 2.1-3.1 headers add stays NULL (`bc250kmd.h`, `wddm.c` `WddmCheckReserved`): a static reading of the lab's dxgkrnl
 (22621.6199) and of 26100.9549 finds no load check at 2.1-2.9 that names one of them for a full adapter, and each one
 is tested for NULL before use. Two answers come with the level: QueryAdapterInfo type 16 (display caps extension)
-answers all bits zero at every level, because at 2.2 or later a refusal makes dxgkrnl set VirtualModeSupport, and the lab
+answers all bits zero, because at 2.2 or later a refusal makes dxgkrnl set VirtualModeSupport, and the lab
 flavour's MPO caps say one queued flip per plane. The WHCP requirements of 2.1-2.9 (SetTimingsFromVidPn, MPO3,
 periodic frame notification, paravirtualization and others) are a separate list and are not met yet.
 

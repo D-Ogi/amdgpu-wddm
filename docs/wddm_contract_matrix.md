@@ -69,7 +69,7 @@ handler writes over the whole `OutputDataSize` first.
 
 | Member | Source text | Value | Line |
 |---|---|---|---|
-| `WDDMVersion` | `Device->WddmLevel` | one of `Bc250WddmLevels` (`wddm_level.h`): 0x2000 (default), 0x2100, 0x2200, 0x2400 ... 0x2900, from the `WddmVersionCap` setting (ADR 0019 stage B4, BD-307) | 1034 |
+| `WDDMVersion` | `DXGKDDI_WDDMv2_9` | `0x2900` (ADR 0019 stage B4, BD-307) | 1034 |
 | `HighestAcceptableAddress.QuadPart` | `-1` | no limit | 1035 |
 | `SupportNonVGA` | `TRUE` | 1 | 1036 |
 | `NumberOfSwizzlingRanges` | `0` | 0 | 1037 |
@@ -176,7 +176,7 @@ Segment 2 has not been seen by a lab dxgkrnl yet; it is here as the compiled dri
 1376 bytes (832 before ADR 0019 B1), 60 DDI pointers set plus `Version` (`wddm.c` `WddmBuildTable`).
 `Version = DXGKDDI_INTERFACE_VERSION_WDDM3_1`, the binary compiled at `DXGKDDI_INTERFACE_VERSION 0x10004`
 (`bc250kmd.h`); every member after the WDDM 2.0 block (offset 832 on) is NULL and checked so at run time. Since ADR 0019 stage B4 (BD-307) `WDDMVersion` is
-the level of the start, at most `DXGKDDI_WDDMv2_9`. The checker evaluates every rule at each level of `Bc250WddmLevels`. The static reading of dxgkrnl 22621.6199 and 26100.9549 finds no load check at 2.1-2.9 that
+`DXGKDDI_WDDMv2_9`: the static reading of dxgkrnl 22621.6199 and 26100.9549 finds no load check at 2.1-2.9 that
 names one of these members for a full adapter, and each one is tested for NULL before use. Stage B and stage C added code
 behind these pointers but no pointer: the table is the same 60 it was before the ring path existed, which is
 what "no new capability and no new DDI" looks like from dxgkrnl's side.
