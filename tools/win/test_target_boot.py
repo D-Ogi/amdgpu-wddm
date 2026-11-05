@@ -115,6 +115,77 @@ class BootWaitTest(unittest.TestCase):
         self.assertEqual(verdict, ("timeout", None))
 
 
+class SlowBootTest(unittest.TestCase):
+    """A restart normally comes back within 180 s; past that the wait takes a camera frame about every 120 s."""
+
+    def run_wait(self, probe, bound=600, every=30, slow_after=180, slow_every=120):
+        clock, lines, calls = FakeClock(), [], []
+
+        def hook():
+            calls.append(clock.now)
+            return f"frame-{len(calls)}.jpg"
+        slow = target.SlowWatch(slow_after, slow_every, hook)
+        verdict = target.boot_wait([("windows", probe)], "windows", bound, every=every, clock=clock.clock,
+                                   sleep=clock.sleep, out=lambda text, flush=False: lines.append(text), slow=slow)
+        return verdict, lines, calls
+
+    def test_normal_boot_takes_no_frame(self):
+        verdict, lines, calls = self.run_wait(script(DOWN, DOWN, DOWN, (BOOT_NEW, "answers")))
+        self.assertEqual(verdict, ("up", "windows"))
+        self.assertEqual(calls, [])
+        self.assertNotIn("SLOW", lines[-1])
+
+    def test_slow_boot_frames_from_180_s_about_every_120_s(self):
+        # Up at 300 s: the boot answers before the second frame is due, so there is one frame, at 180 s.
+        answers = [DOWN] * 10 + [(BOOT_NEW, "answers")]
+        verdict, lines, calls = self.run_wait(script(*answers))
+        self.assertEqual(verdict, ("up", "windows"))
+        self.assertEqual(calls, [180])
+        self.assertIn("[SLOW, over 180s; frames: frame-1.jpg]", lines[-1])
+        self.assertTrue(any(l.startswith("boot-wait SLOW 180s") for l in lines))
+
+    def test_timeout_at_600_s_names_every_frame(self):
+        verdict, lines, calls = self.run_wait(script(DOWN))
+        self.assertEqual(verdict, ("timeout", None))
+        self.assertEqual(calls, [180, 300, 420, 540, 600])
+        self.assertTrue(lines[-1].startswith("BOOT TIMEOUT after 600s"))
+        self.assertIn("frames: frame-1.jpg, frame-2.jpg, frame-3.jpg, frame-4.jpg, frame-5.jpg", lines[-1])
+
+    def test_a_raising_hook_does_not_end_the_wait(self):
+        clock = FakeClock()
+
+        def hook():
+            raise OSError("camera gone")
+        lines = []
+        slow = target.SlowWatch(60, 120, hook)
+        verdict = target.boot_wait([("windows", script(*([DOWN] * 4 + [(BOOT_NEW, "answers")])))], "windows", 600,
+                                   clock=clock.clock, sleep=clock.sleep,
+                                   out=lambda text, flush=False: lines.append(text), slow=slow)
+        self.assertEqual(verdict, ("up", "windows"))
+        self.assertIn("hook error OSError", lines[-1])
+
+    def test_without_a_hook_the_slow_line_still_appears(self):
+        clock, lines = FakeClock(), []
+        verdict = target.boot_wait([("windows", script(DOWN))], "windows", 300, clock=clock.clock,
+                                   sleep=clock.sleep, out=lambda text, flush=False: lines.append(text),
+                                   slow=target.SlowWatch(180, 120, None))
+        self.assertEqual(verdict, ("timeout", None))
+        self.assertTrue(any(l.startswith("boot-wait SLOW 180s") and "no hook" in l for l in lines))
+        self.assertIn("[SLOW, over 180s]", lines[-1])
+
+    def test_negative_control_no_slow_watch_takes_no_frame(self):
+        verdict, lines, calls = self.run_wait(script(DOWN), slow_after=None)
+        self.assertEqual(verdict, ("timeout", None))
+        self.assertEqual(calls, [])
+        self.assertFalse(any("SLOW" in l for l in lines))
+
+    def test_run_slow_hook_gives_the_last_output_line(self):
+        cmd = f'"{sys.executable}" -c "print(1); print(\'frame.jpg\')"'
+        self.assertEqual(target.run_slow_hook(cmd), "frame.jpg")
+        bad = f'"{sys.executable}" -c "import sys; print(\'oops\'); sys.exit(4)"'
+        self.assertEqual(target.run_slow_hook(bad), "hook rc 4 oops")
+
+
 class ParseTest(unittest.TestCase):
     def test_windows_boot(self):
         self.assertEqual(target.utc(target.windows_boot_epoch("noise\r\n2026-10-10T22:40:05\r\n")),
