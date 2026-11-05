@@ -223,7 +223,9 @@ switch ($Action) {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
         # LogonUI.exe and consent.exe run as Local System, CredentialUIBroker.exe as the user: all three must write.
         & icacls.exe $d /grant '*S-1-5-32-545:(OI)(CI)M' | Out-Null
-        New-Item -Path $appRouter -Force -ErrorAction SilentlyContinue | Out-Null
+        # Never New-Item -Force on an existing key: the registry provider then creates the key again, empty, and the
+        # installer's Mode, Allow and Deny values are gone (2026-11-05: the router then read Mode absent = cpu).
+        if (-not (Test-Path -LiteralPath $appRouter)) { New-Item -Path $appRouter -ErrorAction SilentlyContinue | Out-Null }
         Set-ItemProperty -LiteralPath $appRouter -Name RouteLogDirectory -Value $d -Type String
         Say "AppRouter RouteLogDirectory=$d"
     }
