@@ -16,6 +16,10 @@ documents its shape and the lab's values. Importing this module never touches th
     python target.py boot [--os windows|linux|any] [--bound S] [--first S] [--every S] [--after-now|--after UTC]
                                                wait for a boot of either OS: a line each round, one verdict
                                                line at the end (BOOT UP / BOOT WRONG-OS / BOOT TIMEOUT)
+                 [--slow-after 180] [--slow-every 120] [--slow-hook CMD]
+                                               past 180 s a boot is slow: a SLOW line and the hook (default
+                                               $BC250_BOOT_SLOW_HOOK, for the lab a camera frame) about every
+                                               120 s and at the bound; the verdict line names the frames
     python target.py forget                    drop the cached address (the next call probes again)
     python target.py run '<powershell>'         one inline command (watch the quoting, prefer a script file)
     python target.py ps <file.ps1> [args...]   copy a script over and run it with -File
@@ -407,14 +411,67 @@ def utc(epoch):
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
 
 
+SLOW_HOOK_ENV = "BC250_BOOT_SLOW_HOOK"
+
+
+def run_slow_hook(command, timeout=60):
+    """Run the slow-boot hook command (a shell command line) once. Returns a short note for the log: the last
+    line of its output (for a camera hook, the path of the frame), or the reason it failed. Never raises."""
+    try:
+        done = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=timeout,
+                              errors="replace")
+    except subprocess.TimeoutExpired:
+        return f"hook timeout after {timeout}s"
+    except OSError as e:
+        return f"hook error {type(e).__name__}"
+    lines = [l.strip() for l in (done.stdout or "").splitlines() if l.strip()]
+    if done.returncode != 0:
+        return f"hook rc {done.returncode}" + (f" {lines[-1]}" if lines else "")
+    return lines[-1] if lines else "hook gave no output"
+
+
+class SlowWatch:
+    """The slow-boot rule of a boot wait. A restart normally comes back within `after` seconds (180). Up to the
+    bound it is acceptable but not normal (a Windows Update, a slow POST, a hang), so from `after` on the wait
+    calls `hook` (for the lab, one cropped camera frame) about every `every` seconds, logs what it gave, and
+    names all of it in the verdict line. `hook` is a function of no arguments that returns a short note, or
+    None when no hook is configured (then only the SLOW lines are logged)."""
+
+    def __init__(self, after=180, every=120, hook=None):
+        self.after, self.every, self.hook = after, every, hook
+        self.next_at = after
+        self.notes = []
+
+    def check(self, elapsed, out, final=False):
+        """Called once a round. Runs the hook when its time has come (and once more on `final`, the timeout)."""
+        if self.after is None or elapsed < self.after or (elapsed < self.next_at and not final):
+            return
+        self.next_at = elapsed + self.every
+        note = "no hook"
+        if self.hook is not None:
+            try:
+                note = self.hook()
+            except Exception as e:  # noqa: BLE001 - the hook gives evidence, it never ends the wait
+                note = f"hook error {type(e).__name__}"
+            self.notes.append(note)
+        out(f"boot-wait SLOW {elapsed:.0f}s (normal is under {self.after}s): {note}", flush=True)
+
+    def suffix(self, elapsed):
+        if self.after is None or elapsed < self.after:
+            return ""
+        return f" [SLOW, over {self.after}s" + (f"; frames: {', '.join(self.notes)}" if self.notes else "") + "]"
+
+
 def boot_wait(probes, want, bound, first=0, every=30, after=None, wrong_rounds=2,
-              clock=time.monotonic, sleep=time.sleep, out=print):
+              clock=time.monotonic, sleep=time.sleep, out=print, slow=None):
     """Ask every probe once a round until `want` ("windows", "linux" or "any") is up with a boot later than
     `after` (epoch seconds; None accepts any boot). Prints one line per round and one verdict line at the end.
 
     Returns (verdict, name): ("up", name), ("wrong-os", name) when only an OS other than `want` is up with
     a new boot for `wrong_rounds` rounds in a row, or ("timeout", None) after `bound` seconds. A probe that
-    raises counts as down: the wait itself must never hang or die on one bad round."""
+    raises counts as down: the wait itself must never hang or die on one bad round. `slow` is a SlowWatch
+    (None: no slow-boot rule); its notes go into the verdict line."""
+    slow = slow or SlowWatch(after=None)
     start = clock()
     if first:
         sleep(first)
@@ -439,22 +496,27 @@ def boot_wait(probes, want, bound, first=0, every=30, after=None, wrong_rounds=2
                 if want in ("any", name):
                     elapsed = clock() - start
                     out(f"boot-wait {elapsed:.0f}s: " + ", ".join(states), flush=True)
-                    out(f"BOOT UP {name} boot {utc(epoch)} after {elapsed:.0f}s", flush=True)
+                    out(f"BOOT UP {name} boot {utc(epoch)} after {elapsed:.0f}s" + slow.suffix(elapsed), flush=True)
                     return "up", name
         elapsed = clock() - start
         out(f"boot-wait {elapsed:.0f}s: " + ", ".join(states), flush=True)
         for name, epoch in up:
             if want in ("any", name):
-                out(f"BOOT UP {name} boot {utc(epoch)} after {elapsed:.0f}s", flush=True)
+                out(f"BOOT UP {name} boot {utc(epoch)} after {elapsed:.0f}s" + slow.suffix(elapsed), flush=True)
                 return "up", name
         wrong = wrong + 1 if up else 0
         if up and wrong >= wrong_rounds:
-            out(f"BOOT WRONG-OS {up[0][0]} is up (boot {utc(up[0][1])}), wanted {want}, after {elapsed:.0f}s",
-                flush=True)
+            out(f"BOOT WRONG-OS {up[0][0]} is up (boot {utc(up[0][1])}), wanted {want}, after {elapsed:.0f}s"
+                + slow.suffix(elapsed), flush=True)
             return "wrong-os", up[0][0]
         if clock() - start + every > bound:
-            out(f"BOOT TIMEOUT after {clock() - start:.0f}s, wanted {want}: " + ", ".join(states), flush=True)
+            # The last picture before giving up: what the screen shows at the bound (update, POST, black).
+            slow.check(clock() - start, out, final=True)
+            elapsed = clock() - start
+            out(f"BOOT TIMEOUT after {elapsed:.0f}s, wanted {want}: " + ", ".join(states) + slow.suffix(elapsed),
+                flush=True)
             return "timeout", None
+        slow.check(clock() - start, out)
         sleep(every)
 
 
@@ -466,6 +528,12 @@ def boot_main(args):
     parser.add_argument("--bound", type=int, default=900, help="seconds before BOOT TIMEOUT")
     parser.add_argument("--first", type=int, default=0, help="seconds to wait before the first round")
     parser.add_argument("--every", type=int, default=30, help="seconds between rounds (at least 20)")
+    parser.add_argument("--slow-after", type=int, default=180,
+                        help="seconds after which a boot is slow: log SLOW and run the hook (0 turns this off)")
+    parser.add_argument("--slow-every", type=int, default=120, help="seconds between hook runs of a slow boot")
+    parser.add_argument("--slow-hook", default=os.environ.get(SLOW_HOOK_ENV) or None,
+                        help=f"shell command run when the boot is slow, its last output line is logged "
+                             f"(default: ${SLOW_HOOK_ENV}; '' turns it off)")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--after-now", action="store_true", help="accept only a boot that happens from now on")
     group.add_argument("--after", help="accept only a boot later than this UTC time, 2026-10-10T22:40:00")
@@ -482,7 +550,11 @@ def boot_main(args):
         probes.append(("linux", boot_probe("linux", LINUX_CONFIG)))
     elif opts.os == "linux":
         parser.error(f"no Linux session configuration at {LINUX_CONFIG}")
-    verdict, _ = boot_wait(probes, opts.os, opts.bound, opts.first, opts.every, after)
+    if opts.slow_every < 30:
+        parser.error("--slow-every under 30 s")
+    hook = (lambda: run_slow_hook(opts.slow_hook)) if opts.slow_hook else None
+    slow = SlowWatch(opts.slow_after or None, opts.slow_every, hook)
+    verdict, _ = boot_wait(probes, opts.os, opts.bound, opts.first, opts.every, after, slow=slow)
     sys.exit({"up": 0, "timeout": 1, "wrong-os": 3}[verdict])
 
 

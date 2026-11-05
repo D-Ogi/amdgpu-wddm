@@ -65,6 +65,15 @@ python tools/win/target.py pull C:\BC250\mon\log\2026-09-21.log $env:BC250_ROOT\
 Inline PowerShell through Git Bash gets mangled (`$_`, quotes, backslashes): put anything with punctuation in
 a `.ps1` file and use `ps`. There is no scp on the target, so `push` and `pull` pipe a tar through ssh.
 
+A restart of the lab is normally back in under 180 s. A longer boot is acceptable up to 600 s, but it is not
+normal: it can be a Windows Update, a slow POST or a hang. Thus `boot` marks a boot that goes past
+`--slow-after` (180 s) as slow. It logs a `boot-wait SLOW` line and runs the hook command about every
+`--slow-every` (120 s) and one time more at the bound. The verdict line then ends with a `[SLOW, ...]` note
+that names the frames. The hook is a shell command line from `--slow-hook` or the `BC250_BOOT_SLOW_HOOK` environment variable,
+and the last line of its output goes into the log. The workspace sets it to a command that takes one cropped
+camera frame of the lab screen, so the log has a record of the screen. A hook that fails gives a note in the
+log and does not stop the wait. Kits that wait for a restart use `--bound 600`.
+
 `ps` exits with the exit code of the script, and `run` with the exit code of its command: 0 when the last
 statement succeeds, else the last native exit code (1 for a failed cmdlet). The lab's sshd shell ends with 1 for
 every failed native call, so both command lines end with `; exit $LASTEXITCODE` (BD-267). A tool that calls
