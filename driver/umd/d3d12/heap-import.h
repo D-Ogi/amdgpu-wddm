@@ -134,6 +134,8 @@ class RuntimeHeapImports final {
     // (scanout_desktop_route_read, or a host test's double). The kernel driver's mode list is asked through
     // mode_list_reader_ (scanout_mode_list_read, or a double) for a chain that is not the committed mode.
     Adapter* adapter_{};
+    // BD-312: the device whose offered list an allocation leaves when this object releases it (forget_offered).
+    Device* owner_{};
     unsigned long force_cpu_{};
     unsigned (*desktop_route_reader_)(bc250_desktop_route*) noexcept{};
     ScanoutModeList (*mode_list_reader_)(UINT64 luid,unsigned width,unsigned height) noexcept{};

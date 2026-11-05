@@ -30,12 +30,15 @@ int main() {
     native12::install_fence_entries(table);
     native12::install_shell_core_entries(table);
     assert(table.pfnGetImplicitPhysicalAdapterMask && table.pfnQueryNodeMap &&
-        table.pfnOfferResources && table.pfnReclaimResources && table.pfnCalcPrivateSchedulingGroupSize &&
+        table.pfnCalcPrivateSchedulingGroupSize &&
         table.pfnCreateSchedulingGroup && table.pfnDestroySchedulingGroup &&
         table.pfnGetDebugAllocationInfo && table.pfnSetBackgroundProcessingMode);
     assert(table.pfnCreateCommandQueue == native12::queue_create);
     assert(table.pfnCreateFence == native12::fence_create);
+    // BD-312: offer and reclaim belong to install_native_residency_entries (native-residency-ddi-test.cpp). The
+    // E_NOTIMPL this table once answered for them made the runtime remove the device.
     assert(!table.pfnMakeResident && !table.pfnEvict && !table.pfnGetPresentPrivateDriverDataSize);
+    assert(!table.pfnOfferResources && !table.pfnReclaimResources);
     assert(!table.pfnCreateHeapAndResource && !table.pfnCheckFormatSupport);
 
     {
@@ -69,31 +72,6 @@ int main() {
         assert(native12::implicit_physical_adapter_mask({}) == 0);
         native12::query_node_map({}, 1, &guard);
         assert(guard == D3D12DDI_NODE_MAP_HIDE_NODE);
-    }
-    {
-        Fixture f;
-        D3D12DDI_HANDLE_AND_TYPE object{};
-        D3D12DDIARG_OFFERRESOURCES offer{};
-        offer.NumObjects = 1; offer.pObjects = &object;
-        const auto offer_before = offer;
-        assert(table.pfnOfferResources(f.handle(), &offer) == E_NOTIMPL && equal(offer, offer_before));
-        BOOL discarded = TRUE;
-        UINT64 paging_fence = 123456;
-        D3D12DDI_HRTPAGINGQUEUE paging_queue{};
-        D3D12DDIARG_RECLAIMRESOURCES_0001 reclaim{};
-        reclaim.NumAdapters = 1; reclaim.pRTPagingQueue = &paging_queue;
-        reclaim.NumObjects = 1; reclaim.pObjects = &object;
-        reclaim.pDiscarded = &discarded; reclaim.pPagingFenceValue = &paging_fence; reclaim.WaitMask = 13;
-        const auto reclaim_before = reclaim;
-        assert(table.pfnReclaimResources(f.handle(), &reclaim) == E_NOTIMPL && equal(reclaim, reclaim_before));
-        assert(discarded == TRUE && paging_fence == 123456);
-        assert(!f.device.lost && !f.errors);
-        assert(native12::offer_resources(f.handle(), nullptr) == E_INVALIDARG);
-        assert(native12::reclaim_resources({}, &reclaim) == E_INVALIDARG);
-        f.device.remove();
-        assert(table.pfnOfferResources(f.handle(), &offer) == D3DDDIERR_DEVICEREMOVED);
-        assert(table.pfnReclaimResources(f.handle(), &reclaim) == D3DDDIERR_DEVICEREMOVED);
-        assert(equal(reclaim, reclaim_before) && discarded == TRUE && paging_fence == 123456);
     }
     {
         Fixture f;
@@ -144,5 +122,5 @@ int main() {
         native12::background_processing_mode({}, {}, {}, nullptr);
         assert(!f.device.lost && !f.errors);
     }
-    std::puts("PASSED: nine shell slots, single-node identity, typed refusals, guarded outputs, sticky device loss, and the two tool slots that answer without losing the device; no runtime/GPU");
+    std::puts("PASSED: seven shell slots (offer/reclaim left to the residency entries), single-node identity, typed refusals, guarded outputs, sticky device loss, and the two tool slots that answer without losing the device; no runtime/GPU");
 }

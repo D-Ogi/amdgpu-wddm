@@ -39,19 +39,9 @@ inline void APIENTRY query_node_map(D3D12DDI_HDEVICE h, UINT count, UINT* map) {
     map[0] = 0;
 }
 
-// No offer/reclaim implementation exists for the shell's runtime allocation
-// records yet. Refuse without modifying the caller's records or output arrays.
-// These HRESULT DDIs do not require pretending that resources were discarded.
-inline HRESULT APIENTRY offer_resources(D3D12DDI_HDEVICE h,
-    const D3D12DDIARG_OFFERRESOURCES* args) {
-    if (!args) return E_INVALIDARG;
-    return shell_core_detail::unsupported(h);
-}
-inline HRESULT APIENTRY reclaim_resources(D3D12DDI_HDEVICE h,
-    D3D12DDIARG_RECLAIMRESOURCES_0001* args) {
-    if (!args) return E_INVALIDARG;
-    return shell_core_detail::unsupported(h);
-}
+// OfferResources and ReclaimResources are not here: BD-312 moved them to
+// native-residency-ddi.cpp, which reaches the objects' kernel allocations. The
+// E_NOTIMPL they answered here made the runtime remove the device (BD-075).
 
 // ComputeQueuesPer3DQueue is advertised as0: "don't use scheduling groups"
 // (WDK10.0.26100 d3d12umddi.h:7007). No scheduling-group storage is constructed.
@@ -111,14 +101,13 @@ inline void APIENTRY background_processing_mode(D3D12DDI_HDEVICE h,
             "BackgroundProcessingSupported is FALSE", static_cast<unsigned>(mode));
 }
 
-// Install only these nine slots. Residency and Present private data remain
-// unresolved and are deliberately untouched. The caller must still use the
-// complete-table composition gate before publishing anything to the runtime.
+// Install only these seven slots. Residency, offer and reclaim
+// (install_native_residency_entries) and Present private data are deliberately
+// untouched. The caller must still use the complete-table composition gate
+// before publishing anything to the runtime.
 inline void install_shell_core_entries(D3D12DDI_DEVICE_FUNCS_CORE_0088& table) noexcept {
     table.pfnGetImplicitPhysicalAdapterMask = implicit_physical_adapter_mask;
     table.pfnQueryNodeMap = query_node_map;
-    table.pfnOfferResources = offer_resources;
-    table.pfnReclaimResources = reclaim_resources;
     table.pfnCalcPrivateSchedulingGroupSize = scheduling_group_size;
     table.pfnCreateSchedulingGroup = scheduling_group_create;
     table.pfnDestroySchedulingGroup = scheduling_group_destroy;

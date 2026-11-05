@@ -128,6 +128,7 @@ RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& doma
     // The desktop route's kill switch, once per device (M15.14 increment 2). The scan-out trailer is read
     // for every primary (scanout_caps_now); a device without an adapter - the host tests - has none.
     adapter_=d.adapter;
+    owner_=&d;
     force_cpu_=scanout_force_cpu();
     desktop_route_reader_=&scanout_desktop_route_read;
     mode_list_reader_=&scanout_mode_list_read;
@@ -402,6 +403,8 @@ HRESULT RuntimeHeapImports::unlock_for_release(Record& record) noexcept {
     return S_OK;
 }
 HRESULT RuntimeHeapImports::release_owned(Record& record,bool proved) noexcept {
+    // BD-312: the allocation goes now, and with it any offer of it; the handle value may come back for another one.
+    if(owner_)forget_offered(*owner_,record.handle);
     free_report_.stage=FreeStage::Unmap;
     if(!proved){
         // BD-201 R v2, the release through the OS. The caller could not prove that the GPU has stopped
