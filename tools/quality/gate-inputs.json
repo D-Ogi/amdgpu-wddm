@@ -1659,6 +1659,18 @@
         "host"
       ]
     },
+    "router-front": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ],
+      "artifacts": [
+        "router-front/*.dll",
+        "router-front/*.exe",
+        "router-front/**/*.json"
+      ],
+      "timeout": 360
+    },
     "router-stack": {
       "depends": [
         "router-front"
