@@ -53,7 +53,6 @@
 174	wddm.c	wddm summary: virtual transfers (count/bytes) to system %ld/%lld, from system %ld/%lld, other %ld/%lld
 162	wddm.c	wddm visibility event: %lu src %lu req %lu status %08X visible %lu blank %lu qpc %lld..%lld
 208	wddm.c	wddm: CalibrateGpuClock node %u, frequency %llu, gpu %llu (tsc %08lX:%08lX%s), cpu %llu, window %llu
-166	wddm.c	wddm: DRIVERCAPS into %u bytes: wddm %u sched 0x%X mm 0x%X flip 0x%X slots %u tdr %u dflip %u rot %u
 263	wddm.c	wddm: GPU Present refused%lld reason%u side%u ctx%p owner%p src%p fmt%u %ux%u pitch%u dst%p fmt%u %ux%u pitch%u
 313	wddm.c	wddm: GPU Present snapshot refused stopping%lld unopened%lld owner%lld umdopen%lld unbound%lld gone%lld umdbacking%lld descriptor%lld same%lld format%lld
 283	wddm.c	wddm: blit source (reading %d) %p %ux%u pitch %u format %u size 0x%llX va 0x%llX -> 0x%llX .. 0x%llX%s%s

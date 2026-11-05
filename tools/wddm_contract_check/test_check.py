@@ -570,6 +570,53 @@ class NegativeFixtures(unittest.TestCase):
         result, _ = statuses(wddm=wddm)
         self.assertOnlyViolation(result, "R42-WDDMVERSION-ABOVE-2-5-INTERFACE")
 
+    LEVELS_H = ("#define BC250_WDDM_LEVEL_2_0 0x2000u\n#define BC250_WDDM_LEVEL_2_2 0x2200u\n"
+                "#define BC250_WDDM_LEVEL_2_9 0x2900u\n#define BC250_WDDM_LEVEL_3_2 0x3200u\n"
+                "static const unsigned long Bc250WddmLevels[] = { %s };\n")
+
+    def levels(self, members, answer_type16=True):
+        """WDDMVersion from the start's level (WddmVersionCap) with the level set of wddm_level.h."""
+        wddm = self.wddm29(answer_type16).replace("caps->WDDMVersion = DXGKDDI_WDDMv2_9;",
+                                                  "caps->WDDMVersion = (DXGK_WDDMVERSION)Device->WddmLevel;")
+        facts = check.read_facts_text(wddm, "", GOOD_INF, GOOD_BUILD, self.LEVELS_H % members)
+        with open(RULES_PATH, "r", encoding="utf-8") as handle:
+            rules = json.load(handle)
+        results = check.evaluate(facts, rules)
+        return {r["id"]: r["status"] for r in results}, {r["id"]: r["detail"] for r in results}, facts
+
+    def test_level_set_passes_at_every_level(self):
+        """ADR 0019 B4 with WddmVersionCap: every rule holds at 2.0, 2.2 and 2.9."""
+        result, detail, facts = self.levels("BC250_WDDM_LEVEL_2_0, BC250_WDDM_LEVEL_2_2, BC250_WDDM_LEVEL_2_9")
+        self.assertEqual([0x2000, 0x2200, 0x2900], facts.wddm_levels)
+        self.assertEqual({}, {k: v for k, v in result.items() if v == check.VIOLATION})
+        self.assertEqual(check.OK, result["R43-QAI-16-ANSWERED-FROM-2-2"])
+        self.assertIn("0x2200, 0x2900", detail["R43-QAI-16-ANSWERED-FROM-2-2"])
+
+    def test_level_set_without_type16_fails_at_2_2(self):
+        """The worst level decides: without type 16 the set fails R43 at 2.9, which is above 2.2."""
+        result, detail, _ = self.levels("BC250_WDDM_LEVEL_2_0, BC250_WDDM_LEVEL_2_2, BC250_WDDM_LEVEL_2_9",
+                                        answer_type16=False)
+        self.assertOnlyViolation(result, "R43-QAI-16-ANSWERED-FROM-2-2")
+        self.assertIn("at level 0x2900", detail["R43-QAI-16-ANSWERED-FROM-2-2"])
+
+    def test_level_set_at_2_0_only_needs_no_type16(self):
+        """A set of 2.0 alone keeps R43 n/a: the rule applies from 2.2."""
+        result, _, _ = self.levels("BC250_WDDM_LEVEL_2_0", answer_type16=False)
+        self.assertEqual(check.NA, result["R43-QAI-16-ANSWERED-FROM-2-2"])
+
+    def test_level_set_with_3_2_fails_r41(self):
+        """One member that 22621 refuses fails the whole set."""
+        result, detail, _ = self.levels("BC250_WDDM_LEVEL_2_0, BC250_WDDM_LEVEL_3_2")
+        self.assertEqual(check.VIOLATION, result["R41-WDDMVERSION-ACCEPTED"])
+        self.assertIn("0x3200", detail["R41-WDDMVERSION-ACCEPTED"])
+
+    def test_level_without_set_is_unknown(self):
+        """A level from the device with no readable set is 'cannot tell', never a pass."""
+        wddm = self.wddm29().replace("caps->WDDMVersion = DXGKDDI_WDDMv2_9;",
+                                     "caps->WDDMVersion = (DXGK_WDDMVERSION)Device->WddmLevel;")
+        result, _ = statuses(wddm=wddm)
+        self.assertEqual(check.UNKNOWN, result["R41-WDDMVERSION-ACCEPTED"])
+
     def test_empty_source_is_not_a_pass(self):
         """The failure mode of a regex checker: a file it cannot parse must not read as compliant."""
         result, _ = statuses(wddm="/* nothing */\n")
