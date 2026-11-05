@@ -295,6 +295,35 @@ static void RetireTest(HKEY root,HKEY generation)
 done:
     AmdgpuWindowsStateClose(state);AmdgpuWindowsStateClose(readonly);AmdgpuWindowsStateClose(after);RegCloseKey(keep);
 }
+// BD-298: a store whose first transaction did not finish (StateV2 with no Active, the keys of the KMD's Begin). The
+// query only reads.
+static BOOL HasStateV2(void)
+{ HKEY k=NULL;BOOL found=RegOpenKeyExW(Fixture,L"StateV2",0,KEY_READ,&k)==0;if(k)RegCloseKey(k);return found; }
+static void UnfinishedTest(void)
+{
+    DWORD error=0;unsigned int unfinished=9;HKEY root,gens,gen,meta;
+    CHECK(!HasStateV2());
+    CHECK(AmdgpuWindowsStateUnfinished(&unfinished,&error)==0 && unfinished==0 && error==0);
+    // The field shape: StateV2\Generations\<tx>\Migration, no values.
+    root=Child(Fixture,L"StateV2");gens=Child(root,L"Generations");gen=Child(gens,L"05000000000000000000000000000000");meta=Child(gen,L"Migration");
+    CHECK(AmdgpuWindowsStateUnfinished(&unfinished,&error)==0 && unfinished==1);
+    CHECK(HasStateV2());
+    // Frozen or FrozenBy without Active is still a store with no installed generation.
+    Number(root,L"Frozen",0);
+    CHECK(AmdgpuWindowsStateUnfinished(&unfinished,&error)==0 && unfinished==1);
+    // An Active value, also an empty one: an installed generation (OpenState then judges it).
+    String(root,L"Active",L"05000000000000000000000000000000");
+    CHECK(AmdgpuWindowsStateUnfinished(&unfinished,&error)==0 && unfinished==0);
+    String(root,L"Active",L"");
+    CHECK(AmdgpuWindowsStateUnfinished(&unfinished,&error)==0 && unfinished==0);
+    RegDeleteValueW(root,L"Active");
+    RootError=ERROR_ACCESS_DENIED;
+    CHECK(AmdgpuWindowsStateUnfinished(&unfinished,&error)==AMDGPU_STATE_ACCESS && error==ERROR_ACCESS_DENIED && unfinished==0);
+    RootError=0;
+    CHECK(AmdgpuWindowsStateUnfinished(NULL,&error)==AMDGPU_STATE_INVALID_ARGUMENT);
+    RegCloseKey(meta);RegCloseKey(gen);RegCloseKey(gens);RegCloseKey(root);
+    CHECK(RegDeleteTreeW(Fixture,L"StateV2")==0 && !HasStateV2());
+}
 #ifdef AMDGPU_STATE_GUI_FIXTURE
 static HKEY GuiRoot,GuiGenerations,GuiGeneration,GuiData;
 static WCHAR GuiPath[160];
@@ -354,6 +383,7 @@ int wmain(int argc,WCHAR **argv)
     DataTest(root,generation,data);
     SourceTest(root,generation,data);
     RetireTest(root,generation);
+    UnfinishedTest();
     RegCloseKey(data);RegCloseKey(generation);RegCloseKey(generations);RegCloseKey(root);
     CHECK(RegDeleteTreeW(Fixture,NULL)==0);RegCloseKey(Fixture);
     CHECK(RegDeleteKeyW(HKEY_CURRENT_USER,path)==0);

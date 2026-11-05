@@ -17,7 +17,7 @@ static DWORD board_error,pending_error,remove_error,origin_error,device_error,re
 static int failed;
 // BD-298: the writer lock depth, the owner of the store freeze (the first byte of its transaction, 0 for none), and the
 // pending.bin that the abandon step moved aside.
-static UINT lock_depth,frozen_by,thawed,pending_damaged,retired_pending_bytes;static DWORD thaw_error;
+static UINT lock_depth,frozen_by,thawed,pending_damaged,retired_pending_bytes,unfinished_store;static DWORD thaw_error;
 static BYTE retired_pending[AMDGPU_TRANSFER_MAX_BYTES];
 ULONG AmdgpuInstallerTestBoot=91;
 static BYTE rollback[AMDGPU_ROLLBACK_MAX],completed[AMDGPU_ROLLBACK_MAX],active_rollback[AMDGPU_ROLLBACK_MAX];
@@ -28,7 +28,7 @@ static void Reset(UINT source)
     saved_bytes=removed_bytes=failure=freeze=stop=publish=archives=captured=strict_opens=source_opens=0;
     board_error=pending_error=remove_error=origin_error=device_error=removal_moves=removal_keeps=removal_own=0;origin=source;current_package=FALSE;
     rb_bytes=complete_bytes=active_bytes=restores=retired=enabled=source_removed=target_error=restore_error=retire_error=complete_error=0;
-    lock_depth=frozen_by=thawed=pending_damaged=retired_pending_bytes=0;thaw_error=0;
+    lock_depth=frozen_by=thawed=pending_damaged=retired_pending_bytes=unfinished_store=0;thaw_error=0;
     AmdgpuInstallerTestBoot=91;
 }
 static DWORD RunAs(PCWSTR op,PCWSTR transaction,PCWSTR product)
@@ -84,6 +84,9 @@ UINT AmdgpuWindowsStateCancelFreeze(AMDGPU_WINDOWS_STATE *s,const BYTE tx[16],DW
     (void)s;CHECK(lock_depth==1 && !saved_bytes);*error=thaw_error;if(*error)return AMDGPU_STATE_IO;
     if(frozen_by!=tx[0])return frozen_by?AMDGPU_STATE_SCHEMA:AMDGPU_STATE_INCOMPLETE;frozen_by=0;thawed++;return 0;
 }
+// A store whose first transaction did not finish (StateV2 with no Active): the worker reads the legacy state.
+UINT AmdgpuWindowsStateUnfinished(UINT *out,DWORD *error)
+{*error=0;*out=unfinished_store;return 0;}
 // The device identity of the Device fixture. The abandon step computes it without the device.
 unsigned int AmdgpuStateDeviceIdentity(const unsigned short *id,unsigned int characters,unsigned char hash[32])
 {(void)id;if(!characters)return AMDGPU_STATE_INVALID_ARGUMENT;memset(hash,7,32);return 0;}
@@ -314,7 +317,26 @@ static void AbandonTests(void)
     origin_error=0;failure=1;CHECK(Run(L"abandon",tx)==ERROR_ACCESS_DENIED);CHECK(saved_bytes && frozen_by==1 && !lock_depth);failure=0;
     // The abandon step does not need the device: a device error does not stop it.
     device_error=ERROR_NOT_FOUND;CHECK(!Run(L"abandon",tx));CHECK(!saved_bytes && !frozen_by);device_error=0;
-    // A rollback in progress, a zero transaction and an invalid product stop the step before it reads anything.
+    // The KMD began the first transaction of a legacy handoff and stopped before Active (lab 26200): StateV2 exists
+    // with no Active and no freeze, and the bound package declares the catalog. The abandon moves the handoff and
+    // opens no installed state; the store stays. The next prepare and the settings read take the legacy state.
+    Reset(AMDGPU_TRANSFER_LEGACY);CHECK(!Run(L"prepare",tx));published=saved_bytes;
+    origin=AMDGPU_TRANSFER_CURRENT;unfinished_store=1;current_package=TRUE;opens=source_opens+strict_opens;freeze=0;
+    CHECK(!Run(L"abandon",tx));CHECK(!saved_bytes && retired_pending_bytes==published && unfinished_store);
+    CHECK(source_opens+strict_opens==opens && !thawed && !lock_depth && !freeze);
+    CHECK(!Run(L"abandon",tx));CHECK(retired_pending_bytes==published && !lock_depth);
+    {DWORD *pairs=calloc(AmdgpuStateCount()*2,sizeof(DWORD));CHECK(pairs && AmdgpuInstallerTestSettings(L"fixture",pairs)==0);free(pairs);}
+    captured=0;CHECK(!RunAs(L"prepare",other,L"0.7.216.110"));CHECK(saved_bytes && captured==1 && !freeze && source_opens+strict_opens==opens);
+    CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h) && h.origin==AMDGPU_TRANSFER_LEGACY && h.source_schema==1 && h.transaction[0]==2);
+    // An uninstall of that store archives the legacy state.
+    Reset(AMDGPU_TRANSFER_CURRENT);unfinished_store=1;current_package=TRUE;
+    CHECK(!Run(L"archive",tx));CHECK(archives==1 && stop==1 && !freeze);
+    CHECK(!AmdgpuTransferCheck(removed,removed_bytes,&h) && h.origin==AMDGPU_TRANSFER_LEGACY && h.source_schema==1);
+    // Without the unfinished store, a bound package that declares the catalog and a legacy origin stay refused.
+    Reset(AMDGPU_TRANSFER_LEGACY);current_package=TRUE;CHECK(Run(L"prepare",tx)==ERROR_INVALID_DATA);
+    // A handoff of another transaction in that store stays.
+    Reset(AMDGPU_TRANSFER_LEGACY);CHECK(!Run(L"prepare",tx));origin=AMDGPU_TRANSFER_CURRENT;unfinished_store=1;
+    CHECK(Run(L"abandon",other)==ERROR_REVISION_MISMATCH);CHECK(saved_bytes && !retired_pending_bytes);    // A rollback in progress, a zero transaction and an invalid product stop the step before it reads anything.
     Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!Run(L"prepare",tx));active_bytes=1;
     CHECK(Run(L"abandon",tx)==ERROR_BUSY);CHECK(saved_bytes && frozen_by==1);active_bytes=0;
     CHECK(Run(L"abandon",L"00000000000000000000000000000000")==ERROR_INVALID_PARAMETER);

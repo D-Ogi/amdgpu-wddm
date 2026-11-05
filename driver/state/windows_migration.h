@@ -22,6 +22,10 @@ unsigned int AmdgpuWindowsStateCancelFreeze(AMDGPU_WINDOWS_STATE *state,
 // INCOMPLETE or ABSENT: no freeze. Any other result is a read error.
 unsigned int AmdgpuWindowsStateFreezeOwner(AMDGPU_WINDOWS_STATE *state,
     const unsigned char transaction[16],DWORD *error);
+// BD-298. Reads only: *unfinished is 1 when StateV2 exists with no Active value (a first transaction of the KMD
+// that did not finish), else 0. No StateV2 or no shared state gives 0. The installer worker then reads the legacy
+// state as the source of a new transaction (installer_worker.c StoreOrigin).
+unsigned int AmdgpuWindowsStateUnfinished(unsigned int *unfinished,DWORD *error);
 // Explicit legacy rollback only: caller has stopped SCM, disabled the PDO and
 // restored/read-verified the protected receipt's legacy settings and board state.
 // Deletes only the retained, frozen generation's StateV2 tree, then flushes its

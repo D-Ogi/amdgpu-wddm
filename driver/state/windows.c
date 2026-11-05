@@ -400,6 +400,33 @@ unsigned int AmdgpuWindowsStateCancelFreeze(AMDGPU_WINDOWS_STATE *s,const unsign
     }
     ReleaseSRWLockExclusive(&s->lock);AmdgpuStateWriterUnlock(writer);return result;
 }
+// BD-298: a store whose first transaction did not finish. The KMD's Begin of a FRESH or LEGACY handoff creates
+// StateV2, Generations\<tx> and its Migration key before it writes Active; a start that stops there leaves a
+// store with no Active value (lab 26200, 2026-11-05: the 0.7.216.102 KMD failed AddDevice after that point).
+// No generation is active, so no freeze holds such a store.
+static unsigned int OpenUnfinished(REGSAM access,HKEY *shared,HKEY *root,BOOL *unfinished,DWORD *error)
+{
+    LSTATUS status;DWORD type=0;
+    *shared=NULL;*root=NULL;*unfinished=FALSE;
+    *error=SharedRoot(access,shared);
+    if(*error==ERROR_FILE_NOT_FOUND || *error==ERROR_PATH_NOT_FOUND){*error=0;return AMDGPU_STATE_OK;}
+    if(*error) return Status(*error);
+    status=RegOpenKeyExW(*shared,L"StateV2",0,KEY_READ,root);
+    if(status==ERROR_FILE_NOT_FOUND){*root=NULL;return AMDGPU_STATE_OK;}
+    *error=status;if(status) {*root=NULL;return Status(status);}
+    status=RegQueryValueExW(*root,L"Active",NULL,&type,NULL,NULL);
+    if(status==ERROR_FILE_NOT_FOUND){*unfinished=TRUE;return AMDGPU_STATE_OK;}
+    *error=status==ERROR_MORE_DATA?0:status;
+    return *error?Status(*error):AMDGPU_STATE_OK;
+}
+unsigned int AmdgpuWindowsStateUnfinished(unsigned int *unfinished,DWORD *error)
+{
+    HKEY shared=NULL,root=NULL;BOOL found=FALSE;unsigned int result;
+    if(!unfinished || !error) return AMDGPU_STATE_INVALID_ARGUMENT;
+    *unfinished=0;result=OpenUnfinished(KEY_READ,&shared,&root,&found,error);
+    if(!result) *unfinished=found?1:0;
+    if(root)RegCloseKey(root);if(shared)RegCloseKey(shared);return result;
+}
 unsigned int AmdgpuWindowsStateFreezeOwner(AMDGPU_WINDOWS_STATE *s,const unsigned char transaction[16],DWORD *error)
 {
     WCHAR tx[33];unsigned int result;

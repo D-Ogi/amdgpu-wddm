@@ -366,12 +366,24 @@ static BOOL ComparedSetting(const AMDGPU_STATE_SPEC *spec)
     spec->type==AMDGPU_STATE_DWORD && !spec->private_read;}
 // This observation only vetoes stale installer writes. It is not a migration
 // payload and grants no authority to import state. No freeze or SCM write occurs.
+// BD-298: a store whose first transaction the KMD began and did not finish (StateV2 with no Active value; lab 26200,
+// where the 0.7.216.102 KMD failed AddDevice after its Begin). No generation is installed, so the source of a new
+// transaction is the legacy state that the unfinished one was made from, although the bound package declares the
+// state catalog. The KMD accepts a legacy transfer into such a store (no Active and no previous generation).
+static DWORD StoreOrigin(UINT *origin,BOOL *unfinished)
+{
+    DWORD error;UINT found=0,result;
+    *unfinished=FALSE;error=Origin(origin);if(error || *origin!=AMDGPU_TRANSFER_CURRENT)return error;
+    result=AmdgpuWindowsStateUnfinished(&found,&error);if(result)return AsError(result,error);
+    if(found){*origin=AMDGPU_TRANSFER_LEGACY;*unfinished=TRUE;}
+    return 0;
+}
 static DWORD ReadSettings(PCWSTR device,INSTALLER_SETTING *values)
 {
-    AMDGPU_TRANSFER_HEADER h={0};AMDGPU_WINDOWS_STATE *state=NULL;UINT i,result;DWORD error;
+    AMDGPU_TRANSFER_HEADER h={0};AMDGPU_WINDOWS_STATE *state=NULL;UINT i,result;DWORD error;BOOL unfinished;
     error=Device(device,&h,FALSE);if(error)return error;
-    error=Origin(&h.origin);if(error)return error;
-    if(h.source_schema==AmdgpuStateSchema() && h.origin!=AMDGPU_TRANSFER_CURRENT)return ERROR_INVALID_DATA;
+    error=StoreOrigin(&h.origin,&unfinished);if(error)return error;
+    if(h.source_schema==AmdgpuStateSchema() && h.origin!=AMDGPU_TRANSFER_CURRENT && !unfinished)return ERROR_INVALID_DATA;
     if(h.origin!=AMDGPU_TRANSFER_FRESH && h.origin!=AMDGPU_TRANSFER_LEGACY &&
        h.origin!=AMDGPU_TRANSFER_CURRENT)return ERROR_INVALID_DATA;
     if(h.origin==AMDGPU_TRANSFER_CURRENT) {
@@ -417,11 +429,13 @@ static UINT ArchiveFetch(void *context,UINT source,const AMDGPU_STATE_SPEC *spec
 // and a retry after any failure repeats only what remains.
 static DWORD Abandon(PCWSTR device,AMDGPU_TRANSFER_HEADER *h)
 {
-    AMDGPU_WINDOWS_STATE *state=NULL;HANDLE lock=NULL;DWORD error;UINT origin=0,result,owner=AMDGPU_STATE_ABSENT;
+    AMDGPU_WINDOWS_STATE *state=NULL;HANDLE lock=NULL;DWORD error;UINT origin=0,result,owner=AMDGPU_STATE_ABSENT;BOOL unfinished;
     if(wcslen(device)>MAX_DEVICE_ID_LEN ||
        AmdgpuStateDeviceIdentity((const unsigned short*)device,(UINT)wcslen(device),h->device_hash))return ERROR_INVALID_PARAMETER;
     error=AmdgpuStateWriterLock(&lock);if(error)return error;
-    error=Origin(&origin);if(error)goto done;
+    // A store whose first transaction did not finish has no installed generation and no freeze: only the file moves,
+    // and the store stays for the next transaction (StoreOrigin).
+    error=StoreOrigin(&origin,&unfinished);if(error)goto done;
     if(origin==AMDGPU_TRANSFER_CURRENT) {
         // The installed generation can be of an earlier catalog, or of the catalog of the stopped install.
         result=AmdgpuWindowsStateOpenSource(&state,1,&error);if(result){error=AsError(result,error);goto done;}
@@ -438,7 +452,7 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
 {
     AMDGPU_TRANSFER_HEADER h={0},previous;AMDGPU_WINDOWS_STATE *state=NULL;
     void *buffer=NULL,*pending=NULL;DWORD error=0,board=0,pending_bytes=0;UINT bytes=0,result;
-    BOOL archive;
+    BOOL archive,unfinished;
     if(argc>1 && (!wcscmp(argv[1],L"rollback-capture") || !wcscmp(argv[1],L"rollback-restore") || !wcscmp(argv[1],L"rollback-enable") || !wcscmp(argv[1],L"rollback-check") || !wcscmp(argv[1],L"rollback-remove")))return Rollback(argc,argv);
     // ServiceMain receives service name followed by this fixed four-argument
     // protocol. All source state is read by this process, never from caller data.
@@ -460,8 +474,8 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
         HeapFree(GetProcessHeap(),0,pending);return error;
     }
     if(error!=ERROR_FILE_NOT_FOUND)return error;
-    error=Origin(&h.origin);if(error)return error;
-    if(h.source_schema==AmdgpuStateSchema() && h.origin!=AMDGPU_TRANSFER_CURRENT)return ERROR_INVALID_DATA;
+    error=StoreOrigin(&h.origin,&unfinished);if(error)return error;
+    if(h.source_schema==AmdgpuStateSchema() && h.origin!=AMDGPU_TRANSFER_CURRENT && !unfinished)return ERROR_INVALID_DATA;
     if(h.origin==AMDGPU_TRANSFER_FRESH) {
         void *removed=NULL;DWORD removed_bytes=0;UINT history=AMDGPU_HISTORY_NONE;
         error=AmdgpuWindowsReadRemoval(&removed,&removed_bytes,archive);
@@ -530,6 +544,8 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
     } else {
         if(archive && h.origin!=AMDGPU_TRANSFER_LEGACY){error=ERROR_REVISION_MISMATCH;goto done;}
         if(archive){error=Device(argv[4],&h,TRUE);if(error)goto done;}
+        // The device read again for the stop names the catalog of a bound package; the source stays legacy (BD-298).
+        h.source_schema=h.origin==AMDGPU_TRANSFER_LEGACY?1:0;
         result=AmdgpuWindowsCaptureLegacy(&h,buffer,AMDGPU_TRANSFER_MAX_BYTES,&bytes,&error,&board);
         // Rendering migration may retain UNPROVEN, but inaccessible or corrupt
         // original-board data must not be reported as a successful archive.
