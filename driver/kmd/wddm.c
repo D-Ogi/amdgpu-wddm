@@ -41,13 +41,13 @@
 #define ULONGLONG_MAX ULLONG_MAX
 #endif
 
-// ADR 0019 stage B4: a lab bisection compiles fixed images with /DBC250_WDDM_LEVEL=0x2100 and similar values in
-// place of the default DXGK_DRIVERCAPS.WDDMVersion (WddmDriverCaps); there is no runtime setting yet. The level must
-// be one that dxgkrnl knows and that this table and these answers were read against. Without the define the image
-// is the default one, which tools/wddm_contract_check reads.
+// ADR 0019 stage B4: a lab bisection compiles fixed images with /DBC250_WDDM_LEVEL=0x2100 and similar values. Such an
+// image does not read the WddmVersionCap setting (WddmLevelStart). The level must be one of the set of that setting
+// (wddm_level.h Bc250WddmLevels, without 2.3), so that a fixed image and a stored value of the same level answer the
+// same. Without the define the image takes the level of each start, which tools/wddm_contract_check reads.
 #ifdef BC250_WDDM_LEVEL
 C_ASSERT(BC250_WDDM_LEVEL == DXGKDDI_WDDMv2 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_1 ||
-         BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_2 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_3 ||
+         BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_2 ||
          BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_4 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_5 ||
          BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_6 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_7 ||
          BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_8 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_9);
