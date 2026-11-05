@@ -7,7 +7,7 @@
 #include "../amdgpu-import/nvd.h"
 
 /*
- * A compute dispatch of one of the six GDI kernels, written into the GDI DMA buffer.
+ * A compute dispatch of one of the seven GDI kernels, written into the GDI DMA buffer.
  *
  * The packet sequence follows driver/shim/bc250_dispatch.c, which follows libdrm 2.4.114's
  * tests/amdgpu/shader_test_util.c, the sequence that is measured working on this silicon (facts
@@ -105,7 +105,7 @@ unsigned int Bc250GdiCodeKernelCount(void) { return BC250_GDI_KERNEL_COUNT; }
 unsigned int Bc250GdiCodeBytes(void) { return BC250_GDI_CODE_DWORDS * 4u; }
 const char* Bc250GdiCodeHash(void) { return BC250_GDI_CODE_SHA256; }
 
-/* The six kernels are in the image, so the capability bit may be set. The one caller is wddm.c,
+/* The seven kernels are in the image, so the capability bit may be set. The one caller is wddm.c,
  * through gdi_render.h; the count is read from the generated table rather than assumed, so a build
  * that lost a kernel answers 0 and the bit stays clear. */
 int Bc250GdiKernelsPresent(void)
@@ -190,6 +190,9 @@ unsigned int Bc250EmitGdiDispatch(unsigned int kernel, const BC250_GDI_KERNARG* 
     groups[0] = (arg->Width + BC250_GDI_GROUP_X - 1u) / BC250_GDI_GROUP_X;
     groups[1] = (arg->Height + BC250_GDI_GROUP_Y - 1u) / BC250_GDI_GROUP_Y;
     groups[2] = 1u;
+    /* gdi_bitblt_ordered is one work group that walks the whole block in bands, because the order
+     * between its bands is a barrier, and a barrier orders one work group only (BD-306). */
+    if (kernel == (unsigned int)Bc250GdiKernelBitBltOrdered) groups[0] = groups[1] = 1u;
 
     pad = total - GDI_DISPATCH_FIXED;
     buffer[0] = Bc250GdiNop(pad + GDI_KERNARG_DWORDS);
@@ -366,6 +369,15 @@ int Bc250GdiKernarg(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* surfaces,
         break;
     case Bc250GdiKernelBitBltRop:
         arg->Rop = op->Rop;
+        break;
+    case Bc250GdiKernelBitBltOrdered:
+        /* The translation, destination minus source, in the two colour fields: a BITBLT has no
+         * colour, and no other argument carries the destination side of the translation. The
+         * kernel reads them back as signed (gdi_kernels.cl, gdi_bitblt_ordered). */
+        if (!item->Same || !item->Ordered) return 0;
+        arg->Rop = op->Rop;
+        arg->Color = (unsigned int)item->Ddx;
+        arg->Color2 = (unsigned int)item->Ddy;
         break;
     case Bc250GdiKernelAlphaBlend:
         arg->Sca = op->SourceConstantAlpha;

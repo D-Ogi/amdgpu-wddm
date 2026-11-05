@@ -916,7 +916,72 @@ The capability answer of `WddmDriverCaps` changes only while `GdiHwAccel` is tru
 | `SupportSoftwareDeviceBitmaps` | 0 | type 6 stays refused (BD-060) |
 | `SupportLinearHeap` | 0 | no linear heap out of a staging surface |
 | `StagingRectStartPitchAligned` | 0 | no pitch aligned staging rectangle requirement |
-| the `No*SameBitmap*` family | 1 | one allocation on both sides is refused outright |
+| `NoSameBitmapBitBlt`, `NoSameBitmapOverlappedBitBlt` | 0 | a BitBlt inside one allocation is done by the driver (BD-306, next section) |
+| the other `No*SameBitmap*` members | 1 | AlphaBlend, StretchBlt and TransparentBlt on one allocation are refused outright |
+
+### BitBlt inside one allocation (BD-306)
+
+d3dkmddi.h (WDK 10.0.26100, lines 1949 and 1950) reads `NoSameBitmapBitBlt` as "Driver cannot
+support BitBlt when source and destination allocations are the same", and
+`NoSameBitmapOverlappedBitBlt` as the same restriction when the two rectangles overlap. While both
+bits were set, the CDD of 26100 did a same-surface BitBlt itself: it copied the source through a
+staging video-memory surface of its own and then into the destination, which is two copies for each
+scroll. The HLK job "GDIHW_Functional test for GDI HW ACC (v1.1)" compares the rate of such a BitBlt
+with the rate of a BitBlt into a device bitmap, and tester.37 gave the warning "The perf number for
+BitBlt is low" on that comparison. Both bits are now clear, so the operating system sends these
+commands to `DxgkDdiRenderGdi`.
+
+GDI's rule for an overlapping BitBlt is that the result is the same as when every source pixel is
+read before any destination pixel is written. The driver gets that result without a temporary
+surface:
+
+- `Bc250GdiPlanItem` marks a sub-rectangle `Same` when the source and the destination are one
+  allocation, and records the translation of the command, destination minus source (`Ddx`, `Ddy`).
+- A translation of (0, 0) is the identity. `SRCCOPY`, `SRCAND` and `SRCOR` then change no pixel, so
+  the item becomes `Bc250GdiWorkSkip` and emits nothing. `SRCINVERT` clears the block and stays an
+  ordinary kernel item.
+- When the source block and the destination block of an item do not meet, no pixel is read and
+  written, and the item stays what it was.
+- When they meet, the item is `Ordered`. It is done in bands (`Bc250GdiBand*` in
+  [gdi_pixel.h](../../driver/kmd/gdi_pixel.h)). When `Ddy` is not 0, a band is at most `|Ddy|` whole
+  rows. When `Ddy` is 0, a band is at most `|Ddx|` whole columns. The rows that a band writes are then
+  not rows that it reads. The bands start at the edge that the destination moves towards, so a band
+  reads only pixels that no earlier band wrote. Between two bands the earlier band must be complete
+  before the later band writes, because the later band writes pixels that the earlier band read.
+- An ordered copy on the engine path ([gdi_emit.c](../../driver/kmd/gdi_emit.c)) starts every band
+  with `RAW_WAIT` and ends it with `CP_SYNC`. An ordered copy that does not fit the budget, and any
+  other ROP on blocks that meet, runs as `gdi_bitblt_ordered`
+  ([gdi_kernels.cl](../../driver/kmd/gdi_kernels.cl)): one work group of 8 x 8 work items, with a
+  work-group release fence, `s_barrier` and an acquire fence between bands. The code object has
+  `s_waitcnt vmcnt(0)`, `s_waitcnt_vscnt`, `s_barrier` and `buffer_gl0_inv` at that point.
+- Two items of one command can also meet: item i can write pixels that item j reads.
+  `Bc250GdiSameSurfaceOrder` in [gdi_render.c](../../driver/kmd/gdi_render.c) puts j before i, for up
+  to `BC250_GDI_ORDER_MAX` (32) sub-rectangles. The CDD normally sends the sub-rectangles of a scroll
+  in that order already, because it enumerates the clip region with a direction, and the function
+  then keeps the order as it is. The batch ends every item with `CP_SYNC` or with the dispatch's
+  `CS_PARTIAL_FLUSH`, so an item is complete before the next item writes.
+- The hazards are all write-after-read: no pixel of the result depends on a pixel that the same
+  command wrote. So no cache invalidation is necessary between bands or items for correctness, only
+  the completion of the earlier reads.
+
+`WddmGdiBind` lets a BitBlt source that is a second list entry of the destination's allocation share
+the destination's slot when the backing serial and the GPU address are the same. Any other repeated
+allocation is still refused. The stop totals line `wddm: gdi same-skip ordered reordered unordered`
+counts the skipped identities, the ordered items, the commands that were put in a new order, and the
+commands that no order could make safe or that had more than 32 sub-rectangles. A nonzero
+`unordered` can mean wrong pixels.
+
+Host tests: `TestBands`, `TestSameSurfaceStream` and `TestSameSurfaceOrder` in
+[gdi_render_test.c](../../driver/kmd/test/gdi_render_test.c), and `TestOrdered` and
+`TestOrderedBatch` in [gdi_kernel_test.c](../../driver/kmd/test/gdi_kernel_test.c). They cover the
+eight directions, the identity, one-pixel moves and moves near the block size. The engine stream is
+decoded and checked group by group: inside a group between two `CP_SYNC`, no packet writes a byte
+that another packet of the group reads or writes. The stream is then replayed with each group
+forwards and backwards, and both results must equal the reference. The kernel runs band by band,
+with the work items of a band forwards and backwards. Two controls make sure that the tests can see a
+wrong order: the ordinary kernel on a one-pixel move, and the strips of a scroll in the wrong order,
+both give a different image. The contract checker has rules R41 and R42
+([rules.json](../../tools/wddm_contract_check/rules.json)) for the two bits.
 
 The GDI acceleration page adds one condition of its own. "The driver should report this type of
 support only if the cache-coherent GPU aperture segment exists and there's no significant

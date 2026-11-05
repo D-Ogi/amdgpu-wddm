@@ -193,10 +193,18 @@ int Bc250GdiAdmitOp(const BC250_GDI_OP* Op, const BC250_GDI_SURFACE* Surfaces, u
         if (dst->Bpp == 4u && src->RedFirst != dst->RedFirst) return Bc250GdiBadFormat;
         if (OpSourceMustFit(Op->OpCode) && !RectInside(&Op->SrcRect, src->Width, src->Height))
             return Bc250GdiBadRect;
-        /* The No*SameBitmap* caps are all set, so dxgkrnl will not ask for any of these. A command
-         * that does arrive naming one allocation twice is refused rather than run, because the
-         * read-modify-write of a kernel over an overlapping pair has no defined result. */
-        if (Op->SrcAllocationIndex == Op->DstAllocationIndex) return Bc250GdiBadSameSurface;
+        /* One allocation as source and destination. BITBLT is admitted (BD-306): wddm.c clears
+         * NoSameBitmapBitBlt and NoSameBitmapOverlappedBitBlt, so CDD sends a same-surface BitBlt
+         * to us, overlapping or not, instead of copying through a staging surface of its own
+         * (d3dkmddi.h lines 1949-1950: with the bit set, the OS will not ask). Bc250GdiPlanItem
+         * marks the items whose blocks meet, and the emitters do those in bands (gdi_pixel.h).
+         * ALPHABLEND, STRETCHBLT and TRANSPARENTBLT keep their No*SameBitmap* caps set, so a
+         * command of theirs that names one allocation twice is still refused rather than run. The
+         * two pitch members must then agree: one allocation has one row stride. */
+        if (Op->SrcAllocationIndex == Op->DstAllocationIndex) {
+            if (Op->OpCode != BC250_GDIOP_BITBLT) return Bc250GdiBadSameSurface;
+            if (srcPitch != dstPitch) return Bc250GdiBadSurface;
+        }
         /* A stretch that is not 1:1 is only admitted for the three operations whose Remarks define
          * one. BITBLT is "with no stretching" by its own title: unequal extents there is a
          * malformed command. */
@@ -291,6 +299,107 @@ static void ClassifyWork(const BC250_GDI_OP* Op, unsigned int Stretch, BC250_GDI
     }
 }
 
+/* A BITBLT inside one allocation (BD-306), once the source block of this item is known: SrcX and
+ * SrcY are its top-left pixel and the block has the destination's extent. Three cases.
+ *
+ *   - The same block (Ddx = Ddy = 0): SRCCOPY, SRCAND and SRCOR leave the destination as it is, so
+ *     the item becomes Bc250GdiWorkSkip. SRCINVERT stays the ordinary kernel: each work item reads
+ *     and writes only its own pixel, so no order is needed.
+ *   - Blocks that do not meet: no pixel of this item is read and written, so the item stays what
+ *     ClassifyWork made it. The order between items is the order of the sub-rectangles, which the
+ *     CDD gives for an overlapping copy, and gdi_batch.c ends every item with a wait.
+ *   - Blocks that meet: Ordered. A copy stays an engine copy, which gdi_emit.c then writes in
+ *     bands; any other ROP becomes gdi_bitblt_ordered.
+ *
+ * Two blocks of one surface that do not meet in pixels do not meet in bytes either: a row of a
+ * block lies inside its own row of the surface, because the block lies inside the surface width
+ * and the pitch is at least that width (Bc250GdiEffectivePitch). */
+static void ClassifySameSurface(const BC250_GDI_OP* Op, unsigned int SrcX, unsigned int SrcY,
+                                BC250_GDI_ITEM* Item)
+{
+    unsigned int w = Item->DstWidth, h = Item->DstHeight;
+    if (Item->Ddx == 0 && Item->Ddy == 0) {
+        if (Op->Rop != BC250_GDI_ROP_SRCINVERT) {
+            Item->Work = (unsigned int)Bc250GdiWorkSkip;
+            Item->Kernel = (unsigned int)Bc250GdiKernelNone;
+        }
+        return;
+    }
+    if (SrcX >= Item->DstLeft + w || Item->DstLeft >= SrcX + w ||
+        SrcY >= Item->DstTop + h || Item->DstTop >= SrcY + h)
+        return;
+    Item->Ordered = 1u;
+    if (Item->Work == (unsigned int)Bc250GdiWorkKernel)
+        Item->Kernel = (unsigned int)Bc250GdiKernelBitBltOrdered;
+}
+
+/* A sub-rectangle clipped to DstRect, as Bc250GdiPlanItem clips it. */
+static BC250_GDI_RECT ClipToDst(const BC250_GDI_OP* Op, const BC250_GDI_RECT* R)
+{
+    BC250_GDI_RECT c;
+    c.Left = R->Left > Op->DstRect.Left ? R->Left : Op->DstRect.Left;
+    c.Top = R->Top > Op->DstRect.Top ? R->Top : Op->DstRect.Top;
+    c.Right = R->Right < Op->DstRect.Right ? R->Right : Op->DstRect.Right;
+    c.Bottom = R->Bottom < Op->DstRect.Bottom ? R->Bottom : Op->DstRect.Bottom;
+    return c;
+}
+
+static int RectsMeet(const BC250_GDI_RECT* A, const BC250_GDI_RECT* B)
+{
+    return RectNonEmpty(A) && RectNonEmpty(B) && A->Left < B->Right && B->Left < A->Right &&
+        A->Top < B->Bottom && B->Top < A->Bottom;
+}
+
+int Bc250GdiSameSurfaceOrder(const BC250_GDI_OP* Op, const BC250_GDI_RECT* Subs, unsigned int Count,
+                             unsigned char* Order)
+{
+    unsigned int before[BC250_GDI_ORDER_MAX];
+    unsigned int placed = 0u, done = 0u, i, j, moved = 0u;
+    int ddx, ddy;
+
+    if (!Op || !Subs || !Order || Count > BC250_GDI_ORDER_MAX) return 0;
+    for (i = 0; i < Count; i++) Order[i] = (unsigned char)i;
+    if (Op->OpCode != BC250_GDIOP_BITBLT || Op->SrcAllocationIndex != Op->DstAllocationIndex)
+        return 1;
+    if (!RectSane(&Op->DstRect) || !RectSane(&Op->SrcRect)) return 0;
+    ddx = Op->DstRect.Left - Op->SrcRect.Left;
+    ddy = Op->DstRect.Top - Op->SrcRect.Top;
+    if (ddx == 0 && ddy == 0) return 1;     /* each item reads only its own pixels */
+    for (i = 0; i < Count; i++) {
+        BC250_GDI_RECT di;
+        before[i] = 0u;
+        /* A rectangle Bc250GdiPlanItem will refuse draws nothing and needs no place. */
+        if (!RectSane(&Subs[i])) continue;
+        di = ClipToDst(Op, &Subs[i]);
+        for (j = 0; j < Count; j++) {
+            BC250_GDI_RECT sj;
+            if (j == i || !RectSane(&Subs[j])) continue;
+            /* Item j's source block: its clipped destination block moved back by the translation.
+             * Both terms are inside CoordSane, so the sums cannot overflow. */
+            sj = ClipToDst(Op, &Subs[j]);
+            sj.Left -= ddx; sj.Right -= ddx; sj.Top -= ddy; sj.Bottom -= ddy;
+            /* Item i writes pixels that item j reads: j must run first. */
+            if (RectsMeet(&di, &sj)) before[i] |= 1u << j;
+        }
+    }
+    /* Kahn's order, always taking the lowest index that is free. An order that is already safe is
+     * then given back unchanged, item for item. */
+    while (done < Count) {
+        for (i = 0; i < Count; i++)
+            if (!(placed & (1u << i)) && (before[i] & ~placed) == 0u) break;
+        if (i == Count) {
+            /* A cycle: no order of whole items is safe. A clip region of GDI cannot make one, so
+             * this is a malformed command; the given order stays and the caller counts it. */
+            for (j = 0; j < Count; j++) Order[j] = (unsigned char)j;
+            return 0;
+        }
+        if (i != done) moved = 1u;
+        Order[done++] = (unsigned char)i;
+        placed |= 1u << i;
+    }
+    return moved ? 2 : 1;
+}
+
 /* The inverse of the two engine arms of ClassifyWork: the kernel that performs the same operation.
  * The ROP checks are the classification's own conditions read back, so a mismatch is a refusal and
  * not a silently different drawing. */
@@ -306,7 +415,10 @@ int Bc250GdiItemToKernel(const BC250_GDI_OP* Op, BC250_GDI_ITEM* Item)
     switch (Op->OpCode) {
     case BC250_GDIOP_BITBLT:
         if (Op->Rop != BC250_GDI_ROP_SRCCOPY) return 0;
-        kernel = (unsigned int)Bc250GdiKernelBitBltRop;
+        /* A copy whose source and destination blocks meet in one allocation keeps its band order
+         * in the kernel too (gdi_render.h, Bc250GdiItemToKernel). */
+        kernel = Item->Ordered ? (unsigned int)Bc250GdiKernelBitBltOrdered
+                               : (unsigned int)Bc250GdiKernelBitBltRop;
         break;
     case BC250_GDIOP_STRETCHBLT:
         if (Item->Stretch) return 0;            /* a stretching StretchBlt is never an engine item */
@@ -372,6 +484,13 @@ int Bc250GdiPlanItem(const BC250_GDI_OP* Op, const BC250_GDI_SURFACE* Surfaces, 
         Item->Hs = Item->Hd;
     }
     ClassifyWork(Op, Item->Stretch, Item);
+    if (Op->OpCode == BC250_GDIOP_BITBLT && Op->SrcAllocationIndex == Op->DstAllocationIndex) {
+        /* Equal extents (admission), so the translation is one vector for the whole command. Both
+         * terms are inside CoordSane, so the differences cannot overflow. */
+        Item->Same = 1u;
+        Item->Ddx = Op->DstRect.Left - Op->SrcRect.Left;
+        Item->Ddy = Op->DstRect.Top - Op->SrcRect.Top;
+    }
 
     if (!RectNonEmpty(&clipped)) return Bc250GdiOk;      /* nothing to do, not an error */
 
@@ -403,6 +522,7 @@ int Bc250GdiPlanItem(const BC250_GDI_OP* Op, const BC250_GDI_SURFACE* Surfaces, 
         Item->SrcBase = 0;
         Item->SrcOffset = base;
         Item->RowBytes = Item->DstWidth * dst->Bpp;
+        if (Item->Same) ClassifySameSurface(Op, (unsigned int)x0, (unsigned int)y0, Item);
         /* A copy addresses whole rows at a constant offset; the engine path needs that offset and
          * nothing else. A kernel re-evaluates the transform per pixel and uses SrcBase 0. */
         if (Item->Stretch) { Item->SrcOffset = 0; Item->RowBytes = 0; }

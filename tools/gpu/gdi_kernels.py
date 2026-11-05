@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build driver/kmd/gdi_kernels.cl for gfx1013 and generate driver/kmd/gdi_kernels.generated.h.
 
-The six GDI compute kernels (docs/design/gdi-hw-accel.md, increment 2) ship inside the miniport as
+The seven GDI compute kernels (docs/design/gdi-hw-accel.md, increment 2) ship inside the miniport as
 machine code, because DxgkDdiRenderGdi has no compiler and no time for one. This script is the only
 way that code enters the driver image, and the header it writes carries three kinds of number:
 
@@ -262,7 +262,7 @@ def kernel_descriptor(data, sections, symbols, name):
 
 
 def disassembly(clang, elf, names):
-    """The six kernels' instructions, by kernel, for the forbidden-instruction check."""
+    """The seven kernels' instructions, by kernel, for the forbidden-instruction check."""
     argv = [tool(clang, "llvm-objdump"), "-d", "--no-show-raw-insn"]
     argv += [f"--disassemble-symbols={n}" for n in names]
     return run(argv + [elf])
@@ -418,7 +418,7 @@ def build(clang, work):
                             vgprs=described_one[".vgpr_count"], sgprs=described_one[".sgpr_count"]))
         code += data[start:start + length]
         # COMPUTE_PGM_LO is the program address shifted right by 8, so every kernel must begin at a
-        # 256-byte boundary of the DMA buffer. Padding each slice keeps that true for all six from
+        # 256-byte boundary of the DMA buffer. Padding each slice keeps that true for all seven from
         # one aligned base, and the padding is never executed.
         while len(code) % 256:
             code += b"\0"

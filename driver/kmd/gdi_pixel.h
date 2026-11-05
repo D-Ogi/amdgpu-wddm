@@ -71,7 +71,7 @@ typedef int          bc250_i32;
  * functions, and a kernel translation unit must hold nothing but the kernels. */
 #define BC250_GDI_GAMMA_ENTRIES 256u
 
-/* The work-group shape of every kernel in gdi_kernels.cl. One number for all six, because the
+/* The work-group shape of every kernel in gdi_kernels.cl. One number for all seven, because the
  * dispatch emitter programs one COMPUTE_NUM_THREAD_X/Y pair and the build gates the shape the code
  * object asks for against this. 8 by 8 is 64 work items, which is two gfx1013 waves of 32 lanes
  * with no remainder, and a row of 8 pixels is 32 bytes: one cache line of the destination for every
@@ -79,7 +79,7 @@ typedef int          bc250_i32;
 #define BC250_GDI_GROUP_X 8u
 #define BC250_GDI_GROUP_Y 8u
 
-/* The `flags` kernarg: the per-command booleans that the six kernels read, in one dword, so that
+/* The `flags` kernarg: the per-command booleans that the seven kernels read, in one dword, so that
  * the kernarg layout does not change when an operation gains one. gdi_dispatch.c builds the word
  * from BC250_GDI_OP and the surfaces; the host test builds it the same way through the same
  * function. */
@@ -174,6 +174,85 @@ BC250_GDI_FN bc250_u32 Bc250GdiBitBltPixel(bc250_u32 Rop, bc250_u32 Src, bc250_u
     case BC250_GDI_ROP_SRCOR:     return Dst | Src;
     default:                      return Dst;      /* refused before here; leave the pixel alone */
     }
+}
+
+/* ---- the band order of a BitBlt inside one surface (BD-306) -------------------------------------
+ * A BitBlt whose source and destination are one allocation, and whose source block meets its
+ * destination block, must give the result of a copy that reads every source pixel before it writes
+ * any destination pixel (GDI's own BitBlt rule for overlapping rectangles). The driver does it in
+ * bands, without a temporary surface:
+ *
+ *   - Ddx and Ddy are the translation of the command, destination minus source, in pixels.
+ *   - When Ddy is not 0, a band is a run of at most |Ddy| whole rows. The rows a band writes are
+ *     then not the rows it reads: destination row y reads source row y - Ddy, and two rows of one
+ *     band are less than |Ddy| apart. So the pixels of one band can be done in any order, or at
+ *     the same time.
+ *   - When Ddy is 0 and Ddx is not, a band is a run of at most |Ddx| whole columns, for the same
+ *     reason along the other axis.
+ *   - The bands go from the edge the destination moves towards: the bottom band first when Ddy > 0,
+ *     the top band first when Ddy < 0, and the same with the right and left edges for columns. A
+ *     band then reads only pixels that no earlier band wrote, because every earlier band lies
+ *     further along the direction of the move.
+ *   - Ddx = Ddy = 0 is one band of the whole block: each pixel reads and writes only itself.
+ *
+ * Between two bands the earlier band must be complete before the later one writes: the later band
+ * writes pixels that the earlier band read (a write-after-read order). gdi_emit.c ends each band of
+ * an engine copy with CP_SYNC, and the ordered kernel of gdi_kernels.cl ends each band with a
+ * work-group barrier. The emitter, the kernel and the host test all call these functions, so the
+ * three cannot use different bands.
+ *
+ * Width and Height are the block of one sub-rectangle, both at least 1. |Ddx| and |Ddy| are bounded
+ * by the admission (gdi_render.c, CoordSane), so the negation below cannot overflow. */
+BC250_GDI_FN bc250_u32 Bc250GdiBandRows(bc250_i32 Ddx, bc250_i32 Ddy)
+{
+    return Ddy != 0 || Ddx == 0 ? 1u : 0u;
+}
+
+/* The length of the axis the bands cut, and the lines in one full band. */
+BC250_GDI_FN bc250_u32 Bc250GdiBandAxis(bc250_u32 Width, bc250_u32 Height, bc250_i32 Ddx, bc250_i32 Ddy)
+{
+    return Bc250GdiBandRows(Ddx, Ddy) ? Height : Width;
+}
+
+BC250_GDI_FN bc250_u32 Bc250GdiBandLines(bc250_u32 Width, bc250_u32 Height, bc250_i32 Ddx, bc250_i32 Ddy)
+{
+    bc250_u32 axis = Bc250GdiBandAxis(Width, Height, Ddx, Ddy);
+    bc250_i32 d = Bc250GdiBandRows(Ddx, Ddy) ? Ddy : Ddx;
+    bc250_u32 step = d < 0 ? (bc250_u32)(-d) : (bc250_u32)d;
+    if (step == 0u || step > axis) step = axis;
+    return step;
+}
+
+BC250_GDI_FN bc250_u32 Bc250GdiBandCount(bc250_u32 Width, bc250_u32 Height, bc250_i32 Ddx, bc250_i32 Ddy)
+{
+    bc250_u32 axis = Bc250GdiBandAxis(Width, Height, Ddx, Ddy);
+    bc250_u32 step = Bc250GdiBandLines(Width, Height, Ddx, Ddy);
+    if (axis == 0u || step == 0u) return 0u;
+    return (axis + step - 1u) / step;
+}
+
+/* The first line (row or column, from the top or the left edge of the block) of band Band, and the
+ * number of lines in it. Band 0 is the band that runs first. */
+BC250_GDI_FN bc250_u32 Bc250GdiBandFirst(bc250_u32 Band, bc250_u32 Width, bc250_u32 Height,
+                                         bc250_i32 Ddx, bc250_i32 Ddy)
+{
+    bc250_u32 axis = Bc250GdiBandAxis(Width, Height, Ddx, Ddy);
+    bc250_u32 step = Bc250GdiBandLines(Width, Height, Ddx, Ddy);
+    bc250_i32 d = Bc250GdiBandRows(Ddx, Ddy) ? Ddy : Ddx;
+    bc250_u32 behind = Band * step;               /* lines already done, from the first edge */
+    if (behind >= axis) return axis;
+    if (d > 0) return axis - behind < step ? 0u : axis - behind - step;
+    return behind;
+}
+
+BC250_GDI_FN bc250_u32 Bc250GdiBandSpan(bc250_u32 Band, bc250_u32 Width, bc250_u32 Height,
+                                        bc250_i32 Ddx, bc250_i32 Ddy)
+{
+    bc250_u32 axis = Bc250GdiBandAxis(Width, Height, Ddx, Ddy);
+    bc250_u32 step = Bc250GdiBandLines(Width, Height, Ddx, Ddy);
+    bc250_u32 behind = Band * step;
+    if (behind >= axis) return 0u;
+    return axis - behind < step ? axis - behind : step;
 }
 
 /* ---- ColorFill ----------------------------------------------------------------------------------

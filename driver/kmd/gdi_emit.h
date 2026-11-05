@@ -40,11 +40,19 @@ unsigned int Bc250EmitGdiFillSpan(unsigned int* Buffer, unsigned int CapacityDwo
  * "these rows do not fit the dwords the sub-rectangles behind this one are owed" and dispatches the
  * item instead; the ordinals are what a resumable caller would need and are host-tested as such.
  * Written is the dwords emitted.
+ *
+ * An Ordered copy (a BITBLT inside one allocation whose source and destination blocks meet, BD-306)
+ * is written in the bands of gdi_pixel.h, each band with RAW_WAIT on its first packet and CP_SYNC on
+ * its last. It is whole or nothing: Offset must be 0, DONE writes every band, and NO_SPACE writes
+ * nothing, so the caller dispatches gdi_bitblt_ordered instead.
  */
 #define BC250_GDI_EMIT_INVALID  0
 #define BC250_GDI_EMIT_DONE     1
 #define BC250_GDI_EMIT_MORE     2
 #define BC250_GDI_EMIT_NO_SPACE 3
+/* The dwords an Ordered copy needs, or 0 for an item that is not one. */
+unsigned int Bc250GdiOrderedCopyDwords(const BC250_GDI_ITEM* Item);
+
 int Bc250EmitGdiItem(const BC250_GDI_ITEM* Item, unsigned long long SourceBase,
     unsigned long long DestinationBase, unsigned int Pattern, unsigned int Offset,
     unsigned int* Next, unsigned int* Buffer, unsigned int CapacityDwords, unsigned int* Written);

@@ -5,7 +5,7 @@
 
 /*
  * The command stream of the four GDI operations the command processor cannot perform: a compute
- * dispatch of one of the six kernels of gdi_kernels.cl, which the driver image carries as machine
+ * dispatch of one of the seven kernels of gdi_kernels.cl, which the driver image carries as machine
  * code (gdi_kernels.generated.h). Increment 2 of docs/design/gdi-hw-accel.md.
  *
  * Plain C over plain integers, like gdi_emit.h, so that the whole thing is host-tested on this PC:

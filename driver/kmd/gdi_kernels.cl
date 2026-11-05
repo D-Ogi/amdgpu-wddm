@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /*
- * The six GDI operations that the command processor cannot perform, as compute kernels for
+ * The GDI operations that the command processor cannot perform in one pass, as seven compute kernels for
  * gfx1013. Increment 2 of docs/design/gdi-hw-accel.md.
  *
  * The arithmetic is NOT here. Every line of it is gdi_pixel.h, which compiles as OpenCL C in this
@@ -13,7 +13,7 @@
  * the dispatch was emitted, and the one check below (x < width, y < height) is there because the
  * grid is rounded up to whole work groups, not because the rectangle is in doubt.
  *
- * The six kernels share one argument list, so the kernarg block has one layout, one writer in
+ * The seven kernels share one argument list, so the kernarg block has one layout, one writer in
  * gdi_dispatch.c and one gate in tools/gpu/gdi_kernels.py. An argument a kernel does not read
  * costs nothing but its 4 or 8 bytes.
  *
@@ -96,6 +96,61 @@ GDI_GROUP kernel void gdi_bitblt_rop(GDI_ARGS)
     GDI_PIXEL;
     __global uint* d = GdiDstAt(dst, dstPitch, x, y);
     *d = Bc250GdiBitBltPixel(rop, GDI_SRC_WORD, *d);
+}
+
+/* ---- BITBLT inside one surface, overlapping (BD-306) --------------------------------------------
+ * Any BITBLT ROP, when the source and the destination are one allocation and the source block of
+ * the sub-rectangle meets its destination block. The work items of an ordinary dispatch run in no
+ * order, so one of them could write a pixel that another has not read yet. This kernel runs as ONE
+ * work group (gdi_dispatch.c programs a grid of 1 x 1 x 1 for it) and does the block in the bands
+ * of gdi_pixel.h, with a barrier between bands: inside a band no pixel that is written is also
+ * read, and the barrier makes every read of a band complete before the next band writes.
+ *
+ * `color` and `color2` carry the translation of the command, destination minus source (Ddx, Ddy),
+ * which no other argument gives: dst points at this sub-rectangle, and the transform's own origin
+ * fields give only the source side. gdi_dispatch.c writes them for this kernel alone.
+ *
+ * The band body is a function of its own, so the host test can run the 64 work items of the group
+ * in step, band by band, which is the order the barrier enforces on the GPU.
+ */
+static inline void GdiOrderedBand(__global uchar* dst, __global const uchar* src,
+                                  uint dstPitch, uint srcPitch, uint width, uint height, uint rop,
+                                  int srcLeft, int srcTop, uint dx0, uint dy0,
+                                  uint ws, uint wd, uint hs, uint hd, int ddx, int ddy,
+                                  uint band, uint lx, uint ly)
+{
+    uint first = Bc250GdiBandFirst(band, width, height, ddx, ddy);
+    uint span = Bc250GdiBandSpan(band, width, height, ddx, ddy);
+    uint x0 = 0u, x1 = width, y0 = 0u, y1 = height, x, y;
+    if (Bc250GdiBandRows(ddx, ddy)) { y0 = first; y1 = first + span; }
+    else { x0 = first; x1 = first + span; }
+    for (y = y0 + ly; y < y1; y += BC250_GDI_GROUP_Y) {
+        for (x = x0 + lx; x < x1; x += BC250_GDI_GROUP_X) {
+            __global uint* d = GdiDstAt(dst, dstPitch, x, y);
+            *d = Bc250GdiBitBltPixel(rop, GdiSrcWord(src, srcPitch, srcLeft, srcTop, dx0, dy0,
+                                                     x, y, ws, wd, hs, hd), *d);
+        }
+    }
+}
+
+GDI_GROUP kernel void gdi_bitblt_ordered(GDI_ARGS)
+{
+    uint lx = __builtin_amdgcn_workitem_id_x(), ly = __builtin_amdgcn_workitem_id_y();
+    int ddx = (int)color, ddy = (int)color2;
+    uint bands = Bc250GdiBandCount(width, height, ddx, ddy), band;
+    for (band = 0u; band < bands; band++) {
+        GdiOrderedBand(dst, src, dstPitch, srcPitch, width, height, rop, srcLeft, srcTop, dx0, dy0,
+                       ws, wd, hs, hd, ddx, ddy, band, lx, ly);
+        /* Every load and store of this band complete and visible to the whole group before any
+         * work item starts the next band: a work-group-scope release, s_barrier, and a
+         * work-group-scope acquire, which is what an OpenCL work_group_barrier on global memory
+         * lowers to (AMDGPUUsage.rst, memory model for GFX10). These are compiler builtins, not
+         * device-library calls, because the build has no device library (-nogpulib). The group is
+         * 64 work items, two wave32 waves, so the s_barrier is a real one. */
+        __builtin_amdgcn_fence(__ATOMIC_RELEASE, "workgroup");
+        __builtin_amdgcn_s_barrier();
+        __builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "workgroup");
+    }
 }
 
 /* ---- COLORFILL with a raster operation ----------------------------------------------------------

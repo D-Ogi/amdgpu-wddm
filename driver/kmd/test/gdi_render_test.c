@@ -428,11 +428,51 @@ static void TestAdmission(void)
         CHECK_EQ(Bc250GdiAdmitOp(&op, t, 4), Bc250GdiOk);
     }
 
-    /* One allocation named twice: the No*SameBitmap* caps say the OS will not ask, and a command
-     * that does is refused rather than run with an undefined read-modify-write. */
-    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(0, 0, 10, 10), Rect(20, 20, 30, 30));
-    op.SrcAllocationIndex = op.DstAllocationIndex = 1;
-    CHECK_EQ(Bc250GdiAdmitOp(&op, s, 4), Bc250GdiBadSameSurface);
+    /* One allocation named twice (BD-306). A BitBlt is admitted, disjoint or overlapping, with any
+     * of its ROPs: NoSameBitmapBitBlt and NoSameBitmapOverlappedBitBlt are clear. Its two pitch
+     * members must agree, because one allocation has one row stride. The other operations keep
+     * their No*SameBitmap* caps and are refused. */
+    {
+        unsigned int rop;
+        for (rop = BC250_GDI_ROP_SRCCOPY; rop <= BC250_GDI_ROP_SRCOR; rop++) {
+            op = BitBltOp(rop, Rect(0, 0, 10, 10), Rect(20, 20, 30, 30));
+            op.SrcAllocationIndex = op.DstAllocationIndex = 1;
+            CHECK_EQ(Bc250GdiAdmitOp(&op, s, 4), Bc250GdiOk);
+            op = BitBltOp(rop, Rect(0, 0, 10, 10), Rect(1, 1, 11, 11));
+            op.SrcAllocationIndex = op.DstAllocationIndex = 1;
+            CHECK_EQ(Bc250GdiAdmitOp(&op, s, 4), Bc250GdiOk);
+        }
+        {
+            /* The one type whose pitch the DDI supplies, with room for a wider pitch than its own. */
+            BC250_GDI_SURFACE t[4];
+            memcpy(t, s, sizeof(t));
+            t[2] = Surface(200, 100, 4, BC250_GDISURFACE_STAGING_CPUVISIBLE, 0);
+            t[2].Bytes = (unsigned long long)(t[2].Pitch + 256u) * t[2].Height;
+            op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(0, 0, 10, 10), Rect(1, 1, 11, 11));
+            op.SrcAllocationIndex = op.DstAllocationIndex = 2;
+            op.SrcPitch = op.DstPitch = t[2].Pitch;
+            CHECK_EQ(Bc250GdiAdmitOp(&op, t, 4), Bc250GdiOk);
+            op.SrcPitch = t[2].Pitch + 256u;
+            CHECK_EQ(Bc250GdiAdmitOp(&op, t, 4), Bc250GdiBadSurface);
+        }
+        /* The same rectangle twice is admitted: it is the identity, and the plan skips it. */
+        op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(5, 5, 15, 15), Rect(5, 5, 15, 15));
+        op.SrcAllocationIndex = op.DstAllocationIndex = 1;
+        CHECK_EQ(Bc250GdiAdmitOp(&op, s, 4), Bc250GdiOk);
+        memset(&op, 0, sizeof(op));
+        op.OpCode = BC250_GDIOP_ALPHABLEND;
+        op.SrcRect = Rect(0, 0, 10, 10); op.DstRect = Rect(20, 20, 30, 30);
+        op.SrcAllocationIndex = op.DstAllocationIndex = 1;
+        op.SourceConstantAlpha = 255u;
+        CHECK_EQ(Bc250GdiAdmitOp(&op, s, 4), Bc250GdiBadSameSurface);
+        op.OpCode = BC250_GDIOP_STRETCHBLT;
+        op.SourceConstantAlpha = 0u;
+        op.Mode = BC250_GDI_STRETCH_COLORONCOLOR;
+        CHECK_EQ(Bc250GdiAdmitOp(&op, s, 4), Bc250GdiBadSameSurface);
+        op.OpCode = BC250_GDIOP_TRANSPARENTBLT;
+        op.Mode = 0u;
+        CHECK_EQ(Bc250GdiAdmitOp(&op, s, 4), Bc250GdiBadSameSurface);
+    }
 
     /* A BITBLT is "with no stretching" by its own title. */
     op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(0, 0, 10, 10), Rect(0, 0, 20, 20));
@@ -1215,6 +1255,370 @@ static void TestStream(void)
     TestStreamCase(&op, s, 2, &sub, 0, 65536u);
 }
 
+/* ================================================================================================
+ * 4. BitBlt inside one surface (BD-306): the bands, the ordered stream, the item order
+ * ============================================================================================== */
+
+/* The bands of gdi_pixel.h, against the two properties the design rests on, for every shape and
+ * translation in a bounded box. For each band: no line it writes is a line it reads. For each pair
+ * of bands: a band never reads a pixel that an earlier band wrote. Both are stated per pixel here,
+ * from "destination pixel p reads source pixel p - d", and not from the band arithmetic. */
+static void TestBands(void)
+{
+    static unsigned int bandOf[24][24];
+    unsigned int w, h, b, x, y, lines;
+    int dx, dy;
+    for (w = 1; w <= 20u; w += 3u)
+        for (h = 1; h <= 20u; h += 3u)
+            for (dx = -22; dx <= 22; dx++)
+                for (dy = -22; dy <= 22; dy++) {
+                    unsigned int bands = Bc250GdiBandCount(w, h, dx, dy);
+                    unsigned int rows = Bc250GdiBandRows(dx, dy);
+                    unsigned int axis = rows ? h : w, covered = 0, bad = 0;
+                    int d = rows ? dy : dx;
+                    CHECK(bands >= 1u);
+                    if (dx == 0 && dy == 0) CHECK_EQ(bands, 1u);
+                    for (b = 0; b < bands; b++) {
+                        unsigned int first = Bc250GdiBandFirst(b, w, h, dx, dy);
+                        unsigned int span = Bc250GdiBandSpan(b, w, h, dx, dy);
+                        unsigned int i;
+                        CHECK(span >= 1u);
+                        CHECK(first + span <= axis);
+                        /* At most |d| lines, the bound that keeps a band from reading itself. */
+                        if (d != 0) CHECK(span <= (unsigned int)(d < 0 ? -d : d));
+                        for (i = first; i < first + span; i++) {
+                            if (rows) for (x = 0; x < w; x++) bandOf[i][x] = b;
+                            else for (y = 0; y < h; y++) bandOf[y][i] = b;
+                        }
+                        covered += span;
+                    }
+                    /* The bands cut the axis exactly once. */
+                    CHECK_EQ(covered, axis);
+                    lines = Bc250GdiBandLines(w, h, dx, dy);
+                    CHECK(lines >= 1u && lines <= axis);
+                    for (y = 0; y < h; y++)
+                        for (x = 0; x < w; x++) {
+                            int sx = (int)x - dx, sy = (int)y - dy;
+                            if (sx < 0 || sy < 0 || sx >= (int)w || sy >= (int)h) continue;
+                            if (dx == 0 && dy == 0) continue;     /* a pixel reading itself */
+                            /* p is written in band bandOf[y][x] and reads q in that band; q is
+                             * written in band bandOf[sy][sx], which must come later. */
+                            if (bandOf[sy][sx] <= bandOf[y][x]) bad++;
+                        }
+                    CHECK_EQ(bad, 0u);
+                }
+}
+
+/* SeedMemory's pattern repeats every 256 bytes, so with a 1024-byte pitch every row of a surface
+ * holds the same bytes and a vertical move would be invisible. The same-surface cases seed a
+ * pattern with no period a pitch can hit. */
+static void SeedSameSurface(void)
+{
+    unsigned int i;
+    for (i = 0; i < MEM_BYTES; i++) g_memory[i] = (unsigned char)((i * 2654435761u) >> 19);
+    memcpy(g_expected, g_memory, MEM_BYTES);
+}
+
+/* One DMA_DATA copy as decoded for the hazard check. */
+typedef struct COPY_PACKET {
+    unsigned long long Src, Dst;
+    unsigned int Bytes, Wait, Sync;
+} COPY_PACKET;
+
+#define MAX_COPY_PACKETS 8192u
+static COPY_PACKET g_packets[MAX_COPY_PACKETS];
+
+static unsigned int DecodeCopies(const unsigned int* p, unsigned int dwords)
+{
+    unsigned int at = 0, n = 0;
+    while (at < dwords) {
+        unsigned int control, command;
+        if (dwords - at < 7u || n == MAX_COPY_PACKETS) return 0;
+        if (p[at] != (unsigned int)PACKET3(PACKET3_DMA_DATA, 5)) return 0;
+        control = p[at + 1u];
+        command = p[at + 6u];
+        if (((control >> 20) & 3u) != 3u || ((control >> 29) & 3u) != 3u) return 0;
+        g_packets[n].Src = ((unsigned long long)p[at + 3u] << 32) | p[at + 2u];
+        g_packets[n].Dst = ((unsigned long long)p[at + 5u] << 32) | p[at + 4u];
+        g_packets[n].Bytes = command & 0x3FFFFFFu;
+        g_packets[n].Wait = (command & (unsigned int)PACKET3_DMA_DATA_CMD_RAW_WAIT) ? 1u : 0u;
+        g_packets[n].Sync = (control & (unsigned int)PACKET3_DMA_DATA_CP_SYNC) ? 1u : 0u;
+        n++;
+        at += 7u;
+    }
+    return n;
+}
+
+static int SpansMeet(unsigned long long a, unsigned int an, unsigned long long b, unsigned int bn)
+{
+    return a < b + bn && b < a + an;
+}
+
+/* The hazard check of an engine stream. A group is the packets up to and including one with
+ * CP_SYNC: the engine finishes the whole group before it takes the next packet, and the packets of
+ * a group may run in any order. So inside a group no packet may write a byte that another packet
+ * of the group reads or writes, and no packet may read its own output. Then the stream is replayed
+ * twice onto copies of the seed, every group forwards and every group backwards, and both must
+ * give the same bytes. Returns the number of groups, 0 on any violation. */
+static unsigned char g_backwards[MEM_BYTES];
+
+static unsigned int CheckAndReplayGroups(unsigned int n)
+{
+    unsigned int start = 0, groups = 0, i, j, k;
+    memcpy(g_backwards, g_memory, MEM_BYTES);
+    while (start < n) {
+        unsigned int end = start;
+        while (end < n && !g_packets[end].Sync) end++;
+        if (end == n) return 0;                       /* the stream must end with CP_SYNC */
+        if (!g_packets[start].Wait) return 0;         /* and each group begin with RAW_WAIT */
+        for (i = start; i <= end; i++) {
+            const COPY_PACKET* a = &g_packets[i];
+            if (a->Dst + a->Bytes > MEM_BYTES || a->Src + a->Bytes > MEM_BYTES) return 0;
+            if (SpansMeet(a->Src, a->Bytes, a->Dst, a->Bytes)) return 0;
+            for (j = start; j <= end; j++) {
+                const COPY_PACKET* b = &g_packets[j];
+                if (i == j) continue;
+                if (SpansMeet(a->Dst, a->Bytes, b->Src, b->Bytes)) return 0;
+                if (SpansMeet(a->Dst, a->Bytes, b->Dst, b->Bytes)) return 0;
+            }
+        }
+        for (k = start; k <= end; k++) {
+            const COPY_PACKET* f = &g_packets[k];
+            const COPY_PACKET* r = &g_packets[end - (k - start)];
+            memmove(g_memory + f->Dst, g_memory + f->Src, f->Bytes);
+            memmove(g_backwards + r->Dst, g_backwards + r->Src, r->Bytes);
+        }
+        groups++;
+        start = end + 1u;
+    }
+    return memcmp(g_memory, g_backwards, MEM_BYTES) == 0 ? groups : 0u;
+}
+
+/* GDI's rule, on g_expected: every destination pixel of the item gets the source pixel as it was
+ * before the operation. */
+static void ReferenceSameCopy(const BC250_GDI_ITEM* item)
+{
+    static unsigned char before[MEM_BYTES];
+    unsigned int y;
+    memcpy(before, g_expected, MEM_BYTES);
+    for (y = 0; y < item->DstHeight; y++)
+        memcpy(g_expected + item->DstOffset + (unsigned long long)y * item->DstPitch,
+               before + item->SrcOffset + (unsigned long long)y * item->SrcPitch, item->RowBytes);
+}
+
+/* A same-surface copy through the engine path, one item. Returns the item's band count, or 0. */
+static unsigned int RunSameCopy(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* s,
+                                const BC250_GDI_RECT* sub, int expectOrdered)
+{
+    static unsigned int buffer[65536];
+    BC250_GDI_ITEM item;
+    unsigned int next = 0, written = 0, n, groups, bands;
+    CHECK_EQ(Bc250GdiPlanItem(op, s, 1, sub, &item), Bc250GdiOk);
+    if (!item.DstHeight) return 0;
+    CHECK_EQ(item.Same, 1u);
+    CHECK_EQ(item.Ordered, (unsigned int)expectOrdered);
+    CHECK_EQ(item.Work, (unsigned int)Bc250GdiWorkCopy);
+    ReferenceSameCopy(&item);
+    CHECK_EQ(Bc250EmitGdiItem(&item, 0, 0, 0, 0, &next, buffer, 65536u, &written),
+             BC250_GDI_EMIT_DONE);
+    CHECK_EQ(next, item.DstHeight);
+    if (expectOrdered) CHECK_EQ(written, Bc250GdiOrderedCopyDwords(&item));
+    n = DecodeCopies(buffer, written);
+    CHECK(n > 0u);
+    groups = CheckAndReplayGroups(n);
+    CHECK(groups > 0u);
+    bands = expectOrdered ? Bc250GdiBandCount(item.DstWidth, item.DstHeight, item.Ddx, item.Ddy) : 1u;
+    CHECK_EQ(groups, bands);
+    return groups;
+}
+
+static void SameCase(int ddx, int ddy, unsigned int w, unsigned int h, int expectOrdered)
+{
+    BC250_GDI_SURFACE s[1];
+    BC250_GDI_OP op;
+    BC250_GDI_RECT sub;
+    const int x0 = 100, y0 = 50;
+    s[0] = Surface(256, 128, 4, BC250_GDISURFACE_TEXTURE, 0);
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY,
+                  Rect(x0 - ddx, y0 - ddy, x0 - ddx + (int)w, y0 - ddy + (int)h),
+                  Rect(x0, y0, x0 + (int)w, y0 + (int)h));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    sub = op.DstRect;
+    SeedSameSurface();
+    RunSameCopy(&op, s, &sub, expectOrdered);
+    if (memcmp(g_memory, g_expected, MEM_BYTES) != 0) {
+        fprintf(stderr, "FAIL same-surface copy by (%d,%d), %ux%u\n", ddx, ddy, w, h);
+        g_failures++;
+    }
+    g_checks++;
+}
+
+static void TestSameSurfaceStream(void)
+{
+    static const int dirs[8][2] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, 1}, {1, -1}, {-1, -1} };
+    static const int sizes[] = { 1, 2, 7, 8, 9, 29 };
+    unsigned int d, m;
+    BC250_GDI_SURFACE s[1];
+    BC250_GDI_OP op;
+    BC250_GDI_ITEM item;
+    BC250_GDI_RECT sub;
+
+    /* All eight directions, from a one-pixel shift to one just short of the block. */
+    for (d = 0; d < 8u; d++)
+        for (m = 0; m < sizeof(sizes) / sizeof(sizes[0]); m++)
+            SameCase(dirs[d][0] * sizes[m], dirs[d][1] * sizes[m], 40u, 30u, 1);
+    /* Blocks that do not meet: the ordinary row path, one group. */
+    SameCase(40, 0, 40u, 30u, 0);
+    SameCase(0, -30, 40u, 30u, 0);
+    SameCase(-41, 31, 40u, 30u, 0);
+    /* Shapes at the edges of the band arithmetic. */
+    SameCase(1, 0, 64u, 1u, 1);
+    SameCase(0, 1, 1u, 64u, 1);
+    SameCase(3, 0, 7u, 5u, 1);
+    SameCase(0, -1, 256u - 100u, 2u, 1);
+
+    /* The identity: SRCCOPY, SRCAND and SRCOR change nothing and become Skip; SRCINVERT clears the
+     * block (D ^ D = 0) and stays an ordinary kernel. */
+    s[0] = Surface(256, 128, 4, BC250_GDISURFACE_TEXTURE, 0);
+    {
+        unsigned int rop;
+        for (rop = BC250_GDI_ROP_SRCCOPY; rop <= BC250_GDI_ROP_SRCOR; rop++) {
+            op = BitBltOp(rop, Rect(10, 10, 50, 40), Rect(10, 10, 50, 40));
+            op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+            sub = op.DstRect;
+            CHECK_EQ(Bc250GdiPlanItem(&op, s, 1, &sub, &item), Bc250GdiOk);
+            CHECK_EQ(item.Same, 1u);
+            CHECK_EQ(item.Ordered, 0u);
+            if (rop == BC250_GDI_ROP_SRCINVERT) {
+                CHECK_EQ(item.Work, (unsigned int)Bc250GdiWorkKernel);
+                CHECK_EQ(item.Kernel, (unsigned int)Bc250GdiKernelBitBltRop);
+            } else {
+                CHECK_EQ(item.Work, (unsigned int)Bc250GdiWorkSkip);
+                CHECK_EQ(item.Kernel, (unsigned int)Bc250GdiKernelNone);
+            }
+        }
+    }
+    /* A raster operation on meeting blocks is the ordered kernel, never the ordinary one. */
+    {
+        unsigned int rop;
+        for (rop = BC250_GDI_ROP_SRCINVERT; rop <= BC250_GDI_ROP_SRCOR; rop++) {
+            op = BitBltOp(rop, Rect(10, 10, 50, 40), Rect(11, 12, 51, 42));
+            op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+            sub = op.DstRect;
+            CHECK_EQ(Bc250GdiPlanItem(&op, s, 1, &sub, &item), Bc250GdiOk);
+            CHECK_EQ(item.Ordered, 1u);
+            CHECK_EQ(item.Kernel, (unsigned int)Bc250GdiKernelBitBltOrdered);
+        }
+    }
+    /* An ordered copy is not resumable, and it refuses a buffer it does not fit whole. */
+    {
+        static unsigned int buffer[4096];
+        unsigned int next, written;
+        op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(10, 10, 50, 40), Rect(12, 10, 52, 40));
+        op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+        sub = op.DstRect;
+        CHECK_EQ(Bc250GdiPlanItem(&op, s, 1, &sub, &item), Bc250GdiOk);
+        CHECK_EQ(item.Ordered, 1u);
+        CHECK_EQ(Bc250EmitGdiItem(&item, 0, 0, 0, 1u, &next, buffer, 4096u, &written),
+                 BC250_GDI_EMIT_INVALID);
+        memset(buffer, 0xCD, sizeof(buffer));
+        CHECK_EQ(Bc250EmitGdiItem(&item, 0, 0, 0, 0, &next, buffer,
+                                  Bc250GdiOrderedCopyDwords(&item) - 1u, &written),
+                 BC250_GDI_EMIT_NO_SPACE);
+        CHECK_EQ(buffer[0], 0xCDCDCDCDu);
+        CHECK_EQ(Bc250EmitGdiItem(&item, 0, ~0ull - 4096ull, 0, 0, &next, buffer, 4096u, &written),
+                 BC250_GDI_EMIT_INVALID);
+    }
+}
+
+/* Several sub-rectangles of one scroll: the order of the items, and the image it gives. */
+static void TestSameSurfaceOrder(void)
+{
+    BC250_GDI_SURFACE s[1];
+    BC250_GDI_OP op;
+    BC250_GDI_RECT subs[BC250_GDI_ORDER_MAX + 1u];
+    unsigned char order[BC250_GDI_ORDER_MAX];
+    unsigned int i, pass;
+    s[0] = Surface(256, 128, 4, BC250_GDISURFACE_TEXTURE, 0);
+
+    /* A scroll down by 3, in three strips given top first: each strip writes rows that the strip
+     * below it reads, so the bottom strip must run first. */
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(10, 7, 60, 47), Rect(10, 10, 60, 50));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    op.NumSubRects = 3;
+    subs[0] = Rect(10, 10, 60, 20);
+    subs[1] = Rect(10, 20, 60, 30);
+    subs[2] = Rect(10, 30, 60, 50);
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 3, order), 2);
+    CHECK(order[0] == 2u && order[1] == 1u && order[2] == 0u);
+    /* Given bottom first, the order is kept as it is. */
+    {
+        BC250_GDI_RECT flipped[3];
+        flipped[0] = subs[2]; flipped[1] = subs[1]; flipped[2] = subs[0];
+        CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, flipped, 3, order), 1);
+        CHECK(order[0] == 0u && order[1] == 1u && order[2] == 2u);
+    }
+    /* The image: the strips in the computed order give GDI's result; in the given order they do
+     * not (the positive control: the test can see a wrong order). */
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 3, order), 2);
+    for (pass = 0; pass < 2u; pass++) {
+        static unsigned char whole[MEM_BYTES];
+        BC250_GDI_ITEM all;
+        BC250_GDI_RECT rect = op.DstRect;
+        SeedSameSurface();
+        CHECK_EQ(Bc250GdiPlanItem(&op, s, 1, &rect, &all), Bc250GdiOk);
+        ReferenceSameCopy(&all);
+        /* RunSameCopy moves g_expected item by item, so the whole command's result is kept aside. */
+        memcpy(whole, g_expected, MEM_BYTES);
+        memcpy(g_expected, g_memory, MEM_BYTES);
+        for (i = 0; i < 3u; i++) RunSameCopy(&op, s, &subs[pass == 0u ? order[i] : i], 1);
+        g_checks++;
+        if (pass == 0u && memcmp(g_memory, whole, MEM_BYTES) != 0) {
+            fprintf(stderr, "FAIL same-surface order: the ordered strips differ from GDI's rule\n");
+            g_failures++;
+        }
+        if (pass == 1u && memcmp(g_memory, whole, MEM_BYTES) == 0) {
+            fprintf(stderr, "FAIL same-surface order: the given order matched, so the test is blind\n");
+            g_failures++;
+        }
+    }
+
+    /* Two rectangles of one band, moved right: the right one runs first. */
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(0, 0, 20, 10), Rect(3, 0, 23, 10));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    subs[0] = Rect(3, 0, 13, 10);
+    subs[1] = Rect(13, 0, 23, 10);
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order), 2);
+    CHECK(order[0] == 1u && order[1] == 0u);
+    /* Moved left, the same pair is already in order. */
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(6, 0, 26, 10), Rect(3, 0, 23, 10));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order), 1);
+    /* The same rectangle twice is a cycle, which no order can make safe. */
+    subs[1] = subs[0];
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order), 0);
+    CHECK(order[0] == 0u && order[1] == 1u);
+    /* The identity, two allocations, too many rectangles and no arguments. */
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(3, 0, 23, 10), Rect(3, 0, 23, 10));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order), 1);
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(0, 0, 20, 10), Rect(3, 0, 23, 10));
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order), 1);
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    for (i = 0; i <= BC250_GDI_ORDER_MAX; i++) subs[i] = Rect(3 + (int)i % 20, 0, 4 + (int)i % 20, 1);
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, BC250_GDI_ORDER_MAX + 1u, order), 0);
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(0, subs, 2, order), 0);
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, 0, 2, order), 0);
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, 0), 0);
+    /* BC250_GDI_ORDER_MAX rectangles of one row, moved right by one: a chain of the full length,
+     * which comes back reversed. */
+    for (i = 0; i < BC250_GDI_ORDER_MAX; i++) subs[i] = Rect(1 + (int)i, 0, 2 + (int)i, 1);
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(0, 0, 32, 1), Rect(1, 0, 33, 1));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, BC250_GDI_ORDER_MAX, order), 2);
+    for (i = 0; i < BC250_GDI_ORDER_MAX; i++) CHECK_EQ(order[i], BC250_GDI_ORDER_MAX - 1u - i);
+}
+
 static void TestStreamRefusals(void)
 {
     static unsigned int buffer[256];
@@ -1302,6 +1706,9 @@ int main(void)
     TestWalkAndPass();
     TestCommandStep();
     TestStream();
+    TestBands();
+    TestSameSurfaceStream();
+    TestSameSurfaceOrder();
     TestStreamRefusals();
     printf("gdi_render_test: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;

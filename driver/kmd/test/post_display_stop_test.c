@@ -34,6 +34,7 @@ typedef struct {
     long long GdiRenderRefusedCall,GdiRenderMalformed,GdiRenderOutside,GdiRenderEmpty;
     long long GdiRenderOverflow,GdiRenderItemRefused,GdiRenderColorFillRedFirst;
     long long GdiRenderKmCalls;
+    long long GdiRenderSameSkip,GdiRenderSameOrdered,GdiRenderSameReordered,GdiRenderSameUnordered;
     long long GdiRenderBatchRefused,GdiRenderFallback;
     long long GdiRenderPeakSubRects,GdiRenderPeakDwords;
     long long GdiRenderRefused[Bc250GdiRefusals];

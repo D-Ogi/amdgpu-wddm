@@ -21,10 +21,17 @@ extern unsigned int g_Bc250GdiWorkitemX, g_Bc250GdiWorkitemY;
 #define BC250_GDI_RUN_SCALARS 18
 
 /* Run the work item in the four globals above. Kernel is a value of enum bc250_gdi_kernel. Returns
- * 0 for an index that is not one of the six. */
+ * 0 for an index that is not one of the seven. */
 int Bc250GdiRunKernel(unsigned int Kernel, unsigned char* Dst, const unsigned char* Src,
                       const unsigned char* Alpha, const unsigned char* Gamma,
                       const unsigned int* Scalars);
+
+/* gdi_bitblt_ordered (kernel 7), which is one work group whose bands a barrier orders: one band of
+ * one work item (Lx, Ly in 0..7), and the number of bands. The test runs every work item of band 0,
+ * then every work item of band 1, and so on, which is the order the barrier gives on the GPU. */
+int Bc250GdiRunOrderedBand(unsigned char* Dst, const unsigned char* Src, const unsigned int* Scalars,
+                           unsigned int Band, unsigned int Lx, unsigned int Ly);
+unsigned int Bc250GdiRunOrderedBands(const unsigned int* Scalars);
 
 /* The entry point name of that index, for the test to hold against the generated name list: the
  * table in gdi_kernel_run.c and the enum must agree, and this is how the test sees that they do. */

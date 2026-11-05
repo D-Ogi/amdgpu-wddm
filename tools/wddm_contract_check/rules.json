@@ -438,6 +438,28 @@
       "requires_text": "every memory segment carries Flags.LocalBudgetGroup alone and every aperture segment carries Flags.NonLocalBudgetGroup alone, so that system memory reached through the aperture is not counted into the local budget",
       "source": "WDK d3dkmddi.h DXGK_SEGMENTFLAGS LocalBudgetGroup (bit 19) / NonLocalBudgetGroup (bit 20); LEARN memory-management-strategies (local and non-local budgets of DXGI QueryVideoMemoryInfo). Measured: 0.7.182.1 declared the aperture in no group and the lab reported local 11339 MiB = segments 1 + 3 + SharedSystemMemory - 768 MiB, non-local 0; a budget-sized client then overflowed segment 1 (trial 211)",
       "require": [{"segment_budget_groups": true}]
+    },
+    {
+      "id": "R41-SAMEBITMAP-BITBLT",
+      "declaration": "DXGK_DRIVERCAPS.PresentationCaps: SupportKernelModeCommandBuffer = 1 and NoSameBitmapBitBlt = 0",
+      "requires_text": "DxgkDdiRenderGdi in the table, because a BitBlt whose source and destination are one allocation is then sent to it and not done by the OS",
+      "source": "WDK 10.0.26100 d3dkmddi.h DXGK_PRESENTATIONCAPS line 1949 'NoSameBitmapBitBlt: Driver cannot support BitBlt when source and destination allocations are the same'; LEARN ns-d3dkmddi-_dxgk_presentationcaps (ref/ddi-display/d3dkmddi.md:25944) 'the operating system will not request' an operation whose No* bit is set, and DXGKDDI_RENDERGDI 'used when submitting Windows Graphics Device Interface (GDI) commands'. Measured BD-306 (HLK GDIHW_Functional on 26200, tester.37): with the bit set, CDD copies a same-surface BitBlt through a staging surface of its own",
+      "when": [
+        {"cap_true": "PresentationCaps.SupportKernelModeCommandBuffer"},
+        {"cap_false": "PresentationCaps.NoSameBitmapBitBlt"}
+      ],
+      "require": [{"ddi_set": "DxgkDdiRenderGdi"}]
+    },
+    {
+      "id": "R42-SAMEBITMAP-OVERLAP-SUBSET",
+      "declaration": "DXGK_DRIVERCAPS.PresentationCaps: SupportKernelModeCommandBuffer = 1 and NoSameBitmapOverlappedBitBlt = 0",
+      "requires_text": "NoSameBitmapBitBlt = 0 as well: an overlapping same-surface BitBlt is a same-surface BitBlt, so a driver cannot do the overlapping case and refuse the general one",
+      "source": "WDK 10.0.26100 d3dkmddi.h DXGK_PRESENTATIONCAPS lines 1949-1950: 'NoSameBitmapBitBlt: Driver cannot support BitBlt when source and destination allocations are the same' and 'NoSameBitmapOverlappedBitBlt: Driver cannot support BitBlt when source and destination allocations are the same and source and destination rectangles overlap'; LEARN ns-d3dkmddi-_dxgk_presentationcaps (ref/ddi-display/d3dkmddi.md:25944) carries the same two members",
+      "when": [
+        {"cap_true": "PresentationCaps.SupportKernelModeCommandBuffer"},
+        {"cap_false": "PresentationCaps.NoSameBitmapOverlappedBitBlt"}
+      ],
+      "require": [{"cap_false": "PresentationCaps.NoSameBitmapBitBlt"}]
     }
   ]
 }

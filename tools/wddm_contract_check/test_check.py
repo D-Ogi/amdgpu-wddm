@@ -462,6 +462,45 @@ class NegativeFixtures(unittest.TestCase):
         result, _ = statuses(wddm=wddm)
         self.assertOnlyViolation(result, "R40-FLIPIMMEDIATEMMIO")
 
+    def _gdi_caps(self, lines, render_gdi=True):
+        """The good fixture with GDI acceleration declared by the given PresentationCaps lines."""
+        caps = "".join("    caps->PresentationCaps.%s;\n" % line for line in lines)
+        wddm = GOOD_WDDM.replace("    caps->MaxQueuedFlipOnVSync = 1;\n",
+                                 "    caps->MaxQueuedFlipOnVSync = 1;\n" + caps)
+        if render_gdi:
+            wddm = wddm.replace("    Data->DxgkDdiPresent = Bc250WddmPresent;",
+                                "    Data->DxgkDdiRenderGdi = Bc250WddmRenderGdi;\n"
+                                "    Data->DxgkDdiPresent = Bc250WddmPresent;")
+        self.assertNotEqual(GOOD_WDDM, wddm)
+        return wddm
+
+    def test_same_bitmap_bitblt_without_render_gdi(self):
+        """BD-306: NoSameBitmapBitBlt clear with GDI acceleration on sends same-surface BitBlts to
+        DxgkDdiRenderGdi; a table without it has nowhere to send them."""
+        wddm = self._gdi_caps(["SupportKernelModeCommandBuffer = 1", "NoSameBitmapBitBlt = 0",
+                               "NoSameBitmapOverlappedBitBlt = 0"], render_gdi=False)
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R41-SAMEBITMAP-BITBLT")
+        wddm = self._gdi_caps(["SupportKernelModeCommandBuffer = 1", "NoSameBitmapBitBlt = 0",
+                               "NoSameBitmapOverlappedBitBlt = 0"])
+        result, _ = statuses(wddm=wddm)
+        self.assertEqual(check.OK, result["R41-SAMEBITMAP-BITBLT"])
+        self.assertEqual(check.OK, result["R42-SAMEBITMAP-OVERLAP-SUBSET"])
+
+    def test_same_bitmap_overlap_without_the_general_case(self):
+        """The overlapping same-surface BitBlt claimed while the general one is refused."""
+        wddm = self._gdi_caps(["SupportKernelModeCommandBuffer = 1", "NoSameBitmapBitBlt = 1",
+                               "NoSameBitmapOverlappedBitBlt = 0"])
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R42-SAMEBITMAP-OVERLAP-SUBSET")
+        self.assertEqual(check.NA, result["R41-SAMEBITMAP-BITBLT"])
+        # Both bits set, the answer before BD-306: neither rule applies.
+        wddm = self._gdi_caps(["SupportKernelModeCommandBuffer = 1", "NoSameBitmapBitBlt = 1",
+                               "NoSameBitmapOverlappedBitBlt = 1"])
+        result, _ = statuses(wddm=wddm)
+        self.assertEqual(check.NA, result["R41-SAMEBITMAP-BITBLT"])
+        self.assertEqual(check.NA, result["R42-SAMEBITMAP-OVERLAP-SUBSET"])
+
     def test_table_version_not_the_compiled_one(self):
         """ADR 0019 B1: a table that declares 3.1 in a binary compiled at 2.0 would hand dxgkrnl a 0x340-byte
         table it copies as 0x560 bytes, and a 0x240-byte DRIVERCAPS it sized at 0x250."""

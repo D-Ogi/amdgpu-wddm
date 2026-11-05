@@ -191,7 +191,7 @@ typedef struct _BC250_WDDM_KIND {
 #include "dcn_plane.h"               // BD-223: the multiplane-overlay plane 0 and its verdicts
 #include "connector.h"               // BD-223: ConnectorLinkPlaneDml
 #include "gdi_emit.h"                // HLK gap G1: the GDI contract layer and its DMA_DATA stream
-#include "gdi_dispatch.h"            // HLK gap G1 increment 2: the compute dispatch of the six kernels
+#include "gdi_dispatch.h"            // HLK gap G1 increment 2: the compute dispatch of the seven kernels
 #include "gdi_batch.h"               // HLK gap G1 increment 2: the capacity contract of one call
 #include "gdi_walk.h"                // HLK gap G1: the bounded walk of the OS command buffer
 #include "dcn_cursor_shape.h"        // the hardware pointer's size and kinds in the caps
@@ -971,6 +971,14 @@ typedef struct _BC250_WDDM {
     volatile LONG64 GdiRenderRefusedCall, GdiRenderMalformed, GdiRenderOutside, GdiRenderEmpty;
     volatile LONG64 GdiRenderOverflow, GdiRenderItemRefused, GdiRenderColorFillRedFirst;
     volatile LONG64 GdiRenderKmCalls;
+    // BD-306: same-surface BitBlt. SameSkip counts the identity copies that were dropped because they
+    // change no pixel; SameOrdered counts the items whose source and destination blocks meet and that
+    // were copied in bands (gdi_pixel.h, Bc250GdiBand*). SameReordered counts the commands whose
+    // sub-rectangles had to be visited in another order than the given one (Bc250GdiSameSurfaceOrder),
+    // SameUnordered the ones no order could make safe or that had too many sub-rectangles to check:
+    // a nonzero SameUnordered can mean wrong pixels.
+    volatile LONG64 GdiRenderSameSkip, GdiRenderSameOrdered;
+    volatile LONG64 GdiRenderSameReordered, GdiRenderSameUnordered;
     // HLK gap G1: the batch capacity contract of gdi_batch.h. BatchRefused counts the calls whose
     // sub-rectangles could not all be guaranteed and that were therefore translated to an empty DMA
     // buffer; Fallback counts the items that gave up the per-row engine path for a dispatch. The two
@@ -4020,6 +4028,30 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
 // no escape runs while WddmStop does (LEARN display/threading-and-synchronization-third-level). The escape's own
 // side of it is enforced, not assumed: display.c refuses BC250_ESCAPE_LOG_SUMMARY unless the caller asked for
 // HardwareAccess without NoAdapterSynchronization, which makes this a Level Two call (-second-level).
+// The GDI totals so far, for `log summary only` on a running adapter. WddmStop writes the full set once, at
+// the stop; this is the part that a lab arm reads between two runs without a device stop (BD-306: the
+// same-surface counters show whether the OS sent same-allocation BitBlts to RenderGdi at all). The counters
+// keep counting while the lines are written, so two numbers of one line can come from different moments.
+static void WddmGdiLiveSummary(_In_ BC250_WDDM* Wddm)
+{
+    if (Wddm->GdiRenderCalls == 0)
+    {
+        GuardLog("wddm: gdi live no RenderGdi calls (hardware acceleration %s)",
+                 Wddm->GdiHwAccel ? "on" : "off");
+        return;
+    }
+    GuardLog("wddm: gdi live totals calls%lld commands%lld items%lld dwords%lld",
+             Wddm->GdiRenderCalls, Wddm->GdiRenderCommands, Wddm->GdiRenderItems, Wddm->GdiRenderDwords);
+    GuardLog("wddm: gdi live drops call%lld malformed%lld outside%lld empty%lld",
+             Wddm->GdiRenderRefusedCall, Wddm->GdiRenderMalformed, Wddm->GdiRenderOutside,
+             Wddm->GdiRenderEmpty);
+    GuardLog("wddm: gdi live overflow%lld item-refused%lld scope-refused%lld",
+             Wddm->GdiRenderOverflow, Wddm->GdiRenderItemRefused, Wddm->GdiRenderScopeRefused);
+    GuardLog("wddm: gdi live same-skip%lld ordered%lld reordered%lld unordered%lld",
+             Wddm->GdiRenderSameSkip, Wddm->GdiRenderSameOrdered,
+             Wddm->GdiRenderSameReordered, Wddm->GdiRenderSameUnordered);
+}
+
 void WddmSummary(_In_ BC250_DEVICE* Device)
 {
     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
@@ -4037,6 +4069,7 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
     DpmLogSummary(Device);
     InteropLogSummary(Device);
     WddmSummaryOf(wddm);
+    WddmGdiLiveSummary(wddm);
     VidMmSummary();
 }
 
@@ -4172,7 +4205,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // the bit is set, the OS sends AlphaBlend, StretchBlt, TransparentBlt and ClearTypeBlend as well
     // as the two the DMA_DATA engine does exactly, and DxgkDdiRenderGdi cannot refuse them (its
     // return table bugchecks on any status but STATUS_SUCCESS). So the bit follows the translator,
-    // not the gate: Bc250GdiKernelsPresent is the six gfx1013 compute kernels of gdi_kernels.cl,
+    // not the gate: Bc250GdiKernelsPresent is the seven gfx1013 compute kernels of gdi_kernels.cl,
     // and an image without them reports the capability exactly as the release before them did.
     //   The lab flavour also reads LabGdiHwAccel (guard.c), which can only open the gate: an arm that swaps
     // the KMD image into an installed package whose catalog does not have EnableGdiHwAccel yet.
@@ -4707,6 +4740,9 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
                  wddm->GdiRenderEmpty);
         GuardLog("wddm: gdi overflow%lld item-refused%lld red-first%lld", wddm->GdiRenderOverflow,
                  wddm->GdiRenderItemRefused, wddm->GdiRenderColorFillRedFirst);
+        GuardLog("wddm: gdi same-skip%lld ordered%lld reordered%lld unordered%lld",
+                 wddm->GdiRenderSameSkip, wddm->GdiRenderSameOrdered,
+                 wddm->GdiRenderSameReordered, wddm->GdiRenderSameUnordered);
         GuardLog("wddm: gdi batch-refused%lld fallback%lld peak rects%lld dwords%lld",
                  wddm->GdiRenderBatchRefused, wddm->GdiRenderFallback,
                  wddm->GdiRenderPeakSubRects, wddm->GdiRenderPeakDwords);
@@ -5113,8 +5149,21 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
         //    CreateAllocation (BD-060, WddmGdiAllocationPolicy refuses type > 4).
         //  - SupportLinearHeap, StagingRectStartPitchAligned: no linear heap out of a staging
         //    surface, and no pitch-aligned staging rectangle requirement.
-        // The No*SameBitmap* family above stays set: one allocation as both source and destination
-        // is the one case this driver refuses outright (gdi_render.c, Bc250GdiBadSameSurface).
+        //   BD-306: same-surface BitBlt. d3dkmddi.h (WDK 10.0.26100) lines 1949-1950 read
+        // NoSameBitmapBitBlt as "Driver cannot support BitBlt when source and destination allocations
+        // are the same" and NoSameBitmapOverlappedBitBlt as the same for overlapping rectangles. With
+        // either set, CDD (cdd.dll 26100) copies such a BitBlt through a staging video-memory surface
+        // of its own: two copies and a flush for every scroll, which is what made the HLK job's
+        // same-surface BitBlt look slow against a copy to a device bitmap. gdi_render.c now admits a
+        // BitBlt on one surface: an identity copy changes nothing and is skipped, and overlapping
+        // blocks are copied in bands that start at the edge the destination moves towards
+        // (gdi_pixel.h, Bc250GdiBand*), each band closed by CP_SYNC on the engine path or by a
+        // workgroup barrier in gdi_bitblt_ordered. CDD itself hands the sub-rectangles of one command
+        // in the matching order (CLIPOBJ_cEnumStart with a direction). Both bits are therefore clear.
+        caps->PresentationCaps.NoSameBitmapBitBlt = 0;
+        caps->PresentationCaps.NoSameBitmapOverlappedBitBlt = 0;
+        // The rest of the No*SameBitmap* family above stays set: AlphaBlend, StretchBlt and
+        // TransparentBlt on one allocation are still refused (gdi_render.c, Bc250GdiBadSameSurface).
     }
 
 
@@ -9822,8 +9871,9 @@ static int WddmGdiSurfaceAt(BC250_WDDM* Wddm, const BC250_WDDM_OBJECT* Context,
 
 // Resolve the allocation-list indices one command names into a small local table and rewrite the
 // command's indices to point at it, so that the contract layer never needs a 256-entry array. An
-// index that appears twice keeps one slot, which is what lets gdi_render.c's own same-allocation
-// refusal fire; two different indices that resolve to one allocation are caught here, by serial.
+// index that appears twice keeps one slot, which is what lets gdi_render.c see a same-surface
+// operation; two different indices that resolve to one allocation are caught here, by serial, and
+// share one slot only for a BitBlt whose two entries also give the same GPU address (BD-306).
 static int WddmGdiBind(BC250_WDDM* Wddm, const BC250_WDDM_OBJECT* Context,
     const DXGK_ALLOCATIONLIST* List, UINT ListSize, BC250_GDI_OP* Op,
     BC250_GDI_SURFACE* Surfaces, ULONGLONG* Vas, UINT* Count)
@@ -9854,6 +9904,15 @@ static int WddmGdiBind(BC250_WDDM* Wddm, const BC250_WDDM_OBJECT* Context,
             if (!WddmGdiSurfaceAt(Wddm, Context, List, ListSize, original, &Surfaces[used],
                                   &Vas[used], &serials[used]))
                 return 0;
+            // BD-306: a BitBlt source that is another list entry of its destination's allocation
+            // (same backing serial, same GPU address) shares the destination's slot. gdi_render.c
+            // then sees one surface and orders the copy; every other repeat is refused below.
+            if (i == 1 && Op->OpCode == BC250_GDIOP_BITBLT && used == 1 &&
+                serials[0] == serials[1] && Vas[0] == Vas[1])
+            {
+                *fields[i] = 0;
+                continue;
+            }
             originals[used] = original;
             used++;
         }
@@ -10109,7 +10168,8 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
         const RECT* subRects;
         UINT subCount, next, slots, sub, why, start = offset;
         unsigned int pattern = 0;
-        int disjoint = 1;
+        int disjoint = 1, ordered;
+        unsigned char order[BC250_GDI_ORDER_MAX];
         // The structure of this command, read exactly as the counting walk above read it.
         int kind = Bc250GdiWalkCommand(buffer, bytes, start, &op, &subRects, &subCount, &next, &why);
 
@@ -10167,6 +10227,32 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
             if (surfaces[op.DstAllocationIndex].RedFirst)
                 InterlockedIncrement64(&wddm->GdiRenderColorFillRedFirst);
         }
+        // BD-306: a BitBlt inside one allocation with more than one sub-rectangle. One item can
+        // write pixels that a later item still has to read, so the items are visited in the order
+        // Bc250GdiSameSurfaceOrder gives. CDD's own order is normally that order already
+        // (SameReordered then stays 0); a command it cannot order is drawn in the given order and
+        // counted, because DxgkDdiRenderGdi has no status to refuse it with.
+        ordered = 0;
+        if (op.OpCode == BC250_GDIOP_BITBLT && op.SrcAllocationIndex == op.DstAllocationIndex &&
+            subCount > 1u)
+        {
+            int orderResult = 0;
+            if (subCount <= BC250_GDI_ORDER_MAX)
+            {
+                BC250_GDI_RECT orderRects[BC250_GDI_ORDER_MAX];
+                for (sub = 0; sub < subCount; sub++) Bc250GdiWalkRect(&subRects[sub], &orderRects[sub]);
+                orderResult = Bc250GdiSameSurfaceOrder(&op, orderRects, subCount, order);
+            }
+            if (orderResult == 2)
+            {
+                ordered = 1;
+                InterlockedIncrement64(&wddm->GdiRenderSameReordered);
+            }
+            else if (orderResult == 0)
+            {
+                InterlockedIncrement64(&wddm->GdiRenderSameUnordered);
+            }
+        }
         for (sub = 0; sub < subCount; sub++)
         {
             BC250_GDI_ITEM item;
@@ -10174,7 +10260,7 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
             int result, status;
 
             visited++;
-            Bc250GdiWalkRect(&subRects[sub], &rect);
+            Bc250GdiWalkRect(&subRects[ordered ? order[sub] : sub], &rect);
             status = Bc250GdiPlanItem(&op, surfaces, slots, &rect, &item);
             if (status != Bc250GdiOk)
             {
@@ -10183,6 +10269,15 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
                 continue;
             }
             if (item.DstWidth == 0 || item.DstHeight == 0) continue;
+            // BD-306: a same-surface copy onto itself (SRCCOPY, SRCAND or SRCPAINT with source and
+            // destination at one place) changes no pixel, so nothing is emitted for it.
+            if (item.Work == (unsigned int)Bc250GdiWorkSkip)
+            {
+                InterlockedIncrement64(&wddm->GdiRenderSameSkip);
+                continue;
+            }
+            if (item.Ordered)
+                InterlockedIncrement64(&wddm->GdiRenderSameOrdered);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
             // LabGdiHwAccel 2: the engine path only. A kernel item draws nothing and is counted.
             if (engineOnly && item.Work == (unsigned int)Bc250GdiWorkKernel)
