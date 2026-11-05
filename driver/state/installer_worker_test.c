@@ -19,6 +19,8 @@ static int failed;
 // pending.bin that the abandon step moved aside.
 static UINT lock_depth,frozen_by,thawed,pending_damaged,retired_pending_bytes,unfinished_store;static DWORD thaw_error;
 static BYTE retired_pending[AMDGPU_TRANSFER_MAX_BYTES];
+// The archive-<transaction>.bin of the last uninstall, and the number of reads of it.
+static BYTE own_archive[AMDGPU_TRANSFER_MAX_BYTES];static UINT own_archive_bytes,archive_reads;
 ULONG AmdgpuInstallerTestBoot=91;
 static BYTE rollback[AMDGPU_ROLLBACK_MAX],completed[AMDGPU_ROLLBACK_MAX],active_rollback[AMDGPU_ROLLBACK_MAX];
 static DWORD rb_bytes,complete_bytes,active_bytes,restores,retired,enabled,source_removed,target_error,restore_error,retire_error,complete_error;
@@ -28,7 +30,7 @@ static void Reset(UINT source)
     saved_bytes=removed_bytes=failure=freeze=stop=publish=archives=captured=strict_opens=source_opens=0;
     board_error=pending_error=remove_error=origin_error=device_error=removal_moves=removal_keeps=removal_own=0;origin=source;current_package=FALSE;
     rb_bytes=complete_bytes=active_bytes=restores=retired=enabled=source_removed=target_error=restore_error=retire_error=complete_error=0;
-    lock_depth=frozen_by=thawed=pending_damaged=retired_pending_bytes=unfinished_store=0;thaw_error=0;
+    lock_depth=frozen_by=thawed=pending_damaged=retired_pending_bytes=unfinished_store=own_archive_bytes=archive_reads=0;thaw_error=0;
     AmdgpuInstallerTestBoot=91;
 }
 static DWORD RunAs(PCWSTR op,PCWSTR transaction,PCWSTR product)
@@ -239,10 +241,21 @@ DWORD AmdgpuWindowsPublishHandoff(const void *buffer,DWORD bytes)
     publish++;CHECK(AmdgpuTransferCheck(buffer,bytes,NULL)==0);
     if(failure==5)return ERROR_WRITE_FAULT;memcpy(saved,buffer,bytes);saved_bytes=bytes;return 0;
 }
+// The rules of the production adapter: a legacy archive is archive-<transaction>.bin only, and the removal record
+// moves aside; every other archive is also the removal record.
 DWORD AmdgpuWindowsArchiveState(const void *buffer,DWORD bytes)
 {
-    archives++;CHECK(stop==1);CHECK(AmdgpuTransferCheck(buffer,bytes,NULL)==0);
-    if(failure==6)return ERROR_WRITE_FAULT;memcpy(removed,buffer,bytes);removed_bytes=bytes;return 0;
+    AMDGPU_TRANSFER_HEADER h;
+    archives++;CHECK(stop==1);CHECK(AmdgpuTransferCheck(buffer,bytes,&h)==0);
+    if(failure==6)return ERROR_WRITE_FAULT;memcpy(own_archive,buffer,bytes);own_archive_bytes=bytes;
+    if(h.origin==AMDGPU_TRANSFER_LEGACY){if(removed_bytes)removal_moves++;removed_bytes=0;return 0;}
+    memcpy(removed,buffer,bytes);removed_bytes=bytes;return 0;
+}
+DWORD AmdgpuWindowsReadArchive(const BYTE tx[16],void **out,DWORD *bytes)
+{
+    AMDGPU_TRANSFER_HEADER h;archive_reads++;
+    if(own_archive_bytes && !AmdgpuTransferCheck(own_archive,own_archive_bytes,&h) && memcmp(h.transaction,tx,16))return ERROR_FILE_NOT_FOUND;
+    return Read(own_archive,own_archive_bytes,0,out,bytes);
 }
 DWORD AmdgpuWindowsAcknowledgeHandoff(const BYTE tx[16],const BYTE device[32],const char *version)
 {
@@ -328,15 +341,61 @@ static void AbandonTests(void)
     {DWORD *pairs=calloc(AmdgpuStateCount()*2,sizeof(DWORD));CHECK(pairs && AmdgpuInstallerTestSettings(L"fixture",pairs)==0);free(pairs);}
     captured=0;CHECK(!RunAs(L"prepare",other,L"0.7.216.110"));CHECK(saved_bytes && captured==1 && !freeze && source_opens+strict_opens==opens);
     CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h) && h.origin==AMDGPU_TRANSFER_LEGACY && h.source_schema==1 && h.transaction[0]==2);
-    // An uninstall of that store archives the legacy state.
+    // An uninstall of that store archives the legacy state as archive-<transaction>.bin, not as a removal record: the
+    // prepare of a released install stops with ERROR_NOT_SUPPORTED on a legacy removal record (lab 26200, tester.37).
     Reset(AMDGPU_TRANSFER_CURRENT);unfinished_store=1;current_package=TRUE;
-    CHECK(!Run(L"archive",tx));CHECK(archives==1 && stop==1 && !freeze);
-    CHECK(!AmdgpuTransferCheck(removed,removed_bytes,&h) && h.origin==AMDGPU_TRANSFER_LEGACY && h.source_schema==1);
+    CHECK(!Run(L"archive",tx));CHECK(archives==1 && stop==1 && !freeze && !removed_bytes);
+    CHECK(!AmdgpuTransferCheck(own_archive,own_archive_bytes,&h) && h.origin==AMDGPU_TRANSFER_LEGACY && h.source_schema==1);
+    // The same uninstall again before SCM deleted the service: the same archive.
+    stop=0;CHECK(!Run(L"archive",tx));CHECK(archives==2 && !removed_bytes);
+    // SCM deleted the service; the uninstall resumes: its legacy archive is its record, and nothing is written again.
+    origin=AMDGPU_TRANSFER_FRESH;unfinished_store=0;current_package=FALSE;stop=0;
+    CHECK(!Run(L"archive",tx));CHECK(archives==2 && archive_reads==1 && removal_own==1 && !publish && !stop);
+    // Another transaction, a damaged archive or one of an installed generation does not resume the uninstall.
+    CHECK(Run(L"archive",other)==ERROR_REVISION_MISMATCH);CHECK(archives==2);
+    {AMDGPU_TRANSFER_HEADER k;memcpy(&k,own_archive,sizeof(k));
+     own_archive[own_archive_bytes-1]^=1;CHECK(Run(L"archive",tx)==ERROR_REVISION_MISMATCH);own_archive[own_archive_bytes-1]^=1;
+     k.origin=AMDGPU_TRANSFER_CURRENT;memcpy(own_archive,&k,sizeof(k));Reseal(own_archive,own_archive_bytes);
+     CHECK(Run(L"archive",tx)==ERROR_REVISION_MISMATCH);
+     k.origin=AMDGPU_TRANSFER_LEGACY;memcpy(own_archive,&k,sizeof(k));Reseal(own_archive,own_archive_bytes);
+     CHECK(!Run(L"archive",tx));CHECK(archives==2);}
+    // The reinstall after that uninstall finds no removal record and installs fresh, as tester.37 does.
+    CHECK(!RunAs(L"prepare",other,L"0.7.216.110"));CHECK(publish==1 && !removal_moves);
+    CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h) && h.origin==AMDGPU_TRANSFER_FRESH && h.transaction[0]==2);
+    // The legacy removal record that main 967c6d76 wrote for that uninstall: the install moves it aside and installs
+    // fresh; a retry finds nothing more to move. A resumed uninstall still accepts only its own record.
+    Reset(AMDGPU_TRANSFER_CURRENT);unfinished_store=1;current_package=TRUE;CHECK(!Run(L"archive",tx));
+    memcpy(removed,own_archive,own_archive_bytes);removed_bytes=own_archive_bytes;own_archive_bytes=0;
+    origin=AMDGPU_TRANSFER_FRESH;unfinished_store=0;current_package=FALSE;
+    CHECK(!RunAs(L"prepare",other,L"0.7.216.110"));CHECK(publish==1 && removal_moves==1 && !removal_keeps && !removed_bytes);
+    CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h) && h.origin==AMDGPU_TRANSFER_FRESH && h.board_kind==AMDGPU_BOARD_FRESH);
+    CHECK(!RunAs(L"prepare",other,L"0.7.216.110"));CHECK(publish==1 && removal_moves==1);
+    Reset(AMDGPU_TRANSFER_CURRENT);unfinished_store=1;current_package=TRUE;CHECK(!Run(L"archive",tx));
+    memcpy(removed,own_archive,own_archive_bytes);removed_bytes=own_archive_bytes;own_archive_bytes=0;
+    origin=AMDGPU_TRANSFER_FRESH;unfinished_store=0;current_package=FALSE;stop=0;
+    CHECK(!Run(L"archive",tx));CHECK(!removal_moves && removed_bytes && !archive_reads);
+    // Lab 26200 after the tester.37 install stopped (exit 50): the service is gone, state.json is prepared and there is
+    // no pending.bin, beside the legacy record of main 967c6d76. The install of this package abandons that transaction
+    // (nothing to move), then its prepare moves the legacy record aside and installs fresh.
+    Reset(AMDGPU_TRANSFER_CURRENT);unfinished_store=1;current_package=TRUE;CHECK(!Run(L"archive",tx));
+    memcpy(removed,own_archive,own_archive_bytes);removed_bytes=own_archive_bytes;
+    origin=AMDGPU_TRANSFER_FRESH;unfinished_store=0;current_package=FALSE;opens=source_opens+strict_opens;
+    CHECK(!RunAs(L"abandon",L"7d02411324344bd0b031dccadce7843c",L"0.7.216.109"));
+    CHECK(!retired_pending_bytes && !thawed && !lock_depth && removed_bytes && source_opens+strict_opens==opens);
+    CHECK(!RunAs(L"prepare",other,L"0.7.216.110"));CHECK(publish==1 && removal_moves==1 && !removed_bytes);
+    CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h) && h.origin==AMDGPU_TRANSFER_FRESH && h.transaction[0]==2);
+    // The legacy record of another device stays and stops the install.
+    Reset(AMDGPU_TRANSFER_CURRENT);unfinished_store=1;current_package=TRUE;CHECK(!Run(L"archive",tx));
+    memcpy(removed,own_archive,own_archive_bytes);removed_bytes=own_archive_bytes;own_archive_bytes=0;
+    origin=AMDGPU_TRANSFER_FRESH;unfinished_store=0;current_package=FALSE;
+    removed[offsetof(AMDGPU_TRANSFER_HEADER,device_hash)]^=1;Reseal(removed,removed_bytes);
+    CHECK(RunAs(L"prepare",other,L"0.7.216.110")==ERROR_REVISION_MISMATCH);CHECK(!removal_moves && removed_bytes && !publish);
     // Without the unfinished store, a bound package that declares the catalog and a legacy origin stay refused.
     Reset(AMDGPU_TRANSFER_LEGACY);current_package=TRUE;CHECK(Run(L"prepare",tx)==ERROR_INVALID_DATA);
     // A handoff of another transaction in that store stays.
     Reset(AMDGPU_TRANSFER_LEGACY);CHECK(!Run(L"prepare",tx));origin=AMDGPU_TRANSFER_CURRENT;unfinished_store=1;
-    CHECK(Run(L"abandon",other)==ERROR_REVISION_MISMATCH);CHECK(saved_bytes && !retired_pending_bytes);    // A rollback in progress, a zero transaction and an invalid product stop the step before it reads anything.
+    CHECK(Run(L"abandon",other)==ERROR_REVISION_MISMATCH);CHECK(saved_bytes && !retired_pending_bytes);
+    // A rollback in progress, a zero transaction and an invalid product stop the step before it reads anything.
     Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!Run(L"prepare",tx));active_bytes=1;
     CHECK(Run(L"abandon",tx)==ERROR_BUSY);CHECK(saved_bytes && frozen_by==1);active_bytes=0;
     CHECK(Run(L"abandon",L"00000000000000000000000000000000")==ERROR_INVALID_PARAMETER);

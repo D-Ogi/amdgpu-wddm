@@ -479,6 +479,19 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
     if(h.origin==AMDGPU_TRANSFER_FRESH) {
         void *removed=NULL;DWORD removed_bytes=0;UINT history=AMDGPU_HISTORY_NONE;
         error=AmdgpuWindowsReadRemoval(&removed,&removed_bytes,archive);
+        if(error==ERROR_FILE_NOT_FOUND && archive) {
+            // BD-298 follow-up: the legacy archive of an unfinished store is archive-<transaction>.bin only
+            // (AmdgpuWindowsArchiveState). A resumed uninstall of that store accepts only that legacy archive.
+            error=AmdgpuWindowsReadArchive(h.transaction,&removed,&removed_bytes);
+            if(!error) {
+                AMDGPU_TRANSFER_HEADER own;
+                if(AmdgpuTransferCheck(removed,removed_bytes,&own) || own.origin!=AMDGPU_TRANSFER_LEGACY ||
+                   memcmp(own.device_hash,h.device_hash,32) || memcmp(own.transaction,h.transaction,16) ||
+                   strcmp(own.destination_version,h.destination_version))error=ERROR_REVISION_MISMATCH;
+                HeapFree(GetProcessHeap(),0,removed);return error;
+            }
+            if(error!=ERROR_FILE_NOT_FOUND)return error;
+        }
         if(error==ERROR_UNSUPPORTED_TYPE) {
             // A record of another state catalog: an install after the uninstall of another release (BD-262). A
             // record of the catalog of an earlier released package is read by setting name, as an update in place
@@ -500,7 +513,14 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
             if(history!=AMDGPU_HISTORY_NONE){memcpy(&old,removed,sizeof(old));memcpy(old.catalog,AmdgpuStateCatalogId(),64);}
             if((history==AMDGPU_HISTORY_NONE && AmdgpuTransferCheck(removed,removed_bytes,&old)) ||
                memcmp(old.device_hash,h.device_hash,32))error=ERROR_REVISION_MISMATCH;
-            else if(archive) {
+            else if(!archive && old.origin==AMDGPU_TRANSFER_LEGACY) {
+                // BD-298 follow-up: the legacy removal record that main 967c6d76 wrote for the uninstall of an
+                // unfinished store. Its settings never became active. It moves aside as evidence, and the install
+                // continues as on a computer without a record (the installer shows that the settings stay behind).
+                HeapFree(GetProcessHeap(),0,removed);removed=NULL;
+                error=AmdgpuWindowsRetireRemoval(h.transaction,FALSE);if(error)return error;
+                error=ERROR_FILE_NOT_FOUND;goto fresh;
+            } else if(archive) {
                 // A resumed uninstall after SCM deletion can use only the exact
                 // protected final archive it created before that deletion.
                 if(memcmp(old.transaction,h.transaction,16) || strcmp(old.destination_version,h.destination_version))error=ERROR_REVISION_MISMATCH;
@@ -524,6 +544,7 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
             HeapFree(GetProcessHeap(),0,removed);if(buffer)HeapFree(GetProcessHeap(),0,buffer);return error;
         }
         if(removed)HeapFree(GetProcessHeap(),0,removed);
+fresh:
         if(error!=ERROR_FILE_NOT_FOUND)return error;
     }
     if(h.origin==AMDGPU_TRANSFER_FRESH)ZeroMemory(h.source_version,sizeof(h.source_version));
