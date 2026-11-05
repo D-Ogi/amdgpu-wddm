@@ -7,7 +7,13 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   the kill switch `DwmForceCpu` or when the KMD's GPU DWM interop switches are off;
 - every other process goes to the application GPU UMD (the DXVK-based shell `amdgpu_wddm_d3d11.dll`,
   `driver/umd/dxvk`) or to the CPU UMD, by the `AppRouter` policy (`cpu`, `allowlist`, `gpu-default`, with `Allow`
-  and `Deny` lists). The sign-in and consent processes always stay on the CPU UMD. In `gpu-default` mode (the
+  and `Deny` lists). The sign-in, lock, consent and credential processes (`LogonUI.exe`, `LockApp.exe`,
+  `consent.exe`, `CredentialUIBroker.exe`) take the GPU UMD only on a start that the kernel driver confirmed, with
+  the desktop on the GPU route and a clear fault latch, and then follow the policy like any image. Each closed gate
+  has its reason (`app-protected-desktop-cpu`, `-unconfirmed`, `-faulted`, `-reset`, `-unlatched`), the route line
+  ends with `protected=`, and `AppRouter\ProtectedGpu` = 0 keeps all four on the CPU UMD (`app-protected`). The
+  design and the recovery are in `docs/design/logon-gpu-route.md`. `winlogon.exe` always stays on the CPU UMD.
+  In `gpu-default` mode (the
   installer's default since 2026-10-04) Windows components - images below the Windows directory and packaged apps
   under `WindowsApps\Microsoft*` - take the GPU UMD like any other image since train b20. Until then they stayed on
   the CPU UMD, at FL 10_0 (BD-088), because Notepad, Calculator and Task Manager failed on the GPU UMD (BD-061, fixed
@@ -120,7 +126,7 @@ its `DwmForceCpu` argument 0) and `desktop-dwm-unchanged` (the last of three dec
 The link does not use `/Brepro`, so a rebuild differs from `674AD261` in exactly five places: the COFF header
 `TimeDateStamp`, the `TimeDateStamp` of the three debug directory entries and the GUID of the CodeView (RSDS)
 record. The DLL holds no build path (`/PDBALTPATH:%_PDB%` leaves the PDB's file name only).
-`tools/build/pe_compare.py` checks that and nothing else differs:
+`tools/build/pe_compare.py` confirms that nothing else differs:
 
 ```
 python tools/build/pe_compare.py <674AD261 bc250d3d_router.dll> <rebuilt bc250d3d_router.dll>

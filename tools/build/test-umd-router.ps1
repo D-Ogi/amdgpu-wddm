@@ -52,6 +52,13 @@
 # The front must be on. 102 scenarios, 0 failed on 2026-10-30 with the tester.34 release set; the router before
 # the fix fails front-no-key and nothing else.
 #
+# The logon images' GPU route (docs/design/logon-gpu-route.md) adds ten scenarios that run the harness as
+# LogonUI.exe, LockApp.exe, consent.exe and winlogon.exe: a confirmed start takes the GPU UMD and the clean exit
+# removes the latch marker (the parent reads the hive after the child ended), each closed gate gives its reason, a
+# stale marker, a reused process id, a set latch and an adapter restart after the base each give the CPU UMD, a failed
+# GPU open removes the marker, and winlogon.exe stays on the CPU UMD. protected-logonui now expects
+# app-protected-unconfirmed: the fixture holds no start record.
+#
 #   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
 #        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]
 param(
@@ -72,7 +79,7 @@ $gate = Join-Path ([IO.Path]::GetFullPath($OutputDir)) $stamp
 $layout = Join-Path $gate 'layout'
 $out = Join-Path $gate 'results'
 foreach ($d in @('router','router-wow','cpu','cpu-real','fail','umd','umd-noicd','umd-diag','umd-diag\logs','umd-router','icd-alt','dwm','hives',
-                 'routelogs','diaglogs','diaglogs-env','app','app-noexport','app-real','app-real-noconfig','logonui','pickerhost','applogs',
+                 'routelogs','diaglogs','diaglogs-env','app','app-noexport','app-real','app-real-noconfig','logonui','lockapp','consent','winlogon','pickerhost','applogs',
                  'relocated\desktop','relocated\d3d11')) {
     [void](New-Item -ItemType Directory -Force -Path (Join-Path $layout $d))
 }
@@ -102,6 +109,11 @@ Placeholder 'icd-alt\alt-icd.dll'
 Put "$Build\bc250d3d_router-test.dll" 'umd-router\bc250d3d_router.dll'
 Put "$Build\test-router.exe" 'dwm\dwm.exe'
 Put "$Build\test-router.exe" 'logonui\logonui.exe'
+# The logon images' GPU route (docs/design/logon-gpu-route.md): the harness under the names of the gated images and
+# of winlogon.exe, which never takes the GPU UMD.
+Put "$Build\test-router.exe" 'lockapp\LockApp.exe'
+Put "$Build\test-router.exe" 'consent\consent.exe'
+Put "$Build\test-router.exe" 'winlogon\winlogon.exe'
 # BD-126: the harness under the name of the dialog host on the router's built-in default Deny list.
 Put "$Build\test-router.exe" 'pickerhost\PickerHost.exe'
 # The DXVK shell reads its config beside itself at OpenAdapter; engine and ICD are loaded (and hash-checked) only

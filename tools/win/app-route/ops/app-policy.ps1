@@ -3,7 +3,7 @@
 # follows it; processes that already opened theirs keep their route until they open another.
 #   -Mode cpu                     only Mode=cpu: the application kill switch (lists and paths stay for a later return)
 #   -Mode allowlist -Allow a.exe,b.exe [-Deny c.exe]   only the Allow names (minus Deny) on the GPU UMD
-#   -Mode gpu-default [-Deny c.exe,d.exe]               every application but Deny (and the router's protected list)
+#   -Mode gpu-default [-Deny c.exe,d.exe]               every application but Deny (and the router's logon-image gates)
 #   -Mode remove                  deletes the key: the router's default, every application on the CPU UMD
 # allowlist and gpu-default write every value exactly: GpuUmdPath = <Root>\gpu\<shell> (its hash checked against the
 # package), RouteLogDirectory = <Root>\logs, Allow, and Deny with the package's deny_always names. Other values go.

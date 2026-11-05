@@ -42,6 +42,116 @@ static int failures;
 
 // ---------------------------------------------------------------- policy (pure)
 
+// The logon images (router-policy.h ProtectedKindOf, docs/design/logon-gpu-route.md): winlogon.exe never takes the GPU
+// UMD; LogonUI.exe, consent.exe, LockApp.exe and CredentialUIBroker.exe take it only past the desktop, start and latch
+// gates, and then follow the AppRouter policy like any image.
+static void ProtectedTests()
+{
+    using namespace bc250router;
+    CHECK(ProtectedKindOf(L"LogonUI.exe") == ProtectedKind::GatedLatchRequired &&
+          ProtectedKindOf(L"consent.EXE") == ProtectedKind::GatedLatchRequired &&
+          ProtectedKindOf(L"LockApp.exe") == ProtectedKind::GatedLatchBestEffort &&
+          ProtectedKindOf(L"credentialuibroker.exe") == ProtectedKind::GatedLatchBestEffort &&
+          ProtectedKindOf(L"WinLogon.exe") == ProtectedKind::Never, "protected kinds");
+    CHECK(ProtectedKindOf(L"logonui") == ProtectedKind::None && ProtectedKindOf(L"xlogonui.exe") == ProtectedKind::None &&
+          ProtectedKindOf(L"consent.exe.exe") == ProtectedKind::None && ProtectedKindOf(L"") == ProtectedKind::None &&
+          ProtectedKindOf(nullptr) == ProtectedKind::None && !IsProtectedApp(L"notepad.exe") && IsProtectedApp(L"lockapp.exe"),
+          "a neighbour of a logon image is protected");
+
+    // The start gate: both values of the kernel driver must say confirmed.
+    CHECK(StartHealthOf(true, 0, true, 1) == StartHealth::Confirmed, "0 unconfirmed, boot confirmed");
+    CHECK(StartHealthOf(true, 1, true, 1) == StartHealth::Unconfirmed, "a runtime restart in a confirmed boot");
+    CHECK(StartHealthOf(true, 0, true, 0) == StartHealth::Unconfirmed, "0 unconfirmed, boot mark absent");
+    CHECK(StartHealthOf(true, 0, false, 1) == StartHealth::Unconfirmed, "boot mark unreadable");
+    CHECK(StartHealthOf(true, 0, true, 2) == StartHealth::Unconfirmed, "boot mark of another value");
+    CHECK(StartHealthOf(false, 0, true, 1) == StartHealth::Unreadable, "UnconfirmedStarts unreadable");
+
+    // The latch.
+    struct LatchCase { LatchView v; Latch want; };
+    const LatchCase latches[] = {
+        {{true, false, 0, true, 3, true, 3}, Latch::Clear},
+        {{true, true, 0, true, 3, true, 3}, Latch::Faulted},
+        {{true, false, 1, true, 3, true, 3}, Latch::Faulted},
+        {{true, false, 0, true, 4, true, 3}, Latch::Reset},
+        {{true, false, 0, true, 2, true, 3}, Latch::Reset},       // a count below the base: a cleared record
+        {{true, false, 0, false, 0, true, 3}, Latch::Unavailable}, // AdapterRestarts unreadable
+        {{true, false, 0, true, 3, false, 0}, Latch::Unavailable}, // no base could be written
+        {{false, false, 0, true, 3, true, 3}, Latch::Unavailable}, // no store
+        {{false, true, 1, true, 9, true, 3}, Latch::Unavailable},
+    };
+    for (const LatchCase &l : latches)
+        CHECK(LatchOf(l.v) == l.want, "latch store=%d faulted=%d dead=%u restarts=%lu base=%lu got %s", l.v.store,
+              l.v.faulted, l.v.dead_markers, l.v.restarts, l.v.base, LatchName(LatchOf(l.v)));
+
+    // The desktop gate: Decide() for dwm.exe, whatever the image, and a record that says CPU closes it.
+    const Inputs open = {L"logonui.exe", nullptr, 0, 1, true, true};
+    CHECK(DesktopAdmitsGpu(open, DesktopRecord::Gpu) && DesktopAdmitsGpu(open, DesktopRecord::Unknown), "desktop open");
+    CHECK(!DesktopAdmitsGpu(open, DesktopRecord::Cpu), "a CPU record (fallback) admits");
+    CHECK(!DesktopAdmitsGpu({L"logonui.exe", nullptr, 1, 1, true, true}, DesktopRecord::Gpu), "kill switch admits");
+    CHECK(!DesktopAdmitsGpu({L"logonui.exe", nullptr, 0, 1, true, false}, DesktopRecord::Unknown), "switches off admit");
+    CHECK(DesktopAdmitsGpu({L"logonui.exe", nullptr, 0, 0, false, false}, DesktopRecord::Unknown), "switches not required");
+
+    // The decision. Gates open: gpu-default, confirmed start, clear latch.
+    const AppMode Al = AppMode::Allowlist, Gd = AppMode::GpuDefault;
+    const StartHealth C = StartHealth::Confirmed, Un = StartHealth::Unconfirmed, Ur = StartHealth::Unreadable;
+    const Latch Lc = Latch::Clear, Lf = Latch::Faulted, Lr = Latch::Reset, Lu = Latch::Unavailable;
+    struct GateCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; bool cpu, on, desktop;
+                      StartHealth start; Latch latch; AppRoute route; AppReason reason; };
+    const GateCase gates[] = {
+        // Positive: every gated image takes the GPU UMD on a confirmed start with a clear latch.
+        {L"LogonUI.exe", Gd, nullptr, nullptr, false, true, true, C, Lc, AppRoute::Gpu, AppReason::Default},
+        {L"consent.exe", Gd, nullptr, nullptr, false, true, true, C, Lc, AppRoute::Gpu, AppReason::Default},
+        {L"LockApp.exe", Gd, nullptr, nullptr, false, true, true, C, Lc, AppRoute::Gpu, AppReason::Default},
+        {L"CredentialUIBroker.exe", Gd, nullptr, nullptr, false, true, true, C, Lc, AppRoute::Gpu, AppReason::Default},
+        {L"logonui.exe", Al, L"logonui.exe\0", nullptr, false, true, true, C, Lc, AppRoute::Gpu, AppReason::Allowed},
+        // winlogon.exe: never, whatever the gates say.
+        {L"winlogon.exe", Gd, L"winlogon.exe\0", nullptr, false, true, true, C, Lc, AppRoute::Cpu, AppReason::Protected},
+        // ProtectedGpu off: the router before this feature.
+        {L"LogonUI.exe", Gd, nullptr, nullptr, false, false, true, C, Lc, AppRoute::Cpu, AppReason::Protected},
+        {L"lockapp.exe", Gd, nullptr, nullptr, false, false, true, C, Lc, AppRoute::Cpu, AppReason::Protected},
+        // One closed gate at a time, each with its reason.
+        {L"LogonUI.exe", Gd, nullptr, nullptr, false, true, false, C, Lc, AppRoute::Cpu, AppReason::ProtectedDesktopCpu},
+        {L"LogonUI.exe", Gd, nullptr, nullptr, false, true, true, Un, Lc, AppRoute::Cpu, AppReason::ProtectedUnconfirmed},
+        {L"LogonUI.exe", Gd, nullptr, nullptr, false, true, true, Ur, Lc, AppRoute::Cpu, AppReason::ProtectedUnconfirmed},
+        {L"consent.exe", Gd, nullptr, nullptr, false, true, true, C, Lf, AppRoute::Cpu, AppReason::ProtectedFaulted},
+        {L"LockApp.exe", Gd, nullptr, nullptr, false, true, true, C, Lf, AppRoute::Cpu, AppReason::ProtectedFaulted},
+        {L"LogonUI.exe", Gd, nullptr, nullptr, false, true, true, C, Lr, AppRoute::Cpu, AppReason::ProtectedReset},
+        {L"CredentialUIBroker.exe", Gd, nullptr, nullptr, false, true, true, C, Lr, AppRoute::Cpu, AppReason::ProtectedReset},
+        // An unavailable latch: required for LogonUI.exe and consent.exe, best effort for the other two.
+        {L"LogonUI.exe", Gd, nullptr, nullptr, false, true, true, C, Lu, AppRoute::Cpu, AppReason::ProtectedUnlatched},
+        {L"consent.exe", Gd, nullptr, nullptr, false, true, true, C, Lu, AppRoute::Cpu, AppReason::ProtectedUnlatched},
+        {L"LockApp.exe", Gd, nullptr, nullptr, false, true, true, C, Lu, AppRoute::Gpu, AppReason::Default},
+        {L"CredentialUIBroker.exe", Gd, nullptr, nullptr, false, true, true, C, Lu, AppRoute::Gpu, AppReason::Default},
+        // The gates come first: the first closed one names the reason.
+        {L"LogonUI.exe", Gd, nullptr, nullptr, false, true, false, Un, Lf, AppRoute::Cpu, AppReason::ProtectedDesktopCpu},
+        {L"LogonUI.exe", Gd, nullptr, nullptr, false, true, true, Un, Lf, AppRoute::Cpu, AppReason::ProtectedUnconfirmed},
+        {L"LogonUI.exe", Gd, nullptr, nullptr, false, true, true, C, Lf, AppRoute::Cpu, AppReason::ProtectedFaulted},
+        // Past the gates, the opt-outs of any image still apply: RenderOnCpu, Deny, allowlist, the mode.
+        {L"LogonUI.exe", Gd, nullptr, nullptr, true, true, true, C, Lc, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"LogonUI.exe", Gd, nullptr, L"logonui.exe\0", false, true, true, C, Lc, AppRoute::Cpu, AppReason::Denied},
+        {L"LogonUI.exe", Al, L"other.exe\0", nullptr, false, true, true, C, Lc, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"LogonUI.exe", AppMode::Cpu, nullptr, nullptr, false, true, true, C, Lc, AppRoute::Cpu, AppReason::ModeCpu},
+        {L"LogonUI.exe", AppMode::Invalid, nullptr, nullptr, false, true, true, C, Lc, AppRoute::Cpu, AppReason::ModeInvalid},
+    };
+    for (const GateCase &g : gates) {
+        AppInputs in = {g.exe, g.mode, g.allow, g.deny, true, true, Component::Yes, g.cpu};
+        in.protected_gpu = g.on;
+        in.desktop_gpu = g.desktop;
+        in.start = g.start;
+        in.latch = g.latch;
+        const AppDecision d = DecideApp(in);
+        CHECK(d.route == g.route && d.reason == g.reason, "gate exe=%ls mode=%d on=%d desktop=%d start=%s latch=%s got %s",
+              g.exe, (int)g.mode, g.on, g.desktop, StartHealthName(g.start), LatchName(g.latch), AppReasonName(d.reason));
+    }
+    // A caller that fills no gate keeps every logon image on the CPU UMD.
+    CHECK(DecideApp({L"LogonUI.exe", Gd, nullptr, nullptr, true, true}).reason == AppReason::Protected, "default gates");
+    CHECK(!strcmp(AppReasonName(AppReason::ProtectedDesktopCpu), "app-protected-desktop-cpu") &&
+          !strcmp(AppReasonName(AppReason::ProtectedUnconfirmed), "app-protected-unconfirmed") &&
+          !strcmp(AppReasonName(AppReason::ProtectedFaulted), "app-protected-faulted") &&
+          !strcmp(AppReasonName(AppReason::ProtectedReset), "app-protected-reset") &&
+          !strcmp(AppReasonName(AppReason::ProtectedUnlatched), "app-protected-unlatched"), "protected reason names");
+}
+
 static void PolicyTests()
 {
     using namespace bc250router;
@@ -178,6 +288,7 @@ static void PolicyTests()
     }
     CHECK(!strcmp(AppReasonName(AppReason::RenderOnCpu), "app-render-on-cpu"), "reason name %s",
           AppReasonName(AppReason::RenderOnCpu));
+    ProtectedTests();
     struct PathCase { const wchar_t *image, *windows; bool component; };
     const PathCase paths[] = {
         {L"C:\\Windows\\System32\\notepad.exe", L"C:\\Windows", true},
@@ -504,6 +615,61 @@ static void AppBase(const wchar_t *mode, const wchar_t *gpu = L"app\\amdgpu_wddm
 static std::string AppLog() { return ReadAll(RouteLog(Layout + L"\\applogs")); }
 static bool Has(const std::string &log, const char *text) { return log.find(text) != std::string::npos; }
 
+// The logon images (router-latch.h): the store in the private hive, and a kernel driver state with a confirmed start.
+static const wchar_t LatchKey[] = L"SOFTWARE\\amdgpu-wddm\\ProtectedLatch";
+static void SetQw(const wchar_t *key, const wchar_t *name, ULONGLONG v)
+{
+    HKEY k = Sub(key);
+    RegSetValueExW(k, name, 0, REG_QWORD, (const BYTE *)&v, sizeof(v));
+    RegCloseKey(k);
+}
+static bool LatchHas(const wchar_t *name)
+{
+    HKEY k = nullptr;
+    if (RegOpenKeyExW(Root, LatchKey, 0, KEY_QUERY_VALUE, &k) != ERROR_SUCCESS) return false;
+    const bool has = RegQueryValueExW(k, name, nullptr, nullptr, nullptr, nullptr) == ERROR_SUCCESS;
+    RegCloseKey(k);
+    return has;
+}
+// The DWORD, or -1 when absent or of another kind.
+static long LatchDword(const wchar_t *name)
+{
+    DWORD v = 0, bytes = sizeof(v), type = 0;
+    HKEY k = nullptr;
+    if (RegOpenKeyExW(Root, LatchKey, 0, KEY_QUERY_VALUE, &k) != ERROR_SUCCESS) return -1;
+    const LSTATUS s = RegQueryValueExW(k, name, nullptr, &type, (BYTE *)&v, &bytes);
+    RegCloseKey(k);
+    return s == ERROR_SUCCESS && type == REG_DWORD ? (long)v : -1;
+}
+static bool LatchQword(const wchar_t *name, ULONGLONG *v)
+{
+    DWORD bytes = sizeof(*v), type = 0;
+    HKEY k = nullptr;
+    if (RegOpenKeyExW(Root, LatchKey, 0, KEY_QUERY_VALUE, &k) != ERROR_SUCCESS) return false;
+    const LSTATUS s = RegQueryValueExW(k, name, nullptr, &type, (BYTE *)v, &bytes);
+    RegCloseKey(k);
+    return s == ERROR_SUCCESS && type == REG_QWORD;
+}
+// A process that started and ended: its id and creation time, as a marker that its process never removed.
+static DWORD ExitedProcess(ULONGLONG *created)
+{
+    wchar_t cmd[MAX_PATH + 32];
+    wchar_t system[MAX_PATH];
+    if (!GetSystemDirectoryW(system, MAX_PATH)) return 0;
+    swprintf_s(cmd, L"\"%ls\\cmd.exe\" /c exit 0", system);
+    STARTUPINFOW si = {sizeof(si)};
+    PROCESS_INFORMATION pi = {};
+    if (!CreateProcessW(nullptr, cmd, nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) return 0;
+    WaitForSingleObject(pi.hProcess, 10000);
+    FILETIME c, e, k, u;
+    GetProcessTimes(pi.hProcess, &c, &e, &k, &u);
+    *created = ((ULONGLONG)c.dwHighDateTime << 32) | c.dwLowDateTime;
+    const DWORD pid = pi.dwProcessId;
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return pid;
+}
+
 // A handle as the front and the doubles print it, with printf's %p. The width is the pointer width of the
 // build: 16 hex digits for x64, 8 for x86. An expected line must be composed, never written out, or the gate
 // reads a 64-bit tree only (the x86 router gate failed front-on on exactly that).
@@ -573,6 +739,18 @@ static void RouterBase(bool clientIsSelf)
     SetDw(RouterKey, L"DwmForceCpu", 0);
     SetDw(RouterKey, L"RequireKmdSwitches", 1);
     if (clientIsSelf) SetMulti(RouterKey, L"HostedClients", {L"unrelated.exe", ExeBase()});
+}
+
+// A logon image under gpu-default with the desktop route open. confirmed: the kernel driver confirmed this start
+// (UnconfirmedStarts 0, GuardBoot\Confirmed 1) and recorded two adapter restarts (HangRecovery\AdapterRestarts 2).
+static void ProtectedBase(bool confirmed)
+{
+    RouterBase(false); Switches(true, true);
+    AppBase(L"gpu-default");
+    if (!confirmed) return;
+    SetDw(KmdKey, L"UnconfirmedStarts", 0);
+    SetDw(KmdKey, L"GuardBoot.Confirmed", 1);
+    SetDw(KmdKey, L"HangRecovery.AdapterRestarts", 2);
 }
 
 // ---------------------------------------------------------------- image identity (router-identity.h)
@@ -3397,7 +3575,8 @@ static void Child(const std::string &s)
                   "a HostedClients entry wrote the record: status %u", status);
         }
     } else if (s == "protected-logonui") {
-        // Run from <layout>\logonui\logonui.exe: listed in Allow, gpu-default, still the CPU UMD.
+        // Run from <layout>\logonui\logonui.exe: listed in Allow, gpu-default, and the kernel driver's state holds no
+        // start record: the start gate is closed, so the CPU UMD.
         RouterBase(false); Switches(true, true);
         AppBase(L"gpu-default"); SetMulti(AppKey, L"Allow", {L"logonui.exe"});
         OverrideHklm();
@@ -3406,7 +3585,138 @@ static void Child(const std::string &s)
         CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
         CHECK(!Loaded(L"app\\amdgpu_wddm_d3d11.dll"), "application GPU UMD loaded for logonui.exe");
         std::string log = AppLog();
-        CHECK(Has(log, "route=cpu reason=app-protected fallback=0"), "route log: %s", log.c_str());
+        CHECK(Has(log, "route=cpu reason=app-protected-unconfirmed fallback=0") &&
+              Has(log, "protected=desktop:gpu/absent,start:unreadable/") && Has(log, "latch:unavailable/none/"),
+              "route log: %s", log.c_str());
+        CHECK(!LatchHas(L"Base"), "the latch base was written behind a closed start gate");
+    } else if (s == "protected-confirmed" || s == "protected-lockapp" || s == "protected-consent") {
+        // A confirmed start with an open desktop route: the gated image takes the application GPU UMD, its marker is
+        // armed in the store and the base is taken. Another image's latch does not touch this one. The parent reads
+        // the hive after this process ended: the clean exit removed the marker (RunAll, LatchAfterExit).
+        const wchar_t *image = s == "protected-lockapp" ? L"lockapp.exe" : s == "protected-consent" ? L"consent.exe"
+                                                                                                  : L"logonui.exe";
+        ProtectedBase(true);
+        SetDw(LatchKey, s == "protected-lockapp" ? L"logonui.exe" : L"lockapp.exe", 1);
+        OverrideHklm();
+        CHECK(!_wcsicmp(ExeBase().c_str(), image), "not running as %ls", image);
+        Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
+        CHECK(o.hr == S_OK && o.tag == AppTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+        CHECK(Loaded(L"app\\amdgpu_wddm_d3d11.dll") && !Loaded(L"cpu\\bc250d3d.dll"), "modules");
+        std::string log = AppLog();
+        CHECK(Has(log, "route=gpu reason=app-default fallback=0 gpu_hr=00000000") &&
+              Has(log, "protected=desktop:gpu/absent,start:confirmed/0/1,latch:clear/hklm/2,armed:1"),
+              "route log: %s", log.c_str());
+        const std::wstring marker = std::wstring(image) + L"|" + std::to_wstring(GetCurrentProcessId());
+        ULONGLONG created = 0, mine = 0;
+        FILETIME c, e, k, u;
+        GetProcessTimes(GetCurrentProcess(), &c, &e, &k, &u);
+        mine = ((ULONGLONG)c.dwHighDateTime << 32) | c.dwLowDateTime;
+        CHECK(LatchQword(marker.c_str(), &created) && created == mine, "marker %ls: %llu, process %llu", marker.c_str(),
+              (unsigned long long)created, (unsigned long long)mine);
+        CHECK(LatchDword(L"Base") == 2, "base %ld", LatchDword(L"Base"));
+        // A second open in the same process sees its own live marker: still the GPU UMD, no fault.
+        Opened o2 = Open(GetModuleHandleW((Layout + L"\\router\\bc250d3d_router.dll").c_str()), "OpenAdapter10_2");
+        CHECK(o2.hr == S_OK && o2.tag == AppTag102 && LatchDword(image) == -1, "second open tag=%llu latch=%ld",
+              (unsigned long long)o2.tag, LatchDword(image));
+    } else if (s == "protected-gates") {
+        // One closed gate at a time, each with its reason, then the opt-outs that apply past the gates. Every open
+        // reads the registry again. The application GPU UMD is never loaded.
+        ProtectedBase(false);
+        OverrideHklm();
+        HMODULE r = LoadAt(L"router\\bc250d3d_router.dll");
+        std::vector<std::string> expected;
+        auto open = [&](const char *want) {
+            Opened o = Open(r, "OpenAdapter10_2");
+            CHECK(o.hr == S_OK && o.tag == CpuTag102, "%s: hr=%08lx tag=%llu", want, o.hr, (unsigned long long)o.tag);
+            expected.push_back(want);
+        };
+        open("route=cpu reason=app-protected-unconfirmed fallback=0");   // no start record
+        SetDw(KmdKey, L"UnconfirmedStarts", 1); SetDw(KmdKey, L"GuardBoot.Confirmed", 1);
+        open("route=cpu reason=app-protected-unconfirmed fallback=0");   // a start not confirmed yet
+        SetDw(KmdKey, L"UnconfirmedStarts", 0); DeleteValue(KmdKey, L"GuardBoot.Confirmed");
+        open("route=cpu reason=app-protected-unconfirmed fallback=0");   // no confirmation in this boot
+        SetSz(KmdKey, L"GuardBoot.Confirmed", L"1");
+        open("route=cpu reason=app-protected-unconfirmed fallback=0");   // a mark of the wrong kind
+        SetDw(KmdKey, L"GuardBoot.Confirmed", 1); SetDw(RouterKey, L"DwmForceCpu", 1);
+        open("route=cpu reason=app-protected-desktop-cpu fallback=0");   // the desktop kill switch
+        SetDw(RouterKey, L"DwmForceCpu", 0); Latched(0x301);
+        open("route=cpu reason=app-protected-desktop-cpu fallback=0");   // interop closed at this start
+        Latched(0x303); SetDw(AppKey, L"ProtectedGpu", 0);
+        open("route=cpu reason=app-protected fallback=0");               // the bisect switch
+        SetSz(AppKey, L"ProtectedGpu", L"1");
+        open("route=cpu reason=app-protected fallback=0");               // a switch of the wrong kind is off
+        SetDw(AppKey, L"ProtectedGpu", 2);
+        open("route=cpu reason=app-protected fallback=0");               // a value other than 1 is off
+        CHECK(!LatchHas(L"Base"), "the latch base was written behind a closed gate");
+        SetDw(AppKey, L"ProtectedGpu", 1); SetDw(GraphicsKey, L"RenderOnCpu", 1);
+        open("route=cpu reason=app-render-on-cpu fallback=0");           // the global graphics setting
+        DeleteValue(GraphicsKey, L"RenderOnCpu"); SetMulti(AppKey, L"Deny", {L"LOGONUI.EXE"});
+        open("route=cpu reason=app-denied fallback=0");                  // a Deny entry
+        DeleteValue(AppKey, L"Deny"); SetSz(AppKey, L"Mode", L"allowlist");
+        open("route=cpu reason=app-not-allowed fallback=0");             // allowlist without an entry
+        SetSz(AppKey, L"Mode", L"cpu");
+        open("route=cpu reason=app-mode-cpu fallback=0");                // the application kill switch
+        CHECK(!Loaded(L"app\\amdgpu_wddm_d3d11.dll"), "application GPU UMD loaded");
+        std::string log = AppLog();
+        size_t at = 0;
+        for (const std::string &want : expected) {
+            const size_t found = log.find(want, at);
+            CHECK(found != std::string::npos, "missing in order: %s\nlog: %s", want.c_str(), log.c_str());
+            if (found != std::string::npos) at = found + want.size();
+        }
+        CHECK(Has(log, "protected=off"), "route log: %s", log.c_str());
+        CHECK(!LatchHas((L"logonui.exe|" + std::to_wstring(GetCurrentProcessId())).c_str()), "a CPU route armed a marker");
+    } else if (s == "protected-latch-dead" || s == "protected-latch-reused" || s == "protected-latch-set" ||
+               s == "protected-latch-reset") {
+        // A latch that is not clear: the CPU UMD with its reason.
+        ProtectedBase(true);
+        std::wstring stale;
+        if (s == "protected-latch-dead") {
+            // A real process that ended: its id is free and its marker was never removed.
+            ULONGLONG created = 0;
+            const DWORD pid = ExitedProcess(&created);
+            CHECK(pid != 0, "no exited process");
+            stale = L"logonui.exe|" + std::to_wstring(pid);
+            SetQw(LatchKey, stale.c_str(), created);
+        } else if (s == "protected-latch-reused") {
+            // This process's id with another creation time: the id was used again after the marked process ended.
+            stale = L"logonui.exe|" + std::to_wstring(GetCurrentProcessId());
+            SetQw(LatchKey, stale.c_str(), 1);
+        } else if (s == "protected-latch-set") {
+            SetDw(LatchKey, L"logonui.exe", 1);
+        } else {
+            SetDw(LatchKey, L"Base", 1); // AdapterRestarts is 2: one adapter restart after the base
+        }
+        OverrideHklm();
+        Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
+        CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+        CHECK(!Loaded(L"app\\amdgpu_wddm_d3d11.dll"), "application GPU UMD loaded");
+        std::string log = AppLog();
+        const char *want = s == "protected-latch-reset" ? "route=cpu reason=app-protected-reset fallback=0"
+                                                         : "route=cpu reason=app-protected-faulted fallback=0";
+        CHECK(Has(log, want) && Has(log, "armed:0"), "route log: %s", log.c_str());
+        if (!stale.empty()) CHECK(!LatchHas(stale.c_str()) && LatchDword(L"logonui.exe") == 1, "stale marker kept or no latch");
+        if (s == "protected-latch-reset") CHECK(LatchDword(L"logonui.exe") == -1, "a reset wrote the image latch");
+    } else if (s == "protected-winlogon") {
+        // winlogon.exe never takes the GPU UMD, with every gate open and an Allow entry.
+        ProtectedBase(true);
+        SetMulti(AppKey, L"Allow", {L"winlogon.exe"});
+        OverrideHklm();
+        Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
+        CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+        std::string log = AppLog();
+        CHECK(Has(log, "route=cpu reason=app-protected fallback=0") && Has(log, "protected=never"), "route log: %s",
+              log.c_str());
+    } else if (s == "protected-gpu-fails") {
+        // The GPU open fails: the CPU UMD (fallback=1), and the marker goes, so that the later exit is no fault.
+        ProtectedBase(true);
+        AppBase(nullptr, L"fail\\fake-fail.dll");
+        OverrideHklm();
+        Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
+        CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+        std::string log = AppLog();
+        CHECK(Has(log, "route=cpu reason=app-default fallback=1") && Has(log, "armed:1"), "route log: %s", log.c_str());
+        CHECK(!LatchHas((L"logonui.exe|" + std::to_wstring(GetCurrentProcessId())).c_str()), "marker kept after fallback");
     }
 
     // Router in front of the real DXVK shell E748418C (<layout>\app-real: shell and its config A9B498ED; the engine
@@ -3450,6 +3760,38 @@ static void Child(const std::string &s)
 // ---------------------------------------------------------------- parent
 
 struct Scenario { const char *name; const char *exe; std::vector<std::pair<std::wstring, std::wstring>> env; };
+
+// After a logon image on the GPU UMD ended through ExitProcess: its marker is gone (the router's DllMain removed it)
+// and the latch base of the boot stays. The fixture router keeps the store on disk for this read (router-latch.h).
+static bool LatchAfterExit(const char *scenario)
+{
+    if (strcmp(scenario, "protected-confirmed") && strcmp(scenario, "protected-lockapp") &&
+        strcmp(scenario, "protected-consent"))
+        return true;
+    const std::wstring path = Layout + L"\\hives\\" + std::wstring(scenario, scenario + strlen(scenario)) + L".dat";
+    HKEY hive = nullptr, key = nullptr;
+    if (RegLoadAppKeyW(path.c_str(), &hive, KEY_READ, 0, 0) != ERROR_SUCCESS) {
+        printf("  %s: hive not loaded after exit\n", scenario);
+        return false;
+    }
+    bool ok = RegOpenKeyExW(hive, L"SOFTWARE\\amdgpu-wddm\\ProtectedLatch", 0, KEY_QUERY_VALUE, &key) == ERROR_SUCCESS;
+    unsigned markers = 0;
+    DWORD base = 0, bytes = sizeof(base), type = 0;
+    if (ok) {
+        for (DWORD i = 0;; ++i) {
+            wchar_t name[MAX_PATH + 16];
+            DWORD chars = MAX_PATH + 16;
+            if (RegEnumValueW(key, i, name, &chars, nullptr, nullptr, nullptr, nullptr) != ERROR_SUCCESS) break;
+            if (wcschr(name, L'|')) ++markers;
+        }
+        ok = RegQueryValueExW(key, L"Base", nullptr, &type, (BYTE *)&base, &bytes) == ERROR_SUCCESS && type == REG_DWORD &&
+             base == 2 && markers == 0;
+        RegCloseKey(key);
+    }
+    RegCloseKey(hive);
+    if (!ok) printf("  %s: after a clean exit markers=%u base=%lu\n", scenario, markers, base);
+    return ok;
+}
 
 static int RunAll(const std::wstring &out)
 {
@@ -3510,6 +3852,12 @@ static int RunAll(const std::wstring &out)
         {"app-dialog-host-builtin", "pickerhost\\PickerHost.exe", {}},
         {"app-dialog-host-allow", "pickerhost\\PickerHost.exe", {}},
         {"protected-logonui", "logonui\\logonui.exe", {}},
+        // The logon images' GPU route (docs/design/logon-gpu-route.md): gates, latch and the clean exit.
+        {"protected-confirmed", "logonui\\logonui.exe", {}}, {"protected-lockapp", "lockapp\\LockApp.exe", {}},
+        {"protected-consent", "consent\\consent.exe", {}}, {"protected-gates", "logonui\\logonui.exe", {}},
+        {"protected-latch-dead", "logonui\\logonui.exe", {}}, {"protected-latch-reused", "logonui\\logonui.exe", {}},
+        {"protected-latch-set", "logonui\\logonui.exe", {}}, {"protected-latch-reset", "logonui\\logonui.exe", {}},
+        {"protected-winlogon", "winlogon\\winlogon.exe", {}}, {"protected-gpu-fails", "logonui\\logonui.exe", {}},
         {"desktop-dwm-unchanged", "dwm\\dwm.exe", {}}, {"desktop-client-unchanged", nullptr, {}},
         {"stack-app-real", nullptr, {}}, {"stack-app-real-noconfig", nullptr, {}}, {"stack-app-real-no-identity", nullptr, {}},
     };
@@ -3562,7 +3910,8 @@ static int RunAll(const std::wstring &out)
             errSize.LowPart = fa.nFileSizeLow; errSize.HighPart = (LONG)fa.nFileSizeHigh;
         }
         // Nothing may reach stderr: with diagnostics off the UMD writes nowhere, with them on only to its log file.
-        const bool pass = code == 0 && errSize.QuadPart == 0;
+        bool pass = code == 0 && errSize.QuadPart == 0;
+        if (pass && !LatchAfterExit(sc.name)) pass = false;
         if (!pass) ++failed;
         printf("%s %s exit=%lu stderr_bytes=%lld\n", pass ? "PASS" : "FAIL", sc.name, code, errSize.QuadPart);
         if (summary) fprintf(summary, "%s %s exit=%lu stderr_bytes=%lld\n", pass ? "PASS" : "FAIL", sc.name, code, errSize.QuadPart);

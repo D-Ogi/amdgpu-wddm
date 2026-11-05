@@ -233,6 +233,9 @@ application on this driver is the one of the application itself.
 The value 1 sends a D3D10 or D3D11 application to the CPU UMD `bc250d3d.dll`, which is Mesa `d3d10umd` on
 llvmpipe. The router applies it in `driver/umd/router/router-policy.h`, after the built-in protected list and
 before the `Deny` list. The route log line gives the reason `app-render-on-cpu` and the field `render_on_cpu`.
+A logon image (`LogonUI.exe`, `LockApp.exe`, `consent.exe`, `CredentialUIBroker.exe`) that passes the gates of
+[logon-gpu-route.md](logon-gpu-route.md) also obeys `RenderOnCpu`, globally and per image: this value is one of the
+opt-outs of the logon screens.
 
 The `Deny` list of `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` works as before. Either one keeps an application on the
 CPU UMD. The value 0 never moves an application off the CPU UMD that the `AppRouter` policy chose. When the
