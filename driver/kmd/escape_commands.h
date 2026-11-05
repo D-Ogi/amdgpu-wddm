@@ -48,6 +48,7 @@ static __inline void Bc250EscapeCommandsUnique(void)
     case BC250_ESCAPE_CONNECTOR_REPLUG:
     case BC250_ESCAPE_LATCH_PROBE_COMMAND:
     case BC250_ESCAPE_SET_PROCESS_POLICY:
+    case BC250_ESCAPE_SET_DESKTOP_COMPOSITOR:
     default:
         break;
     }

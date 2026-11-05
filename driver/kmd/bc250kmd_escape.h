@@ -2032,6 +2032,40 @@ typedef struct _BC250_ESCAPE_PROCESS_POLICY {
     unsigned short Image[BC250_PROCESS_POLICY_IMAGE_CHARS]; // in: the process image's file name, zero-terminated
 } BC250_ESCAPE_PROCESS_POLICY; // 176 bytes, ABI 1
 typedef char BC250_PROCESS_POLICY_SIZE_CHECK[(sizeof(BC250_ESCAPE_PROCESS_POLICY) == 176) ? 1 : -1];
+
+// BD-296 part (b): the desktop router in dwm.exe tells the KMD which UMD composes the desktop. The router sends it
+// at each desktop decision, before the UMD of that decision opens the adapter. With a CPU route the KMD gives every
+// standard GDI texture created after it the placement of a CPU-visible staging surface (the aperture, cached), so
+// that the CPU UMD can map it (gdi_admission.h, Bc250GdiCompositorPlacement). The GPU route takes that back for the
+// textures created after it. The KMD accepts the escape only from a Window Manager account (S-1-5-90-0-<session>,
+// the account of dwm.exe), which no other process can have. Software state of the adapter, so it is answered with
+// any escape flags and in both flavours. A new start of the adapter begins with the GPU placement.
+#define BC250_ESCAPE_SET_DESKTOP_COMPOSITOR 39u
+#define BC250_DESKTOP_COMPOSITOR_ABI 1u
+// Route: the route words of driver/contract/bc250_desktop_route.h (the router checks the equality at compile time).
+#define BC250_COMPOSITOR_ROUTE_GPU 1u           // the hosted GPU UMD composes
+#define BC250_COMPOSITOR_ROUTE_KILL_SWITCH 2u   // the CPU UMD: DwmForceCpu
+#define BC250_COMPOSITOR_ROUTE_SWITCHES_OFF 3u  // the CPU UMD: the KMD desktop switches are not both on
+#define BC250_COMPOSITOR_ROUTE_FALLBACK 4u      // the CPU UMD: the hosted open failed
+// Reason (out): why Status is DONE or REFUSED.
+#define BC250_COMPOSITOR_REASON_ACCEPTED 0u
+#define BC250_COMPOSITOR_REASON_ABI 1u          // AbiVersion is not BC250_DESKTOP_COMPOSITOR_ABI
+#define BC250_COMPOSITOR_REASON_ROUTE 2u        // Route is not one of the four words
+#define BC250_COMPOSITOR_REASON_ACCOUNT 3u      // the caller's token user is not a Window Manager account
+typedef struct _BC250_ESCAPE_DESKTOP_COMPOSITOR {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion;
+    unsigned long Route;                    // in: BC250_COMPOSITOR_ROUTE_*
+    unsigned long Pid;                      // in: the compositor process, for the log only
+    unsigned long Reason;                   // out: BC250_COMPOSITOR_REASON_*
+    unsigned long CpuCompositor;            // out: 1 when new standard GDI textures now get a CPU view
+    unsigned long ApertureOffered;          // out: 1 when this start offers the aperture segment that the view needs
+    unsigned long Changes;                  // out: accepted changes of the route in this start
+    unsigned long Placed;                   // out: standard GDI textures placed with a CPU view in this start
+    unsigned long Refused;                  // out: refused escapes of this kind in this start
+    unsigned long Reserved[6];              // out: 0
+} BC250_ESCAPE_DESKTOP_COMPOSITOR; // 80 bytes, ABI 1
+typedef char BC250_DESKTOP_COMPOSITOR_SIZE_CHECK[(sizeof(BC250_ESCAPE_DESKTOP_COMPOSITOR) == 80) ? 1 : -1];
 #define BC250_BOARD_CAPS_ABI 3u
 #define BC250_BOARD_CAPS_ABI_V2 2u   // the overclock words, without CpuDefaultTempC
 #define BC250_BOARD_CAPS_ABI_V1 1u

@@ -307,4 +307,54 @@ static __inline int Bc250DesktopKillSwitch(int Read, unsigned long Value)
     default: return 0;
     }
 }
+
+// BD-296 part (b): the compositor of this start, as the router in dwm.exe reports it (BC250_ESCAPE_SET_DESKTOP_COMPOSITOR,
+// bc250kmd_escape.h). The capability above is decided once, at WddmStart, from what the KMD can see then. A hosted
+// open that fails inside dwm.exe (the router's fallback) happens later, and so does a router that reads its kill
+// switch while the driver's copy is absent. In both, the CPU UMD composes while GDI draws each window into a standard
+// texture (type 1) with no CPU view, which the CPU UMD cannot map: the window has no content (part (a), the UMD's
+// safety net, keeps the device). With the router's report, the KMD gives each standard texture created after it the
+// placement of a CPU-visible staging surface (type 2): the aperture, cached, with a CPU view. The GDI kernels address
+// both placements through the same GPU virtual address, so only the segment and the CPU view change. The texture's
+// LB7A record, its type and its layout do not change, so the GDI path and the UMD's OpenResource read it as before.
+// The aperture is the condition: without the segment (QuerySegment did not offer it) the texture keeps its place.
+// Textures created before the report keep the placement they were created with; the GPU route takes the CPU view
+// away again for the textures created after it.
+#define BC250_COMPOSITOR_ROUTE_WORD_FIRST 1ul   /* BC250_COMPOSITOR_ROUTE_GPU */
+#define BC250_COMPOSITOR_ROUTE_WORD_LAST 4ul    /* BC250_COMPOSITOR_ROUTE_FALLBACK */
+static __inline int Bc250CompositorRouteValid(unsigned long Route)
+{
+    return Route >= BC250_COMPOSITOR_ROUTE_WORD_FIRST && Route <= BC250_COMPOSITOR_ROUTE_WORD_LAST;
+}
+// The three CPU words (kill switch, switches off, fallback); the GPU word and every invalid word are not.
+static __inline int Bc250CompositorRouteCpu(unsigned long Route)
+{
+    return Bc250CompositorRouteValid(Route) && Route != BC250_COMPOSITOR_ROUTE_WORD_FIRST;
+}
+
+// The caller of the escape: a Window Manager account, S-1-5-90-0-<session> (SECURITY_WINDOW_MANAGER_BASE_RID 90, the
+// account dwm.exe of a session runs as, as in driver/contract/bc250_desktop_route.h). Sid is the token user's SID in
+// its binary form: revision 1, three sub-authorities, authority 5 (NT), sub-authorities 90 and 0, then the session.
+// Any other SID, a shorter buffer or another sub-authority count is refused.
+static __inline int Bc250CompositorAccount(const unsigned char* Sid, unsigned long Bytes)
+{
+    unsigned long sub0, sub1;
+    if (!Sid || Bytes < 8ul + 3ul * 4ul || Sid[0] != 1u || Sid[1] != 3u) return 0;
+    if (Sid[2] || Sid[3] || Sid[4] || Sid[5] || Sid[6] || Sid[7] != 5u) return 0;
+    sub0 = (unsigned long)Sid[8] | ((unsigned long)Sid[9] << 8) | ((unsigned long)Sid[10] << 16) |
+           ((unsigned long)Sid[11] << 24);
+    sub1 = (unsigned long)Sid[12] | ((unsigned long)Sid[13] << 8) | ((unsigned long)Sid[14] << 16) |
+           ((unsigned long)Sid[15] << 24);
+    return sub0 == 90ul && sub1 == 0ul;
+}
+
+// The placement of one admitted LB7A allocation of CreateAllocation, after Bc250Lb7aAdmit. 1 when it moved Policy to
+// the type 2 placement: a standard texture, the CPU compositor reported, the aperture offered. 0 leaves Policy as
+// Bc250Lb7aAdmit computed it, for every other type and for the GPU compositor.
+static __inline int Bc250GdiCompositorPlacement(unsigned long Type, int CpuCompositor, int ApertureOffered,
+                                                BC250_GDI_ALLOCATION_POLICY* Policy)
+{
+    if (Type != 1ul || !CpuCompositor || !ApertureOffered || !Policy) return 0;
+    return WddmGdiAllocationPolicy(2ul, 0, 0, Policy);
+}
 #endif
