@@ -17,6 +17,11 @@
 # above it: "spawn-loop-ok: <reason>". It is then reported as allowed and not counted.
 param([Parameter(Mandatory)][string]$List)
 $ErrorActionPreference = 'Stop'
+# stdout carries the JSON. Set it to UTF-8 without a BOM: on a machine whose console output page is OEM (a Polish
+# PC uses 852) the default encoding writes the Polish text of a file error as one byte per letter, and the Python
+# gate cannot decode it. The script prints non-ASCII text in two places only: a path from the list and the text of a
+# parser error.
+[Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
 $lab = @('bc250kmd_cli', 'bc250rd_cli', 'handle64', 'procdump', 'powershell', 'pwsh', 'cmd', 'schtasks', 'ssh', 'scp',
          'python', 'py', 'tar', 'curl', 'wevtutil', 'netsh', 'reg', 'sc', 'taskkill', 'tasklist', 'wmic', 'logman', 'wpr',
          'xperf', 'typeperf', 'pnputil', 'bcdedit', 'certutil', 'presentmon', 'amdgpu_wddm_d3d12caps', 'llama-bench',

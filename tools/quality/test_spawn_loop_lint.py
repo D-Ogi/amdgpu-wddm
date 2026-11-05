@@ -5,6 +5,7 @@ The positive control is kmdlog-stream.ps1 as it was at 930f075e: it started bc25
 now read the KMD in-process. Run:
     python -m unittest discover -s tools/quality -p "test_spawn_loop_lint.py"
 """
+import json
 import os
 import subprocess
 import sys
@@ -157,6 +158,43 @@ class Ratchet(unittest.TestCase):
 
     def test_kit_mode_refuses_any_counted_loop(self):
         self.assertEqual(lint.main(['--files', str(self.root / 'tool.ps1')]), 1)
+
+    def test_a_missing_file_gives_an_error_line_not_a_traceback(self):
+        # The AST prints the localized text of a file error; the gate must decode it and report, not crash
+        # (UnicodeDecodeError on a machine with an OEM console page, 2026-11-05).
+        import io
+        from contextlib import redirect_stdout
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = lint.main(['--files', str(self.root / 'gone-ę.ps1'), '--list'])
+        text = buf.getvalue()
+        self.assertEqual(code, 1)
+        self.assertIn('ERROR', text)
+        self.assertIn('gone-ę.ps1', text)
+        self.assertNotIn('Traceback', text)
+
+
+@unittest.skipUnless(has_ps51(), 'Windows PowerShell 5.1 is needed for the PowerShell rule')
+class AstOutput(unittest.TestCase):
+    """The JSON of spawn-loop-ast.ps1 is UTF-8 on every console page, not only on the page of the test runner."""
+    NAME = 'brak-ąęść.ps1'  # a missing file with Polish letters: they come back in path and error
+
+    def test_the_json_is_utf8_on_an_oem_console_page(self):
+        # The child first sets its console output page to 852 (OEM, Polish), as a Polish PC has it by default.
+        # Without the fix the path and the parse error come out one byte a letter, and the decode below fails
+        # (2026-11-05). The page is set in the child, so the result does not depend on the page of the runner.
+        with tempfile.TemporaryDirectory(dir=TMP) as d:
+            listing = Path(d) / 'list.txt'
+            gone = Path(d) / self.NAME
+            listing.write_text(str(gone), encoding='utf-8')
+            p = subprocess.run([str(lint.PS51), '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
+                                "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(852); & '%s' -List '%s'"
+                                % (lint.AST, listing)], capture_output=True, timeout=600)
+        self.assertEqual(p.returncode, 0, p.stderr.decode('utf-8', 'replace'))
+        data = json.loads(p.stdout.decode('utf-8-sig'))  # strict: a byte of page 852 raises UnicodeDecodeError
+        entry = data[0] if isinstance(data, list) else data
+        self.assertEqual(entry['path'], str(gone))
+        self.assertTrue(entry['error'].startswith('parse'), entry['error'])
 
 
 if __name__ == '__main__':
