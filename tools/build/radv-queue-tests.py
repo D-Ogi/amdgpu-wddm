@@ -6,7 +6,9 @@ public Vulkan instance parser. Rebuild Mesa before running this test.
 
 The test programs, each when the tree has it, each case in its own process:
 - radv_wddm2_queue_binding_test.c (the D3D ICD line), compiled with
-  radv_wddm2_cs.c's flags and linked against the DLL's cs/bo objects;
+  radv_wddm2_cs.c's flags and linked against the DLL's cs/bo objects; when the
+  cs source calls the monitored fence (BD-317), also against the tree's
+  vk_wddm2_monitored_fence.c (FENCE_RENAMES) and the runtime libraries;
 - radv_wddm2_hosted_sync_test.c (BD-038, the D3D ICD line) and
   radv_wddm2_fence_slice_test.c (BD-179, the system line), compiled with
   vk_wddm2_monitored_fence.c's flags and linked against the runtime libraries.
@@ -33,6 +35,12 @@ import sys
 
 CS_REL = 'src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c'
 FENCE_REL = 'src/vulkan/runtime/vk_wddm2_monitored_fence.c'
+# BD-317: the cs object calls the monitored fence since c7456a94. The queue test defines its own
+# vk_wddm2_monitored_fence_type (the sync type the winsys names), and the real file defines it too, so the real
+# object linked into the queue test is compiled with these two data names renamed; its functions stay the real ones.
+FENCE_CALL = 'vk_wddm2_monitored_fence_note_submitted('
+FENCE_RENAMES = ['/Dvk_wddm2_monitored_fence_type=bd317_real_vk_wddm2_monitored_fence_type',
+                 '/Dvk_wddm2_monitored_fence_hosted_type=bd317_real_vk_wddm2_monitored_fence_hosted_type']
 WDDM2 = 'src/amd/vulkan/winsys/wddm2'
 QUEUE_TEST = WDDM2 + '/tests/radv_wddm2_queue_binding_test.c'
 SYNC_TEST = WDDM2 + '/tests/radv_wddm2_hosted_sync_test.c'
@@ -165,17 +173,27 @@ def main():
     objects = [objdir / ('winsys_wddm2_radv_wddm2_' + k + '.c.obj') for k in ('cs', 'bo')]
     util = [build / p for p in ('src/vulkan/util/libvulkan_util.a', 'src/util/libmesa_util.a',
                                 'src/c11/impl/libmesa_util_c11.a')]
+    runtime = [build / p for p in ('src/vulkan/runtime/libvulkan_lite_runtime.a',
+                                   'src/vulkan/runtime/libvulkan_instance.a',
+                                   'src/compiler/libcompiler.a')]
     programs = []
+    # BD-317: since c7456a94 the cs object calls vk_wddm2_monitored_fence_note_submitted. At a tree whose cs source
+    # has the call, the queue test also links the real vk_wddm2_monitored_fence.c of the tree (compiled below with
+    # FENCE_RENAMES) and the runtime libraries; an older tree links exactly as before.
+    fence = (Path(SRC) / QUEUE_TEST).exists() and FENCE_CALL in (Path(SRC) / CS_REL).read_text(
+        encoding='utf-8', errors='replace')
+    fence_obj = out / 'vk_wddm2_monitored_fence.bd317.obj'
     if (Path(SRC) / QUEUE_TEST).exists():
-        programs.append((Path(SRC) / QUEUE_TEST, CS_REL,
-                         [*objects, build / 'src/amd/common/libamd_common.a', *util],
-                         [Path(SRC) / CS_REL, Path(SRC) / WDDM2 / 'radv_wddm2_bo.c']))
+        links = [*objects, build / 'src/amd/common/libamd_common.a', *util]
+        if fence:
+            links = [*objects, str(fence_obj), build / 'src/amd/common/libamd_common.a', *runtime, *util,
+                     'gdi32.lib']
+        programs.append((Path(SRC) / QUEUE_TEST, CS_REL, links,
+                         [Path(SRC) / CS_REL, Path(SRC) / WDDM2 / 'radv_wddm2_bo.c',
+                          *([Path(SRC) / FENCE_REL] if fence else [])]))
     for sync_test in SYNC_TESTS:
         if (Path(SRC) / sync_test).exists():
-            programs.append((Path(SRC) / sync_test, FENCE_REL,
-                             [build / p for p in ('src/vulkan/runtime/libvulkan_lite_runtime.a',
-                                                  'src/vulkan/runtime/libvulkan_instance.a',
-                                                  'src/compiler/libcompiler.a')] + util + ['gdi32.lib'],
+            programs.append((Path(SRC) / sync_test, FENCE_REL, runtime + util + ['gdi32.lib'],
                              [Path(SRC) / FENCE_REL]))
     if not programs:
         raise SystemExit('none of the test programs is in ' + SRC)
@@ -187,7 +205,14 @@ def main():
             record['inputs'][str(p)] = sha(p)
     record['inputs'][str(build / 'src/amd/vulkan/vulkan_radeon.dll')] = sha(build / 'src/amd/vulkan/vulkan_radeon.dll')
     ok = True
+    record['fence_object'] = fence
     with (out / 'build.log').open('w', encoding='utf-8', errors='replace') as log:
+        if fence:
+            fcwd, fargv = compile_command(FENCE_REL)
+            if run([fargv[0], *flags_only(fargv, FENCE_REL), *FENCE_RENAMES, '/c', '/Fo' + str(fence_obj),
+                    str(Path(SRC) / FENCE_REL)], fcwd, log):
+                raise SystemExit('vk_wddm2_monitored_fence.c did not compile; see build.log')
+            record['inputs'][str(fence_obj)] = sha(fence_obj)
         for test, rel, links, _ in programs:
             which = flavour(compile_command(rel)[1])
             exe = build_program(out, log, test, rel, links)

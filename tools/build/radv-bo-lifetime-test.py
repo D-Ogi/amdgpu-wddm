@@ -14,7 +14,10 @@ against:
     test can refuse every host allocation of the winsys for one call (the destroy
     path must need no host memory);
   - the build's radv_wddm2_cs.c object, unchanged;
-  - the build's amd_common, vulkan_util, mesa_util and mesa_util_c11 libraries.
+  - the build's amd_common, vulkan_util, mesa_util and mesa_util_c11 libraries;
+  - when the cs source calls the monitored fence (BD-317): vk_wddm2_monitored_fence.c,
+    compiled HERE with its recorded flags (two data names renamed, see FENCE_RENAMES),
+    and the build's vulkan_lite_runtime, vulkan_instance and compiler libraries.
 
 A build with the dynamic C runtime (/MD) declares the C runtime functions
 dllimport. The renamed allocators are the test's own functions, so the bo
@@ -45,6 +48,17 @@ TEST_REL = WDDM2 + '/tests/radv_wddm2_bo_lifetime_test.c'
 OBJDIR = 'src/amd/vulkan/vulkan_radeon.dll.p'
 LIBS = ['src/amd/common/libamd_common.a', 'src/vulkan/util/libvulkan_util.a',
         'src/util/libmesa_util.a', 'src/c11/impl/libmesa_util_c11.a']
+# BD-317: since c7456a94 radv_wddm2_cs.c calls vk_wddm2_monitored_fence_note_submitted. At a tree whose cs source
+# has the call, the real vk_wddm2_monitored_fence.c of the tree is compiled with its recorded flags and linked with
+# the Vulkan runtime libraries (and gdi32); an older tree links exactly as before. The test file defines its own
+# vk_wddm2_monitored_fence_type and _hosted_type (the sync types the winsys names, unused here), and the real file
+# defines them too, so these two data names are renamed in the real object only; its functions stay the real ones.
+FENCE_REL = 'src/vulkan/runtime/vk_wddm2_monitored_fence.c'
+FENCE_CALL = 'vk_wddm2_monitored_fence_note_submitted('
+FENCE_RENAMES = ['-Dvk_wddm2_monitored_fence_type=bd317_real_vk_wddm2_monitored_fence_type',
+                 '-Dvk_wddm2_monitored_fence_hosted_type=bd317_real_vk_wddm2_monitored_fence_hosted_type']
+RUNTIME_LIBS = ['src/vulkan/runtime/libvulkan_lite_runtime.a', 'src/vulkan/runtime/libvulkan_instance.a',
+                'src/compiler/libcompiler.a']
 SYSLIBS = ['kernel32.lib', 'synchronization.lib', 'ws2_32.lib', 'advapi32.lib',
            'user32.lib', 'dbghelp.lib', 'ole32.lib', 'shlwapi.lib']
 # The winsys knobs a test must not inherit from the environment.
@@ -175,7 +189,9 @@ def main():
         linker_path = linker
 
     objects = [Path(build) / OBJDIR / 'winsys_wddm2_radv_wddm2_cs.c.obj']
-    libs = [Path(build) / p for p in LIBS]
+    fence = FENCE_CALL in (Path(source) / CS_REL).read_text(encoding='utf-8', errors='replace')
+    libs = [Path(build) / p for p in LIBS + (RUNTIME_LIBS if fence else [])]
+    fence_obj = out / 'vk_wddm2_monitored_fence.bd317.obj'
     missing = [str(p) for p in objects + libs if not p.exists()]
     if missing:
         raise SystemExit('the build directory lacks: ' + ', '.join(missing))
@@ -183,13 +199,14 @@ def main():
     record = {
         'source': source, 'build': build, 'flavour': which, 'deferred_api': api, 'bo_pool': pool,
         'hosted_import_flags': import_flags, 'expect': args.expect, 'v2_requirements_asserted': bool(v2),
-        'dynamic_crt': bool(crt), 'compiler': compiler, 'linker': linker_path,
+        'dynamic_crt': bool(crt), 'compiler': compiler, 'linker': linker_path, 'fence_object': fence,
         'source_head': subprocess.check_output(['git', '-C', source, 'rev-parse', 'HEAD'], text=True).strip(),
         'source_dirty': bool(subprocess.check_output(['git', '-C', source, 'status', '--porcelain',
                                                       '--untracked-files=no'], text=True).strip()),
         'inputs': {}, 'results': {},
     }
-    for p in [test, Path(source) / BO_REL, Path(source) / CS_REL, *objects, *libs]:
+    for p in [test, Path(source) / BO_REL, Path(source) / CS_REL, *([Path(source) / FENCE_REL] if fence else []),
+              *objects, *libs]:
         record['inputs'][str(p)] = sha(p)
 
     bo_obj = out / 'radv_wddm2_bo.lifetime.obj'
@@ -205,10 +222,17 @@ def main():
         if run([cs_argv[0], *flags_only(cs_argv, CS_REL, source), *switches,
                 '/c', '/Fo' + str(test_obj), str(test)], cwd, log):
             raise SystemExit('the test did not compile; see build.log')
+        extra = []
+        if fence:
+            fcwd, fence_argv = compile_command(build, FENCE_REL)
+            if run([fence_argv[0], *flags_only(fence_argv, FENCE_REL, source), *FENCE_RENAMES,
+                    '/c', '/Fo' + str(fence_obj), str(Path(source) / FENCE_REL)], fcwd, log):
+                raise SystemExit('vk_wddm2_monitored_fence.c did not compile; see build.log')
+            extra = [str(fence_obj), 'gdi32.lib']
         # /DEBUG keeps a PDB next to the test: a case that faults gives a named stack under cdb.
         if run([linker_path, '/nologo', '/DEBUG', '/PDB:' + str(exe.with_suffix('.pdb')),
                 '/OUT:' + str(exe), str(test_obj), str(bo_obj),
-                *map(str, objects), *map(str, libs), *SYSLIBS], cwd, log):
+                *map(str, objects), *extra, *map(str, libs), *SYSLIBS], cwd, log):
             raise SystemExit('the test did not link; see build.log')
         record['inputs'][str(exe)] = sha(exe)
 
