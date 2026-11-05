@@ -63,6 +63,10 @@
 # the GPU UMD on UnconfirmedStarts 1 with the record written before the GPU open, Off of this GPU UMD, Pending of an
 # earlier boot turned into Off by a start after an unconfirmed one, Pending of an earlier boot cleared, and Pending of
 # this boot cleared by the confirmation. 117 scenarios, 0 failed on 2026-11-05; the router before the change fails nine.
+# The bounded retry of an Off path adds three: the one retry after five boots that followed a confirmed start (and
+# not after four), Off cleared by a confirmed retry (in its boot and in the next one), and a failed retry that keeps
+# Off with OffCount 2 while a new package path is open again. 120 scenarios, 0 failed on 2026-11-05; the router
+# without the retry (6557ab95) fails 12: the three, and nine whose route word has no off count.
 #
 #   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
 #        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]

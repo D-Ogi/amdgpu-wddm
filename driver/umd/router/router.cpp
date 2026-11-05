@@ -66,7 +66,8 @@
 //               (app-protected-faulted), no adapter restart after the latch base (app-protected-reset), and for
 //               LogonUI.exe and consent.exe a store that can be written (app-protected-unlatched)
 //   The route line ends with protected=<word>: no, off, or the state of the gates
-//   (desktop:..,start:..,latch:..,prov:<state>/<action>,armed:N; latch:unread when the start gate was closed).
+//   (desktop:..,start:..,latch:..,prov:<state>/<offcount>/<since>/<action>,armed:N; latch:unread when the start
+//   gate was closed; router-provisional.h).
 //   HKLM\SOFTWARE\amdgpu-wddm\ProtectedStart   Pending, Off   REG_SZ, the provisional record (router-provisional.h)
 //   OpenAdapter10 always goes to the CPU UMD: the application GPU UMD
 //   exports OpenAdapter10_2 only. The Direct3D 10.0 runtime of Windows 11 does not call OpenAdapter10 when
@@ -572,7 +573,7 @@ static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *
     const ProtectedKind kind = ProtectedKindOf(exe);
     const bool gated = kind == ProtectedKind::GatedLatchRequired || kind == ProtectedKind::GatedLatchBestEffort;
     LatchStore store = {nullptr, "none"};
-    ProvisionalView provisional = {false, false, false, "unread", "none"};
+    ProvisionalView provisional = {false, false, false, false, 0, 0, "unread", "none"};
     bool latchRead = false;
     char protectedWord[320] = "no";
     if (kind == ProtectedKind::Never) strcpy_s(protectedWord, "never");
@@ -616,7 +617,10 @@ static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *
     // later in the boot is found by the next boot. An image that cannot write it waits for the confirmation.
     if (gated && d.route == AppRoute::Gpu && in.start == StartHealth::Provisional) {
         const bool already = provisional.pending_this_boot;
-        if (WriteProvisional(RegistryView, store, a.gpu, already)) provisional.action = already ? "kept" : "written";
+        if (WriteProvisional(RegistryView, store, a.gpu, already))
+            provisional.action = already                                ? "kept"
+                                 : !strcmp(provisional.action, "retry-ok") ? "retry-ok+written"
+                                                                           : "written";
         else {
             provisional.action = "write-failed";
             d = {AppRoute::Cpu, AppReason::ProtectedUnconfirmed};
@@ -632,8 +636,9 @@ static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *
     if (store.key) RegCloseKey(store.key);
     if (gated && in.protected_gpu) {
         const size_t used = strlen(protectedWord);
-        _snprintf_s(protectedWord + used, sizeof(protectedWord) - used, _TRUNCATE, ",prov:%s/%s,armed:%u",
-                    provisional.state, provisional.action, armed ? 1u : 0u);
+        _snprintf_s(protectedWord + used, sizeof(protectedWord) - used, _TRUNCATE, ",prov:%s/%lu/%lu/%s,armed:%u",
+                    provisional.state, provisional.off_count, provisional.since, provisional.action,
+                    armed ? 1u : 0u);
     }
     HRESULT gpuHr = S_FALSE; // not tried
     if (d.route == AppRoute::Gpu) {

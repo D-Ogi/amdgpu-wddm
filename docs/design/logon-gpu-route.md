@@ -75,7 +75,7 @@ to the logon images as well:
 
 The route line ends with `protected=<word>`. The word is `no` for every other image and `never` for
 `winlogon.exe`. It is `off` when `ProtectedGpu` is off. Otherwise it gives the state of each gate, for example
-`protected=desktop:gpu/absent,start:confirmed/0/1,latch:clear/hklm/2,prov:on/none,armed:1`.
+`protected=desktop:gpu/absent,start:confirmed/0/1,latch:clear/hklm/2,prov:on/0/0/none,armed:1`.
 
 ## What this gives the first sign-in of a boot
 
@@ -101,28 +101,44 @@ more state, every second boot would hang. The provisional record stops this loop
 |---|---|---|
 | `HKLM\SOFTWARE\amdgpu-wddm\ProtectedStart\Pending` | `REG_SZ` | the GPU UMD path of a provisional GPU route whose start is not known to be confirmed |
 | `HKLM\SOFTWARE\amdgpu-wddm\ProtectedStart\Off` | `REG_SZ` | the GPU UMD path for which the provisional route is off |
+| `HKLM\SOFTWARE\amdgpu-wddm\ProtectedStart\OffCount` | `REG_DWORD` | 1: one failed provisional boot of that path. 2: its retry failed too |
+| `HKLM\SOFTWARE\amdgpu-wddm\ProtectedStart\OffAt` | `REG_DWORD` | the value of `Boots` when `Off` was written |
+| `HKLM\SOFTWARE\amdgpu-wddm\ProtectedStart\Boots` | `REG_DWORD` | the boots whose first decision read a provisional start |
 | `HKLM\SOFTWARE\amdgpu-wddm\ProtectedLatch\Provisional` | `REG_DWORD`, volatile | 1: a decision of this boot wrote `Pending` |
+| `HKLM\SOFTWARE\amdgpu-wddm\ProtectedLatch\BootCounted` | `REG_DWORD`, volatile | 1: `Boots` counts this boot already |
 
 - Before the GPU open of a provisional route, the router writes `Pending` and flushes the key. Then it writes the
   volatile mark. If one of the writes fails, the image takes the CPU UMD (`app-protected-unconfirmed`).
 - Each decision that reads a start state also reads the record and does what it finds:
   - A confirmed start removes `Pending`.
   - `Pending` without the mark comes from an earlier boot. When the counter is 2 or more, the start before this
-    one was never confirmed: `Off` takes the path and `Pending` goes. When the counter is 0 or 1, that start was
-    confirmed, and `Pending` goes.
-- `Off` closes the provisional route for that GPU UMD path only. A new driver package has a new path, so it tries
-  the provisional route again. A confirmed start is not affected by `Off`.
+    one was never confirmed: `Off` takes the path, with `OffCount` 1 and `OffAt` = `Boots`, and `Pending` goes.
+    When the counter is 0 or 1, that start was confirmed, and `Pending` goes.
+  - When `Pending` and `Off` name the same path, that start was the retry (see below). If the retry is confirmed,
+    `Off`, `OffCount` and `OffAt` go too (action `retry-ok`). If it is not, `OffCount` becomes 2.
+- The first decision of a boot that reads a provisional start adds 1 to `Boots`: the start before was confirmed.
+  The volatile mark `BootCounted` makes sure that each boot counts once.
+- `Off` closes the provisional route for that GPU UMD path only. A confirmed start is not affected by `Off`.
+  - With `OffCount` 1, the route stays closed until `Boots` - `OffAt` is 5. Then one provisional start takes the GPU
+    UMD again (state `retry`), and it writes `Pending` as any provisional route does.
+  - With `OffCount` 2, the route stays closed until a new driver package, or until a tool removes `Off`.
+  - A new driver package has a new path, so it tries the provisional route again at once. A failure of the new
+    path starts again at `OffCount` 1.
 
-A power loss before the confirmation of a provisional boot also sets `Off`. That costs the GPU route of the first
-sign-in screen until the next driver package, and nothing else. The record follows the guard's own counter, so a
+A power loss or a hang of another cause before the confirmation of a provisional boot also sets `Off`. That costs
+the GPU route of the first sign-in screen for five boots, then the retry tries it again. Only a second failure of
+the same path keeps it off until the next driver package. The record follows the guard's own counter, so a
 tool that writes `UnconfirmedStarts` = 0 before a restart (the lab kit's `restart.ps1`) also clears this
 evidence. Only Local System (`LogonUI.exe`, `consent.exe`) can write the record. `LockApp.exe` and
 `CredentialUIBroker.exe` wait for the confirmation.
 
-The route line shows the record as `prov:<state>/<action>`:
+The route line shows the record as `prov:<state>/<offcount>/<since>/<action>`:
 
-- The state is `on`, `off`, `nostore` (the record cannot be written) or `unread` (no start state was read).
-- The action is `none`, `cleared`, `set-off`, `written`, `kept` or `write-failed`.
+- The state is `on`, `off`, `retry` (the one retry of an `Off` path), `nostore` (the record cannot be written) or
+  `unread` (no start state was read).
+- The off count is the `OffCount` of an `Off` that names this GPU UMD, and 0 when there is none. The since value is
+  `Boots` - `OffAt` of that `Off`. For example, `prov:off/1/3/none` is a first failure three boots ago.
+- The action is `none`, `cleared`, `retry-ok`, `set-off`, `written`, `retry-ok+written`, `kept` or `write-failed`.
 
 When the start gate is closed, the route line shows `latch:unread`. The router does not read the latch behind a
 closed gate, so it takes no base there.
@@ -155,7 +171,7 @@ What Windows does after a fault, and what happens next:
 | A fault of the GPU UMD ends `LogonUI.exe` | `winlogon.exe` starts `LogonUI.exe` again (to be measured, see the lab plan) | the marker has no live process: CPU UMD, `app-protected-faulted` |
 | A GPU hang that the driver recovers | TDR, event 4101. The process gets device-removed | `AdapterRestarts` > `Base`: CPU UMD, `app-protected-reset` |
 | Hangs that the driver does not recover | bugcheck 0x116, restart | the interop session marker closes the desktop route (`InteropClosedReason` 4). Then the desktop gate closes, and the start guard counts the start |
-| A crash of the machine or a power loss | restart | the latch is gone with the boot. The next start reads 2, so its sign-in is on the CPU UMD. If the boot that died took the provisional route, `Off` closes that route for this GPU UMD |
+| A crash of the machine or a power loss | restart | the latch is gone with the boot. The next start reads 2, so its sign-in is on the CPU UMD. If the boot that died took the provisional route, `Off` closes that route for this GPU UMD. It stays closed for five boots, or until the next package after a failed retry |
 | A start that the guard refuses | Windows uses its fallback adapter driver | our router does not run |
 
 The latch does not see a fault that the process itself catches and then follows with a clean exit. Such a

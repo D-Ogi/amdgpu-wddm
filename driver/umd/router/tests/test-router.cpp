@@ -805,6 +805,31 @@ static void ProvisionalStart(DWORD unconfirmed = 1)
     SetDw(KmdKey, L"HangRecovery.AdapterRestarts", 2);
 }
 static std::wstring AppGpuPath() { return Layout + L"\\app\\amdgpu_wddm_d3d11.dll"; }
+// A REG_DWORD of the provisional record, -1 when absent or of another kind.
+static long ProvisionalDword(const wchar_t *name)
+{
+    DWORD v = 0, bytes = sizeof(v), type = 0;
+    HKEY k = nullptr;
+    if (RegOpenKeyExW(Root, ProvisionalKey, 0, KEY_QUERY_VALUE, &k) != ERROR_SUCCESS) return -1;
+    const LSTATUS s = RegQueryValueExW(k, name, nullptr, &type, (BYTE *)&v, &bytes);
+    RegCloseKey(k);
+    return s == ERROR_SUCCESS && type == REG_DWORD ? (long)v : -1;
+}
+// The next boot in the same process: the volatile marks of a boot go (the fixture keeps the latch key on disk).
+static void NewBoot()
+{
+    DeleteValue(LatchKey, L"Provisional");
+    DeleteValue(LatchKey, L"BootCounted");
+    DeleteValue(KmdKey, L"GuardBoot.Confirmed");
+}
+// Off of the application GPU UMD with its count, its time and the boot count now.
+static void OffRecord(DWORD count, DWORD at, DWORD boots)
+{
+    SetSz(ProvisionalKey, L"Off", AppGpuPath());
+    SetDw(ProvisionalKey, L"OffCount", count);
+    SetDw(ProvisionalKey, L"OffAt", at);
+    SetDw(ProvisionalKey, L"Boots", boots);
+}
 
 static void ProtectedBase(bool confirmed)
 {
@@ -3650,7 +3675,7 @@ static void Child(const std::string &s)
         std::string log = AppLog();
         CHECK(Has(log, "route=cpu reason=app-protected-unconfirmed fallback=0") &&
               Has(log, "protected=desktop:gpu/absent,start:unreadable/") && Has(log, "latch:unread/none/") &&
-              Has(log, "prov:unread/none,armed:0"),
+              Has(log, "prov:unread/0/0/none,armed:0"),
               "route log: %s", log.c_str());
         CHECK(!LatchHas(L"Base"), "the latch base was written behind a closed start gate");
     } else if (s == "protected-confirmed" || s == "protected-lockapp" || s == "protected-consent") {
@@ -3668,7 +3693,7 @@ static void Child(const std::string &s)
         CHECK(Loaded(L"app\\amdgpu_wddm_d3d11.dll") && !Loaded(L"cpu\\bc250d3d.dll"), "modules");
         std::string log = AppLog();
         CHECK(Has(log, "route=gpu reason=app-default fallback=0 gpu_hr=00000000") &&
-              Has(log, "protected=desktop:gpu/absent,start:confirmed/0/1,latch:clear/hklm/2,prov:on/none,armed:1"),
+              Has(log, "protected=desktop:gpu/absent,start:confirmed/0/1,latch:clear/hklm/2,prov:on/0/0/none,armed:1"),
               "route log: %s", log.c_str());
         CHECK(ProvisionalSz(L"Pending").empty(), "a confirmed start wrote a provisional record");
         const std::wstring marker = std::wstring(image) + L"|" + std::to_wstring(GetCurrentProcessId());
@@ -3799,8 +3824,8 @@ static void Child(const std::string &s)
         CHECK(o2.hr == S_OK && o2.tag == AppTag102, "second open tag=%llu", (unsigned long long)o2.tag);
         std::string log = AppLog();
         CHECK(Has(log, "route=gpu reason=app-default fallback=0 gpu_hr=00000000") &&
-              Has(log, "protected=desktop:gpu/absent,start:provisional/1/0,latch:clear/hklm/2,prov:on/written,armed:1") &&
-              Has(log, "prov:on/kept,armed:1"), "route log: %s", log.c_str());
+              Has(log, "protected=desktop:gpu/absent,start:provisional/1/0,latch:clear/hklm/2,prov:on/0/0/written,armed:1") &&
+              Has(log, "prov:on/0/0/kept,armed:1"), "route log: %s", log.c_str());
     } else if (s == "protected-provisional-off" || s == "protected-provisional-set-off" ||
                s == "protected-provisional-cleared" || s == "protected-provisional-confirmed") {
         // What a decision does with a record that an earlier boot left (no mark of this boot).
@@ -3816,7 +3841,7 @@ static void Child(const std::string &s)
             CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
             log = AppLog();
             CHECK(Has(log, "route=cpu reason=app-protected-provisional-off fallback=0") &&
-                  Has(log, "start:provisional/1/0,latch:unread/none/2,prov:off/none,armed:0"), "route log: %s", log.c_str());
+                  Has(log, "start:provisional/1/0,latch:unread/none/2,prov:off/1/0/none,armed:0"), "route log: %s", log.c_str());
             CHECK(!LatchHas(L"Base") && ProvisionalSz(L"Pending").empty(), "a closed provisional gate wrote the latch");
             // Off of another GPU UMD path (an earlier package) does not close the route.
             SetSz(ProvisionalKey, L"Off", Layout + L"\\old-package\\amdgpu_wddm_d3d11.dll");
@@ -3841,9 +3866,9 @@ static void Child(const std::string &s)
             CHECK(o3.tag == AppTag102, "confirmed with Off: tag=%llu", (unsigned long long)o3.tag);
             log = AppLog();
             CHECK(Has(log, "route=cpu reason=app-protected-unconfirmed fallback=0") &&
-                  Has(log, "start:unconfirmed/2/0,latch:unread/none/2,prov:off/set-off,armed:0") &&
+                  Has(log, "start:unconfirmed/2/0,latch:unread/none/2,prov:off/1/0/set-off,armed:0") &&
                   Has(log, "route=cpu reason=app-protected-provisional-off fallback=0") &&
-                  Has(log, "start:confirmed/0/1,latch:clear/hklm/2,prov:off/none,armed:1"), "route log: %s", log.c_str());
+                  Has(log, "start:confirmed/0/1,latch:clear/hklm/2,prov:off/1/1/none,armed:1"), "route log: %s", log.c_str());
         } else if (s == "protected-provisional-cleared") {
             // Pending of an earlier boot and count 1: the start before this one was confirmed. Pending goes, and this
             // decision writes its own.
@@ -3856,7 +3881,7 @@ static void Child(const std::string &s)
                   LatchDword(L"Provisional") == 1, "pending=%ls off=%ls", ProvisionalSz(L"Pending").c_str(),
                   ProvisionalSz(L"Off").c_str());
             log = AppLog();
-            CHECK(Has(log, "start:provisional/1/0,latch:clear/hklm/2,prov:on/written,armed:1"), "route log: %s", log.c_str());
+            CHECK(Has(log, "start:provisional/1/0,latch:clear/hklm/2,prov:on/0/0/written,armed:1"), "route log: %s", log.c_str());
         } else {
             // Pending of this boot (the mark is there) and then the confirmation: the confirmed decision removes it.
             ProvisionalStart();
@@ -3876,8 +3901,109 @@ static void Child(const std::string &s)
                   !ProvisionalSz(L"Pending").empty(), "restart in the boot: tags %llu %llu off=%ls",
                   (unsigned long long)o3.tag, (unsigned long long)o4.tag, ProvisionalSz(L"Off").c_str());
             log = AppLog();
-            CHECK(Has(log, "start:confirmed/0/1,latch:clear/hklm/2,prov:on/cleared,armed:1") &&
-                  Has(log, "start:unconfirmed/2/0,latch:unread/none/2,prov:on/none,armed:0"), "route log: %s", log.c_str());
+            CHECK(Has(log, "start:confirmed/0/1,latch:clear/hklm/2,prov:on/0/0/cleared,armed:1") &&
+                  Has(log, "start:unconfirmed/2/0,latch:unread/none/2,prov:on/0/0/none,armed:0"), "route log: %s", log.c_str());
+        }
+        (void)r;
+    } else if (s == "protected-provisional-retry" || s == "protected-provisional-retry-ok" ||
+               s == "protected-provisional-retry-fail") {
+        // The bounded retry of an Off path (router-provisional.h): one retry after ProvisionalRetryAfter (5) boots
+        // that followed a confirmed start, Off goes when the retry is confirmed, and a failed retry is permanent.
+        ProtectedBase(false);
+        HMODULE r = nullptr;
+        std::string log;
+        if (s == "protected-provisional-retry") {
+            // Off written at Boots 10. Boot 14 (four boots later): still off. Boot 15: the one retry, Pending written.
+            ProvisionalStart();
+            OffRecord(1, 10, 13);
+            OverrideHklm();
+            Opened o = Open(r = LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
+            CHECK(o.tag == CpuTag102 && ProvisionalDword(L"Boots") == 14 && ProvisionalSz(L"Pending").empty(),
+                  "boot 14: tag=%llu boots=%ld pending=%ls", (unsigned long long)o.tag, ProvisionalDword(L"Boots"),
+                  ProvisionalSz(L"Pending").c_str());
+            Opened o1 = Open(r, "OpenAdapter10_2");
+            CHECK(o1.tag == CpuTag102 && ProvisionalDword(L"Boots") == 14, "boot 14 counted twice: boots=%ld",
+                  ProvisionalDword(L"Boots"));
+            NewBoot();
+            Opened o2 = Open(r, "OpenAdapter10_2");
+            CHECK(o2.tag == AppTag102 && ProvisionalDword(L"Boots") == 15 &&
+                      !_wcsicmp(ProvisionalSz(L"Pending").c_str(), AppGpuPath().c_str()) &&
+                      !_wcsicmp(ProvisionalSz(L"Off").c_str(), AppGpuPath().c_str()) && ProvisionalDword(L"OffCount") == 1,
+                  "boot 15: tag=%llu boots=%ld pending=%ls off=%ls count=%ld", (unsigned long long)o2.tag,
+                  ProvisionalDword(L"Boots"), ProvisionalSz(L"Pending").c_str(), ProvisionalSz(L"Off").c_str(),
+                  ProvisionalDword(L"OffCount"));
+            Opened o3 = Open(r, "OpenAdapter10_2");
+            CHECK(o3.tag == AppTag102 && ProvisionalDword(L"Boots") == 15, "boot 15 second open: tag=%llu",
+                  (unsigned long long)o3.tag);
+            log = AppLog();
+            CHECK(Has(log, "start:provisional/1/0,latch:unread/none/2,prov:off/1/4/none,armed:0") &&
+                  Has(log, "route=gpu reason=app-default fallback=0") &&
+                  Has(log, "start:provisional/1/0,latch:clear/hklm/2,prov:retry/1/5/written,armed:1") &&
+                  Has(log, "prov:retry/1/5/kept,armed:1"), "route log: %s", log.c_str());
+        } else if (s == "protected-provisional-retry-ok") {
+            // The retry and then the confirmation in the same boot: Off, OffCount and OffAt go.
+            ProvisionalStart();
+            OffRecord(1, 0, 4);
+            OverrideHklm();
+            Opened o = Open(r = LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
+            CHECK(o.tag == AppTag102 && !ProvisionalSz(L"Pending").empty(), "retry tag=%llu", (unsigned long long)o.tag);
+            SetDw(KmdKey, L"UnconfirmedStarts", 0); SetDw(KmdKey, L"GuardBoot.Confirmed", 1);
+            Opened o2 = Open(r, "OpenAdapter10_2");
+            CHECK(o2.tag == AppTag102 && ProvisionalSz(L"Off").empty() && ProvisionalSz(L"Pending").empty() &&
+                      ProvisionalDword(L"OffCount") == -1 && ProvisionalDword(L"OffAt") == -1,
+                  "confirmed retry: off=%ls pending=%ls count=%ld at=%ld", ProvisionalSz(L"Off").c_str(),
+                  ProvisionalSz(L"Pending").c_str(), ProvisionalDword(L"OffCount"), ProvisionalDword(L"OffAt"));
+            // A retry boot with no decision after its confirmation: the next boot (count 1) finds Pending and Off of
+            // the same path, clears Off and takes the provisional route again.
+            OffRecord(1, 0, 5);
+            SetSz(ProvisionalKey, L"Pending", AppGpuPath());
+            NewBoot(); SetDw(KmdKey, L"UnconfirmedStarts", 1);
+            Opened o3 = Open(r, "OpenAdapter10_2");
+            CHECK(o3.tag == AppTag102 && ProvisionalSz(L"Off").empty() && ProvisionalDword(L"OffCount") == -1 &&
+                      !_wcsicmp(ProvisionalSz(L"Pending").c_str(), AppGpuPath().c_str()),
+                  "next boot: tag=%llu off=%ls pending=%ls", (unsigned long long)o3.tag, ProvisionalSz(L"Off").c_str(),
+                  ProvisionalSz(L"Pending").c_str());
+            log = AppLog();
+            CHECK(Has(log, "prov:retry/1/5/written,armed:1") &&
+                  Has(log, "start:confirmed/0/1,latch:clear/hklm/2,prov:on/0/0/retry-ok,armed:1") &&
+                  Has(log, "start:provisional/1/0,latch:clear/hklm/2,prov:on/0/0/retry-ok+written,armed:1"),
+                  "route log: %s", log.c_str());
+        } else {
+            // The retry boot was never confirmed: this start reads 2. OffCount 2, and no retry however many boots
+            // follow. A new package path is open again, and a failure of it starts again at one.
+            ProvisionalStart(2);
+            OffRecord(1, 0, 5);
+            SetSz(ProvisionalKey, L"Pending", AppGpuPath());
+            OverrideHklm();
+            Opened o = Open(r = LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
+            CHECK(o.tag == CpuTag102 && !_wcsicmp(ProvisionalSz(L"Off").c_str(), AppGpuPath().c_str()) &&
+                      ProvisionalDword(L"OffCount") == 2 && ProvisionalDword(L"OffAt") == 5 &&
+                      ProvisionalSz(L"Pending").empty(),
+                  "failed retry: tag=%llu off=%ls count=%ld at=%ld pending=%ls", (unsigned long long)o.tag,
+                  ProvisionalSz(L"Off").c_str(), ProvisionalDword(L"OffCount"), ProvisionalDword(L"OffAt"),
+                  ProvisionalSz(L"Pending").c_str());
+            SetDw(ProvisionalKey, L"Boots", 500);
+            NewBoot(); SetDw(KmdKey, L"UnconfirmedStarts", 1);
+            Opened o2 = Open(r, "OpenAdapter10_2");
+            CHECK(o2.tag == CpuTag102 && ProvisionalSz(L"Pending").empty(), "permanent off: tag=%llu",
+                  (unsigned long long)o2.tag);
+            SetSz(ProvisionalKey, L"Off", Layout + L"\\old-package\\amdgpu_wddm_d3d11.dll");
+            NewBoot();
+            Opened o3 = Open(r, "OpenAdapter10_2");
+            CHECK(o3.tag == AppTag102, "a new package path: tag=%llu", (unsigned long long)o3.tag);
+            NewBoot(); SetDw(KmdKey, L"UnconfirmedStarts", 2);
+            Opened o4 = Open(r, "OpenAdapter10_2");
+            CHECK(o4.tag == CpuTag102 && !_wcsicmp(ProvisionalSz(L"Off").c_str(), AppGpuPath().c_str()) &&
+                      ProvisionalDword(L"OffCount") == 1,
+                  "failure of the new path: tag=%llu off=%ls count=%ld", (unsigned long long)o4.tag,
+                  ProvisionalSz(L"Off").c_str(), ProvisionalDword(L"OffCount"));
+            log = AppLog();
+            CHECK(Has(log, "start:unconfirmed/2/0,latch:unread/none/2,prov:off/2/0/set-off,armed:0") &&
+                  Has(log, "route=cpu reason=app-protected-provisional-off fallback=0") &&
+                  Has(log, "start:provisional/1/0,latch:unread/none/2,prov:off/2/496/none,armed:0") &&
+                  Has(log, "start:provisional/1/0,latch:clear/hklm/2,prov:on/0/0/written,armed:1") &&
+                  Has(log, "start:unconfirmed/2/0,latch:unread/none/2,prov:off/1/0/set-off,armed:0"),
+                  "route log: %s", log.c_str());
         }
         (void)r;
     }
@@ -4026,6 +4152,9 @@ static int RunAll(const std::wstring &out)
         {"protected-provisional-set-off", "logonui\\logonui.exe", {}},
         {"protected-provisional-cleared", "logonui\\logonui.exe", {}},
         {"protected-provisional-confirmed", "logonui\\logonui.exe", {}},
+        {"protected-provisional-retry", "logonui\\logonui.exe", {}},
+        {"protected-provisional-retry-ok", "logonui\\logonui.exe", {}},
+        {"protected-provisional-retry-fail", "logonui\\logonui.exe", {}},
         {"desktop-dwm-unchanged", "dwm\\dwm.exe", {}}, {"desktop-client-unchanged", nullptr, {}},
         {"stack-app-real", nullptr, {}}, {"stack-app-real-noconfig", nullptr, {}}, {"stack-app-real-no-identity", nullptr, {}},
     };
