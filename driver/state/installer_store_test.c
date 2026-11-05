@@ -309,6 +309,31 @@ static void LegacyArchive(const BYTE *snapshot,UINT bytes)
     CHECK(!AmdgpuWindowsArchiveState(legacy,legacy_bytes));
     CHECK(!Find(cur) && !Find(old) && Holds(cur_retired,legacy,legacy_bytes) && Holds(old_retired,other,bytes) && Holds(own,legacy,legacy_bytes));
     Reset();Put(cur,snapshot,bytes);CHECK(!AmdgpuWindowsArchiveState(legacy,legacy_bytes));CHECK(!Find(cur) && Holds(cur_retired,snapshot,bytes));
+    // The record of an earlier uninstall of an installed generation (another transaction, either name, either catalog)
+    // stays beside the legacy archive: it holds the last active settings. A legacy record of another transaction moves.
+    {BYTE *earlier=HeapAlloc(GetProcessHeap(),0,AMDGPU_TRANSFER_MAX_BYTES),*old_legacy=HeapAlloc(GetProcessHeap(),0,AMDGPU_TRANSFER_MAX_BYTES);
+     AMDGPU_TRANSFER_HEADER e=h;UINT earlier_bytes=0,old_legacy_bytes=0;
+     e.origin=AMDGPU_TRANSFER_CURRENT;e.source_schema=AmdgpuStateSchema();memset(e.source_generation,2,16);memset(e.transaction,9,16);
+     strcpy_s(e.destination_version,32,"0.7.216.100");
+     CHECK(!AmdgpuTransferCapture(&e,Empty,NULL,earlier,AMDGPU_TRANSFER_MAX_BYTES,&earlier_bytes));
+     e=h;memset(e.transaction,9,16);CHECK(!AmdgpuTransferCapture(&e,Empty,NULL,old_legacy,AMDGPU_TRANSFER_MAX_BYTES,&old_legacy_bytes));
+     Reset();Put(cur,earlier,earlier_bytes);
+     CHECK(!AmdgpuWindowsArchiveState(legacy,legacy_bytes));CHECK(Holds(cur,earlier,earlier_bytes) && !Find(cur_retired) && Holds(own,legacy,legacy_bytes));
+     CHECK(!AmdgpuWindowsReadRemoval(&read,&got,FALSE));CHECK(got==earlier_bytes && !memcmp(read,earlier,got));HeapFree(GetProcessHeap(),0,read);read=NULL;
+     CHECK(!AmdgpuWindowsArchiveState(legacy,legacy_bytes));CHECK(Holds(cur,earlier,earlier_bytes) && !Find(cur_retired));
+     OtherCatalog(earlier,earlier_bytes);Reset();Put(old,earlier,earlier_bytes);Put(cur,earlier,earlier_bytes);
+     CHECK(!AmdgpuWindowsArchiveState(legacy,legacy_bytes));CHECK(Holds(old,earlier,earlier_bytes) && Holds(cur,earlier,earlier_bytes) && !Find(old_retired));
+     Reset();Put(cur,old_legacy,old_legacy_bytes);Put(old,earlier,earlier_bytes);
+     CHECK(!AmdgpuWindowsArchiveState(legacy,legacy_bytes));CHECK(!Find(cur) && Holds(cur_retired,old_legacy,old_legacy_bytes) && Holds(old,earlier,earlier_bytes));
+     // A later uninstall of an installed generation: the kept record is older than it and moves aside, as before.
+     e=h;e.origin=AMDGPU_TRANSFER_CURRENT;e.source_schema=AmdgpuStateSchema();memset(e.source_generation,3,16);memset(e.transaction,3,16);
+     {BYTE *later=HeapAlloc(GetProcessHeap(),0,AMDGPU_TRANSFER_MAX_BYTES);UINT later_bytes=0;
+      static const WCHAR later_retired[]=L"fixture\\amdgpu-wddm\\StateV2\\retired-03030303030303030303030303030303-removed.bin";
+      CHECK(!AmdgpuTransferCapture(&e,Empty,NULL,later,AMDGPU_TRANSFER_MAX_BYTES,&later_bytes));
+      CHECK(!AmdgpuWindowsArchiveState(later,later_bytes));CHECK(Holds(cur,later,later_bytes) && Holds(later_retired,earlier,earlier_bytes));
+      HeapFree(GetProcessHeap(),0,later);}
+     CHECK(!Handles && !LockCount);
+     HeapFree(GetProcessHeap(),0,earlier);HeapFree(GetProcessHeap(),0,old_legacy);}
     // A damaged removal record stays and stops the step; evidence is never overwritten.
     Reset();Put(cur,snapshot,bytes);Find(cur)->data[bytes-1]^=1;
     CHECK(AmdgpuWindowsArchiveState(legacy,legacy_bytes)==ERROR_INVALID_DATA);CHECK(Find(cur)!=NULL && !Find(cur_retired));

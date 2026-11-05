@@ -478,20 +478,22 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
     if(h.source_schema==AmdgpuStateSchema() && h.origin!=AMDGPU_TRANSFER_CURRENT && !unfinished)return ERROR_INVALID_DATA;
     if(h.origin==AMDGPU_TRANSFER_FRESH) {
         void *removed=NULL;DWORD removed_bytes=0;UINT history=AMDGPU_HISTORY_NONE;
-        error=AmdgpuWindowsReadRemoval(&removed,&removed_bytes,archive);
-        if(error==ERROR_FILE_NOT_FOUND && archive) {
+        if(archive) {
             // BD-298 follow-up: the legacy archive of an unfinished store is archive-<transaction>.bin only
-            // (AmdgpuWindowsArchiveState). A resumed uninstall of that store accepts only that legacy archive.
+            // (AmdgpuWindowsArchiveState), and the removal record of an earlier uninstall can stay beside it. A
+            // resumed uninstall of that store accepts only its own legacy archive. Any other archive-<transaction>.bin
+            // (the archive of an installed generation, or a damaged file) leaves the check to the removal record.
             error=AmdgpuWindowsReadArchive(h.transaction,&removed,&removed_bytes);
             if(!error) {
-                AMDGPU_TRANSFER_HEADER own;
-                if(AmdgpuTransferCheck(removed,removed_bytes,&own) || own.origin!=AMDGPU_TRANSFER_LEGACY ||
-                   memcmp(own.device_hash,h.device_hash,32) || memcmp(own.transaction,h.transaction,16) ||
-                   strcmp(own.destination_version,h.destination_version))error=ERROR_REVISION_MISMATCH;
-                HeapFree(GetProcessHeap(),0,removed);return error;
-            }
-            if(error!=ERROR_FILE_NOT_FOUND)return error;
+                AMDGPU_TRANSFER_HEADER own;BOOL legacy;
+                legacy=!AmdgpuTransferCheck(removed,removed_bytes,&own) && own.origin==AMDGPU_TRANSFER_LEGACY;
+                if(legacy && (memcmp(own.device_hash,h.device_hash,32) || memcmp(own.transaction,h.transaction,16) ||
+                   strcmp(own.destination_version,h.destination_version)))error=ERROR_REVISION_MISMATCH;
+                HeapFree(GetProcessHeap(),0,removed);removed=NULL;removed_bytes=0;
+                if(legacy)return error;
+            } else if(error!=ERROR_FILE_NOT_FOUND && error!=ERROR_INVALID_DATA)return error;
         }
+        error=AmdgpuWindowsReadRemoval(&removed,&removed_bytes,archive);
         if(error==ERROR_UNSUPPORTED_TYPE) {
             // A record of another state catalog: an install after the uninstall of another release (BD-262). A
             // record of the catalog of an earlier released package is read by setting name, as an update in place

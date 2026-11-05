@@ -248,7 +248,14 @@ DWORD AmdgpuWindowsArchiveState(const void *buffer,DWORD bytes)
     AMDGPU_TRANSFER_HEADER h;
     archives++;CHECK(stop==1);CHECK(AmdgpuTransferCheck(buffer,bytes,&h)==0);
     if(failure==6)return ERROR_WRITE_FAULT;memcpy(own_archive,buffer,bytes);own_archive_bytes=bytes;
-    if(h.origin==AMDGPU_TRANSFER_LEGACY){if(removed_bytes)removal_moves++;removed_bytes=0;return 0;}
+    if(h.origin==AMDGPU_TRANSFER_LEGACY) {
+        // A removal record of this transaction or a legacy one moves aside; the record of an earlier uninstall of an
+        // installed generation stays.
+        AMDGPU_TRANSFER_HEADER old;
+        if(removed_bytes>=sizeof(old)){memcpy(&old,removed,sizeof(old));
+            if(!memcmp(old.transaction,h.transaction,16) || old.origin==AMDGPU_TRANSFER_LEGACY){removal_moves++;removed_bytes=0;}}
+        return 0;
+    }
     memcpy(removed,buffer,bytes);removed_bytes=bytes;return 0;
 }
 DWORD AmdgpuWindowsReadArchive(const BYTE tx[16],void **out,DWORD *bytes)
@@ -350,7 +357,7 @@ static void AbandonTests(void)
     stop=0;CHECK(!Run(L"archive",tx));CHECK(archives==2 && !removed_bytes);
     // SCM deleted the service; the uninstall resumes: its legacy archive is its record, and nothing is written again.
     origin=AMDGPU_TRANSFER_FRESH;unfinished_store=0;current_package=FALSE;stop=0;
-    CHECK(!Run(L"archive",tx));CHECK(archives==2 && archive_reads==1 && removal_own==1 && !publish && !stop);
+    CHECK(!Run(L"archive",tx));CHECK(archives==2 && archive_reads==1 && !removal_own && !publish && !stop);
     // Another transaction, a damaged archive or one of an installed generation does not resume the uninstall.
     CHECK(Run(L"archive",other)==ERROR_REVISION_MISMATCH);CHECK(archives==2);
     {AMDGPU_TRANSFER_HEADER k;memcpy(&k,own_archive,sizeof(k));
@@ -362,6 +369,26 @@ static void AbandonTests(void)
     // The reinstall after that uninstall finds no removal record and installs fresh, as tester.37 does.
     CHECK(!RunAs(L"prepare",other,L"0.7.216.110"));CHECK(publish==1 && !removal_moves);
     CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h) && h.origin==AMDGPU_TRANSFER_FRESH && h.transaction[0]==2);
+    // The removal record of an earlier uninstall of an installed generation (another transaction) is beside the
+    // unfinished store: the legacy archive leaves it, a resumed uninstall reads its own archive, and the reinstall
+    // reads the settings of that record. A legacy record of another transaction moves aside.
+    Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!RunAs(L"archive",L"05050505050505050505050505050505",L"0.7.216.102"));
+    CHECK(!AmdgpuTransferCheck(removed,removed_bytes,&h) && h.origin==AMDGPU_TRANSFER_CURRENT && h.transaction[0]==5);
+    published=removed_bytes;own_archive_bytes=0;unfinished_store=1;current_package=TRUE;stop=0;
+    CHECK(!Run(L"archive",tx));CHECK(archives==2 && removed_bytes==published && !removal_moves);
+    CHECK(!AmdgpuTransferCheck(removed,removed_bytes,&h) && h.transaction[0]==5);
+    CHECK(!AmdgpuTransferCheck(own_archive,own_archive_bytes,&h) && h.origin==AMDGPU_TRANSFER_LEGACY && h.transaction[0]==1);
+    origin=AMDGPU_TRANSFER_FRESH;unfinished_store=0;current_package=FALSE;stop=0;
+    CHECK(!Run(L"archive",tx));CHECK(archives==2 && archive_reads==1 && !removal_own && removed_bytes==published);
+    CHECK(!RunAs(L"prepare",other,L"0.7.216.110"));CHECK(publish==1 && removal_keeps==1 && !removal_moves);
+    CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h) && h.origin==AMDGPU_TRANSFER_ARCHIVE && h.transaction[0]==2 && h.source_generation[0]==2);
+    CHECK(ValueIn(saved,saved_bytes,"","CpuTune")==1);HangRecordIn(saved,saved_bytes);
+    // A legacy record of another transaction (main 967c6d76 wrote it for an earlier uninstall) moves aside.
+    Reset(AMDGPU_TRANSFER_CURRENT);unfinished_store=1;current_package=TRUE;
+    CHECK(!RunAs(L"archive",L"05050505050505050505050505050505",L"0.7.216.102"));
+    memcpy(removed,own_archive,own_archive_bytes);removed_bytes=own_archive_bytes;own_archive_bytes=0;stop=0;
+    CHECK(!AmdgpuTransferCheck(removed,removed_bytes,&h) && h.origin==AMDGPU_TRANSFER_LEGACY && h.transaction[0]==5);
+    CHECK(!Run(L"archive",tx));CHECK(!removed_bytes && removal_moves==1);
     // The legacy removal record that main 967c6d76 wrote for that uninstall: the install moves it aside and installs
     // fresh; a retry finds nothing more to move. A resumed uninstall still accepts only its own record.
     Reset(AMDGPU_TRANSFER_CURRENT);unfinished_store=1;current_package=TRUE;CHECK(!Run(L"archive",tx));
@@ -373,7 +400,7 @@ static void AbandonTests(void)
     Reset(AMDGPU_TRANSFER_CURRENT);unfinished_store=1;current_package=TRUE;CHECK(!Run(L"archive",tx));
     memcpy(removed,own_archive,own_archive_bytes);removed_bytes=own_archive_bytes;own_archive_bytes=0;
     origin=AMDGPU_TRANSFER_FRESH;unfinished_store=0;current_package=FALSE;stop=0;
-    CHECK(!Run(L"archive",tx));CHECK(!removal_moves && removed_bytes && !archive_reads);
+    CHECK(!Run(L"archive",tx));CHECK(!removal_moves && removed_bytes && archive_reads==1 && removal_own==1);
     // Lab 26200 after the tester.37 install stopped (exit 50): the service is gone, state.json is prepared and there is
     // no pending.bin, beside the legacy record of main 967c6d76. The install of this package abandons that transaction
     // (nothing to move), then its prepare moves the legacy record aside and installs fresh.

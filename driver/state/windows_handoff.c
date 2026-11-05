@@ -343,15 +343,20 @@ static DWORD RetireStale(const void *buffer,PCWSTR leaf)
     if(error && error!=ERROR_UNSUPPORTED_TYPE)return error;
     return RetireLeaf(h.transaction,leaf);
 }
-// An intact removal record of any transaction moves aside. A damaged one stays and stops the step.
-static DWORD RetireAny(const void *buffer,PCWSTR leaf)
+// The removal records beside a legacy archive. A record of this transaction (written by main 967c6d76) and a
+// legacy record of any transaction move aside: no released install reads a legacy record. The record of an earlier
+// uninstall of an installed generation stays: it holds the last settings that were active, and the next install
+// reads it as it would without this uninstall. A damaged record stays and stops the step.
+static DWORD RetireLegacy(const void *buffer,PCWSTR leaf)
 {
-    HANDOFF_DIRECTORY *d=NULL;AMDGPU_TRANSFER_HEADER h;void *data=NULL;DWORD got=0,error;
+    HANDOFF_DIRECTORY *d=NULL;AMDGPU_TRANSFER_HEADER h,old={0};void *data=NULL;DWORD got=0,error;
     memcpy(&h,buffer,sizeof(h));
     error=Directory(&d);if(!error)error=ReadLeaf(d,leaf,&data,&got,NULL,TRUE);
-    if(d)CloseDirectory(d);if(data)HeapFree(GetProcessHeap(),0,data);
+    if(d)CloseDirectory(d);
+    if(data){memcpy(&old,data,sizeof(old));HeapFree(GetProcessHeap(),0,data);}
     if(error==ERROR_FILE_NOT_FOUND)return 0;
     if(error && error!=ERROR_UNSUPPORTED_TYPE)return error;
+    if(memcmp(old.transaction,h.transaction,16) && old.origin!=AMDGPU_TRANSFER_LEGACY)return 0;
     return RetireLeaf(h.transaction,leaf);
 }
 DWORD AmdgpuWindowsArchiveState(const void *buffer,DWORD bytes)
@@ -361,16 +366,16 @@ DWORD AmdgpuWindowsArchiveState(const void *buffer,DWORD bytes)
     error=AmdgpuStateWriterLock(&lock);if(error)return error;
     error=Directory(&d);if(!error)error=Archive(d,buffer,bytes,NULL);
     if(d){CloseDirectory(d);d=NULL;}
-    if(!error)error=RetireStale(buffer,RemovedOld);
     if(h.origin==AMDGPU_TRANSFER_LEGACY) {
         // BD-298 follow-up: the legacy archive of an unfinished store. The prepare of every released install accepts
         // only a removal record of an installed generation (origin 3) and stops with ERROR_NOT_SUPPORTED on another
-        // origin (lab 26200, tester.37). Thus this archive is not a removal record: an install after this uninstall
-        // finds none and installs fresh, as the settings of the unfinished store never became active. A
-        // removed-v2.bin of this transaction (written by main 967c6d76) moves aside too. A resumed uninstall reads
-        // archive-<transaction>.bin.
-        if(!error)error=RetireAny(buffer,RemovedLeaf);
+        // origin (lab 26200, tester.37). Thus this archive is not a removal record: the settings of the unfinished
+        // store never became active. An install after this uninstall reads the record of an earlier uninstall, if
+        // one exists, or installs fresh. A resumed uninstall reads archive-<transaction>.bin.
+        if(!error)error=RetireLegacy(buffer,RemovedOld);
+        if(!error)error=RetireLegacy(buffer,RemovedLeaf);
     } else {
+        if(!error)error=RetireStale(buffer,RemovedOld);
         if(!error)error=RetireStale(buffer,RemovedLeaf);
         if(!error)error=Directory(&d);
         if(!error)error=Archive(d,buffer,bytes,RemovedLeaf);
