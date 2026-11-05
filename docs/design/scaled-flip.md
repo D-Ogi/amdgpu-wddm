@@ -22,8 +22,10 @@ The sources are the WDK 10.0.26100 headers (`shared/d3dkmddi.h`, `km/dispmprt.h`
 `display/multiplane-overlay-vidpn-presentation.md` and `display/multiplane-overlay-hardware-requirements.md`
 (windows-driver-docs, staging 110f60ea).
 
-The KMD reports `WDDMVersion` 2.0 (ADR 0019 B1). The MPO DDIs of that version are the "2" family. Both are in the
-WDDM 2.0 block of `DRIVER_INITIALIZATION_DATA`, before `SetVideoProtectedRegion`, so `WddmCheckReserved` accepts
+This design is of `WDDMVersion` 2.0 (ADR 0019 B1), where the MPO DDIs are the "2" family. Since ADR 0019 stage B4
+(BD-307), the level of a start is the `WddmVersionCap` setting, default 2.9. From 2.1, dxgkrnl flips plane 0
+through the MPO3 DDI ([mpo.md](mpo.md)). The lab has no scaled-flip result at 2.9 yet. The two "2" family DDIs are
+in the WDDM 2.0 block of `DRIVER_INITIALIZATION_DATA`, before `SetVideoProtectedRegion`, so `WddmCheckReserved` accepts
 them. The "3" family of [mpo.md](mpo.md) is after that block and needs a later `WDDMVersion`.
 
 | Item | What the lab flavour does |

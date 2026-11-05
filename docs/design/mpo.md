@@ -62,8 +62,15 @@ whole output and the plane below it is not visible. That is a change of the Chec
 
 ## The route
 
-The KMD reports `WDDMVersion` 2.0 (ADR 0019). It therefore uses the WDDM 1.3/2.0 MPO model. dxgkrnl calls the KMD
-DDIs of the "2" family, and the DXGI runtime calls the DXGI 1.3 entries of the compositor's UMD:
+The KMD reports the `WDDMVersion` of the start (ADR 0019 stage B4, BD-307): the `WddmVersionCap` setting, default
+2.9. From 2.1, dxgkrnl sends the flips of plane 0 through `DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3`,
+also without `SupportMultiPlaneOverlay`. The KMD fills that DDI for plane 0 only (`mpo3_track.h`). On 2026-11-05 at
+2.9 on 22631 (lab kit-22631-r5), 19822 MPO3 flips had no failure, and dxgkrnl made no
+`CheckMultiPlaneOverlaySupport3` call, because the KMD does not set `SupportMultiPlaneOverlay`.
+
+At a `WddmVersionCap` of 2.0, the KMD uses the WDDM 1.3/2.0 MPO model. dxgkrnl calls the KMD DDIs of the "2"
+family, and the DXGI runtime calls the DXGI 1.3 entries of the compositor's UMD. The table and the
+[Lab status](#lab-status) are of this model:
 
 | Part | DDI | What it does here |
 | --- | --- | --- |
