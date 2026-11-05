@@ -257,6 +257,49 @@ DWORD AmdgpuWindowsRetireRemoval(const unsigned char transaction[16],BOOL keep)
     if(!error && (!keep || old))error=RetireLeaf(transaction,RemovedLeaf);
     AmdgpuStateWriterUnlock(lock);return error;
 }
+// BD-298: the handoff of an install that stopped before its acknowledgment. The header must name this transaction,
+// device and product. A record of another state catalog is accepted: the stopped install can be of another release.
+// The record moves aside as retired-<transaction>-pending.bin; nothing is deleted. A damaged file stays.
+DWORD AmdgpuWindowsAbandonHandoff(const unsigned char transaction[16],const unsigned char device_hash[32],
+    const char product_version[32])
+{
+    HANDOFF_DIRECTORY *d=NULL;HANDLE lock=NULL;void *data=NULL;DWORD bytes=0,error;AMDGPU_TRANSFER_HEADER h;
+    error=AmdgpuStateWriterLock(&lock);if(error)return error;
+    error=Directory(&d);if(!error)error=ReadLeaf(d,L"\\pending.bin",&data,&bytes,NULL,TRUE);
+    if(d){CloseDirectory(d);d=NULL;}
+    // No handoff: the prepare published none, or an earlier run of this step moved it aside.
+    if(error==ERROR_FILE_NOT_FOUND){error=0;goto done;}
+    if(error && error!=ERROR_UNSUPPORTED_TYPE)goto done;
+    memcpy(&h,data,sizeof(h));
+    if(memcmp(h.transaction,transaction,16) || memcmp(h.device_hash,device_hash,32) ||
+       memcmp(h.destination_version,product_version,32)){error=ERROR_REVISION_MISMATCH;goto done;}
+    error=RetireLeaf(transaction,L"\\pending.bin");
+    if(error==ERROR_ALREADY_EXISTS) {
+        // An earlier abandon of this transaction retired a handoff, and the same transaction published one again.
+        // Bytes identical to the retired copy: that evidence is complete, and the pending file goes. Other bytes stay.
+        WCHAR archive[46],leaf[96];HANDLE file=INVALID_HANDLE_VALUE,retired=INVALID_HANDLE_VALUE;void *again=NULL;DWORD again_bytes=0;
+        FILE_DISPOSITION_INFO dispose={TRUE};
+        TransactionLeaf(transaction,archive);(void)StringCchPrintfW(leaf,96,L"\\retired-%.32s-pending.bin",archive+9);
+        error=Directory(&d);if(error)goto done;
+        // The handle with DELETE access is the file that was compared: no name lookup comes between them.
+        error=ReadLeaf(d,L"\\pending.bin",&again,&again_bytes,&file,TRUE);CloseDirectory(d);d=NULL;
+        if(error==ERROR_UNSUPPORTED_TYPE)error=0;
+        if(!error && (again_bytes!=bytes || memcmp(again,data,bytes)))error=ERROR_REVISION_MISMATCH;
+        if(!error){error=Directory(&d);
+            if(!error && FAILED(StringCchCatW(d->path,32768,leaf)))error=ERROR_FILENAME_EXCED_RANGE;
+            if(!error){retired=CreateFileW(d->path,GENERIC_READ|READ_CONTROL,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,NULL);
+                if(retired==INVALID_HANDLE_VALUE)error=GetLastError();}
+            // A retired copy with other bytes is other evidence: both files stay.
+            if(!error){error=Matches(retired,data,bytes);if(error==ERROR_REVISION_MISMATCH)error=ERROR_ALREADY_EXISTS;}
+            if(d){CloseDirectory(d);d=NULL;}}
+        if(!error && !SetFileInformationByHandle(file,FileDispositionInfo,&dispose,sizeof(dispose)))error=GetLastError();
+        if(retired!=INVALID_HANDLE_VALUE)CloseHandle(retired);
+        if(file!=INVALID_HANDLE_VALUE && !CloseHandle(file) && !error)error=GetLastError();
+        if(again)HeapFree(GetProcessHeap(),0,again);
+    }
+done:
+    if(d)CloseDirectory(d);if(data)HeapFree(GetProcessHeap(),0,data);AmdgpuStateWriterUnlock(lock);return error;
+}
 static DWORD Archive(HANDOFF_DIRECTORY *d,const void *buffer,DWORD bytes,PCWSTR fixed)
 {
     AMDGPU_TRANSFER_HEADER h;WCHAR leaf[46];DWORD error,done=0;HANDLE file;

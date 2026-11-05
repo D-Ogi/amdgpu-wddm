@@ -11,6 +11,16 @@ $runner={param($exe,$a) $script:events.Add($a[0]);if($script:bad -eq $a[0]){retu
 $save={param($s) $script:events.Add('save:'+$s.legacy_rollback.phase)}
 $target=[pscustomobject]@{product='0.7.216.102';inf_sha256=('1'*64);sys_sha256=('2'*64);manifest_sha256=('3'*64);
     inf_identity=@{date='10/13/2026';quad='40.7.216.102'}}
+# BD-298: the refusal names the actual state of the last install and what to do.
+$refused=[pscustomobject]@{driver_state=[pscustomobject]@{phase='abandoned';product='0.7.216.102'}};$msg=''
+try{[void](Start-LegacyRollback -State $refused -Target $target -Device '-' -SourceInf oem17.inf -Worker fixture.exe -Save $save -Runner $runner)}catch{$msg=$_.Exception.Message}
+Check ($msg -match 'install of driver version 0\.7\.216\.102 stopped and was abandoned' -and $msg -match 'Install a driver version with its setup first' -and
+    $script:events.Count -eq 0) 'abandoned install: the rollback refusal names it and says what to do'
+$refused.driver_state.phase='prepared';$msg=''
+try{[void](Start-LegacyRollback -State $refused -Target $target -Device '-' -SourceInf oem17.inf -Worker fixture.exe -Save $save -Runner $runner)}catch{$msg=$_.Exception.Message}
+Check ($msg -match 'install of driver version 0\.7\.216\.102 has not finished' -and $script:events.Count -eq 0) 'stopped install: the rollback refusal names it'
+Check ((Get-LegacyRollbackStateRefusal ([pscustomobject]@{})) -match 'completed schema 2 installation') 'no install record: refusal'
+Check ($null -eq (Get-LegacyRollbackStateRefusal ([pscustomobject]@{driver_state=@{phase='acknowledged'}}))) 'completed install: no refusal'
 $state=[pscustomobject]@{driver_state=@{phase='acknowledged'}}
 $device='PCI\VEN_1002&DEV_13FE\FIXTURE'
 $r=Start-LegacyRollback -State $state -Target $target -Device $device -SourceInf oem17.inf -Worker fixture.exe -Save $save -Runner $runner

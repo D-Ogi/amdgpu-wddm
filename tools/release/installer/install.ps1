@@ -1143,9 +1143,8 @@ if ($action.action -ne 'verify' -and $script:Manifest) {
 }
 if($legacyRollback) {
     $script:RollbackTarget=Get-LegacyRollbackTarget -PackageRoot $package -FirmwareDir $FirmwareDir
-    if(-not $early -or -not $early.driver_state -or $early.driver_state.phase -ne 'acknowledged') {
-        throw 'legacy rollback requires a completed schema 2 installation'
-    }
+    $refusal = if ($early) { Get-LegacyRollbackStateRefusal $early } else { Get-LegacyRollbackStateRefusal ([pscustomobject]@{}) }
+    if ($refusal) { throw $refusal }
 }
 Write-EngineEvent 'decision' ([ordered]@{ action = $action.action; message = $action.message; installed_version = $installedVersion; package_version = $packageVersion; phase = [string]$state.phase
     consents = @($consents); consents_given = [ordered]@{ test_signing = [bool]$AcceptTestSigning; bitlocker = $BitLocker }; restarts = $restarts
@@ -1779,6 +1778,10 @@ if ($driverSetAction -eq 'stage' -or $script:DryRunMode) {
         # bind leaves the GPU on a KMD that does not start.
         $rank = Test-DriverSetRank -InstallState $state
         if ($rank -and -not $rank.ok) { throw "driver package rank: $($rank.detail)" }
+        # BD-298: an install of another package that stopped after its prepare is abandoned first (state-lifecycle.ps1).
+        # The settings comparison below belongs to this package, not to that transaction.
+        [void](Resolve-DriverStateTransaction -State $state -Worker $stateWorker -Product (Get-ProductPackageQuad $script:Manifest.version) `
+            -Device $script:Device.DeviceID -InfSha256 $driverSetSha -Save {param($s) Save-InstallState $s})
         Save-DriverSettingsComparison -State $state -Worker $stateWorker -Device $script:Device.DeviceID `
             -InfSha256 $driverSetSha -Save {param($s) Save-InstallState $s}
         [void](Start-DriverStateTransaction -State $state -Worker $stateWorker -Product (Get-ProductPackageQuad $script:Manifest.version) `

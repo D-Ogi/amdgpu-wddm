@@ -52,6 +52,44 @@ Legacy absence follows the catalog's migration rule, including explicit zero for
 
 Acknowledgment requires the installed generation to match the transaction. The worker archives the transfer before it removes the pending file.
 Uninstall requires a durable archive before it removes service state.
+
+### Transaction phases of the installer
+
+The installer record `driver_state` in `state.json` has one of three phases (BD-298).
+One table in `tools/release/installer/state-lifecycle.ps1` gives the step for each phase and intent.
+
+| Phase | Install of the same package | Install of another package | Acknowledgment | Uninstall |
+|---|---|---|---|---|
+| no record | new transaction | new transaction | refused | removal |
+| `prepared` | the same transaction again | abandon, then a new transaction | `acknowledged` | abandon, then removal |
+| `acknowledged` | new transaction | new transaction | the same check again | removal |
+| `abandoned` | new transaction | new transaction | refused | removal |
+
+"The same package" means the same product version, device and INF hash.
+An install can stop after its prepare and before its acknowledgment, for example after a power loss or a blocked program.
+The worker step `abandon <transaction> <product> <device>` then removes the hold of that transaction. The step holds the writer lock:
+
+1. A freeze of another transaction stops the step before it changes anything.
+2. The `pending.bin` of this transaction moves aside as `retired-<transaction>-pending.bin`. A file of another state catalog is accepted, because the stopped install can be of another release.
+3. The step releases the freeze of this transaction.
+
+A store whose first transaction did not finish needs one more rule.
+The KMD creates `StateV2` and `Generations\<transaction>` at the start of a transaction, and it writes `Active` only at the end.
+If a start of the KMD stops between these points, the store has no `Active` value, no installed generation and no freeze.
+The bound package already declares the state catalog.
+For such a store, the abandon step only moves the file.
+The prepare, the archive of an uninstall and the settings read then use the legacy state, which was the source of the unfinished transaction.
+The KMD accepts a legacy transfer into such a store, because no `Active` value and no earlier generation exist.
+In all other cases, a bound package that declares the catalog without a store with `Active` stays an error.
+If the KMD has already applied the handoff, `Active` names the transaction and the store has no freeze: only the file moves.
+The same transaction can publish its handoff again after an abandon. A retired copy with the same bytes then completes the step.
+The worker removes `pending.bin` only after a byte compare under the lock, and the installer log records this removal.
+A `pending.bin` of another transaction, a damaged file, an incorrect ACL and a retired copy with other bytes stop the step. The step keeps the files in each of these cases.
+The step does not need the device. A retry does only the work that remains.
+The installer then writes the phase `abandoned`, keeps a copy of the record in `driver_state_history` and writes a warning line.
+`abandoned` is terminal for its transaction: no step resumes or acknowledges it.
+The uninstaller of a package uses the worker of that package for the abandon step.
+The installed worker can be of a release without that step.
 Repair preserves runtime closure records. Recovery actions in the GUI remain separate, explicit operations.
 
 Board memory backup and journal files have separate protected storage.

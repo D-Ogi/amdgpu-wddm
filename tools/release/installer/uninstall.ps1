@@ -87,9 +87,13 @@ if($pkgs.Count -or ($state -and $state.driver_state_removal)) {
     $removalDevice=[string]$devices[0].DeviceID
     if(-not $state){throw 'state archive requires the existing installer identity; no removal was started'}
     $product=Get-ProductPackageQuad ([string]$state.package_version)
+    # BD-298: the abandon step of a stopped install uses the worker of this package when the uninstaller runs from a
+    # package folder: the installed worker can be of a release without that step.
+    $abandonWorker=Join-Path $package 'payload\tools\amdgpu-state-installer.exe'
+    if(-not (Test-Path -LiteralPath $abandonWorker -PathType Leaf)){$abandonWorker=Join-Path $root 'tools\amdgpu-state-installer.exe'}
     Invoke-Change 'freeze settings, stop the device, and durably archive final state before removing any component' {
         Save-DriverStateBeforeRemoval -State $state -Worker (Join-Path $root 'tools\amdgpu-state-installer.exe') `
-            -Product $product -Device $removalDevice -Save {param($s) Save-InstallState $s}
+            -AbandonWorker $abandonWorker -Product $product -Device $removalDevice -Save {param($s) Save-InstallState $s}
     } | Out-Null
 }
 # Running the uninstaller IS the answer: nothing
