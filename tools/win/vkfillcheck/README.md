@@ -120,9 +120,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File bd290-fault-witness.ps1 -Exe
 
 The script reads `bc250kmd_cli log` (and `bc250kmd_cli ih state`, which only a lab-flavour KMD answers) before
 and after one `copy-eom` case. It prints the new `ih: GPU FAULT va` lines by page: the page after the source,
-the last source page, or elsewhere. Exit 1 (`OVERREAD`) is a fault in the page after the source. Exit 0
+the last source page, or elsewhere. Exit 1 (`OVERREAD`) is a fault in the page after the source, also when the
+fault stopped the copy and vkfillcheck failed (on unit A the fence can time out, exit 3). Exit 0
 (`NO-OVERREAD`) is no such fault with the capture-replay placement. Exit 4 is inconclusive: an ordinary
-placement, or a log ring that restarted. Exit 3 is a failed vkfillcheck run, and exit 2 is a setup error. The
+placement, or a log ring that restarted. Exit 3 is a failed vkfillcheck run with no fault in that page. Exit 2
+is a setup error or an error of the script itself, never a verdict. The
 script keeps the logs and the vkfillcheck output in `-OutDir`.
 
 In `core`, 4 is one dword, 12 and 252 are not a multiple of the shader's dwords per thread, 65536 is the

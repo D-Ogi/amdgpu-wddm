@@ -14,9 +14,10 @@
 #       -Exe C:\BC250\vkfillcheck\vkfillcheck-x64.exe -Icd 'C:\Program Files\amdgpu-wddm\vulkan\vulkan_radeon.dll' `
 #       -Cli C:\BC250\bin\bc250kmd_cli.exe [-Size 4093] [-OutDir C:\BC250\tmp\bd290-witness]
 #
-# Exit: 0 no fault in the page after the source, 1 one or more faults there (the over-read), 2 setup error,
-# 3 vkfillcheck did not pass (its own exit code is in the output), 4 inconclusive (ordinary placement, or the KMD
-# log restarted during the run).
+# Exit: 0 no fault in the page after the source, 1 one or more faults there (the over-read, also when vkfillcheck
+# failed, for example with exit 3 after a fence timeout: that hang is the bug), 2 setup error or an error of this
+# script, 3 vkfillcheck did not pass and no fault is in the page after the source, 4 inconclusive (ordinary
+# placement, or the KMD log restarted during the run).
 
 param(
     [Parameter(Mandatory = $true)][string]$Exe,
@@ -26,7 +27,15 @@ param(
     [string]$OutDir = '',
     [switch]$AnyDevice      # passes --any-device: a dry run on a PC without a BC-250
 )
-$ErrorActionPreference = 'Stop'
+# Continue, not Stop: in Windows PowerShell 5.1 a native program's stderr under 2>&1 becomes an error record, and Stop
+# ends the script there (seen with the release bc250kmd_cli, which answers "unknown command ih"). Every native call
+# below checks its own exit code.
+$ErrorActionPreference = 'Continue'
+# A failure of this script itself is a setup error (exit 2), never a verdict: exit 1 means OVERREAD only.
+trap {
+    Write-Host "setup: script error: $_"
+    exit 2
+}
 
 function Get-MaxSequence([string[]]$Lines) {
     $max = -1
@@ -128,9 +137,17 @@ if ($haveIh) {
 }
 Write-Host "output       $OutDir"
 
-if ($runCode -ne 0) { Write-Host "verdict      VKFILLCHECK-FAILED (exit $runCode)"; exit 3 }
 if ($seqBefore -lt 0 -or $seqAfter -lt $seqBefore) { Write-Host 'verdict      INCONCLUSIVE: the KMD log ring restarted or was empty'; exit 4 }
-if ($inNext.Count -gt 0) { Write-Host 'verdict      OVERREAD: the copy loaded the page after its source'; exit 1 }
+# A fault in the next page is the over-read whatever vkfillcheck returned. On unit A the faulting copy can also stop
+# the queue: the fence times out and vkfillcheck exits 3. That hang is a result of the bug, so the verdict is still
+# OVERREAD and not VKFILLCHECK-FAILED.
+if ($inNext.Count -gt 0) {
+    $why = ''
+    if ($runCode -ne 0) { $why = " (vkfillcheck exit ${runCode}: the fault also stopped the copy)" }
+    Write-Host "verdict      OVERREAD: the copy loaded the page after its source$why"
+    exit 1
+}
+if ($runCode -ne 0) { Write-Host "verdict      VKFILLCHECK-FAILED (exit $runCode) with no fault in the page after the source"; exit 3 }
 if ($placement -ne 'capture-replay') { Write-Host "verdict      INCONCLUSIVE: placement $placement, the next page may be mapped"; exit 4 }
 Write-Host 'verdict      NO-OVERREAD: no fault in the page after the source'
 exit 0
