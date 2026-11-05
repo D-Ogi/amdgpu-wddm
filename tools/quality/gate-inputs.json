@@ -1659,6 +1659,18 @@
         "host"
       ]
     },
+    "router-front": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ],
+      "artifacts": [
+        "router-front/*.dll",
+        "router-front/*.exe",
+        "router-front/**/*.json"
+      ],
+      "timeout": 600
+    },
     "router-stack": {
       "depends": [
         "router-front"
@@ -1719,7 +1731,7 @@
       "inputs": [
         "host"
       ],
-      "timeout": 600
+      "timeout": 1200
     },
     "winsys-lines-controls": {
       "inputs": [
