@@ -25,8 +25,8 @@
  * command buffer, vkCmdCopyBuffer reads another buffer. A defect in one of them does not have to show in
  * the others. A fill also runs with VK_WHOLE_SIZE on a buffer that ends past a dword boundary, where the
  * driver has to round the range down and leave the last bytes alone. A "copy-eom" copy (BD-290) reads
- * a source that ends at the last byte of its own one-page VkDeviceMemory, where a compute copy that
- * loads whole threads past the range reads into the next page.
+ * a source that ends at the last byte of its own 2 MiB VkDeviceMemory, where a compute copy that loads
+ * whole threads past the range reads into the next page (see EOM_MEM).
  *
  * Both halves of our ICD need this: the x64 DLL serves 64-bit clients and the x86 DLL serves the WOW64
  * ones, and they are separate builds of the same source. build.ps1 -Arch both makes an x64 and an x86
@@ -211,13 +211,26 @@ static const uint32_t kBd287CopySrc[] = { 0u };
  * source: each thread loads S = dwords_per_thread * 4 bytes (8 up to 64 KiB), and the window of the first
  * thread starts dst_align_offset bytes before the copy, so the last thread loads
  * S - (dst_align_offset + size) % S bytes past the last source byte. Each case copies from a source that
- * ends at the last byte of its own VkDeviceMemory of exactly one 4 KiB page (srcOffset = 4096 - size), so
- * those bytes are in the next page, which belongs to no mapping of this memory. dstOffset 4 gives
- * dst_align_offset 4. The sizes give (4 + size) % 8 = 1, 2, 3, 5, 6, 7 and 1, so none is a multiple of the
- * per-thread load. An ICD without the fix (radv_copy_memory_overread_tail) loads past the page: a GPU page
- * fault, which is a TDR on WDDM, when the next page is unmapped, and nothing visible when it is mapped. An
- * ICD with the fix copies the tail with CP DMA. In both cases the bytes must match exactly. */
-#define EOM_PAGE 4096u
+ * ends at the last byte of its own VkDeviceMemory (srcOffset = EOM_MEM - size), so those bytes are in the
+ * page after that memory. dstOffset 4 gives dst_align_offset 4. The sizes give (4 + size) % 8 = 1, 2, 3, 5,
+ * 6, 7 and 1, so none is a multiple of the per-thread load.
+ *
+ * Where the next page is on our WDDM stack: RADV creates every VkDeviceMemory BO with the addrlib maximum
+ * alignment (radv_device_memory.c, radv_bo_create_for_image(... pdev->info.max_alignment ...)), and the
+ * winsys rounds the BO size up to it (radv_wddm2_bo.c, phys_size = align64(size, phys_alignment)). A 4 KiB
+ * memory can therefore be a larger BO, with the next page inside it. EOM_MEM is 2 MiB, a multiple of every
+ * power-of-two alignment up to 2 MiB, so the BO ends where the memory ends. The memory is also allocated with
+ * VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT when the device has bufferDeviceAddressCaptureReplay:
+ * RADV gives it RADEON_FLAG_REPLAYABLE, and the winsys maps such BOs only in their own VA window
+ * (RADV_WDDM2_REPLAY_HEAP_START), which nothing else of this process uses. The page after the source is then
+ * unmapped. Without the feature the client says so and uses an ordinary allocation.
+ *
+ * An unmapped page does not fail the case: the KMD programs the VM contexts as amdgpu does (default page,
+ * interrupt; driver/amdgpu-import/gfxhub_v2_0.c), so the load reads the default page and the copy stores
+ * the right bytes. The witness is the KMD log line "ih: GPU FAULT va" in the page after the source, which
+ * bd290-fault-witness.ps1 looks for. The client prints that page for each case on an "eom" line. An ICD
+ * with radv_copy_memory_overread_tail copies the last thread with CP DMA and makes no such load. */
+#define EOM_MEM (2u * 1024u * 1024u)
 static const uint32_t kEomSizes[] = { 13u, 6u, 255u, 1025u, 4090u, 4091u, 4093u };
 static const uint32_t kEomOffsets[] = { 4u };
 static const uint32_t kEomSrc[] = { 0u };
@@ -409,6 +422,67 @@ static void FreeBuf(Buf *b)
     b->buffer = VK_NULL_HANDLE;
     b->memory = VK_NULL_HANDLE;
     b->map = NULL;
+}
+
+/* copy-eom placement (see EOM_MEM): set at device creation from the device's features. */
+static int eomBda, eomReplay;
+static PFN_vkGetBufferDeviceAddress pfnGetBufferDeviceAddress;
+
+/* The source of one copy-eom case: EOM_MEM bytes of host-visible memory, the buffer as large as the memory,
+ * in the capture-replay VA window when the device has it. Prints the source range and the page after it. */
+static Buf MakeEomBuf(uint32_t size)
+{
+    Buf b = { VK_NULL_HANDLE, VK_NULL_HANDLE, 0, NULL, 0 };
+    VkBufferCreateInfo bi = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+    VkMemoryAllocateFlagsInfo fi = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO };
+    VkMemoryAllocateInfo ai = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+    VkMemoryRequirements req;
+    int t;
+
+    if (size > EOM_MEM) {
+        fprintf(stderr, "vkfillcheck: copy-eom size %u is larger than its source memory\n", size);
+        exit(3);
+    }
+    bi.size = EOM_MEM;
+    bi.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | (eomBda ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : 0);
+    bi.flags = eomReplay ? VK_BUFFER_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT : 0;
+    bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    VK(vkCreateBuffer(dev, &bi, NULL, &b.buffer));
+    vkGetBufferMemoryRequirements(dev, b.buffer, &req);
+    if (req.size != EOM_MEM) {
+        fprintf(stderr, "vkfillcheck: the copy-eom source needs %llu bytes of memory, not %u\n",
+                (unsigned long long)req.size, EOM_MEM);
+        exit(3);
+    }
+    if ((t = PickType(req.memoryTypeBits, PLACE_HOST)) < 0) {
+        fprintf(stderr, "vkfillcheck: no host memory type for the copy-eom source (bits 0x%X)\n", req.memoryTypeBits);
+        exit(3);
+    }
+    if (eomBda) {
+        fi.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT |
+                   (eomReplay ? VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT : 0);
+        ai.pNext = &fi;
+    }
+    ai.allocationSize = EOM_MEM;
+    ai.memoryTypeIndex = (uint32_t)t;
+    VK(vkAllocateMemory(dev, &ai, NULL, &b.memory));
+    VK(vkBindBufferMemory(dev, b.buffer, b.memory, 0));
+    b.type = (uint32_t)t;
+    b.size = EOM_MEM;
+    VK(vkMapMemory(dev, b.memory, 0, VK_WHOLE_SIZE, 0, (void **)&b.map));
+    if (eomBda) {
+        VkBufferDeviceAddressInfo dai = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO };
+        unsigned long long va, end;
+        dai.buffer = b.buffer;
+        va = (unsigned long long)pfnGetBufferDeviceAddress(dev, &dai);
+        end = va + EOM_MEM;
+        printf("eom           size %u source va 0x%llX-0x%llX last source page 0x%llX next page 0x%llX (%s)\n", size,
+               end - size, end, (end - 1) & ~0xFFFull, end,
+               eomReplay ? "capture-replay window" : "ordinary placement");
+    } else {
+        printf("eom           size %u source va unknown: no bufferDeviceAddress\n", size);
+    }
+    return b;
 }
 
 static void BarrierTransfer(VkCommandBuffer cb)
@@ -614,7 +688,7 @@ static int RunCase(const Case *c, Fixtures *f, uint32_t index, int onlyFail)
     }
     case OP_COPY_EOM:
         /* The source range ends at the last byte of its own one-page memory (see kEomSizes). */
-        regions[0].srcOffset = EOM_PAGE - c->size;
+        regions[0].srcOffset = EOM_MEM - c->size;
         regions[0].dstOffset = c->off;
         regions[0].size = c->size;
         regionCount = 1;
@@ -639,24 +713,17 @@ static int RunCase(const Case *c, Fixtures *f, uint32_t index, int onlyFail)
             if (s + n > srcEnd) srcEnd = s + n;
             for (uint32_t k = 0; k < n; k++) f->want[d + k] = SrcByte(s + k, salt);
         }
-        for (uint32_t i = 0; i < srcEnd; i++) f->source[i] = SrcByte(i, salt);
         if (c->op == OP_COPY_EOM) {
-            /* A memory object of its own for every case, exactly one page, with the buffer bound at
-             * offset 0 and as large as the memory: the byte after the source range is the first byte
-             * of the next page, outside this allocation. */
-            if (c->size > EOM_PAGE) {
-                fprintf(stderr, "vkfillcheck: copy-eom size %u is larger than a page\n", c->size);
-                exit(3);
-            }
-            eom = MakeBuf(EOM_PAGE, PLACE_HOST);
-            if (eom.size != EOM_PAGE || !eom.map) {
-                fprintf(stderr, "vkfillcheck: the copy-eom source memory is %llu bytes%s, not one mapped page\n",
-                        (unsigned long long)eom.size, eom.map ? "" : " and not mapped");
-                exit(3);
-            }
-            memcpy(eom.map, f->source, srcEnd);
+            /* A memory object of its own for every case, with the buffer bound at offset 0 and as large
+             * as the memory: the byte after the source range is the first byte after this allocation.
+             * Only the source range is staged; f->source holds it from index 0. */
+            const uint32_t s = (uint32_t)regions[0].srcOffset;
+            eom = MakeEomBuf(c->size);
+            for (uint32_t k = 0; k < c->size; k++) f->source[k] = SrcByte(s + k, salt);
+            memcpy(eom.map + s, f->source, c->size);
             srcBuffer = eom.buffer;
         } else {
+            for (uint32_t i = 0; i < srcEnd; i++) f->source[i] = SrcByte(i, salt);
             memcpy(f->src.map, f->source, srcEnd);
         }
     }
@@ -759,7 +826,7 @@ static void Usage(FILE *out, int code)
             "  --skip-case OP:SIZE:OFF  skip the matching case (use to exclude a known TDR).\n"
             "                      OP is one of fill, update, copy, copy-parts, fill-whole, copy-eom.\n"
             "                      copy-eom (BD-290) copies from a source that ends at the end of its own\n"
-            "                      one-page memory; --case copy-eom:13:4 runs one of those cases.\n"
+            "                      2 MiB memory; --case copy-eom:13:4 runs one of those cases.\n"
             "  --deadline SEC      end the run after this many seconds (default 60, at most 170).\n"
             "  --fence-timeout-ms  how long to wait for one submission (default 10000).\n"
             "\n"
@@ -784,6 +851,7 @@ int main(int argc, char **argv)
     float priority = 1.0f;
     VkDeviceQueueCreateInfo qci = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
     VkDeviceCreateInfo dci = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
+    VkPhysicalDeviceVulkan12Features want12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
     VkCommandPoolCreateInfo cpc = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
     VkFenceCreateInfo fci = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
     Fixtures f;
@@ -897,7 +965,7 @@ int main(int argc, char **argv)
     if (!(createInstance = (PFN_vkCreateInstance)getInstanceProc(NULL, "vkCreateInstance"))) Missing("vkCreateInstance");
 
     app.pApplicationName = "vkfillcheck";
-    app.apiVersion = VK_API_VERSION_1_1;
+    app.apiVersion = VK_API_VERSION_1_2;    /* 1.2: the copy-eom placement features (bufferDeviceAddress) */
     ici.pApplicationInfo = &app;
     VK(createInstance(&ici, NULL, &instance));
     INSTANCE_FUNCS(LOAD_INSTANCE)
@@ -969,7 +1037,36 @@ int main(int argc, char **argv)
     qci.pQueuePriorities = &priority;
     dci.queueCreateInfoCount = 1;
     dci.pQueueCreateInfos = &qci;
+    /* copy-eom placement: bufferDeviceAddress for the printed source address, and
+     * bufferDeviceAddressCaptureReplay for the capture-replay VA window (see EOM_MEM). Both are Vulkan 1.2. */
+    if (props.apiVersion >= VK_API_VERSION_1_2) {
+        PFN_vkGetPhysicalDeviceFeatures2 getFeatures2 =
+            (PFN_vkGetPhysicalDeviceFeatures2)getInstanceProc(instance, "vkGetPhysicalDeviceFeatures2");
+        if (getFeatures2) {
+            VkPhysicalDeviceVulkan12Features has12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+            VkPhysicalDeviceFeatures2 f2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+            f2.pNext = &has12;
+            getFeatures2(phys[deviceIndex], &f2);
+            eomBda = has12.bufferDeviceAddress == VK_TRUE;
+            eomReplay = eomBda && has12.bufferDeviceAddressCaptureReplay == VK_TRUE;
+        }
+    }
+    if (eomBda) {
+        want12.bufferDeviceAddress = VK_TRUE;
+        want12.bufferDeviceAddressCaptureReplay = eomReplay ? VK_TRUE : VK_FALSE;
+        dci.pNext = &want12;
+    }
     VK(vkCreateDevice(phys[deviceIndex], &dci, NULL, &dev));
+    if (eomBda &&
+        !(pfnGetBufferDeviceAddress = (PFN_vkGetBufferDeviceAddress)vkGetDeviceProcAddr(dev, "vkGetBufferDeviceAddress")))
+        eomBda = eomReplay = 0;
+    if (eomReplay)
+        printf("eom placement capture-replay VA window, %u-byte source memory: the page after a copy-eom source is "
+               "outside every mapping of this process\n", EOM_MEM);
+    else
+        printf("eom placement ORDINARY: bufferDeviceAddressCaptureReplay is not available (device API %u.%u, "
+               "bufferDeviceAddress %s); the page after a copy-eom source may be mapped\n",
+               VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion), eomBda ? "yes" : "no");
     DEVICE_FUNCS(LOAD_DEVICE)
     vkGetDeviceQueue(dev, family, 0, &queue);
     cpc.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
