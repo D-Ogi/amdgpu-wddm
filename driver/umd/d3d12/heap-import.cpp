@@ -83,6 +83,11 @@ struct RuntimeHeapImports::Record {
     // a failed deallocate with flags NONE asked for ASSUME_NOT_IN_USE and SYNCHRONOUS_DESTROY, while the GPU
     // may still read the allocation.
     bool unproved{};
+    // BD-313: a runtime MakeResident or Evict has named this allocation, so the runtime holds its residency and the
+    // import's hold has ended (or ends at the next notice, after a refused hand-back). residency_turn: a thread is
+    // ending the hold now, outside lock_; the record is borrowed for that time, so no release starts under it.
+    bool runtime_named{},residency_turn{};
+    uint64_t hold_seen{};                       // the end_residency_hold call that took it last
     Record(D3D12DDI_HRTDEVICE d,const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb):allocation(d,cb) {}
 };
 namespace {
@@ -114,8 +119,10 @@ ImportReleasePolicy ImportReleasePolicy::from_switches() noexcept {
     }
     // tester.36: the hold is the default again. The hand-back of BD-052 let VidMm evict an import in the paging
     // batch that created it, and a CP write to it 7 ms later faulted (3DMark 0x116, KMD paging journal records
-    // 23798-23811 of boot-20261102T232052Z). It stays as the opt-in arm until the hand-back is limited to
-    // allocations that a runtime object makes resident. import-residency-hold-on is still accepted (a no-op).
+    // 23798-23811 of boot-20261102T232052Z). The hand-back at creation stays the opt-in arm. BD-313 limits the
+    // hold instead: it ends at the first runtime MakeResident or Evict of the allocation (end_residency_hold), so
+    // only engine memory, which no runtime object names, keeps it for life. import-residency-hold-on is still
+    // accepted (a no-op).
     policy.residency_hold=!ddi_experiment("import-residency-release-on");
     return policy;
 }
@@ -314,8 +321,8 @@ void RuntimeHeapImports::drain(bool all) noexcept {
 // before the VA leaves this module. After the DDI the residency of an application's heap is the runtime's,
 // which is what the residency DDIs are for, and a heap the runtime never makes resident is a heap the
 // application asked not to have committed.
-//   import-residency-hold-on (ddi-trace.h) keeps the pre-BD-052 lifetime hold, so a lab trial can bisect the
-// trial 153 class against this change with no DLL swap.
+//   This hand-back is the arm import-residency-release-on (ddi-trace.h). The default is the hold, which the first
+// runtime MakeResident or Evict of the allocation ends (BD-313, end_residency_hold).
 HRESULT RuntimeHeapImports::release_import_residency(Record& record) noexcept {
     if(policy_.residency_hold)return S_OK;
     // This runs inside allocate/adopt, before the creation/open DDI returns. Even
@@ -335,10 +342,68 @@ HRESULT RuntimeHeapImports::release_import_residency(Record& record) noexcept {
 void RuntimeHeapImports::note_runtime_residency(const D3DKMT_HANDLE* allocations,unsigned count) noexcept {
     if(!active_.load() || !allocations || !count)return;
     runtime_residencies_.fetch_add(1,std::memory_order_relaxed);
+    end_residency_hold(allocations,count,false);
 }
 void RuntimeHeapImports::note_runtime_eviction(const D3DKMT_HANDLE* allocations,unsigned count) noexcept {
     if(!active_.load() || !allocations || !count)return;
     runtime_evictions_.fetch_add(1,std::memory_order_relaxed);
+    end_residency_hold(allocations,count,true);
+}
+// BD-313. Under the shipped policy (residency_hold, tester.36: the 3DMark CPG fault of BD-052) the import keeps the
+// reference its creation DDI took, so that memory the runtime never makes resident - the engine's own - is never
+// paged out under the engine. An application's heap is different: the runtime makes it resident through
+// pfnMakeResident and evicts it through pfnEvict, and while the import also holds it, the application's Evict
+// leaves it resident (HLK VidMm::MemoryResidency::VerifyStandard, makeresident main.cpp line 260). So the hold ends
+// at the first runtime residency operation that names the allocation:
+//   after a MakeResident (S_OK or E_PENDING, native-residency-ddi.cpp), the runtime's reference exists, and the
+//   import gives its own back. The count never reaches zero on the way, so the creation-batch eviction of the
+//   3DMark fault cannot happen. A refused hand-back keeps the hold and is tried again at the next notice;
+//   after an Evict with no MakeResident before it, the runtime's Evict callback took the one reference the
+//   allocation had, which was the import's: the mapping forgets it, and no Evict of ours follows, now or at the
+//   release. After a refused hand-back, an Evict gives the import's reference back as well, so that nothing of
+//   ours is left once the application has evicted.
+// No callback runs under lock_: the records are borrowed for the time of the hand-back (free() answers E_PENDING
+// for a borrowed record) and residency_turn keeps a second thread off the same record.
+void RuntimeHeapImports::end_residency_hold(const D3DKMT_HANDLE* allocations,unsigned count,bool evicted) noexcept {
+    if(!policy_.residency_hold)return;          // the hand-back was made inside the creation DDI
+    Record* take[16];unsigned taken=0;
+    // A record is taken once per call, so that a refused hand-back is not retried in a loop inside this call.
+    const uint64_t epoch=hold_epoch_.fetch_add(1,std::memory_order_relaxed)+1;
+    for(unsigned first=0;first<count;){
+        // One batch of at most 16 records at a time, so that no allocation is made on this path.
+        taken=0;unsigned next=count;
+        {
+            Exclusive held(lock_);
+            for(unsigned i=first;i<count;++i){
+                if(taken==16){next=i;break;}
+                const D3DKMT_HANDLE handle=allocations[i];
+                if(!handle)continue;
+                for(Record* r=records_;r;r=r->next){
+                    if(r->handle!=handle || r->retired || r->releasing || r->residency_turn || r->hold_seen==epoch)continue;
+                    const bool before=r->runtime_named;
+                    r->runtime_named=true;
+                    if(!paging_.holds_residency(r->mapping))continue;
+                    if(taken==16){r->runtime_named=before;next=i;break;}
+                    // An Evict of an allocation the runtime never made resident: the import's reference went with it.
+                    if(evicted && !before){
+                        (void)paging_.forget_residency(r->mapping);
+                        hold_forgotten_.fetch_add(1,std::memory_order_relaxed);
+                        continue;
+                    }
+                    r->residency_turn=true;r->hold_seen=epoch;++r->borrowed;take[taken++]=r;
+                }
+                if(next!=count)break;
+            }
+        }
+        for(unsigned k=0;k<taken;++k){
+            Record& r=*take[k];
+            const HRESULT hr=paging_.release_residency(r.mapping);
+            if(hr==S_OK)hold_handbacks_.fetch_add(1,std::memory_order_relaxed);
+            else if(hr!=S_FALSE)hold_failures_.fetch_add(1,std::memory_order_relaxed);
+            Exclusive held(lock_);r.residency_turn=false;--r.borrowed;
+        }
+        first=next;
+    }
 }
 // The shared hold of paging_life_lock_ is what makes the read of the queue's fence page safe against the
 // close that unmaps it (heap-import.h): clearing paging_open_ rejects new readers, but only the lock waits
@@ -432,7 +497,8 @@ HRESULT RuntimeHeapImports::release_owned(Record& record,bool proved) noexcept {
     }
     // BD-052: a complete import holds no residency reference by now (release_import_residency gave it back
     // inside the creation DDI), so the unmap's Evict is made only for an import whose creation failed after
-    // the residency operation and for the import-residency-hold-on bisect arm.
+    // the residency operation and, under the hold (the default), for engine memory and for a heap that no runtime
+    // residency operation named (BD-313).
     HRESULT hr=paging_.unmap_after_gpu_retirement(record.mapping,record.adopted);
     if(hr!=S_OK)return hr;
     free_report_.stage=FreeStage::Deallocate;

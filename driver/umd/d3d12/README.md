@@ -262,9 +262,19 @@ reference for the heap's whole life, and the kernel driver sets
 `DriverManagesResidency` to 0. With the hand-back, VidMm paged out an import in
 the same paging batch that created it, and a CP write to it faulted (the 3DMark
 0x116 of 2026-11-02, paging journal records 23798-23811). The switch
-`import-residency-release-on` turns the hand-back on for a lab arm. The fix
-limits the hand-back to the allocations that a runtime object makes resident.
+`import-residency-release-on` turns the hand-back on for a lab arm.
 `import-residency-hold-on` is still accepted and changes nothing.
+
+**BD-313:** the hold ends at the first runtime residency operation that names the
+allocation (`RuntimeHeapImports::end_residency_hold`, called from the two
+notices of `native-residency-ddi.cpp`). After a `pfnMakeResident` the runtime
+holds a reference, so the import gives its own back with one `pfnEvictCb`, and the
+count does not reach zero on the way. An `pfnEvict` before any `pfnMakeResident`
+took the one reference the allocation had, which was the import's: the mapping
+forgets it and makes no Evict. A refused hand-back keeps the hold and is tried
+again at the next notice. Engine memory, which no runtime object names, keeps the
+hold until its unmap. Without this, the application's `Evict` left the heap
+resident (HLK `VidMm::MemoryResidency::VerifyStandard`).
 
 After the creation DDI the residency of the heap is the runtime's, and a
 `pfnMakeResident` makes exactly one residency operation: the mandated callback,

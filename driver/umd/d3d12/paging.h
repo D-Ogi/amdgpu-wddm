@@ -278,6 +278,16 @@ public:
         ++residency_releases_;
         return S_OK;
     }
+    // BD-313: this domain's reference is gone without a callback of ours. The runtime's Evict of an allocation the
+    // runtime never made resident went to VidMm with the one reference the allocation had, which was this one
+    // (heap-import.cpp, note_runtime_eviction). An Evict here would be a second one. No counter is raised: the
+    // import counts it.
+    HRESULT forget_residency(GpuMapping& mapping) noexcept {
+        if(mapping.owner_!=this) return E_INVALIDARG;
+        if(!mapping.resident_) return S_FALSE;
+        mapping.resident_=false;
+        return S_OK;
+    }
     // BD-052, for the engine's and the ICD's internal contexts, which the runtime never sees and therefore
     // never makes wait for a paging operation of ours (trial 153: a GPU job wrote a mapped range 2 ms after
     // its map fence and bugchecked 0x116).
