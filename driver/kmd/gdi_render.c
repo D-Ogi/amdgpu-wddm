@@ -344,58 +344,177 @@ static BC250_GDI_RECT ClipToDst(const BC250_GDI_OP* Op, const BC250_GDI_RECT* R)
     return c;
 }
 
-static int RectsMeet(const BC250_GDI_RECT* A, const BC250_GDI_RECT* B)
+/* Item i writes pixels that item j reads, when Di and Dj are their clipped destination blocks: Di
+ * meets Dj moved back by the translation (Dj - d is item j's source block). Every term is inside
+ * CoordSane, so the sums cannot overflow. An empty block meets nothing. */
+static int WritesWhatReads(const BC250_GDI_RECT* Di, const BC250_GDI_RECT* Dj, int Ddx, int Ddy)
 {
-    return RectNonEmpty(A) && RectNonEmpty(B) && A->Left < B->Right && B->Left < A->Right &&
-        A->Top < B->Bottom && B->Top < A->Bottom;
+    return RectNonEmpty(Di) && RectNonEmpty(Dj) &&
+        Di->Left < Dj->Right - Ddx && Dj->Left - Ddx < Di->Right &&
+        Di->Top < Dj->Bottom - Ddy && Dj->Top - Ddy < Di->Bottom;
+}
+
+/* The lowest set bit of a nonzero word. */
+static unsigned int LowestBit(unsigned long long Word)
+{
+    unsigned int b = 0u;
+    if ((Word & 0xFFFFFFFFull) == 0u) { Word >>= 32; b += 32u; }
+    if ((Word & 0xFFFFull) == 0u) { Word >>= 16; b += 16u; }
+    if ((Word & 0xFFull) == 0u) { Word >>= 8; b += 8u; }
+    if ((Word & 0xFull) == 0u) { Word >>= 4; b += 4u; }
+    if ((Word & 0x3ull) == 0u) { Word >>= 2; b += 2u; }
+    if ((Word & 0x1ull) == 0u) b += 1u;
+    return b;
+}
+
+/* The work space of Bc250GdiSameSurfaceOrder, as BC250_GDI_ORDER_BYTES lays it out. */
+typedef struct GDI_ORDER_WORK {
+    BC250_GDI_RECT* Dst;        /* [Count] the clipped destination blocks; empty for a refused one */
+    unsigned short* Waiting;    /* [Count] the items that must still run before this one */
+    unsigned short* Sorted;     /* [Rows] the items with a block, by the low edge on the axis */
+    unsigned long long* Ready;  /* [Words] one bit per item that waits for nothing and is not placed */
+    unsigned int Rows, Words;
+    int Vertical;               /* the axis: 1 sorts by Top, 0 by Left */
+    int Longest;                /* the greatest extent of a block on the axis */
+} GDI_ORDER_WORK;
+
+static int AxisLo(const GDI_ORDER_WORK* W, const BC250_GDI_RECT* R) { return W->Vertical ? R->Top : R->Left; }
+static int AxisHi(const GDI_ORDER_WORK* W, const BC250_GDI_RECT* R) { return W->Vertical ? R->Bottom : R->Right; }
+
+static void SiftDown(const GDI_ORDER_WORK* W, unsigned int Root, unsigned int Size)
+{
+    unsigned short* heap = W->Sorted;
+    for (;;) {
+        unsigned int child = Root * 2u + 1u, top = Root;
+        unsigned short swap;
+        if (child < Size && AxisLo(W, &W->Dst[heap[child]]) > AxisLo(W, &W->Dst[heap[top]])) top = child;
+        if (child + 1u < Size && AxisLo(W, &W->Dst[heap[child + 1u]]) > AxisLo(W, &W->Dst[heap[top]]))
+            top = child + 1u;
+        if (top == Root) return;
+        swap = heap[Root]; heap[Root] = heap[top]; heap[top] = swap;
+        Root = top;
+    }
+}
+
+/* Sorted in place, by heap sort: no recursion and no allocation, Rows * log(Rows) steps. Items with
+ * one low edge come in any order, which changes nothing: every query below tests each candidate
+ * whole and only counts. */
+static void SortOnAxis(GDI_ORDER_WORK* W)
+{
+    unsigned int k;
+    if (W->Rows < 2u) return;
+    for (k = W->Rows / 2u; k-- > 0u;) SiftDown(W, k, W->Rows);
+    for (k = W->Rows - 1u; k > 0u; k--) {
+        unsigned short swap = W->Sorted[0];
+        W->Sorted[0] = W->Sorted[k]; W->Sorted[k] = swap;
+        SiftDown(W, 0u, k);
+    }
+}
+
+/* The first position in Sorted whose block can meet a block with low edge Lo on the axis: a block
+ * whose low edge is at or below Lo - Longest ends at or below Lo. Both terms are inside CoordSane. */
+static unsigned int FirstOnAxis(const GDI_ORDER_WORK* W, int Lo)
+{
+    unsigned int lo = 0u, hi = W->Rows;
+    int below = Lo - W->Longest;
+    while (lo < hi) {
+        unsigned int mid = lo + (hi - lo) / 2u;
+        if (AxisLo(W, &W->Dst[W->Sorted[mid]]) <= below) lo = mid + 1u; else hi = mid;
+    }
+    return lo;
 }
 
 int Bc250GdiSameSurfaceOrder(const BC250_GDI_OP* Op, const BC250_GDI_RECT* Subs, unsigned int Count,
-                             unsigned char* Order)
+                             unsigned short* Order, void* Work, unsigned int WorkBytes)
 {
-    unsigned int before[BC250_GDI_ORDER_MAX];
-    unsigned int placed = 0u, done = 0u, i, j, moved = 0u;
-    int ddx, ddy;
+    GDI_ORDER_WORK w;
+    unsigned int done = 0u, i, j, k, moved = 0u;
+    int ddx, ddy, d, minX = 0, maxX = 0, minY = 0, maxY = 0, wide = 0, tall = 0;
 
-    if (!Op || !Subs || !Order || Count > BC250_GDI_ORDER_MAX) return 0;
-    for (i = 0; i < Count; i++) Order[i] = (unsigned char)i;
+    if (!Op || !Subs || !Order || Count > BC250_GDI_ORDER_LIMIT) return 0;
+    for (i = 0; i < Count; i++) Order[i] = (unsigned short)i;
     if (Op->OpCode != BC250_GDIOP_BITBLT || Op->SrcAllocationIndex != Op->DstAllocationIndex)
         return 1;
     if (!RectSane(&Op->DstRect) || !RectSane(&Op->SrcRect)) return 0;
     ddx = Op->DstRect.Left - Op->SrcRect.Left;
     ddy = Op->DstRect.Top - Op->SrcRect.Top;
     if (ddx == 0 && ddy == 0) return 1;     /* each item reads only its own pixels */
+    /* The alignment is the caller's (gdi_render.h); this file uses no standard header to test it. */
+    if (!Work || WorkBytes < BC250_GDI_ORDER_BYTES(Count)) return 0;
+    w.Dst = (BC250_GDI_RECT*)Work;
+    w.Waiting = (unsigned short*)(w.Dst + Count);
+    w.Sorted = (unsigned short*)((unsigned char*)w.Waiting + ((Count * 2u + 7u) & ~7u));
+    w.Ready = (unsigned long long*)((unsigned char*)w.Sorted + ((Count * 2u + 7u) & ~7u));
+    w.Words = (Count + 63u) / 64u;
+    w.Rows = 0u;
     for (i = 0; i < Count; i++) {
-        BC250_GDI_RECT di;
-        before[i] = 0u;
-        /* A rectangle Bc250GdiPlanItem will refuse draws nothing and needs no place. */
-        if (!RectSane(&Subs[i])) continue;
-        di = ClipToDst(Op, &Subs[i]);
-        for (j = 0; j < Count; j++) {
-            BC250_GDI_RECT sj;
-            if (j == i || !RectSane(&Subs[j])) continue;
-            /* Item j's source block: its clipped destination block moved back by the translation.
-             * Both terms are inside CoordSane, so the sums cannot overflow. */
-            sj = ClipToDst(Op, &Subs[j]);
-            sj.Left -= ddx; sj.Right -= ddx; sj.Top -= ddy; sj.Bottom -= ddy;
-            /* Item i writes pixels that item j reads: j must run first. */
-            if (RectsMeet(&di, &sj)) before[i] |= 1u << j;
+        BC250_GDI_RECT* r = &w.Dst[i];
+        /* A rectangle Bc250GdiPlanItem will refuse draws nothing and needs no place: it becomes
+         * the empty block, which meets nothing and is not in Sorted. */
+        if (RectSane(&Subs[i])) {
+            *r = ClipToDst(Op, &Subs[i]);
+        } else {
+            r->Left = r->Top = r->Right = r->Bottom = 0;
         }
+        if (!RectNonEmpty(r)) continue;
+        if (w.Rows == 0u || r->Left < minX) minX = r->Left;
+        if (w.Rows == 0u || r->Right > maxX) maxX = r->Right;
+        if (w.Rows == 0u || r->Top < minY) minY = r->Top;
+        if (w.Rows == 0u || r->Bottom > maxY) maxY = r->Bottom;
+        if (r->Right - r->Left > wide) wide = r->Right - r->Left;
+        if (r->Bottom - r->Top > tall) tall = r->Bottom - r->Top;
+        w.Sorted[w.Rows++] = (unsigned short)i;
+    }
+    /* The axis on which the longest block is the smaller part of the span, so that a query window
+     * holds fewer blocks: rows of one band sort by Left, strips stacked on each other by Top. The
+     * products are of extents inside CoordSane, so they fit 64 bits. */
+    w.Vertical = (long long)tall * (long long)(maxX - minX) <= (long long)wide * (long long)(maxY - minY);
+    w.Longest = w.Vertical ? tall : wide;
+    d = w.Vertical ? ddy : ddx;
+    SortOnAxis(&w);
+    for (i = 0; i < w.Words; i++) w.Ready[i] = 0u;
+    /* Waiting[i]: the items j that item i writes for (Dst[i] meets Dst[j] - d, so Dst[j] meets
+     * Dst[i] + d). Only the blocks whose low edge is inside the window of that block can meet it.
+     * Count - 1 fits, because Count is at most BC250_GDI_ORDER_LIMIT. */
+    for (i = 0; i < Count; i++) {
+        unsigned int n = 0u;
+        if (RectNonEmpty(&w.Dst[i])) {
+            int hi = AxisHi(&w, &w.Dst[i]) + d;
+            for (k = FirstOnAxis(&w, AxisLo(&w, &w.Dst[i]) + d);
+                 k < w.Rows && AxisLo(&w, &w.Dst[w.Sorted[k]]) < hi; k++) {
+                j = w.Sorted[k];
+                if (j != i && WritesWhatReads(&w.Dst[i], &w.Dst[j], ddx, ddy)) n++;
+            }
+        }
+        w.Waiting[i] = (unsigned short)n;
+        if (n == 0u) w.Ready[i / 64u] |= 1ull << (i % 64u);
     }
     /* Kahn's order, always taking the lowest index that is free. An order that is already safe is
-     * then given back unchanged, item for item. */
+     * then given back unchanged, item for item. When item i is placed, each item j that waits for
+     * it (Dst[j] meets Dst[i] - d) waits for one fewer; a ready or placed item waits for nothing
+     * that is left. */
     while (done < Count) {
-        for (i = 0; i < Count; i++)
-            if (!(placed & (1u << i)) && (before[i] & ~placed) == 0u) break;
-        if (i == Count) {
+        for (j = 0; j < w.Words && w.Ready[j] == 0u; j++) {}
+        if (j == w.Words) {
             /* A cycle: no order of whole items is safe. A clip region of GDI cannot make one, so
              * this is a malformed command; the given order stays and the caller counts it. */
-            for (j = 0; j < Count; j++) Order[j] = (unsigned char)j;
+            for (j = 0; j < Count; j++) Order[j] = (unsigned short)j;
             return 0;
         }
+        i = j * 64u + LowestBit(w.Ready[j]);
+        w.Ready[j] &= w.Ready[j] - 1u;
         if (i != done) moved = 1u;
-        Order[done++] = (unsigned char)i;
-        placed |= 1u << i;
+        Order[done++] = (unsigned short)i;
+        if (RectNonEmpty(&w.Dst[i])) {
+            int hi = AxisHi(&w, &w.Dst[i]) - d;
+            for (k = FirstOnAxis(&w, AxisLo(&w, &w.Dst[i]) - d);
+                 k < w.Rows && AxisLo(&w, &w.Dst[w.Sorted[k]]) < hi; k++) {
+                j = w.Sorted[k];
+                if (w.Waiting[j] == 0u || !WritesWhatReads(&w.Dst[j], &w.Dst[i], ddx, ddy)) continue;
+                w.Waiting[j]--;
+                if (w.Waiting[j] == 0u) w.Ready[j / 64u] |= 1ull << (j % 64u);
+            }
+        }
     }
     return moved ? 2 : 1;
 }

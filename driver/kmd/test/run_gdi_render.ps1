@@ -7,13 +7,21 @@
 #
 #   pwsh driver\kmd\test\run_gdi_render.ps1 -Out P:\BC-250\scratch\gdi-hw\out
 #
+# Negative controls of the same-surface order (BD-306, tools\quality\quick.ps1). Each builds the test against
+# a COPY of gdi_render.c under -Out with one rule changed, and the test must then fail in the named cases:
+#   -Mutation order-limit-32  the order gives up above 32 sub-rectangles (the limit of the first version);
+#                             the 40-strip scrolls down and up must fail.
+#   -Mutation order-window    the sorted window forgets the longest block, so it misses blocks that start
+#                             before the query; the random comparison with the definition must fail.
+#
 # Everything is written under -Out, never into the repository and never onto drive C:.
 
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
     [string]$Out = "$Root\scratch\gdi-render",
     [string]$Kits = "$Root\toolchain\nuget",
-    [string]$KitVersion = '10.0.26100.0'
+    [string]$KitVersion = '10.0.26100.0',
+    [ValidateSet('none', 'order-limit-32', 'order-window')][string]$Mutation = 'none'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,16 +51,51 @@ $env:LIB = ''
 $incUser = @("/I$kmd", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$($msvc.FullName)\include")
 
+$render = Join-Path $kmd 'gdi_render.c'
+if ($Mutation -ne 'none') {
+    # The copy finds gdi_render.h and the other headers through /I$kmd; the tree stays unchanged.
+    $source = [IO.File]::ReadAllText($render)
+    $nl = if ($source.Contains("`r`n")) { "`r`n" } else { "`n" }
+    if ($Mutation -eq 'order-limit-32') {
+        $anchor = '    if (!Op || !Subs || !Order || Count > BC250_GDI_ORDER_LIMIT) return 0;'
+        $replacement = '    if (!Op || !Subs || !Order || Count > 32u) return 0;'
+    } else {
+        $anchor = "    int below = Lo - W->Longest;$nl"
+        $replacement = "    int below = Lo;$nl"
+    }
+    $hits = $source.Split(@($anchor), [StringSplitOptions]::None).Count - 1
+    if ($hits -ne 1) { throw "negative control $Mutation : its line matched $hits times, once expected" }
+    $render = Join-Path $Out 'gdi_render_mutant.c'
+    [IO.File]::WriteAllText($render, $source.Replace($anchor, $replacement))
+    Write-Host "mutation $Mutation : $($replacement.Trim())"
+}
+
 Write-Host 'compile and link (host, no WDK header)'
 Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/TC', '/W4', '/WX', '/Od', '/Zi') + $incUser +
     @("/Fo$obj\", "/Fd$obj\cl.pdb", "/Fe$Out\gdi_render_test.exe") +
-    @((Join-Path $kmd 'gdi_render.c'), (Join-Path $kmd 'gdi_emit.c'), (Join-Path $kmd 'gfx_copy.c'),
+    @($render, (Join-Path $kmd 'gdi_emit.c'), (Join-Path $kmd 'gfx_copy.c'),
       (Join-Path $here 'gdi_render_test.c')) +
     @("/link", "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64", "/LIBPATH:$($msvc.FullName)\lib\x64"))
 
 Write-Host 'run'
-& "$Out\gdi_render_test.exe"
+$log = @(& "$Out\gdi_render_test.exe" 2>&1 | ForEach-Object { "$_" })
 $code = $LASTEXITCODE
+$log | ForEach-Object { Write-Host $_ }
+
+if ($Mutation -ne 'none') {
+    # A control passes only when the test exits 1 (a crash or another code is not a detection) and the
+    # cases named for it fail.
+    $named = @{
+        'order-limit-32' = @('same-surface order 40 strips down:', 'same-surface order 40 strips up:')
+        'order-window'   = @('same-surface order random trial')
+    }[$Mutation]
+    $missing = @($named | Where-Object { $n = $_; -not ($log | Where-Object { $_.Contains($n) }) })
+    if ($code -ne 1 -or $missing.Count -ne 0) {
+        throw "negative control $Mutation : exit $code, cases not failed: $($missing -join '; ')"
+    }
+    Write-Host "negative control $Mutation : the test failed as required ($($named -join ', '))"
+    exit 0
+}
 
 Write-Host 'compile-check (kernel flags, same source, no link)'
 $kernFlags = @('/nologo', '/c', '/TC', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',

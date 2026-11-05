@@ -73,6 +73,7 @@ C_ASSERT(D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 == BC250_MPO3_COLOR_SRGB);
 #define BC250_WDDM_TAG 'wW2B'
 #define BC250_WDDM_LOG_CALLS 8              // how many first calls of each DDI reach the guard log
 #define BC250_WDDM_PRESENT_LIST_QWORDS 12u  // how much of a present's allocation list is read: 3 entries of either arm
+#define WDDM_GDI_ORDER_STACK 16u            // BD-306: sub-rectangles a RenderGdi command orders on the stack
 // KMD196: buckets of the held-submission histogram, microseconds. The edges are chosen so that the regimes this
 // change is about fall in different buckets and cannot be confused in a summary: the spin catch (<100, 100-199),
 // the plain submit cost of about 550 us plus the ~130 us the blocking job still had to run (500-999), the 4.7 ms
@@ -1001,8 +1002,9 @@ typedef struct _BC250_WDDM {
     // change no pixel; SameOrdered counts the items whose source and destination blocks meet and that
     // were copied in bands (gdi_pixel.h, Bc250GdiBand*). SameReordered counts the commands whose
     // sub-rectangles had to be visited in another order than the given one (Bc250GdiSameSurfaceOrder),
-    // SameUnordered the ones no order could make safe or that had too many sub-rectangles to check:
-    // a nonzero SameUnordered can mean wrong pixels.
+    // SameUnordered the ones no order could make safe (a cycle) or that got no work space for the
+    // order (no memory, or more than BC250_GDI_ORDER_LIMIT sub-rectangles, which is over 1 MB of
+    // rectangles in one command): a nonzero SameUnordered can mean wrong pixels.
     volatile LONG64 GdiRenderSameSkip, GdiRenderSameOrdered;
     volatile LONG64 GdiRenderSameReordered, GdiRenderSameUnordered;
     // HLK gap G1: the batch capacity contract of gdi_batch.h. BatchRefused counts the calls whose
@@ -10297,7 +10299,14 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
         UINT subCount, next, slots, sub, why, start = offset;
         unsigned int pattern = 0;
         int disjoint = 1, ordered;
-        unsigned char order[BC250_GDI_ORDER_MAX];
+        const unsigned short* order = 0;
+        void* orderBlock = 0;
+        // BD-306: the work space of a command of up to WDDM_GDI_ORDER_STACK sub-rectangles, about
+        // the stack the 32-item version used (616 bytes against 544); a larger one takes one pool
+        // block for the call.
+        BC250_GDI_RECT orderRects[WDDM_GDI_ORDER_STACK];
+        unsigned short orderStack[WDDM_GDI_ORDER_STACK];
+        unsigned long long orderWork[BC250_GDI_ORDER_BYTES(WDDM_GDI_ORDER_STACK) / 8u];
         // The structure of this command, read exactly as the counting walk above read it.
         int kind = Bc250GdiWalkCommand(buffer, bytes, start, &op, &subRects, &subCount, &next, &why);
 
@@ -10357,19 +10366,48 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
         }
         // BD-306: a BitBlt inside one allocation with more than one sub-rectangle. One item can
         // write pixels that a later item still has to read, so the items are visited in the order
-        // Bc250GdiSameSurfaceOrder gives. CDD's own order is normally that order already
-        // (SameReordered then stays 0); a command it cannot order is drawn in the given order and
-        // counted, because DxgkDdiRenderGdi has no status to refuse it with.
+        // Bc250GdiSameSurfaceOrder gives, for any count. CDD's own order is normally that order
+        // already (SameReordered then stays 0). A command it cannot order (a cycle, or no memory
+        // for the work space) is drawn in the given order and counted, because DxgkDdiRenderGdi
+        // has no status to refuse it with. The DDI page gives no IRQL, so the block is nonpaged
+        // and is not asked for above DISPATCH_LEVEL.
         ordered = 0;
         if (op.OpCode == BC250_GDIOP_BITBLT && op.SrcAllocationIndex == op.DstAllocationIndex &&
             subCount > 1u)
         {
             int orderResult = 0;
-            if (subCount <= BC250_GDI_ORDER_MAX)
+            BC250_GDI_RECT* rects = 0;
+            unsigned short* orderOut = 0;
+            void* work = 0;
+            unsigned int workBytes = 0u;
+            if (subCount <= WDDM_GDI_ORDER_STACK)
             {
-                BC250_GDI_RECT orderRects[BC250_GDI_ORDER_MAX];
-                for (sub = 0; sub < subCount; sub++) Bc250GdiWalkRect(&subRects[sub], &orderRects[sub]);
-                orderResult = Bc250GdiSameSurfaceOrder(&op, orderRects, subCount, order);
+                rects = orderRects;
+                orderOut = orderStack;
+                work = orderWork;
+                workBytes = (unsigned int)sizeof(orderWork);
+            }
+            else if (subCount <= BC250_GDI_ORDER_LIMIT && KeGetCurrentIrql() <= DISPATCH_LEVEL)
+            {
+                // Rectangles, then the order padded to 8 bytes, then the work space. subCount is
+                // at most BC250_GDI_ORDER_LIMIT, so the size is below 3 MB and cannot overflow.
+                SIZE_T orderBytes = ((SIZE_T)subCount * sizeof(unsigned short) + 7u) & ~(SIZE_T)7u;
+                workBytes = BC250_GDI_ORDER_BYTES(subCount);
+                orderBlock = ExAllocatePool2(POOL_FLAG_NON_PAGED,
+                                             (SIZE_T)subCount * sizeof(BC250_GDI_RECT) + orderBytes + workBytes,
+                                             BC250_WDDM_TAG);
+                if (orderBlock)
+                {
+                    rects = (BC250_GDI_RECT*)orderBlock;
+                    orderOut = (unsigned short*)(rects + subCount);
+                    work = (unsigned char*)orderOut + orderBytes;
+                }
+            }
+            if (rects)
+            {
+                for (sub = 0; sub < subCount; sub++) Bc250GdiWalkRect(&subRects[sub], &rects[sub]);
+                orderResult = Bc250GdiSameSurfaceOrder(&op, rects, subCount, orderOut, work, workBytes);
+                order = orderOut;
             }
             if (orderResult == 2)
             {
@@ -10443,6 +10481,7 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
             }
             InterlockedIncrement64(&wddm->GdiRenderItems);
         }
+        if (orderBlock) ExFreePoolWithTag(orderBlock, BC250_WDDM_TAG);
         if (overflow) break;
     }
     used = Bc250GdiBatchEnd(&batch);
