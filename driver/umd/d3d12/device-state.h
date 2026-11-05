@@ -8,6 +8,8 @@
 #include "present-context.h"
 #include "../app-settings/app-settings.h"
 #include <memory>
+#include <vector>
+#include <algorithm>
 namespace native12 {
 // The application-specific driver state of one device (app-state.h, docs/design/app-specific-driver-state.md):
 // what CreateDevice found and, when the runtime gave a blob of this build, the profile of that blob. blob_status
@@ -77,6 +79,12 @@ struct Device {
     // The application-specific driver state, set by CreateDevice of a CORE 0113 or later device and null before
     // and on an older one. The state is held through a pointer for the size reason below.
     std::unique_ptr<DeviceAppState> app_state;
+    // BD-312: the kernel allocations that OfferResources gave to the kernel and no ReclaimResources took back yet,
+    // sorted (native-residency-ddi.cpp). Reclaim gives the kernel only these: an allocation whose offer the kernel
+    // refused stays the application's, and it is reported as not discarded. offer_lock is innermost: no other lock
+    // of this module is taken under it, and only the runtime's offer and reclaim callbacks are called under it.
+    SRWLOCK offer_lock=SRWLOCK_INIT;
+    std::vector<D3DKMT_HANDLE> offered;
     // The per-application settings this device applies: those of an application-specific driver state blob that
     // CreateDevice used, or else the process settings (app-settings.h).
     const amdgpu_wddm::app_settings::Settings& settings() const noexcept {
@@ -97,6 +105,17 @@ struct Device {
         }
     }
 };
+// BD-312: an allocation that is about to be destroyed leaves the offered list, so that a later allocation with the same
+// handle value is not taken for an offered one. A destroyed allocation cannot be reclaimed any more; the kernel forgets
+// its offer with it. No memory is allocated, so this cannot fail.
+inline void forget_offered(Device& device,D3DKMT_HANDLE allocation) noexcept {
+    if(!allocation)return;
+    AcquireSRWLockExclusive(&device.offer_lock);
+    auto& list=device.offered;
+    const auto at=std::lower_bound(list.begin(),list.end(),allocation);
+    if(at!=list.end() && *at==allocation)list.erase(at);
+    ReleaseSRWLockExclusive(&device.offer_lock);
+}
 // Serializes the queue operations of one device: queue creation and destruction, ExecuteCommandLists,
 // UpdateTileMappings, CopyTileMappings and Present. The runtime serializes each of them per queue
 // (DirectX-Specs CPUEfficiency.md, "Command Queue Operations"), but not across the queues of a device,

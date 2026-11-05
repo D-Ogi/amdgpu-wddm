@@ -1366,12 +1366,96 @@ int main(){
   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
   heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;expected_type=0;
   pending=false;resident_pending=false;completed=20;
-  // The policy the driver ships (from_switches with no switch set: progress_gate on, quarantine depth 3),
-  // with a progress source bound and the device-wide progress unretired, which is the normal in-game state.
+  // The quarantine of the policy the driver ships (progress_gate on, quarantine depth 3) with the hand-back at
+  // creation, which is the import-residency-release-on arm since tester.36; the shipped hold is the BD-313 block
+  // above. With a progress source bound and the device-wide progress unretired, which is the normal in-game state.
   // The first version of this fix gated the hand-back on that progress and therefore left the heap resident
   // in exactly this configuration, while its own test ran with ImportReleasePolicy::off(); the gate belongs
   // to the release quarantine, and no gate may postpone this hand-back.
-  ImportReleasePolicy shipped{};shipped.quarantine_depth=3;shipped.quarantine_count_cap=64;
+  // ---- BD-313: under the shipped hold, the first runtime residency operation of a heap ends the import's hold ----
+  // The policy is the real one (from_switches: residency_hold since tester.36). VidMm's count of an allocation is
+  // the import's (makes - evictions of ours) plus the runtime's MakeResident minus the runtime's Evict, both of which
+  // native-residency-ddi.cpp makes before its notice. HLK VerifyStandard needs 0 after the application's Evict.
+  {
+   const ImportReleasePolicy real=ImportReleasePolicy::from_switches();
+   assert(real.residency_hold);
+   RuntimeHeapImports r(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,real);
+   assert(r.initialize()==S_OK);
+   // (a) The repro and its fix. The creation keeps the hold (AMZI); the runtime's MakeResident ends it with one
+   //     Evict of ours (E); the application's Evict leaves nothing; the release makes no second Evict.
+   engine_ddi::ImportedMemory a{};
+   unsigned made=makes_resident,evicted=evictions;
+   events.clear();assert(r.allocate(&req,&a)==S_OK && events=="AMZI" && evictions==evicted);
+   D3DKMT_HANDLE ha[]={a.allocation};
+   events.clear();r.note_runtime_residency(ha,1);
+   assert(events=="E" && evictions==evicted+1 && r.hold_handbacks()==1 && !r.hold_failures());
+   events.clear();r.note_runtime_eviction(ha,1);
+   assert(events.empty() && !r.hold_forgotten());
+   // Ours: one make, one Evict. The runtime's: one MakeResident, one Evict. VidMm's count is 0.
+   assert(makes_resident-made==1 && evictions-evicted==1);
+   // (b) A second MakeResident and an allocation of nobody change nothing.
+   events.clear();r.note_runtime_residency(ha,1);
+   D3DKMT_HANDLE alien[]={a.allocation+1000};r.note_runtime_residency(alien,1);r.note_runtime_eviction(alien,1);
+   assert(events.empty() && r.hold_handbacks()==1);
+   // (c) The runtime evicts before any MakeResident of its own (a heap created non-resident, or a runtime that does
+   //     not make a new heap resident): its Evict took the import's reference, the one there was. The mapping
+   //     forgets it, and no Evict of ours follows, not even at the release.
+   engine_ddi::ImportedMemory c{};
+   made=makes_resident;evicted=evictions;
+   events.clear();assert(r.allocate(&req,&c)==S_OK && events=="AMZI");
+   D3DKMT_HANDLE hc[]={c.allocation};
+   events.clear();r.note_runtime_eviction(hc,1);
+   assert(events.empty() && r.hold_forgotten()==1 && evictions==evicted);
+   // Ours: one make, no Evict. The runtime's: one Evict. VidMm's count is 0.
+   assert(makes_resident-made==1 && evictions==evicted);
+   events.clear();r.note_runtime_residency(hc,1);  // the application makes it resident again: the runtime's alone
+   assert(events.empty() && r.hold_handbacks()==1);
+   // (d) A refused hand-back keeps the hold and the device; the next notice gives it back. A refusal followed by the
+   //     application's Evict gives it back too, so nothing of ours is left after that Evict.
+   engine_ddi::ImportedMemory d{};
+   evicted=evictions;
+   events.clear();assert(r.allocate(&req,&d)==S_OK && events=="AMZI");
+   D3DKMT_HANDLE hd[]={d.allocation};
+   fail_evict=true;events.clear();r.note_runtime_residency(hd,1);
+   assert(events=="E" && r.hold_failures()==1 && evictions==evicted);
+   fail_evict=false;events.clear();r.note_runtime_eviction(hd,1);
+   assert(events=="E" && evictions==evicted+1 && r.hold_handbacks()==2 && r.hold_forgotten()==1 && r.hold_failures()==1);
+   events.clear();r.note_runtime_eviction(hd,1);
+   assert(events.empty());
+   // (e) Engine memory, which no runtime object names: the hold stays for its life, and the release's unmap gives it.
+   engine_ddi::ImportedMemory e{};
+   evicted=evictions;
+   events.clear();assert(r.allocate(&req,&e)==S_OK && events=="AMZI");
+   const auto handbacks=r.hold_handbacks();
+   // (f) Several allocations in one notice, one of them twice and one unknown: each record once.
+   engine_ddi::ImportedMemory f1{},f2{};
+   assert(r.allocate(&req,&f1)==S_OK && r.allocate(&req,&f2)==S_OK);
+   D3DKMT_HANDLE hf[]={f1.allocation,a.allocation+2000,f2.allocation,f1.allocation};
+   const auto before_f=evictions;
+   events.clear();r.note_runtime_residency(hf,4);
+   assert(events=="EE" && evictions==before_f+2 && r.hold_handbacks()==handbacks+2);
+   // (g) A notice after the release names no record any more.
+   const auto before_g=evictions;
+   assert(r.free(&a)==S_OK && r.free(&c)==S_OK && r.free(&d)==S_OK && r.free(&f1)==S_OK && r.free(&f2)==S_OK);
+   assert(r.free(&e)==S_OK);
+   events.clear();r.note_runtime_residency(ha,1);r.note_runtime_eviction(hc,1);
+   assert(r.hold_handbacks()==handbacks+2);
+   assert(r.close_after_engine_retirement()==S_OK && r.discard_metadata()==0);
+   // Of the six imports only (e) still held a reference at its release: exactly one Evict from the unmaps.
+   assert(evictions==before_g+1);
+  }
+  // The hand-back at creation (import-residency-release-on): the notices find nothing to end.
+  {
+   RuntimeHeapImports o(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,
+                        ImportReleasePolicy::off());
+   assert(o.initialize()==S_OK);
+   engine_ddi::ImportedMemory m{};
+   events.clear();assert(o.allocate(&req,&m)==S_OK && events=="AMZIE");
+   D3DKMT_HANDLE hm[]={m.allocation};
+   events.clear();o.note_runtime_residency(hm,1);o.note_runtime_eviction(hm,1);
+   assert(events.empty() && !o.hold_handbacks() && !o.hold_forgotten());
+   assert(o.free(&m)==S_OK && o.close_after_engine_retirement()==S_OK && o.discard_metadata()==0);
+  }  ImportReleasePolicy shipped{};shipped.quarantine_depth=3;shipped.quarantine_count_cap=64;
   shipped.quarantine_age_ms=250;shipped.quarantine_byte_cap=64ull<<20;shipped.progress_gate=true;
   RuntimeHeapImports own(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,
                          identity,shipped);
@@ -1526,9 +1610,8 @@ int main(){
    assert(refused.close_after_engine_retirement()==S_OK && events=="UP" && evictions==refused_evictions);
    assert(!refused.owns_allocation(open.allocation) && refused.discard_metadata()==0);
   }
-  // The bisect arm: with ImportReleasePolicy::residency_hold (switch import-residency-hold-on) the import
-  // keeps the reference for the heap's whole life, which is the pre-BD-052 behaviour and the defect. The
-  // Evict then comes from the unmap of the release, as it did before.
+  // The hold (the default, ImportReleasePolicy::residency_hold) with no runtime residency operation: the import
+  // keeps the reference for the heap's whole life, and the Evict comes from the unmap of the release.
   {
    ImportReleasePolicy hold=ImportReleasePolicy::off();hold.residency_hold=true;
    RuntimeHeapImports kept(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,
@@ -1560,9 +1643,12 @@ int main(){
   "M15.14 scan-out primary from the trailer of the moment (one query per primary, a mode change both ways, "
   "the kernel driver's switch closed, a failed query and a format without a scan-out row all composed; a chain "
   "made before the mode commit admitted only on a geometry the mode list offers), "
-  "BD-052 (under the policy the driver ships, with the device-wide progress unretired, the import gives its "
+  "BD-052 (in the arm import-residency-release-on, with the device-wide progress unretired, the import gives its "
   "residency reference back inside the creation DDI; the runtime's MakeResident and Evict make no residency "
   "callback of ours at all and are only counted; the release makes no second eviction; an internal submission "
   "is ordered on the paging queue's own fence only while that queue is behind and never after the queue is "
-  "closed; and the import-residency-hold-on bisect arm keeps the old lifetime hold)");
+  "closed; and the hold with no runtime notice lasts until the unmap), "
+  "BD-313 (under the shipped hold, the first runtime MakeResident gives the import's reference back with one Evict, "
+  "an Evict before any MakeResident forgets it with none, a refused hand-back is counted and retried at the next "
+  "notice, each record once per notice, nothing for an alien or released handle, and engine memory keeps the hold)");
 }

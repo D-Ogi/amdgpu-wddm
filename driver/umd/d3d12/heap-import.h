@@ -61,8 +61,9 @@ struct ImportReleasePolicy {
     uint64_t quarantine_byte_cap{};
     bool progress_gate{};
     // BD-052, and not part of the release gate: an imported heap keeps the driver's own residency reference
-    // for its whole life, as it did before that fix. The bisect arm of the trial 153 class only
-    // (release_import_residency); on it an application's Evict cannot page an imported heap out.
+    // past its creation DDI (release_import_residency). The default since tester.36 (the 3DMark CPG fault). Since
+    // BD-313 the hold ends at the first runtime MakeResident or Evict of the allocation (end_residency_hold), so it
+    // lasts the whole life of engine memory only, which the runtime never names.
     bool residency_hold{};
     bool holds() const noexcept {return progress_gate || quarantine_depth;}
     static ImportReleasePolicy off() noexcept {return {};}
@@ -134,6 +135,8 @@ class RuntimeHeapImports final {
     // (scanout_desktop_route_read, or a host test's double). The kernel driver's mode list is asked through
     // mode_list_reader_ (scanout_mode_list_read, or a double) for a chain that is not the committed mode.
     Adapter* adapter_{};
+    // BD-312: the device whose offered list an allocation leaves when this object releases it (forget_offered).
+    Device* owner_{};
     unsigned long force_cpu_{};
     unsigned (*desktop_route_reader_)(bc250_desktop_route*) noexcept{};
     ScanoutModeList (*mode_list_reader_)(UINT64 luid,unsigned width,unsigned height) noexcept{};
@@ -146,6 +149,13 @@ class RuntimeHeapImports final {
     // BD-052: runtime residency operations this device saw, for the trace and the lab arm. The driver makes
     // no residency operation of its own for them (note_runtime_residency).
     std::atomic<uint64_t> runtime_residencies_{},runtime_evictions_{};
+    // BD-313: the ends of the residency hold (note_runtime_residency, note_runtime_eviction). hold_handbacks_: the
+    // import's reference given back after a runtime MakeResident; hold_forgotten_: the reference that a runtime Evict
+    // took with it; hold_failures_: hand-backs the kernel refused, each retried at the next notice.
+    std::atomic<uint64_t> hold_handbacks_{},hold_forgotten_{},hold_failures_{},hold_epoch_{};
+    // The end of the hold for the records of these allocations, after a runtime MakeResident (evicted false) or a
+    // runtime Evict (evicted true). Never under lock_.
+    void end_residency_hold(const D3DKMT_HANDLE* allocations,unsigned count,bool evicted) noexcept;
     std::atomic<bool> active_{true},paging_open_{};
     bool initialized_{};
     Record* find(D3DKMT_HANDLE) const noexcept;   // under lock_
@@ -176,9 +186,9 @@ class RuntimeHeapImports final {
     // lock_, exactly where map() and make_resident() are called for the same mapping, so no runtime
     // callback is ever made under lock_ and the leaf rule above still holds. Unconditional: no gate, no
     // progress source may leave a heap resident when the creation DDI returns, which is the whole
-    // requirement (DirectX-Specs ResourceHeaps.md, Residency DDIs, line 1011). The one exception is the
-    // bisect arm ImportReleasePolicy::residency_hold (switch import-residency-hold-on), which keeps the
-    // pre-BD-052 lifetime hold.
+    // requirement (DirectX-Specs ResourceHeaps.md, Residency DDIs, line 1011). It runs only in the arm
+    // import-residency-release-on; by default ImportReleasePolicy::residency_hold keeps the reference until the
+    // first runtime residency operation of the allocation (BD-313, end_residency_hold).
     HRESULT release_import_residency(Record&) noexcept;
 public:
     RuntimeHeapImports(Device&,bc250::umd::RuntimeDomain&,VkPhysicalDevice,VkDevice,
@@ -231,12 +241,14 @@ public:
     // CREATE_NOT_RESIDENT bit at all (WDK 10.0.26100 d3d12umddi.h, lines 307-317): the runtime expresses
     // that flag by not calling pfnMakeResident, so the only way for the driver to honour it is to leave no
     // residency reference of its own behind (release_import_residency).
-    //   The two notices below make no residency operation at all. The one residency operation of a
+    //   The two notices below make no residency operation of the runtime's: the one residency operation of a
     // pfnMakeResident is the mandated callback with the runtime's own flags and the runtime's paging queue
     // (native-residency-ddi.cpp, RuntimeResidency::make_resident; "the driver must forward the flags passed
     // in to both MakeResident and Evict to the callback routines", line 978). A second MakeResidentCb of
     // this driver's own would take a second VidMm residency reference that the application's Evict cannot
-    // drop, which is the defect itself. They count what the runtime did, for the trace and the lab arm.
+    // drop, which is the defect itself. They count what the runtime did, for the trace and the lab arm, and,
+    // under residency_hold, they end the import's own hold on the allocations they name (BD-313,
+    // end_residency_hold): the one operation of ours on this path is the Evict that gives that hold back.
     void note_runtime_residency(const D3DKMT_HANDLE* allocations,unsigned count) noexcept;
     void note_runtime_eviction(const D3DKMT_HANDLE* allocations,unsigned count) noexcept;
     // BD-052: orders everything this context submits after this call behind every paging operation this
@@ -252,6 +264,9 @@ public:
     unsigned residency_orders() const noexcept {return paging_.ordered_waits();}
     uint64_t runtime_residencies() const noexcept {return runtime_residencies_.load();}
     uint64_t runtime_evictions() const noexcept {return runtime_evictions_.load();}
+    uint64_t hold_handbacks() const noexcept {return hold_handbacks_.load();}
+    uint64_t hold_forgotten() const noexcept {return hold_forgotten_.load();}
+    uint64_t hold_failures() const noexcept {return hold_failures_.load();}
     HRESULT allocate(const engine_ddi::MemoryRequest*,engine_ddi::ImportedMemory*) noexcept;
     // BD-075: the open half. The allocation already exists, so this call makes no allocate callback: it maps
     // the handle the runtime opened, makes it resident, waits for the address, checks the alignment and imports
