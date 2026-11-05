@@ -111,7 +111,7 @@ enum bc250_gdi_refusal {
     Bc250GdiBadFormat,      /* source and destination channel order differ */
     Bc250GdiBadRect,        /* a rectangle that is not well ordered, or empty where it may not be */
     Bc250GdiBadGamma,       /* the gamma row or the lookup allocation's shape */
-    Bc250GdiBadSameSurface, /* a case the No*SameBitmap* caps said would not be asked for */
+    Bc250GdiBadSameSurface, /* one allocation twice, for an operation whose No*SameBitmap* cap is set */
     Bc250GdiRefusals
 };
 
@@ -122,7 +122,11 @@ enum bc250_gdi_work {
     Bc250GdiWorkNone = 0,
     Bc250GdiWorkCopy,       /* BITBLT, SRCCOPY, equal extents, one channel order: DMA_DATA copy */
     Bc250GdiWorkFill,       /* COLORFILL, PATCOPY: DMA_DATA fill from an immediate dword */
-    Bc250GdiWorkKernel      /* a compute dispatch; Kernel says which */
+    Bc250GdiWorkKernel,     /* a compute dispatch; Kernel says which */
+    /* A BITBLT whose source and destination are the same pixels of one allocation (BD-306): SRCCOPY,
+     * SRCAND and SRCOR leave every destination word as it is (S = D, and D & D = D | D = D), so the
+     * item draws nothing and emits nothing. SRCINVERT is not a no-op (D ^ D = 0) and is a kernel. */
+    Bc250GdiWorkSkip
 };
 
 /* The kernels, one per arithmetic class. Numbered, not derived from the opcode, because BITBLT and
@@ -136,6 +140,7 @@ enum bc250_gdi_kernel {
     Bc250GdiKernelStretchBlt,       /* gdi_stretchblt:     a point resample, any ROP-free copy */
     Bc250GdiKernelTransparentBlt,   /* gdi_transparentblt, with or without stretch */
     Bc250GdiKernelClearTypeBlend,   /* gdi_cleartypeblend */
+    Bc250GdiKernelBitBltOrdered,    /* gdi_bitblt_ordered: one surface, overlapping blocks, any ROP */
     Bc250GdiKernels
 };
 
@@ -174,6 +179,15 @@ typedef struct BC250_GDI_ITEM {
 
     unsigned int Work;                   /* bc250_gdi_work */
     unsigned int Kernel;                 /* bc250_gdi_kernel */
+
+    /* BITBLT inside one allocation (BD-306). Same is 1 when the source and the destination are one
+     * allocation. Ddx and Ddy are the command's translation, destination minus source, in pixels.
+     * Ordered is 1 when the source block of this item meets its destination block and they are not
+     * the same block: the item must then run in the bands of gdi_pixel.h (Bc250GdiBand*), as an
+     * engine copy with a CP_SYNC between bands or as gdi_bitblt_ordered, and never as an ordinary
+     * dispatch, whose work items run in no order. */
+    unsigned int Same, Ordered;
+    int Ddx, Ddy;
 } BC250_GDI_ITEM;
 
 /* Whether this driver image can perform EVERY operation of DXGK_RENDERKM_OPERATION, which is what
@@ -181,7 +195,7 @@ typedef struct BC250_GDI_ITEM {
  * for an individual operation, so a driver that sets the bit is sent all seven and DxgkDdiRenderGdi
  * has no way to refuse one (its return table bugchecks on any status but STATUS_SUCCESS).
  *
- * The answer is the presence of the six gfx1013 kernels of gdi_kernels.cl in this driver image, so
+ * The answer is the presence of the seven gfx1013 kernels of gdi_kernels.cl in this driver image, so
  * the function lives beside them in gdi_dispatch.c and reads the generated table rather than a
  * constant: an image that lost a kernel answers 0, the capability bit stays clear, and the caps
  * answer is byte for byte what the release before this one gave. It is a function and not a #if so
@@ -219,12 +233,32 @@ int Bc250GdiPlanItem(const BC250_GDI_OP* Op, const BC250_GDI_SURFACE* Surfaces, 
  *   - a 1:1 STRETCHBLT copy is the point resample of gdi_stretchblt at Ws == Wd and Hs == Hd;
  *   - a COLORFILL fill is PATCOPY, which gdi_colorfill_rop performs ("Dst = Color").
  *
- * A same-surface command cannot reach here (the No*SameBitmap* caps are set and the admission
- * refuses one anyway), so the unordered work items of a dispatch cannot race a copy's own rows.
+ * An Ordered item (a BITBLT inside one allocation whose source and destination blocks meet) becomes
+ * gdi_bitblt_ordered and never gdi_bitblt_rop: the work items of an ordinary dispatch run in no
+ * order and could write a pixel before another work item reads it. Every other same-surface item
+ * has disjoint source and destination blocks, or the same block, and is safe in any order.
  * Returns 0 for anything else, leaving Item alone. An item that already is a kernel item is left
  * as it is and answers 1.
  */
 int Bc250GdiItemToKernel(const BC250_GDI_OP* Op, BC250_GDI_ITEM* Item);
+
+/* The order of the sub-rectangles of a BITBLT inside one allocation (BD-306). Each item is done in
+ * bands (gdi_pixel.h), but two items of one command can also meet: item i can write pixels that
+ * item j reads. j must then run before i, because the copy must read every source pixel before it
+ * writes any destination pixel. CDD gives the sub-rectangles of a scroll in such an order already
+ * (it enumerates the clip region with a direction); this function does not depend on that. It
+ * writes into Order[0..Count) the order to visit Subs in, and returns
+ *   1  the given order is safe, and Order is 0, 1, 2, ...;
+ *   2  another order was needed, and Order holds it;
+ *   0  no order of whole items is safe, or Count is above BC250_GDI_ORDER_MAX, or the arguments
+ *      are invalid. Order is then 0, 1, 2, ... (when Order can hold it) and the caller counts it.
+ * Any command that is not a same-surface BITBLT answers 1. The cost is Count * Count rectangle
+ * tests, which is why Count is bounded. The order between items that do not meet is unchanged,
+ * and the items of one command have disjoint destinations, so no write-after-write order exists
+ * between them. */
+#define BC250_GDI_ORDER_MAX 32u
+int Bc250GdiSameSurfaceOrder(const BC250_GDI_OP* Op, const BC250_GDI_RECT* Subs, unsigned int Count,
+                             unsigned char* Order);
 
 /* The contract's destination-to-source transform, exactly. Xd and Yd are absolute destination
  * coordinates. Both are total: with Ws==Wd they reduce to the translation the BITBLT Remarks give. */

@@ -54,6 +54,93 @@ unsigned int Bc250EmitGdiFillSpan(unsigned int* buffer, unsigned int capacity,
     return written;
 }
 
+/* The packets of one band line of an Ordered copy (BD-306): which row, which byte range of it. */
+static void OrderedLine(const BC250_GDI_ITEM* item, unsigned int band, unsigned int line,
+    unsigned int bpp, unsigned long long* srcAt, unsigned long long* dstAt, unsigned int* bytes)
+{
+    unsigned int first = Bc250GdiBandFirst(band, item->DstWidth, item->DstHeight, item->Ddx, item->Ddy);
+    unsigned int span = Bc250GdiBandSpan(band, item->DstWidth, item->DstHeight, item->Ddx, item->Ddy);
+    unsigned int row, column;
+    if (Bc250GdiBandRows(item->Ddx, item->Ddy)) {
+        /* Rows of a band are independent of each other; they go in the band's own direction only
+         * so that the stream reads in the order the copy moves. */
+        row = item->Ddy > 0 ? first + span - 1u - line : first + line;
+        column = 0u;
+        *bytes = item->RowBytes;
+    } else {
+        row = line;
+        column = first;
+        *bytes = span * bpp;
+    }
+    *srcAt = item->SrcOffset + (unsigned long long)row * item->SrcPitch + (unsigned long long)column * bpp;
+    *dstAt = item->DstOffset + (unsigned long long)row * item->DstPitch + (unsigned long long)column * bpp;
+}
+
+static unsigned int OrderedLines(const BC250_GDI_ITEM* item, unsigned int band)
+{
+    return Bc250GdiBandRows(item->Ddx, item->Ddy) ?
+        Bc250GdiBandSpan(band, item->DstWidth, item->DstHeight, item->Ddx, item->Ddy) : item->DstHeight;
+}
+
+unsigned int Bc250GdiOrderedCopyDwords(const BC250_GDI_ITEM* item)
+{
+    unsigned long long total = 0;
+    unsigned int bands, band, bpp;
+    if (!item || item->Work != Bc250GdiWorkCopy || !item->Ordered || item->Stretch) return 0;
+    if (!item->DstWidth || !item->DstHeight || !item->RowBytes) return 0;
+    bpp = item->RowBytes / item->DstWidth;
+    if (!bpp || bpp * item->DstWidth != item->RowBytes) return 0;
+    bands = Bc250GdiBandCount(item->DstWidth, item->DstHeight, item->Ddx, item->Ddy);
+    for (band = 0; band < bands; band++) {
+        unsigned long long src, dst;
+        unsigned int bytes;
+        OrderedLine(item, band, 0u, bpp, &src, &dst, &bytes);
+        total += (unsigned long long)OrderedLines(item, band) * Bc250GfxCopyDwords(bytes);
+        if (total > 0xFFFFFFFFull) return 0;
+    }
+    return (unsigned int)total;
+}
+
+/* An Ordered copy, whole or not at all (BD-306). Every band starts with RAW_WAIT and ends with
+ * CP_SYNC. CP_SYNC makes the micro engine wait until that DMA is complete before it takes the next
+ * packet (radv_cp_dma.c: "the 3D engine waits until CP DMA is done"), so the next band cannot
+ * write a pixel the band before it still reads, and RAW_WAIT keeps a read behind every earlier
+ * write. Inside a band no packet writes a byte that another packet of the band reads (gdi_pixel.h),
+ * so the packets of a band need no order between them. */
+static int EmitOrderedCopy(const BC250_GDI_ITEM* item, unsigned long long sourceBase,
+    unsigned long long destinationBase, unsigned int* buffer, unsigned int capacity,
+    unsigned int* next, unsigned int* written)
+{
+    unsigned int need = Bc250GdiOrderedCopyDwords(item), used = 0, bands, band, bpp;
+    unsigned long long lastSrc, lastDst;
+    if (!need) return BC250_GDI_EMIT_INVALID;
+    bpp = item->RowBytes / item->DstWidth;
+    /* The whole footprint, before any dword: the farthest byte of either block must not wrap. */
+    lastSrc = item->SrcOffset + (unsigned long long)(item->DstHeight - 1u) * item->SrcPitch + item->RowBytes;
+    lastDst = item->DstOffset + (unsigned long long)(item->DstHeight - 1u) * item->DstPitch + item->RowBytes;
+    if (sourceBase > ~0ull - lastSrc || destinationBase > ~0ull - lastDst) return BC250_GDI_EMIT_INVALID;
+    if (capacity < need) return BC250_GDI_EMIT_NO_SPACE;
+    bands = Bc250GdiBandCount(item->DstWidth, item->DstHeight, item->Ddx, item->Ddy);
+    for (band = 0; band < bands; band++) {
+        unsigned int lines = OrderedLines(item, band), line;
+        for (line = 0; line < lines; line++) {
+            unsigned long long src, dst;
+            unsigned int bytes, got;
+            OrderedLine(item, band, line, bpp, &src, &dst, &bytes);
+            got = Bc250EmitGfxCopySpan(buffer + used, capacity - used, sourceBase + src,
+                                       destinationBase + dst, bytes, line == 0u, line + 1u == lines);
+            /* 0 is a span whose two ranges meet, which the bands exclude, or a short buffer, which
+             * the count above excludes. Either is a defect, and the item is refused. */
+            if (!got) return BC250_GDI_EMIT_INVALID;
+            used += got;
+        }
+    }
+    if (used != need) return BC250_GDI_EMIT_INVALID;
+    *written = used;
+    *next = item->DstHeight;
+    return BC250_GDI_EMIT_DONE;
+}
+
 /* Rows of one item, resumable at a row boundary. The whole footprint is validated before any dword
  * is written, so a no-space answer leaves the buffer untouched and the caller may retry with a
  * larger one; that is the DDI's STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER contract. */
@@ -72,6 +159,13 @@ int Bc250EmitGdiItem(const BC250_GDI_ITEM* item, unsigned long long sourceBase,
     if (!copy && item->Work != Bc250GdiWorkFill) return BC250_GDI_EMIT_INVALID;
     if (item->Stretch) return BC250_GDI_EMIT_INVALID;            /* not an engine case */
     rows = item->DstHeight;
+    if (copy && item->Ordered) {
+        /* Not resumable: a band order that stops in the middle is not an order. */
+        if (offset != 0u) return BC250_GDI_EMIT_INVALID;
+        if (!rows || !item->RowBytes) return BC250_GDI_EMIT_DONE;
+        if (!item->SrcPitch || !item->DstPitch) return BC250_GDI_EMIT_INVALID;
+        return EmitOrderedCopy(item, sourceBase, destinationBase, buffer, capacity, next, written);
+    }
     if (!rows || !item->RowBytes) return BC250_GDI_EMIT_DONE;    /* an empty item emits nothing */
     if (offset > rows) return BC250_GDI_EMIT_INVALID;
     if (offset == rows) return BC250_GDI_EMIT_DONE;
@@ -94,9 +188,10 @@ int Bc250EmitGdiItem(const BC250_GDI_ITEM* item, unsigned long long sourceBase,
             srcRow = sourceBase + item->SrcOffset + (unsigned long long)row * item->SrcPitch;
             if (sourceBase > ~0ull - item->SrcOffset) return BC250_GDI_EMIT_INVALID;
             if (srcRow > ~0ull - (item->RowBytes - 1u)) return BC250_GDI_EMIT_INVALID;
-            /* The two rows must not overlap. The surfaces are different allocations (admission
-             * refuses a command naming one twice), but their virtual addresses are the caller's
-             * word, so the row pair is checked here as gfx_copy.c checks its span. */
+            /* The two rows must not overlap. A same-surface item that gets here has disjoint
+             * blocks (an item whose blocks meet is Ordered and took the path above), and the
+             * virtual addresses are the caller's word, so the row pair is checked here as
+             * gfx_copy.c checks its span. */
             if (srcRow <= dstRow ? dstRow - srcRow < item->RowBytes : srcRow - dstRow < item->RowBytes)
                 return BC250_GDI_EMIT_INVALID;
         }

@@ -30,7 +30,8 @@ typedef unsigned long long ulong;
  * here. One work item runs at a time: every kernel of gdi_kernels.cl writes its own destination
  * pixel and reads nothing another work item writes, so running the grid in order is a faithful
  * serialisation of it (the admission refuses a command whose source and destination are one
- * allocation, which is the case that would not be).
+ * allocation, which is the case that would not be; gdi_bitblt_ordered, the one kernel for that case, is
+ * run band by band instead).
  */
 extern unsigned int g_Bc250GdiWorkgroupX, g_Bc250GdiWorkgroupY;
 extern unsigned int g_Bc250GdiWorkitemX, g_Bc250GdiWorkitemY;
@@ -39,6 +40,14 @@ extern unsigned int g_Bc250GdiWorkitemX, g_Bc250GdiWorkitemY;
 #define __builtin_amdgcn_workgroup_id_y() (g_Bc250GdiWorkgroupY)
 #define __builtin_amdgcn_workitem_id_x() (g_Bc250GdiWorkitemX)
 #define __builtin_amdgcn_workitem_id_y() (g_Bc250GdiWorkitemY)
+
+/* The work-group barrier of gdi_bitblt_ordered. One work item runs at a time here, so the barrier
+ * itself does nothing; the host test runs that kernel's band body (GdiOrderedBand) for all 64 work
+ * items of the group, band by band, which is the order the barrier gives on the GPU. Running the
+ * kernel function itself one work item at a time would NOT be that order, so Bc250GdiRunKernel
+ * refuses it (gdi_kernel_run.c). */
+#define __builtin_amdgcn_fence(order, scope) ((void)0)
+#define __builtin_amdgcn_s_barrier() ((void)0)
 
 /* The arm of gdi_pixel.h the kernels need: global pointers and the OpenCL integer types, which the
  * typedefs above make mean the right thing here. */

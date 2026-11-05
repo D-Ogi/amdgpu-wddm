@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #include "gdi_kernel_run.h"
 #ifdef _MSC_VER
-/* The six kernels share one argument list on purpose, so each of them leaves part of it
+/* The seven kernels share one argument list on purpose, so each of them leaves part of it
  * unread; that is the point of GDI_ARGS and not an oversight. The device compiler does not
  * warn about it, and the driver never compiles this file. */
 #pragma warning(disable: 4100)
@@ -36,8 +36,28 @@ int Bc250GdiRunKernel(unsigned int Kernel, unsigned char* Dst, const unsigned ch
     case 4: RUN(gdi_stretchblt); return 1;
     case 5: RUN(gdi_transparentblt); return 1;
     case 6: RUN(gdi_cleartypeblend); return 1;
+    /* 7, gdi_bitblt_ordered, is one work group in step: Bc250GdiRunOrderedBand below. */
     default: return 0;
     }
+}
+
+int Bc250GdiRunOrderedBand(unsigned char* Dst, const unsigned char* Src, const unsigned int* Scalars,
+                           unsigned int Band, unsigned int Lx, unsigned int Ly)
+{
+    const unsigned int* s = Scalars;
+    if (!Dst || !Src || !s) return 0;
+    /* The scalars in the kernel's parameter order: dstPitch 0, srcPitch 1, alphaPitch 2, width 3,
+     * height 4, color 5, color2 6, rop 7, flags 8, sca 9, srcLeft 10, srcTop 11, dx0 12, dy0 13,
+     * ws 14, wd 15, hs 16, hd 17. */
+    GdiOrderedBand(Dst, Src, s[0], s[1], s[3], s[4], s[7], (int)s[10], (int)s[11], s[12], s[13],
+                   s[14], s[15], s[16], s[17], (int)s[5], (int)s[6], Band, Lx, Ly);
+    return 1;
+}
+
+unsigned int Bc250GdiRunOrderedBands(const unsigned int* Scalars)
+{
+    if (!Scalars) return 0;
+    return Bc250GdiBandCount(Scalars[3], Scalars[4], (int)Scalars[5], (int)Scalars[6]);
 }
 
 const char* Bc250GdiRunKernelName(unsigned int Kernel)
@@ -49,6 +69,7 @@ const char* Bc250GdiRunKernelName(unsigned int Kernel)
     case 4: return "gdi_stretchblt";
     case 5: return "gdi_transparentblt";
     case 6: return "gdi_cleartypeblend";
+    case 7: return "gdi_bitblt_ordered";
     default: return 0;
     }
 }

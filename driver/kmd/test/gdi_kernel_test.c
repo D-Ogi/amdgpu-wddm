@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /*
  * Host test of the GDI compute path (docs/design/gdi-hw-accel.md increment 2): the dispatch
- * emitter of driver/kmd/gdi_dispatch.c and the six kernels of driver/kmd/gdi_kernels.cl.
+ * emitter of driver/kmd/gdi_dispatch.c and the seven kernels of driver/kmd/gdi_kernels.cl.
  *
  * What one case does:
  *
@@ -342,6 +342,27 @@ static unsigned char* ArenaAt(unsigned long long va, unsigned long long bytes)
 {
     if (va < ARENA_VA || va - ARENA_VA + bytes > MEM_BYTES) return 0;
     return g_memory + (va - ARENA_VA);
+}
+
+/* gdi_bitblt_ordered (BD-306): its one work group, band by band, all 64 work items of a band before
+ * any work item of the next band, which is the order the barrier gives on the GPU. Inside a band the
+ * work items run in no order on the GPU, so the test runs them forwards or backwards (Reverse) and
+ * both must give the same image. Returns the work items that could not be run. */
+static unsigned int RunOrderedGroup(unsigned char* dst, const unsigned char* src,
+                                    const unsigned int* scalars, int reverse)
+{
+    unsigned int bands = Bc250GdiRunOrderedBands(scalars), band, lane, unrun = 0;
+    const unsigned int lanes = BC250_GDI_GROUP_X * BC250_GDI_GROUP_Y;
+    g_Bc250GdiWorkgroupX = g_Bc250GdiWorkgroupY = 0;
+    if (bands == 0u) return 1u;
+    for (band = 0; band < bands; band++)
+        for (lane = 0; lane < lanes; lane++) {
+            unsigned int l = reverse ? lanes - 1u - lane : lane;
+            if (!Bc250GdiRunOrderedBand(dst, src, scalars, band, l % BC250_GDI_GROUP_X,
+                                        l / BC250_GDI_GROUP_X))
+                unrun++;
+        }
+    return unrun;
 }
 
 static void RunCase(const char* what, const BC250_GDI_OP* op, const BC250_GDI_SURFACE* surfaces,
@@ -923,6 +944,16 @@ static unsigned int RunDispatchSpan(const unsigned int* buffer, unsigned int dwo
     dst = ArenaAt(((unsigned long long)decoded.Block[BC250_GDI_ARG_DST + 1u] << 32) |
                   decoded.Block[BC250_GDI_ARG_DST], 4u);
     if (!dst) return 0;
+    if (kernel == (unsigned int)Bc250GdiKernelBitBltOrdered) {
+        const unsigned char* src;
+        unsigned long long va = ((unsigned long long)decoded.Block[BC250_GDI_ARG_SRC + 1u] << 32) |
+            decoded.Block[BC250_GDI_ARG_SRC];
+        if (decoded.Groups[0] != 1u || decoded.Groups[1] != 1u || decoded.Groups[2] != 1u) return 0;
+        src = ArenaAt(va, 4u);
+        if (!src) return 0;
+        return RunOrderedGroup(dst, src, &decoded.Block[BC250_GDI_ARG_DSTPITCH], 0) == 0u ?
+            at + dispatch : 0u;
+    }
     for (gy = 0; gy < decoded.Groups[1]; gy++)
         for (gx = 0; gx < decoded.Groups[0]; gx++)
             for (wy = 0; wy < BC250_GDI_GROUP_Y; wy++)
@@ -1847,7 +1878,7 @@ static void TestImage(void)
 {
     static const char* const names[] = BC250_GDI_CODE_NAME_LIST;
     unsigned int i;
-    /* The image carries the six kernels, so the capability bit may be set. */
+    /* The image carries the seven kernels, so the capability bit may be set. */
     CHECK_EQ(Bc250GdiKernelsPresent(), 1);
     CHECK_EQ(Bc250GdiCodeKernelCount(), BC250_GDI_KERNEL_COUNT);
     CHECK_EQ(Bc250GdiCodeBytes(), BC250_GDI_CODE_DWORDS * 4u);
@@ -1871,6 +1902,288 @@ static void TestImage(void)
     CHECK_EQ(Bc250GdiRunKernelName(BC250_GDI_KERNEL_COUNT + 1u), (const char*)0);
 }
 
+/* ================================================================================================
+ * BitBlt inside one surface (BD-306): gdi_bitblt_ordered
+ * ============================================================================================== */
+
+static unsigned char g_snapshot[MEM_BYTES];
+
+/* SeedMemory's pattern repeats every 256 bytes, so with a 1024-byte pitch every row holds the same
+ * bytes and a vertical move would be invisible. The same-surface cases add a pattern with no period
+ * a pitch can hit over the destination allocation. */
+static void SeedSameSurface(void)
+{
+    unsigned int i;
+    SeedMemory();
+    for (i = 0; i < 256u * 128u * 4u; i++)
+        g_memory[DST_AT + i] ^= (unsigned char)((i * 2654435761u) >> 19);
+    memcpy(g_expected, g_memory, MEM_BYTES);
+}
+
+/* GDI's rule for an overlapping BitBlt, written without the bands: every destination pixel is the
+ * ROP of the source pixel and the destination pixel as they were BEFORE the operation. */
+static void ReferenceSameSurface(const BC250_GDI_OP* op, const BC250_GDI_ITEM* item, unsigned int at)
+{
+    unsigned int x, y;
+    memcpy(g_snapshot, g_expected, MEM_BYTES);
+    for (y = 0; y < item->DstHeight; y++)
+        for (x = 0; x < item->DstWidth; x++) {
+            int sx = Bc250GdiSourceX(item, (int)item->DstLeft + (int)x);
+            int sy = Bc250GdiSourceY(item, (int)item->DstTop + (int)y);
+            unsigned long long d = at + item->DstOffset + (unsigned long long)y * item->DstPitch +
+                4ull * x;
+            unsigned long long s = at + (unsigned long long)(unsigned int)sy * item->SrcPitch +
+                4ull * (unsigned int)sx;
+            Store32(g_expected + d, Bc250GdiBitBltPixel(op->Rop, Load32(g_snapshot + s),
+                                                        Load32(g_snapshot + d)));
+        }
+}
+
+static int ArenaMatches(const char* what)
+{
+    unsigned int off;
+    g_checks++;
+    if (memcmp(g_memory, g_expected, MEM_BYTES) == 0) return 1;
+    for (off = 0; off < MEM_BYTES; off++)
+        if (g_memory[off] != g_expected[off]) break;
+    fprintf(stderr, "FAIL %s: first difference at 0x%X (got 0x%02X, want 0x%02X)\n",
+            what, off, g_memory[off], g_expected[off]);
+    g_failures++;
+    return 0;
+}
+
+/* One same-surface BitBlt of a W x H block moved by (Ddx, Ddy), through the kernel path: planned,
+ * argument block built, code and dispatch emitted, decoded, run band by band, and compared with
+ * ReferenceSameSurface over the whole arena, once with the work items of each band forwards and
+ * once backwards. */
+static void RunOrderedCase(const char* what, unsigned int rop, int ddx, int ddy, unsigned int w,
+                           unsigned int h)
+{
+    static unsigned int buffer[8192];
+    BC250_GDI_SURFACE s[1];
+    BC250_GDI_OP op;
+    BC250_GDI_ITEM item;
+    BC250_GDI_KERNARG arg;
+    DECODED decoded;
+    BC250_GDI_RECT sub;
+    unsigned long long vas[1], codeVa = 0;
+    unsigned int code, dispatch, pass;
+    const int x0 = 80, y0 = 50;
+    unsigned char* dst;
+    const unsigned char* src;
+
+    s[0] = Surface(256, 128, 4, BC250_GDISURFACE_TEXTURE, 0);
+    vas[0] = ARENA_VA + DST_AT;
+    op = Op(BC250_GDIOP_BITBLT, Rect(x0 - ddx, y0 - ddy, x0 - ddx + (int)w, y0 - ddy + (int)h),
+            Rect(x0, y0, x0 + (int)w, y0 + (int)h));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    op.Rop = rop;
+    sub = op.DstRect;
+    if (Bc250GdiPlanItem(&op, s, 1, &sub, &item) != Bc250GdiOk) {
+        fprintf(stderr, "FAIL %s: the command was refused\n", what);
+        g_checks++; g_failures++;
+        return;
+    }
+    CHECK_EQ(item.Same, 1u);
+    CHECK_EQ(item.Ordered, 1u);
+    CHECK_EQ(item.Ddx, ddx);
+    CHECK_EQ(item.Ddy, ddy);
+    /* A copy is an engine item first; its kernel is the ordered one, never gdi_bitblt_rop. */
+    if (rop == BC250_GDI_ROP_SRCCOPY) {
+        CHECK_EQ(item.Work, (unsigned int)Bc250GdiWorkCopy);
+        CHECK_EQ(Bc250GdiItemToKernel(&op, &item), 1);
+    }
+    CHECK_EQ(item.Work, (unsigned int)Bc250GdiWorkKernel);
+    CHECK_EQ(item.Kernel, (unsigned int)Bc250GdiKernelBitBltOrdered);
+    if (item.Kernel != (unsigned int)Bc250GdiKernelBitBltOrdered) return;
+
+    CHECK_EQ(Bc250GdiKernarg(&op, s, vas, 1, &item, &arg), 1);
+    code = Bc250EmitGdiCode(buffer, 8192u, IB_VA, &codeVa);
+    CHECK(code != 0u);
+    if (!code) return;
+    dispatch = Bc250EmitGdiDispatch(item.Kernel, &arg, codeVa, buffer + code, 8192u - code,
+                                    IB_VA + (unsigned long long)code * 4u);
+    CHECK(dispatch != 0u);
+    if (!dispatch) return;
+    CHECK_EQ(DecodeDispatch(buffer + code, dispatch, IB_VA + (unsigned long long)code * 4u,
+                            &decoded), 1);
+    CHECK_EQ(decoded.ProgramVa, codeVa + (unsigned long long)
+             g_Bc250GdiCodeKernels[Bc250GdiKernelBitBltOrdered].Offset * 4u);
+    /* One work group, because a barrier orders one work group only. */
+    CHECK_EQ(decoded.Groups[0], 1u);
+    CHECK_EQ(decoded.Groups[1], 1u);
+    CHECK_EQ(decoded.Groups[2], 1u);
+    CHECK_EQ(decoded.Threads[0], BC250_GDI_GROUP_X);
+    CHECK_EQ(decoded.Threads[1], BC250_GDI_GROUP_Y);
+    /* The translation travels in the two colour fields. */
+    CHECK_EQ(decoded.Block[BC250_GDI_ARG_COLOR], (unsigned int)ddx);
+    CHECK_EQ(decoded.Block[BC250_GDI_ARG_COLOR2], (unsigned int)ddy);
+    CHECK_EQ(decoded.Block[BC250_GDI_ARG_ROP], rop);
+    CHECK_EQ(Bc250GdiRunOrderedBands(&decoded.Block[BC250_GDI_ARG_DSTPITCH]),
+             Bc250GdiBandCount(w, h, ddx, ddy));
+
+    for (pass = 0; pass < 2u; pass++) {
+        SeedSameSurface();
+        ReferenceSameSurface(&op, &item, DST_AT);
+        dst = ArenaAt(((unsigned long long)decoded.Block[BC250_GDI_ARG_DST + 1u] << 32) |
+                      decoded.Block[BC250_GDI_ARG_DST], 4u);
+        src = ArenaAt(((unsigned long long)decoded.Block[BC250_GDI_ARG_SRC + 1u] << 32) |
+                      decoded.Block[BC250_GDI_ARG_SRC], 4u);
+        CHECK(dst != 0 && src != 0);
+        if (!dst || !src) return;
+        CHECK_EQ(RunOrderedGroup(dst, src, &decoded.Block[BC250_GDI_ARG_DSTPITCH], (int)pass), 0u);
+        ArenaMatches(what);
+    }
+}
+
+/* The positive control of the method: the same block through the ORDINARY BitBlt kernel, work
+ * groups and work items in row order, gives a different image when the block moves down or right
+ * by one pixel. If it did not, the comparison above could not tell an ordered kernel from an
+ * unordered one. */
+static void OrderedControl(int ddx, int ddy)
+{
+    BC250_GDI_SURFACE s[1];
+    BC250_GDI_OP op;
+    BC250_GDI_ITEM item;
+    BC250_GDI_KERNARG arg;
+    BC250_GDI_RECT sub;
+    unsigned long long vas[1];
+    unsigned int gx, gy, wx, wy, scalars[BC250_GDI_RUN_SCALARS];
+    s[0] = Surface(256, 128, 4, BC250_GDISURFACE_TEXTURE, 0);
+    vas[0] = ARENA_VA + DST_AT;
+    op = Op(BC250_GDIOP_BITBLT, Rect(80 - ddx, 50 - ddy, 80 - ddx + 37, 50 - ddy + 21),
+            Rect(80, 50, 117, 71));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    op.Rop = BC250_GDI_ROP_SRCCOPY;
+    sub = op.DstRect;
+    CHECK_EQ(Bc250GdiPlanItem(&op, s, 1, &sub, &item), Bc250GdiOk);
+    item.Work = (unsigned int)Bc250GdiWorkKernel;
+    item.Kernel = (unsigned int)Bc250GdiKernelBitBltRop;
+    CHECK_EQ(Bc250GdiKernarg(&op, s, vas, 1, &item, &arg), 1);
+    memcpy(scalars, &arg.DstPitch, sizeof(scalars));
+    SeedSameSurface();
+    ReferenceSameSurface(&op, &item, DST_AT);
+    for (gy = 0; gy < (arg.Height + 7u) / 8u; gy++)
+        for (gx = 0; gx < (arg.Width + 7u) / 8u; gx++)
+            for (wy = 0; wy < 8u; wy++)
+                for (wx = 0; wx < 8u; wx++) {
+                    g_Bc250GdiWorkgroupX = gx; g_Bc250GdiWorkgroupY = gy;
+                    g_Bc250GdiWorkitemX = wx; g_Bc250GdiWorkitemY = wy;
+                    Bc250GdiRunKernel(Bc250GdiKernelBitBltRop, ArenaAt(arg.Dst, 4u),
+                                      ArenaAt(arg.Src, 4u), 0, 0, scalars);
+                }
+    g_checks++;
+    if (memcmp(g_memory, g_expected, MEM_BYTES) == 0) {
+        fprintf(stderr, "FAIL ordered control (%d,%d): the unordered kernel matched\n", ddx, ddy);
+        g_failures++;
+    }
+}
+
+static void TestOrdered(void)
+{
+    static const int dirs[8][2] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, 1}, {1, -1}, {-1, -1} };
+    static const int sizes[] = { 1, 3, 8, 9, 20 };
+    unsigned int d, m, rop;
+    char what[96];
+    for (d = 0; d < 8u; d++)
+        for (m = 0; m < sizeof(sizes) / sizeof(sizes[0]); m++)
+            for (rop = BC250_GDI_ROP_SRCCOPY; rop <= BC250_GDI_ROP_SRCOR; rop++) {
+                int ddx = dirs[d][0] * sizes[m], ddy = dirs[d][1] * sizes[m];
+                snprintf(what, sizeof(what), "ordered rop %u by (%d,%d), 37x21", rop, ddx, ddy);
+                RunOrderedCase(what, rop, ddx, ddy, 37u, 21u);
+            }
+    /* The edge shapes: one row, one column, one band exactly, a band of one line. */
+    RunOrderedCase("ordered, one row", BC250_GDI_ROP_SRCCOPY, 1, 0, 64u, 1u);
+    RunOrderedCase("ordered, one column", BC250_GDI_ROP_SRCCOPY, 0, 1, 1u, 64u);
+    RunOrderedCase("ordered, 2x2 by (1,1)", BC250_GDI_ROP_SRCCOPY, 1, 1, 2u, 2u);
+    RunOrderedCase("ordered, 17x9 by (0,-8)", BC250_GDI_ROP_SRCINVERT, 0, -8, 17u, 9u);
+    RunOrderedCase("ordered, 70x40 by (-69,0)", BC250_GDI_ROP_SRCCOPY, -69, 0, 70u, 40u);
+
+    OrderedControl(0, 1);
+    OrderedControl(1, 0);
+
+    /* The argument block refuses the ordered kernel for an item that is not ordered. */
+    {
+        BC250_GDI_SURFACE s[1];
+        BC250_GDI_OP op;
+        BC250_GDI_ITEM item;
+        BC250_GDI_KERNARG arg;
+        BC250_GDI_RECT sub;
+        unsigned long long vas[1];
+        s[0] = Surface(256, 128, 4, BC250_GDISURFACE_TEXTURE, 0);
+        vas[0] = ARENA_VA + DST_AT;
+        op = Op(BC250_GDIOP_BITBLT, Rect(0, 0, 10, 10), Rect(50, 50, 60, 60));
+        op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+        op.Rop = BC250_GDI_ROP_SRCOR;
+        sub = op.DstRect;
+        CHECK_EQ(Bc250GdiPlanItem(&op, s, 1, &sub, &item), Bc250GdiOk);
+        CHECK_EQ(item.Ordered, 0u);
+        CHECK_EQ(item.Kernel, (unsigned int)Bc250GdiKernelBitBltRop);
+        item.Kernel = (unsigned int)Bc250GdiKernelBitBltOrdered;
+        CHECK_EQ(Bc250GdiKernarg(&op, s, vas, 1, &item, &arg), 0);
+    }
+}
+
+/* An ordered copy through the batch: with room, the engine bands; with a budget too small for the
+ * bands, the ordered kernel, and in both cases the image GDI's rule gives. */
+static void TestOrderedBatch(void)
+{
+    unsigned int capacities[2];
+    BC250_GDI_SURFACE s[1];
+    BC250_GDI_BATCH batch;
+    BC250_GDI_OP op;
+    BC250_GDI_ITEM item;
+    BC250_GDI_RECT sub;
+    unsigned long long vas[1], codeVa;
+    unsigned int c, result, start;
+    s[0] = Surface(256, 128, 4, BC250_GDISURFACE_TEXTURE, 0);
+    vas[0] = ARENA_VA + DST_AT;
+    /* Moved right by 2: column bands, 32 rows each, so the engine path needs 16 bands x 32 rows of
+     * packets. The small capacity is the least Begin accepts for one sub-rectangle, which holds
+     * the code and one dispatch and not those packets. */
+    op = Op(BC250_GDIOP_BITBLT, Rect(40, 20, 72, 52), Rect(42, 20, 74, 52));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    op.Rop = BC250_GDI_ROP_SRCCOPY;
+    sub = op.DstRect;
+    capacities[0] = BATCH_TIGHT_DWORDS;
+    for (capacities[1] = BC250_GDI_RING_GRANULE; capacities[1] < BATCH_TIGHT_DWORDS;
+         capacities[1] += BC250_GDI_RING_GRANULE)
+        if (Bc250GdiBatchBegin(&batch, g_batch, capacities[1], IB_VA, 1u)) break;
+    CHECK_EQ(Bc250GdiPlanItem(&op, s, 1, &sub, &item), Bc250GdiOk);
+    CHECK(capacities[1] < Bc250GdiOrderedCopyDwords(&item));
+    for (c = 0; c < 2u; c++) {
+        CHECK_EQ(Bc250GdiPlanItem(&op, s, 1, &sub, &item), Bc250GdiOk);
+        CHECK_EQ(item.Ordered, 1u);
+        SeedSameSurface();
+        ReferenceSameSurface(&op, &item, DST_AT);
+        CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, capacities[c], IB_VA, 1u), 1);
+        result = (unsigned int)Bc250GdiBatchItem(&batch, &op, s, vas, 1, &item, 0, 1u);
+        start = BC250_GFX_ACQUIRE_DWORDS;
+        if (c == 0u) {
+            unsigned int rows = 0, written = 0;
+            CHECK_EQ(result, (unsigned int)BC250_GDI_BATCH_ROWS);
+            CHECK_EQ(batch.Fallbacks, 0u);
+            CHECK_EQ(Bc250EmitGdiItem(&item, vas[0], vas[0], 0, 0u, &rows, g_scratch,
+                                      BATCH_DWORDS, &written), BC250_GDI_EMIT_DONE);
+            CHECK_EQ(batch.Used - start, written);
+            CHECK_EQ(written, Bc250GdiOrderedCopyDwords(&item));
+            /* The bands themselves are replayed against the same rule in gdi_render_test.c; here
+             * the batch must hold exactly the emitter's packets. */
+            if (batch.Used - start == written)
+                CHECK_EQ(memcmp(g_batch + start, g_scratch, written * 4u), 0);
+            continue;
+        } else {
+            CHECK_EQ(result, (unsigned int)BC250_GDI_BATCH_DISPATCH);
+            CHECK_EQ(batch.Fallbacks, 1u);
+            codeVa = 0;
+            CHECK_EQ(RunDispatchSpan(g_batch + start, batch.Used - start,
+                                     IB_VA + (unsigned long long)start * 4u,
+                                     Bc250GdiKernelBitBltOrdered, &codeVa), batch.Used - start);
+        }
+        ArenaMatches(c == 0u ? "ordered batch, engine" : "ordered batch, kernel fallback");
+    }
+}
+
 int main(void)
 {
     TestImage();
@@ -1885,6 +2198,8 @@ int main(void)
     TestBatchCapacity();
     TestIbBound();
     TestDmaMap();
+    TestOrdered();
+    TestOrderedBatch();
     printf("gdi_kernel_test: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }
