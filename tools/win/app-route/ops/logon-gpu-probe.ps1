@@ -77,6 +77,52 @@ function Show-Latch {
     }
 }
 
+# The second module reader, in-process: K32EnumProcessModulesEx (LIST_MODULES_ALL, both bitnesses) and
+# K32GetModuleFileNameExW, the method of bc250mon (src/GraphicsApiProvider.cs). The watch loop samples every 5 s, so
+# it must not start a process for each sample (the spawn-loop gate, BD-051). Add-Type compiles once, here.
+$modReader = $true
+try {
+    Add-Type -Namespace LogonProbe -Name Mods -ErrorAction Stop -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+[DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+[DllImport("kernel32.dll", EntryPoint = "K32EnumProcessModulesEx", SetLastError = true)]
+static extern bool EnumProcessModulesEx(IntPtr h, [Out] IntPtr[] modules, int bytes, out int needed, uint filter);
+[DllImport("kernel32.dll", EntryPoint = "K32GetModuleFileNameExW", CharSet = CharSet.Unicode)]
+static extern int GetModuleFileNameExW(IntPtr h, IntPtr module, System.Text.StringBuilder name, int size);
+// The full paths of the modules of a process, or the Win32 error of the step that failed.
+public static string[] List(int pid, out string error) {
+    error = "";
+    IntPtr h = OpenProcess(0x1000 | 0x0010, false, pid); // PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ
+    if (h == IntPtr.Zero) { error = "OpenProcess " + Marshal.GetLastWin32Error(); return null; }
+    try {
+        IntPtr[] mods = new IntPtr[1024];
+        int needed;
+        if (!EnumProcessModulesEx(h, mods, mods.Length * IntPtr.Size, out needed, 3)) {
+            error = "EnumProcessModulesEx " + Marshal.GetLastWin32Error(); return null;
+        }
+        int count = Math.Min(needed / IntPtr.Size, mods.Length);
+        string[] paths = new string[count];
+        System.Text.StringBuilder b = new System.Text.StringBuilder(1024);
+        for (int i = 0; i < count; i++) {
+            b.Length = 0;
+            paths[i] = GetModuleFileNameExW(h, mods[i], b, b.Capacity) > 0 ? b.ToString() : "?";
+        }
+        return paths;
+    } finally { CloseHandle(h); }
+}
+'@
+} catch { $modReader = $false }
+
+function Read-Modules([int]$id) {
+    # The second reader as module objects with the names Show-Processes uses, or $null with the reason in the report.
+    # Say goes to the host here: its output in the pipeline would become part of the return value.
+    if (-not $modReader) { Say '  modules: no in-process reader (Add-Type failed)' | Out-Host; return $null }
+    $err = ''
+    $paths = [LogonProbe.Mods]::List($id, [ref]$err)
+    if ($null -eq $paths) { Say ("  modules (in-process reader): " + $err) | Out-Host; return $null }
+    return @($paths | ForEach-Object { [pscustomobject]@{ ModuleName = [IO.Path]::GetFileName($_); FileName = $_ } })
+}
+
 function Show-Processes {
     foreach ($name in $images) {
         foreach ($p in @(Get-Process -Name $name -ErrorAction SilentlyContinue)) {
@@ -92,10 +138,11 @@ function Show-Processes {
                 $mods = @($all | Where-Object { $_.ModuleName -match $moduleRx })
             } catch { $mods = $null } finally { $ErrorActionPreference = $saved }
             if ($null -eq $mods) {
-                # The module list of another bitness or a process this shell cannot read: tasklist as a second reader.
-                $t = & tasklist.exe /m /fi ("PID eq " + $p.Id) /fo csv /nh 2>$null
-                Say ("  modules (tasklist): " + (($t | Out-String).Trim()))
-                continue
+                # The module list of another bitness or a process .NET cannot read: the in-process second reader.
+                $all = Read-Modules $p.Id
+                if ($null -eq $all) { continue }
+                Say '  modules from the in-process reader'
+                $mods = @($all | Where-Object { $_.ModuleName -match $moduleRx })
             }
             foreach ($m in $mods) {
                 $h = try { (Get-FileHash -LiteralPath $m.FileName -Algorithm SHA256).Hash.Substring(0, 8) } catch { '?' }
