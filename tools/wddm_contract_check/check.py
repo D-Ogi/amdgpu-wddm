@@ -83,11 +83,27 @@ INTERFACE_VERSIONS = {
     "DXGKDDI_INTERFACE_VERSION_WDDM3_2": 0x11007,
 }
 
+# DXGK_WDDMVERSION, WDK 10.0.26100 shared/d3dkmddi.h:2383-2404.
 WDDM_VERSIONS = {
+    "DXGKDDI_WDDMv1": 0x1000,
     "DXGKDDI_WDDMv1_2": 0x1200,
     "DXGKDDI_WDDMv1_3": 0x1300,
     "DXGKDDI_WDDMv2": 0x2000,
     "DXGKDDI_WDDMv2_0": 0x2000,
+    "DXGKDDI_WDDMv2_1": 0x2100,
+    "DXGKDDI_WDDMv2_1_5": 0x2105,
+    "DXGKDDI_WDDMv2_1_6": 0x2106,
+    "DXGKDDI_WDDMv2_2": 0x2200,
+    "DXGKDDI_WDDMv2_3": 0x2300,
+    "DXGKDDI_WDDMv2_4": 0x2400,
+    "DXGKDDI_WDDMv2_5": 0x2500,
+    "DXGKDDI_WDDMv2_6": 0x2600,
+    "DXGKDDI_WDDMv2_7": 0x2700,
+    "DXGKDDI_WDDMv2_8": 0x2800,
+    "DXGKDDI_WDDMv2_9": 0x2900,
+    "DXGKDDI_WDDMv3_0": 0x3000,
+    "DXGKDDI_WDDMv3_1": 0x3100,
+    "DXGKDDI_WDDMv3_2": 0x3200,
 }
 
 
@@ -676,6 +692,15 @@ def predicate(facts: Facts, pred: dict):
             return None, "caps.WDDMVersion = %s, not a known constant" % entry["raw"]
         want = int(pred["wddm_version_at_least"], 16)
         return value >= want, "caps.WDDMVersion = %s (0x%04X)" % (entry["raw"], value)
+    if "wddm_version_in" in pred:
+        entry = facts.cap("WDDMVersion")
+        if entry is None:
+            return False, "caps.WDDMVersion not set"
+        value = WDDM_VERSIONS.get(entry["raw"].strip())
+        if value is None:
+            return None, "caps.WDDMVersion = %s, not a known constant" % entry["raw"]
+        allowed = {int(v, 16) for v in pred["wddm_version_in"]}
+        return value in allowed, "caps.WDDMVersion = %s (0x%04X)" % (entry["raw"], value)
     if "inf_umd_name" in pred:
         if facts.inf_umd_active:
             return True, "bc250kmd.inf writes UserModeDriverName in every package"

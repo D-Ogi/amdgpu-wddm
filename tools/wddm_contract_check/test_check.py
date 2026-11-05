@@ -519,6 +519,57 @@ class NegativeFixtures(unittest.TestCase):
         self.assertEqual({}, {k: v for k, v in result.items() if v == check.VIOLATION})
         self.assertEqual(check.OK, result["R20-WDDMVERSION-VS-INTERFACE"])
 
+    @staticmethod
+    def wddm29(answer_type16=True):
+        """The stage B4 shape (BD-307): interface 0xE003, table WDDM2_9, WDDMVersion 2.9, type 16 answered."""
+        wddm = GOOD_WDDM.replace("Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_0;",
+                                 "Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_9;")
+        wddm = wddm.replace("#define DXGKDDI_INTERFACE_VERSION 0x5023", "#define DXGKDDI_INTERFACE_VERSION 0xE003")
+        wddm = wddm.replace("caps->WDDMVersion = DXGKDDI_WDDMv2;", "caps->WDDMVersion = DXGKDDI_WDDMv2_9;")
+        if answer_type16:
+            wddm = wddm.replace("    case DXGKQAITYPE_NUMPOWERCOMPONENTS:",
+                                "    case DXGKQAITYPE_DISPLAY_DRIVERCAPS_EXTENSION:\n"
+                                "        RtlZeroMemory(QueryAdapterInfo->pOutputData, QueryAdapterInfo->OutputDataSize);\n"
+                                "        status = STATUS_SUCCESS;\n"
+                                "        break;\n"
+                                "    case DXGKQAITYPE_NUMPOWERCOMPONENTS:")
+        return wddm
+
+    def test_wddm29_shape_passes(self):
+        """ADR 0019 B4: 2.9 at interface 0xE003 with type 16 answered is not a violation of any rule."""
+        wddm = self.wddm29()
+        result, facts = statuses(wddm=wddm)
+        self.assertEqual({}, {k: v for k, v in result.items() if v == check.VIOLATION})
+        for rule_id in ("R20-WDDMVERSION-VS-INTERFACE", "R41-WDDMVERSION-ACCEPTED",
+                        "R42-WDDMVERSION-ABOVE-2-5-INTERFACE", "R43-QAI-16-ANSWERED-FROM-2-2"):
+            self.assertEqual(check.OK, result[rule_id], rule_id)
+        self.assertIn(16, facts.qai_handled)
+
+    def test_wddm29_without_type16(self):
+        """At 2.2 or later a refused type 16 makes dxgkrnl set VirtualModeSupport by itself."""
+        result, _ = statuses(wddm=self.wddm29(answer_type16=False))
+        self.assertOnlyViolation(result, "R43-QAI-16-ANSWERED-FROM-2-2")
+
+    def test_wddm32_is_not_accepted_by_22621(self):
+        """0x3200 fails the adapter on 22621 (the 23H2 lab), so one binary for n-2 may not report it."""
+        wddm = self.wddm29().replace("caps->WDDMVersion = DXGKDDI_WDDMv2_9;", "caps->WDDMVersion = DXGKDDI_WDDMv3_2;")
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R41-WDDMVERSION-ACCEPTED")
+
+    def test_wddm21_5_is_not_accepted(self):
+        """0x2105 is in the enum and in no accepted list."""
+        wddm = self.wddm29().replace("caps->WDDMVersion = DXGKDDI_WDDMv2_9;", "caps->WDDMVersion = DXGKDDI_WDDMv2_1_5;")
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R41-WDDMVERSION-ACCEPTED")
+
+    def test_wddm29_needs_an_interface_above_2_5(self):
+        """WDDMVersion above 2.5 with interface 0xA00B or lower fails the adapter."""
+        wddm = self.wddm29().replace("Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_9;",
+                                     "Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_5;")
+        wddm = wddm.replace("#define DXGKDDI_INTERFACE_VERSION 0xE003", "#define DXGKDDI_INTERFACE_VERSION 0xA00B")
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R42-WDDMVERSION-ABOVE-2-5-INTERFACE")
+
     def test_empty_source_is_not_a_pass(self):
         """The failure mode of a regex checker: a file it cannot parse must not read as compliant."""
         result, _ = statuses(wddm="/* nothing */\n")
