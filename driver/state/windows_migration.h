@@ -18,6 +18,10 @@ unsigned int AmdgpuWindowsStateFreeze(AMDGPU_WINDOWS_STATE *state,
     const unsigned char transaction[16],DWORD *error);
 unsigned int AmdgpuWindowsStateCancelFreeze(AMDGPU_WINDOWS_STATE *state,
     const unsigned char transaction[16],DWORD *error);
+// Reads only. OK: this transaction holds the freeze. SCHEMA: another transaction holds it, or Active changed.
+// INCOMPLETE or ABSENT: no freeze. Any other result is a read error.
+unsigned int AmdgpuWindowsStateFreezeOwner(AMDGPU_WINDOWS_STATE *state,
+    const unsigned char transaction[16],DWORD *error);
 // Explicit legacy rollback only: caller has stopped SCM, disabled the PDO and
 // restored/read-verified the protected receipt's legacy settings and board state.
 // Deletes only the retained, frozen generation's StateV2 tree, then flushes its

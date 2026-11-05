@@ -156,10 +156,16 @@ static void CaptureTest(AMDGPU_WINDOWS_STATE *state)
     strcpy_s(h.source_version,32,"0.7.216.101");strcpy_s(h.destination_version,32,"0.7.216.102");
     CHECK(AmdgpuWindowsStateSet(state,"","CpuTune",REG_DWORD,&choice,4,&error)==0);
     CHECK(AmdgpuWindowsCaptureCurrent(state,&h,buffer,AMDGPU_TRANSFER_MAX_BYTES,&bytes,&error)==AMDGPU_STATE_INCOMPLETE && !bytes);
+    // BD-298: the abandon of a stopped install reads the owner of the freeze before it releases it.
+    {unsigned int owner=AmdgpuWindowsStateFreezeOwner(state,h.transaction,&error);
+     CHECK(owner==AMDGPU_STATE_INCOMPLETE || owner==AMDGPU_STATE_ABSENT);}
     CHECK(AmdgpuWindowsStateFreeze(state,h.transaction,&error)==0);
+    CHECK(AmdgpuWindowsStateFreezeOwner(state,h.transaction,&error)==0);
+    CHECK(AmdgpuWindowsStateFreezeOwner(state,other,&error)==AMDGPU_STATE_SCHEMA);
     CHECK(AmdgpuWindowsStateFreeze(state,h.transaction,&error)==0);
     CHECK(AmdgpuWindowsStateFreeze(state,other,&error)==AMDGPU_STATE_SCHEMA);
     CHECK(AmdgpuWindowsStateCancelFreeze(state,other,&error)==AMDGPU_STATE_SCHEMA);
+    CHECK(AmdgpuWindowsStateFreezeOwner(state,h.transaction,&error)==0);
     choice=1;CHECK(AmdgpuWindowsStateSet(state,"","CpuTune",REG_DWORD,&choice,4,&error)==AMDGPU_STATE_INCOMPLETE);
     CHECK(AmdgpuWindowsCaptureCurrent(state,&h,buffer,AMDGPU_TRANSFER_MAX_BYTES,&bytes,&error)==0);
     for(i=0;i<AmdgpuStateCount();i++)if(!strcmp(AmdgpuStateAt(i)->name,"CpuTune"))cpu=i;
@@ -168,6 +174,7 @@ static void CaptureTest(AMDGPU_WINDOWS_STATE *state)
     h.source_generation[0]=1;
     CHECK(AmdgpuWindowsCaptureCurrent(state,&h,buffer,AMDGPU_TRANSFER_MAX_BYTES,&bytes,&error)==AMDGPU_STATE_SCHEMA && !bytes);
     CHECK(AmdgpuWindowsStateCancelFreeze(state,h.transaction,&error)==0);
+    CHECK(AmdgpuWindowsStateFreezeOwner(state,h.transaction,&error)==AMDGPU_STATE_INCOMPLETE);
     CHECK(AmdgpuWindowsStateSet(state,"","CpuTune",REG_DWORD,&choice,4,&error)==0);
     HeapFree(GetProcessHeap(),0,buffer);
 }

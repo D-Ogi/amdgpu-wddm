@@ -400,6 +400,16 @@ unsigned int AmdgpuWindowsStateCancelFreeze(AMDGPU_WINDOWS_STATE *s,const unsign
     }
     ReleaseSRWLockExclusive(&s->lock);AmdgpuStateWriterUnlock(writer);return result;
 }
+unsigned int AmdgpuWindowsStateFreezeOwner(AMDGPU_WINDOWS_STATE *s,const unsigned char transaction[16],DWORD *error)
+{
+    WCHAR tx[33];unsigned int result;
+    if(!s || !error) return AMDGPU_STATE_INVALID_ARGUMENT;
+    *error=0;result=TransactionName(transaction,tx);if(result) return result;
+    AcquireSRWLockShared(&s->lock);
+    result=Identity(s,error,FALSE);
+    if(!result) result=FrozenOwner(s,tx,error);
+    ReleaseSRWLockShared(&s->lock);return result;
+}
 unsigned int AmdgpuWindowsStateRetire(AMDGPU_WINDOWS_STATE *s,const unsigned char transaction[16],DWORD *error)
 {
     HANDLE writer=NULL;HKEY shared=NULL,current=NULL;WCHAR tx[33];unsigned int result;
