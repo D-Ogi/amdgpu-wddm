@@ -24,16 +24,16 @@ int main(int argc, char** argv)
     BC250_WDDM_LEVEL r;
 
     /* ---- the set: rising, 2.0 first, 2.9 last, no 2.3, equal to the catalog's allowed list ------------------- */
-    CHECK(BC250_WDDM_LEVEL_SET_COUNT == 9u);
+    CHECK(BC250_WDDM_LEVEL_COUNT == 9u);
     CHECK(Bc250WddmLevels[0] == BC250_WDDM_LEVEL_FLOOR);
-    CHECK(Bc250WddmLevels[BC250_WDDM_LEVEL_SET_COUNT - 1] == BC250_WDDM_LEVEL_MAX);
-    for (i = 1; i < BC250_WDDM_LEVEL_SET_COUNT; i++) CHECK(Bc250WddmLevels[i - 1] < Bc250WddmLevels[i]);
+    CHECK(Bc250WddmLevels[BC250_WDDM_LEVEL_COUNT - 1] == BC250_WDDM_LEVEL_MAX);
+    for (i = 1; i < BC250_WDDM_LEVEL_COUNT; i++) CHECK(Bc250WddmLevels[i - 1] < Bc250WddmLevels[i]);
     CHECK(!Bc250WddmLevelKnown(BC250_WDDM_LEVEL_2_3));
     CHECK(Bc250WddmLevelKnown(BC250_WDDM_LEVEL_DEFAULT));
     if (argc > 1) {
         /* argv[1..]: the catalog's allowed list, decimal */
-        CHECK((unsigned long)(argc - 1) == BC250_WDDM_LEVEL_SET_COUNT);
-        for (i = 1; i < (unsigned long)argc && i <= BC250_WDDM_LEVEL_SET_COUNT; i++)
+        CHECK((unsigned long)(argc - 1) == BC250_WDDM_LEVEL_COUNT);
+        for (i = 1; i < (unsigned long)argc && i <= BC250_WDDM_LEVEL_COUNT; i++)
             CHECK(strtoul(argv[i], NULL, 10) == Bc250WddmLevels[i - 1]);
     }
 
@@ -49,7 +49,7 @@ int main(int argc, char** argv)
     CHECK(r.Level == 0x2000u && r.Source == BC250_WDDM_LEVEL_FROM_STATE);
 
     /* ---- every level of the set, stored: reported as stored on 22631 and on 26100 ------------------------- */
-    for (i = 0; i < BC250_WDDM_LEVEL_SET_COUNT; i++) {
+    for (i = 0; i < BC250_WDDM_LEVEL_COUNT; i++) {
         r = Bc250WddmLevelResolve(1, Bc250WddmLevels[i], BC250_WDDM_LEVEL_DEFAULT, IFACE_29, OS_22631);
         CHECK(r.Level == Bc250WddmLevels[i] && r.Source == BC250_WDDM_LEVEL_FROM_STATE);
         CHECK(r.Clamp == BC250_WDDM_CLAMP_NONE);

@@ -374,7 +374,6 @@ static unsigned readyCalls;
 static void StartHealthReady(BC250_DEVICE* d, BOOLEAN r)
 { (void)d; (void)r; readyCalls++; visibleAtReady = hardwareVisible; StartEvent(EVENT_READY); }
 static void CuModeBegin(BC250_DEVICE* d) { (void)d; }
-static void WddmLevelStart(BC250_DEVICE* d) { (void)d; }
 static void BoardMemoryIdentityClear(BC250_DEVICE* d) { (void)d; if (lastStage) Trace("bmclear"); }
 static void BoardMemoryIdentityCapture(BC250_DEVICE* d) { (void)d; }
 static void BoardMemoryStart(BC250_DEVICE* d) { (void)d; }

@@ -69,7 +69,7 @@ static const unsigned long Bc250WddmLevels[] = {
     BC250_WDDM_LEVEL_2_0, BC250_WDDM_LEVEL_2_1, BC250_WDDM_LEVEL_2_2, BC250_WDDM_LEVEL_2_4, BC250_WDDM_LEVEL_2_5,
     BC250_WDDM_LEVEL_2_6, BC250_WDDM_LEVEL_2_7, BC250_WDDM_LEVEL_2_8, BC250_WDDM_LEVEL_2_9,
 };
-#define BC250_WDDM_LEVEL_SET_COUNT (sizeof(Bc250WddmLevels) / sizeof(Bc250WddmLevels[0]))
+#define BC250_WDDM_LEVEL_COUNT (sizeof(Bc250WddmLevels) / sizeof(Bc250WddmLevels[0]))
 
 enum bc250_wddm_level_source {
     BC250_WDDM_LEVEL_FROM_DEFAULT = 0,
@@ -106,7 +106,7 @@ static __inline const char* Bc250WddmLevelClampName(unsigned long Clamp)
 static __inline int Bc250WddmLevelKnown(unsigned long Level)
 {
     unsigned long i;
-    for (i = 0; i < BC250_WDDM_LEVEL_SET_COUNT; i++)
+    for (i = 0; i < BC250_WDDM_LEVEL_COUNT; i++)
         if (Bc250WddmLevels[i] == Level) return 1;
     return 0;
 }
@@ -159,7 +159,7 @@ static __inline BC250_WDDM_LEVEL Bc250WddmLevelResolve(int Present, unsigned lon
         /* The highest level of the set at or below the ceiling. The set starts at the floor, which is at or
          * below every ceiling, so the loop always finds one. */
         r.Level = BC250_WDDM_LEVEL_FLOOR;
-        for (i = 0; i < BC250_WDDM_LEVEL_SET_COUNT; i++)
+        for (i = 0; i < BC250_WDDM_LEVEL_COUNT; i++)
             if (Bc250WddmLevels[i] <= ceiling) r.Level = Bc250WddmLevels[i];
         r.Source = BC250_WDDM_LEVEL_FROM_CLAMP;
         r.Clamp = clampWhy;

@@ -89,7 +89,6 @@ static void GuardRecordStartFailed(NTSTATUS s){(void)s;records++;recordFailures+
 // this test is about.
 static void StartHealthBegin(BC250_DEVICE* d,BOOLEAN full){(void)d;(void)full;}
 static void CuModeBegin(BC250_DEVICE* d){(void)d;}
-static void WddmLevelStart(BC250_DEVICE* d){(void)d;}
 static void BoardMemoryIdentityClear(BC250_DEVICE* d){(void)d;}
 static void BoardMemoryIdentityCapture(BC250_DEVICE* d){(void)d;}
 static void BoardMemoryStart(BC250_DEVICE* d){(void)d;}
