@@ -343,16 +343,47 @@ static DWORD RetireStale(const void *buffer,PCWSTR leaf)
     if(error && error!=ERROR_UNSUPPORTED_TYPE)return error;
     return RetireLeaf(h.transaction,leaf);
 }
+// An intact removal record of any transaction moves aside. A damaged one stays and stops the step.
+static DWORD RetireAny(const void *buffer,PCWSTR leaf)
+{
+    HANDOFF_DIRECTORY *d=NULL;AMDGPU_TRANSFER_HEADER h;void *data=NULL;DWORD got=0,error;
+    memcpy(&h,buffer,sizeof(h));
+    error=Directory(&d);if(!error)error=ReadLeaf(d,leaf,&data,&got,NULL,TRUE);
+    if(d)CloseDirectory(d);if(data)HeapFree(GetProcessHeap(),0,data);
+    if(error==ERROR_FILE_NOT_FOUND)return 0;
+    if(error && error!=ERROR_UNSUPPORTED_TYPE)return error;
+    return RetireLeaf(h.transaction,leaf);
+}
 DWORD AmdgpuWindowsArchiveState(const void *buffer,DWORD bytes)
 {
-    HANDOFF_DIRECTORY *d=NULL;HANDLE lock=NULL;DWORD error;
+    HANDOFF_DIRECTORY *d=NULL;HANDLE lock=NULL;DWORD error;AMDGPU_TRANSFER_HEADER h;
+    if(AmdgpuTransferCheck(buffer,bytes,&h))return ERROR_INVALID_DATA;
     error=AmdgpuStateWriterLock(&lock);if(error)return error;
     error=Directory(&d);if(!error)error=Archive(d,buffer,bytes,NULL);
     if(d){CloseDirectory(d);d=NULL;}
     if(!error)error=RetireStale(buffer,RemovedOld);
-    if(!error)error=RetireStale(buffer,RemovedLeaf);
-    if(!error)error=Directory(&d);
-    if(!error)error=Archive(d,buffer,bytes,RemovedLeaf);
+    if(h.origin==AMDGPU_TRANSFER_LEGACY) {
+        // BD-298 follow-up: the legacy archive of an unfinished store. The prepare of every released install accepts
+        // only a removal record of an installed generation (origin 3) and stops with ERROR_NOT_SUPPORTED on another
+        // origin (lab 26200, tester.37). Thus this archive is not a removal record: an install after this uninstall
+        // finds none and installs fresh, as the settings of the unfinished store never became active. A
+        // removed-v2.bin of this transaction (written by main 967c6d76) moves aside too. A resumed uninstall reads
+        // archive-<transaction>.bin.
+        if(!error)error=RetireAny(buffer,RemovedLeaf);
+    } else {
+        if(!error)error=RetireStale(buffer,RemovedLeaf);
+        if(!error)error=Directory(&d);
+        if(!error)error=Archive(d,buffer,bytes,RemovedLeaf);
+    }
+    if(d)CloseDirectory(d);AmdgpuStateWriterUnlock(lock);return error;
+}
+DWORD AmdgpuWindowsReadArchive(const unsigned char transaction[16],void **buffer,DWORD *bytes)
+{
+    HANDOFF_DIRECTORY *d=NULL;HANDLE lock=NULL;DWORD error;WCHAR leaf[46];
+    if(!transaction || !buffer || !bytes)return ERROR_INVALID_PARAMETER;*buffer=NULL;*bytes=0;
+    error=AmdgpuStateWriterLock(&lock);if(error)return error;
+    TransactionLeaf(transaction,leaf);
+    error=Directory(&d);if(!error)error=ReadLeaf(d,leaf,buffer,bytes,NULL,FALSE);
     if(d)CloseDirectory(d);AmdgpuStateWriterUnlock(lock);return error;
 }
 DWORD AmdgpuWindowsAcknowledgeHandoff(const unsigned char transaction[16],

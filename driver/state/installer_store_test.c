@@ -279,6 +279,56 @@ static void RemovalRecords(const BYTE *snapshot,UINT bytes)
     CHECK(!Handles && !LockCount);
     HeapFree(GetProcessHeap(),0,other);HeapFree(GetProcessHeap(),0,record);HeapFree(GetProcessHeap(),0,pending);
 }
+// BD-298 follow-up: the legacy archive of an unfinished store is archive-<transaction>.bin only. The prepare of a
+// released install stops with ERROR_NOT_SUPPORTED on a legacy removal record (lab 26200, tester.37), so no removal
+// record stays after this uninstall, and a resumed uninstall reads the archive.
+static void LegacyArchive(const BYTE *snapshot,UINT bytes)
+{
+    static const WCHAR old[]=L"fixture\\amdgpu-wddm\\StateV2\\removed.bin",cur[]=L"fixture\\amdgpu-wddm\\StateV2\\removed-v2.bin",
+        old_retired[]=L"fixture\\amdgpu-wddm\\StateV2\\retired-01010101010101010101010101010101-removed.bin",
+        cur_retired[]=L"fixture\\amdgpu-wddm\\StateV2\\retired-01010101010101010101010101010101-removed-v2.bin",
+        own[]=L"fixture\\amdgpu-wddm\\StateV2\\archive-01010101010101010101010101010101.bin";
+    BYTE tx[16],other_tx[16],*legacy=HeapAlloc(GetProcessHeap(),0,AMDGPU_TRANSFER_MAX_BYTES),*other=HeapAlloc(GetProcessHeap(),0,bytes);
+    AMDGPU_TRANSFER_HEADER h;void *read=NULL;DWORD got=0,error;UINT legacy_bytes=0,i,total;
+    memset(tx,1,16);memset(other_tx,2,16);memcpy(other,snapshot,bytes);OtherCatalog(other,bytes);
+    memset(&h,0,sizeof(h));h.origin=AMDGPU_TRANSFER_LEGACY;h.source_schema=1;h.board_kind=AMDGPU_BOARD_UNPROVEN;
+    memcpy(h.transaction,tx,16);memset(h.device_hash,7,32);AmdgpuStateBootToken(91,h.source_boot);
+    memcpy(h.catalog,AmdgpuStateCatalogId(),64);strcpy_s(h.source_version,32,"0.7.216.100");strcpy_s(h.destination_version,32,"0.7.216.102");
+    CHECK(!AmdgpuTransferCapture(&h,Empty,NULL,legacy,AMDGPU_TRANSFER_MAX_BYTES,&legacy_bytes));
+    // The archive only; a retry writes nothing new. The resumed uninstall reads it; another transaction finds none.
+    Reset();CHECK(!AmdgpuWindowsArchiveState(legacy,legacy_bytes));
+    CHECK(Holds(own,legacy,legacy_bytes) && !Find(cur) && !Find(old) && !Find(cur_retired));
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,TRUE)==ERROR_FILE_NOT_FOUND);
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_FILE_NOT_FOUND);
+    CHECK(!AmdgpuWindowsReadArchive(tx,&read,&got));CHECK(got==legacy_bytes && !memcmp(read,legacy,got));HeapFree(GetProcessHeap(),0,read);read=NULL;
+    CHECK(AmdgpuWindowsReadArchive(other_tx,&read,&got)==ERROR_FILE_NOT_FOUND);CHECK(!read);
+    CHECK(!AmdgpuWindowsArchiveState(legacy,legacy_bytes));CHECK(Holds(own,legacy,legacy_bytes) && !Find(cur));
+    CHECK(!Handles && !LockCount);
+    // The legacy removal record of this transaction (main 967c6d76) and the records of other releases move aside.
+    Reset();Put(cur,legacy,legacy_bytes);Put(old,other,bytes);
+    CHECK(!AmdgpuWindowsArchiveState(legacy,legacy_bytes));
+    CHECK(!Find(cur) && !Find(old) && Holds(cur_retired,legacy,legacy_bytes) && Holds(old_retired,other,bytes) && Holds(own,legacy,legacy_bytes));
+    Reset();Put(cur,snapshot,bytes);CHECK(!AmdgpuWindowsArchiveState(legacy,legacy_bytes));CHECK(!Find(cur) && Holds(cur_retired,snapshot,bytes));
+    // A damaged removal record stays and stops the step; evidence is never overwritten.
+    Reset();Put(cur,snapshot,bytes);Find(cur)->data[bytes-1]^=1;
+    CHECK(AmdgpuWindowsArchiveState(legacy,legacy_bytes)==ERROR_INVALID_DATA);CHECK(Find(cur)!=NULL && !Find(cur_retired));
+    Reset();Put(cur,snapshot,bytes);Put(cur_retired,other,bytes);
+    CHECK(AmdgpuWindowsArchiveState(legacy,legacy_bytes)==ERROR_ALREADY_EXISTS);CHECK(Holds(cur,snapshot,bytes) && Holds(cur_retired,other,bytes));
+    // A damaged archive is not read as the record of a resumed uninstall.
+    Reset();Put(own,legacy,legacy_bytes);Find(own)->data[legacy_bytes-1]^=1;
+    CHECK(AmdgpuWindowsReadArchive(tx,&read,&got)==ERROR_INVALID_DATA);CHECK(!read);
+    // Every IO fault leaves no legacy removal record. A retry completes the archive, or stops on a torn archive (the
+    // rule of every archive: a torn archive never authorizes the service deletion).
+    Reset();Put(cur,snapshot,bytes);IoCount=0;CHECK(!AmdgpuWindowsArchiveState(legacy,legacy_bytes));total=IoCount;
+    for(i=1;i<=total;i++) {
+        Reset();Put(cur,snapshot,bytes);IoCount=0;FailAt=i;error=AmdgpuWindowsArchiveState(legacy,legacy_bytes);FailAt=0;
+        CHECK(error!=0);CHECK(!Find(cur) || Holds(cur,snapshot,bytes));CHECK(!Handles && !LockCount);
+        error=AmdgpuWindowsArchiveState(legacy,legacy_bytes);
+        CHECK(!Find(cur) || Holds(cur,snapshot,bytes));if(!error)CHECK(!Find(cur) && Holds(own,legacy,legacy_bytes));
+        CHECK(!Handles && !LockCount);
+    }
+    HeapFree(GetProcessHeap(),0,legacy);HeapFree(GetProcessHeap(),0,other);
+}
 // BD-298: the handoff of an install that stopped before its acknowledgment moves aside as evidence.
 static void AbandonRecords(const BYTE *snapshot,UINT bytes)
 {
@@ -409,6 +459,7 @@ int main(void)
         if(read)HeapFree(GetProcessHeap(),0,read);CHECK(!Handles && !LockCount);
     }
     RemovalRecords(snapshot,bytes);
+    LegacyArchive(snapshot,bytes);
     AbandonRecords(snapshot,bytes);
     Reset();CHECK(!AmdgpuWindowsPublishHandoff(snapshot,bytes));IoCount=0;
     CHECK(!AmdgpuWindowsAcknowledgeHandoff(h.transaction,h.device_hash,h.destination_version));total=IoCount;

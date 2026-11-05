@@ -6,7 +6,12 @@ DWORD AmdgpuWindowsPublishHandoff(const void *buffer,DWORD bytes);
 // All operations require LocalSystem, retain protected ancestor handles and use
 // fixed names. The caller frees Read with HeapFree(GetProcessHeap(),0,...).
 DWORD AmdgpuWindowsReadHandoff(void **buffer,DWORD *bytes);
+// The final archive of an uninstall: archive-<transaction>.bin and the removal record removed-v2.bin. A legacy archive
+// (origin 2: the store of an install whose first transaction did not finish, BD-298) is written as
+// archive-<transaction>.bin only, and every removal record moves aside: no released install reads a legacy record.
 DWORD AmdgpuWindowsArchiveState(const void *buffer,DWORD bytes);
+// The archive-<transaction>.bin of an uninstall: the record of a resumed legacy uninstall (no removed-v2.bin).
+DWORD AmdgpuWindowsReadArchive(const unsigned char transaction[16],void **buffer,DWORD *bytes);
 // The removal record that an uninstall archived. own: only the record that this release writes (a resumed
 // uninstall); otherwise the newest record of either name (an install). ERROR_UNSUPPORTED_TYPE: the record is
 // intact, but of another state catalog; its bytes are returned and the caller frees them.
