@@ -1074,6 +1074,7 @@ typedef struct _BC250_WDDM {
     volatile LONG Mpo3Checks[BC250_MPO3_VERDICTS];
     volatile LONG Mpo3Flips, Mpo3Kept, Mpo3Empty, Mpo3Refused, Mpo3Failed, Mpo3Converted;
     volatile LONG Mpo3Reports, Mpo3ReportsEmpty, Mpo3PostPresents, Mpo3Notes;
+    volatile LONG Mpo3Retries;          // flips refused while a writer owned the pipe, answered STATUS_RETRY
     // The plane rule's verdict for every enabled plane 0 the flip DDI was given, and the first plane with a verdict
     // other than ok (the flip programs the full surface anyway, Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3).
     volatile LONG Mpo3FlipVerdicts[BC250_MPO3_VERDICTS];
@@ -3744,8 +3745,8 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         GuardLog("wddm summary: MPO3 flips %ld failed %ld kept %ld empty %ld refused %ld converted %ld post-presents %ld",
                  Wddm->Mpo3Flips, Wddm->Mpo3Failed, Wddm->Mpo3Kept, Wddm->Mpo3Empty, Wddm->Mpo3Refused,
                  Wddm->Mpo3Converted, Wddm->Mpo3PostPresents);
-        GuardLog("wddm summary: MPO3 reports %ld without a plane %ld, flips with odd planes %ld, checks %ld ok %ld",
-                 Wddm->Mpo3Reports, Wddm->Mpo3ReportsEmpty, odd, checks, check[BC250_MPO3_OK]);
+        GuardLog("wddm summary: MPO3 reports %ld without a plane %ld, flips with odd planes %ld retried %ld, checks %ld ok %ld",
+                 Wddm->Mpo3Reports, Wddm->Mpo3ReportsEmpty, odd, Wddm->Mpo3Retries, checks, check[BC250_MPO3_OK]);
         // Two lines: one with all eleven refusal counts is wider than BC250_LOG_TEXT (guardlog-width).
         GuardLog("wddm summary: MPO3 check no count/src/layer/geom/rot/flags %ld/%ld/%ld/%ld/%ld/%ld",
                  check[BC250_MPO3_COUNT], check[BC250_MPO3_SOURCE], check[BC250_MPO3_LAYER],
@@ -12002,6 +12003,11 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
     flip.Duration = pSet->Duration;
     InterlockedIncrement(&wddm->Mpo3Flips);
     status = WddmFlipEntry(hAdapter, &flip, NULL, TRUE, plane->PresentId);
+    // A writer owns the pipe (the deposit edges): the transaction refuses the flip with STATUS_DEVICE_BUSY, as for
+    // SetVidPnSourceAddress. That code is outside the return set of this DDI (d3dkmddi.md, STATUS_SUCCESS,
+    // STATUS_INVALID_PARAMETER, STATUS_RETRY). STATUS_RETRY is its answer for a request that the driver could not
+    // queue because of pending work. PrePresentNeeded stays clear: a later call at the same IRQL can take the flip.
+    if (status == STATUS_DEVICE_BUSY) { InterlockedIncrement(&wddm->Mpo3Retries); status = STATUS_RETRY; }
     if (!NT_SUCCESS(status)) InterlockedIncrement(&wddm->Mpo3Failed);
     return status;
 }

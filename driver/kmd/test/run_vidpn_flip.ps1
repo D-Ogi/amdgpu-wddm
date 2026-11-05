@@ -32,7 +32,7 @@ param(
                  'shape-not-a-change', 'null-drops-shape', 'shape-without-allocation',
                  'mpo3-report-off', 'mpo3-report-type', 'mpo3-legacy-kept', 'mpo3-refused-tracked', 'mpo3-not-converted',
                  'mpo3-keep-unlocked', 'mpo3-immediate-lost', 'mpo3-extra-layer-shown', 'mpo3-check-scanout-skipped',
-                 'mpo3-check-gate-skipped',
+                 'mpo3-check-gate-skipped', 'mpo3-busy-passed',
                  'witness-before-decision', 'witness-changes-answer', 'witness-stale-compared',
                  'witness-lost-uncounted')][string]$Mutation = '',
     [switch]$Lab
@@ -183,6 +183,9 @@ $mutations = [ordered]@{
     'mpo3-immediate-lost' = @{ find = '    flip.Flags.FlipImmediate = plane->InputFlags.FlipImmediate ? 1 : 0;'
         with = '    flip.Flags.FlipImmediate = plane->InputFlags.FlipImmediate ? 0 : 0;'
         why = 'an immediate MPO3 flip is programmed for the next VSync' }
+    'mpo3-busy-passed' = @{ find = '    if (status == STATUS_DEVICE_BUSY) { InterlockedIncrement(&wddm->Mpo3Retries); status = STATUS_RETRY; }'
+        with = '    if (((void)0, 0)) { InterlockedIncrement(&wddm->Mpo3Retries); status = STATUS_RETRY; }'
+        why = 'an MPO3 flip refused during a writer returns STATUS_DEVICE_BUSY, outside the return set of the DDI' }
     'mpo3-extra-layer-shown' = @{ find = '        if (p->InputFlags.Enabled) { InterlockedIncrement(&wddm->Mpo3Refused); return STATUS_INVALID_PARAMETER; }'
         with = ''
         why = 'an enabled plane of another layer is answered as shown' }

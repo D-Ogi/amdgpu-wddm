@@ -48,6 +48,7 @@ typedef struct { LONGLONG QuadPart; } LARGE_INTEGER;
 #define STATUS_NOT_SUPPORTED ((NTSTATUS)0xC00000BBu)
 #define STATUS_INVALID_DEVICE_STATE ((NTSTATUS)0xC0000184u)
 #define STATUS_DEVICE_HARDWARE_ERROR ((NTSTATUS)0xC0000483u)
+#define STATUS_RETRY ((NTSTATUS)0xC000022Du)
 #define NT_SUCCESS(s) ((s)>=0)
 /* DXGK_INTERRUPT_TYPE values of shared/d3dkmddi.h 10.0.26100 (line 689 on). */
 typedef unsigned DXGK_INTERRUPT_TYPE;
@@ -308,6 +309,7 @@ typedef struct {
     volatile LONG Mpo3Checks[BC250_MPO3_VERDICTS];
     volatile LONG Mpo3Flips, Mpo3Kept, Mpo3Empty, Mpo3Refused, Mpo3Failed, Mpo3Converted;
     volatile LONG Mpo3Reports, Mpo3ReportsEmpty, Mpo3PostPresents, Mpo3Notes;
+    volatile LONG Mpo3Retries;
     volatile LONG Mpo3FlipVerdicts[BC250_MPO3_VERDICTS];
     volatile LONG Mpo3FlipOddTaken;
     BC250_MPO3_PLANE Mpo3FlipOdd;
@@ -2430,6 +2432,32 @@ static void Mpo3Flips(int level)
         set.PlaneCount=1;set.ppPlanes=planes;planes[0]=&plane;plane.PresentId=5;
         sync_refusals=1;
         CHECK(Flip3(&d,&set)==STATUS_UNSUCCESSFUL && w.LowSyncFailed==1 && !w.Mpo3.Active);
+    }
+
+    /* A writer owns the pipe: the transaction refuses the flip with STATUS_DEVICE_BUSY, which is outside the return
+     * set of this DDI. The answer is STATUS_RETRY; nothing is published, and the reports keep the last id. */
+    {
+        ULONG generation;
+        Setup(&d,&w,level);
+        memset(&set,0,sizeof(set));memset(&plane,0,sizeof(plane));memset(&data,0,sizeof(data));
+        planes[0]=&plane;contexts[0]=&data;Mpo3Attributes(&plane.PlaneAttributes);
+        data.hAllocation=&desktop;data.SegmentId=BC250_WDDM_SEGMENT_VRAM;data.SegmentAddress.QuadPart=0x20000;
+        set.PlaneCount=1;set.ppPlanes=planes;plane.ContextCount=1;plane.ppContextData=contexts;
+        plane.InputFlags.Enabled=1;plane.InputFlags.FlipImmediate=1;plane.PresentId=200;
+        CHECK(Flip3(&d,&set)==STATUS_SUCCESS);
+        displayed=0x20000;Vblank(&d);
+        CHECK(mpo_id==200);
+        CHECK(Begin(&d,&generation));
+        plane.PresentId=201;data.SegmentAddress.QuadPart=0x28000;
+        CHECK(Flip3(&d,&set)==STATUS_RETRY && w.Mpo3Retries==1 && w.Mpo3Failed==1 && w.WriterBusy==1);
+        CHECK(w.PrimaryAddress.QuadPart==0x20000 && set.OutputFlags.Value==0);
+        CHECK(End(&d,generation,FALSE)==STATUS_SUCCESS);
+        Vblank(&d);
+        CHECK(mpo_id==200);
+        /* After End the OS calls again, and the flip is taken. */
+        CHECK(Flip3(&d,&set)==STATUS_SUCCESS && w.Mpo3Retries==1);
+        displayed=0x28000;Vblank(&d);
+        CHECK(mpo_id==201);
     }
 }
 /* BD-307, PASSIVE_LEVEL: Check3 approves the full-size plane 0 that SetVidPnSourceAddress programs and nothing else,
