@@ -218,6 +218,9 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  Check 'repack-notes' { & pwsh -NoProfile -File "$repo\tools\release\test-repack-notes.ps1" -Out (New-Item -ItemType Directory -Force "$Out\repack-notes").FullName }
  # The release gates read the commit that the package names: a dirty tree, or one that changes during a run, stops build-release.ps1 (BD-263).
  Check 'tree-state' { & pwsh -NoProfile -File "$repo\tools\release\test-tree-state.ps1" -Out (New-Item -ItemType Directory -Force "$Out\tree-state").FullName }
+ # Its deadline is 1200 s in gate-inputs.json (BD-316). 42 tests: 494 s in a quick Full of 2026-11-05 19:07Z, and two
+ # stops at the old 600 s in the full uncached gates of build-release.ps1 the same evening (19:50Z and 20:46Z),
+ # with the suite not finished. 1200 s is 2.4x the quick Full run.
  Check 'release-build-set' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-build-set").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_build_release_set.py' }
  # BD-204: a fix marker on one RADV WDDM line and not on the other (marker_guard.py lines, winsys-lines.json). The
  # controls run on throwaway repositories; the gate reads the Mesa lines that release-sources.json pins, in the
