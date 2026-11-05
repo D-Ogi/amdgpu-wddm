@@ -5233,10 +5233,11 @@ void WddmLevelStart(_Inout_ BC250_DEVICE* Device)
 {
 #ifdef BC250_WDDM_LEVEL
     // A lab bisection image (/DBC250_WDDM_LEVEL): its level is the build's, and the setting is not read, so that the
-    // image hash names the level that the arm measures.
+    // image hash names the level that the arm measures. The log text does not name the macro: the BD-167 flavour
+    // gate reads each BC250_* name in an image as a setting that it must find declared.
     Device->WddmLevel = (ULONG)BC250_WDDM_LEVEL;
     Device->WddmLevelSource = BC250_WDDM_LEVEL_FROM_DEFAULT;
-    GuardLog("wddm: level 0x%lX fixed by the build (BC250_WDDM_LEVEL), %ws not read", Device->WddmLevel,
+    GuardLog("wddm: level 0x%lX fixed by this bisection image, %ws not read", Device->WddmLevel,
              BC250_WDDM_LEVEL_SETTING);
 #else
     RTL_OSVERSIONINFOW os;
