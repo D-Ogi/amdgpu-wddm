@@ -44,8 +44,11 @@
 //
 // The program restores the flags of the adapter after each case and at its end. It writes the flags it found to
 // --save before it sets any, so that "--set-flags <hex>" can restore them if it is stopped in the middle.
-// Output: one line for each case, and one JSON file; the last line is "OFFER-STATES <all> shared <s> private <p>",
-// each word KEPT, DISCARDED (or NONE for a kind not run, REMOVED for all). Exit 0 every state 5 case discarded, 1 a state 5 case kept the
+// Output: one line for each case, and one JSON file; the last line is "OFFER-STATES <all> shared <s> private <p>".
+// The words judge the state 5 cases only: KEPT (a state 5 case kept the content), DISCARDED (every state 5 case of the
+// kind discarded it), NONE (no state 5 case of that kind ran, for example a run of "--states 0"); <all> is REMOVED
+// when a device was removed, and NONE when no state 5 case ran. The rows of other states carry their own bDiscarded.
+// Exit 0 every state 5 case discarded (or none ran), 1 a state 5 case kept the
 // content or a device was removed, 2 usage, 3 setup (no adapter, no device, no output file), 4 the verifier flags
 // could not be queried or set. The working-set rows do not change the exit code.
 #include <windows.h>
@@ -334,12 +337,14 @@ int main(int argc,char **argv) {
     for (const Row &r:rows) {
         setOk=setOk && r.set>=0;
         anyRemoved=anyRemoved || FAILED(r.removed);
-        (r.shared ? anyShared : anyPrivate)=true;
+        // The summary words judge the state 5 cases only (see the header): a run without one says NONE
+        if (r.state==5)
+            (r.shared ? anyShared : anyPrivate)=true;
         if (r.state==5 && SUCCEEDED(r.setup) && SUCCEEDED(r.offer) && SUCCEEDED(r.reclaim) && !r.discarded) { kept=true; (r.shared ? keptShared : keptPrivate)=true; }
     }
     for (const WsRow &w:ws) { setOk=setOk && w.set>=0; anyRemoved=anyRemoved || FAILED(w.removed); }
     char name[256]{}; WideCharToMultiByte(CP_UTF8,0,ad.Description,-1,name,sizeof(name),nullptr,nullptr);
-    std::fprintf(f,"{\"tool\":\"offer-states\",\"version\":5,\"pid\":%lu,\"adapter\":\"%s\",\"vendor\":\"%04X\",\"device\":\"%04X\","
+    std::fprintf(f,"{\"tool\":\"offer-states\",\"version\":6,\"pid\":%lu,\"adapter\":\"%s\",\"vendor\":\"%04X\",\"device\":\"%04X\","
         "\"d3d11_umd\":\"%s\",\"original_flags\":\"%s\",\"restore_status\":\"%08X\",\"flags_after\":\"%s\",\"rows\":[",
         GetCurrentProcessId(),name,ad.VendorId,ad.DeviceId,module_path(L"amdgpu_wddm_d3d11.dll").c_str(),hex(p.original).c_str(),
         unsigned(restore),hex(after).c_str());
@@ -385,7 +390,8 @@ int main(int argc,char **argv) {
     std::printf("flags original %s, restore %08X, after %s\n",hex(p.original).c_str(),unsigned(restore),hex(after).c_str());
     if (!setOk || restore<0 || after!=p.original) { std::puts("OFFER-STATES FLAGS"); return 4; }
     auto word=[&](bool any,bool k) { return !any ? "NONE" : k ? "KEPT" : "DISCARDED"; };
-    std::printf("OFFER-STATES %s shared %s private %s\n",kept ? "KEPT" : anyRemoved ? "REMOVED" : "DISCARDED",word(anyShared,keptShared),
+    std::printf("OFFER-STATES %s shared %s private %s\n",
+        kept ? "KEPT" : anyRemoved ? "REMOVED" : (anyShared || anyPrivate) ? "DISCARDED" : "NONE",word(anyShared,keptShared),
         word(anyPrivate,keptPrivate));
     return kept || anyRemoved ? 1 : 0;
 }
