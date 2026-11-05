@@ -65,6 +65,12 @@ static void ProtectedTests()
     CHECK(StartHealthOf(true, 0, false, 1) == StartHealth::Unconfirmed, "boot mark unreadable");
     CHECK(StartHealthOf(true, 0, true, 2) == StartHealth::Unconfirmed, "boot mark of another value");
     CHECK(StartHealthOf(false, 0, true, 1) == StartHealth::Unreadable, "UnconfirmedStarts unreadable");
+    // The provisional first start of a boot: its own count only, and no confirmation yet.
+    CHECK(StartHealthOf(true, 1, true, 0) == StartHealth::Provisional, "the first start of a boot after a confirmed one");
+    CHECK(StartHealthOf(true, 2, true, 0) == StartHealth::Unconfirmed, "a start after an unconfirmed one");
+    CHECK(StartHealthOf(true, 3, true, 0) == StartHealth::Unconfirmed, "a count above the guard's limit");
+    CHECK(StartHealthOf(true, 1, false, 0) == StartHealth::Unconfirmed, "count 1, boot mark unreadable");
+    CHECK(StartHealthOf(true, 1, true, 2) == StartHealth::Unconfirmed, "count 1, boot mark of another value");
 
     // The latch.
     struct LatchCase { LatchView v; Latch want; };
@@ -143,6 +149,43 @@ static void ProtectedTests()
         CHECK(d.route == g.route && d.reason == g.reason, "gate exe=%ls mode=%d on=%d desktop=%d start=%s latch=%s got %s",
               g.exe, (int)g.mode, g.on, g.desktop, StartHealthName(g.start), LatchName(g.latch), AppReasonName(d.reason));
     }
+    // A provisional start: the record decides, then the latch as on a confirmed start.
+    struct ProvisionalCase { const wchar_t *exe; bool store, off; Latch latch; AppRoute route; AppReason reason; };
+    const ProvisionalCase provisionals[] = {
+        {L"LogonUI.exe", true, false, Lc, AppRoute::Gpu, AppReason::Default},
+        {L"consent.exe", true, false, Lc, AppRoute::Gpu, AppReason::Default},
+        {L"LogonUI.exe", true, true, Lc, AppRoute::Cpu, AppReason::ProtectedProvisionalOff},
+        {L"LogonUI.exe", false, true, Lc, AppRoute::Cpu, AppReason::ProtectedProvisionalOff},
+        {L"LogonUI.exe", false, false, Lc, AppRoute::Cpu, AppReason::ProtectedUnconfirmed},
+        {L"LockApp.exe", false, false, Lu, AppRoute::Cpu, AppReason::ProtectedUnconfirmed},
+        {L"LogonUI.exe", true, false, Lf, AppRoute::Cpu, AppReason::ProtectedFaulted},
+        {L"LogonUI.exe", true, false, Lr, AppRoute::Cpu, AppReason::ProtectedReset},
+        {L"LogonUI.exe", true, false, Lu, AppRoute::Cpu, AppReason::ProtectedUnlatched},
+    };
+    for (const ProvisionalCase &p : provisionals) {
+        AppInputs in = {p.exe, Gd, nullptr, nullptr, true, true, Component::Yes, false};
+        in.protected_gpu = true;
+        in.desktop_gpu = true;
+        in.start = StartHealth::Provisional;
+        in.latch = p.latch;
+        in.provisional_store = p.store;
+        in.provisional_off = p.off;
+        const AppDecision d = DecideApp(in);
+        CHECK(d.route == p.route && d.reason == p.reason, "provisional exe=%ls store=%d off=%d latch=%s got %s", p.exe,
+              p.store, p.off, LatchName(p.latch), AppReasonName(d.reason));
+    }
+    // The provisional record does not open any other start state.
+    {
+        AppInputs in = {L"LogonUI.exe", Gd, nullptr, nullptr, true, true, Component::Yes, false};
+        in.protected_gpu = in.desktop_gpu = in.provisional_store = true;
+        in.latch = Lc;
+        in.start = Un;
+        CHECK(DecideApp(in).reason == AppReason::ProtectedUnconfirmed, "a record opened an unconfirmed start");
+        in.start = Ur;
+        CHECK(DecideApp(in).reason == AppReason::ProtectedUnconfirmed, "a record opened an unreadable start");
+    }
+    CHECK(!strcmp(AppReasonName(AppReason::ProtectedProvisionalOff), "app-protected-provisional-off") &&
+          !strcmp(StartHealthName(StartHealth::Provisional), "provisional"), "provisional names");
     // A caller that fills no gate keeps every logon image on the CPU UMD.
     CHECK(DecideApp({L"LogonUI.exe", Gd, nullptr, nullptr, true, true}).reason == AppReason::Protected, "default gates");
     CHECK(!strcmp(AppReasonName(AppReason::ProtectedDesktopCpu), "app-protected-desktop-cpu") &&
@@ -743,6 +786,26 @@ static void RouterBase(bool clientIsSelf)
 
 // A logon image under gpu-default with the desktop route open. confirmed: the kernel driver confirmed this start
 // (UnconfirmedStarts 0, GuardBoot\Confirmed 1) and recorded two adapter restarts (HangRecovery\AdapterRestarts 2).
+// The provisional record (router-provisional.h): a REG_SZ of it, empty when absent or of another kind.
+static const wchar_t ProvisionalKey[] = L"SOFTWARE\\amdgpu-wddm\\ProtectedStart";
+static std::wstring ProvisionalSz(const wchar_t *name)
+{
+    HKEY k = nullptr;
+    if (RegOpenKeyExW(Root, ProvisionalKey, 0, KEY_QUERY_VALUE, &k) != ERROR_SUCCESS) return L"";
+    wchar_t text[1024] = {};
+    DWORD type = 0, bytes = sizeof(text) - sizeof(wchar_t);
+    const LSTATUS s = RegQueryValueExW(k, name, nullptr, &type, (BYTE *)text, &bytes);
+    RegCloseKey(k);
+    return s == ERROR_SUCCESS && type == REG_SZ ? std::wstring(text) : std::wstring();
+}
+// A provisional start: the first start of a boot after a confirmed one (UnconfirmedStarts 1, no boot mark).
+static void ProvisionalStart(DWORD unconfirmed = 1)
+{
+    SetDw(KmdKey, L"UnconfirmedStarts", unconfirmed);
+    SetDw(KmdKey, L"HangRecovery.AdapterRestarts", 2);
+}
+static std::wstring AppGpuPath() { return Layout + L"\\app\\amdgpu_wddm_d3d11.dll"; }
+
 static void ProtectedBase(bool confirmed)
 {
     RouterBase(false); Switches(true, true);
@@ -3586,7 +3649,8 @@ static void Child(const std::string &s)
         CHECK(!Loaded(L"app\\amdgpu_wddm_d3d11.dll"), "application GPU UMD loaded for logonui.exe");
         std::string log = AppLog();
         CHECK(Has(log, "route=cpu reason=app-protected-unconfirmed fallback=0") &&
-              Has(log, "protected=desktop:gpu/absent,start:unreadable/") && Has(log, "latch:unavailable/none/"),
+              Has(log, "protected=desktop:gpu/absent,start:unreadable/") && Has(log, "latch:unread/none/") &&
+              Has(log, "prov:unread/none,armed:0"),
               "route log: %s", log.c_str());
         CHECK(!LatchHas(L"Base"), "the latch base was written behind a closed start gate");
     } else if (s == "protected-confirmed" || s == "protected-lockapp" || s == "protected-consent") {
@@ -3604,8 +3668,9 @@ static void Child(const std::string &s)
         CHECK(Loaded(L"app\\amdgpu_wddm_d3d11.dll") && !Loaded(L"cpu\\bc250d3d.dll"), "modules");
         std::string log = AppLog();
         CHECK(Has(log, "route=gpu reason=app-default fallback=0 gpu_hr=00000000") &&
-              Has(log, "protected=desktop:gpu/absent,start:confirmed/0/1,latch:clear/hklm/2,armed:1"),
+              Has(log, "protected=desktop:gpu/absent,start:confirmed/0/1,latch:clear/hklm/2,prov:on/none,armed:1"),
               "route log: %s", log.c_str());
+        CHECK(ProvisionalSz(L"Pending").empty(), "a confirmed start wrote a provisional record");
         const std::wstring marker = std::wstring(image) + L"|" + std::to_wstring(GetCurrentProcessId());
         ULONGLONG created = 0, mine = 0;
         FILETIME c, e, k, u;
@@ -3717,6 +3782,104 @@ static void Child(const std::string &s)
         std::string log = AppLog();
         CHECK(Has(log, "route=cpu reason=app-default fallback=1") && Has(log, "armed:1"), "route log: %s", log.c_str());
         CHECK(!LatchHas((L"logonui.exe|" + std::to_wstring(GetCurrentProcessId())).c_str()), "marker kept after fallback");
+    } else if (s == "protected-provisional") {
+        // The sign-in screen of a cold boot: UnconfirmedStarts 1 and no confirmation yet. The GPU UMD, with the
+        // record on the disk and the mark of this boot written before the GPU open, and the latch armed. A second
+        // open of the same boot keeps the record as it is.
+        ProtectedBase(false);
+        ProvisionalStart();
+        OverrideHklm();
+        HMODULE r = LoadAt(L"router\\bc250d3d_router.dll");
+        Opened o = Open(r, "OpenAdapter10_2");
+        CHECK(o.hr == S_OK && o.tag == AppTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+        CHECK(!_wcsicmp(ProvisionalSz(L"Pending").c_str(), AppGpuPath().c_str()) && LatchDword(L"Provisional") == 1 &&
+              LatchDword(L"Base") == 2, "record pending=%ls mark=%ld base=%ld", ProvisionalSz(L"Pending").c_str(),
+              LatchDword(L"Provisional"), LatchDword(L"Base"));
+        Opened o2 = Open(r, "OpenAdapter10_2");
+        CHECK(o2.hr == S_OK && o2.tag == AppTag102, "second open tag=%llu", (unsigned long long)o2.tag);
+        std::string log = AppLog();
+        CHECK(Has(log, "route=gpu reason=app-default fallback=0 gpu_hr=00000000") &&
+              Has(log, "protected=desktop:gpu/absent,start:provisional/1/0,latch:clear/hklm/2,prov:on/written,armed:1") &&
+              Has(log, "prov:on/kept,armed:1"), "route log: %s", log.c_str());
+    } else if (s == "protected-provisional-off" || s == "protected-provisional-set-off" ||
+               s == "protected-provisional-cleared" || s == "protected-provisional-confirmed") {
+        // What a decision does with a record that an earlier boot left (no mark of this boot).
+        ProtectedBase(false);
+        HMODULE r = nullptr;
+        std::string log;
+        if (s == "protected-provisional-off") {
+            // Off names this GPU UMD: the provisional route stays off, the latch is not read.
+            ProvisionalStart();
+            SetSz(ProvisionalKey, L"Off", AppGpuPath());
+            OverrideHklm();
+            Opened o = Open(r = LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
+            CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+            log = AppLog();
+            CHECK(Has(log, "route=cpu reason=app-protected-provisional-off fallback=0") &&
+                  Has(log, "start:provisional/1/0,latch:unread/none/2,prov:off/none,armed:0"), "route log: %s", log.c_str());
+            CHECK(!LatchHas(L"Base") && ProvisionalSz(L"Pending").empty(), "a closed provisional gate wrote the latch");
+            // Off of another GPU UMD path (an earlier package) does not close the route.
+            SetSz(ProvisionalKey, L"Off", Layout + L"\\old-package\\amdgpu_wddm_d3d11.dll");
+            Opened o2 = Open(r, "OpenAdapter10_2");
+            CHECK(o2.tag == AppTag102, "Off of another path: tag=%llu", (unsigned long long)o2.tag);
+        } else if (s == "protected-provisional-set-off") {
+            // An earlier boot took the provisional route and its start was never confirmed: this start reads 2.
+            ProvisionalStart(2);
+            SetSz(ProvisionalKey, L"Pending", AppGpuPath());
+            OverrideHklm();
+            Opened o = Open(r = LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
+            CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
+            CHECK(!_wcsicmp(ProvisionalSz(L"Off").c_str(), AppGpuPath().c_str()) && ProvisionalSz(L"Pending").empty(),
+                  "off=%ls pending=%ls", ProvisionalSz(L"Off").c_str(), ProvisionalSz(L"Pending").c_str());
+            // The next boot after a confirmed one (count 1) keeps the provisional route off for that GPU UMD.
+            SetDw(KmdKey, L"UnconfirmedStarts", 1);
+            Opened o2 = Open(r, "OpenAdapter10_2");
+            CHECK(o2.tag == CpuTag102, "provisional after set-off: tag=%llu", (unsigned long long)o2.tag);
+            // A confirmed start is not touched by Off: the GPU UMD.
+            SetDw(KmdKey, L"UnconfirmedStarts", 0); SetDw(KmdKey, L"GuardBoot.Confirmed", 1);
+            Opened o3 = Open(r, "OpenAdapter10_2");
+            CHECK(o3.tag == AppTag102, "confirmed with Off: tag=%llu", (unsigned long long)o3.tag);
+            log = AppLog();
+            CHECK(Has(log, "route=cpu reason=app-protected-unconfirmed fallback=0") &&
+                  Has(log, "start:unconfirmed/2/0,latch:unread/none/2,prov:off/set-off,armed:0") &&
+                  Has(log, "route=cpu reason=app-protected-provisional-off fallback=0") &&
+                  Has(log, "start:confirmed/0/1,latch:clear/hklm/2,prov:off/none,armed:1"), "route log: %s", log.c_str());
+        } else if (s == "protected-provisional-cleared") {
+            // Pending of an earlier boot and count 1: the start before this one was confirmed. Pending goes, and this
+            // decision writes its own.
+            ProvisionalStart();
+            SetSz(ProvisionalKey, L"Pending", Layout + L"\\old-package\\amdgpu_wddm_d3d11.dll");
+            OverrideHklm();
+            Opened o = Open(r = LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
+            CHECK(o.tag == AppTag102, "tag=%llu", (unsigned long long)o.tag);
+            CHECK(!_wcsicmp(ProvisionalSz(L"Pending").c_str(), AppGpuPath().c_str()) && ProvisionalSz(L"Off").empty() &&
+                  LatchDword(L"Provisional") == 1, "pending=%ls off=%ls", ProvisionalSz(L"Pending").c_str(),
+                  ProvisionalSz(L"Off").c_str());
+            log = AppLog();
+            CHECK(Has(log, "start:provisional/1/0,latch:clear/hklm/2,prov:on/written,armed:1"), "route log: %s", log.c_str());
+        } else {
+            // Pending of this boot (the mark is there) and then the confirmation: the confirmed decision removes it.
+            ProvisionalStart();
+            OverrideHklm();
+            Opened o = Open(r = LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
+            CHECK(o.tag == AppTag102 && !ProvisionalSz(L"Pending").empty(), "provisional tag=%llu", (unsigned long long)o.tag);
+            SetDw(KmdKey, L"UnconfirmedStarts", 0); SetDw(KmdKey, L"GuardBoot.Confirmed", 1);
+            Opened o2 = Open(r, "OpenAdapter10_2");
+            CHECK(o2.tag == AppTag102 && ProvisionalSz(L"Pending").empty() && ProvisionalSz(L"Off").empty(),
+                  "confirmed tag=%llu pending=%ls", (unsigned long long)o2.tag, ProvisionalSz(L"Pending").c_str());
+            // A runtime restart in an unconfirmed boot (count 2) with Pending of this boot: no Off.
+            SetDw(KmdKey, L"UnconfirmedStarts", 1); DeleteValue(KmdKey, L"GuardBoot.Confirmed");
+            Opened o3 = Open(r, "OpenAdapter10_2");
+            SetDw(KmdKey, L"UnconfirmedStarts", 2);
+            Opened o4 = Open(r, "OpenAdapter10_2");
+            CHECK(o3.tag == AppTag102 && o4.tag == CpuTag102 && ProvisionalSz(L"Off").empty() &&
+                  !ProvisionalSz(L"Pending").empty(), "restart in the boot: tags %llu %llu off=%ls",
+                  (unsigned long long)o3.tag, (unsigned long long)o4.tag, ProvisionalSz(L"Off").c_str());
+            log = AppLog();
+            CHECK(Has(log, "start:confirmed/0/1,latch:clear/hklm/2,prov:on/cleared,armed:1") &&
+                  Has(log, "start:unconfirmed/2/0,latch:unread/none/2,prov:on/none,armed:0"), "route log: %s", log.c_str());
+        }
+        (void)r;
     }
 
     // Router in front of the real DXVK shell E748418C (<layout>\app-real: shell and its config A9B498ED; the engine
@@ -3766,7 +3929,7 @@ struct Scenario { const char *name; const char *exe; std::vector<std::pair<std::
 static bool LatchAfterExit(const char *scenario)
 {
     if (strcmp(scenario, "protected-confirmed") && strcmp(scenario, "protected-lockapp") &&
-        strcmp(scenario, "protected-consent"))
+        strcmp(scenario, "protected-consent") && strcmp(scenario, "protected-provisional"))
         return true;
     const std::wstring path = Layout + L"\\hives\\" + std::wstring(scenario, scenario + strlen(scenario)) + L".dat";
     HKEY hive = nullptr, key = nullptr;
@@ -3858,6 +4021,11 @@ static int RunAll(const std::wstring &out)
         {"protected-latch-dead", "logonui\\logonui.exe", {}}, {"protected-latch-reused", "logonui\\logonui.exe", {}},
         {"protected-latch-set", "logonui\\logonui.exe", {}}, {"protected-latch-reset", "logonui\\logonui.exe", {}},
         {"protected-winlogon", "winlogon\\winlogon.exe", {}}, {"protected-gpu-fails", "logonui\\logonui.exe", {}},
+        // The provisional first start of a boot (router-provisional.h).
+        {"protected-provisional", "logonui\\logonui.exe", {}}, {"protected-provisional-off", "logonui\\logonui.exe", {}},
+        {"protected-provisional-set-off", "logonui\\logonui.exe", {}},
+        {"protected-provisional-cleared", "logonui\\logonui.exe", {}},
+        {"protected-provisional-confirmed", "logonui\\logonui.exe", {}},
         {"desktop-dwm-unchanged", "dwm\\dwm.exe", {}}, {"desktop-client-unchanged", nullptr, {}},
         {"stack-app-real", nullptr, {}}, {"stack-app-real-noconfig", nullptr, {}}, {"stack-app-real-no-identity", nullptr, {}},
     };

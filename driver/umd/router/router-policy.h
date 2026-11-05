@@ -82,7 +82,10 @@ enum class AppReason {
     ModeInvalid,  // Mode present but not one of the three names (fail safe: CPU)
     Protected,    // winlogon.exe (never a GPU UMD), or a gated logon image with AppRouter ProtectedGpu set to 0
     ProtectedDesktopCpu,  // a gated logon image, and the desktop does not take the GPU route (ProtectedGates below)
-    ProtectedUnconfirmed, // a gated logon image, and the kernel driver has not confirmed this start
+    ProtectedUnconfirmed, // a gated logon image, and the kernel driver has not confirmed this start, and the start is
+                          // not the provisional first start of a boot (or the image cannot write its record)
+    ProtectedProvisionalOff, // a provisional start, and an earlier provisional boot never confirmed its start with
+                             // this GPU UMD (router-provisional.h Off)
     ProtectedFaulted,     // a gated logon image whose GPU process of this boot ended without a clean exit
     ProtectedReset,       // a gated logon image, and the adapter was reset after the latch base of this boot
     ProtectedUnlatched,   // LogonUI or consent, and the fault latch cannot be read or armed
@@ -104,7 +107,7 @@ enum class AppReason {
 enum class Component { No, Yes, Unknown };
 
 // The start gate of the logon images (StartHealthOf below).
-enum class StartHealth { Confirmed, Unconfirmed, Unreadable };
+enum class StartHealth { Confirmed, Provisional, Unconfirmed, Unreadable };
 
 // The fault latch of one logon image in this boot (LatchOf below; router-latch.h reads and arms it).
 enum class Latch { Clear, Faulted, Reset, Unavailable };
@@ -150,6 +153,9 @@ struct AppInputs {
     bool desktop_gpu = false;            // the desktop decision for dwm.exe is the hosted GPU UMD (DesktopAdmitsGpu)
     StartHealth start = StartHealth::Unreadable;
     Latch latch = Latch::Unavailable;
+    // The provisional record (router-provisional.h), read for a Provisional start only.
+    bool provisional_store = false;      // the record and the volatile mark can be written
+    bool provisional_off = false;        // Off names this GPU UMD
 };
 
 struct AppDecision {
@@ -168,7 +174,7 @@ struct AppDecision {
 //          sign-in: a lock without the curtain still shows LogonUI.exe, and a failed prompt fails that one request.
 //          LockApp.exe cannot write HKLM or HKCU, so for it the latch is best effort.
 // A gated image takes the application GPU UMD only on a start that DWM itself would take to the GPU, that the kernel
-// driver confirmed, and whose fault latch is clear (docs/design/logon-gpu-route.md). Otherwise the CPU UMD with a
+// driver confirmed or that is the provisional first start of a boot (StartHealthOf), and whose fault latch is clear (docs/design/logon-gpu-route.md). Otherwise the CPU UMD with a
 // reason that names the gate. After the gates, the image follows the AppRouter policy like any other image.
 enum class ProtectedKind { None, Never, GatedLatchRequired, GatedLatchBestEffort };
 
@@ -198,14 +204,22 @@ inline bool DesktopAdmitsGpu(const Inputs &desktop, DesktopRecord record)
 // The start gate, from two values of the kernel driver's state that every process can read
 // (driver/kmd/guard.c): Parameters UnconfirmedStarts (incremented at every StartDevice, written 0 by the start
 // confirmation, docs/design/wddm-start-confirmation.md) and the volatile GuardBoot\Confirmed (1 after a durable
-// confirmation in this boot). Confirmed needs both: 0 unconfirmed starts and a confirmation in this boot. A runtime
-// restart of the device in a confirmed boot counts one start again, so it is unconfirmed until it is confirmed.
+// confirmation in this boot).
+//   Confirmed    0 unconfirmed starts and a confirmation in this boot.
+//   Provisional  1 unconfirmed start and no confirmation in this boot: the first start of a boot, after a start
+//                that was confirmed (it wrote 0). The confirmation needs 60 s of healthy presentation, so the sign-in
+//                screen of every boot opens its adapter on such a start. It passes the gate while the provisional
+//                record allows it (router-provisional.h); the latch then protects it as on a confirmed start.
+//   Unconfirmed  any other count: 2 or more is a start after one that was never confirmed (a hang, a crash, a power
+//                loss, a refused sign-in); 1 with the mark is a runtime restart of the device in a confirmed boot,
+//                which stays unconfirmed until its own confirmation; 0 without the mark is no start of this boot.
 inline StartHealth StartHealthOf(bool unconfirmed_known, unsigned long unconfirmed, bool boot_known,
                                  unsigned long boot_confirmed)
 {
     if (!unconfirmed_known) return StartHealth::Unreadable;
-    if (unconfirmed != 0 || !boot_known || boot_confirmed != 1) return StartHealth::Unconfirmed;
-    return StartHealth::Confirmed;
+    if (unconfirmed == 0 && boot_known && boot_confirmed == 1) return StartHealth::Confirmed;
+    if (unconfirmed == 1 && boot_known && boot_confirmed == 0) return StartHealth::Provisional;
+    return StartHealth::Unconfirmed;
 }
 
 // The router's built-in default Deny list: images kept on the CPU UMD without any registry entry, because the
@@ -301,7 +315,10 @@ inline AppDecision DecideApp(const AppInputs &in)
     case ProtectedKind::GatedLatchBestEffort:
         if (!in.protected_gpu) return {AppRoute::Cpu, AppReason::Protected};
         if (!in.desktop_gpu) return {AppRoute::Cpu, AppReason::ProtectedDesktopCpu};
-        if (in.start != StartHealth::Confirmed) return {AppRoute::Cpu, AppReason::ProtectedUnconfirmed};
+        if (in.start == StartHealth::Provisional) {
+            if (in.provisional_off) return {AppRoute::Cpu, AppReason::ProtectedProvisionalOff};
+            if (!in.provisional_store) return {AppRoute::Cpu, AppReason::ProtectedUnconfirmed};
+        } else if (in.start != StartHealth::Confirmed) return {AppRoute::Cpu, AppReason::ProtectedUnconfirmed};
         if (in.latch == Latch::Faulted) return {AppRoute::Cpu, AppReason::ProtectedFaulted};
         if (in.latch == Latch::Reset) return {AppRoute::Cpu, AppReason::ProtectedReset};
         if (in.latch == Latch::Unavailable && ProtectedKindOf(in.exe_base) == ProtectedKind::GatedLatchRequired)
@@ -353,6 +370,7 @@ inline const char *AppReasonName(AppReason r)
     case AppReason::Protected: return "app-protected";
     case AppReason::ProtectedDesktopCpu: return "app-protected-desktop-cpu";
     case AppReason::ProtectedUnconfirmed: return "app-protected-unconfirmed";
+    case AppReason::ProtectedProvisionalOff: return "app-protected-provisional-off";
     case AppReason::ProtectedFaulted: return "app-protected-faulted";
     case AppReason::ProtectedReset: return "app-protected-reset";
     case AppReason::ProtectedUnlatched: return "app-protected-unlatched";
@@ -372,6 +390,7 @@ inline const char *StartHealthName(StartHealth s)
 {
     switch (s) {
     case StartHealth::Confirmed: return "confirmed";
+    case StartHealth::Provisional: return "provisional";
     case StartHealth::Unconfirmed: return "unconfirmed";
     case StartHealth::Unreadable: return "unreadable";
     }

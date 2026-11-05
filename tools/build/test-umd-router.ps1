@@ -59,6 +59,11 @@
 # GPU open removes the marker, and winlogon.exe stays on the CPU UMD. protected-logonui now expects
 # app-protected-unconfirmed: the fixture holds no start record.
 #
+# The provisional first start of a boot (driver/umd/router/router-provisional.h) adds five scenarios as LogonUI.exe:
+# the GPU UMD on UnconfirmedStarts 1 with the record written before the GPU open, Off of this GPU UMD, Pending of an
+# earlier boot turned into Off by a start after an unconfirmed one, Pending of an earlier boot cleared, and Pending of
+# this boot cleared by the confirmation. 117 scenarios, 0 failed on 2026-11-05; the router before the change fails nine.
+#
 #   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
 #        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]
 param(

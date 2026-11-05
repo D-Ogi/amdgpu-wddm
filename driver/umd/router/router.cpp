@@ -58,12 +58,16 @@
 //   adapter. The four logon images take the application GPU UMD only when all gates are open, each with its reason:
 //     desktop   Decide() would send dwm.exe to the hosted GPU UMD, and the session's desktop-route record does not
 //               say the compositor ended on the CPU UMD                               (app-protected-desktop-cpu)
-//     start     the kernel driver confirmed this start: UnconfirmedStarts 0 and GuardBoot\Confirmed 1
-//                                                                                      (app-protected-unconfirmed)
+//     start     the kernel driver confirmed this start: UnconfirmedStarts 0 and GuardBoot\Confirmed 1, or the start
+//               is the provisional first start of a boot after a confirmed one: UnconfirmedStarts 1 and no
+//               GuardBoot\Confirmed, with a provisional record that the image can write (app-protected-unconfirmed)
+//               and that is not off for this GPU UMD (app-protected-provisional-off; router-provisional.h)
 //     latch     router-latch.h: no GPU process of the image ended without a clean exit in this boot
 //               (app-protected-faulted), no adapter restart after the latch base (app-protected-reset), and for
 //               LogonUI.exe and consent.exe a store that can be written (app-protected-unlatched)
-//   The route line ends with protected=<word>: no, off, or the state of the gates.
+//   The route line ends with protected=<word>: no, off, or the state of the gates
+//   (desktop:..,start:..,latch:..,prov:<state>/<action>,armed:N; latch:unread when the start gate was closed).
+//   HKLM\SOFTWARE\amdgpu-wddm\ProtectedStart   Pending, Off   REG_SZ, the provisional record (router-provisional.h)
 //   OpenAdapter10 always goes to the CPU UMD: the application GPU UMD
 //   exports OpenAdapter10_2 only. The Direct3D 10.0 runtime of Windows 11 does not call OpenAdapter10 when
 //   OpenAdapter10_2 is exported: it opens this router through OpenAdapter10_2 and creates a D3D11-family device,
@@ -107,6 +111,7 @@
 #include "router-policy.h"
 #include "router-state.h"
 #include "router-latch.h"
+#include "router-provisional.h"
 #include "router-identity.h"
 #include "front-adapter.h"
 #include "../app-settings/app-settings-core.h"
@@ -561,12 +566,15 @@ static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *
     const as::Value renderOnCpu = settings[as::Setting::RenderOnCpu];
     AppInputs in = {exe, a.mode, a.allow, a.deny, entry_10_2, a.gpu[0] != 0, component, as::render_on_cpu(settings)};
     // The logon images' gates (router-policy.h ProtectedKindOf). Read only for them, in the order of the decision, so
-    // that a closed gate reads nothing after it: the start state only on a desktop that takes the GPU, and the latch
-    // only on a confirmed start. A latch base is therefore taken at the first decision of the boot that passed both.
+    // that a closed gate reads nothing after it: the start state only on a desktop that takes the GPU, the provisional
+    // record only on a start state that could be read, and the latch only on a start that passed the start gate. A
+    // latch base is therefore taken at the first decision of the boot that passed both.
     const ProtectedKind kind = ProtectedKindOf(exe);
     const bool gated = kind == ProtectedKind::GatedLatchRequired || kind == ProtectedKind::GatedLatchBestEffort;
     LatchStore store = {nullptr, "none"};
-    char protectedWord[256] = "no";
+    ProvisionalView provisional = {false, false, false, "unread", "none"};
+    bool latchRead = false;
+    char protectedWord[320] = "no";
     if (kind == ProtectedKind::Never) strcpy_s(protectedWord, "never");
     else if (gated && !a.protected_gpu) strcpy_s(protectedWord, "off");
     else if (gated) {
@@ -583,18 +591,37 @@ static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *
         if (in.desktop_gpu) {
             s = ReadRouterStartState();
             in.start = StartHealthOf(s.unconfirmed_known, s.unconfirmed, s.boot_known, s.boot);
+            // Every decision that read a start state carries out the provisional record (a confirmed start clears
+            // Pending, a start after an unconfirmed one turns an earlier boot's Pending into Off).
+            if (in.start != StartHealth::Unreadable)
+                provisional = ReadProvisional(RegistryView, in.start, s.unconfirmed, a.gpu);
+            in.provisional_store = provisional.store;
+            in.provisional_off = provisional.off;
         }
-        if (in.desktop_gpu && in.start == StartHealth::Confirmed) {
+        const bool provisionalOpen = in.start == StartHealth::Provisional && provisional.store && !provisional.off;
+        if (in.desktop_gpu && (in.start == StartHealth::Confirmed || provisionalOpen)) {
             store = OpenLatchStore(RegistryView);
             in.latch = LatchOf(ReadLatch(store.key, exe, s.restarts_known, s.restarts));
+            latchRead = true;
         }
+        // latch:unread = the start gate is closed, so the latch was not read (and no base was taken).
         _snprintf_s(protectedWord, _TRUNCATE, "desktop:%s/%s,start:%s/%lu/%lu,latch:%s/%s/%lu",
                     in.desktop_gpu ? "gpu" : "cpu", bc250_desktop_route_text(status, record.route),
                     StartHealthName(in.start), s.unconfirmed_known ? s.unconfirmed : 0xFFFFFFFFul,
-                    s.boot_known ? s.boot : 0xFFFFFFFFul, LatchName(in.latch), store.where,
+                    s.boot_known ? s.boot : 0xFFFFFFFFul, latchRead ? LatchName(in.latch) : "unread", store.where,
                     s.restarts_known ? s.restarts : 0xFFFFFFFFul);
     }
     AppDecision d = DecideApp(in);
+    // A provisional GPU route writes its record first (on the disk, flushed), so that a hang inside the GPU open or
+    // later in the boot is found by the next boot. An image that cannot write it waits for the confirmation.
+    if (gated && d.route == AppRoute::Gpu && in.start == StartHealth::Provisional) {
+        const bool already = provisional.pending_this_boot;
+        if (WriteProvisional(RegistryView, store, a.gpu, already)) provisional.action = already ? "kept" : "written";
+        else {
+            provisional.action = "write-failed";
+            d = {AppRoute::Cpu, AppReason::ProtectedUnconfirmed};
+        }
+    }
     // A logon image on its way to the GPU UMD arms its marker first, so that a fault inside the GPU open is caught
     // as well. LogonUI.exe and consent.exe go to the CPU UMD when the marker cannot be armed: their latch is required.
     bool armed = false;
@@ -605,7 +632,8 @@ static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *
     if (store.key) RegCloseKey(store.key);
     if (gated && in.protected_gpu) {
         const size_t used = strlen(protectedWord);
-        _snprintf_s(protectedWord + used, sizeof(protectedWord) - used, _TRUNCATE, ",armed:%u", armed ? 1u : 0u);
+        _snprintf_s(protectedWord + used, sizeof(protectedWord) - used, _TRUNCATE, ",prov:%s/%s,armed:%u",
+                    provisional.state, provisional.action, armed ? 1u : 0u);
     }
     HRESULT gpuHr = S_FALSE; // not tried
     if (d.route == AppRoute::Gpu) {

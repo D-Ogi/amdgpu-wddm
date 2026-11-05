@@ -50,12 +50,18 @@ the first gate that is closed. Each closed gate has its reason in the route line
    with the same `DesktopRouter` key and the same start-latched kernel switches (`InteropLastState`). Also, the
    desktop-route record of the session (`driver/contract/bc250_desktop_route.h`) must not say that the
    compositor ended on the CPU UMD. A record that cannot be read does not close the gate.
-3. The start gate, reason `app-protected-unconfirmed`. The kernel driver must have confirmed this start:
-   `Parameters\UnconfirmedStarts` is 0 and the volatile `GuardBoot\Confirmed` is 1
-   ([wddm-start-confirmation.md](wddm-start-confirmation.md), `driver/kmd/guard.c`). Each `StartDevice` adds one
-   to the counter, and a durable confirmation writes 0 and the volatile mark. A runtime restart of the device in a
-   confirmed boot adds one again, so it is unconfirmed until its own confirmation. A value that cannot be read
-   closes the gate.
+3. The start gate, reason `app-protected-unconfirmed`. Each `StartDevice` adds one to
+   `Parameters\UnconfirmedStarts`, and a durable confirmation writes 0 and the volatile mark `GuardBoot\Confirmed`
+   = 1 ([wddm-start-confirmation.md](wddm-start-confirmation.md), `driver/kmd/guard.c`). The gate is open in two
+   states:
+   - Confirmed: the counter is 0 and the mark is 1.
+   - Provisional: the counter is 1 and the mark is absent. This is the first start of a boot after a start that
+     was confirmed. The image must be able to write the provisional record (next section), and the record must not
+     be off for this GPU UMD (reason `app-protected-provisional-off`).
+
+   Every other state closes the gate. A counter of 2 or more is a start after a start that was never confirmed.
+   A counter of 1 with the mark is a runtime restart of the device in a confirmed boot, which stays closed until its
+   own confirmation. A value that cannot be read also closes the gate.
 4. The fault latch (next section): `app-protected-faulted`, `app-protected-reset`, and for `LogonUI.exe` and
    `consent.exe` also `app-protected-unlatched` when the store cannot be written.
 
@@ -69,15 +75,57 @@ to the logon images as well:
 
 The route line ends with `protected=<word>`. The word is `no` for every other image and `never` for
 `winlogon.exe`. It is `off` when `ProtectedGpu` is off. Otherwise it gives the state of each gate, for example
-`protected=desktop:gpu/absent,start:confirmed/0/1,latch:clear/hklm/2,armed:1`.
+`protected=desktop:gpu/absent,start:confirmed/0/1,latch:clear/hklm/2,prov:on/none,armed:1`.
 
 ## What this gives the first sign-in of a boot
 
-The start confirmation needs at least 60 s of healthy presentation. The sign-in screen of a boot without
-automatic sign-in opens its adapter before that time, so it draws on the CPU UMD. This is the intended result:
-before the confirmation, nothing shows that this start can draw a screen. Later screens use the GPU UMD:
-`LogonUI.exe` exits after each sign-in, and Windows starts it again for each lock, unlock and Ctrl+Alt+Del.
-A sign-in screen that waits for a long time stays on the CPU UMD until it closes.
+The start confirmation needs at least 60 s of healthy presentation. The sign-in screen of every boot opens its
+adapter before that time. Up to 2026-11-05 the start gate needed a confirmed start, so the first sign-in screen of
+each boot drew on the CPU UMD (lab, 2026-11-05: `LogonUI.exe` 15 s after the boot,
+`start:unconfirmed/1/0`). The vendor drivers draw that screen on the GPU from its first frame (BD-299).
+
+The provisional state opens the gate for that screen: `UnconfirmedStarts` is 1, the count of this start only,
+so the start before it was confirmed. The latch protects a provisional start as it protects a confirmed one. A
+fault of `LogonUI.exe` moves the next sign-in screen to the CPU UMD, and a recovered TDR moves every gated image
+to the CPU UMD for the rest of the boot.
+
+A hang that the driver does not recover kills the boot and its volatile latch. The next start then reads 2, and
+its sign-in screen draws on the CPU UMD. When that boot is confirmed, the start after it reads 1 again. Without
+more state, every second boot would hang. The provisional record stops this loop.
+
+## The provisional record
+
+`driver/umd/router/router-provisional.h` keeps a record that survives a restart:
+
+| Key and value | Kind | Meaning |
+|---|---|---|
+| `HKLM\SOFTWARE\amdgpu-wddm\ProtectedStart\Pending` | `REG_SZ` | the GPU UMD path of a provisional GPU route whose start is not known to be confirmed |
+| `HKLM\SOFTWARE\amdgpu-wddm\ProtectedStart\Off` | `REG_SZ` | the GPU UMD path for which the provisional route is off |
+| `HKLM\SOFTWARE\amdgpu-wddm\ProtectedLatch\Provisional` | `REG_DWORD`, volatile | 1: a decision of this boot wrote `Pending` |
+
+- Before the GPU open of a provisional route, the router writes `Pending` and flushes the key. Then it writes the
+  volatile mark. If one of the writes fails, the image takes the CPU UMD (`app-protected-unconfirmed`).
+- Each decision that reads a start state also reads the record and does what it finds:
+  - A confirmed start removes `Pending`.
+  - `Pending` without the mark comes from an earlier boot. When the counter is 2 or more, the start before this
+    one was never confirmed: `Off` takes the path and `Pending` goes. When the counter is 0 or 1, that start was
+    confirmed, and `Pending` goes.
+- `Off` closes the provisional route for that GPU UMD path only. A new driver package has a new path, so it tries
+  the provisional route again. A confirmed start is not affected by `Off`.
+
+A power loss before the confirmation of a provisional boot also sets `Off`. That costs the GPU route of the first
+sign-in screen until the next driver package, and nothing else. The record follows the guard's own counter, so a
+tool that writes `UnconfirmedStarts` = 0 before a restart (the lab kit's `restart.ps1`) also clears this
+evidence. Only Local System (`LogonUI.exe`, `consent.exe`) can write the record. `LockApp.exe` and
+`CredentialUIBroker.exe` wait for the confirmation.
+
+The route line shows the record as `prov:<state>/<action>`:
+
+- The state is `on`, `off`, `nostore` (the record cannot be written) or `unread` (no start state was read).
+- The action is `none`, `cleared`, `set-off`, `written`, `kept` or `write-failed`.
+
+When the start gate is closed, the route line shows `latch:unread`. The router does not read the latch behind a
+closed gate, so it takes no base there.
 
 ## The fault latch and the recovery
 
@@ -107,7 +155,7 @@ What Windows does after a fault, and what happens next:
 | A fault of the GPU UMD ends `LogonUI.exe` | `winlogon.exe` starts `LogonUI.exe` again (to be measured, see the lab plan) | the marker has no live process: CPU UMD, `app-protected-faulted` |
 | A GPU hang that the driver recovers | TDR, event 4101. The process gets device-removed | `AdapterRestarts` > `Base`: CPU UMD, `app-protected-reset` |
 | Hangs that the driver does not recover | bugcheck 0x116, restart | the interop session marker closes the desktop route (`InteropClosedReason` 4). Then the desktop gate closes, and the start guard counts the start |
-| A crash of the machine or a power loss | restart | the latch is gone with the boot. The start is unconfirmed until the confirmation, so the first sign-in is on the CPU UMD |
+| A crash of the machine or a power loss | restart | the latch is gone with the boot. The next start reads 2, so its sign-in is on the CPU UMD. If the boot that died took the provisional route, `Off` closes that route for this GPU UMD |
 | A start that the guard refuses | Windows uses its fallback adapter driver | our router does not run |
 
 The latch does not see a fault that the process itself catches and then follows with a clean exit. Such a
@@ -142,4 +190,6 @@ GPU UMD.
   at a time. `protected-latch-dead` (a process that ended), `-reused` (a process ID used again), `-set` and
   `-reset` give the CPU UMD. `protected-gpu-fails` removes the marker after a failed GPU open. `protected-winlogon`
   stays on the CPU UMD. `protected-logonui` gives `app-protected-unconfirmed`, because the fixture holds no start
-  record.
+  record. `protected-provisional` takes the GPU UMD on a provisional start and writes the record before the GPU
+  open. `-off`, `-set-off`, `-cleared` and `-confirmed` read a record that an earlier boot or this boot left.
+  The router before this change fails these five scenarios and the four that read the route word.
