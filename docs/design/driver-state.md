@@ -81,6 +81,14 @@ For such a store, the abandon step only moves the file.
 The prepare, the archive of an uninstall and the settings read then use the legacy state, which was the source of the unfinished transaction.
 The KMD accepts a legacy transfer into such a store, because no `Active` value and no earlier generation exist.
 In all other cases, a bound package that declares the catalog without a store with `Active` stays an error.
+The archive of an uninstall of such a store has origin 2 (legacy).
+The worker writes that archive only as `archive-<transaction>.bin`, and every removal record moves aside as `retired-<transaction>-<name>`.
+The reason is that the prepare of every released install (0.7.216.106 and later) accepts only a removal record of an installed generation.
+On a removal record of another origin, the prepare stops with error 50, `ERROR_NOT_SUPPORTED` (lab 26200, tester.37).
+An install after this uninstall thus finds no removal record and installs fresh. The settings of the unfinished store never became active.
+A resumed uninstall of that store reads its own `archive-<transaction>.bin` and accepts only a legacy archive of its transaction, device and product.
+Main 967c6d76 wrote such a legacy removal record. If an install finds one of its device, the record moves aside as evidence and the install continues fresh.
+The installer then writes a warning: the settings are not carried over, because the install of that version did not finish.
 If the KMD has already applied the handoff, `Active` names the transaction and the store has no freeze: only the file moves.
 The same transaction can publish its handoff again after an abandon. A retired copy with the same bytes then completes the step.
 The worker removes `pending.bin` only after a byte compare under the lock, and the installer log records this removal.
