@@ -144,9 +144,52 @@ We read each version from the file version of the signed installer, or from the 
 The most useful next result is the export of the HLK test list for our adapter. That list turns the requirements
 into a checklist. Each line gets one of three marks: implement, test, or not applicable.
 
+## First HLK results on 25H2, 2026-11-05
+
+The first campaign ran on Windows 11, version 25H2 (build 26200, native VHDX boot) with the HLK 10.1.26100.8328
+controller in a VHLK virtual machine. The package is `0.7.216.109-tester.37`, release flavour, KMD build 0.7.216.65.
+HLK selected 1397 tests for the adapter from the official 25H2 compatibility playlist. All 1397 are in that
+playlist. These are internal runs on one board. They are not a submission package, and the official filters were
+not applied.
+
+Each job started only after these checks on the client: the prerequisites, a baseline of the configuration and a
+live thermal guard. The guard stops the HLK client at 87 C. Driver Verifier stayed on for all jobs. The HLK
+configuration task set it for `bc250kmd.sys` and `wdf01000.sys`, and a client restart applied it before the first
+job ran.
+
+| Job | Result | Test cases | Run time |
+| --- | --- | --- | --- |
+| `DF - InfVerif INF Verification` | Passed | 1 of 1 passed. The Driver Verifier event check passed. | 0.2 min |
+| `WGF11 D3DWDDM` | Passed | 15 cases: 14 passed, 1 skipped. The DXGK validation check passed 4 of 4. | 6.2 min, with 2 client restarts by HLK |
+| `WGF11 D3DWDDM (WoW64)` | Passed | 15 cases: 14 passed, 1 skipped. The x86 test binaries ran. | 1.0 min |
+| `GDIHW_Functional test for GDI HW ACC (v1.1)` | Passed | 22 cases: 21 passed, 1 warning. | 1.1 min |
+| `GDIHW_Functional test for GDI HW ACC (v1.1) (WoW64)` | Passed | 22 of 22 passed. | 0.8 min |
+
+No job had a failed or blocked case, no filter applied, and no bugcheck occurred. Every job ran on the adapter
+"BC-250 GPU (amdgpu-wddm)", PCI `VEN_1002&DEV_13FE`. The WGF11 jobs found it as a WDDM 2.0 hardware device with
+DDI level 11. The GDIHW jobs used the 64-bit and the 32-bit desktop routers of the package.
+
+Cases that did not pass:
+
+- `D3D9DriverRuntimeVersion` in both WGF11 jobs. The test skips it with the message "Not applicable on devices
+  without a DX9 driver". The package has no D3D9 user-mode driver (BD-157). The CreateDevice and v-table checks that
+  failed in earlier campaigns pass in this run.
+- `Check Status` in the native GDIHW job. The warning says that the BitBlt performance is low and that device bitmaps
+  can be disabled (BD-306). The WoW64 job reports that device bitmaps are in use and has no warning.
+
+Two log items are not driver defects:
+
+- The Driver Verifier event check logs isolation rule 0x210001 for `wdf01000.sys`, a Microsoft module. The check
+  passes.
+- Two GDIHW setup tasks remove registry values that are not present. They exit with code 1, and the test continues.
+
+The highest CPU temperature (Tctl) was 86.25 C, 18 s after a client restart by HLK. The KMD thermal policy then limited
+the GPU clock to 800 MHz, and the guard did not stop the client. Later jobs start only when Tctl is below 70 C.
+
 ## Blockers from the documentation
 
-Review date: 2026-10-13. The profile is Full Graphics, WDDM 2.0, Windows 11 25H2 x64, with WoW64 user-mode components.
+Review date: 2026-10-13, with the G1 row updated on 2026-11-05. The first HLK results above supersede the setup
+state of rows E1, E2 and E4 and give partial results for S2 and D3. The profile is Full Graphics, WDDM 2.0, Windows 11 25H2 x64, with WoW64 user-mode components.
 The source review uses driver revision `878f296291ad3671c25532a56a251d9fff0918ba` and the named candidates below.
 It does not replace the device-specific test list that HLK will generate. No row is a measured HLK failure.
 
@@ -173,7 +216,7 @@ The latest dated results take precedence over older summaries. The table does no
 | E4 | Device-selected tests, matching official playlist and current filters. [Select and run tests](https://learn.microsoft.com/en-us/windows-hardware/test/hlk/getstarted/step-6-select-and-run-tests). | **Setup.** The local environment record lists downloaded playlist and filter files. No adapter test-list export or HLK result package exists in the reviewed inputs. | **S.** Import the matching files, select the installed adapter and export its test list. Record the package, kit and filters with each run. |
 | H1 | Certification hardware coverage. [Graphics prerequisites](https://learn.microsoft.com/en-us/windows-hardware/test/hlk/testref/graphic-adapter-or-chipset-testing-prerequisites), hardware requirements. | **Setup.** The local environment record lists one board and one attached monitor. The prerequisites ask for two computers and two adapters per INF family, with multi-display coverage. | **M.** Supply the required hardware coverage or get an applicable program exception. A single-monitor job's Continue option does not waive the submission prerequisites. |
 | H2 | Test-system storage and sleep coverage. HLK prerequisites, 300 GB disk requirement. `DF - Sleep with IO During (Reliability)`. | **Setup.** The local environment record lists an 80 GB maximum for the client VHDX. Native VHDX boot does not support hibernation. Explicit HLK acceptance of this boot layout is unverified. | **M.** Resolve storage for certification. Use a supported hibernation-capable installation for selected S4 tests, or document why those tests do not apply. |
-| G1 | GDI hardware acceleration. [WDDM feature caps](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/wddm-driver-and-feature-caps), mandatory Full Graphics row. `GDIHW_Functional test for GDI HW ACC (v1.1)`. | **Implemented, HLK job not run.** Since 0.7.216.105-tester.33, [wddm.c](../../driver/kmd/wddm.c) fills `DxgkDdiRenderGdi` and `DxgkDdiRenderKm` and sets `SupportKernelModeCommandBuffer` when `EnableGdiHwAccel` is 1, the installation default. Lab trials 3 to 5 of [the GDI lab plan](gdi-hw-accel-lab.md) passed (facts M926, M927). | **S.** Run the native and WoW64 jobs on the 26200 client with a package that has the capability on. A job that does not appear in the selection means that the capability did not reach the OS. |
+| G1 | GDI hardware acceleration. [WDDM feature caps](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/wddm-driver-and-feature-caps), mandatory Full Graphics row. `GDIHW_Functional test for GDI HW ACC (v1.1)`. | **Implemented, HLK jobs passed on 2026-11-05.** Since 0.7.216.105-tester.33, [wddm.c](../../driver/kmd/wddm.c) fills `DxgkDdiRenderGdi` and `DxgkDdiRenderKm` and sets `SupportKernelModeCommandBuffer` when `EnableGdiHwAccel` is 1, the installation default. Lab trials 3 to 5 of [the GDI lab plan](gdi-hw-accel-lab.md) passed (facts M926, M927). On tester.37 the native and WoW64 jobs passed. The native job warns that BitBlt performance is low (BD-306). | **S.** Find the cause of the native BitBlt performance warning. Run both jobs again on the submission package. |
 | G2 | Virtual resolution and DWMClone. Component specification, `Device.Graphics.WDDM20.Display.VirtualModeSupport.CoreRequirement`, page 251. | **Contract gap.** The specification says WDDM 2.0 drivers report `VirtualModeSupport=1`. [wddm.c](../../driver/kmd/wddm.c) has no `DXGKQAITYPE_DISPLAY_DRIVERCAPS_EXTENSION` case. An unhandled query returns `STATUS_NOT_SUPPORTED`. | **M.** Implement the query and its mode semantics together. Check applicability of the section's If-Implemented label against the selected WDDM 2.0 profile. Do not merely set the bit. |
 | V1 | D3D11 decoder DDI. Component specification, `Device.Graphics.WDDM12.Render.D3D11VideoDecoding`, pages 229-230. | **Contract gap.** The rendering UMD does not expose the video path. See [ddi-format.cpp](../../driver/umd/dxvk/ddi-format.cpp) and [ddi-clear-view.cpp](../../driver/umd/dxvk/ddi-clear-view.cpp). The M15.11 encoder is a separate interface. | **L.** Implement the required H.264 decoder profile, NV12 and 420_OPAQUE output, and the specified x64/x86 protection support. Run the selected DXVA jobs. |
 | V2 | D3D11 video processor DDI. Component specification, `Device.Graphics.WDDM12.Render.D3D11VideoProcessing`, pages 230-231. | **Contract gap.** The same UMD has no video processor table. Ordinary texture sampling and format admission do not implement video processing. See [ddi-format.cpp](../../driver/umd/dxvk/ddi-format.cpp). | **L.** Add the required formats, deinterlacing, scaling, rotation and colour conversion. Check the video processor caps and selected jobs. |
