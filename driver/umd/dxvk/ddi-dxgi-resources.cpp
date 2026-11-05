@@ -70,6 +70,23 @@ HRESULT allocation_batch(DeviceOwner &owner,const DXGI_DDI_HRESOURCE *resources,
     }
     return S_OK;
 }
+// BD-308: one line for each offer whose wait for the device's work did not end with S_OK, 16 for each process. The
+// offer still goes to the kernel after such a wait, so only this line shows it.
+void offer_wait_note(HRESULT wait,UINT count,DWORD waited_ms) {
+    static std::atomic_uint left{16};
+    unsigned n=left.load(std::memory_order_relaxed);
+    while (n && !left.compare_exchange_weak(n,n-1,std::memory_order_relaxed)) {}
+    if (!n) return;
+    char text[192];
+    std::snprintf(text,sizeof(text),"BC250 BD-308: OfferResources: the wait for the device's work returned %08X after "
+        "%lu ms; %u allocation(s) offered with work in flight\n",unsigned(wait),(unsigned long)waited_ms,count);
+    OutputDebugStringA(text);
+    amdgpu_wddm_log::print("%s",text);
+}
+// BD-308: the longest CPU wait of an offer for the work of its device. An offer is rare (a suspended or hidden
+// application, a trim), so the wait costs little; past the bound the offer goes to the kernel with the work in flight,
+// as the contract allows.
+inline constexpr DWORD kOfferRetireMs=500;
 HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
     if (!args) { dxgi_entry_note("OfferResources",E_INVALIDARG); return E_INVALIDARG; }
     UINT kernel=0;
@@ -88,6 +105,20 @@ HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
             };
             HRESULT result=status(); if (FAILED(result)) return result;
             owner.context()->Flush(); // Engine E3: all prior commands submitted, not a CPU wait.
+            result=status(); if (FAILED(result)) return result;
+            // BD-308: wait until the kernel has retired the submitted work, then offer. The contract lets the kernel
+            // defer an offer of an allocation that work in flight uses (display/offer-and-reclaim-changes.md), and a
+            // Reclaim before the kernel completed that deferred offer finds the content kept. The HLK test
+            // "OfferReclaim11 - Offer States" reclaims directly after the offer and, in its offer state 5, which it sets
+            // with D3DKMT_ESCAPE_ADAPTER_VERIFIER_OPTION (escape 29, d3dkmthk.h; the VidMm flags there include
+            // AlwaysDiscardOffer), asserts a discard: on tester.37
+            // it failed for each workload that used the texture before the offer and passed for the one that did not.
+            // An offer of an idle allocation is not deferred, so the wait makes the result independent of how fast
+            // the work completes.
+            const ULONGLONG start=GetTickCount64();
+            const HRESULT retired=wait_device_work_retired(owner.bridge(),kOfferRetireMs);
+            if (retired==D3DDDIERR_DEVICEREMOVED) { latch_device_lost(owner.bridge()); return DXGI_ERROR_DEVICE_REMOVED; }
+            if (retired!=S_OK) offer_wait_note(retired,UINT(handles.size()),DWORD(GetTickCount64()-start));
             return status();
         });
     });
