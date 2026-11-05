@@ -9,9 +9,19 @@
 #include "vblank-pacer.h"
 #include "../app-settings/app-settings.h"
 #include "scanout-primary.h"
+#include "engine-memory-allocation.h"
 #include <memory>
 #include <vector>
 namespace bc250::umd {
+// BD-309: what an offer of an engine-private resource needs. The engine (ABI 1.6) puts the resource on memory of its
+// own and names it (PrepareOffer); the hosted ICD names the kernel allocation of that memory. Either may be absent (an
+// older engine or ICD): such resources stay hints, as before. The owner holds the reference to engine.
+struct EngineOfferPath {
+    IBc250DxvkDevice5 *engine=nullptr;
+    PFN_bc250GetMemoryAllocation query=nullptr;
+    VkDevice device=VK_NULL_HANDLE;
+    bool ready() const { return engine && query && device; }
+};
 // Heap-owned by the DDI device handle. Keep this entire owner and both DLLs
 // alive if close fails. The runtime's private handle must never contain a
 // by-value copy of this object: callback userdata and descriptors point into it.
@@ -49,6 +59,8 @@ public:
     size_t surface_count() const { return surfaces_.size(); }
     // The paging queue of the surfaces (prepare_surface_import creates it). The close tests set it.
     SurfacePagingQueue &surface_queue() { return surface_queue_; }
+    // BD-309: the offer path of engine-private resources (initialize fills it). The DXGI resource tests set it.
+    EngineOfferPath &offer_path() { return offer_path_; }
     // BD-065: the B8G8R8A8 shadows of windowed Blt presents. Their surfaces are owned by surfaces_.
     PresentShadows &present_shadows() { return present_shadows_; }
     // The per-application FrameRateLimit of this device's presents (docs/design/per-app-graphics-settings.md).
@@ -75,7 +87,8 @@ public:
     }
     bool has_live_objects() const {
         return !surfaces_.empty() || surface_queue_.queue || surface_queue_.sync || surface_queue_.cpu || runtime_.present_context || bridge_.present_sync || instance_.info().Instance ||
-            session_.device() || session_.must_retain_owner() || engine4_ || device_ || context_ || retained_module_count();
+            session_.device() || session_.must_retain_owner() || engine4_ || offer_path_.engine || device_ || context_ ||
+            retained_module_count();
     }
 private:
     HRESULT prepare_surface_import();
@@ -94,6 +107,7 @@ private:
     HostedInstance instance_;
     EngineSession session_;
     IBc250DxvkDevice4 *engine4_=nullptr;
+    EngineOfferPath offer_path_{};
     ID3D11Device5 *device_=nullptr;
     ID3D11DeviceContext4 *context_=nullptr;
     HMODULE modules_[3]{};

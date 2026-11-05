@@ -54,6 +54,14 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
         if (SUCCEEDED(hr) && !engine4_) hr=E_NOINTERFACE;
     }
     if (SUCCEEDED(hr)) {
+        // BD-309: optional. An engine below ABI 1.6 or an ICD without the query keeps engine resources as offer hints.
+        IBc250DxvkDevice5 *engine5=nullptr;
+        if (SUCCEEDED(session_.engine()->QueryInterface(__uuidof(IBc250DxvkDevice5),reinterpret_cast<void **>(&engine5))))
+            offer_path_.engine=engine5;
+        offer_path_.query=reinterpret_cast<PFN_bc250GetMemoryAllocation>(get(VK_NULL_HANDLE,kMemoryAllocationQueryName));
+        offer_path_.device=session_.device();
+    }
+    if (SUCCEEDED(hr)) {
         hr=session_.engine()->GetD3D11Device(__uuidof(ID3D11Device5),reinterpret_cast<void **>(&device_));
         if (SUCCEEDED(hr) && !device_) hr=E_FAIL;
     }
@@ -195,6 +203,8 @@ HRESULT DeviceOwner::close() {
     if (context_) { context_->Release(); context_=nullptr; }
     if (device_) { device_->Release(); device_=nullptr; }
     if (engine4_) { engine4_->Release(); engine4_=nullptr; }
+    if (offer_path_.engine) offer_path_.engine->Release();
+    offer_path_={};
     step_="close-session";
     hr=session_.close();
     if (FAILED(hr)) return hr;
