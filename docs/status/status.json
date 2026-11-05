@@ -4301,7 +4301,7 @@
       {
        "name": "pfnMakeResident",
        "function": "native_make_resident",
-       "source": "driver/umd/d3d12/native-residency-ddi.cpp:85",
+       "source": "driver/umd/d3d12/native-residency-ddi.cpp:231",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4313,7 +4313,7 @@
       {
        "name": "pfnEvict",
        "function": "native_evict",
-       "source": "driver/umd/d3d12/native-residency-ddi.cpp:90",
+       "source": "driver/umd/d3d12/native-residency-ddi.cpp:236",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4493,10 +4493,10 @@
       },
       {
        "name": "pfnOfferResources",
-       "function": "offer_resources",
-       "source": "driver/umd/d3d12/shell-core-ddi.h:45",
-       "done": false,
-       "reason": "every return is a failure constant",
+       "function": "native_offer_resources",
+       "source": "driver/umd/d3d12/native-residency-ddi.cpp:241",
+       "done": true,
+       "reason": "does work",
        "applicability": {
         "class": "applicable",
         "reason": "Offer and reclaim were ported to the D3D12 DDI (ID3D12Device::OfferResources).",
@@ -4505,10 +4505,10 @@
       },
       {
        "name": "pfnReclaimResources",
-       "function": "reclaim_resources",
-       "source": "driver/umd/d3d12/shell-core-ddi.h:50",
-       "done": false,
-       "reason": "every return is a failure constant",
+       "function": "native_reclaim_resources",
+       "source": "driver/umd/d3d12/native-residency-ddi.cpp:246",
+       "done": true,
+       "reason": "does work",
        "applicability": {
         "class": "applicable",
         "reason": "Offer and reclaim were ported to the D3D12 DDI (ID3D12Device::ReclaimResources).",
@@ -4651,7 +4651,7 @@
       {
        "name": "pfnGetDebugAllocationInfo",
        "function": "debug_allocation_info",
-       "source": "driver/umd/d3d12/shell-core-ddi.h:86",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:76",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4712,7 +4712,7 @@
       {
        "name": "pfnCalcPrivateSchedulingGroupSize",
        "function": "scheduling_group_size",
-       "source": "driver/umd/d3d12/shell-core-ddi.h:60",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:50",
        "done": true,
        "reason": "returns the answer",
        "applicability": {
@@ -4724,7 +4724,7 @@
       {
        "name": "pfnCreateSchedulingGroup",
        "function": "scheduling_group_create",
-       "source": "driver/umd/d3d12/shell-core-ddi.h:65",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:55",
        "done": false,
        "reason": "every return is a failure constant",
        "applicability": {
@@ -4736,7 +4736,7 @@
       {
        "name": "pfnDestroySchedulingGroup",
        "function": "scheduling_group_destroy",
-       "source": "driver/umd/d3d12/shell-core-ddi.h:71",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:61",
        "done": false,
        "reason": "forwards to reject_void: only logs, counts, reads or writes zeros",
        "applicability": {
@@ -4928,7 +4928,7 @@
       {
        "name": "pfnSetBackgroundProcessingMode",
        "function": "background_processing_mode",
-       "source": "driver/umd/d3d12/shell-core-ddi.h:100",
+       "source": "driver/umd/d3d12/shell-core-ddi.h:90",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -6522,15 +6522,15 @@
     }
    ],
    "summary": {
-    "done": 188,
+    "done": 190,
     "total": 215,
     "partial": 8,
-    "percent": 87.44,
+    "percent": 88.37,
     "applicable": {
-     "done": 186,
+     "done": 188,
      "total": 200,
      "partial": 8,
-     "percent": 93.0
+     "percent": 94.0
     },
     "classes": {
      "applicable": 200,
