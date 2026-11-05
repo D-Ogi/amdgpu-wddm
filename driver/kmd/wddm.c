@@ -5082,12 +5082,12 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     // BD-223: MaxOverlayPlanes counts the primary, so 1 is plane 0 alone (LabScaledPlane bit 2 asks 2, a lab
     // question; Check still refuses a second plane). The count is the trailer's (WddmMpoFlags), which the front
-    // reports too. No MPO immediate-flip cap. One flip-on-vsync in flight per plane: WHCP
-    // Device.Graphics.WDDM21.FlipQueueLatency asks MaxQueuedMultiPlaneOverlayFlipVSync = 1 of such hardware.
+    // reports too. No MPO immediate-flip cap, and MaxQueuedMultiPlaneOverlayFlipVSync stays 0 as it was at
+    // WDDMVersion 2.0: no dxgkrnl check found asks for it at 2.9, so the WHCP queue-depth item (WDDM21.FlipQueueLatency)
+    // belongs to the MPO work (BD-223), not to the WDDMVersion change.
     if (Device->Wddm && (((BC250_WDDM*)Device->Wddm)->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK)) {
         caps->SupportMultiPlaneOverlay = TRUE;
         caps->MaxOverlayPlanes = bc250_scanout_mpo_planes(WddmMpoFlags(((BC250_WDDM*)Device->Wddm)->ScaledPlane));
-        caps->MaxQueuedMultiPlaneOverlayFlipVSync = 1;
     }
 #endif
     caps->InterruptMessageNumber = 0;                   // the INF asks for one MSI message, so it is message 0 (M38)
