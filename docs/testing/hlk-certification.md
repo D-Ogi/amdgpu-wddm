@@ -172,8 +172,10 @@ DDI level 11. The GDIHW jobs used the 64-bit and the 32-bit desktop routers of t
 Cases that did not pass:
 
 - `D3D9DriverRuntimeVersion` in both WGF11 jobs. The test skips it with the message "Not applicable on devices
-  without a DX9 driver". The package has no D3D9 user-mode driver (BD-157). The CreateDevice and v-table checks that
-  failed in earlier campaigns pass in this run.
+  without a DX9 driver". This skip is expected. The package supplies Direct3D 9 through D3D9On12: the D3D9 entry of
+  `UserModeDriverName` and `UserModeDriverNameWow` is `<>`, and the runtime then uses D3D9On12 on our D3D12 driver.
+  The test reads the DDI version of a native D3D9 user-mode driver, which that route does not have. The D3D9
+  CreateDevice and v-table checks that failed in earlier campaigns (BD-157) pass in this run, for x64 and x86.
 - `Check Status` in the native GDIHW job. The warning says that the BitBlt performance is low and that device bitmaps
   can be disabled (BD-306). The WoW64 job reports that device bitmaps are in use and has no warning.
 
