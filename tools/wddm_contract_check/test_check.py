@@ -519,10 +519,38 @@ class NegativeFixtures(unittest.TestCase):
         self.assertEqual({}, {k: v for k, v in result.items() if v == check.VIOLATION})
         self.assertEqual(check.OK, result["R20-WDDMVERSION-VS-INTERFACE"])
 
+    # BD-307: the MPO3 report and flip, in the shapes of wddm.c.
+    MPO3_SOURCE = r"""
+static BOOLEAN WddmMpo3Notify(_In_ BC250_DEVICE* Device, _In_ const DXGKARGCB_NOTIFY_INTERRUPT_DATA* Data)
+{
+    DXGKARGCB_NOTIFY_INTERRUPT_DATA mpo;
+    DXGK_MULTIPLANE_OVERLAY_VSYNC_INFO2 layer;
+    if (!Bc250Mpo3Report(&wddm->Mpo3, Data->CrtcVsync.PhysicalAddress.QuadPart, &count, &presentId)) return FALSE;
+    layer.PresentId = presentId;
+    mpo.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2;
+    mpo.CrtcVsyncWithMultiPlaneOverlay2.pMultiPlaneOverlayVsyncInfo = count ? &layer : NULL;
+    Device->Dxgk.DxgkCbNotifyInterrupt(Device->Dxgk.DeviceHandle, &mpo);
+    return TRUE;
+}
+
+static BOOLEAN WddmNotifyRoutine(_In_ PVOID Context)
+{
+    if (!WddmMpo3Notify(notify->Device, &notify->Data)) WddmNotifyCall(notify->Device, &notify->Data);
+    return TRUE;
+}
+
+static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const HANDLE hAdapter,
+    _Inout_ DXGKARG_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY3* pSet)
+{
+    if (!plane->InputFlags.Enabled) return WddmMpo3Keep(device, wddm, TRUE, plane->PresentId);
+    return WddmFlipEntry(hAdapter, &flip, NULL, TRUE, plane->PresentId);
+}
+"""
+
     @staticmethod
-    def wddm29(answer_type16=True, link_info=True):
+    def wddm29(answer_type16=True, link_info=True, mpo3=True):
         """The stage B4 shape (BD-307): interface 0xE003, table WDDM2_9, WDDMVersion 2.9, type 16 answered,
-        UpdateMonitorLinkInfo in the table."""
+        UpdateMonitorLinkInfo and the MPO3 trio in the table, with the MPO3 report and flip."""
         wddm = GOOD_WDDM.replace("Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_0;",
                                  "Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_9;")
         wddm = wddm.replace("#define DXGKDDI_INTERFACE_VERSION 0x5023", "#define DXGKDDI_INTERFACE_VERSION 0xE003")
@@ -538,6 +566,14 @@ class NegativeFixtures(unittest.TestCase):
             wddm = wddm.replace("    Data->DxgkDdiQueryAdapterInfo = Bc250WddmQueryAdapterInfo;",
                                 "    Data->DxgkDdiQueryAdapterInfo = Bc250WddmQueryAdapterInfo;\n"
                                 "    Data->DxgkDdiUpdateMonitorLinkInfo = Bc250WddmTracedUpdateMonitorLinkInfo;")
+        if mpo3:
+            wddm = wddm.replace("    Data->DxgkDdiQueryAdapterInfo = Bc250WddmQueryAdapterInfo;",
+                                "    Data->DxgkDdiQueryAdapterInfo = Bc250WddmQueryAdapterInfo;\n"
+                                "    Data->DxgkDdiCheckMultiPlaneOverlaySupport3 = Bc250WddmCheckMultiPlaneOverlaySupport3;\n"
+                                "    Data->DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3 = "
+                                "Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3;\n"
+                                "    Data->DxgkDdiPostMultiPlaneOverlayPresent = Bc250WddmPostMultiPlaneOverlayPresent;")
+            wddm += NegativeFixtures.MPO3_SOURCE
         return wddm
 
     def test_wddm29_shape_passes(self):
@@ -547,9 +583,74 @@ class NegativeFixtures(unittest.TestCase):
         self.assertEqual({}, {k: v for k, v in result.items() if v == check.VIOLATION})
         for rule_id in ("R20-WDDMVERSION-VS-INTERFACE", "R41-WDDMVERSION-ACCEPTED",
                         "R42-WDDMVERSION-ABOVE-2-5-INTERFACE", "R43-QAI-16-ANSWERED-FROM-2-2",
-                        "R44-UPDATEMONITORLINKINFO-FROM-2-4"):
+                        "R44-UPDATEMONITORLINKINFO-FROM-2-4", "R45-MPO3-TRIO-FROM-2-1",
+                        "R46-MPO3-FLIP-RETIRED-BY-PRESENTID"):
             self.assertEqual(check.OK, result[rule_id], rule_id)
         self.assertIn(16, facts.qai_handled)
+
+    def test_wddm20_needs_no_mpo3(self):
+        """At WDDMVersion 2.0 dxgkrnl reads no 2.1 member: the good fixture has none and both rules are n/a."""
+        result, _ = statuses()
+        self.assertEqual(check.NA, result["R45-MPO3-TRIO-FROM-2-1"])
+        self.assertEqual(check.NA, result["R46-MPO3-FLIP-RETIRED-BY-PRESENTID"])
+
+    def test_wddm29_without_the_mpo3_flip_ddi(self):
+        """The 0x139/0xA of 2026-11-05: a 2.9 table with the MPO3 flip member NULL."""
+        wddm = drop(self.wddm29(), "Data->DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3")
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R45-MPO3-TRIO-FROM-2-1")
+
+    def test_wddm21_without_check3_or_post_present(self):
+        """The rule holds from 2.1, and each member of the trio on its own."""
+        for needle in ("Data->DxgkDdiCheckMultiPlaneOverlaySupport3", "Data->DxgkDdiPostMultiPlaneOverlayPresent"):
+            wddm = drop(self.wddm29(), needle).replace("caps->WDDMVersion = DXGKDDI_WDDMv2_9;",
+                                                      "caps->WDDMVersion = DXGKDDI_WDDMv2_1;")
+            result, _ = statuses(wddm=wddm)
+            self.assertOnlyViolation(result, "R45-MPO3-TRIO-FROM-2-1")
+
+    def test_mpo3_reported_by_address(self):
+        """An MPO3 flip that is reported as CRTC_VSYNC is never retired."""
+        wddm = self.wddm29().replace("mpo.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2;",
+                                     "mpo.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC;")
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R46-MPO3-FLIP-RETIRED-BY-PRESENTID")
+
+    def test_mpo3_reported_as_flip_queue(self):
+        """Type 18 is the hardware flip queue's report, which this driver does not implement."""
+        wddm = self.wddm29().replace("DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2;",
+                                     "DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2;\n"
+                                     "    if (0) mpo.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY3;")
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R46-MPO3-FLIP-RETIRED-BY-PRESENTID")
+
+    def test_mpo3_report_without_presentid(self):
+        result, _ = statuses(wddm=drop(self.wddm29(), "layer.PresentId = presentId;"))
+        self.assertOnlyViolation(result, "R46-MPO3-FLIP-RETIRED-BY-PRESENTID")
+
+    def test_mpo3_report_not_called(self):
+        """The routine that reports a VSync calls WddmNotifyCall alone: the MPO3 report never goes out."""
+        wddm = self.wddm29().replace(
+            "if (!WddmMpo3Notify(notify->Device, &notify->Data)) WddmNotifyCall(notify->Device, &notify->Data);",
+            "WddmNotifyCall(notify->Device, &notify->Data);")
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R46-MPO3-FLIP-RETIRED-BY-PRESENTID")
+
+    def test_mpo3_report_function_missing(self):
+        """A renamed report function is a violation, not 'cannot tell'."""
+        wddm = self.wddm29().replace("static BOOLEAN WddmMpo3Notify(", "static BOOLEAN WddmMpo3NotifyRenamed(")
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R46-MPO3-FLIP-RETIRED-BY-PRESENTID")
+
+    def test_mpo3_flip_drops_presentid(self):
+        """The flip and the request with no new surface both hand their PresentId on."""
+        for old, new in (("return WddmFlipEntry(hAdapter, &flip, NULL, TRUE, plane->PresentId);",
+                          "return WddmFlipEntry(hAdapter, &flip, NULL, TRUE, 0);"),
+                         ("return WddmMpo3Keep(device, wddm, TRUE, plane->PresentId);",
+                          "return WddmMpo3Keep(device, wddm, TRUE, 0);")):
+            wddm = self.wddm29()
+            self.assertIn(old, wddm)
+            result, _ = statuses(wddm=wddm.replace(old, new))
+            self.assertOnlyViolation(result, "R46-MPO3-FLIP-RETIRED-BY-PRESENTID")
 
     def test_wddm29_without_type16(self):
         """At 2.2 or later a refused type 16 makes dxgkrnl set VirtualModeSupport by itself."""

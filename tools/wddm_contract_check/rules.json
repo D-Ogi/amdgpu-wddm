@@ -280,6 +280,35 @@
       "require": [{"ddi_set": "DxgkDdiUpdateMonitorLinkInfo"}]
     },
     {
+      "id": "R45-MPO3-TRIO-FROM-2-1",
+      "declaration": "DXGK_DRIVERCAPS.WDDMVersion >= 2.1",
+      "requires_text": "the table carries DxgkDdiCheckMultiPlaneOverlaySupport3, DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3 and DxgkDdiPostMultiPlaneOverlayPresent, also with no multiplane-overlay cap. From 2.1 the graphics kernel sends flips of plane 0 through the MPO3 flip DDI and calls the member without testing it: the disable-planes flip of CddDisable through the NULL member is bugcheck 0x139/0xA (guard_icall_bugcheck)",
+      "source": "DXGKRNL lab minidump of the 2.9 image B46D3A9A on 22631 (BD-307, 2026-11-05, pnputil disable, LabScaledPlane absent so no MPO cap): cdd!PresentWorkerThread -> DxgkCddDisable -> FlushPresentReferencesAndDisableOverlays -> VidSchiSubmitDisablePlanesFlip -> VidSchiExecuteMmIoFlipMultiPlaneOverlayAtISR -> ADAPTER_DISPLAY::DdiSetVidPnSourceAddressWithMultiPlaneOverlay+0x1c4 -> guard_icall_bugcheck, args 2-4 zero; WDK km/dispmprt.h 10.0.26100 lines 2891-2900: the three members are in the WDDM 2.1 block of DRIVER_INITIALIZATION_DATA; LEARN d3dkmddi.md: MPO2 'replaced by' MPO3",
+      "when": [{"wddm_version_at_least": "0x2100"}],
+      "require": [{"ddi_set": "DxgkDdiCheckMultiPlaneOverlaySupport3"},
+                  {"ddi_set": "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3"},
+                  {"ddi_set": "DxgkDdiPostMultiPlaneOverlayPresent"}]
+    },
+    {
+      "id": "R46-MPO3-FLIP-RETIRED-BY-PRESENTID",
+      "declaration": "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3 is in the table",
+      "requires_text": "every MPO3 request hands its PresentId on, the flip to the transaction and a request with no new surface to the tracker, and the VSync report in the MPO3 mode is DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2 with a DXGK_MULTIPLANE_OVERLAY_VSYNC_INFO2 that carries the PresentId (WddmMpo3Notify, called by WddmNotifyRoutine before the CRTC_VSYNC call). An MPO3 flip is retired by PresentId, so an address report leaves it pending for ever. Type 18 (OVERLAY3) is the hardware flip queue's report and this driver has no flip queue, so it may not appear",
+      "source": "LEARN windows-driver-docs hardware-flip-queue.md:242: CrtcVSyncWithMultiPlaneOverlay2 carries 'a single last completed PresentId for each plane', OVERLAY3 the flip queue log; WDK shared/d3dkmddi.h 10.0.26100 line 709 (type 10), line 780 (VSYNC_INFO2 {LayerIndex, PresentId, Flags}), line 1090 (union member); LEARN DXGK_PLANE_SPECIFIC_OUTPUT_FLAGS HsyncInterruptCompletion: a pending flip completes on 'the PresentId greater or equal to pending'",
+      "when": [{"ddi_set": "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3"}],
+      "require": [{"function_matches": {"function": "WddmMpo3Notify",
+                                        "all": ["InterruptType\\s*=\\s*DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2\\b",
+                                                "\\bDXGK_MULTIPLANE_OVERLAY_VSYNC_INFO2\\b",
+                                                "\\.PresentId\\s*=",
+                                                "CrtcVsyncWithMultiPlaneOverlay2\\.pMultiPlaneOverlayVsyncInfo\\s*=",
+                                                "DxgkCbNotifyInterrupt\\s*\\("],
+                                        "none": ["DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY3"]}},
+                  {"function_matches": {"function": "WddmNotifyRoutine",
+                                        "all": ["if\\s*\\(\\s*!\\s*WddmMpo3Notify\\s*\\([^;]*\\)\\s*\\)\\s*WddmNotifyCall\\s*\\("]}},
+                  {"function_matches": {"function": "Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3",
+                                        "all": ["WddmFlipEntry\\s*\\([^;]*\\bTRUE\\s*,\\s*plane->PresentId\\s*\\)",
+                                                "WddmMpo3Keep\\s*\\([^;]*\\bTRUE\\s*,\\s*plane->PresentId\\s*\\)"]}}]
+    },
+    {
       "id": "R21-HIGHEST-ADDRESS",
       "declaration": "any full miniport",
       "requires_text": "DXGK_DRIVERCAPS.HighestAcceptableAddress is not left at a low value (-1 = no limit)",

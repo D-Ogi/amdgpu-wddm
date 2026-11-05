@@ -308,6 +308,7 @@ class Facts:
         self.node_count = None
         self.notes = []
         self.wddm_lines = 0
+        self.text = ""                  # wddm.c without comments, for the function_matches predicate
 
     def cap(self, name):
         return self.caps.get(name)
@@ -344,6 +345,7 @@ def read_facts_text(wddm_text, header_text="", inf_text="", build_text=""):
     raw = wddm_text
     facts.wddm_lines = raw.count("\n") + 1
     text = strip_comments(raw)
+    facts.text = text
 
     header = strip_comments(header_text) if header_text else ""
     constants = Constants(text, header)
@@ -710,6 +712,24 @@ def predicate(facts: Facts, pred: dict):
         if facts.inf_umd_marked:
             return False, "bc250kmd.inf has the ;@UMD block but build.ps1 does not generate that package"
         return False, "no UserModeDriverName anywhere in bc250kmd.inf"
+    # The body of one function, without comments: every pattern of "all" must occur in it and none of "none".
+    # A missing function is a violation, never "cannot tell": a renamed report must not read as compliant.
+    if "function_matches" in pred:
+        spec = pred["function_matches"]
+        name = spec["function"]
+        body, line = function_body(facts.text, name)
+        if body is None:
+            return False, "%s() not found" % name
+        missing = [p for p in spec.get("all", []) if not re.search(p, body)]
+        present = [p for p in spec.get("none", []) if re.search(p, body)]
+        if missing or present:
+            parts = []
+            if missing:
+                parts.append("lacks %s" % ", ".join(repr(p) for p in missing))
+            if present:
+                parts.append("has %s" % ", ".join(repr(p) for p in present))
+            return False, "%s() (line %d) %s" % (name, line, "; ".join(parts))
+        return True, "%s() (line %d) has every required pattern" % (name, line)
     if "always" in pred:
         return bool(pred["always"]), "unconditional"
     return None, "unknown predicate %s" % sorted(pred)
