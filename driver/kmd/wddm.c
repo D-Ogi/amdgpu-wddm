@@ -12601,7 +12601,7 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
 #if BC250_WDDM_REPORTED_LEVEL >= 0x2100
     // BD-307: from WDDMVersion 2.1 the graphics kernel flips plane 0 through the MPO3 DDI, also without the MPO cap,
     // and does not test the member first (0x139/0xA in the CddDisable path, 2026-11-05). Plane 0 only; see the block
-    // above Bc250WddmCheckMultiPlaneOverlaySupport3. tools/wddm_contract_check rule R45 holds the three together.
+    // above Bc250WddmCheckMultiPlaneOverlaySupport3. tools/wddm_contract_check rule R47 holds the three together.
     Data->DxgkDdiCheckMultiPlaneOverlaySupport3 = Bc250WddmCheckMultiPlaneOverlaySupport3;
     Data->DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3 = Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3;
     Data->DxgkDdiPostMultiPlaneOverlayPresent = Bc250WddmPostMultiPlaneOverlayPresent;
