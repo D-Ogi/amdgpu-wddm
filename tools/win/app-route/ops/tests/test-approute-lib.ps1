@@ -142,4 +142,22 @@ $t=Test-AppRoutePackage $pkg
 Check 'package sums catch a missing file' ((@($t.mismatched) -join '|') -ceq 'gpu/amdgpu_wddm_d3d11.dll')
 [IO.File]::WriteAllText("$pkg\SHA256SUMS.txt","not a sums line`n")
 Reject 'package sums malformed' {Test-AppRoutePackage $pkg}
-"PASS approute-lib: $cases cases (router swap, policy value sets and readback, lists, manifest and package checks)"
+
+# ---- no ops script runs New-Item -Force on a registry key or a file: the provider creates the item again, empty
+# (2026-11-05: the logon probe's routelog-on removed the installer's AppRouter Mode, Allow and Deny that way).
+# A directory (-ItemType Directory) is the one safe use.
+function Find-NewItemForce([System.Management.Automation.Language.Ast]$Ast){
+ @($Ast.FindAll({param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'New-Item'},$true) | Where-Object {
+  $names=@($_.CommandElements | Where-Object { $_ -is [System.Management.Automation.Language.CommandParameterAst] } | ForEach-Object { $_.ParameterName })
+  $names -contains 'Force' -and $_.Extent.Text -notmatch '-ItemType\s+Directory'
+ } | ForEach-Object { $_.Extent.StartLineNumber })
+}
+$probeAst=[System.Management.Automation.Language.Parser]::ParseInput('New-Item -Path $appRouter -Force | Out-Null; New-Item -ItemType Directory -Force -Path $d | Out-Null',[ref]$null,[ref]$null)
+Check 'positive control: New-Item -Force on a key is found, a directory is not' (@(Find-NewItemForce $probeAst).Count -eq 1)
+$found=@()
+foreach($f in @(Get-ChildItem -LiteralPath $ops -Filter *.ps1 -File)){
+ $ast=[System.Management.Automation.Language.Parser]::ParseFile($f.FullName,[ref]$null,[ref]$null)
+ foreach($line in @(Find-NewItemForce $ast)){ $found+="$($f.Name):$line" }
+}
+Check "no New-Item -Force on a key or a file in ops ($($found -join ', '))" (!$found.Count)
+"PASS approute-lib: $cases cases (router swap, policy value sets and readback, lists, manifest and package checks, no New-Item -Force on keys)"

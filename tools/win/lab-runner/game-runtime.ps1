@@ -583,7 +583,11 @@ function Get-RouterDecision([string]$image){
   if($mode -ne 'cpu' -and (($kind.Allow -and $kind.Allow -ne 'MultiString') -or ($kind.Deny -and $kind.Deny -ne 'MultiString'))){$mode='invalid'}
   if($mode -eq 'cpu'){return 'cpu app-mode-cpu'}
   if($mode -eq 'invalid'){return 'cpu app-mode-invalid'}
-  if($image -in 'logonui.exe','consent.exe','lockapp.exe','credentialuibroker.exe','winlogon.exe'){return 'cpu app-protected'}
+  # winlogon.exe never takes the GPU UMD. The four logon images take it only past the router's run-time gates (desktop
+  # route, start confirmation, fault latch; router-policy.h ProtectedKindOf), which this mirror does not read, so it
+  # answers with the CPU UMD and a reason that says so. No game is one of these images.
+  if($image -eq 'winlogon.exe'){return 'cpu app-protected'}
+  if($image -in 'logonui.exe','consent.exe','lockapp.exe','credentialuibroker.exe'){return 'cpu app-protected-gated (run-time gates not read here)'}
   $deny=if($kind.Deny){@($key.GetValue('Deny'))}else{@()}
   $allow=if($kind.Allow){@($key.GetValue('Allow'))}else{@()}
   if($deny -contains $image){return 'cpu app-denied'}

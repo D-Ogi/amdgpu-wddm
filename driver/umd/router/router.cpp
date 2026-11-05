@@ -49,8 +49,27 @@
 //                                    and before Deny; the environment variable AMDGPU_WDDM_RENDER_ON_CPU wins over
 //                                    the application key, which wins over the global key. It adds to Deny, which
 //                                    keeps working as before; 0 never moves an application off the CPU UMD.
-//   Built in: logonui.exe, consent.exe, lockapp.exe, credentialuibroker.exe and winlogon.exe always stay on the CPU
-//   UMD (router-policy.h IsProtectedApp). OpenAdapter10 always goes to the CPU UMD: the application GPU UMD
+//     ProtectedGpu        REG_DWORD  the logon images' GPU route (docs/design/logon-gpu-route.md). Absent or 1 = on:
+//                                    LogonUI.exe, consent.exe, LockApp.exe and CredentialUIBroker.exe pass the
+//                                    gates below and then follow Mode, Allow, Deny and RenderOnCpu like any image.
+//                                    0 or any other value or kind = off: they stay on the CPU UMD (app-protected),
+//                                    the router that shipped before, and this feature's bisect switch
+//   Built in (router-policy.h ProtectedKindOf): winlogon.exe always stays on the CPU UMD (app-protected); it opens no
+//   adapter. The four logon images take the application GPU UMD only when all gates are open, each with its reason:
+//     desktop   Decide() would send dwm.exe to the hosted GPU UMD, and the session's desktop-route record does not
+//               say the compositor ended on the CPU UMD                               (app-protected-desktop-cpu)
+//     start     the kernel driver confirmed this start: UnconfirmedStarts 0 and GuardBoot\Confirmed 1, or the start
+//               is the provisional first start of a boot after a confirmed one: UnconfirmedStarts 1 and no
+//               GuardBoot\Confirmed, with a provisional record that the image can write (app-protected-unconfirmed)
+//               and that is not off for this GPU UMD (app-protected-provisional-off; router-provisional.h)
+//     latch     router-latch.h: no GPU process of the image ended without a clean exit in this boot
+//               (app-protected-faulted), no adapter restart after the latch base (app-protected-reset), and for
+//               LogonUI.exe and consent.exe a store that can be written (app-protected-unlatched)
+//   The route line ends with protected=<word>: no, off, or the state of the gates
+//   (desktop:..,start:..,latch:..,prov:<state>/<offcount>/<since>/<action>,armed:N; latch:unread when the start
+//   gate was closed; router-provisional.h).
+//   HKLM\SOFTWARE\amdgpu-wddm\ProtectedStart   Pending, Off   REG_SZ, the provisional record (router-provisional.h)
+//   OpenAdapter10 always goes to the CPU UMD: the application GPU UMD
 //   exports OpenAdapter10_2 only. The Direct3D 10.0 runtime of Windows 11 does not call OpenAdapter10 when
 //   OpenAdapter10_2 is exported: it opens this router through OpenAdapter10_2 and creates a D3D11-family device,
 //   so a D3D10.0 application takes the AppRouter decision like a D3D11 one (BD-081, measured 2026-10-07).
@@ -62,6 +81,8 @@
 //                         registry failure). Present but not a REG_DWORD: off.
 //     EnableGpuPresentBlit, EnableCddDwmInterop   REG_DWORD, read only when InteropLastState is absent (KMD 0.7.180
 //                         and earlier, whose wddm.c latched "value == 1" at adapter start): each on only when 1.
+//     UnconfirmedStarts, GuardBoot\Confirmed, HangRecovery\AdapterRestarts   REG_DWORD, read for the logon images
+//                         only (router-state.h ReadRouterStartState)
 //
 // Process-name test: the base name of GetModuleFileNameW(NULL) compared case-insensitively with "dwm.exe" (and
 // with each HostedClients, Allow and Deny entry). A failed GPU load or a failed GPU OpenAdapter (hosted UMD for the
@@ -90,6 +111,8 @@
 #include <cwchar>
 #include "router-policy.h"
 #include "router-state.h"
+#include "router-latch.h"
+#include "router-provisional.h"
 #include "router-identity.h"
 #include "front-adapter.h"
 #include "../app-settings/app-settings-core.h"
@@ -160,6 +183,7 @@ struct AppConfig {
     wchar_t allow[AppListBytes / sizeof(wchar_t)];
     wchar_t deny[AppListBytes / sizeof(wchar_t)];
     wchar_t log_directory[PathChars];
+    bool protected_gpu;          // ProtectedGpu absent or 1
 };
 
 static bool IsAbsolute(const wchar_t *p)
@@ -345,6 +369,10 @@ static void ReadAppConfig(AppConfig *a)
     if (ReadText(key, L"RouteLogDirectory", RRF_RT_REG_SZ, a->log_directory, sizeof(a->log_directory)) != Text::Value ||
         !IsAbsolute(a->log_directory))
         a->log_directory[0] = 0;
+    // Absent or 1: on. 0, any other number and any other kind: off, the CPU UMD as before this feature.
+    DWORD v = 0;
+    const Dword pg = ReadDword(key, L"ProtectedGpu", &v);
+    a->protected_gpu = pg == Dword::Absent || (pg == Dword::Value && v == 1);
     RegCloseKey(key);
 }
 
@@ -467,7 +495,8 @@ static const char *InstallFront(const Config &c, const char *entry, D3D10DDIARG_
 // when its path or the Windows directory cannot be resolved; reported only, the route does not depend on it).
 static void ReportApp(const Config &c, const AppConfig &a, const wchar_t *exe, const char *entry, const AppDecision &d,
                       HRESULT gpuHr, bool fellBack, const wchar_t *module, HRESULT hr,
-                      const amdgpu_wddm::app_settings::Value &renderOnCpu, Component component)
+                      const amdgpu_wddm::app_settings::Value &renderOnCpu, Component component,
+                      const char *protectedWord)
 {
     char setting[48] = "unset";
     if (renderOnCpu.set())
@@ -476,10 +505,11 @@ static void ReportApp(const Config &c, const AppConfig &a, const wchar_t *exe, c
     char line[2048];
     int n = _snprintf_s(line, _TRUNCATE,
         "bc250d3d_router pid=%lu exe=%ls entry=%s route=%s reason=%s fallback=%u gpu_hr=%08lx hr=%08lx module=%ls "
-        "app_mode=%s mode_source=%s gpu_source=%s cpu_source=%s render_on_cpu=%s component=%s\n",
+        "app_mode=%s mode_source=%s gpu_source=%s cpu_source=%s render_on_cpu=%s component=%s protected=%s\n",
         GetCurrentProcessId(), exe, entry, d.route == AppRoute::Gpu && !fellBack ? "gpu" : "cpu",
         AppReasonName(d.reason), fellBack ? 1u : 0u, (unsigned long)gpuHr, (unsigned long)hr, module,
-        AppModeName(a.mode), a.mode_source, a.gpu_source, c.cpu_source, setting, ComponentName(component));
+        AppModeName(a.mode), a.mode_source, a.gpu_source, c.cpu_source, setting, ComponentName(component),
+        protectedWord);
     if (n < 0) n = (int)strlen(line);
     WriteRouteLine(a.log_directory[0] ? a.log_directory : c.log_directory, exe, line, n);
 }
@@ -517,6 +547,9 @@ static HRESULT ForwardCpu(const Config &c, const char *entry, D3D10DDIARG_OPENAD
     return cpu ? CallEntry(cpu, entry, args) : HRESULT_FROM_WIN32(error);
 }
 
+// Successful GPU opens of a logon image in this process (router-latch.h).
+static volatile LONG ProtectedGpuOpens;
+
 static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *exe, const char *entry,
                           D3D10DDIARG_OPENADAPTER *args, size_t tableBytes)
 {
@@ -532,18 +565,95 @@ static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *
     as::Settings settings;
     as::resolve(exe, as::system_sources(), settings);
     const as::Value renderOnCpu = settings[as::Setting::RenderOnCpu];
-    const AppDecision d = DecideApp({exe, a.mode, a.allow, a.deny, entry_10_2, a.gpu[0] != 0, component,
-                                     as::render_on_cpu(settings)});
+    AppInputs in = {exe, a.mode, a.allow, a.deny, entry_10_2, a.gpu[0] != 0, component, as::render_on_cpu(settings)};
+    // The logon images' gates (router-policy.h ProtectedKindOf). Read only for them, in the order of the decision, so
+    // that a closed gate reads nothing after it: the start state only on a desktop that takes the GPU, the provisional
+    // record only on a start state that could be read, and the latch only on a start that passed the start gate. A
+    // latch base is therefore taken at the first decision of the boot that passed both.
+    const ProtectedKind kind = ProtectedKindOf(exe);
+    const bool gated = kind == ProtectedKind::GatedLatchRequired || kind == ProtectedKind::GatedLatchBestEffort;
+    LatchStore store = {nullptr, "none"};
+    ProvisionalView provisional = {false, false, false, false, 0, 0, "unread", "none"};
+    bool latchRead = false;
+    char protectedWord[320] = "no";
+    if (kind == ProtectedKind::Never) strcpy_s(protectedWord, "never");
+    else if (gated && !a.protected_gpu) strcpy_s(protectedWord, "off");
+    else if (gated) {
+        in.protected_gpu = true;
+        bc250_desktop_route record;
+        const unsigned status = bc250_desktop_route_read_session(&record);
+        const DesktopRecord recorded = status != BC250_DESKTOP_ROUTE_READ_OK || record.route == BC250_DESKTOP_ROUTE_NONE
+                                           ? DesktopRecord::Unknown
+                                       : record.route == BC250_DESKTOP_ROUTE_GPU ? DesktopRecord::Gpu
+                                                                                 : DesktopRecord::Cpu;
+        in.desktop_gpu = DesktopAdmitsGpu({exe, c.clients, c.force_cpu, c.require_switches, c.blit_on, c.interop_on},
+                                          recorded);
+        RouterStartState s = {};
+        if (in.desktop_gpu) {
+            s = ReadRouterStartState();
+            in.start = StartHealthOf(s.unconfirmed_known, s.unconfirmed, s.boot_known, s.boot);
+            // Every decision that read a start state carries out the provisional record (a confirmed start clears
+            // Pending, a start after an unconfirmed one turns an earlier boot's Pending into Off).
+            if (in.start != StartHealth::Unreadable)
+                provisional = ReadProvisional(RegistryView, in.start, s.unconfirmed, a.gpu);
+            in.provisional_store = provisional.store;
+            in.provisional_off = provisional.off;
+        }
+        const bool provisionalOpen = in.start == StartHealth::Provisional && provisional.store && !provisional.off;
+        if (in.desktop_gpu && (in.start == StartHealth::Confirmed || provisionalOpen)) {
+            store = OpenLatchStore(RegistryView);
+            in.latch = LatchOf(ReadLatch(store.key, exe, s.restarts_known, s.restarts));
+            latchRead = true;
+        }
+        // latch:unread = the start gate is closed, so the latch was not read (and no base was taken).
+        _snprintf_s(protectedWord, _TRUNCATE, "desktop:%s/%s,start:%s/%lu/%lu,latch:%s/%s/%lu",
+                    in.desktop_gpu ? "gpu" : "cpu", bc250_desktop_route_text(status, record.route),
+                    StartHealthName(in.start), s.unconfirmed_known ? s.unconfirmed : 0xFFFFFFFFul,
+                    s.boot_known ? s.boot : 0xFFFFFFFFul, latchRead ? LatchName(in.latch) : "unread", store.where,
+                    s.restarts_known ? s.restarts : 0xFFFFFFFFul);
+    }
+    AppDecision d = DecideApp(in);
+    // A provisional GPU route writes its record first (on the disk, flushed), so that a hang inside the GPU open or
+    // later in the boot is found by the next boot. An image that cannot write it waits for the confirmation.
+    if (gated && d.route == AppRoute::Gpu && in.start == StartHealth::Provisional) {
+        const bool already = provisional.pending_this_boot;
+        if (WriteProvisional(RegistryView, store, a.gpu, already))
+            provisional.action = already                                ? "kept"
+                                 : !strcmp(provisional.action, "retry-ok") ? "retry-ok+written"
+                                                                           : "written";
+        else {
+            provisional.action = "write-failed";
+            d = {AppRoute::Cpu, AppReason::ProtectedUnconfirmed};
+        }
+    }
+    // A logon image on its way to the GPU UMD arms its marker first, so that a fault inside the GPU open is caught
+    // as well. LogonUI.exe and consent.exe go to the CPU UMD when the marker cannot be armed: their latch is required.
+    bool armed = false;
+    if (gated && d.route == AppRoute::Gpu) {
+        armed = ArmLatch(store.key, exe);
+        if (!armed && kind == ProtectedKind::GatedLatchRequired) d = {AppRoute::Cpu, AppReason::ProtectedUnlatched};
+    }
+    if (store.key) RegCloseKey(store.key);
+    if (gated && in.protected_gpu) {
+        const size_t used = strlen(protectedWord);
+        _snprintf_s(protectedWord + used, sizeof(protectedWord) - used, _TRUNCATE, ",prov:%s/%lu/%lu/%s,armed:%u",
+                    provisional.state, provisional.off_count, provisional.since, provisional.action,
+                    armed ? 1u : 0u);
+    }
     HRESULT gpuHr = S_FALSE; // not tried
     if (d.route == AppRoute::Gpu) {
         gpuHr = TryGpu(a.gpu, entry, args, tableBytes);
         if (SUCCEEDED(gpuHr)) {
-            ReportApp(c, a, exe, entry, d, gpuHr, false, a.gpu, gpuHr, renderOnCpu, component);
+            if (gated) InterlockedIncrement(&ProtectedGpuOpens);
+            ReportApp(c, a, exe, entry, d, gpuHr, false, a.gpu, gpuHr, renderOnCpu, component, protectedWord);
             return gpuHr;
         }
+        // The process goes on with the CPU UMD: its later end is not a GPU fault, unless an earlier open of this
+        // process is on the GPU UMD.
+        if (armed && !ProtectedGpuOpens) DisarmLatch();
     }
     const HRESULT hr = ForwardCpu(c, entry, args);
-    ReportApp(c, a, exe, entry, d, gpuHr, d.route == AppRoute::Gpu, c.cpu, hr, renderOnCpu, component);
+    ReportApp(c, a, exe, entry, d, gpuHr, d.route == AppRoute::Gpu, c.cpu, hr, renderOnCpu, component, protectedWord);
     return hr;
 }
 
@@ -595,4 +705,13 @@ extern "C" UMD_EXPORT HRESULT APIENTRY OpenAdapter10(D3D10DDIARG_OPENADAPTER *ar
 extern "C" UMD_EXPORT HRESULT APIENTRY OpenAdapter10_2(D3D10DDIARG_OPENADAPTER *args)
 {
     return Forward("OpenAdapter10_2", args, sizeof(D3D10_2DDI_ADAPTERFUNCS));
+}
+
+// The clean exit of a logon image on the GPU UMD removes its latch marker (router-latch.h). A non-null reserved
+// argument is ExitProcess; a FreeLibrary cannot reach this after a marker is armed, because ArmLatch pins the module.
+// TerminateProcess calls no DllMain, so a process ended that way keeps its marker, and that is the point.
+BOOL WINAPI DllMain(HINSTANCE, DWORD reason, LPVOID reserved)
+{
+    if (reason == DLL_PROCESS_DETACH && reserved) DisarmLatchAtExit();
+    return TRUE;
 }

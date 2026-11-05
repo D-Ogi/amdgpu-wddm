@@ -22,10 +22,16 @@ DWORD WINAPI AmdgpuClientRead(AMDGPU_WINDOWS_STATE *state,const char *path,const
     AMDGPU_STATE_VALUE *v,void *data,DWORD bytes)
 {
     ZeroMemory(v,sizeof(*v));v->status=AMDGPU_STATE_UNKNOWN;
-    const WCHAR *wide = !strcmp(name,"InteropLastState") ? L"InteropLastState" :
-        !strcmp(name,"EnableGpuPresentBlit") ? L"EnableGpuPresentBlit" :
-        !strcmp(name,"EnableCddDwmInterop") ? L"EnableCddDwmInterop" : nullptr;
-    if (path[0] || !wide || effective>1) return ERROR_INVALID_PARAMETER;
+    // A value below a state path is stored as "<path>.<name>" in the fixture key.
+    const WCHAR *wide = nullptr;
+    if (!path[0])
+        wide = !strcmp(name,"InteropLastState") ? L"InteropLastState" :
+            !strcmp(name,"EnableGpuPresentBlit") ? L"EnableGpuPresentBlit" :
+            !strcmp(name,"EnableCddDwmInterop") ? L"EnableCddDwmInterop" :
+            !strcmp(name,"UnconfirmedStarts") ? L"UnconfirmedStarts" : nullptr;
+    else if (!strcmp(path,"GuardBoot") && !strcmp(name,"Confirmed")) wide = L"GuardBoot.Confirmed";
+    else if (!strcmp(path,"HangRecovery") && !strcmp(name,"AdapterRestarts")) wide = L"HangRecovery.AdapterRestarts";
+    if (!wide || effective>1) return ERROR_INVALID_PARAMETER;
     DWORD type=0, size=bytes;
     LSTATUS error=RegQueryValueExW(reinterpret_cast<HKEY>(state),wide,nullptr,&type,(BYTE *)data,&size);
     v->type=type;v->bytes=size;v->os_error=error;v->source=AMDGPU_STATE_OVERRIDE;
