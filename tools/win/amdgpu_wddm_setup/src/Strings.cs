@@ -1,4 +1,4 @@
-// The setup window's text in four languages (WU-003): one table per language, embedded in the exe as strings.<lang>.txt
+// The setup window's text in six languages (WU-003): one table per language, embedded in the exe as strings.<lang>.txt
 // (tools/win/amdgpu_wddm_setup/strings/). The same format and rules as the control app's tables (tools/win/
 // amdgpu_wddm_control/src/Strings.cs); every visible sentence comes from here, the support file stays English.
 //
@@ -38,8 +38,33 @@ namespace AmdgpuWddmSetup
 
     public static class Strings
     {
-        public static readonly string[] Languages = { "en", "pl", "ja", "ko" };
+        // pt is Brazilian Portuguese and es is one neutral Latin American Spanish: every pt-* and
+        // es-* culture of Windows maps to them through its two-letter name (SystemLanguage).
+        public static readonly string[] Languages = { "en", "pl", "pt", "es", "ja", "ko" };
         public static readonly string[] Statuses = { "src", "rev", "mt", "mt-safe" };
+
+        // Each language by its own name in its own script, whatever the current language is: a person who cannot read
+        // the current language still finds their own in the list.
+        static readonly Dictionary<string, string> Endonyms = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            { "en", "English" }, { "pl", "Polski" }, { "pt", "Português (Brasil)" }, { "es", "Español" }, { "ja", "日本語" }, { "ko", "한국어" },
+        };
+
+        public static string Endonym(string language)
+        {
+            string name;
+            return language != null && Endonyms.TryGetValue(language, out name) ? name : language;
+        }
+
+        // The label of the language choice: the word in the current language, and the English word beside it when the
+        // current language is not English ("언어 / Language"), so it can be found by a person who cannot read it.
+        public static string LanguageLabel()
+        {
+            string english = In("en", LanguageLabelId), local = T(LanguageLabelId);
+            return _language == "en" || local == english ? english : local + " / " + english;
+        }
+
+        public const string LanguageLabelId = "ui.language.label";
 
         static readonly object Gate = new object();
         static Dictionary<string, StringTable> _tables;
@@ -64,7 +89,7 @@ namespace AmdgpuWddmSetup
             }
         }
 
-        // The language of Windows' user interface when it is one of the four, else English.
+        // The language of Windows' user interface when it is one of the six, else English (pt-PT and es-ES included).
         public static string SystemLanguage()
         {
             var name = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;

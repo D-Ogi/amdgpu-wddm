@@ -128,7 +128,7 @@ namespace AmdgpuWddmControl
             return 0;
         }
 
-        // The loading window (Launch.cs) in both its states, the four languages, 96 to 192 DPI, the text of Windows at
+        // The loading window (Launch.cs) in both its states, the six languages, 96 to 192 DPI, the text of Windows at
         // 100 to 225 % and a 1024x768 and a large screen, built without being shown. An empty findings list is a pass.
         // The first line also says how long this process took to its first loading window: the part of a start that
         // the person waits for with nothing on the screen (the live start adds one paint to it).
@@ -295,7 +295,7 @@ namespace AmdgpuWddmControl
             return 0;
         }
 
-        // BD-137: the notice built in both cases, in the four languages, at 96, 120, 144 and 192 DPI, for a
+        // BD-137: the notice built in both cases, in the six languages, at 96, 120, 144 and 192 DPI, for a
         // 1024x768 screen and for a large one. No window is shown. An empty findings file is a pass.
         static int SmokeNotice(string path)
         {

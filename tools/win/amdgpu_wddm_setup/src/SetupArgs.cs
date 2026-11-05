@@ -32,7 +32,7 @@
 //                                             %ProgramData%\amdgpu-wddm\setup instead
 //   amdgpu_wddm_setup.exe --smoke-loading <out-dir>
 //                                             no window: the loading window (LoadingWindow.cs) in each of its stages,
-//                                             four languages, four scales, three text sizes and two screens, checked;
+//                                             six languages, four scales, three text sizes and two screens, checked;
 //                                             findings in <out-dir>\loading.txt
 //   (internal) --loading-handover <name>     given by the copy that asks for administrator rights to the copy it
 //                                             starts: the name of the event the new copy sets when its own loading

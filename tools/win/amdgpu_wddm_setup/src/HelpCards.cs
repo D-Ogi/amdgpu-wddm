@@ -1,12 +1,15 @@
-// The help card of a check that the user fixes in Windows: today Smart App Control. The engine refuses the install
-// while it is on (smartappcontrol.on, install.ps1) and notes evaluation mode and an unread state; the card says what to
+// The help card of a check that the user fixes in Windows: today Smart App Control. Since 2026-11-04 the engine turns
+// it off by itself when the preflight reads on or evaluation (install.ps1, Invoke-SmartAppControlOff; the plan screen
+// says so, plan.change.smartappcontrol). The card is for the two cases left: a change that did not hold, which refuses
+// the run (smartappcontrol.not-off), and a state the engine could not read (smartappcontrol.unknown). It says what to
 // do in steps, shows up to three pictures of Windows Security, and has a button that opens that page of Windows
-// Security. The window changes no Windows setting itself: the user does it, and Try again or Install reads it again.
+// Security. The window itself changes no Windows setting: the user does it, and Try again or Install reads it again.
 // The pictures are English screenshots that build.ps1 embeds from -HelpArt (default art\help) as help.<file>. A
 // picture the exe does not carry leaves its step as text, which says the same.
 // Measured on 26100 (2026-10-20): while Smart App Control is on, Windows blocks this test-signed exe before its window
-// opens, so today the "on" card shows only for a signed setup; install.cmd -Console reports the same check as text.
-// Windows also blocks our user-mode driver DLLs in every process, DWM included, which is why evaluation is a warning.
+// opens, so the window reads on or evaluation only as a signed setup; install.cmd -Console reports the same lines as
+// text. Windows also blocks our user-mode driver DLLs in every process, DWM included, which is why evaluation is
+// turned off too.
 using System.Collections.Generic;
 using System.Linq;
 
@@ -43,7 +46,7 @@ namespace AmdgpuWddmSetup
         public const int ImagePixels = 720, ImageBytes = 160 * 1024, ShotWidth = 440;
 
         // The checks with a card, in the order a screen looks for one: the refusal first.
-        public static readonly string[] CheckIds = { "smartappcontrol.on", "smartappcontrol.evaluation", "smartappcontrol.unknown" };
+        public static readonly string[] CheckIds = { "smartappcontrol.not-off", "smartappcontrol.unknown" };
 
         static HelpCard SmartAppControl(string checkId, string bodyId, string lastStepId)
         {
@@ -64,14 +67,13 @@ namespace AmdgpuWddmSetup
             };
         }
 
-        // The card of one check id, or null. "on" refuses the install, so the last step is Try again; the two notes
-        // come on the plan screen, where the last step is Install.
+        // The card of one check id, or null. "not-off" refuses the run, so the last step is Try again; the note of an
+        // unread state comes on the plan screen, where the last step is Install.
         public static HelpCard For(string checkId)
         {
             switch (checkId)
             {
-                case "smartappcontrol.on": return SmartAppControl(checkId, "help.sac.on.body", "help.sac.step.retry");
-                case "smartappcontrol.evaluation": return SmartAppControl(checkId, "help.sac.evaluation.body", "help.sac.step.install");
+                case "smartappcontrol.not-off": return SmartAppControl(checkId, "help.sac.not-off.body", "help.sac.step.retry");
                 case "smartappcontrol.unknown": return SmartAppControl(checkId, "help.sac.unknown.body", "help.sac.step.install");
                 default: return null;
             }

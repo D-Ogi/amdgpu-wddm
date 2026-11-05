@@ -321,7 +321,7 @@ search.driver.version.terms|rev|63b1897d|wersja|wydanie|zainstalowany|data
 search.driver.update|rev|f26f3275|Sprawdź aktualizacje
 search.driver.update.terms|rev|8e944c4d|aktualizacja|aktualizuj|nowa wersja|pobierz|pobieranie|uaktualnienie
 search.settings.language|rev|a4fe6526|Język
-search.settings.language.terms|rev|fd2aa88a|język|English|angielski|Polski|日本語|한국어
+search.settings.language.terms|mt|e5916771|język|English|angielski|Polski|Português|portugalski|Español|hiszpański|日本語|한국어
 search.settings.update-start|rev|1795d304|Sprawdzaj aktualizacje przy uruchamianiu aplikacji
 search.settings.update-start.terms|rev|f9b8aeaa|aktualizacja|automatycznie|uruchamianie|start
 search.settings.recent|rev|1584741a|Zapamiętuj uruchomione gry
@@ -365,7 +365,6 @@ ui.back|rev|76900f1b|Wstecz
 ui.search|rev|255b076d|Znajdź ustawienie
 ui.search.results|rev|e978b00d|Wyniki wyszukiwania
 ui.search.none|rev|4a80e7e4|Nie znaleziono ustawienia.
-ui.language.current|rev|45f00aed|Bieżący język
 ui.nav.current|rev|de2574e5|Bieżąca strona
 ui.explain|rev|c68f3c5e|Do czego służy „{0}”?
 ui.explain.page|rev|d2447d18|O tej stronie
@@ -547,7 +546,7 @@ driver.repair.title|rev|1196b6c5|Naprawa
 driver.repair.text|rev|e71e61c4|Jeśli sterownik nie działa tak, jak powinien, napraw go na stronie Pomoc.
 driver.repair.open|rev|30dd758a|Otwórz Pomoc
 # ---- Settings (WU-003, WU-046, WU-075, WU-076, WU-077) ----
-settings.language.note|rev|3880569c|Teksty japońskie i koreańskie są na razie tłumaczeniem maszynowym.
+settings.language.note|mt|6c69e5d7|Teksty portugalskie, hiszpańskie, japońskie i koreańskie są na razie tłumaczeniem maszynowym.
 settings.updates.title|rev|22e2bada|Aktualizacje
 settings.update-start.note|rev|ae77c8bd|Najwyżej raz na godzinę. Bez Twojego udziału nic nie jest pobierane ani instalowane.
 settings.recent.title|rev|085fe856|Lista gier

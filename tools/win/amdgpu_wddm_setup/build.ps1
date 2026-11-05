@@ -23,7 +23,7 @@
 #      card's width and byte limits, every required one present, every embedded one in the built image;
 #   3. --smoke-engine against a scripted fake engine (test/fake-engine.ps1): plan, noise, cancel, stale result, crash
 #      without a result, restart, refusal, and a verify that found a driver which did not start (its diagnostics
-#      file is named in the result and travels in the support file); the screen in four languages without internals;
+#      file is named in the result and travels in the support file); the screen in six languages without internals;
 #      the support file without this PC's user or computer name; then --smoke-start-failure: plan, install and
 #      prepare with an engine that cannot start end on the result screen;
 #   4. --smoke-render: every setup screen from fixtures at 96, 120, 144 and 192 DPI in EN, PL, JA, KO, at a 150 %
@@ -40,7 +40,7 @@
 #      options of the same instruction: the plan screen offers the Start menu and the desktop, and both are on when
 #      it opens.
 #   4b. --smoke-loading: the loading window of the start in each of its stages, with the same layout and G-NOINT
-#      checks, at four DPIs, four languages, three text sizes and two screens;
+#      checks, at four DPIs, six languages, three text sizes and two screens;
 #   4c. --smoke-progress: an install run of 30 s and a plan run of 10 s played against the setup window: the progress
 #      strip stays one control with one window handle, no engine event builds the screen again, and the strip is
 #      drawn again only when its value changes or its band moves;
@@ -228,7 +228,7 @@ if (-not $NoSmoke) {
         $summary = Get-Content (Join-Path $dir 'summary.txt') -Raw -ErrorAction SilentlyContinue
         if ($code -ne 0) { throw "smoke-engine $($e.Key): exit $code`n$summary" }
         foreach ($want in $e.Value[1]) { if (-not $summary.Contains($want)) { throw "smoke-engine $($e.Key): '$want' missing:`n$summary" } }
-        foreach ($lang in 'en', 'pl', 'ja', 'ko') {
+        foreach ($lang in 'en', 'pl', 'pt', 'es', 'ja', 'ko') {
             if ($summary -notmatch "(?m)^screen ${lang}: \w+; internals none; missing strings none") { throw "smoke-engine $($e.Key): the $lang screen has internals or missing strings:`n$summary" }
         }
         $zip = Join-Path $dir 'support.zip'
@@ -276,11 +276,13 @@ if (-not $NoSmoke) {
     if ($code -ne 0 -or $summary -notmatch '(?m)^ok\r?$' -or ([regex]::Matches($summary, '(?m)^\w+ [\w-]+: Result Problem\r?$')).Count -ne 6) { throw "smoke-start-failure (exit $code):`n$summary" }
     Write-Host '  start failure: plan, install and prepare with a run folder or a package folder that cannot be used end on the result screen (6 cases)'
 
-    # 4. Every screen at four DPIs and four languages, and at a 150 % text size. Every run draws the guide character,
+    # 4. Every screen at four DPIs and six languages, and at a 150 % text size. Every run draws the guide character,
     # because she is on unless the control app's setting says 0; the two last runs draw the panel without her.
-    $renders = @(foreach ($scale in '1', '1.25', '1.5', '2') { foreach ($lang in 'en', 'pl', 'ja', 'ko') { , @($scale, $lang, '1', '') } })
+    $renders = @(foreach ($scale in '1', '1.25', '1.5', '2') { foreach ($lang in 'en', 'pl', 'pt', 'es', 'ja', 'ko') { , @($scale, $lang, '1', '') } })
     $renders += , @('1', 'en', '1.5', '')
     $renders += , @('1', 'ja', '1.5', '')
+    $renders += , @('1', 'es', '1.5', '')
+    $renders += , @('1', 'pt', '1.5', '')
     $renders += , @('1', 'en', '1', '--no-nagi')
     $renders += , @('2', 'ko', '1', '--no-nagi')
     # High contrast: this PC does not have it on, so the window is told to use the system palette. Without this run
@@ -303,9 +305,9 @@ if (-not $NoSmoke) {
         $layout = Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue
         if ($code -ne 0 -or $layout -notmatch '^ok: ') { throw "render at scale $($r[0]), $($r[1]), text $($r[2]) $($extra -join ' ') (exit $code):`n$layout" }
     }
-    Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character + 2 in high contrast + 6 runs over five screen sizes from 800x600 up), no overlap or overflow, the guide art and the right-hand panel where they belong, G-A11Y, G-CHROME, G-SMALL, G-CONSENT, G-SHORTCUT and G-NOINT clean ($obj\render-*)"
+    Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 6 languages + 4 at 150 % text + 2 without the guide character + 2 in high contrast + 6 runs over five screen sizes from 800x600 up), no overlap or overflow, the guide art and the right-hand panel where they belong, G-A11Y, G-CHROME, G-SMALL, G-CONSENT, G-SHORTCUT and G-NOINT clean ($obj\render-*)"
 
-    # 4b. The loading window of the start (LoadingWindow.cs) in each of its stages, four languages, four scales, three
+    # 4b. The loading window of the start (LoadingWindow.cs) in each of its stages, six languages, four scales, three
     #     text sizes and a 1024x768 and a large screen: it fits or scrolls, nothing overlaps or overflows, no internals,
     #     every text in the tables, the guide's picture where the exe carries it.
     $dir = Join-Path $obj 'loading'

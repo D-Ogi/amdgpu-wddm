@@ -39,6 +39,7 @@ namespace AmdgpuWddmSetup
         public const string Chevron = "";      // ChevronRight
         public const string Minimise = "";     // ChromeMinimize
         public const string Close = "";        // ChromeClose
+        public const string Globe = "";        // Globe (the language choice)
         public const string Chip = "";         // Processor (the driver itself)
         public const string Lock = "";         // Lock (nothing changes without consent)
         public const string Sparkle = "";      // FavoriteStar (what is new)
@@ -359,6 +360,12 @@ namespace AmdgpuWddmSetup
                 }
                 else if (glyph == Icons.Chevron)
                     g.DrawLines(pen, new[] { new Point(r.Left + r.Width / 4, r.Top), new Point(r.Right - r.Width / 4, r.Top + r.Height / 2), new Point(r.Left + r.Width / 4, r.Bottom) });
+                else if (glyph == Icons.Globe)
+                {
+                    g.DrawEllipse(pen, r);
+                    g.DrawEllipse(pen, r.X + r.Width * 0.28f, r.Y, r.Width * 0.44f, r.Height);
+                    g.DrawLine(pen, r.X, r.Y + r.Height / 2f, r.Right, r.Y + r.Height / 2f);
+                }
                 else if (glyph == Icons.Dot)
                     g.DrawEllipse(pen, r);
                 else

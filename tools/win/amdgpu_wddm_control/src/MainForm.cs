@@ -243,27 +243,20 @@ namespace AmdgpuWddmControl
             _search.KeyDown += SearchKey;
             left.Controls.Add(_search);
             _header.Controls.Add(left);
+            // The language choice of the header: one globe button with the current language's own name, which opens the
+            // list of every language, each in its own name (one click from any page). The same choice is on Settings.
             var langs = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, BackColor = Color.Transparent };
-            foreach (var l in Strings.Languages)
-            {
-                string lang = l;
-                var b = Ui.Button(LanguageName(l), (s, e) => SetLanguage(lang));
-                b.Margin = Theme.Pad(4, 0, 0, 0);
-                b.Font = lang == Strings.Language ? Theme.Bold : Theme.Body;
-                b.BackColor = lang == Strings.Language ? Theme.CardHi : Theme.Nav;
-                b.AccessibleName = LanguageName(l);
-                b.Tag = l;
-                b.AccessibleDescription = lang == Strings.Language ? Strings.T("ui.language.current") : null;
-                langs.Controls.Add(b);
-            }
+            var langChoice = LanguageChoice();
+            langChoice.Margin = Theme.Pad(4, 0, 0, 0);
+            langChoice.BackColor = Theme.Nav;
+            langs.Controls.Add(langChoice);
             _header.Controls.Add(langs);
-            // The search box takes what the brand, Back and the language buttons leave. In a narrow window or with large
-            // text the brand goes first (the title bar names the app), then the language buttons show short codes;
-            // their accessible names stay the full language names.
+            // The search box takes what the brand, Back and the language choice leave. In a narrow window or with large
+            // text the brand goes first (the title bar names the app), then the language choice shows the globe alone;
+            // its accessible name keeps the label and the language.
             Func<int> room = () => ClientSize.Width - _header.Padding.Horizontal - langs.PreferredSize.Width - (left.PreferredSize.Width - _search.Width) - Theme.S(24);
             if (room() < Theme.S(150)) { brand.Visible = false; left.Controls.Remove(brand); }
-            if (room() < Theme.S(150))
-                foreach (Button b in langs.Controls) b.Text = ((string)b.Tag).ToUpperInvariant();
+            if (room() < Theme.S(150)) langChoice.GlyphOnly = true;
             _search.Width = Math.Max(Theme.S(110), Math.Min(Theme.S(250), room()));
             _header.Height = Math.Max(Theme.S(60), Math.Max(left.PreferredSize.Height, langs.PreferredSize.Height) + _header.Padding.Vertical);
 
@@ -317,9 +310,19 @@ namespace AmdgpuWddmControl
             finally { _building = false; }
         }
 
-        static string LanguageName(string lang)
+        // The language choice, in the header and on Settings: a globe, the current language's own name and the list of
+        // every language by its own name (Strings.Endonym). A choice rebuilds the window in the new language at once.
+        DropChoice LanguageChoice()
         {
-            switch (lang) { case "pl": return "Polski"; case "ja": return "日本語"; case "ko": return "한국어"; default: return "English"; }
+            var choice = new DropChoice(Strings.Languages.Select(Strings.Endonym).ToList(), Strings.LanguageLabel(), Theme.S(260)) { Globe = true };
+            choice.SelectedIndex = Array.IndexOf(Strings.Languages, Strings.Language);
+            choice.Tag = "language";
+            choice.SelectionChangeCommitted += (s, e) =>
+            {
+                string code = Strings.Languages[choice.SelectedIndex];
+                BeginInvoke((Action)(() => SetLanguage(code)));
+            };
+            return choice;
         }
 
         void SetLanguage(string lang)

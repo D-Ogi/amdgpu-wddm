@@ -74,17 +74,26 @@ events 3033 and 3077). Both are measured on 26100 (2026-10-20). `powershell.exe`
 `Read-SmartAppControlState` in `installer\common.ps1` reads `VerifiedAndReputablePolicyState` under
 `HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy`: 0 off, 1 on, 2 evaluation. Microsoft documents no API for the
 value, so a Windows without it has no Smart App Control and reads as off. CiTool prints the state as translated text,
-and the installer never reads it (GitHub #35). The check ids: `smartappcontrol.on` is `fail`, so the run stops
-before its first change, and its detail names the steps and the INSTALL.md section. `smartappcontrol.evaluation`
-is `warn`: if Windows turns Smart App Control on later, the desktop and games lose the driver, so it asks to turn it
-off now. `smartappcontrol.unknown` (a read that failed, or a value other than 0, 1 or 2) is `warn`.
-`smartappcontrol.off` is `ok`. The window shows a help card for the first three (`src/HelpCards.cs`): the steps, the
-three pictures of Windows Security that the exe embeds (the page, the question "Are you sure?" and the page with Off
-selected), and a button that opens Windows Security on its Smart App Control page (`windowsdefender://smartapp`).
-The button opens a page and changes nothing. Today the window shows the `smartappcontrol.on` card only for a setup
-that Windows lets start, such as a later signed one. `smartappcontrol.on` is not in `ResultView.RetryCannotFix`,
-because the user turns it off while the window stays open, so Try again stays the default. A dry run takes `AMDGPU_WDDM_TEST_SAC` (`on`, `evaluation`,
-`off`, `missing` or a number) in place of the registry value, for the host tests.
+and the installer never reads it (GitHub #35). The check ids: `smartappcontrol.on` and `smartappcontrol.evaluation`
+are `ok` since 2026-11-04: the installer turns Smart App Control off by itself, and the plan screen
+states it as information with no box to tick and no other question, in the line `plan.change.smartappcontrol`:
+"Smart App Control will be turned off. Windows can turn it back on only by a reset of the system." Install is the
+consent. The run does it before its first program of ours (`Invoke-SmartAppControlOff` in `install.ps1`, before
+phase 1, the state worker `amdgpu-state-installer.exe` and the INF staging; `uninstall.ps1` does the same before its
+state worker): it writes `VerifiedAndReputablePolicyState` = 0 (DWORD), runs `CiTool.exe --refresh --json` and reads
+the value back (`Disable-SmartAppControl` in `common.ps1`), and logs all three. Measured on 26300 and 26100: the
+refresh gives `OperationResult` 0 and the value stays 0. When the write fails, CiTool fails (an exit or an
+`OperationResult` other than 0) or the value does not read back 0, the run stops before any program of the driver
+with `result.preflight-refused` and the check id `smartappcontrol.not-off`, and the detail names the steps by hand
+and the INSTALL.md section. `smartappcontrol.unknown` (a read that failed, or a value other than 0, 1 or 2) is
+`warn` and changes nothing. `smartappcontrol.off` is `ok`. The window shows a help card for `smartappcontrol.not-off`
+and `smartappcontrol.unknown` (`src/HelpCards.cs`): the steps, the three pictures of Windows Security that the exe
+embeds (the page, the question "Are you sure?" and the page with Off selected), and a button that opens Windows
+Security on its Smart App Control page (`windowsdefender://smartapp`). The button opens a page and changes nothing.
+`smartappcontrol.not-off` is not in `ResultView.RetryCannotFix`, because the user turns it off while the window
+stays open, so Try again stays the default. A dry run takes `AMDGPU_WDDM_TEST_SAC` (`on`, `evaluation`, `off`,
+`missing`, `change-not-held` or a number) in place of the registry value, for the host tests: with it, the turn-off
+uses stand-ins that hold, and `change-not-held` reads on and then reads the value back as 1.
 
 **Where to find the application afterwards**. The plan screen has a card with two boxes, the Start menu and the desktop,
 both on. Neither holds the Install button back. A box opens on the answer the decision event reports
@@ -308,7 +317,7 @@ package root: `manifest.json`, `install.cmd`, `uninstall.cmd`, `verify.cmd`, `pr
 SHA256 and size under `setup` (a name, not a path), so the integrity check covers it wherever the copy sits.
 The window takes `<its own folder>\files` as its package when that folder holds the manifest and
 `installer\install.ps1`, else its own folder (the kept repair set). With neither, the welcome screen says to unpack
-the whole zip (`welcome.files-missing`, four languages) and the check button stays off.
+the whole zip (`welcome.files-missing`, six languages) and the check button stays off.
 
 `<package>\..\setup.exe` (WinForms, .NET Framework 4.8, `asInvoker`; it relaunches itself elevated
 with `runas` when it has to change the system). Arguments: none (welcome), `--continue` (from RunOnce),
@@ -340,8 +349,11 @@ Strings: `strings.<lang>.txt` (`en`, `pl`, `ja`, `ko`) embedded in the exe, the 
 the source; `stamp.ps1` refreshes the hashes). Every Polish line of both apps carries `rev`: a Polish speaker
 read them all against one terminology, where one English term keeps one Polish word in the installer and in the
 control app (2026-10-12). The window's language is the control app's choice
-(`HKCU\Software\amdgpu-wddm\Control`, read only), else the Windows display language, else English; the title bar
-switches it. The tip panel follows the control app's guide setting: the guide character and her tip in a speech
+(`HKCU\Software\amdgpu-wddm\Control`, value `Language`), else the Windows display language (any `pt-*` gives `pt`,
+any `es-*` gives `es`), else English. The title bar switches it: a globe with the current language's own name opens
+the list of the six languages, each in its own script, under a label that keeps the English word ("Idioma /
+Language"). A choice redraws the window at once and writes `Language`, so the control app opens in the same language.
+The setup window writes no other value of that key. The tip panel follows the control app's guide setting: the guide character and her tip in a speech
 bubble with her, the same tip text with a plain title without her.
 
 The window draws its own frame (`FormBorderStyle.None`): a title bar with the mark, the product name, the language
@@ -353,7 +365,8 @@ user can reach is a system button, option control or text box, so its role, its 
 Windows' own, and the first Tab of the window lands on the screen, never on a glyph of the title bar. The window is
 never larger than the work area of the screen it opens on, because it cannot be resized or moved above the top of
 the screen. The render gate checks the frame as well (G-CHROME: a caption of Windows, a missing or unnamed window
-glyph, a glyph outside the bar, a language choice that runs into the glyphs and a rail step wider than the rail all
+glyph, a glyph outside the bar, a language choice that is not one globe with every language by its own name, a
+language choice that runs into the glyphs and a rail step wider than the rail all
 fail the build).
 
 ## 9. Running-release witness and verify report: how each value is obtained (writer side)

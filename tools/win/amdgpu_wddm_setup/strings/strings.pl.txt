@@ -8,7 +8,7 @@ ui.close|rev|7d9eb7ac|Zamknij
 ui.back|rev|76900f1b|Wstecz
 ui.cancel|rev|19766ed6|Anuluj
 ui.choose-folder|rev|826c7dcd|Wybierz folder...
-ui.language|rev|a6567634|Język: {0}
+ui.language.label|mt-safe|a4fe6526|Język
 ui.minimise|rev|20f082e9|Minimalizuj
 ui.close-window|rev|8b9de9c0|Zamknij okno
 ui.window-title|mt|229174f8|Nagi Setup - sterownik grafiki dla BC-250
@@ -93,9 +93,10 @@ check.bitlocker.unknown|rev|74c5d56a|Instalator nie mógł odczytać stanu funkc
 check.hvci.off|rev|c5375084|Integralność pamięci jest wyłączona.
 check.hvci.on|rev|038dce93|Integralność pamięci jest włączona. Jeśli sterownik się nie uruchomi, wyłącz ją w Zabezpieczeniach Windows (Izolacja rdzenia).
 check.smartappcontrol.off|mt|d0c27ee8|Inteligentna kontrola aplikacji jest wyłączona.
-check.smartappcontrol.on|mt|78cca160|Inteligentna kontrola aplikacji jest włączona. Gdy jest włączona, Windows blokuje ten instalator i programy sterownika graficznego. Wyłącz ją przed instalacją.
-check.smartappcontrol.evaluation|mt|8d341ff5|Inteligentna kontrola aplikacji jest w trybie oceny. Jeśli Windows później ją włączy, zablokuje programy sterownika graficznego, a pulpit i gry stracą sterownik. Wyłącz ją teraz.
+check.smartappcontrol.on|mt|e942bb33|Inteligentna kontrola aplikacji jest włączona. Instalator wyłączy ją przed instalacją sterownika.
+check.smartappcontrol.evaluation|mt|6d2a3b91|Inteligentna kontrola aplikacji jest w trybie oceny. Instalator wyłączy ją przed instalacją sterownika, więc Windows nie włączy jej później.
 check.smartappcontrol.unknown|mt|4ce54139|Instalator nie mógł odczytać, czy inteligentna kontrola aplikacji jest włączona.
+check.smartappcontrol.not-off|mt|0e4a27ff|Instalator nie mógł wyłączyć inteligentnej kontroli aplikacji. Gdy jest włączona, Windows blokuje ten instalator i programy sterownika graficznego. Nic ze sterownika nie zostało zainstalowane.
 check.vcruntime.ok|rev|da7b7ffe|Środowisko uruchomieniowe Microsoft Visual C++ jest zainstalowane.
 check.vcruntime.missing|rev|e96604a7|Brakuje środowiska uruchomieniowego Microsoft Visual C++ 2015-2022 (x64) albo jest ono za stare. Instalator zainstaluje je z pliku, który ma przy sobie.
 check.vcruntime.no-installer|rev|a1670c32|Trzeba zainstalować środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), a ten zestaw plików nie ma programu firmy Microsoft, który to robi. Pobierz wydanie ponownie.
@@ -142,6 +143,7 @@ plan.change.test-mode.on|rev|cf315297|Windows już działa w trybie testowym, wi
 plan.change.bitlocker|rev|f43553fa|Ochrona BitLocker zostaje wstrzymana na czas ponownych uruchomień tej instalacji i potem włącza się sama, więc Windows nie poprosi o klucz odzyskiwania.
 plan.change.bitlocker.unknown|rev|67f2277e|Instalator nie mógł odczytać stanu funkcji BitLocker na tym komputerze. Mimo to kontynuuje pracę: miej klucz odzyskiwania pod ręką, jeśli Windows poprosi o niego po ponownym uruchomieniu.
 plan.change.vcruntime|rev|65d68876|Najpierw instalowane jest środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), którego potrzebują programy sterownika.
+plan.change.smartappcontrol|mt|90e7f550|Inteligentna kontrola aplikacji zostanie wyłączona. Windows może ją ponownie włączyć tylko przez zresetowanie systemu.
 shortcuts.title|mt|19544092|Skróty i Nagi
 shortcuts.start-menu|rev|f7bdc16b|W menu Start
 shortcuts.desktop|rev|b1e0eb2c|Na pulpicie
@@ -337,8 +339,7 @@ tuning.restore|mt|3fb261c1|Poszczególne ustawienia przejrzysz, a zapisane warto
 
 # ---- help cards (HelpCards.cs) ----
 help.sac.title|mt|abf79205|Jak wyłączyć inteligentną kontrolę aplikacji
-help.sac.on.body|mt|83e5ce37|Inteligentna kontrola aplikacji uruchamia tylko programy podpisane przez wydawcę, któremu Microsoft ufa. Ta wersja testowa ma podpis testowy. Wyłącz inteligentną kontrolę aplikacji, a potem spróbuj ponownie.
-help.sac.evaluation.body|mt|425fde85|Wyłącz inteligentną kontrolę aplikacji, zanim przejdziesz dalej. Gdy jest wyłączona, Windows nie włączy jej sam.
+help.sac.not-off.body|mt|83d88902|Inteligentna kontrola aplikacji uruchamia tylko programy podpisane przez wydawcę, któremu Microsoft ufa. Ta wersja testowa ma podpis testowy, a instalator nie mógł sam wyłączyć inteligentnej kontroli aplikacji. Wyłącz ją według tych kroków, a potem spróbuj ponownie.
 help.sac.unknown.body|mt|41f88dc0|Jeśli Windows zablokuje instalator albo sterownik, wyłącz inteligentną kontrolę aplikacji według tych kroków.
 help.sac.step.open|mt|53dc10bb|Wybierz poniżej Otwórz ustawienia inteligentnej kontroli aplikacji. Zabezpieczenia Windows otworzą stronę Inteligentna kontrola aplikacji.
 help.sac.step.off|mt|1ad754d0|Wybierz Wyłączone.

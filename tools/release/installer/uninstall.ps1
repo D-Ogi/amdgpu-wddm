@@ -55,6 +55,27 @@ if ($lab.Count) { Write-Warn2 "a development-lab installation ($($lab -join ', '
 # Inventory must succeed before the first change. A failed read is not an empty driver store.
 try { $pkgs = @(Get-OurDriverPackages) }
 catch { Write-Fail "Driver-store inventory could not be read. No removal was started: $($_.Exception.Message)"; exit 6 }
+# Smart App Control blocks the state worker amdgpu-state-installer.exe below as it blocks the installer's programs,
+# so the uninstaller turns it off first, as install.ps1 does (common.ps1, Disable-SmartAppControl), when it finds
+# anything of ours to remove. Running the uninstaller is the consent. A change that does not hold stops here,
+# before any removal, with the steps to do it by hand.
+$sac = Read-SmartAppControlState
+Write-Info "Smart App Control: $($sac.detail)"
+if ($sac.state -in @('on', 'evaluation') -and ($pkgs.Count -or $state)) {
+    Write-Step 'Smart App Control'
+    Write-Info $script:SacTurnOffText
+    $desc = "turn Smart App Control off ($($sac.state) now): CI\Policy VerifiedAndReputablePolicyState = 0 (DWORD), CiTool.exe --refresh --json, and the value read back"
+    $off = $null
+    if ($DryRun -and -not $env:AMDGPU_WDDM_TEST_SAC) { Invoke-Change $desc { } | Out-Null }
+    elseif ($DryRun) { [void](Invoke-Change $desc { }); $off = Disable-SmartAppControl }
+    else { $off = Invoke-Change $desc { Disable-SmartAppControl } }
+    if ($off -and $off.ok) { Write-Info "Smart App Control is off: $($off.detail)" }
+    elseif ($off) {
+        Write-Fail "Smart App Control did not turn off: $($off.detail)"
+        Write-Fail "No removal was started. Turn Smart App Control off by hand: $($script:SacSteps). Then run the uninstaller again."
+        exit 2
+    }
+} elseif ($sac.state -eq 'unknown') { Write-Warn2 "Smart App Control: state unknown ($($sac.detail)). If Windows blocks the uninstaller's programs, $($script:SacSteps)." }
 Write-Step 'TheRock Python environments'
 # Fail before driver or package removal. A refused/unfinished detach still needs the installed runtime.
 $rocmRemoval = @(Invoke-RocmVenvDetach -Payload (Join-Path $root 'tools\hip\rocm'))

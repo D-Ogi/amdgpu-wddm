@@ -1,0 +1,381 @@
+# Spanish strings of Nagi Setup, one neutral Latin American table (usted; PC or equipo): every es-* language of
+# Windows uses it. Machine translation (mt / mt-safe) until a native review. Format: src/Strings.cs.
+
+# ---- frame ----
+install.pending-removals-cancelled|mt|4a977944|El programa de instalación canceló las eliminaciones que dejó la desinstalación anterior. Estos archivos de instalación se conservarán después de reiniciar Windows.
+ui.close|mt-safe|7d9eb7ac|Cerrar
+ui.back|mt-safe|76900f1b|Atrás
+ui.cancel|mt-safe|19766ed6|Cancelar
+ui.choose-folder|mt|826c7dcd|Elegir carpeta...
+ui.language.label|mt-safe|a4fe6526|Idioma
+ui.minimise|mt-safe|20f082e9|Minimizar
+ui.close-window|mt|8b9de9c0|Cerrar ventana
+ui.window-title|mt|229174f8|Nagi Setup - controlador de gráficos para la BC-250
+ui.unexpected|mt|88790f84|La instalación se detuvo porque algo falló dentro de su ventana. No cambió nada más. Iníciela de nuevo.
+rail.welcome|mt-safe|0e2226b5|Bienvenida
+rail.check|mt|9d60841e|Comprobación
+rail.plan|mt|aff0766a|Revisión
+rail.install|mt|569ca49f|Instalación
+rail.finish|mt-safe|a6c7a84b|Fin
+rail.folder|mt-safe|74ccd433|Carpeta
+rail.prepare|mt|ee820467|Preparación
+rail.current|mt|3d59ee1e|paso actual
+rail.done|mt|a4c3ed04|listo
+rail.failed|mt|a1f6bdb2|se detuvo aquí
+elevation.declined|mt|0a586e33|La instalación necesita permiso de administrador para instalar o reparar el controlador. No se cambió nada. Inicie la instalación de nuevo y elija Sí cuando Windows lo pregunte.
+payload.damaged|mt|44795d7b|Este archivo de instalación está dañado: los archivos que contiene no son los mismos con los que se creó. No se cambió nada. Descargue la versión de nuevo.
+payload.already-running|mt|45dca71f|La instalación ya se está ejecutando en esta PC. Termine la instalación en la ventana abierta; aquí no se cambió nada.
+payload.folder|mt|78be926d|La instalación no puede preparar la carpeta donde guarda los archivos de instalación: pertenece a otra cuenta de esta PC o no es una carpeta normal. No se cambió nada. Elimine esa carpeta, que el archivo de soporte indica, e inicie este archivo de nuevo.
+loading.starting|mt|ff87e28a|Preparando la instalación.
+loading.permission|mt|2d672b09|Windows pregunta ahora si la instalación puede hacer cambios en esta PC. Elija Sí para continuar.
+loading.unpacking|mt|a96e5550|Descomprimiendo y comprobando los archivos de instalación. Tarda unos segundos.
+
+# ---- welcome ----
+welcome.title|mt|1d5a1bfb|Instalar Nagi, el controlador de gráficos para la ASRock BC-250
+welcome.body|mt|37fc056a|La instalación instala el controlador de gráficos y Nagi Control App. Primero comprueba esta PC y muestra todo lo que va a cambiar antes de cambiar algo.
+welcome.repair.title|mt|ccc0cf87|Reparar el controlador de gráficos Nagi
+welcome.repair.body|mt|25153ac9|La instalación vuelve a instalar la misma versión, desde la copia guardada en esta PC. Su configuración se conserva.
+welcome.dry-run|mt|42af2b21|Prueba: la instalación recorre todos los pasos, pero no cambia nada.
+welcome.version|mt|9699394c|Versión {0}
+welcome.files-missing|mt|938e9bd4|Faltan los archivos de esta versión. Descomprima todo el archivo zip en una carpeta y luego inicie setup.exe desde esa carpeta: necesita la carpeta files a su lado.
+welcome.source.title|mt|1623a97a|De dónde vienen los archivos
+welcome.source.package|mt|61e09644|Los archivos de esta instalación
+welcome.source.kept|mt|9ea897ba|La copia guardada en esta PC
+welcome.source.prepared|mt|1c2cec8d|Una carpeta preparada para una PC sin internet
+welcome.prepared.path|mt|a79aab12|Carpeta preparada
+welcome.prepared.choose|mt|40e8823f|Elija la carpeta preparada.
+welcome.prepared.ok|mt|6203a8e5|Carpeta preparada con la versión {0}. No se necesita internet.
+welcome.prepare-link|mt|5868e4fc|Preparar una carpeta para una PC sin internet...
+welcome.check|mt|7c97d062|Comprobar esta PC
+welcome.promise.driver|mt|d8eb7961|El controlador de gráficos y Nagi Control App, instalados juntos.
+welcome.promise.shown|mt|0f886d7e|Cada cambio se muestra antes de que algo cambie en esta PC.
+welcome.promise.offline|mt|bb2a3e49|Una carpeta preparada instala la misma versión sin internet.
+folder.missing|mt|219fdbbd|Esta carpeta no existe.
+folder.not-prepared|mt|c9f12282|Esta no es una carpeta preparada. Elija la carpeta que preparó la instalación, o prepare una primero.
+folder.unknown|mt|6c91a6f6|Esta carpeta la preparó otra versión de la instalación y no se puede usar. Prepárela de nuevo.
+folder.incomplete|mt|73bc7acc|Esta carpeta preparada está incompleta. Prepárela de nuevo.
+
+# ---- checking ----
+checking.title|mt|cae3765d|Comprobando esta PC
+checking.body|mt|8fff775a|Puede tardar hasta un minuto. No se cambia nada.
+checking.list|mt|de07d072|Comprobaciones
+checking.waiting|mt|db75f750|Iniciando las comprobaciones...
+
+# ---- checks (one per check of the installer) ----
+check.other|mt|6b757578|Otra comprobación (detalles en el archivo de soporte).
+check.mark.ok|mt|436fe71b|Correcto
+check.mark.warn|mt|d8da2c49|Nota
+check.mark.fail|mt|cb5b28f8|No pasó
+check.package.ok|mt|3a077fcf|Los archivos de instalación están completos.
+check.package.damaged|mt|8eaa1e54|Los archivos de instalación están dañados o incompletos.
+check.admin.ok|mt|a3e85529|La instalación se ejecuta con permiso de administrador.
+check.admin.dry-run|mt|83161cfe|La instalación se ejecuta sin permiso de administrador, así que no se pudieron leer algunas configuraciones.
+check.admin.missing|mt|3da431e1|La instalación necesita permiso de administrador.
+check.windows.ok|mt|7d1c4fbb|Esta versión de Windows es compatible.
+check.windows.not-x64|mt|1c9550cb|Este Windows no es de 64 bits. El controlador necesita Windows 11 de 64 bits.
+check.windows.too-old|mt|b44ce700|Esta versión de Windows es demasiado antigua. El controlador necesita Windows 11.
+check.windows.below-supported|mt|71688b75|Esta versión de Windows es anterior a las versiones con las que se prueba el controlador: Windows 11 23H2, 24H2 y 25H2. Actualice Windows. La instalación continúa.
+check.windows.insider|mt|2b892990|Esta es una versión Insider de Windows, que no es compatible. El controlador se prueba en Windows 11 23H2, 24H2 y 25H2. La instalación continúa.
+check.windows.ltsc|mt|346c19f0|Esta edición de Windows (LTSC) no se probó con este controlador. La instalación continúa.
+check.gpu.ok|mt|f61b25ac|Se encontró el chip gráfico de la ASRock BC-250.
+check.gpu.missing|mt|7ac6bcb8|No se encontró ningún chip gráfico de ASRock BC-250. Este controlador funciona solo en la BC-250.
+check.gpu.several|mt|57bff6a6|Se encontró más de un chip gráfico BC-250. Solo se admite uno.
+check.gpu.ignored|mt|cced4549|No se encontró ningún chip gráfico BC-250; esta prueba continúa de todos modos.
+check.secureboot.off|mt|a107f361|Secure Boot está desactivado.
+check.secureboot.on|mt|1a594fe8|Secure Boot está activado. Desactívelo en la configuración del firmware de la PC antes de instalar.
+check.secureboot.unknown|mt|349a2c6d|La instalación no pudo leer si Secure Boot está activado.
+check.testsigning.active|mt|f6138193|El modo de prueba de Windows está activado.
+check.testsigning.inactive|mt|1f2ea753|El modo de prueba de Windows está desactivado. La instalación lo activa como parte del proceso.
+check.bitlocker.ok|mt|f6019261|BitLocker no requiere atención.
+check.bitlocker.on|mt|833d9bbb|BitLocker está activado. La instalación lo pausa durante los reinicios y luego se vuelve a activar solo.
+check.bitlocker.unknown|mt|74c5d56a|La instalación no pudo leer el estado de BitLocker. Si BitLocker está activado, tenga a mano su clave de recuperación.
+check.hvci.off|mt|c5375084|La integridad de memoria está desactivada.
+check.hvci.on|mt|038dce93|La integridad de memoria está activada. Si el controlador no inicia, desactívela en Seguridad de Windows (Aislamiento del núcleo).
+check.smartappcontrol.off|mt|d0c27ee8|Control inteligente de aplicaciones está desactivado.
+check.smartappcontrol.on|mt|e942bb33|Control inteligente de aplicaciones está activado. La instalación lo desactiva antes de instalar el controlador.
+check.smartappcontrol.evaluation|mt|6d2a3b91|Control inteligente de aplicaciones está en modo de evaluación. La instalación lo desactiva antes de instalar el controlador, así Windows no puede activarlo más tarde.
+check.smartappcontrol.unknown|mt|4ce54139|La instalación no pudo leer si Control inteligente de aplicaciones está activado.
+check.smartappcontrol.not-off|mt|0e4a27ff|La instalación no pudo desactivar Control inteligente de aplicaciones. Mientras esté activado, Windows bloquea este programa de instalación y los programas del controlador de gráficos. No se instaló nada del controlador.
+check.vcruntime.ok|mt|da7b7ffe|El runtime de Microsoft Visual C++ está instalado.
+check.vcruntime.missing|mt|e96604a7|El runtime de Microsoft Visual C++ 2015-2022 (x64) falta o es demasiado antiguo. La instalación lo instala desde el archivo que trae consigo.
+check.vcruntime.no-installer|mt|a1670c32|Hay que instalar el runtime de Microsoft Visual C++ 2015-2022 (x64), y este conjunto de archivos no incluye el programa de Microsoft que lo hace. Descargue la versión de nuevo.
+check.space.ok|mt|fc218428|Hay suficiente espacio libre en el disco.
+check.space.low|mt|e473eee3|No hay suficiente espacio libre en la unidad C:. La instalación necesita 2 GB.
+check.firmware.download-ok|mt|11f01474|El firmware de la GPU se puede descargar.
+check.firmware.unreachable|mt|2126305d|El firmware de la GPU no se puede descargar. Conecte esta PC a internet o use una carpeta preparada.
+check.firmware.folder-ok|mt|1703f1b6|Los archivos de firmware de la GPU en la carpeta están completos.
+check.firmware.folder-bad|mt|e11eec4f|Faltan algunos archivos de firmware de la GPU en la carpeta o son distintos.
+check.firmware.no-list|mt|de36633a|Los archivos de instalación no indican qué firmware de la GPU se necesita. Descargue la versión de nuevo.
+check.lab-install.present|mt|c4ebe135|Esta PC tiene una instalación de desarrollo del controlador. La instalación no la cambia.
+check.lab-install.forced|mt|711bb1d9|Esta PC tiene una instalación de desarrollo del controlador; la instalación continúa porque usted lo pidió.
+check.state.ok|mt|52525a38|Se encontró una instalación anterior de Nagi.
+check.existing.no-state|mt|a46215ab|El controlador está instalado sin los registros de la instalación. Desinstálelo primero y luego inicie la instalación de nuevo.
+check.driver-rank.ok|mt|e792821d|Windows puede cambiar el chip gráfico al controlador de este paquete.
+check.driver-rank.not-above|mt|39cb4710|Windows mantendría el controlador instalado ahora, porque este paquete no tiene una versión más nueva del controlador. Desinstale primero el controlador, reinicie la PC y luego inicie la instalación de nuevo.
+check.driver-rank.unreadable|mt|7961fbb0|La instalación no pudo leer qué controlador usa ahora el chip gráfico. Desinstale primero el controlador, reinicie la PC y luego inicie la instalación de nuevo.
+check.prepare.destination-inside|mt|08b96974|La carpeta está dentro de los archivos de instalación. Elija una carpeta en otro lugar.
+check.prepare.destination-file|mt|3d875a78|Ya existe un archivo con este nombre. Elija una carpeta.
+check.prepare.destination-not-empty|mt|5a6961d7|La carpeta no está vacía. Elija una carpeta vacía o una carpeta preparada antes.
+
+# ---- plan ----
+plan.install.title|mt|6dd7ca20|Listo para instalar la versión {0}
+plan.upgrade.title|mt|8222a9d0|Listo para actualizar de la versión {0} a la {1}
+plan.repair.title|mt|2dbf2997|Listo para reparar la versión {0}
+plan.resume.title|mt|f105505d|Listo para terminar de instalar la versión {0}
+plan.already.title|mt|92b25209|La versión {0} ya está instalada y comprobada
+plan.already.body|mt|9ea445c4|No hay nada que hacer. Elija Reparar para instalar la misma versión de nuevo.
+plan.verify.title|mt|e593d4b9|La versión {0} está instalada y espera un reinicio
+plan.verify.body|mt|1deb5208|Después de reiniciar Windows, la instalación comprueba que el controlador funcione.
+plan.repair-again|mt-safe|1196b6c5|Reparar
+plan.checks.title|mt|de07d072|Comprobaciones
+plan.checks.ok|mt|eb2f3d98|Todas las comprobaciones pasaron.
+plan.checks.attention|mt|e6885bff|Comprobaciones que requieren su atención: {0}
+plan.what.title|mt|70fbb54b|Qué va a pasar
+plan.restarts.0|mt|b0a2c82a|No hace falta reiniciar Windows.
+plan.restarts.1|mt|2ae11afb|Windows se reinicia una vez. Cuando vuelva a iniciar sesión, la instalación continúa sola.
+plan.restarts.2|mt|efc32bc9|Windows se reinicia dos veces. Después de cada inicio de sesión, la instalación continúa sola.
+plan.restarts.many|mt|40c9ca93|Windows se reiniciará {0} veces. La instalación continúa después de cada inicio de sesión.
+plan.restarts.choice|mt|e2801100|Cada reinicio empieza solo después de una breve cuenta regresiva. Puede reiniciar de inmediato o posponerlo.
+plan.change.test-mode|mt|7c5a1301|Windows cambia al modo de prueba para poder cargar este controlador.
+plan.change.test-mode.note|mt|9a9c5086|Después, "Modo de prueba" aparece en una esquina del escritorio. Al quitar el controlador se desactiva de nuevo.
+plan.change.test-mode.on|mt|cf315297|Windows ya se ejecuta en modo de prueba, así que ahí no cambia nada.
+plan.change.bitlocker|mt|f43553fa|La protección de BitLocker se pausa durante los reinicios de esta instalación y se vuelve a activar sola, así Windows no pide la clave de recuperación.
+plan.change.bitlocker.unknown|mt|67f2277e|La instalación no pudo leer el estado de BitLocker de esta PC. Continúa de todos modos: tenga a mano su clave de recuperación por si Windows la pide después de un reinicio.
+plan.change.vcruntime|mt|65d68876|Primero se instala el runtime de Microsoft Visual C++ 2015-2022 (x64), porque los programas del controlador lo necesitan.
+plan.change.smartappcontrol|mt|90e7f550|Control inteligente de aplicaciones se desactivará. Windows solo puede volver a activarlo con un restablecimiento del sistema.
+shortcuts.title|mt|19544092|Accesos directos y Nagi
+shortcuts.start-menu|mt|f7bdc16b|En el menú Inicio
+shortcuts.desktop|mt|b1e0eb2c|En el escritorio
+shortcuts.note|mt|e8f6f141|Los accesos directos abren Nagi Control App. El menú Inicio también recibe una entrada de recuperación. Desactive una opción si no la quiere. El controlador se instala de todos modos.
+shortcuts.wallpaper|mt|ce6e26e6|Poner el fondo de pantalla de Nagi
+shortcuts.wallpaper.note|mt|14a12464|El fondo de pantalla se pone una vez para cada persona que inicia sesión, después de comprobar el controlador. Nagi Control App puede recuperar el fondo anterior.
+shortcuts.boot-logo|mt|c125e22c|Mostrar a Nagi mientras Windows inicia
+shortcuts.boot-logo.note|mt|3c8dd869|Nagi aparece sobre el anillo de puntos de la pantalla de inicio. Nagi Control App puede quitarla después.
+plan.firmware.download|mt|7051aa7f|El firmware de la GPU se descarga del archivo oficial de firmware de Linux y se comprueba.
+plan.firmware.folder|mt|3afc555b|El firmware de la GPU viene de la carpeta que eligió y se comprueba.
+plan.firmware.package-folder|mt|576cf803|El firmware de la GPU viene de la carpeta preparada. No se necesita internet.
+plan.notes.title|mt|3a048d0b|Novedades de esta versión
+plan.notes.english|mt|e9981e5c|Estas notas están en inglés.
+plan.notes.none|mt|e9bf28c9|Esta versión no tiene notas de la versión.
+plan.settings.title|mt|7760b023|Su configuración
+plan.settings.summary|mt|e3ba042c|{0} conservadas, {1} nuevas, {2} cambiadas a un nuevo valor recomendado, {3} sin cambios.
+plan.settings.none|mt|5fa2509b|La instalación no pudo listar las configuraciones que cambia. No se cambia nada antes de que continúe.
+plan.settings.note|mt|d7133201|Las configuraciones que usted cambió se conservan.
+plan.go.install|mt-safe|569ca49f|Instalar
+plan.go.upgrade|mt-safe|c1c1009d|Actualizar
+plan.go.repair|mt-safe|1196b6c5|Reparar
+plan.go.resume|mt-safe|31fbef16|Continuar
+settings.clock-limit|mt|9d16b4b1|Límite de velocidad de reloj de gráficos: {0} MHz
+settings.auto-clock.on|mt|499702fd|Reloj automático de gráficos: activado
+settings.auto-clock.off|mt|3df7a04f|Reloj automático de gráficos: desactivado
+settings.cores|mt|36cd7560|Núcleos gráficos: {0}
+settings.desktop-path|mt|b1b92ad5|Escritorio en el chip gráfico
+settings.desktop.gpu|mt|7befc32c|Escritorio dibujado por el chip gráfico
+settings.desktop.cpu|mt|0fcc82b2|Escritorio dibujado por el procesador (modo seguro)
+settings.desktop.cpu-until-repair|mt|ed1263ad|Escritorio dibujado por el procesador hasta que el controlador vuelva a dibujarlo
+settings.d3d11.gpu|mt|c45dd50d|Juegos y aplicaciones Direct3D 11 y 10.1 dibujados por el chip gráfico (las aplicaciones propias de Windows y las de Direct3D 10.0 siguen en el procesador)
+settings.d3d11.listed|mt|747f87a0|Juegos y aplicaciones Direct3D 11 dibujados por el procesador, excepto los de la lista
+settings.game|mt|f203abf1|Configuración recomendada para {0}
+settings.other|mt|b4abd830|{0} otras configuraciones del controlador, {1} de ellas nuevas o cambiadas
+settings.decision.set|mt|11507a0e|nueva
+settings.decision.same|mt|aaa8d3c8|sin cambios
+settings.decision.update|mt|bae122db|nuevo valor recomendado
+settings.decision.kept|mt|b4865f1f|se conserva su valor
+settings.decision.command|mt|898239d8|como lo eligió para esta instalación
+settings.decision.reopened|mt|4342e37e|restablecida por esta reparación (el controlador la había desactivado)
+settings.decision.driver-closed|mt|cff55d7f|desactivada por el controlador. Una reparación la restablece
+settings.decision.cores-driver-closed|mt|6f8a9a7c|el controlador volvió a este número por sí mismo. Una reparación restablece el número de la versión
+settings.decision.cores-reopened|mt|282a0682|restablecido por esta reparación (el controlador había vuelto a menos núcleos)
+
+# ---- consents ----
+
+# ---- working ----
+working.title|mt|8749b169|Instalando
+working.repair.title|mt|e2c5201c|Reparando
+working.continue.title|mt|d0432a88|Continuando la instalación
+working.prepare.title|mt|28edcf49|Preparando la carpeta
+working.body|mt|dccb0ab7|Espere, por favor. Mantenga la PC encendida.
+working.prepare.body|mt|aa356215|La instalación copia sus archivos y el firmware de la GPU y comprueba cada uno.
+working.stages|mt-safe|1de3df70|Pasos
+working.elapsed|mt|409cb488|Tiempo transcurrido: {0}
+working.cancel.available|mt|0031d59c|Todavía puede cancelar. Aún no se cambió nada.
+working.cancel.unavailable|mt|42461b9b|Ahora no se puede cancelar: la instalación debe terminar primero esta parte.
+working.cancel.requested|mt|3caf86ac|Deteniendo en el próximo punto seguro...
+working.close-blocked|mt|10e529bd|La instalación está trabajando. La ventana se puede cerrar cuando termine esta parte.
+stage.other|mt|80de8143|Otro paso
+stage.preflight|mt|de07d072|Comprobaciones
+stage.test-signing|mt|61d7aae4|Modo de prueba de Windows
+stage.install|mt|c9fb4313|Preparando la instalación
+stage.firmware|mt|46d4dd63|Firmware de la GPU
+stage.files|mt|3ffd2d35|Archivos del controlador
+stage.driver|mt|fc465aa6|Controlador de gráficos
+stage.settings|mt-safe|74a883a0|Configuración
+stage.extras|mt|800ae5e9|Programas adicionales
+stage.components|mt|5f69dcb7|Instalando los programas adicionales
+stage.finish|mt|0052205c|Finalizando
+stage.verify|mt|11d4d5ab|Comprobando el controlador
+stage.prepare-check|mt|0f35d10d|Archivos de instalación y carpeta
+stage.copy|mt|ff9e3c81|Copiando los archivos
+
+# ---- restart ----
+restart.now|mt|09af1002|Reiniciar ahora
+restart.later|mt-safe|73b6e48a|Más tarde
+restart.save-work|mt|16909f23|Guarde primero su trabajo. Windows pide a los programas abiertos que se cierren; no los obliga.
+restart.countdown|mt|e8ce24a7|Windows se reinicia solo en {0} s.
+restart.countdown.over|mt|7af75060|La cuenta regresiva terminó. La instalación ya no reinicia Windows por sí sola.
+restart.later.done|mt|a38787ae|La instalación continúa sola después del próximo reinicio de Windows. Puede cerrar esta ventana.
+restart.failed|mt|56d3b9cd|Windows no inició el reinicio. Reinicie la PC desde el menú Inicio.
+
+# ---- results ----
+result.none.title|mt|58c58ece|La instalación se detuvo de forma inesperada
+result.none.body|mt|8ae282a1|La instalación no informó cómo terminó.
+result.other.title|mt|493698ce|La instalación terminó
+result.other.body|mt|3cf8a086|El archivo de soporte tiene los detalles.
+result.planned.title|mt-safe|5fa7aac5|Listo
+result.planned.body|mt|d714c256|La instalación comprobó esta PC.
+result.needs-consent.title|mt|b2f19443|Se necesita su aprobación
+result.needs-consent.body|mt|ecacb024|La instalación necesita su aprobación antes de continuar.
+result.dry-run-complete.title|mt|f54c1b03|Prueba terminada
+result.dry-run-complete.body|mt|9ea5d7b2|La instalación recorrió todos los pasos y no cambió nada.
+result.dry-run-verify.title|mt|f54c1b03|Prueba terminada
+result.dry-run-verify.body|mt|d1555a0f|Esta versión espera un reinicio. Después del reinicio, una ejecución real comprueba el controlador.
+result.already.title|mt|eb0999fb|Esta versión ya está instalada y comprobada
+result.already.body|mt|886b4b43|No hay nada que hacer. Elija Reparar para instalarla de nuevo.
+result.restart-test-signing.title|mt|14fc8bc7|Reinicie Windows para continuar
+result.restart-test-signing.body|mt|2258d814|El modo de prueba de Windows se activa con el reinicio. Cuando vuelva a iniciar sesión, la instalación continúa sola.
+result.restart-driver.title|mt|14fc8bc7|Reinicie Windows para continuar
+result.restart-driver.body|mt|de5ef092|El controlador está instalado e inicia con el reinicio. Cuando vuelva a iniciar sesión, la instalación continúa sola.
+result.installed-restart.title|mt|93aab4b5|Reinicie Windows para terminar
+result.installed-restart.body|mt|42a56d9a|Todo está instalado. Después del reinicio, la instalación comprueba que el controlador funcione.
+result.testsigning-not-active.title|mt|7fcee967|El modo de prueba de Windows todavía no está activado
+result.testsigning-not-active.body|mt|3213b661|Windows no activó el modo de prueba en el último inicio. Reinicie Windows una vez más. Si este mensaje vuelve a aparecer, compruebe que Secure Boot esté desactivado.
+result.testsigning-secureboot.title|mt|e160b4ae|Secure Boot bloquea el modo de prueba de Windows
+result.testsigning-secureboot.body|mt|5ab0b106|Windows informa que Secure Boot está activado. Windows no permite el modo de prueba que necesita este controlador mientras Secure Boot esté activado. El firmware estándar de la BC-250 no tiene una opción de Secure Boot, así que este equipo tiene un firmware modificado: desactive Secure Boot en su configuración, normalmente en Security > Secure Boot, y luego inicie la instalación de nuevo. Algunas versiones modificadas no tienen esa opción: ponga OS Type en "Other OS" o elimine las claves de Secure Boot. Para ver el estado usted mismo, abra Información del sistema desde el menú Inicio y lea la línea de arranque seguro.
+result.restart-still-pending.title|mt|9676613e|Windows todavía no se reinició
+result.restart-still-pending.body|mt|e79d291f|La instalación continúa después del próximo reinicio de Windows.
+result.verify-before-restart.title|mt|93aab4b5|Reinicie Windows para terminar
+result.verify-before-restart.body|mt|ff335b2d|El controlador se comprueba después del reinicio de Windows.
+result.install-unfinished.title|mt|905e1ac5|La instalación todavía no terminó
+result.install-unfinished.body|mt|0e894d61|Ejecute la instalación de nuevo para terminarla. Después se comprueba el controlador.
+result.verified.title|mt|243117f3|El controlador Nagi está instalado y funciona
+result.verified.body|mt|10c96356|Todo está listo. Nagi Control App está en el menú Inicio.
+result.verified-with-warnings.title|mt|b0c2d18c|El controlador Nagi está instalado y funciona, con notas
+result.verified-with-warnings.body|mt|687cef5d|Todo está listo. Algunas comprobaciones tuvieron notas; el archivo de soporte tiene los detalles.
+result.preflight-refused.title|mt|6a7ab8d2|La instalación no puede instalar en esta PC ahora
+result.preflight-refused.body|mt|435efe20|Estas comprobaciones no pasaron. Corríjalas y luego inicie la instalación de nuevo.
+result.preflight-error.title|mt|7f549710|La instalación no pudo comprobar esta PC
+result.preflight-error.body|mt|0cdc865d|Intente de nuevo. Si vuelve a pasar, guarde el archivo de soporte e informe el problema.
+result.needs-admin.title|mt|a7547d5e|La instalación necesita permiso de administrador
+result.needs-admin.body|mt|c300742e|Inicie la instalación de nuevo y elija Sí cuando Windows lo pregunte.
+result.package-damaged.title|mt|9605d07e|Los archivos de instalación están dañados
+result.package-damaged.body|mt|3b352587|Descargue la versión de nuevo, descomprímala e inicie la instalación desde la nueva carpeta.
+result.firmware-folder-bad.title|mt|7a0ca40b|Los archivos de firmware de la GPU no están completos
+result.firmware-folder-bad.body|mt|8e7f3bf0|Faltan algunos archivos de firmware en la carpeta o son distintos. Prepare la carpeta de nuevo o deje que la instalación descargue los archivos.
+result.firmware-unreachable.title|mt|9a30fe38|El firmware de la GPU no se puede descargar
+result.firmware-unreachable.body|mt|f36a7aec|Revise la conexión a internet e intente de nuevo, o use una carpeta preparada en otra PC.
+result.prepare-destination.title|mt|80d7e19c|Esta carpeta no se puede usar
+result.prepare-destination.body|mt|537024c6|Elija una carpeta vacía, o una carpeta preparada antes, fuera de los archivos de instalación.
+result.busy.title|mt|2a14eee7|La instalación ya se está ejecutando
+result.busy.body|mt|f31e735e|Otra instalación o reparación se está ejecutando en esta PC. Espere a que termine e intente de nuevo.
+result.verify-failed.title|mt|dd7e4790|El controlador no funciona como se esperaba
+result.verify-failed.body|mt|ffe45976|La instalación comprobó el controlador después del reinicio y encontró un problema. Repárelo, o guarde el archivo de soporte e informe el problema.
+result.step-failed.title|mt|aac11030|La instalación se detuvo antes de terminar
+result.step-failed.body|mt|bda9b715|Un paso no se completó.
+result.cancelled.title|mt|5efba629|La instalación se canceló
+result.cancelled.body|mt|60ecbf18|La instalación se detuvo en un punto seguro.
+result.cancelled-after-changes.title|mt|5efba629|La instalación se canceló
+result.cancelled-after-changes.body|mt|7e3e0e36|La instalación se detuvo en un punto seguro después de empezar a cambiar esta PC.
+result.deadline.title|mt|37bea89c|La instalación se detuvo: se alcanzó el límite de tiempo
+result.deadline.body|mt|99cbc2bc|La instalación alcanzó el límite de tiempo que tenía y se detuvo en un punto seguro.
+result.deadline-after-changes.title|mt|37bea89c|La instalación se detuvo: se alcanzó el límite de tiempo
+result.deadline-after-changes.body|mt|b329d221|La instalación alcanzó el límite de tiempo que tenía y se detuvo en un punto seguro después de empezar a cambiar esta PC.
+result.offline-prepared.title|mt|58c76c43|La carpeta está lista
+result.offline-prepared.body|mt|2a59d535|Copie la carpeta a la PC sin internet e inicie la instalación desde ella. Allí, elija "Una carpeta preparada para una PC sin internet".
+result.failed-checks|mt|ecefee18|Comprobaciones que no pasaron
+result.nothing-changed|mt|54ca5460|No se cambió nada.
+result.already-installed|mt|c90b9352|Esta PC ya tiene la versión {0} del controlador.
+result.changes-made|mt|b7ee935f|Se hicieron algunos cambios antes de que la instalación se detuviera, y se quedan como están. Inicie la instalación de nuevo para terminar, o use Reparar en Nagi Control App.
+result.changes-unknown|mt|88bf7384|La instalación no puede saber si se cambió algo. Iníciela de nuevo; continúa donde pueda.
+result.support|mt|3e9e40b3|El archivo de soporte tiene los detalles para informar un problema. No se envía nada automáticamente.
+result.support.diagnostics|mt|a739d1a9|Se reunieron para usted los detalles del chip gráfico que no inició. Están en ese archivo.
+result.support.saved|mt|73cd7e8c|Guardado: {0}
+result.support.failed|mt|d2f9f531|No se pudo guardar el archivo de soporte. Elija otro lugar.
+result.save-support|mt|884d47cb|Guardar archivo de soporte...
+result.retry|mt|d8b8392e|Intentar de nuevo
+result.repair|mt-safe|1196b6c5|Reparar
+
+# ---- prepare a folder for a PC without internet ----
+prepare.title|mt|27a6234d|Preparar una carpeta para una PC sin internet
+prepare.body|mt|7cd7fbff|La instalación copia sus archivos y el firmware de la GPU en una carpeta. Copie esa carpeta a la PC sin internet e inicie la instalación allí.
+prepare.destination|mt|7788ee99|Carpeta que se va a preparar
+prepare.destination.hint|mt|d7d3d807|Elija una carpeta vacía o una carpeta preparada antes (se reemplaza).
+prepare.firmware.title|mt|46d4dd63|Firmware de la GPU
+prepare.use-firmware|mt|d8e7a9bd|Ya tengo los archivos de firmware de la GPU en una carpeta
+prepare.firmware.folder|mt|5c1a3bc9|Carpeta de firmware
+prepare.firmware.download-note|mt|6ec53a34|Sin una carpeta, la instalación descarga el firmware, así que esta PC necesita internet ahora.
+prepare.firmware.folder-note|mt|bb8b6a97|La instalación comprueba cada archivo de firmware con la lista de esta versión.
+prepare.go|mt-safe|ee820467|Preparar
+
+# ---- guide panel (plan v7 section 6; text only, the panel repeats what the screen says) ----
+guide.title|mt|5506739a|Consejo de Nagi
+guide.title.plain|mt-safe|a4245a3c|Consejo
+guide.welcome|mt|65339917|Nada cambia hasta que presione Instalar. La instalación muestra primero cada cambio.
+guide.prepare|mt|9ee5d83f|Una carpeta preparada funciona en cualquier BC-250 sin internet, también para una reparación posterior.
+guide.page-tip|mt|267a0cc9|La configuración que cambió en Nagi Control App se conserva al actualizar.
+guide.work-in-progress|mt|f3e8ef82|Estoy en eso. Puede tardar unos minutos.
+guide.checking|mt|687b400d|Estoy comprobando esta PC. Puede tardar hasta un minuto.
+guide.pending-restart|mt|d31250df|Sus cambios están guardados. La instalación continúa después del próximo reinicio de Windows.
+guide.install-stopped|mt|47319a31|La instalación no terminó. La página indica qué hacer a continuación.
+guide.verification-failed|mt|1abe91c5|El controlador no pasó sus comprobaciones. Una reparación suele ayudar.
+guide.upgrade-done|mt|7ed192a1|¡Listo! El controlador está instalado y comprobado. ¡Que se divierta!
+guide.name|mt|58a9149a|Nagi significa {0}. Sí, la N es otra vez Nagi.
+brand.expansion|mt-safe|8b8af7be|Nagi's AMD Graphics Infrastructure
+# Optional Windows tuning
+tuning.title|mt|a1f6198e|Ajustes de Windows
+tuning.opt-in|mt|d229d14d|Aplicar ajustes opcionales de Windows
+tuning.details|mt|36ae26fb|Aplica la configuración recomendada para reducir la actividad de Windows en segundo plano.
+tuning.restore|mt|3fb261c1|Revise cada configuración y restaure los valores guardados en Nagi Control App. La desinstalación también ofrece restaurar la configuración de todo el equipo.
+
+# ---- help cards (HelpCards.cs): a check the user fixes in Windows, in steps ----
+help.sac.title|mt|abf79205|Cómo desactivar Control inteligente de aplicaciones
+help.sac.not-off.body|mt|83d88902|Control inteligente de aplicaciones solo ejecuta los programas que firma un editor y en los que Microsoft confía. Esta versión de prueba tiene una firma de prueba, y la instalación no pudo desactivar Control inteligente de aplicaciones por sí sola. Desactívelo con estos pasos e intente de nuevo.
+help.sac.unknown.body|mt|41f88dc0|Si Windows bloquea la instalación o el controlador, desactive Control inteligente de aplicaciones con estos pasos.
+help.sac.step.open|mt|53dc10bb|Seleccione Abrir la configuración de Control inteligente de aplicaciones, abajo. Seguridad de Windows abre la página de Control inteligente de aplicaciones.
+help.sac.step.off|mt|1ad754d0|Seleccione Desactivado.
+help.sac.step.confirm|mt|b7aa45b9|Windows pregunta "¿Está seguro?". Seleccione "Sí, estoy seguro". Luego seleccione Sí en la solicitud de administrador.
+help.sac.step.done|mt|f4dc8b8a|La página muestra ahora Desactivado como la opción seleccionada. Ya no puede seleccionar Activado ni Evaluación.
+help.sac.step.retry|mt|1751eaf5|Vuelva a esta ventana y seleccione Intentar de nuevo.
+help.sac.step.install|mt|6ecd7bba|Vuelva a esta ventana y continúe.
+help.sac.note|mt|39238865|Después de desactivar Control inteligente de aplicaciones, no puede volver a activarlo ni elegir el modo de evaluación hasta que restablezca esta PC desde las opciones de recuperación de Windows. Windows se lo avisa antes del cambio.
+help.sac.open|mt|6f158fa2|Abrir la configuración de Control inteligente de aplicaciones
+help.open-failed|mt|680624a8|Seguridad de Windows no se abrió. Abra Seguridad de Windows desde el menú Inicio. Luego seleccione Control de aplicaciones y navegador, y después Configuración de Control inteligente de aplicaciones.
+help.picture|mt|fd7b7a5d|Imagen del paso {0}
+help.pictures-english|mt|1eacacfc|Las imágenes muestran Windows en inglés.
+
+# ---- an update from the control app (setup.exe --apply, ApplyUpdate.cs, docs/design/self-update.md) ----
+apply.working.title|mt|27974dfa|Instalando la actualización
+apply.working.body|mt|d0e12901|Nagi Setup está instalando la actualización que descargó Nagi Control App. Tarda uno o dos minutos. No apague el equipo.
+apply.done.title|mt|295af56e|La actualización está instalada
+apply.done.body|mt|a7ae3618|La nueva versión de las aplicaciones Nagi está lista. Inicie Nagi Control App de nuevo para usarla. No hace falta reiniciar.
+apply.up-to-date.title|mt|b5700156|Nagi ya está actualizado
+apply.up-to-date.body|mt|f738356a|Esta actualización ya está en este equipo. No se cambió nada.
+apply.refused-signature.title|mt|906d860f|La actualización no se instaló
+apply.refused-signature.body|mt|75fa87b4|La instalación no pudo confirmar que la actualización viene del proyecto Nagi, así que no la usó. No se cambió nada. Busque actualizaciones de nuevo más tarde.
+apply.refused-hash.title|mt|906d860f|La actualización no se instaló
+apply.refused-hash.body|mt|03f1fcfd|Los archivos descargados están dañados o incompletos. No se cambió nada. Busque actualizaciones de nuevo para volver a descargarlos.
+apply.refused-downgrade.title|mt|906d860f|La actualización no se instaló
+apply.refused-downgrade.body|mt|e1283f89|Esta actualización es más antigua que la versión de este equipo. No se cambió nada.
+apply.refused-too-old.title|mt|8a55309f|Esta actualización necesita el instalador completo
+apply.refused-too-old.body|mt|8a1be265|La versión de este equipo es demasiado antigua para actualizarla de esta forma. No se cambió nada. Descargue la versión completa desde la página de la versión e instálela.
+apply.refused-incompatible.title|mt|8a55309f|Esta actualización necesita el instalador completo
+apply.refused-incompatible.body|mt|5df711de|Las nuevas aplicaciones Nagi no funcionan con el controlador de este equipo. No se cambió nada. Descargue la versión completa desde la página de la versión e instálela.
+apply.refused-unknown-installed.title|mt|8a55309f|Esta actualización necesita el instalador completo
+apply.refused-unknown-installed.body|mt|261fb208|La instalación no puede saber qué versión de Nagi hay en este equipo. No se cambió nada. Descargue la versión completa desde la página de la versión e instálela.
+apply.busy.title|mt|3c21a94f|Cierre primero las aplicaciones Nagi
+apply.busy.body|mt|89af49ca|Una aplicación Nagi sigue abierta, así que la instalación no pudo reemplazarla. No se cambió nada. Cierre Nagi Control App y todas las demás ventanas de Nagi, y luego busque actualizaciones de nuevo.
+apply.rolled-back.title|mt|a187e7b8|Volvió la versión anterior
+apply.rolled-back.body|mt|ef09d191|Las nuevas aplicaciones Nagi no iniciaron, así que la instalación restauró la versión anterior. Su equipo funciona como antes.
+apply.driver-handoff.title|mt|c9b3acf3|La actualización incluye un controlador nuevo
+apply.driver-handoff.body|mt|ebef72f8|La instalación abre ahora el instalador de la nueva versión. Sígalo hasta el final; Windows se reinicia durante la instalación. Si el nuevo controlador no inicia dos veces, el controlador anterior vuelve por sí solo.
+apply.failed.title|mt|e3b2ad5f|La actualización no terminó
+apply.failed.body|mt|f7d37c9d|La actualización se detuvo antes de terminar, y se sigue usando la versión de este equipo. Intente de nuevo, o descargue la versión completa desde la página de la versión e instálela.

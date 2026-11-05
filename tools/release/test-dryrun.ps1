@@ -101,15 +101,47 @@ Check ($r.text -match 'package integrity\s+\d+ files match manifest\.json') 'pac
 Check ($r.text -match 'Nothing was changed') 'refusal says nothing was changed'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'no change, no elevation'
 
-# Smart App Control on refuses before the first change, with the board ignored, so it is the only failed check.
-'install -DryRun -DryRunIgnoreBoard with Smart App Control on (AMDGPU_WDDM_TEST_SAC, a dry run only)'
+# Smart App Control: on and evaluation are turned off by the run, before the first program of
+# ours; a change that does not hold refuses the run there. AMDGPU_WDDM_TEST_SAC is honoured by a dry run only: the
+# turn-off then uses stand-ins (the write does nothing, the refresh holds, the value reads back 0, or 1 for
+# change-not-held). The board is ignored, so the walk-through goes on after the step.
+$sacText = 'Smart App Control will be turned off\. Windows can turn it back on only by a reset of the system\.'
+'install -Plan with Smart App Control on: the plan states the turn-off as information'
 $env:AMDGPU_WDDM_TEST_SAC = 'on'
+try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-Plan', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_SAC }
+$r.text
+Check ($r.code -eq 0) "plan with Smart App Control on exit $($r.code)"
+Check ($r.text -match ('\[ok\s*\]\s+Smart App Control\s+on \(source: CI\\Policy VerifiedAndReputablePolicyState = 1\): the installer turns it off before its first program runs\. ' + $sacText)) 'the preflight line of on is information that names the change'
+Check ($r.text -match ('(?m)^\s+' + $sacText + '\s*$')) 'the plan states the change in the owner''s sentence'
+Check ($r.text -notmatch 'would: turn Smart App Control off') 'a plan does not reach the turn-off'
+foreach ($sacCase in @('on', 'evaluation')) {
+    "install -DryRun -DryRunIgnoreBoard with Smart App Control $sacCase (AMDGPU_WDDM_TEST_SAC, a dry run only)"
+    $env:AMDGPU_WDDM_TEST_SAC = $sacCase
+    try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_SAC }
+    $r.text
+    Check ($r.code -eq 0) "install with Smart App Control $sacCase exit $($r.code) (the run turns it off and goes on)"
+    Check ($r.text -match "\[ok\s*\]\s+Smart App Control\s+$sacCase \(source: CI\\Policy VerifiedAndReputablePolicyState = [12]\): the installer turns it off") "$sacCase is an ok line that says the installer turns it off"
+    Check ($r.text -match "would: turn Smart App Control off \($sacCase now\): CI\\Policy VerifiedAndReputablePolicyState = 0 \(DWORD\), CiTool\.exe --refresh --json, and the value read back") "$sacCase`: the run names the turn-off"
+    Check ($r.text -match 'Smart App Control is off: VerifiedAndReputablePolicyState = 0 \(DWORD\) written; CiTool\.exe --refresh --json: exit 0, OperationResult 0 [^\r\n]*; read back: 0') "$sacCase`: the stand-ins hold, and the log names the write, the refresh and the read-back"
+    $iSac = $r.text.IndexOf('would: turn Smart App Control off')
+    $iTs = $r.text.IndexOf("would: bcdedit /set '{current}' testsigning on")
+    $iDrv = $r.text.IndexOf('would: DiInstallDriverW INSTALL_AS_SET')
+    Check (($iSac -ge 0) -and ($iTs -gt $iSac) -and ($iDrv -gt $iSac)) "$sacCase`: the turn-off comes before phase 1 and the driver staging (off $iSac, test signing $iTs, driver $iDrv)"
+    Check ($r.text -match 'Dry run complete' -and $r.text -notmatch 'doing:') "$sacCase`: the walk-through completes and changes nothing"
+}
+'install -DryRun -DryRunIgnoreBoard with Smart App Control off: no turn-off'
+$env:AMDGPU_WDDM_TEST_SAC = 'off'
+try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_SAC }
+Check ($r.code -eq 0) "install with Smart App Control off exit $($r.code)"
+Check (($r.text -match '\[ok\s*\]\s+Smart App Control\s+off \(source: CI\\Policy VerifiedAndReputablePolicyState = 0\)') -and ($r.text -notmatch 'turn Smart App Control off|will be turned off')) 'off: an ok line, no step and no plan sentence'
+'install -DryRun -DryRunIgnoreBoard with a Smart App Control change that does not hold: the refusal'
+$env:AMDGPU_WDDM_TEST_SAC = 'change-not-held'
 try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_SAC }
 $r.text
-Check ($r.code -eq 2) "install with Smart App Control on exit $($r.code) (2 = preflight refusal)"
-Check ($r.text -match '\[fail\]\s+Smart App Control\s+on \(source: CI\\Policy VerifiedAndReputablePolicyState = 1\): .*Turn Smart App Control off first: open Windows Security > App & browser control > Smart App Control settings, select Off, then "Yes, I''m sure", then Yes in the administrator prompt \(see INSTALL\.md, section Smart App Control and SmartScreen\)') 'the refusal names the steps and the INSTALL.md section'
-Check ($r.text -match 'Preflight refused the installation: 1 check\(s\) failed\. Nothing was changed\.') 'Smart App Control is the one failed check, and nothing was changed'
-Check ($r.text -notmatch 'would:|doing:') 'no phase runs after the refusal'
+Check ($r.code -eq 2) "install with a change that does not hold exit $($r.code) (2 = refusal)"
+Check ($r.text -match 'FAIL: Smart App Control did not turn off: [^\r\n]*read back: 1') 'the refusal names the read-back'
+Check ($r.text -match 'Turn Smart App Control off by hand: open Windows Security > App & browser control > Smart App Control settings, select Off, then "Yes, I''m sure", then Yes in the administrator prompt \(see INSTALL\.md, section Smart App Control and SmartScreen\)') 'the refusal names the steps by hand and the INSTALL.md section'
+Check ($r.text -notmatch "would: bcdedit|would: DiInstallDriverW|would: copy payload") 'no step of the driver runs after the refusal'
 
 'install -DryRun -DryRunIgnoreBoard (walks phases 1 and 2, prints every change)'
 $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard')
@@ -177,7 +209,7 @@ try { $r2 = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun
 finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME; Remove-Item Env:\AMDGPU_WDDM_TEST_SAC; Remove-Item Env:\AMDGPU_WDDM_TEST_VULKANLOADER }
 $r2.text
 Check ($r2.code -eq 0) "walk-through without the runtime exit $($r2.code)"
-Check ($r2.text -match '\[warn\]\s+Smart App Control\s+evaluation \(source: CI\\Policy VerifiedAndReputablePolicyState = 2\): if Windows turns Smart App Control on later, Windows blocks the programs of the graphics driver, and the desktop and games lose the driver\. Turn it off now: open Windows Security > App & browser control > Smart App Control settings, select Off, then "Yes, I''m sure", then Yes in the administrator prompt \(see INSTALL\.md, section Smart App Control and SmartScreen\)') 'Smart App Control in evaluation is a warning that says what Windows blocks, with the steps, not a refusal'
+Check ($r2.text -match '\[ok\s*\]\s+Smart App Control\s+evaluation \(source: CI\\Policy VerifiedAndReputablePolicyState = 2\): the installer turns it off before its first program runs, so Windows cannot turn it on later\.') 'Smart App Control in evaluation is information that the run turns it off, not a refusal'
 Check ($r2.text -match '\[warn\]\s+Visual C\+\+ runtime\s+missing in System32: vcruntime140\.dll, vcruntime140_1\.dll, msvcp140\.dll') 'the preflight states the missing runtime as a line, not a refusal'
 Check ($r2.text -match 'the installer installs 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(SHA256 CC0FF0EB1DC3F518, signature Valid, CN=Microsoft Corporation') 'the line names the file, its hash and its signature'
 Check ($r2.text -match 'would: install the Microsoft Visual C\+\+ 2015-2022 Redistributable \(x64\) 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(/install /quiet /norestart; SHA256 CC0FF0EB1DC3F518 and the Microsoft signature checked\)') 'phase 2 shows the runtime step before anything of ours is copied'
@@ -830,6 +862,25 @@ $st = [ordered]@{ schema = 1; phase = 'verified'; package_version = [string]$m.v
 $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
 try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRun', '-Yes', '-KeepTestSigning') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
 Check ($r.code -eq 0) "uninstall -DryRun with a state: exit $($r.code)"
+Check ($r.text -match 'Smart App Control: (off|on|evaluation|the read)') 'uninstall names the state of Smart App Control of this PC'
+# Smart App Control blocks the uninstaller's programs too (26200, 2026-11-04: bc250kmd.sys and bc250kmd_cli.exe):
+# the uninstaller turns it off before the state worker, and stops before any removal when the change does not hold.
+foreach ($sacCase in @('on', 'change-not-held')) {
+    $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
+    $env:AMDGPU_WDDM_TEST_SAC = $sacCase
+    try { $rs = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRun', '-KeepTestSigning') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR; Remove-Item Env:\AMDGPU_WDDM_TEST_SAC }
+    $rs.text
+    if ($sacCase -eq 'on') {
+        Check ($rs.code -eq 0) "uninstall with Smart App Control on: exit $($rs.code)"
+        Check (($rs.text -match 'would: turn Smart App Control off \(on now\)') -and ($rs.text -match 'Smart App Control is off: [^\r\n]*read back: 0')) 'uninstall with Smart App Control on: it is turned off first'
+        $uSac = $rs.text.IndexOf('would: turn Smart App Control off'); $uFirst = $rs.text.IndexOf('would: unregister our scheduled task')
+        Check (($uSac -ge 0) -and ($uFirst -gt $uSac)) "uninstall: the turn-off comes before the first removal (off $uSac, first removal $uFirst)"
+    } else {
+        Check ($rs.code -eq 2) "uninstall with a change that does not hold: exit $($rs.code) (2 = refusal)"
+        Check (($rs.text -match 'FAIL: Smart App Control did not turn off: [^\r\n]*read back: 1') -and ($rs.text -match 'No removal was started\. Turn Smart App Control off by hand: ')) 'uninstall with a change that does not hold: it stops with the steps by hand'
+        Check ($rs.text -notmatch 'would: (unregister|remove)') 'uninstall with a change that does not hold: nothing is removed'
+    }
+}
 Check (($r.text -match 'would: remove .+\\System32\\bc250umd\.dll') -and ($r.text -match 'would: remove .+\\SysWOW64\\bc250umd\.dll')) 'both stubs of an earlier release removed (neither was there before the install)'
 Check ($r.text -match "would: remove '[^']+\\wow64\\vulkan\\radeon_icd\.json' from HKLM:\\SOFTWARE\\WOW6432Node\\Khronos\\Vulkan\\Drivers") 'the WOW6432Node Khronos entry removed'
 # The H.264 encoder MFT keys go at every uninstall, whether this release registered the transform or not. On this

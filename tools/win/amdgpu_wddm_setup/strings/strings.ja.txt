@@ -6,7 +6,7 @@ ui.close|mt-safe|7d9eb7ac|閉じる
 ui.back|mt-safe|76900f1b|戻る
 ui.cancel|mt-safe|19766ed6|キャンセル
 ui.choose-folder|mt-safe|826c7dcd|フォルダーを選択...
-ui.language|mt-safe|a6567634|言語: {0}
+ui.language.label|mt-safe|a4fe6526|言語
 ui.minimise|mt-safe|20f082e9|最小化
 ui.close-window|mt-safe|8b9de9c0|ウィンドウを閉じる
 ui.window-title|mt|229174f8|Nagi Setup - BC-250 用グラフィックス ドライバー
@@ -91,9 +91,10 @@ check.bitlocker.unknown|mt|74c5d56a|BitLocker の状態を読み取れません�
 check.hvci.off|mt|c5375084|メモリ整合性はオフです。
 check.hvci.on|mt|038dce93|メモリ整合性がオンです。ドライバーが起動しない場合は、Windows セキュリティ (コア分離) でオフにしてください。
 check.smartappcontrol.off|mt|d0c27ee8|スマート アプリ コントロールはオフです。
-check.smartappcontrol.on|mt|78cca160|スマート アプリ コントロールがオンです。オンの間は、Windows がこのセットアップ プログラムとグラフィックス ドライバーのプログラムをブロックします。インストールの前にオフにしてください。
-check.smartappcontrol.evaluation|mt|8d341ff5|スマート アプリ コントロールは評価モードです。後で Windows がオンにすると、グラフィックス ドライバーのプログラムがブロックされ、デスクトップとゲームはドライバーを使えなくなります。今オフにしてください。
+check.smartappcontrol.on|mt|e942bb33|スマート アプリ コントロールがオンです。セットアップはドライバーをインストールする前にオフにします。
+check.smartappcontrol.evaluation|mt|6d2a3b91|スマート アプリ コントロールは評価モードです。セットアップはドライバーをインストールする前にオフにするので、後で Windows がオンにすることはありません。
 check.smartappcontrol.unknown|mt|4ce54139|スマート アプリ コントロールがオンかどうかを読み取れませんでした。
+check.smartappcontrol.not-off|mt|0e4a27ff|セットアップはスマート アプリ コントロールをオフにできませんでした。オンの間は、Windows がこのセットアップ プログラムとグラフィックス ドライバーのプログラムをブロックします。ドライバーは何もインストールされていません。
 check.vcruntime.ok|mt|da7b7ffe|Microsoft Visual C++ ランタイムはインストールされています。
 check.vcruntime.missing|mt|e96604a7|Microsoft Visual C++ 2015-2022 ランタイム (x64) がないか、古すぎます。セットアップが同梱のファイルからインストールします。
 check.vcruntime.no-installer|mt|a1670c32|Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールする必要がありますが、この一式には Microsoft の該当プログラムが含まれていません。リリースをもう一度ダウンロードしてください。
@@ -140,6 +141,7 @@ plan.change.test-mode.on|mt|cf315297|Windows はすでにテスト モードで�
 plan.change.bitlocker|mt|f43553fa|BitLocker の保護はこのインストールの再起動の間だけ一時停止し、その後は自動的に再開するので、Windows が回復キーを求めることはありません。
 plan.change.bitlocker.unknown|mt|67f2277e|この PC の BitLocker の状態を読み取れませんでした。処理は続行します。再起動後に Windows が求めた場合に備えて、回復キーを用意しておいてください。
 plan.change.vcruntime|mt|65d68876|ドライバーのプログラムが必要とするため、最初に Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールします。
+plan.change.smartappcontrol|mt|90e7f550|スマート アプリ コントロールをオフにします。Windows でこれを再びオンにするには、システムのリセットが必要です。
 shortcuts.title|mt-safe|19544092|ショートカットと Nagi
 shortcuts.start-menu|mt-safe|f7bdc16b|スタート メニュー
 shortcuts.desktop|mt-safe|b1e0eb2c|デスクトップ
@@ -335,8 +337,7 @@ tuning.restore|mt|3fb261c1|Nagi Control App で個別の設定を確認し、保
 
 # ---- help cards (HelpCards.cs) ----
 help.sac.title|mt|abf79205|スマート アプリ コントロールをオフにする方法
-help.sac.on.body|mt|83e5ce37|スマート アプリ コントロールは、Microsoft が信頼する発行元が署名したプログラムだけを実行します。このテスト版はテスト署名です。スマート アプリ コントロールをオフにしてから、もう一度試してください。
-help.sac.evaluation.body|mt|425fde85|続行する前に、スマート アプリ コントロールをオフにしてください。オフの場合、Windows が自動的にオンにすることはありません。
+help.sac.not-off.body|mt|83d88902|スマート アプリ コントロールは、Microsoft が信頼する発行元が署名したプログラムだけを実行します。このテスト版はテスト署名で、セットアップはスマート アプリ コントロールを自動でオフにできませんでした。次の手順でオフにしてから、もう一度試してください。
 help.sac.unknown.body|mt|41f88dc0|Windows がセットアップまたはドライバーをブロックする場合は、次の手順でスマート アプリ コントロールをオフにしてください。
 help.sac.step.open|mt|53dc10bb|下の [スマート アプリ コントロールの設定を開く] を選びます。Windows セキュリティの [スマート アプリ コントロール] ページが開きます。
 help.sac.step.off|mt|1ad754d0|[オフ] を選びます。

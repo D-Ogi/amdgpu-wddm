@@ -323,19 +323,13 @@ namespace AmdgpuWddmControl
         Control BuildSettings(int width)
         {
             var p = Frame("settings", width);
-            var lang = new CardPanel(Strings.T("search.settings.language"), width);
+            // The first card of Settings: the language list under a label that keeps the English word (Strings.LanguageLabel).
+            var lang = new CardPanel(Strings.LanguageLabel(), width);
             Mark("settings.language", lang);
-            var radios = Ui.WrapRow(lang.Inner);
-            foreach (var l in Strings.Languages)
-            {
-                string code = l;
-                var r = Ui.Radio(LanguageName(l));
-                r.Checked = l == Strings.Language;
-                r.CheckedChanged += (s, e) => { if (r.Checked) BeginInvoke((Action)(() => SetLanguage(code))); };
-                radios.Controls.Add(r);
-            }
-            radios.Controls.Add(Explain("language", Strings.T("search.settings.language")));
-            lang.Add(radios);
+            var row = Ui.WrapRow(lang.Inner);
+            row.Controls.Add(LanguageChoice());
+            row.Controls.Add(Explain("language", Strings.LanguageLabel()));
+            lang.Add(row);
             lang.Add(Ui.Dim(Strings.T("settings.language.note"), lang.Inner));
             p.Controls.Add(lang);
 

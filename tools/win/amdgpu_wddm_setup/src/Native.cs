@@ -1,6 +1,7 @@
 // The few Windows calls of the setup window: a planned restart (R3, C17: ExitWindowsEx with a planned reason, never
 // EWX_FORCE, so programs are asked to close and may keep unsaved work), the elevation check and relaunch, and the
-// control app's display preferences (HKCU\Software\amdgpu-wddm\Control, docs/gui/interfaces.md section 5), read only.
+// control app's display preferences (HKCU\Software\amdgpu-wddm\Control, docs/gui/interfaces.md section 5), read only
+// except the language that the person chooses in setup's own list.
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -121,6 +122,16 @@ namespace AmdgpuWddmSetup
         {
             try { using (var k = Registry.CurrentUser.OpenSubKey(ControlKey)) { var v = k == null ? null : k.GetValue("Language") as string; return Array.IndexOf(Strings.Languages, v) >= 0 ? v : null; } }
             catch (Exception) { return null; }
+        }
+
+        // A language the person chose in setup's own list: written to the same value the control app reads and writes
+        // (AppPrefs.Language, a string), so both windows speak the language chosen last. Only on a choice: a setup that
+        // only follows Windows' language writes nothing. A failure keeps the choice for this window only.
+        public static void SaveChosenLanguage(string language)
+        {
+            if (Array.IndexOf(Strings.Languages, language) < 0) return;
+            try { using (var k = Registry.CurrentUser.CreateSubKey(ControlKey)) if (k != null) k.SetValue("Language", language, RegistryValueKind.String); }
+            catch (Exception) { }
         }
     }
 }

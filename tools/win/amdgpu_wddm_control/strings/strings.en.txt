@@ -325,7 +325,7 @@ search.driver.version.terms|src|-|version|release|installed|date
 search.driver.update|src|-|Check for updates
 search.driver.update.terms|src|-|update|new version|download|upgrade
 search.settings.language|src|-|Language
-search.settings.language.terms|src|-|language|English|Polski|日本語|한국어
+search.settings.language.terms|src|-|language|English|Polski|Português|Español|日本語|한국어
 search.settings.update-start|src|-|Check for updates when the app starts
 search.settings.update-start.terms|src|-|update|automatic|start
 search.settings.recent|src|-|Remember launched games
@@ -370,7 +370,6 @@ ui.back|src|-|Back
 ui.search|src|-|Search settings
 ui.search.results|src|-|Search results
 ui.search.none|src|-|No setting found.
-ui.language.current|src|-|Current language
 ui.nav.current|src|-|Current page
 ui.explain|src|-|What does "{0}" do?
 ui.explain.page|src|-|About this page
@@ -560,7 +559,7 @@ driver.repair.text|src|-|If the driver does not work as it should, repair it fro
 driver.repair.open|src|-|Open Help
 
 # ---- Settings (WU-003, WU-046, WU-075, WU-076, WU-077) ----
-settings.language.note|src|-|Japanese and Korean texts are machine translations for now.
+settings.language.note|src|-|Portuguese, Spanish, Japanese and Korean texts are machine translations for now.
 settings.updates.title|src|-|Updates
 settings.update-start.note|src|-|At most once an hour. Nothing is downloaded or installed without you.
 settings.recent.title|src|-|Game list

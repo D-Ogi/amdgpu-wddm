@@ -19,7 +19,9 @@
 # the fallbacks answer only when the read fails), one real read of the variable on this host, and the certificate
 # step's error (store, HRESULT, certutil commands), also through the shipped step with a stand-in Import-Certificate.
 # Smart App Control: the CI\Policy value with stand-in readers (on, evaluation, off, no value, unexpected, refused),
-# the dry-run stand-in AMDGPU_WDDM_TEST_SAC and its negative control, one real read, and the preflight lines.
+# the dry-run stand-in AMDGPU_WDDM_TEST_SAC and its negative control, one real read, the preflight lines, and the
+# turn-off: the write, CiTool --refresh --json and the read-back with stand-ins, every way it can
+# fail to hold, its place before the first program of ours in install.ps1 and uninstall.ps1, and its refusal id.
 # Everything is written under -WorkRoot; nothing in the registry, no driver, no restart.
 param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$WorkRoot)
 # Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder, so one more level up than it used to be; an older flat package keeps the old place.
@@ -776,12 +778,73 @@ try {
 } finally { $script:DryRunMode = $savedDry; Remove-Item Env:\AMDGPU_WDDM_TEST_SAC -ErrorAction SilentlyContinue }
 $live = Read-SmartAppControlState
 Check ($live.state -in 'on', 'evaluation', 'off', 'unknown') "the real read runs on this host: $($live.state), $($live.detail)"
-# The preflight lines: on refuses and names the steps and the INSTALL.md section, evaluation warns, both on one id.
+# The preflight lines: on and evaluation are information, not a refusal or a warning, because the
+# run turns Smart App Control off; the line says so in the words of the plan. An unread state stays a warning.
 $pre = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
-Check ($pre -match "Add-Check 'Smart App Control' 'fail' [^\r\n]*Turn Smart App Control off first: \`$sacSteps\.`" 'smartappcontrol\.on'") 'install.ps1: on is a failed check with the steps'
-Check ($pre -match "Add-Check 'Smart App Control' 'warn' [^\r\n]*Turn it off now: \`$sacSteps\.`" 'smartappcontrol\.evaluation'") 'install.ps1: evaluation is a warning with the steps'
-Check ($pre -match "Add-Check 'Smart App Control' 'warn' [^\r\n]*if Windows turns Smart App Control on later, Windows blocks the programs of the graphics driver, and the desktop and games lose the driver\.") 'install.ps1: the evaluation warning says what Windows blocks if it turns Smart App Control on'
-Check ($pre -match "\`$sacSteps = '(?:[^']|'')*Smart App Control settings, select Off, then `"Yes, I''m sure`", then Yes in the administrator prompt \(see INSTALL\.md, section Smart App Control and SmartScreen\)'") 'install.ps1: the steps name the settings page, the confirmation, the administrator prompt and the INSTALL.md section'
+$com = [IO.File]::ReadAllText((Join-Path $Installer 'common.ps1'))
+Check ($pre -match "Add-Check 'Smart App Control' 'ok' [^\r\n]*the installer turns it off before its first program runs\. \`$\(\`$script:SacTurnOffText\)`" 'smartappcontrol\.on'") 'install.ps1: on is information that the run turns it off'
+Check ($pre -match "Add-Check 'Smart App Control' 'ok' [^\r\n]*so Windows cannot turn it on later\. \`$\(\`$script:SacTurnOffText\)`" 'smartappcontrol\.evaluation'") 'install.ps1: evaluation is information that the run turns it off'
+Check ($pre -match "Add-Check 'Smart App Control' 'warn' [^\r\n]*'smartappcontrol\.unknown'") 'install.ps1: an unread state keeps its warning'
+Check ($pre -notmatch "Add-Check 'Smart App Control' 'fail'") 'install.ps1: the preflight no longer refuses on Smart App Control'
+Check ($com -match [regex]::Escape("`$script:SacTurnOffText = 'Smart App Control will be turned off. Windows can turn it back on only by a reset of the system.'")) 'common.ps1: the one text of the change is the owner''s sentence'
+Check ($com -match "\`$script:SacSteps = '(?:[^']|'')*Smart App Control settings, select Off, then `"Yes, I''m sure`", then Yes in the administrator prompt \(see INSTALL\.md, section Smart App Control and SmartScreen\)'") 'common.ps1: the steps by hand name the settings page, the confirmation, the administrator prompt and the INSTALL.md section'
+# The order in the run: the turn-off comes after the plan exit and before the first program of ours (the state worker
+# of phase 2, the INF staging), and its failure refuses with smartappcontrol.not-off.
+$iPlan = $pre.IndexOf("Exit-Engine -Code 0 -Outcome 'planned'")
+$iOff = $pre.IndexOf("if (`$action.action -in @('install', 'upgrade', 'repair', 'resume')) { Invoke-SmartAppControlOff }")
+$iPhase1 = $pre.IndexOf("Enter-Stage 'test-signing'")
+$iWorker = [Math]::Min($pre.IndexOf("'payload\tools\amdgpu-state-installer.exe'"), $pre.IndexOf("'tools\amdgpu-state-installer.exe'"))
+$iStage = $pre.IndexOf("would: DiInstallDriverW")
+if ($iStage -lt 0) { $iStage = $pre.IndexOf("Enter-Stage 'driver'") }
+Check (($iPlan -gt 0) -and ($iOff -gt $iPlan) -and ($iOff -lt $iPhase1) -and ($iOff -lt $iWorker) -and ($iOff -lt $iStage)) "install.ps1: the turn-off runs after the plan and before phase 1, the state worker and the driver stage (plan $iPlan, off $iOff, phase 1 $iPhase1, worker $iWorker, driver $iStage)"
+Check ($pre -match "(?s)function Invoke-SmartAppControlOff \{.*?\`$script:EngineFailedChecks = @\('smartappcontrol\.not-off'\)\s+Exit-Engine -Code 2 -Outcome 'refused' -MessageId 'result\.preflight-refused'") 'install.ps1: a change that does not hold refuses with smartappcontrol.not-off'
+$un = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
+$uOff = $un.IndexOf('Disable-SmartAppControl')
+$uWorker = $un.IndexOf("'tools\amdgpu-state-installer.exe'")
+Check (($uOff -gt 0) -and ($uWorker -gt $uOff)) "uninstall.ps1: the turn-off comes before the state worker (off $uOff, worker $uWorker)"
+
+'Smart App Control off: the write, CiTool --refresh --json and the read-back must all hold (Disable-SmartAppControl)'
+$wrote = 0
+$okCi = { @{ code = 0; text = "{`"OperationResult`":0}"; timed_out = $false } }
+$o = Disable-SmartAppControl -WriteRegistry { $script:wrote++ } -RunCiTool $okCi -ReadRegistry { 0 }
+Check ($o.ok -and $o.written -and ($o.citool_result -eq 0) -and ($o.after -eq 0) -and ($wrote -eq 1) -and ($o.detail -match 'VerifiedAndReputablePolicyState = 0 \(DWORD\) written; CiTool\.exe --refresh --json: exit 0, OperationResult 0 .*; read back: 0')) "held: $($o.detail)"
+$o = Disable-SmartAppControl -WriteRegistry { } -RunCiTool $okCi -ReadRegistry { 1 }
+Check ((-not $o.ok) -and ($o.detail -match 'read back: 1')) "the value reads back 1: not held ($($o.detail))"
+$o = Disable-SmartAppControl -WriteRegistry { } -RunCiTool $okCi -ReadRegistry { $null }
+Check ((-not $o.ok) -and ($o.detail -match 'read back: no value')) "no value after the write: not held ($($o.detail))"
+$o = Disable-SmartAppControl -WriteRegistry { } -RunCiTool $okCi -ReadRegistry { '0' }
+Check (-not $o.ok) "a text '0' is not the DWORD 0: not held"
+$o = Disable-SmartAppControl -WriteRegistry { } -RunCiTool { @{ code = 1; text = "{`"OperationResult`":0}"; timed_out = $false } } -ReadRegistry { 0 }
+Check ((-not $o.ok) -and ($o.detail -match 'exit 1')) "CiTool exit 1: not held ($($o.detail))"
+$o = Disable-SmartAppControl -WriteRegistry { } -RunCiTool { @{ code = 0; text = "{`"OperationResult`":-2147024891}"; timed_out = $false } } -ReadRegistry { 0 }
+Check ((-not $o.ok) -and ($o.detail -match 'OperationResult -2147024891')) "CiTool OperationResult not 0: not held ($($o.detail))"
+$o = Disable-SmartAppControl -WriteRegistry { } -RunCiTool { @{ code = 0; text = 'The operation completed successfully.'; timed_out = $false } } -ReadRegistry { 0 }
+Check ((-not $o.ok) -and ($o.detail -match 'OperationResult not found')) "CiTool without JSON: not held ($($o.detail))"
+$o = Disable-SmartAppControl -WriteRegistry { } -RunCiTool { @{ code = $null; text = ''; timed_out = $true } } -ReadRegistry { 0 }
+Check ((-not $o.ok) -and ($o.detail -match 'no answer within its time bound')) "CiTool without an answer: not held ($($o.detail))"
+$o = Disable-SmartAppControl -WriteRegistry { } -RunCiTool { throw 'CiTool.exe not found' } -ReadRegistry { 0 }
+Check ((-not $o.ok) -and ($o.detail -match 'did not run: CiTool\.exe not found')) "CiTool missing: not held ($($o.detail))"
+$ran = 0
+$o = Disable-SmartAppControl -WriteRegistry { throw (New-Object UnauthorizedAccessException 'denied') } -RunCiTool { $script:ran++; @{ code = 0; text = "{`"OperationResult`":0}" } } -ReadRegistry { 1 }
+Check ((-not $o.ok) -and (-not $o.written) -and ($ran -eq 0) -and ($o.detail -match 'UnauthorizedAccessException') -and ($o.detail -match 'read back: 1')) "a refused write: no refresh, the value read back, not held ($($o.detail))"
+$o = Disable-SmartAppControl -WriteRegistry { } -RunCiTool { @{ code = 0; text = "CiTool output`n{`n  `"OperationResult`": 0`n}"; timed_out = $false } } -ReadRegistry { 0 }
+Check $o.ok "JSON after other lines and across lines is read: $($o.detail)"
+# The dry-run stand-ins, and their negative control: a dry run without the variable never reaches the real actions
+# here (the caller prints the step only), and the variable outside a dry run changes nothing.
+$savedDry = $script:DryRunMode
+try {
+    $script:DryRunMode = $true
+    $env:AMDGPU_WDDM_TEST_SAC = 'on'
+    $o = Disable-SmartAppControl -WriteRegistry { throw 'the real write ran' } -RunCiTool { throw 'the real refresh ran' } -ReadRegistry { 1 }
+    Check $o.ok "dry run, AMDGPU_WDDM_TEST_SAC=on: the stand-ins hold ($($o.detail))"
+    $env:AMDGPU_WDDM_TEST_SAC = 'change-not-held'
+    Check ((Read-SmartAppControlState -ReadRegistry { 0 }).state -eq 'on') 'dry run, AMDGPU_WDDM_TEST_SAC=change-not-held: the preflight reads on'
+    $o = Disable-SmartAppControl -WriteRegistry { throw 'the real write ran' } -RunCiTool { throw 'the real refresh ran' } -ReadRegistry { 0 }
+    Check ((-not $o.ok) -and ($o.detail -match 'read back: 1')) "dry run, change-not-held: the value reads back 1 ($($o.detail))"
+    $script:DryRunMode = $false
+    $o = Disable-SmartAppControl -WriteRegistry { } -RunCiTool $okCi -ReadRegistry { 0 }
+    Check $o.ok 'negative control: not a dry run, AMDGPU_WDDM_TEST_SAC=change-not-held is ignored'
+} finally { $script:DryRunMode = $savedDry; Remove-Item Env:\AMDGPU_WDDM_TEST_SAC -ErrorAction SilentlyContinue }
 
 '[G-STAGE] child closure: the job''s own count decides, an unreadable job is unknown (R9; last: this process joins a job)'
 Check (($null -eq [AmdgpuWddmEngine.Job]::Processes()) -and ([AmdgpuWddmEngine.Job]::ActiveProcesses() -eq -1)) 'no job: the listing is unknown (null), never an empty job'

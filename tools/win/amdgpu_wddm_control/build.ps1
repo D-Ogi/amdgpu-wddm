@@ -24,11 +24,11 @@
 # diagnostics worker as the window starts it (no console, output redirected: BD-142), and the
 # Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC,
 # the recovery view without bc250control.dll (--smoke-recovery), the hidden-window cost (--smoke-perf, G-PERF),
-# the sign-in notice in both its cases, four languages and four scales on a small and a large screen
+# the sign-in notice in both its cases, six languages and four scales on a small and a large screen
 # (--smoke-notice: it fits the screen, overlaps nothing, names no internals, closes with Escape), the loading window
 # of the start in both its states with the same checks (--smoke-loading),
 # the place a rebuilt page keeps and the place of the buttons in every state of a benchmark run (--smoke-scroll), and
-# the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 9 pages at 96, 120, 144 and 192 DPI in the four
+# the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 9 pages at 96, 120, 144 and 192 DPI in the six
 # languages, at text scale 150 %, with the guide character on (the default of an installed application) and two runs
 # with her off, and a language switch at run time; every page is drawn to PNG without a window and checked for
 # overlap, overflow, internals in the text and accessible names. G-BACKDROP (BD-137) paints every control of the page
@@ -777,7 +777,7 @@ if (-not $NoSmoke) {
     if ($p.ExitCode -ne 0) { throw "perf smoke (exit $($p.ExitCode)): $perf" }
     Write-Host "  hidden window: $((($perf -split "`r?`n") | Where-Object { $_ }) -join ', ')"
 
-    # The sign-in notice (NoticeForm.cs): both cases, the four languages, 96/120/144/192 DPI, a 1024x768 screen and
+    # The sign-in notice (NoticeForm.cs): both cases, the six languages, 96/120/144/192 DPI, a 1024x768 screen and
     # a large one, built without being shown. It must fit the screen, overlap nothing, overflow nothing, name no
     # driver internals and close with Escape (BD-137 found overlapping texts on Microsoft Basic Display).
     $file = Join-Path $obj 'smoke-notice.txt'
@@ -809,18 +809,22 @@ if (-not $NoSmoke) {
     # G-RENDER matrix: this PC's state and the recorded fixture (warnings, games, the CU section).
     $fixture = Join-Path $here 'test\snapshot-bd059.json'
     $runs = @()
-    foreach ($lang in 'en', 'pl', 'ja', 'ko') {
+    foreach ($lang in 'en', 'pl', 'pt', 'es', 'ja', 'ko') {
         foreach ($scale in '1', '1.25', '1.5', '2') { $runs += , @("$lang-$scale", $scale, '--lang', $lang, '--fixture', "`"$fixture`"") }
         $runs += , @("$lang-1-unknown-board", '1', '--lang', $lang, '--fixture', "`"$fixture`"", '--board-fixture', "`"$unknownBoardFixture`"")
     }
     $runs += , @('en-1-pc', '1')
     $runs += , @('pl-1-text150', '1', '--lang', 'pl', '--text-scale', '1.5', '--fixture', "`"$fixture`"")
     $runs += , @('ja-1.5-text150', '1.5', '--lang', 'ja', '--text-scale', '1.5', '--fixture', "`"$fixture`"")
+    $runs += , @('es-1-text150', '1', '--lang', 'es', '--text-scale', '1.5', '--fixture', "`"$fixture`"")
+    $runs += , @('pt-1.5-text150', '1.5', '--lang', 'pt', '--text-scale', '1.5', '--fixture', "`"$fixture`"")
     # Every run above draws the guide character, because she is on by default; these two draw the panel with her off.
     $runs += , @('en-1-no-nagi', '1', '--no-nagi', '--fixture', "`"$fixture`"")
     $runs += , @('ko-2-no-nagi', '2', '--lang', 'ko', '--no-nagi', '--fixture', "`"$fixture`"")
     $runs += , @('en-1-switch-ja', '1', '--switch-to', 'ja', '--fixture', "`"$fixture`"")
     $runs += , @('ja-1-switch-pl', '1', '--lang', 'ja', '--switch-to', 'pl', '--fixture', "`"$fixture`"")
+    $runs += , @('ko-1-switch-es', '1', '--lang', 'ko', '--switch-to', 'es', '--fixture', "`"$fixture`"")
+    $runs += , @('es-1-switch-pt', '1', '--lang', 'es', '--switch-to', 'pt', '--fixture', "`"$fixture`"")
     # The tuning cards in their other states (docs/design/tuner.md): the BD-059 runs above draw a curve test and saved
     # processor settings; these draw the standard curve with a readback behind it, and the card that waits for a restart.
     $tuner = Join-Path $here 'test\snapshot-tuner.json'
@@ -829,20 +833,24 @@ if (-not $NoSmoke) {
     $runs += , @('pl-1.25-tuner', '1.25', '--lang', 'pl', '--fixture', "`"$tuner`"")
     $runs += , @('ja-1.5-tuner', '1.5', '--lang', 'ja', '--fixture', "`"$tuner`"")
     $runs += , @('ko-2-tuner', '2', '--lang', 'ko', '--fixture', "`"$tuner`"")
+    $runs += , @('pt-1-tuner', '1', '--lang', 'pt', '--fixture', "`"$tuner`"")
+    $runs += , @('es-1.5-tuner', '1.5', '--lang', 'es', '--fixture', "`"$tuner`"")
     $runs += , @('en-1-tuner-off', '1', '--fixture', "`"$tunerOff`"")
     $runs += , @('pl-1-tuner-off', '1', '--lang', 'pl', '--fixture', "`"$tunerOff`"")
-    # The overclock card with the liquid-cooling tier in force and nothing stored, in the four languages.
+    # The overclock card with the liquid-cooling tier in force and nothing stored, in the six languages.
     $runs += , @('en-1-tuner-oc', '1', '--fixture', "`"$tuner`"", '--board-fixture', "`"$ocBoardFixture`"")
     $runs += , @('pl-1.25-tuner-oc', '1.25', '--lang', 'pl', '--fixture', "`"$tuner`"", '--board-fixture', "`"$ocBoardFixture`"")
     $runs += , @('ja-1.5-tuner-oc', '1.5', '--lang', 'ja', '--fixture', "`"$tuner`"", '--board-fixture', "`"$ocBoardFixture`"")
     $runs += , @('ko-2-tuner-oc', '2', '--lang', 'ko', '--fixture', "`"$tuner`"", '--board-fixture', "`"$ocBoardFixture`"")
-    # BD-181: the notice card of Home, in the four languages. This fixture is the state unit A was left in after the
+    $runs += , @('pt-1.25-tuner-oc', '1.25', '--lang', 'pt', '--fixture', "`"$tuner`"", '--board-fixture', "`"$ocBoardFixture`"")
+    $runs += , @('es-1-tuner-oc', '1', '--lang', 'es', '--fixture', "`"$tuner`"", '--board-fixture', "`"$ocBoardFixture`"")
+    # BD-181: the notice card of Home, in the six languages. This fixture is the state unit A was left in after the
     # 0x116 of 2026-10-15 01:05Z: the driver closed the GPU desktop path and the automatic clock at the 01:12:22Z
     # start and left the durable record of each (InteropClosedReason 4, DpmClosedReason 4), so later starts read the
     # zeros as "not requested" and the desktop stayed on the processor. The BD-059 runs above draw the same card from
     # the legacy record (DpmLastReason), which is how a driver before 0.7.208.1 leaves the clock.
     $closed = Join-Path $here 'test\snapshot-bd181.json'
-    foreach ($lang in 'en', 'pl', 'ja', 'ko') {
+    foreach ($lang in 'en', 'pl', 'pt', 'es', 'ja', 'ko') {
         $runs += , @("$lang-1-closed", '1', '--lang', $lang, '--fixture', "`"$closed`"")
     }
     $runs += , @('ja-1.5-closed-text150', '1.5', '--lang', 'ja', '--text-scale', '1.5', '--fixture', "`"$closed`"")
@@ -855,9 +863,9 @@ if (-not $NoSmoke) {
     }
     $runs += , @('pl-1.5-work1920x1080', '1.5', '--lang', 'pl', '--work-area', '1920x1080', '--fixture', "`"$fixture`"")
     # BD-291: a column of 417 px, as unit A's own render had it (2026-11-04), put the two wallpaper buttons of
-    # Settings 7 px past their card in English. A 720x540 working area gives a narrower column than that, in all four
+    # Settings 7 px past their card in English. A 720x540 working area gives a narrower column than that, in all six
     # languages.
-    foreach ($lang in 'en', 'pl', 'ja', 'ko') {
+    foreach ($lang in 'en', 'pl', 'pt', 'es', 'ja', 'ko') {
         $runs += , @("$lang-1-work720x540", '1', '--lang', $lang, '--work-area', '720x540', '--fixture', "`"$fixture`"")
     }
     $failed = @()
@@ -875,7 +883,7 @@ if (-not $NoSmoke) {
         if ($p.ExitCode -ne 0) { $failed += "$($r[0]): $(Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue)" }
     }
     if ($failed.Count) { throw "render gates:`n$($failed -join "`n")" }
-    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on by default and two runs with her off, language switch, tuning states, 6 runs over five screen sizes from 800x600 up, 4 runs at 720x540): no findings ($obj\render)"
+    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 6 languages, text 150 %, Nagi on by default and two runs with her off, language switch, tuning states, 6 runs over five screen sizes from 800x600 up, 6 runs at 720x540): no findings ($obj\render)"
 }
 # BD-166: the two native files of this build that the release ships carry their version resource from here. The
 # stamp is the last step, after every gate above has run against the images this build linked.

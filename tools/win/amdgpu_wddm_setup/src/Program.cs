@@ -76,7 +76,7 @@ namespace AmdgpuWddmSetup
             catch (Exception) { }
         }
 
-        // --smoke-loading: the loading window in each stage, the four languages, 96 to 192 DPI, the text of Windows
+        // --smoke-loading: the loading window in each stage, the six languages, 96 to 192 DPI, the text of Windows
         // at 100 to 225 % and a 1024x768 and a large screen, built without being shown (LoadingWindow.Findings).
         // loading.txt: "ok: <n> windows" or the findings. The first line also says how long this process took to its
         // first loading window built: the part of a start the person waits for with nothing on the screen.

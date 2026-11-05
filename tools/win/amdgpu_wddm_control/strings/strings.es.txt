@@ -1,0 +1,1449 @@
+# Spanish strings of Nagi Control App, one neutral Latin American table (usted; PC or equipo): every es-* language of
+# Windows uses it. Machine translation (mt / mt-safe) until a native review. Format: src/Strings.cs.
+
+# ---- graphics cores (CU mode, plan v7 section 7) ----
+cu.choice.all|mt-safe|c8029dd4|Su elección: Todos (40).
+cu.choice.standard|mt-safe|fa436287|Su elección: Estándar (24).
+cu.choice.invalid|mt|9ed29361|Su elección no es válida; elija Estándar (24) o Todos (40).
+cu.choice.unreadable|mt|ee127a9b|No se puede leer su elección.
+cu.choice.some|mt|39a1d070|Su elección: {0} núcleos gráficos.
+cu.choice.driver-24|mt|a8fa591b|Está configurado Estándar (24), pero ese número lo eligió el controlador, no usted.
+cu.note.driver-24|mt|0199b2dd|Seleccione Todos (40) y reinicie Windows para volver a usar los 40 núcleos.
+cu.choice.after-restart|mt|07660ab1|Se aplica después del próximo reinicio de Windows.
+cu.run.standard|mt|a1be65f1|En uso ahora: {0} núcleos.
+cu.run.waiting|mt|c00ce647|En uso ahora: {0} núcleos, aún sin confirmar. Si la nueva configuración de 40 núcleos no se confirma, el próximo inicio vuelve a 24 núcleos.
+cu.run.waiting-short|mt|76106f98|En uso ahora: {0} núcleos, aún sin confirmar.
+cu.run.confirm-failed|mt|d0b0b5c5|No se pudieron confirmar los 40 núcleos. Si sigue sin confirmar, el próximo inicio vuelve a 24 núcleos.
+cu.run.confirmed|mt|231f98dc|Los 40 núcleos, confirmados.
+cu.run.confirmed-fewer|mt|fe3b6fd7|En uso ahora: {0} núcleos (confirmados).
+cu.run.not-saved|mt|656b0e77|En uso ahora: {0} núcleos. No se pudo guardar la confirmación.
+cu.run.not-saved.next40|mt|d07300f4|El próximo inicio volverá a intentar 40 núcleos y pedirá confirmación otra vez.
+cu.run.not-saved.next24|mt|0d9cc034|El próximo inicio usa 24 núcleos, como usted eligió.
+cu.run.fallback|mt|c1cc5938|El último inicio con 40 núcleos no se confirmó, por eso este inicio usa 24 núcleos.
+cu.run.refused|mt|9517c611|No se pudieron usar 40 núcleos en este inicio.
+cu.run.unknown|mt|39943c8f|No se puede leer el número de núcleos gráficos.
+cu.run.groups|mt|4d770aed|Núcleos en cada grupo ahora: {0}.
+cu.map.item|mt|5905f8e5|grupo {0} par {1}
+cu.next.standard|mt|7c94a6f5|Próximo inicio: 24 núcleos.
+cu.next.fallback|mt|d366069f|Próximo inicio: 24 núcleos, porque la configuración de 40 núcleos no se confirmó.
+cu.next.ask40|mt|5af1df5d|Próximo inicio: 40 núcleos, por confirmar después del inicio.
+cu.next.ask40-limited|mt|95fdb1b4|Próximo inicio: {0} núcleos gráficos, por confirmar después del inicio.
+cu.next.confirmed40|mt|59baaddb|Próximo inicio: 40 núcleos (confirmados antes).
+cu.next.confirmed40-limited|mt|371afe5f|Próximo inicio: {0} núcleos gráficos (confirmados antes).
+cu.next.unknown|mt|8bb23e4f|Próximo inicio: no se puede prever.
+cu.refuse.target|mt|84439e4b|Elija Estándar (24) o Todos (40).
+cu.refuse.unreadable|mt|d945441d|No se puede leer la configuración guardada.
+cu.refuse.already40|mt|4f5796de|Todos (40) ya está seleccionado.
+cu.refuse.already24|mt|91c3ed3d|Estándar (24) ya está seleccionado.
+cu.refuse.already-some|mt|ba20d575|Ya están seleccionados {0} núcleos gráficos.
+cu.refuse.map|mt|1de01451|Esos pares de núcleos gráficos no se pueden elegir en esta PC.
+cu.preview.write40|mt|46267060|Selecciona los 40 núcleos gráficos.
+cu.preview.write24|mt|3920ecbe|Selecciona los 24 núcleos gráficos estándar.
+cu.preview.remove-closed|mt|93f4029d|Registra que los 24 núcleos gráficos estándar son su elección, no un paso atrás que el controlador dio por sí mismo.
+cu.preview.write40-some|mt|0345f0c0|Selecciona {0} de los 40 núcleos gráficos.
+cu.preview.set-disable|mt|0056c790|Desactiva estos pares de núcleos gráficos: {0}.
+cu.preview.write-chosen|mt|2acbb148|Registra este número como su elección, para que una actualización del controlador lo conserve.
+cu.preview.remove-confirmed|mt|d10b327e|Quita la confirmación anterior de 40 núcleos, para que la nueva configuración se confirme en su propio inicio.
+cu.preview.remove-disable|mt|7f38ddbb|Vuelve a activar todos los pares de núcleos gráficos.
+cu.result.nothing|mt|54ca5460|No se cambió nada.
+cu.result.saved|mt|fca046cc|Guardado.
+cu.result.failed|mt|ec48fa5b|No se pudo completar el cambio.
+cu.result.cleanup-incomplete|mt|8e56e5c8|La limpieza está incompleta. El próximo inicio usa los 24 núcleos estándar. Los pares de núcleos que siguen desactivados no los reducen.
+cu.effect|mt|60ee9b9b|Más núcleos consumen más energía y generan más calor: unos 30 W más a 1500 MHz en nuestra unidad de prueba. Es una referencia, no una promesa para su PC.
+
+# ---- driver card (WU-043) ----
+drv.running.exact|mt|f02b57d6|Versión en uso: {0}
+drv.running.unknown|mt|2f2c0a8f|Versión en uso: no se puede determinar con exactitud.
+drv.installed|mt|15ffa882|Instalada: {0}
+drv.installed.pending|mt|65d41410|Instalada: {0}, a la espera del reinicio de Windows.
+drv.installed.none|mt|f9cee8f4|Versión instalada: desconocida.
+drv.installed.stopped|mt|58f52a20|La última instalación se detuvo antes de terminar.
+drv.verify.ok|mt|af4213e7|Verificación: verificado.
+drv.verify.failed|mt|d9c038fd|Verificación: no verificado (falló una comprobación).
+drv.verify.unknown|mt|72256755|Verificación: no se pudo comprobar.
+drv.date|mt|05989de0|Fecha del controlador: {0}
+drv.date.none|mt|ce2d6c9e|Fecha del controlador: desconocida.
+drv.released|mt|48781b5a|Publicada: {0}
+drv.released.none|mt|63087412|Publicada: se sabrá después de buscar actualizaciones.
+
+# ---- update check (A5) ----
+upd.available|mt|68e4656c|Actualización disponible: {0}
+upd.uptodate|mt|39fd9eaf|Tiene la versión más reciente.
+upd.newest|mt|ffd32b15|La versión más reciente es {0}.
+upd.ahead|mt|d8273d3e|Su controlador es más nuevo que la versión más reciente ({0}).
+upd.incomplete|mt|fc36062b|No hay una versión más nueva entre las {0} versiones más recientes.
+upd.failed|mt|bf1dd0e0|No se pudo buscar actualizaciones. Intente de nuevo más tarde.
+upd.rate-limited|mt|2c365d35|El servicio de actualizaciones pidió esperar. Puede volver a buscar después de {0}.
+upd.last-success|mt|cac0e0b4|Última búsqueda correcta: {0}.
+upd.never|mt|d413e103|Aún no se buscaron actualizaciones.
+upd.checking|mt|8bcaee3c|Buscando actualizaciones...
+upd.released|mt|48781b5a|Publicada: {0}
+upd.self.reading|mt|92891a00|Leyendo la actualización...
+upd.self.downloading|mt|f94464ea|Descargando la actualización: {0} de {1} MB...
+upd.self.checking-files|mt|9e89fe00|Comprobando los archivos descargados...
+upd.self.ready|mt|7d5c7b68|Nagi Setup instala la actualización ahora. Esta ventana se cierra.
+upd.self.declined|mt|768a879c|La actualización no se inició. Para instalarla, seleccione Instalar actualización otra vez y responda Sí cuando Windows lo pregunte.
+upd.self.up-to-date|mt|2bafb369|Esta actualización ya está instalada.
+upd.self.failed|mt|3bfc0923|No se pudo descargar la actualización. Intente de nuevo más tarde o abra la página de la versión.
+upd.self.no-manifest|mt|b2abca0d|Esta versión no se puede instalar desde aquí. Abra la página de la versión y descárguela allí.
+upd.self.no-setup|mt|c845a923|Faltan los archivos de instalación de la versión instalada, así que la actualización no se puede instalar desde aquí. Abra la página de la versión y descárguela allí.
+upd.self.refused-signature|mt|6532925e|La actualización no se instaló: no se pudo confirmar que proviene del proyecto Nagi.
+upd.self.refused-hash|mt|108332ed|La actualización no se instaló: los archivos descargados están dañados o incompletos. Intente de nuevo más tarde.
+upd.self.refused-downgrade|mt|70458ef6|La actualización no se instaló: es más antigua que la versión de este equipo.
+upd.self.refused-too-old|mt|d2ca8e0d|La versión de este equipo es demasiado antigua para actualizarla desde aquí. Abra la página de la versión y descargue la versión completa.
+upd.self.refused-incompatible|mt|74bd5d20|Esta actualización no corresponde al controlador de este equipo. Abra la página de la versión y descargue la versión completa.
+upd.self.refused-unknown-installed|mt|5eaa2b5a|No se conoce la versión instalada, así que la actualización no se puede instalar desde aquí. Abra la página de la versión y descargue la versión completa.
+upd.self.txn-pending|mt|6a3f38d1|Se está instalando una actualización del controlador. Reinicie el equipo cuando Nagi Setup lo pida.
+upd.self.txn-rollback-pending|mt|0b4af500|El nuevo controlador no se inició, así que se restauró el controlador anterior. Reinicie el equipo para usarlo.
+upd.self.txn-rolled-back|mt|cf117d74|El nuevo controlador no se inició, así que el controlador anterior vuelve a estar en uso.
+upd.self.txn-manual|mt|27a175f1|El nuevo controlador no se inició y el controlador anterior no pudo volver por sí mismo. Use Reparar en la página Ayuda o instale la versión otra vez desde la página de la versión.
+
+# ---- guide panel (plan v7 section 6): repeats or explains what the page says; never the only place of a message ----
+guide.title|mt|5506739a|Consejo de Nagi
+guide.title.plain|mt-safe|a4245a3c|Consejo
+guide.driver-not-running|mt|908881c2|El controlador de gráficos no está en ejecución. La tarjeta de estado de Inicio indica qué hacer.
+guide.install-stopped|mt|74f99e5a|La última instalación no terminó. Una reparación desde Ayuda suele resolverlo.
+guide.verification-failed|mt|a3750351|El controlador instalado no pasó sus comprobaciones. Repárelo desde Ayuda o cree un informe de soporte.
+guide.cu-unknown-after-40|mt|62d0fc7a|No puedo leer cuántos núcleos gráficos funcionan después de su elección de 40 núcleos. Reinicie Windows; si sigue así, elija Estándar (24).
+guide.start-at-risk|mt|89f6dab1|Este inicio aún no está confirmado. Cuando la pantalla funcione con normalidad, confírmelo en Inicio.
+guide.cu-fallback|mt|ba6d9d43|El inicio con 40 núcleos no se confirmó, por eso este inicio usa 24 núcleos. Puede volver a elegir 40 en Gráficos.
+guide.cu-confirm-failed|mt|210bc0ed|No se pudieron confirmar los 40 núcleos. Intente de nuevo en Inicio o elija Estándar (24) en Gráficos.
+guide.cu-not-saved|mt|3f220554|No se pudo guardar la confirmación de 40 núcleos. Gráficos muestra qué usa el próximo inicio.
+guide.gpu-desktop-closed|mt|2be154cc|Tras un apagado inesperado, el escritorio usa el modo seguro y más lento. Puede reactivar el modo más rápido desde Inicio.
+guide.desktop-replaced|mt|5c77c3e9|Windows reinició su escritorio en esta sesión. Algunas aplicaciones pueden ignorar el mouse hasta que reinicie Windows.
+guide.installing|mt|0fc1d034|Se está instalando el controlador. Esto puede tardar unos minutos.
+guide.pending-restart|mt|43402a6a|Sus cambios están guardados. Empiezan a funcionar después del próximo reinicio de Windows.
+guide.repairing|mt|5128c7cc|Estoy en eso. Puede tardar un minuto.
+guide.creating-report|mt|ad4df524|Estoy reuniendo el informe de soporte. Puede tardar un minuto.
+guide.upgrade-done|mt|298dabef|La actualización está instalada y comprobada. ¡Que se divierta!
+guide.welcome|mt|99bfb2d9|Hola, soy Nagi. Inicio muestra lo que hace su PC; el menú de la izquierda tiene todo lo demás.
+guide.about|mt|dccc95f8|Este controlador lo hacen personas a las que les gusta mucho esta placa. Sin cuenta, sin rastreo.
+guide.page-tip|mt|7b1fc953|Pulse el ? junto a una configuración para leer qué hace.
+guide.update-available|mt|9ba22dcf|Hay una versión más nueva del controlador. La página Controlador tiene los detalles.
+guide.all-good|mt|f523ac28|Todo se ve bien. Listo para jugar.
+guide.tip.settings|mt|d4c81f93|Sus elecciones aquí se conservan cuando se actualiza el controlador.
+guide.tip.display|mt|fff5e425|Si la ventana se pierde tras un cambio de monitor, vuelve sola a una pantalla visible.
+guide.tip.graphics|mt|bce30225|Los cambios de reloj y de núcleos se aplican después del próximo reinicio de Windows. La configuración para todos los juegos se aplica la próxima vez que se inicie un juego.
+guide.name|mt|58a9149a|Nagi significa {0}. Sí, la N es otra vez Nagi.
+
+# ---- status card on Home (WU-007, WU-052, WU-061) ----
+status.title.problem|mt|4241fd03|Algo requiere su atención
+status.title.attention|mt|2908a908|Revise esto, por favor
+status.title.pending|mt|93aab4b5|Reinicie Windows para terminar
+status.title.ok|mt|6dbc080d|Listo para jugar
+status.title.unknown|mt|3e28dda8|Estado desconocido
+status.unreadable|mt|8c31205d|La aplicación no pudo leer el estado del controlador en este momento.
+status.ok-detail|mt|a5875517|El controlador está en ejecución y nada espera por usted.
+status.not-installed|mt|fc070032|El controlador de gráficos Nagi no está instalado en esta PC.
+status.not-installed.next|mt|187b98b1|Instálelo con Nagi Setup desde la página de la versión.
+status.driver-not-running|mt|5818d3e1|El controlador de gráficos no está en ejecución. Windows usa su pantalla básica.
+status.driver-not-running.next|mt|3588314e|Reinicie Windows. Si sigue así, abra Ayuda y siga "La pantalla queda oscura o el controlador no se inicia".
+status.install-stopped|mt|58f52a20|La última instalación se detuvo antes de terminar.
+status.install-stopped.next|mt|4fae210b|Repare el controlador desde Ayuda.
+status.verification-failed|mt|35993530|El controlador instalado no pasó sus comprobaciones.
+status.verification-failed.next|mt|d14c5893|Repare el controlador desde Ayuda. Si eso no ayuda, cree un informe de soporte.
+status.cu-unknown-after-40|mt|4ea30a7a|Después de su elección de 40 núcleos gráficos, no se puede leer el número de núcleos.
+status.cu-unknown-after-40.next|mt|bf63a099|Reinicie Windows. Si sigue así, elija Estándar (24) en la página Gráficos.
+status.start-at-risk|mt|e23a450a|Este inicio del controlador aún no está confirmado. Si los inicios siguen sin confirmar, Windows cambia a su pantalla básica.
+status.start-at-risk.next|mt|f46634ca|Si la pantalla funciona con normalidad, confirme este inicio.
+status.cu-fallback|mt|c1cc5938|El último inicio con 40 núcleos no se confirmó, por eso este inicio usa 24 núcleos.
+status.cu-fallback.next|mt|877c98cd|Puede volver a elegir Todos (40) en la página Gráficos.
+status.cu-confirm-failed|mt|6ba8c90a|No se pudieron confirmar los 40 núcleos.
+status.cu-confirm-failed.next|mt|86628f5f|Intente de nuevo o elija Estándar (24) en la página Gráficos. Si sigue sin confirmar, el próximo inicio vuelve a 24 núcleos.
+status.cu-waiting|mt|2b65c0e8|Los 40 núcleos gráficos están en uso, pero aún no están confirmados.
+status.cu-waiting.next|mt|8d7cc5b3|Si la pantalla funciona con normalidad, confirme los 40 núcleos. Sin confirmación, el próximo inicio vuelve a 24 núcleos.
+status.cu-not-saved|mt|037918da|No se pudo guardar la confirmación de 40 núcleos.
+status.cu-not-saved.next|mt|6f88d8db|La página Gráficos muestra qué usa el próximo inicio.
+status.gpu-desktop-closed|mt|28c255e8|Tras un apagado inesperado, el escritorio usa el modo seguro y más lento.
+status.gpu-desktop-closed.next|mt|532da758|Reactive el escritorio más rápido. Se aplica después del próximo reinicio de Windows.
+status.clock-closed|mt|9e869628|Tras un apagado inesperado, el chip gráfico se queda en su velocidad base.
+status.clock-closed.next|mt|4d22397b|Reactive la velocidad completa. Se aplica después del próximo reinicio de Windows.
+status.see-notice|mt|695ddac6|El aviso de arriba explica qué pasó y cómo restablecerlo.
+status.desktop-replaced|mt|9db01528|Windows reinició su escritorio en esta sesión. Algunas aplicaciones pueden ignorar los clics del mouse hasta que Windows se reinicie.
+status.desktop-replaced.next|mt|1cabfb01|Guarde su trabajo y reinicie Windows.
+status.pending-restart|mt|4453aecf|A la espera de un reinicio de Windows: {0}.
+status.pending-restart.next|mt|43680344|Reinicie Windows cuando le convenga.
+status.pending-later|mt|42e2bbba|Todavía a la espera de un reinicio de Windows: {0}.
+status.pending-later.next|mt|e938b3bd|Reinicie Windows cuando le convenga. Nada cambia antes de eso.
+status.pending.driver|mt|b6bab5e5|la actualización del controlador instalada
+status.pending.clock|mt|6b722aa5|la configuración del reloj
+status.pending.cores|mt|52792a19|la configuración de núcleos gráficos
+status.pending.desktop|mt|f3ffbde5|el escritorio más rápido
+status.work-in-progress|mt|dfc15eb7|Procesando su solicitud...
+status.upgrade-done|mt|2a1fb0de|La actualización a {0} está instalada y verificada.
+status.update-available|mt|2d79e5cb|Hay una versión más nueva del controlador.
+status.action.restart|mt|32c8ac84|Reiniciar Windows...
+status.action.confirm-start|mt|e9d08826|Confirmar este inicio
+status.action.reopen-gpu-path|mt|05dc8cea|Reactivar el escritorio más rápido...
+status.action.reopen-closed|mt|c425247d|Reactivar todo...
+status.action.cu-confirm|mt|429c630b|Confirmar 40 núcleos
+status.action.repair|mt|c5ec5fc0|Reparar...
+status.action.graphics|mt|4d922cbd|Abrir Gráficos
+status.action.driver|mt|cd30abda|Abrir Controlador
+
+# ---- readings (WU-038, WU-041) ----
+perf.no-reading|mt|713f2bdd|Sin lectura
+perf.load|mt|30c049fb|Carga de la GPU
+perf.load.explain|mt|092492cf|Qué tan ocupado estuvo el chip gráfico en los últimos instantes.
+perf.temperature|mt|f8c3af4b|Temperatura de la GPU
+perf.temperature.explain|mt|8b04f6a8|Desde 87 °C el controlador baja el reloj paso a paso; a 90 °C mantiene el reloj más bajo hasta que el chip se enfría. Esta protección siempre está activa.
+perf.clock|mt|31605456|Reloj de la GPU
+perf.clock.explain|mt|5a25c301|Qué tan rápido funciona ahora el chip gráfico. Con la velocidad de reloj automática, sigue la carga.
+perf.memory|mt|34a62533|Memoria de video en uso
+perf.memory.explain|mt|28bc56be|Memoria que los juegos y Windows usan para gráficos.
+perf.memory.value|mt|eaf124e2|{0} GB de {1} GB
+perf.power|mt|848e9656|Consumo
+perf.power.explain|mt|a2850175|Cuánta energía consumen juntos el procesador y el chip gráfico, según mide el propio chip. No incluye el resto de la placa, el ventilador ni las pérdidas de la fuente de alimentación.
+perf.fan|mt|e27be641|Ventilador
+perf.fan.explain|mt|730cb123|La velocidad del ventilador del gabinete. Quién controla el ventilador y con qué curva se elige en la tarjeta Ventilador del gabinete, más abajo.
+perf.fan.value|mt-safe|863e80e6|{0} rpm ({1} %)
+perf.fan.rpm-only|mt-safe|c140fb3e|{0} rpm
+perf.fan.stopped|mt|95e3cf4e|Detenido
+
+# ---- shader caches (F-CACHE) ----
+cache.d3d12|mt|f4642299|Caché de shaders de DirectX 12
+cache.d3d12.present|mt|15118fb9|En uso: {0} para {1} programas. Hace que los juegos se inicien más rápido después.
+cache.d3d12.empty|mt|2bed9aa6|Vacía. Los juegos la llenan la primera vez que se ejecutan.
+cache.unknown|mt|b7cdc0cc|Todavía no se puede comprobar.
+cache.d3d11|mt|4738ed96|Caché de shaders de DirectX 11
+cache.d3d11.present|mt|15118fb9|En uso: {0} para {1} programas. Hace que los juegos se inicien más rápido después.
+cache.d3d11.empty|mt|2bed9aa6|Vacía. Los juegos la llenan la primera vez que se ejecutan.
+cache.vulkan.present|mt|3ea51817|En uso: {0}. Los juegos Vulkan, OpenGL y DirectX guardan aquí programas gráficos preparados. Hace que los juegos se inicien más rápido después.
+cache.vulkan.empty|mt|2bed9aa6|Vacía. Los juegos la llenan la primera vez que se ejecutan.
+cache.vulkan|mt|eac8dfa1|Caché de shaders de Vulkan
+cache.windows|mt|f621abf7|Caché de shaders de DirectX de Windows
+cache.windows.text|mt|4525456f|La administra Windows. Puede borrarla con el Liberador de espacio en disco de Windows.
+
+# ---- hints before a restart (WU-060) ----
+hint.game-running|mt|000b9f0f|{0} está en ejecución ahora.
+hint.fullscreen|mt|dd00a6e6|Hay un juego o una aplicación en pantalla completa en ejecución.
+hint.presentation|mt|90bd7120|Windows está en modo de presentación.
+hint.save-first|mt|fee7f6a8|Guarde su partida o su trabajo antes de continuar.
+
+# ---- per-game settings (WU-015, WU-028) ----
+game.group.rt|mt|49d8697b|Compatibilidad con trazado de rayos
+game.group.rt.explain|mt|bf5cc535|Permite que el juego active sus efectos de trazado de rayos.
+game.group.rt.cost|mt|162366cb|Algunos efectos de trazado de rayos pueden faltar o verse mal, y el juego funciona más lento con el trazado de rayos activado.
+game.group.present|mt|d16b6c3b|Entrega de fotogramas más rápida
+game.group.present.explain|mt|7cd04fb0|Envía los fotogramas terminados a la pantalla con menos copias.
+game.group.present.cost|mt|5ad3e854|Usa un poco más de memoria. Desactívelo si la imagen parpadea o queda negra.
+game.group.cpu|mt|45883a65|Menos trabajo del procesador por fotograma
+game.group.cpu.explain|mt|61eb2481|Reparte el trabajo del controlador entre más núcleos del procesador. Esto puede subir la cantidad de fotogramas por segundo cuando el procesador es el límite.
+game.group.cpu.cost|mt|3f836d24|Usa más hilos del procesador. Desactívelo si el juego tiene tirones o se cierra.
+game.group.diag|mt|1a394bb7|Interruptores de diagnóstico
+game.group.diag.explain|mt|62e65139|Desactivan correcciones de estabilidad. Úselos solo cuando los desarrolladores se lo pidan.
+game.group.diag.cost|mt|9bd2b1e2|El juego puede volverse inestable.
+game.origin.driver|mt|95d5095e|Predeterminado del controlador
+game.origin.recommended|mt|3c243c3e|Recomendado por el instalador
+game.origin.game|mt|0d27941d|Configurado para este juego
+game.state.partial|mt|b2524367|Activado en parte (personalizado)
+
+# ---- confirmation dialogs (WU-053) ----
+plan.title.reopen-gpu-path|mt|b10076e7|Reactivar el escritorio más rápido
+plan.title.reopen-closed|mt|eb783672|Reactivar lo que se desactivó
+plan.title.desktop-gpu|mt|b1b92ad5|Escritorio en el chip gráfico
+plan.title.desktop-cpu|mt|85985462|Escritorio en modo seguro
+plan.title.confirm-start|mt|e9d08826|Confirmar este inicio
+plan.title.enable-dpm|mt|d66865b5|Velocidad de reloj automática
+plan.title.set-clocks|mt|a6c47043|Velocidad de reloj
+plan.title.reset-defaults|mt|529f2f6e|Restaurar la configuración de gráficos predeterminada
+plan.title.undo|mt|c1628643|Deshacer el último cambio
+plan.title.cu-mode|mt|3b1c283f|Núcleos gráficos
+plan.title.cu-confirm|mt|117b1c92|Confirmar 40 núcleos gráficos
+plan.title.game-profile|mt|fece8604|Configuración del juego
+plan.title.game-undo|mt|a1fad77b|Deshacer el cambio del juego
+plan.title.game-redo|mt|144129fb|Rehacer el cambio del juego
+plan.title.other|mt|873512a9|Cambiar configuración
+plan.line.desktop-on|mt|106dee6b|El escritorio más rápido se activa.
+plan.line.desktop-off|mt|fefc9d16|El escritorio más rápido se desactiva.
+plan.line.clear-mark|mt|e5065dd9|Se borra la marca que dejó el apagado inesperado.
+plan.line.route-gpu|mt|1c9c9142|El escritorio usa el chip gráfico.
+plan.line.route-cpu|mt|a59306ef|El escritorio usa el modo seguro (el procesador).
+plan.line.auto-on|mt|9f6b672e|Velocidad de reloj automática: activada.
+plan.line.auto-off|mt|f5daa219|Velocidad de reloj automática: desactivada (fija en 1000 MHz).
+plan.line.ceiling|mt|c01c44a8|Velocidad de reloj máxima: {0} MHz.
+plan.line.ceiling-default|mt|07dc48a6|Límite superior de la velocidad de reloj: {0} MHz (predeterminado).
+plan.line.other|mt|00229d42|Se restaura una configuración anterior del controlador.
+plan.line.cu-confirm|mt|68cc6ac8|Los próximos inicios conservan los 40 núcleos.
+plan.line.confirm-start|mt|911bc92e|Este inicio queda marcado como funcional.
+plan.game.set|mt-safe|c064a67c|{0}: {1}.
+plan.game.remove|mt|bf4850f1|{0}: vuelve al valor predeterminado del controlador.
+plan.game.none|mt|cced93bb|sin configuración
+plan.game.other|mt|252d9e89|otra configuración
+plan.when.now|mt|2a2d2ad0|Se aplica de inmediato.
+plan.when.restart|mt|c005e77e|Se aplica después del próximo reinicio de Windows.
+plan.when.game|mt|d21b858b|Se aplica la próxima vez que se inicie {0}.
+plan.scope.game|mt|d76f166e|Esta configuración la comparten todos los juegos llamados {0} en esta PC.
+plan.scope.games-kept|mt|cf20d5e4|Se conserva la configuración por juego.
+plan.scope.games-reset|mt|4d3df4af|La configuración por juego vuelve a las recomendaciones del instalador.
+plan.dark-screen|mt|7cc9b278|La pantalla puede quedar oscura un momento mientras Windows se inicia.
+plan.close-apps|mt|e5b8ccd6|Guarde su trabajo en otras aplicaciones antes de reiniciar Windows.
+plan.cu-no-undo|mt|b2aae3bc|La parte de los núcleos gráficos no se puede deshacer; elija la otra opción para volver atrás.
+plan.undo.yes|mt|c8f1c81e|Puede deshacer esto más tarde.
+plan.undo.partly|mt|54d91bb7|Puede deshacer esto más tarde, salvo la parte de los núcleos gráficos.
+plan.undo.no|mt|b545dd16|Esto no se puede deshacer.
+plan.refuse.not-installed|mt|05ad8657|El controlador no está instalado, así que no hay nada que cambiar.
+plan.refuse.not-running|mt|99675e61|El controlador no está en ejecución ahora. Reinicie Windows primero.
+plan.refuse.already|mt|893691ef|Nada que cambiar: esto ya está configurado.
+plan.refuse.nothing-to-undo|mt|9f3ece29|No hay nada que deshacer.
+plan.refuse.no-cu-waiting|mt|6f6ca6f0|Ningún inicio con 40 núcleos espera confirmación.
+plan.refuse.confirm-later|mt|d0279b4f|Este inicio aún no se puede confirmar. Espere un minuto mientras la pantalla funciona con normalidad e intente de nuevo.
+plan.refuse.other|mt|36c01058|Esto no se puede hacer ahora. No se cambió nada. El informe de soporte tiene los detalles.
+
+# ---- settings search (WU-009): the name, then common terms separated by | (translations add their own terms) ----
+search.graphics.clock-auto|mt|d66865b5|Velocidad de reloj automática
+search.graphics.clock-auto.terms|mt|74d15b22|reloj|frecuencia|velocidad|DPM|boost|reloj de la GPU|automático|clock
+search.graphics.clock-ceiling|mt|a61bb638|Velocidad de reloj máxima
+search.graphics.clock-ceiling.terms|mt|2c39cbca|reloj máximo|MHz|límite|tope|overclock|OC|frecuencia máxima
+search.graphics.cores|mt|3b1c283f|Núcleos gráficos
+search.graphics.cores.terms|mt|d2fcccf3|CU|unidades de cómputo|núcleos|40 núcleos|24 núcleos|desbloquear|desbloqueo|núcleos de shaders
+search.graphics.reset|mt|529f2f6e|Restaurar la configuración de gráficos predeterminada
+search.graphics.reset.terms|mt|20d20bb8|restablecer|restaurar|predeterminado|valores de fábrica|reset
+search.games.rt|mt|49d8697b|Compatibilidad con trazado de rayos
+search.games.rt.terms|mt|3abbb3ed|RT|ray tracing|raytracing|trazado de rayos|DXR
+search.games.present|mt|d16b6c3b|Entrega de fotogramas más rápida
+search.games.present.terms|mt|e4d40585|presentación|entrega de fotogramas|copias|latencia|present
+search.games.cpu|mt|45883a65|Menos trabajo del procesador por fotograma
+search.games.cpu.terms|mt|776e6494|CPU|procesador|hilos|multihilo|limitado por la CPU
+search.games.undo|mt|59e2951f|Deshacer un cambio del juego
+search.games.undo.terms|mt|f63a6cb8|deshacer|rehacer|revertir
+search.games.add|mt|37b1384f|Agregar un juego
+search.games.add.terms|mt|94d2c8d7|agregar|añadir|juego|programa|exe
+search.display.resolution|mt|c12b3df8|Resolución y frecuencia de actualización
+search.display.resolution.terms|mt|d9eeed60|resolución|frecuencia|actualización|Hz|1080p|monitor|cambiar resolución|modo|144 Hz|refresh
+search.display.identify|mt|3def2f6d|Identificar el monitor
+search.display.identify.terms|mt|6a71b05e|identificar|qué pantalla|número de monitor
+search.display.scale|mt|1cf201de|Escala, diseño y orientación
+search.display.scale.terms|mt|f73bb0e2|DPI|zoom|tamaño del texto|orientación|rotación|diseño|escala
+search.perf.sensors|mt|a8451874|Temperatura y carga
+search.perf.sensors.terms|mt|b467ff5a|temperatura|temp|uso|carga|sensores|VRAM|memoria|consumo|energía|ventilador|rpm|vatios|W
+search.perf.cache|mt|d7b57389|Caché de shaders
+search.perf.cache.terms|mt|6c23151c|caché|cache|shader|tirones|compilar|compilación
+search.driver.version|mt|04cb4284|Versión del controlador
+search.driver.version.terms|mt|63b1897d|versión|instalada|fecha|driver|controlador
+search.driver.update|mt|f26f3275|Buscar actualizaciones
+search.driver.update.terms|mt|8e944c4d|actualizar|actualización|nueva versión|descargar|update
+search.settings.language|mt|a4fe6526|Idioma
+search.settings.language.terms|mt|e5916771|idioma|lengua|language|English|inglés|Polski|polaco|Português|portugués|Español|español|日本語|japonés|한국어|coreano
+search.settings.update-start|mt|1795d304|Buscar actualizaciones al iniciar la aplicación
+search.settings.update-start.terms|mt|f9b8aeaa|actualización|automático|inicio|al iniciar
+search.settings.recent|mt|1584741a|Recordar los juegos iniciados
+search.settings.recent.terms|mt|b9a70e98|historial|recientes|iniciados|privacidad|borrar
+search.settings.nagi|mt|31c709aa|Mostrar a Nagi
+search.settings.nagi.terms|mt|d1e1a96e|Nagi|personaje|mascota|guía
+search.settings.tips|mt|95766585|Mostrar consejos automáticamente
+search.settings.tips.terms|mt|34fa1b1d|consejos|sugerencias|sabía que|tips
+search.settings.animations|mt|2962f3a5|Reducir animaciones
+search.settings.animations.terms|mt|2e378347|animación|animaciones|movimiento|efectos
+search.settings.support|mt|57b9df00|Mostrar opciones de soporte
+search.settings.support.terms|mt|bf7d08c9|soporte|técnico|avanzado|diagnóstico
+search.settings.data|mt|ee5ef73a|Sus datos
+search.settings.data.terms|mt|a17a07e3|privacidad|datos|telemetría|red|envío|subir
+search.help.repair|mt|304cd933|Reparar el controlador
+search.help.repair.terms|mt|c5551081|reparar|arreglar|reinstalar|dañado|roto
+search.help.report|mt|db2acddc|Crear un informe de soporte
+search.help.report.terms|mt|6ce5ba51|informe|reporte|error|bug|soporte|registros|logs
+search.help.restart|mt|1ef47f1f|Reiniciar Windows
+search.help.restart.terms|mt|7ad6427b|reiniciar|reinicio|reiniciar controlador|reset
+search.help.guides|mt|6ef2d14b|Ayuda para problemas comunes
+search.help.guides.terms|mt|031dd644|pantalla negra|bloqueo|cierre|lento|tirones|mouse|problema|ayuda
+search.later.sharpen|mt|65319812|Nitidez de imagen
+search.later.sharpen.terms|mt|9e551a61|nitidez|enfoque|RIS|CAS
+search.later.aa|mt|c77c3af2|Suavizado de bordes (anti-aliasing)
+search.later.aa.terms|mt|99479753|AA|MSAA|antialiasing|anti-aliasing|suavizado|dientes de sierra
+search.later.hdr|mt-safe|60790181|HDR
+search.later.hdr.terms|mt|e0f32e0b|HDR|10 bits|profundidad de color|color
+search.later.vrr|mt|2939546a|Frecuencia de actualización variable
+search.later.vrr.terms|mt|685a6f1e|VRR|FreeSync|G-Sync|sincronización adaptativa
+search.later.power|mt|fba85679|Límite de potencia
+search.later.power.terms|mt|db72d2b0|límite de potencia|vatios|consumo|TDP
+search.perf.fan|mt|8c9a2877|Control del ventilador
+search.perf.fan.terms|mt|f8a14c23|ventilador|curva del ventilador|ruido|refrigeración|fan
+search.perf.fan-boost|mt|b044d1f7|Ventilador a toda velocidad con carga alta
+search.perf.fan-boost.terms|mt|458693d7|ruidoso|ruido|velocidad máxima|velocidad del ventilador|carga alta|caliente
+search.later.cache-clear|mt|6b923412|Borrar la caché de shaders
+search.later.cache-clear.terms|mt|bd9dc929|borrar caché|eliminar caché|limpiar caché
+
+# ---- window frame (WU-008, WU-011) ----
+ui.back|mt-safe|76900f1b|Atrás
+ui.search|mt|255b076d|Buscar configuración
+ui.search.results|mt|e978b00d|Resultados de la búsqueda
+ui.search.none|mt|4a80e7e4|No se encontró ninguna configuración.
+ui.nav.current|mt|de2574e5|Página actual
+ui.explain|mt|c68f3c5e|¿Qué hace "{0}"?
+ui.explain.page|mt|d2447d18|Acerca de esta página
+ui.explain.setting|mt|3872b16d|Acerca de esta configuración
+ui.apply|mt-safe|31e392d1|Aplicar
+ui.discard|mt|f9bfa3dc|Descartar cambios
+ui.cancel|mt-safe|19766ed6|Cancelar
+ui.continue|mt-safe|31fbef16|Continuar
+ui.expanded|mt-safe|ed077f3d|Abierto
+ui.collapsed|mt-safe|c21ead06|Cerrado
+ui.ceiling.lower|mt|f7017502|Bajar la velocidad de reloj máxima
+ui.ceiling.higher|mt|4d2c5410|Subir la velocidad de reloj máxima
+ui.unsaved.title|mt|a710c2b9|Cambios sin guardar
+ui.unsaved.text|mt|31225aee|Cambió la configuración en la página {0} y no la aplicó.
+ui.unsaved.save|mt-safe|31e392d1|Aplicar
+ui.unsaved.discard|mt-safe|eb1a70e3|Descartar
+ui.unsaved.keep|mt|e76fd2ad|Seguir editando
+ui.confirm.changes|mt|86a32a72|Esto cambia:
+ui.confirm.admin|mt|04e01336|A continuación, Windows pide permiso de administrador.
+ui.restart.title|mt|6fa4b426|¿Reiniciar Windows?
+ui.restart.text|mt|57b7190e|El cambio empieza a funcionar después de un reinicio. Windows pide a los demás programas que se cierren, así que guarde antes su trabajo en ellos.
+ui.restart.later|mt-safe|73b6e48a|Más tarde
+ui.restart.now|mt|09af1002|Reiniciar ahora
+ui.later|mt|3ff09ef1|Próximamente.
+ui.later.short|mt-safe|91981460|próximamente
+ui.later.reason|mt|d5a9cf1d|El controlador todavía no puede hacer esto. Llegará con una versión posterior del controlador.
+ui.later.title|mt-safe|e3b48f0b|Próximamente
+nav.home|mt-safe|3a786953|Inicio
+nav.games|mt-safe|d9dae781|Juegos
+nav.graphics|mt-safe|a874fca8|Gráficos
+nav.display|mt-safe|34e108c0|Pantalla
+nav.performance|mt-safe|442aded8|Rendimiento
+nav.driver|mt-safe|9fe4c68e|Controlador
+nav.settings|mt-safe|74a883a0|Configuración
+nav.help|mt-safe|b79cac92|Ayuda
+page.home.title|mt-safe|3a786953|Inicio
+page.home.intro|mt|05aa30e0|Lo que hace su PC ahora y lo que requiere su atención.
+page.games.title|mt-safe|d9dae781|Juegos
+page.games.intro|mt|7bac98dd|Configuración de un juego. Se aplica la próxima vez que se inicie el juego.
+page.graphics.title|mt-safe|a874fca8|Gráficos
+page.graphics.intro|mt|83130cfc|Velocidad de reloj, núcleos gráficos y la configuración para todos los juegos. Los cambios de reloj y de núcleos se aplican después del próximo reinicio de Windows; la configuración para todos los juegos se aplica la próxima vez que se inicie un juego.
+page.display.title|mt-safe|34e108c0|Pantalla
+page.display.intro|mt|00622054|Sus monitores, lo que muestran ahora y los modos que puede elegir.
+page.performance.title|mt-safe|442aded8|Rendimiento
+page.performance.intro|mt|b072238e|Lecturas en vivo del chip gráfico y las cachés de shaders.
+page.driver.title|mt-safe|9fe4c68e|Controlador
+page.driver.intro|mt|9aba802f|La versión del controlador instalada y sus actualizaciones.
+page.settings.title|mt-safe|74a883a0|Configuración
+page.settings.intro|mt|0dfe016b|Cómo se comporta esta aplicación. Estas elecciones son solo suyas y se conservan cuando se actualiza el controlador.
+page.help.title|mt-safe|b79cac92|Ayuda
+page.help.intro|mt|ba52ab9c|Ayuda paso a paso para problemas comunes, reparación e informes de soporte.
+
+# ---- results of actions (WU-061) ----
+action.working|mt|82f2bdf0|Procesando... Windows puede pedir permiso de administrador.
+action.done|mt|ed251864|Listo.
+action.failed|mt|ee79203d|No se hizo el cambio. No se cambió nada más. Un informe de soporte desde Ayuda muestra por qué.
+action.background-failed|mt|4ec90c79|Un paso en segundo plano no terminó. No se cambió nada del controlador. Un informe de soporte desde Ayuda muestra qué pasó.
+action.not-elevated|mt|d6a4391d|No se concedió el permiso de administrador. No se cambió nada.
+action.cannot-read|mt|4f597aff|No se puede leer la configuración actual, así que no se cambió nada.
+action.restart-failed|mt|0783bdf8|Windows no se reinició. Reinícielo desde el menú Inicio.
+
+# ---- Home (WU-007, WU-002) ----
+home.start.title|mt|831d0f72|Primeros pasos
+home.start.1|mt|19a22787|Inicie un juego como siempre. El controlador usa la configuración recomendada.
+home.start.2|mt|c551f885|Si un juego tiene problemas, abra Juegos y revise su configuración.
+home.start.3|mt|fec0203b|Ayuda tiene guías paso a paso para problemas comunes.
+home.start.dismiss|mt|0a82387a|Entendido, ocultar
+home.recent.title|mt|6c30b7fc|Juegos recientes
+home.closed.title|mt|e56fe58e|Los gráficos están en su configuración segura
+home.closed.what|mt|cf1397fd|Windows se detuvo inesperadamente mientras los gráficos dibujaban su escritorio. Para recuperar este equipo de forma segura, el controlador volvió por sí mismo a la configuración segura de lo siguiente:
+home.closed.desktop|mt|bf712fa9|El escritorio lo dibuja el procesador, no el chip gráfico.
+home.closed.clock|mt|a1bf73f2|El chip gráfico se queda en su velocidad base.
+home.closed.cost|mt|26723ef9|Todo funciona, pero el escritorio se siente más lento, al mover ventanas pueden verse franjas y los juegos obtienen menos fotogramas. Seguirá así cada vez que este equipo se inicie, hasta que usted lo reactive.
+home.closed.effect|mt|0271d4d0|Un clic lo reactiva todo. Se aplica después del próximo reinicio de Windows.
+home.recent.none|mt|73f0a6d1|Todavía no hay juegos. Los juegos que inicie aparecen aquí.
+home.recent.off|mt|965bacdf|Recordar los juegos iniciados está desactivado (Configuración).
+home.recent.settings|mt-safe|74a883a0|Configuración
+home.recent.all|mt|cf2bf152|Todos los juegos
+home.monitor.title|mt-safe|4c2e1df4|Monitor
+home.monitor.open|mt|f4983796|Abrir Pantalla
+home.driver.title|mt-safe|9fe4c68e|Controlador
+home.graphics.title|mt-safe|a874fca8|Gráficos
+
+# ---- Games (WU-012, WU-013, WU-015, WU-019, WU-020a, WU-028, WU-054) ----
+games.list.title|mt|e9f433a5|Sus juegos
+games.filter|mt|4342eecc|Buscar un juego
+games.sort.name|mt|588a0823|Ordenar por nombre
+games.sort.recent|mt|0a98c5ff|Ordenar por última partida
+games.show-hidden|mt|13d39e6b|Mostrar juegos ocultos
+games.add|mt|d6031d13|Agregar un juego...
+games.add.title|mt|6da9b3ee|Elija el archivo de programa del juego
+games.add.filter|mt-safe|b6747064|Programas
+games.add.invalid|mt|44a0074e|Este nombre de archivo no se puede usar para la configuración de juegos.
+games.launched|mt|2e7c7623|Último inicio {0} ({1})
+games.api.d3d12|mt-safe|05b30c4c|DirectX 12
+games.api.d3d11|mt-safe|1eed6087|DirectX 11
+games.has-settings|mt|d9ad0a62|Tiene su propia configuración
+games.no-settings|mt|62ce296b|Sin configuración propia
+games.hide|mt-safe|ac20a57b|Ocultar
+games.unhide|mt-safe|0df6f1ca|Mostrar
+games.hide.note|mt|91405f21|Ocultar un juego solo lo quita de esta lista. Sus archivos, partidas guardadas y configuración se conservan.
+games.kind.browser|mt|705a76e7|Navegador web, no es un juego
+games.kind.windows|mt|eda843a4|Parte de Windows, no es un juego
+games.kind.launcher|mt|dc3b2e61|Aplicación de tienda de juegos, no es un juego
+games.kind.own|mt|14dee775|Parte del controlador de gráficos, no es un juego
+games.not-games.note|mt|b7c08956|No se muestran como juegos: {0} programa(s), como navegadores web y partes de Windows. "Mostrar juegos ocultos" los muestra, y "Mostrar" pone uno entre sus juegos.
+games.empty|mt|0818ed91|Todavía no hay juegos. Inicie un juego una vez o agréguelo a mano.
+games.empty.off|mt|5cfe9fad|No hay juegos en la lista. Recordar los juegos iniciados está desactivado (Configuración); puede agregar un juego a mano.
+games.select|mt|3c23c839|Elija un juego para ver su configuración.
+games.unsaved|mt|c4751a7a|cambios sin guardar
+games.scope|mt|0ec70022|Esta configuración se aplica a todos los juegos llamados {0} en esta PC.
+games.running|mt|e20bd8e0|{0} está en ejecución ahora. La nueva configuración se aplica la próxima vez que se inicie.
+games.changed|mt|2df4fd0e|Cambiado, aún sin aplicar
+games.other-kept|mt|a17fc54d|Otros valores se conservan como están: {0}
+games.hidden-kept|mt|ee0a72e7|Este juego también tiene configuración de soporte. Se conserva como está.
+games.when|mt|57ebe13e|La configuración se aplica la próxima vez que se inicie {0}.
+games.unsaved.count|mt|fc5aef28|Cambios sin guardar en {0} juego(s). Aplicar los guarda.
+games.unsaved.none|mt|c9b0957f|Sus cambios coinciden con la configuración guardada.
+games.undo|mt|1095dd19|Deshacer el último cambio
+games.redo|mt-safe|74273989|Rehacer
+games.reset.recommended|mt|d7d3dc65|Usar la configuración recomendada
+games.reset.none|mt|cf06d86c|Usar los valores predeterminados del controlador
+games.reset.note|mt|6002de1f|El instalador recomienda una configuración para este juego. "Usar la configuración recomendada" vuelve a ella.
+
+# ---- Graphics (B5, WU-042, WU-055, section 7) ----
+graphics.clock.title|mt|a6c47043|Velocidad de reloj
+graphics.clock.now|mt-safe|fe18013d|Ahora
+graphics.clock.after|mt|1ccff8ba|Después del próximo reinicio
+graphics.clock.fixed|mt|8380e882|Fija, baja y silenciosa
+graphics.clock.auto-up-to|mt|13865cd2|Automática, hasta {0} MHz
+graphics.clock-auto.default|mt|bb1da6bd|Cuando esto está desactivado, el chip funciona a una velocidad fija y baja: menos calor, menos rendimiento.
+graphics.clock-ceiling.check|mt|3c16c1c1|Velocidad de reloj máxima:
+graphics.clock-ceiling.default|mt|aa55aa8b|Cuando esto está desactivado, la velocidad máxima es {0} MHz. Solo se usa con la velocidad de reloj automática.
+graphics.thermal|mt|14bc2f1d|La protección contra el calor siempre está activa: desde 87 °C el controlador baja la velocidad, a 90 °C mantiene la velocidad más baja hasta que el chip se enfría. La placa controla el ventilador.
+graphics.cores.title|mt|3b1c283f|Núcleos gráficos
+graphics.cores.24|mt-safe|99b1c87b|Estándar (24)
+graphics.cores.40|mt-safe|908ab6d1|Todos (40)
+graphics.cores.count|mt|202ea951|Cuántos núcleos gráficos
+graphics.cores.count.item|mt|18b460db|{0} núcleos
+graphics.cores.map.show|mt|09bc7c18|Elegir los pares de núcleos usted mismo
+graphics.cores.map.help|mt|c8e8a347|Cada par son dos núcleos gráficos. Si un par hace que la PC falle o se congele, desactive ese par y deje los demás activados.
+graphics.cores.map.unreadable|mt|4a1e2bd6|Ahora no se pueden leer los pares de núcleos de esta PC, así que no se pueden elegir. Elija un número de núcleos.
+graphics.cores.map.group|mt|e5d24a19|Grupo {0}
+graphics.cores.map.pair|mt|c2d4e788|Par {0}
+graphics.cores.map.name|mt|e7997c8a|Grupo {0}, par {1}: dos núcleos gráficos
+graphics.cores.map.fixed|mt|f017032a|siempre activado
+graphics.not-installed|mt|17713c9c|El controlador no está instalado, así que aquí no hay nada que configurar.
+graphics.unsaved|mt|fdb121dc|Tiene cambios que aún no se aplicaron.
+graphics.saved|mt|75d79f0a|No hay cambios sin guardar.
+graphics.reset.text|mt|2ddb47cc|Restablece la velocidad de reloj y los núcleos gráficos a la configuración de la versión, y la configuración para todos los juegos a "La aplicación decide".
+graphics.reset.keep-games|mt|4ef40ca5|Conservar la configuración de cada juego
+graphics.reset.button|mt|cf98ec90|Restaurar valores predeterminados...
+graphics.undo|mt|766450ec|Deshacer el último cambio...
+graphics.undo.none|mt|12d1c282|No hay ningún cambio que deshacer.
+graphics.undo.when|mt|a768bb2c|El último cambio se hizo el {0}.
+
+# ---- Display (WU-030, WU-031, WU-034) ----
+display.name|mt-safe|086503fb|Monitor {0}
+display.name.main|mt|a3111418|Monitor {0} (principal)
+display.resolution|mt|d4055faf|Resolución
+display.refresh|mt|1c04ebff|Frecuencia de actualización
+display.size|mt-safe|cae2c3d9|{0} x {1}
+display.mode|mt|f4307cf3|{0} x {1} a {2} Hz
+display.mode.no-rate|mt-safe|cae2c3d9|{0} x {1}
+display.mode-note|mt|f9c30388|Windows muestra los modos que este monitor puede mostrar. Una nueva configuración se aplica de inmediato y se conserva solo si la confirma en 15 segundos.
+display.identify|mt-safe|4786cd51|Identificar
+display.windows.title|mt|a597577a|Configuración de pantalla de Windows
+display.windows.text|mt|49237ecd|La escala, el diseño, la orientación y el monitor principal se configuran en Windows.
+display.windows.open|mt|a8aa4f79|Abrir la configuración de pantalla de Windows
+
+# ---- Performance (WU-038, WU-041) ----
+perf.now.title|mt-safe|fe18013d|Ahora
+perf.now.note|mt|47358944|Las lecturas se actualizan cada 2 segundos mientras esta página está abierta.
+perf.cache.title|mt|2c9cb386|Cachés de shaders
+perf.cache.note|mt|e46f62f9|Una caché de shaders guarda programas gráficos preparados, para que los juegos se inicien y carguen más rápido la próxima vez.
+
+# ---- Driver (WU-043, WU-046, WU-058) ----
+driver.card.title|mt|242adbbf|Controlador instalado
+driver.updates.title|mt|22e2bada|Actualizaciones
+driver.updates.check|mt|2937cffb|Buscar ahora
+driver.updates.open|mt|9da2b089|Abrir la página de la versión
+driver.updates.releases|mt|3b8c94fd|Todas las versiones
+driver.updates.install|mt|cada4215|Instalar actualización
+driver.updates.privacy|mt|4813b1cb|La búsqueda lee la lista pública de versiones. No envía nada sobre usted ni sobre su PC.
+driver.repair.title|mt-safe|1196b6c5|Reparar
+driver.repair.text|mt|e71e61c4|Si el controlador no funciona como debería, repárelo desde Ayuda.
+driver.repair.open|mt|30dd758a|Abrir Ayuda
+
+# ---- Settings (WU-003, WU-046, WU-075, WU-076, WU-077) ----
+settings.language.note|mt|6c69e5d7|Por ahora, los textos en portugués, español, japonés y coreano son traducciones automáticas.
+settings.updates.title|mt|22e2bada|Actualizaciones
+settings.update-start.note|mt|ae77c8bd|Como máximo una vez por hora. Nada se descarga ni se instala sin usted.
+settings.recent.title|mt|085fe856|Lista de juegos
+settings.recent.note|mt|58f29ae6|El controlador recuerda los juegos que inicia en esta PC, para la lista de Juegos. La lista no se sube a ningún lado.
+settings.recent.invalid|mt|5d19417d|La configuración guardada de esta lista no es válida, así que no se recuerda ningún juego. Marque la casilla para activarla.
+settings.recent.unreadable|mt|a63ef10f|No se puede leer la lista de juegos. Borre la lista para empezar una nueva.
+settings.recent.clear|mt|50da1a01|Borrar la lista
+settings.recent.cleared|mt|c2c7e99b|La lista está vacía.
+settings.recent.busy|mt|fd22dbb3|No se pudo borrar la lista ahora porque se está iniciando un juego. Intente de nuevo en un momento.
+settings.recent.failed|mt|26db6f1a|No se pudo borrar la lista. Intente de nuevo en un momento.
+settings.guide.title|mt|8e02ab12|Consejos y guía
+settings.guide.note|mt|529531e4|Sin Nagi, los consejos se muestran como texto. Nada más cambia.
+settings.nagi.small|mt|6fd13869|En una pantalla pequeña, de 1024 por 768 o menos, la guía se oculta para dejar espacio a la página.
+settings.animations.windows-off|mt|0962c940|Las animaciones de Windows están desactivadas, así que esta aplicación tampoco anima.
+settings.support.title|mt-safe|be91940b|Soporte
+settings.support.note|mt|97dadddd|Muestra detalles técnicos y acciones adicionales en Ayuda, para cuando los desarrolladores los pidan.
+settings.data.1|mt|370b4dab|No hay telemetría ni cuenta.
+settings.data.2|mt|fa14b2f8|La aplicación se conecta a internet solo para buscar actualizaciones y para las descargas que usted inicia.
+settings.data.3|mt|40bbfde4|Los informes de soporte se quedan en esta PC hasta que usted mismo los envíe.
+settings.data.4|mt|5439adf1|La lista de juegos se guarda para su cuenta de Windows en esta PC y no se sube a ningún lado. Puede desactivarla y borrarla arriba.
+settings.data.5|mt|7e6b4f23|Sus elecciones en esta aplicación se guardan solo para su cuenta de Windows.
+
+# ---- Help (WU-058, WU-059, WU-063, WU-067) ----
+help.guides.title|mt|6ef2d14b|Ayuda para problemas comunes
+help.guide.dark|mt|1faa0159|La pantalla queda oscura o el controlador no se inicia
+help.guide.dark.1|mt|8b1336e3|Espere dos minutos. El primer inicio después de una actualización puede tardar más.
+help.guide.dark.2|mt|e0b50b70|Reinicie Windows desde el menú Inicio, o pulse una vez el botón de encendido y espere.
+help.guide.dark.3|mt|9a456513|Si Inicio dice que el escritorio usa el modo seguro, reactive el escritorio más rápido y reinicie.
+help.guide.dark.4|mt|ed93ddc9|Si sigue oscura, repare el controlador desde Ayuda, o inicie Windows en modo seguro y ejecute la reparación allí.
+help.guide.slow|mt|bf7ad7f5|Los juegos van lentos o tienen tirones
+help.guide.slow.1|mt|717d0dd0|En Gráficos, compruebe que la velocidad de reloj automática esté activada.
+help.guide.slow.2|mt|e0575748|En Rendimiento, mire la temperatura. Por encima de 87 °C el controlador frena el chip para protegerlo: limpie el disipador y deje que entre aire al gabinete.
+help.guide.slow.3|mt|b4eb7514|Los primeros minutos en un juego nuevo pueden tener tirones mientras se llena la caché de shaders. Esto mejora por sí solo.
+help.guide.slow.4|mt|8f348ed6|En Juegos, pruebe "Menos trabajo del procesador por fotograma" para este juego.
+help.guide.crash|mt|9f0a6158|Un juego se cierra, se congela o no se inicia
+help.guide.crash.1|mt|c05b2fa3|Inicie el juego otra vez. Si se vuelve a cerrar, abra su configuración en Juegos.
+help.guide.crash.2|mt|e58faffe|Use los valores predeterminados del controlador para este juego, aplique e inícielo otra vez.
+help.guide.crash.3|mt|f39a416d|Si el juego usa trazado de rayos, desactívelo en las opciones del propio juego.
+help.guide.crash.4|mt|da93756f|Si sigue fallando, cree un informe de soporte y envíelo a los desarrolladores.
+help.guide.display|mt|1e7607a4|La imagen, el mouse o el monitor no se comportan bien
+help.guide.display.1|mt|03b57c05|Si los clics del mouse no funcionan en algunas aplicaciones, reinicie Windows.
+help.guide.display.2|mt|ca7058ff|Si la ventana de esta aplicación se pierde tras un cambio de monitor, vuelva a iniciar la aplicación: aparece en una pantalla visible.
+help.guide.display.3|mt|d4b2d442|Cambie la resolución, la escala y el diseño en la configuración de pantalla de Windows.
+help.guide.display.4|mt|7a5f2a9b|Si la imagen se ve mal después de una actualización, use "Restaurar valores predeterminados" en Gráficos y reinicie.
+help.guide.safe|mt|d2304dae|Reparar desde el modo seguro
+help.guide.safe.1|mt|7f161492|Mantenga presionada Mayús y seleccione Reiniciar en el menú Inicio.
+help.guide.safe.2|mt|b12561b0|Seleccione Solucionar problemas, Opciones avanzadas, Configuración de inicio, Reiniciar, y luego pulse 4 para el modo seguro.
+help.guide.safe.3|mt|2c9b1fcf|Abra "Nagi Control App (recovery)" desde el menú Inicio y seleccione Reparar.
+help.guide.safe.4|mt|bb202726|Estos pasos también están en la página de la versión, para que pueda leerlos en otro dispositivo.
+help.start.text|mt|75b035b9|Volver a mostrar la tarjeta "Primeros pasos" en Inicio.
+help.start.show|mt|42892e31|Mostrarla otra vez
+help.repair.text|mt|07c5c040|Reparar instala otra vez la misma versión del controlador desde la copia guardada en esta PC. Su configuración se conserva. La pantalla puede quedar oscura un momento y Windows puede necesitar un reinicio.
+help.repair.confirm|mt|d6e18be8|¿Reparar el controlador ahora? Guarde antes su trabajo en otros programas. El instalador pide permiso de administrador.
+help.repair.started|mt|de691dd9|La reparación se inició en su propia ventana.
+help.repair.failed|mt|5d64d67d|No se pudo iniciar la reparación.
+help.repair.unavailable|mt|18d8e621|Reparar no está disponible en esta PC: falta la copia guardada de la versión. Descargue el paquete de la versión desde la página de la versión y ejecute su instalador.
+help.restart.text|mt|3c64612a|No es posible reiniciar solo el controlador de gráficos. Reinicie Windows en su lugar: es la forma segura.
+help.report.create|mt|3cf7d83c|Crear un informe de soporte...
+help.report.text|mt|3afd39fb|Un informe de soporte ayuda a los desarrolladores a encontrar un problema. Es un archivo zip en su escritorio y contiene:
+help.report.item.1|mt|4792c5d9|el registro del controlador y su estado actual (velocidad de reloj, temperatura, configuración)
+help.report.item.2|mt|cd14373b|el estado del escritorio y de los últimos inicios
+help.report.item.3|mt|b2dda27d|los archivos del controlador instalados con sus versiones
+help.report.item.4|mt|8014d767|el diagnóstico de DirectX y las comprobaciones de gráficos
+help.report.item.5|mt|3e350ded|los eventos de Windows de las últimas 24 horas sobre el controlador de gráficos, y los registros de cada cierre inesperado y bloqueo de programas de esas mismas 24 horas
+help.report.privacy|mt|bb8e792c|Se quitan su nombre de usuario, el nombre del equipo y los números de serie. Usted ve cada archivo antes de guardar el informe, y nada se envía a ningún lado.
+help.report.dxdiag|mt|9661696b|Incluir el diagnóstico de DirectX (tarda hasta 2 minutos)
+help.report.caps|mt|2425bb47|Incluir las comprobaciones de gráficos
+help.report.collecting|mt|9edbbbce|Reuniendo datos... Esto puede tardar unos minutos.
+help.report.failed|mt|8c3a41ba|No se pudo crear el informe.
+help.report.cancelled|mt|aa061bcb|Cancelado. No se guardó nada.
+help.report.saved|mt|73cd7e8c|Guardado: {0}
+help.report.not-saved|mt|b8cf4fba|No se pudo guardar el informe.
+help.report.preview|mt|c1a5c02a|Informe de soporte: revise los archivos
+help.report.where|mt|5f73de1a|El informe se guardará como {0}. Seleccione un archivo para ver qué contiene.
+help.report.files|mt|d2dc06c5|Archivos del informe
+help.report.file|mt-safe|50009ce1|Archivo
+help.report.size|mt-safe|1af85190|Tamaño
+help.report.contents|mt-safe|437aea62|Contenido
+help.report.save|mt|c7ca9b29|Guardar el informe
+help.about.title|mt-safe|4efca0d1|Acerca de
+help.about.release|mt|1751ebfd|Versión del controlador {0}
+help.about.text|mt|c9714463|Nagi (amdgpu-wddm) es un controlador de código abierto para la ASRock BC-250. Sin cuenta, sin telemetría.
+help.about.name|mt|a9f92e00|Nagi significa {0}.
+brand.expansion|mt-safe|8b8af7be|Nagi's AMD Graphics Infrastructure
+
+# ---- recovery view (WU-068) ----
+recovery.title|mt-safe|48f6a8d5|Recuperación
+recovery.intro|mt|cf19b743|Esta vista funciona incluso cuando el controlador o el resto de la aplicación no funcionan. Solo lee lo que está instalado.
+recovery.actions|mt|f42148c5|Qué puede hacer
+
+# ---- explanations next to each page and setting (WU-064) ----
+help.page.home|mt|37fa8758|Inicio muestra una tarjeta de estado: si todo está listo y, si no, qué hacer a continuación. Debajo están sus juegos recientes y un breve resumen.
+help.page.games|mt|ea40fa7a|Cada juego puede tener su propia configuración. Se guarda según el nombre del archivo del programa y se lee cuando se inicia el juego.
+help.page.graphics|mt|c6ff7fd8|Esta configuración se aplica a todos los juegos. La velocidad de reloj y los núcleos gráficos se aplican después del próximo reinicio de Windows. La configuración para todos los juegos se aplica la próxima vez que se inicie un juego; la configuración propia de un juego en la página Juegos tiene prioridad.
+help.page.display|mt|f914a5ac|Elija la resolución, la frecuencia de actualización y el escalado de cada monitor. Una nueva configuración se conserva solo si la confirma en 15 segundos. Windows configura la escala y el diseño.
+help.page.performance|mt|ef1ac3a4|Lecturas en vivo del chip gráfico. "Sin lectura" significa que el controlador todavía no puede medir este valor.
+help.page.driver|mt|a2700547|La versión instalada, si está verificada y si hay una versión más nueva disponible.
+help.page.settings|mt|b5b868fe|Cómo se comporta esta aplicación para usted. Nada de aquí cambia el controlador.
+help.page.help|mt|e5564803|Ayuda paso a paso, reparación, reinicio e informes de soporte.
+help.setting.clock-auto|mt|584f89f3|El chip cambia su velocidad según la carga: rápido en los juegos, lento y silencioso en el escritorio. Cuando esto está desactivado, funciona a una velocidad fija y baja.
+help.setting.clock-ceiling|mt|d5c0013b|La velocidad más alta que puede usar el reloj automático. Más alta es más rápido, pero consume más energía y genera más calor.
+help.setting.cores|mt|b7b0e331|Estándar usa 24 núcleos gráficos, como la placa tal como se vende. Todos usa 40 núcleos: más rápido en muchos juegos, pero con más consumo y calor. Después del primer inicio con 40 núcleos, confirme en Inicio que la pantalla funciona; sin la confirmación, el próximo inicio vuelve a 24.
+help.setting.reset|mt|13409397|Restablece la configuración de gráficos compartida a la configuración de la versión. Usted elige si se conserva la configuración de cada juego.
+help.setting.rt|mt|87cd1543|Permite que un juego active sus efectos de trazado de rayos. Algunos efectos pueden faltar, y el trazado de rayos hace que los juegos vayan más lentos.
+help.setting.present|mt|70ad2029|Envía los fotogramas terminados a la pantalla con menos copias. Esto puede hacer que los juegos vayan más fluidos. Desactívelo si la imagen parpadea o queda negra.
+help.setting.cpu|mt|b2c75482|Reparte el trabajo del controlador entre más núcleos del procesador. Esto ayuda cuando el procesador limita los fotogramas por segundo.
+help.setting.diag|mt|f2712639|Interruptores para pruebas de los desarrolladores. Úselos solo cuando ellos se lo pidan.
+help.setting.undo|mt|a64f5f62|Vuelve a la configuración de este juego anterior a su último cambio. Rehacer devuelve su cambio.
+help.setting.add|mt|c3f487f7|Elija el archivo de programa del juego (.exe) para darle su propia configuración antes de iniciarlo.
+help.setting.resolution|mt|8b860a88|El número de píxeles y la frecuencia de actualización de cada monitor. Solo se ofrecen los modos que Windows muestra. Un nuevo modo se aplica de inmediato y se conserva solo si lo confirma en 15 segundos.
+help.setting.identify|mt|83ce03d0|Muestra el número del monitor en ese monitor durante 3 segundos.
+help.setting.scale|mt|dac4615e|Windows configura el tamaño del texto y de las aplicaciones, el diseño de los monitores y la orientación.
+help.setting.sensors|mt|462f8d49|Carga, temperatura, velocidad de reloj y memoria de video del chip gráfico, cada 2 segundos.
+help.setting.cache|mt|b58e324f|Las cachés de shaders guardan programas gráficos preparados, para que los juegos se inicien y carguen más rápido.
+help.setting.version|mt|2ba29e3c|La versión del controlador que está en ejecución ahora y la versión instalada. Son distintas hasta que Windows se reinicia después de una actualización.
+help.setting.update|mt|013323f7|Busca una versión más nueva en la lista pública de versiones. Nada se descarga ni se instala sin usted.
+help.setting.language|mt|a3aafdb3|El idioma de esta aplicación. Su elección se conserva cuando se actualiza el controlador.
+help.setting.update-start|mt|f3d2de1b|Busca una versión más nueva cuando se abre la aplicación, como máximo una vez por hora.
+help.setting.recent|mt|15d43b5b|El controlador recuerda qué juegos inicia, para que aparezcan en Juegos. La lista se queda en esta PC.
+help.setting.nagi|mt|631f5a6d|Muestra a Nagi, la guía de la aplicación, junto a los consejos. Cada consejo también está como texto sin ella.
+help.setting.tips|mt|97283b45|Muestra un consejo sobre la página abierta sin que usted lo pida.
+help.setting.animations|mt|7d29cccb|Detiene las imágenes en movimiento de esta aplicación.
+help.setting.support|mt|a67e46b5|Agrega detalles técnicos y acciones adicionales a Ayuda. Están en inglés.
+help.setting.data|mt|c77e39d6|Qué guardan esta aplicación y el controlador, y qué se envía por internet.
+help.setting.repair|mt|7bd6d691|Instala otra vez la misma versión desde la copia guardada en esta PC.
+help.setting.report|mt|77f4acdf|Crea un archivo zip con información para los desarrolladores. Usted decide si lo envía.
+help.setting.restart|mt|f4c0e8b6|Reinicia Windows. No es posible reiniciar solo el controlador de gráficos.
+help.setting.guides|mt|e75ebef4|Ayuda paso a paso para problemas comunes.
+help.setting.vsync|mt|0cddf4ee|Hace que un juego espere al monitor antes de mostrar un nuevo fotograma. Esto evita el tearing (cortes en la imagen), pero puede añadir un pequeño retraso. "La aplicación decide" lo deja a la configuración propia del juego. Funciona en juegos DirectX 11, DirectX 12, Vulkan y OpenGL de 64 bits.
+help.setting.fps|mt|01cbd5d3|Limita cuántos fotogramas dibuja un juego por segundo. Un límite mantiene el chip gráfico más fresco y silencioso. "Sin límite" en un juego quita un límite configurado para todos los juegos. Funciona en juegos DirectX 11, DirectX 12, Vulkan y OpenGL de 64 bits.
+help.setting.sharpen|mt|f351a4a8|Hace que la imagen se vea más nítida. Próximamente.
+help.setting.aa|mt|2f6e7807|Suaviza los bordes dentados. Próximamente.
+help.setting.af|mt|16b4ebae|Hace que las texturas vistas en ángulo se vean más nítidas. Los valores más altos cuestan un poco de velocidad. Funciona en juegos DirectX 11, DirectX 12, Vulkan y OpenGL de 64 bits.
+help.setting.scaling|mt|9b2c7d59|Cómo llena la pantalla una imagen de menor resolución que la del monitor: estirada a pantalla completa, ampliada manteniendo la relación de aspecto, o centrada sin escalar. Un cambio se conserva solo si lo confirma en 15 segundos.
+help.setting.hdr|mt|af54494e|Alto rango dinámico: luces más brillantes y más colores. Próximamente.
+help.setting.vrr|mt|4662d04f|El monitor sigue los fotogramas por segundo del juego para un movimiento más fluido. Próximamente.
+help.setting.power|mt|3659317e|La máxima energía que puede usar el chip. Próximamente.
+help.setting.fan|mt|e5088079|Elige quién controla el ventilador del gabinete. Automático lo deja a la configuración del BIOS de la placa. La curva del controlador gira el ventilador un poco más rápido que la configuración estándar de la placa cuando el chip está caliente. Silencioso es más lento por debajo de 80 °C; Rendimiento es más rápido en todo el rango. Desde 87 °C el ventilador siempre gira a toda velocidad.
+help.setting.fan-boost|mt|6e077955|Permite que el controlador lleve el ventilador a toda velocidad en cuanto los gráficos trabajan mucho, en lugar de esperar a que el chip se caliente. Está activado desde el principio. Desactívelo si quiere que decida solo la curva del ventilador; una nueva configuración funciona después de reiniciar Windows.
+help.setting.cache-clear|mt|c75227ac|Elimina la caché de shaders. Próximamente.
+# ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
+graphics.tuning.title|mt|e6d2df01|Ajuste avanzado
+graphics.tuning.show|mt|ad38683b|Mostrar ajuste avanzado
+graphics.tuning.intro|mt|783ada66|Baje un poco el voltaje de los gráficos para que funcionen más frescos y silenciosos. Cada cambio se ejecuta primero como prueba y se revierte solo, a menos que lo conserve.
+graphics.tuning.preset|mt|5691a71e|Ajustes predefinidos
+graphics.tuning.preset.standard|mt-safe|ef669154|Estándar
+graphics.tuning.preset.mild|mt-safe|96124817|Suave
+graphics.tuning.preset.medium|mt-safe|8e588cd1|Medio
+graphics.tuning.preset.deep|mt|7038852d|Lo más bajo permitido
+graphics.tuning.point|mt-safe|65d8ea4f|{0} MHz
+graphics.tuning.lower|mt|635c004b|Menos voltaje
+graphics.tuning.raise|mt|d6d822c0|Más voltaje
+graphics.tuning.apply|mt|238cd174|Probar esta configuración
+graphics.tuning.keep|mt-safe|fdce5da2|Conservar
+graphics.tuning.stop|mt|e8c445ee|Volver a la configuración anterior
+graphics.tuning.reset|mt|71803214|Voltaje estándar
+graphics.tuning.running|mt|020767b3|Hay una prueba en curso. {0}
+graphics.tuning.saved|mt|ff1402a2|Esta configuración está guardada y se usa en cada inicio.
+graphics.tuning.unsaved|mt|d55611e8|Conserve esta configuración antes de que termine la prueba o se revertirá sola.
+graphics.tuning.chart|mt|1cab2722|Voltaje en cada velocidad
+graphics.tuning.chart.help|mt|ec985b16|Haga clic en un punto y luego use Menos voltaje o Más voltaje. La línea gris es la estándar; la línea inferior es lo más bajo que permite este controlador.
+graphics.tuning.need-auto|mt|ca6c9300|Active el reloj automático, reinicie Windows y vuelva aquí.
+graphics.tuning.table|mt|510c2545|Velocidad, voltaje y diferencia con el estándar
+graphics.cpu.title|mt-safe|54aac653|Procesador
+graphics.cpu.intro|mt|a63ab108|Esta configuración del procesador proviene de placas de otras personas y nadie la midió en esta, así que cada cambio se ejecuta primero como prueba.
+graphics.cpu.off|mt|f1b24044|El ajuste del procesador está desactivado.
+graphics.cpu.enable|mt|0bb17eb3|Activar el ajuste del procesador
+graphics.cpu.disable|mt|3cfe43a7|Desactivar el ajuste del procesador
+graphics.cpu.readback|mt|82efaa57|Leer el procesador ahora
+graphics.cpu.need-readback|mt|0cc411d5|Lea el procesador una vez antes de cambiar nada.
+graphics.cpu.voltage.label|mt|76e2487b|Voltaje actual
+graphics.cpu.count.label|mt|36912b92|Procesadores que ve Windows
+graphics.cpu.cap.label|mt|17954fca|Límite de temperatura vigente
+graphics.cpu.clock.label|mt|f57ec9fb|Velocidad máxima
+graphics.cpu.uv.label|mt|c6848a6c|Pasos de voltaje más bajos
+graphics.cpu.temp.label|mt|caaccd53|Límite de temperatura a configurar
+graphics.cpu.apply|mt|4b907b31|Probar esta configuración
+graphics.cpu.cores.title|mt|22777135|Núcleos del procesador
+graphics.cpu.cores.6|mt|00842292|6 núcleos (estándar)
+graphics.cpu.cores.8|mt|b977c4a8|8 núcleos
+graphics.cpu.cores.apply|mt|1797bc97|Usar este número de núcleos
+graphics.cpu.cores.note|mt|39ab5add|La placa viene con seis de sus ocho núcleos activados. Ocho núcleos requieren un reinicio de Windows, y nadie probó los otros dos en esta placa.
+tuner.curve.delta.line|mt-safe|fe6d3468|estándar
+tuner.curve.delta.under|mt|513a58af|{0} mV menos
+tuner.curve.delta.over|mt|90207f8b|{0} mV más
+tuner.curve.error.range|mt|38116870|El voltaje a {0} MHz está fuera de lo que acepta el controlador.
+tuner.curve.error.depth|mt|9fbad56a|El voltaje a {0} MHz es más bajo de lo que permite el controlador.
+tuner.curve.error.order|mt|3e359e98|El voltaje a {0} MHz es más bajo que en la velocidad inferior.
+tuner.curve.error.floor|mt|89adac7a|La velocidad más baja conserva su voltaje estándar.
+tuner.curve.error.none|mt|d7c2b02e|No se indicó ninguna configuración de voltaje.
+tuner.trial.left|mt|eb5d98aa|Quedan {0} s
+tuner.cpu.voltage|mt-safe|0c0a06a5|{0} mV
+tuner.cpu.voltage.high|mt|14f68a9d|{0} mV, más de lo que permite esta aplicación
+tuner.cpu.uv.none|mt-safe|fe6d3468|estándar
+tuner.cpu.uv.steps|mt|0f215681|{0} pasos más bajo
+tuner.curve.summary|mt|497bd2e7|Cambian {0} velocidades; el paso mayor es {1} mV menos a {2} MHz
+tuner.curve.summary.line|mt|a850a56c|el voltaje estándar en cada velocidad
+tuner.curve.preview.revert|mt|dd7a9c60|la configuración anterior vuelve sola después de {0} s, a menos que la conserve
+tuner.curve.preview.keep|mt|3632b9d0|la configuración en prueba se guarda y se usa en cada inicio
+tuner.cpu.preview.clock|mt|4888e4e0|velocidad máxima del procesador {0} MHz
+tuner.cpu.preview.uv|mt|b1e8e5b2|voltaje del procesador {0} pasos más bajo
+tuner.cpu.preview.temp|mt|f4c256f3|límite de temperatura del procesador {0} C
+tuner.cpu.preview.keep|mt|9ac1dfb1|se guarda la configuración del procesador en prueba
+tuner.cpu.preview.readback|mt|7dd25675|leer el voltaje, la velocidad y el límite de temperatura del procesador
+tuner.refuse.not-running|mt|a8b8ef18|El controlador no está en ejecución, así que no hay nada que ajustar.
+tuner.refuse.no-read|mt|a2f4958b|El controlador no respondió. Intente de nuevo en un momento.
+tuner.refuse.not-valid|mt|402bcee3|Este inicio del controlador no permite ajustes. Reinicie Windows e intente de nuevo.
+tuner.refuse.not-governing|mt|9a470d35|Active primero el reloj automático y luego reinicie Windows.
+tuner.refuse.bad-values|mt|a416480c|Estos voltajes no son una configuración que acepte el controlador.
+tuner.refuse.same|mt|ff58de1c|Esta configuración ya está en uso.
+tuner.refuse.bad-window|mt|5eb5edb4|La duración de la prueba está fuera de lo que acepta el controlador.
+tuner.refuse.no-trial|mt|0a23efc0|No hay ninguna prueba en curso, así que no hay nada que conservar ni detener.
+tuner.refuse.already-default|mt|9f0d673e|El voltaje estándar ya está en uso.
+tuner.refuse.cpu-off|mt|b88471b0|El ajuste del procesador está desactivado. Actívelo y reinicie Windows.
+tuner.refuse.cpu-busy|mt|9f5b8dd2|El procesador está ocupado con otro cambio. Intente de nuevo en un momento.
+tuner.refuse.cpu-not-proven|mt|0cc411d5|Lea el procesador una vez antes de cambiar nada.
+tuner.refuse.cpu-nothing|mt|ed6c4b52|No se eligió nada para cambiar.
+tuner.refuse.cpu-bad-clock|mt|effa04de|La velocidad debe estar entre {0} y {1} MHz.
+tuner.refuse.cpu-bad-uv|mt|d56317ef|El número de pasos de voltaje debe ser {0} o menos.
+tuner.refuse.cpu-bad-temp|mt|d14fa1e3|El límite de temperatura debe estar entre {0} y {1} C.
+tuner.refuse.cpu-bad-cores|mt|52c699a3|Esta placa no acepta ese número de núcleos.
+tuner.refuse.cpu-cores-already|mt|dc4921d6|Ese número de núcleos ya está elegido.
+tuner.refuse.cpu-already-standard|mt|3160dc03|El procesador ya tiene su configuración estándar.
+tuner.refuse.cpu-enable-already|mt|53af5ab8|El ajuste del procesador ya está activado.
+tuner.refuse.cpu-disable-already|mt|68d82f85|El ajuste del procesador ya está desactivado.
+plan.title.tune-trial|mt|5fa23224|Probar una configuración de voltaje
+plan.title.tune-keep|mt|a3b10e8e|Conservar la configuración de voltaje
+plan.title.tune-stop|mt|2933136c|Volver al voltaje anterior
+plan.title.tune-reset|mt|71803214|Voltaje estándar
+plan.title.cpu-enable|mt|0bb17eb3|Activar el ajuste del procesador
+plan.title.cpu-disable|mt|3cfe43a7|Desactivar el ajuste del procesador
+plan.title.cpu-readback|mt|615fdee1|Leer el procesador
+plan.title.cpu-trial|mt|15a8535d|Probar la configuración del procesador
+plan.title.cpu-keep|mt|14e57d83|Conservar la configuración del procesador
+plan.title.cpu-stop|mt|d7e78a7b|Volver a la configuración anterior del procesador
+plan.title.cpu-reset|mt|4bd614fa|Configuración estándar del procesador
+plan.title.core-mask|mt|39d71947|Cambiar el número de núcleos
+search.graphics.tuning|mt|e6d2df01|Ajuste avanzado
+search.graphics.tuning.terms|mt|2b970752|voltaje|undervolt|reducción de voltaje|curva|más fresco|más silencioso|tensión
+search.graphics.cpu-tuning|mt|447b1d50|Ajuste del procesador
+search.graphics.cpu-tuning.terms|mt|7f92368b|procesador|CPU|velocidad|boost|undervolt|reducción de voltaje
+search.graphics.cpu-cores|mt|22777135|Núcleos del procesador
+search.graphics.cpu-cores.terms|mt|71b97e69|núcleos|ocho núcleos|desbloquear|desbloqueo|cores|CPU
+help.setting.tuning|mt|c9f195b3|Reduce el voltaje de los gráficos unos pocos milivoltios en cada velocidad. Así, la misma velocidad necesita menos energía y genera menos calor. Un voltaje demasiado bajo se nota porque un juego o la pantalla se congelan; por eso, cada cambio se ejecuta como una prueba que se revierte sola.
+help.setting.cpu-cores|mt|5510f0aa|La placa viene con seis de sus ocho núcleos activados. Ocho núcleos requieren reiniciar Windows. Si después Windows no inicia correctamente, el controlador vuelve a activar seis por sí solo.
+help.setting.cpu-tuning|mt|30000aff|La velocidad máxima del procesador, una pequeña reducción de voltaje y el límite de temperatura. Estos valores provienen de placas de otras personas. Una placa se dañó al subir la velocidad del procesador con el voltaje sin límite; por eso, esta aplicación solo reduce el voltaje y siempre vuelve a leerlo.
+plan.line.cpu-tune-on|mt|c3793e19|Ajuste del procesador: activado.
+plan.line.cpu-tune-off|mt|14ef42b2|Ajuste del procesador: desactivado.
+tuner.cpu.preview.stop|mt|f3995948|el procesador vuelve a la configuración que tenía antes de la prueba
+tuner.cpu.preview.reset|mt|c3cf92af|el procesador vuelve a su configuración estándar
+# ---- the fixes of 0.7.211: an owed way back, a Keep the governor has not applied, and WU-042 risk ----
+graphics.cpu.reset|mt|4bd614fa|Configuración estándar del procesador
+graphics.cpu.revert-owed|mt|7214cad3|El controlador no pudo restaurar la configuración anterior del procesador y sigue intentándolo. Reinicie Windows si esto continúa.
+graphics.tuning.not-applied|mt|24166ef8|El controlador todavía no usó esta configuración. Espere un momento y luego consérvela.
+tuner.curve.error.untried|mt|6ae732ce|El controlador todavía no usó esta configuración. Espere un momento e intente de nuevo.
+tuner.refuse.curve-not-applied|mt|28020c45|El controlador todavía no usó la configuración en prueba. Espere un momento e intente de nuevo.
+tuner.curve.preview.standard|mt|0c38511f|el voltaje estándar vuelve en cada velocidad
+tuner.note.curve-risk|mt|28bb65b2|Menos voltaje hace que el chip gráfico esté más frío y silencioso a la misma velocidad. Si es demasiado bajo, se nota porque un juego o la pantalla se congelan, no con un mensaje, y la configuración se revierte sola al terminar la prueba.
+tuner.note.cpu-risk|mt|0e0c4e70|Estos valores del procesador provienen de placas de otras personas. Una velocidad demasiado alta o un voltaje demasiado bajo se nota porque el equipo se congela. La aplicación solo reduce el voltaje y lo vuelve a leer después de cada cambio.
+tuner.note.cores-risk|mt|8be50b28|Ocho núcleos generan más calor y consumen más energía que seis. Nadie ha probado los otros dos núcleos en esta placa.
+
+# ---- case fan control (docs/design/fan.md Part B) ----
+perf.fan.title|mt|5c8d61f3|Ventilador del gabinete
+perf.fan.intro|mt|a21739ad|El ventilador del gabinete puede seguir la configuración propia de la placa (BIOS) o una curva del controlador. Su elección se guarda y funciona después de cada inicio.
+perf.fan.no-control|mt|fd9e9d33|Este controlador no puede manejar el ventilador. La placa lo maneja según su configuración de BIOS.
+perf.fan.speed|mt-safe|c372fee9|Velocidad
+perf.fan.who|mt|74669b7c|Maneja el ventilador
+perf.fan.state.curve|mt|0d3840dd|El controlador, según la curva de abajo
+perf.fan.state.board|mt|6cc6995a|La placa, según la configuración del ventilador en su BIOS
+perf.fan.state.held-back|mt|59f5a3c5|La placa por ahora: una lectura de temperatura no era confiable. El controlador retoma el ventilador cuando las lecturas vuelvan a ser estables.
+perf.fan.state.fixed|mt|4f18369a|El controlador, a una sola velocidad para una prueba corta
+perf.fan.state.emergency|mt|c7b823af|El controlador, a velocidad máxima: el chip está a 87 °C o más
+perf.fan.state.doubt|mt|660c9278|El controlador, a velocidad máxima: una lectura de temperatura no es confiable
+perf.fan.state.fault|mt|66ca68ee|La placa: el chip del ventilador no aceptó un cambio, así que el controlador se detuvo hasta el próximo inicio
+perf.fan.state.paused|mt|fd766292|La placa, mientras el chip gráfico está en reposo
+perf.fan.gate.setting|mt|c8ff005e|El control del ventilador está desactivado en la configuración del controlador. La placa maneja el ventilador.
+perf.fan.gate.reader|mt|05e4ec56|El controlador no puede leer el chip del ventilador en este equipo. La placa maneja el ventilador.
+perf.fan.gate.chip|mt|7fdd9fb9|El controlador no conoce el chip del ventilador de esta placa. La placa maneja el ventilador.
+perf.fan.choice|mt|490e9e7b|Comportamiento del ventilador
+perf.fan.choice.board|mt|0660c6e8|Automático (placa)
+perf.fan.choice.standard|mt|97831670|Curva del controlador
+perf.fan.choice.quiet|mt-safe|c0ebb7d6|Silencioso
+perf.fan.choice.performance|mt-safe|442aded8|Rendimiento
+perf.fan.choice.custom|mt-safe|494ca78f|Personalizado
+perf.fan.curve|mt-safe|2a45c073|Curva
+perf.fan.curve.help|mt|2f35cf1a|Cada fila es un punto de la curva: una temperatura y la velocidad del ventilador en ella. Entre dos puntos, la velocidad cambia en línea recta.
+perf.fan.point|mt-safe|d145e24e|Punto {0}
+perf.fan.point.temp|mt|be391872|Temperatura del punto {0}
+perf.fan.point.speed|mt|b36cbfd1|Velocidad del punto {0}
+perf.fan.point.value|mt-safe|2395e526|{0} °C {1} %
+perf.fan.add|mt|d6d9d451|Agregar un punto
+perf.fan.remove|mt|a6ebf703|Quitar el último punto
+perf.fan.reset|mt|b03f57c8|Restablecer curva
+perf.fan.apply|mt|185c5444|Aplicar curva
+perf.fan.note|mt|238b862b|Desde 87 °C, el ventilador siempre funciona a velocidad máxima, diga lo que diga la curva.
+perf.fan.error.points|mt|51203614|Una curva necesita de {0} a {1} puntos.
+perf.fan.error.temperature|mt|13cdba76|Punto {0}: la temperatura debe estar entre {1} y {2} °C y ser mayor que la del punto anterior.
+perf.fan.error.duty|mt|1542faac|Punto {0}: la velocidad debe estar entre {1} y {2} % y no ser menor que la del punto anterior.
+perf.fan.refuse.no-read|mt|04a57b48|El controlador no respondió sobre el ventilador. Intente de nuevo en un momento.
+perf.fan.refuse.off|mt|7d6ac4d6|El controlador no maneja el ventilador en este equipo.
+perf.fan.refuse.same|mt|c47d1c73|Esa configuración del ventilador ya está en uso.
+perf.fan.refuse.bad-curve|mt|ee0a1378|Esa curva del ventilador no es válida.
+plan.line.fan-board|mt|2372fc6a|La configuración propia de la placa maneja el ventilador, ahora y en cada inicio.
+plan.line.fan-curve|mt|8917f825|El controlador maneja el ventilador según la curva "{0}", ahora y en cada inicio.
+plan.line.fan-points|mt|787b6e90|Velocidades del ventilador: {0}
+plan.title.fan-auto|mt|16d8024e|Dejar que la placa maneje el ventilador
+plan.title.fan-curve|mt|df6aeaec|Usar una curva del ventilador
+perf.fan.boost|mt|b044d1f7|Ventilador al máximo con carga alta
+perf.fan.boost.help|mt|60253290|Cuando los gráficos trabajan intensamente durante más de dos segundos, el ventilador pasa de inmediato a velocidad máxima en lugar de esperar a que el chip se caliente. Desactívelo si quiere usar solo la curva. Una nueva configuración funciona después de reiniciar Windows.
+perf.fan.boost.now|mt|1a7edb80|El ventilador está a velocidad máxima ahora, porque los gráficos están trabajando intensamente.
+perf.fan.boost.after-restart|mt|41495538|La nueva configuración funciona después de reiniciar Windows.
+perf.fan.refuse.boost-on-already|mt|9da898c4|El ventilador al máximo con carga alta ya está activado.
+perf.fan.refuse.boost-off-already|mt|2076873d|El ventilador al máximo con carga alta ya está desactivado.
+plan.line.fan-boost-on|mt|0233bb62|El ventilador funciona a velocidad máxima cuando los gráficos trabajan intensamente.
+plan.line.fan-boost-off|mt|043650b9|El ventilador sigue solo la curva, también cuando los gráficos trabajan intensamente.
+plan.title.fan-boost-on|mt|60ac49bb|Activar el ventilador al máximo con carga alta
+plan.title.fan-boost-off|mt|37126bef|Desactivar el ventilador al máximo con carga alta
+
+# ---- tuning cards: trial ends, readings and the closed card (docs/design/tuner.md) ----
+graphics.tuning.hide|mt|59b507b0|Ocultar el ajuste avanzado
+graphics.tuning.curve.title|mt|e47d7a86|Voltaje de los gráficos
+graphics.tuning.chart.marks|mt|72154322|La línea discontinua es la velocidad máxima permitida ahora, y el anillo muestra dónde funciona el chip en este momento.
+tuner.end.kept|mt|31ccaced|La configuración se conserva y se usa en cada inicio.
+tuner.end.stopped|mt|403b4756|La prueba se detuvo. Volvió la configuración de antes de la prueba.
+tuner.end.expired|mt|7ef08e16|La prueba terminó sin Conservar, así que la configuración de antes de la prueba volvió sola.
+tuner.end.reset.curve|mt|bfc2561a|El voltaje estándar volvió en cada velocidad.
+tuner.end.reset.cpu|mt|337fc138|El procesador volvió a la configuración estándar de este inicio.
+tuner.temp|mt-safe|aa6b1ef9|{0} °C
+tuner.curve.in-use|mt|09effe8c|En uso ahora: {0}
+tuner.curve.saved|mt|d626a63e|Guardado para cada inicio: {0}
+tuner.curve.live|mt|648c554d|Ahora: {0} MHz a {1} mV
+tuner.curve.live.temp|mt|d1468279|Ahora: {0} MHz a {1} mV, {2}
+tuner.curve.guard.unfinished|mt|a7be7ff4|Esta vez no se usó su propia configuración de voltaje, porque el último inicio con ella no terminó. Se usa la configuración estándar.
+tuner.curve.guard.refused|mt|4300b552|Esta vez no se usó su propia configuración de voltaje, porque el controlador no la aceptó. Se usa la configuración estándar.
+tuner.curve.row|mt-safe|b87bbfe9|{0} mV, {1}
+tuner.curve.row.now|mt|05e062ca|{0} mV, {1} (ahora {2} mV)
+tuner.cpu.mhz-list|mt-safe|65d8ea4f|{0} MHz
+tuner.cpu.own|mt|38de4c9d|sin cambios
+tuner.cpu.on-after-restart|mt|12f166fe|El ajuste del procesador se activa después del próximo reinicio de Windows.
+tuner.cpu.off-after-restart|mt|14faf359|El ajuste del procesador se desactiva después del próximo reinicio de Windows.
+tuner.cpu.saved|mt|1477534c|Su configuración del procesador está guardada y se usa en cada inicio.
+tuner.cpu.standard|mt|8f0b39bc|El procesador funciona con su configuración estándar.
+tuner.cpu.guard.unfinished|mt|d96467db|Esta vez no se usó su configuración del procesador, porque el último inicio con ella no terminó. Se usa la configuración estándar.
+tuner.cpu.guard.refused|mt|fff75ab6|Esta vez no se usó su configuración del procesador, porque el procesador no la aceptó. Se usa la configuración estándar.
+tuner.cpu.temp.label|mt|9001480f|Temperatura ahora
+tuner.cpu.cores-now.label|mt|3a5e306a|Velocidad de cada núcleo
+tuner.cpu.steps-now.label|mt|9ef2435f|Pasos de velocidad
+tuner.cpu.in-use.label|mt|8289ad5a|En uso ahora
+tuner.cpu.settings|mt|88193f5c|velocidad máxima {0}; voltaje {1}; límite de temperatura {2}
+tuner.cpu.saved.label|mt|a7de57fb|Guardado para cada inicio
+tuner.cpu.baseline.label|mt|5d92c4a0|Estándar de este inicio
+tuner.cpu.baseline.none|mt|62a9af5e|Primero lea el procesador.
+tuner.summary.curve-trial|mt|64c717a2|Hay una prueba de voltaje de los gráficos en curso.
+tuner.summary.curve-own|mt|82c1b09b|Se usa su propia configuración de voltaje de los gráficos.
+tuner.summary.cpu-trial|mt|92b795ab|Hay una prueba del procesador en curso.
+tuner.summary.cpu-own|mt|dea49322|Se usa su propia configuración del procesador.
+tuner.summary.standard|mt|f3252110|Se usa la configuración estándar.
+tuner.discard|mt|c493ce8f|Descartar mis cambios
+tuner.cpu.readings|mt|1fb1ec0b|Lo que informa el procesador
+tuner.cpu.settings.title|mt-safe|74a883a0|Configuración
+tuner.cpu.choose|mt|53eca097|Nueva configuración para probar
+tuner.cpu.choose.help|mt|f60a34ae|Solo se ofrecen valores que el controlador acepta. La prueba cambia solo los valores que usted ajustó; los demás quedan como están.
+
+# ---- the case fan card: chart, modes, rules and the short test (docs/design/fan.md) ----
+perf.fan.apply.board|mt|00e4d22f|Devolver el ventilador a la placa
+perf.fan.undo|mt|3ce707f0|Volver a la configuración anterior
+perf.fan.mode.board|mt|7f4437f3|La placa mueve el ventilador según la curva de su BIOS. El controlador solo lee la velocidad.
+perf.fan.mode.standard|mt|230ac427|La curva equilibrada del controlador. Nunca es más lenta que la configuración estándar de la placa.
+perf.fan.mode.quiet|mt|031b8d9a|Más silencioso que la placa por debajo de 80 °C, velocidad máxima desde 85 °C.
+perf.fan.mode.performance|mt|a47e9e5f|Más rápido en cada temperatura para mantener frío el chip, velocidad máxima desde 75 °C.
+perf.fan.mode.custom|mt|eedc0ab4|Sus propios puntos. Arrástrelos en el gráfico o cámbielos en las filas de abajo.
+perf.fan.chart|mt|02698365|Curva del ventilador
+perf.fan.chart.help|mt|0194917e|Arrastre un punto, o seleccione el gráfico y use las flechas: izquierda y derecha eligen un punto, arriba y abajo cambian su velocidad, Ctrl con izquierda o derecha cambia su temperatura.
+perf.fan.chart.marks|mt|718f72a7|Banda gris: el ventilador nunca baja del 20 %. Zona ámbar: velocidad máxima desde 87 °C. Anillo verde: el ventilador ahora. Línea discontinua: la curva en uso ahora.
+perf.fan.now|mt|3ded7dc3|Ahora: {0}, el ventilador al {1} %
+perf.fan.rules|mt|b0ae79df|Cómo maneja el controlador el ventilador
+perf.fan.rule.input|mt|57e81613|Sigue la más alta de dos lecturas: la del propio chip y la del sensor de la placa.
+perf.fan.rule.doubt|mt|9a50960f|Si una lectura no es confiable, el ventilador funciona a velocidad máxima.
+perf.fan.rule.slow|mt|7dc63ff0|La velocidad sube de inmediato y baja despacio, para que el ventilador no suba y baje a pulsos.
+perf.fan.rule.hot|mt|0ad231b2|Desde 87 °C, el ventilador funciona a velocidad máxima hasta que el chip se mantiene a 82 °C o menos durante 10 segundos.
+perf.fan.rule.floor|mt|1c20a7e0|El ventilador nunca funciona por debajo del 20 %, para que no se detenga.
+perf.fan.test|mt|9aae2421|Prueba corta
+perf.fan.test.help|mt|03396cdb|Haga funcionar el ventilador a una sola velocidad durante 10 segundos para oírlo y ver qué tan rápido gira. Luego vuelve a la configuración en uso. No se guarda nada.
+perf.fan.test.speed|mt|500893e9|Velocidad de prueba
+perf.fan.test.run|mt|ac39ee02|Probar durante 10 segundos
+perf.fan.test.result|mt|6817274d|Prueba al {0} %: el ventilador llegó a {1} rpm. Volvió a la configuración en uso.
+perf.fan.test.no-rpm|mt|66e7cfb6|La prueba al {0} % terminó, pero no llegó ninguna lectura de velocidad. El ventilador volvió a la configuración en uso.
+perf.fan.refuse.bad-test|mt|31d68f2f|Esa velocidad de prueba no está disponible.
+perf.fan.refuse.busy|mt|d56c3708|Ahora no se puede hacer una prueba, porque en este momento el controlador no maneja el ventilador de la forma normal.
+plan.line.fan-test|mt|e34087ea|El ventilador funciona al {0} % durante {1} segundos y luego vuelve a la configuración en uso. No se guarda nada.
+plan.title.fan-test|mt|86153b93|Probar el ventilador
+
+# ---- graphics settings for games, shader model, display modes (2026-10-08) ----
+search.graphics.vsync|mt|86146f8a|Sincronización vertical (VSync)
+search.graphics.vsync.terms|mt|352b1574|VSync|sincronización vertical|vertical sync|tearing|desgarro de imagen
+search.graphics.fps|mt|3217f73e|Límite de fotogramas por segundo
+search.graphics.fps.terms|mt|226d00fd|FPS|límite de FPS|limitador de fotogramas|tope de FPS|fotogramas por segundo|frame rate
+search.graphics.af|mt|527a4439|Filtrado de texturas
+search.graphics.af.terms|mt|ef806f34|AF|anisotrópico|anisotropic|filtrado|texturas
+search.display.scaling.terms|mt|4245cba4|escalado|reescalado|upscaling|escalado entero|relación de aspecto|estirar|escalado de GPU|escalado de pantalla|centrar|centrado
+search.graphics.overlay.terms|mt|72342a7f|contador de FPS|tiempo de fotograma|overlay|superposición|fotogramas por segundo|HUD|OSD|superposición de rendimiento
+search.graphics.fsr4.terms|mt|096e626c|FSR|FSR 4|FidelityFX|reescalado|upscaling|superresolución|AMD|calidad de imagen
+search.graphics.latency|mt|f3bcef3c|Baja latencia
+search.graphics.latency.terms|mt|5b07cf0e|latencia|retraso de entrada|input lag|fotogramas adelantados|cola de renderizado|Anti-Lag|Reflex|latencia máxima de fotogramas
+search.graphics.overlay|mt|37d49e6c|Superposición de rendimiento
+search.graphics.fsr4|mt|72fac2c4|Permitir FSR 4 en juegos que lo incluyen
+search.graphics.vk-present|mt|cdee9cc4|Presentación de Vulkan
+search.graphics.vk-present.terms|mt|f2d57cd4|Vulkan|presentar|presentación|pantalla negra|imagen congelada|compatibilidad|compatible|rápido|flip
+search.graphics.vk-memory|mt|542ed595|Cuando la memoria de video está llena
+search.graphics.vk-memory.terms|mt|f744c892|VRAM|memoria de video|sin memoria|memoria llena|memoria del sistema|DirectX 11|DirectX 12
+search.games.sm|mt|0dbc5bc7|Modelo de shader más alto
+search.games.sm.terms|mt|ab586346|modelo de shader|shader model|SM 6.8|SM 6.7|SM 6.6|shader|DirectX 12
+search.games.cpu-render|mt|bf157885|Ejecutar DirectX 11 en el procesador
+search.games.cpu-render.terms|mt|927301e2|renderizado por CPU|renderizado por software|WARP|procesador|CPU|DirectX 11|alternativa|último recurso
+search.display.scaling|mt|22b1cb79|Escalado de GPU
+help.setting.latency|mt|4d3900ab|Cuántos fotogramas puede preparar el procesador por adelantado al chip gráfico. Menos fotogramas hacen que el juego responda más rápido al mouse y al teclado, pero pueden reducir la tasa de fotogramas. Funciona en juegos DirectX 11, DirectX 12, Vulkan y OpenGL de 64 bits. Un juego que ya prepara menos fotogramas por adelantado se deja como está.
+help.setting.overlay|mt|78ee0e43|Muestra la tasa de fotogramas y los tiempos de fotograma en una esquina del juego. Por ahora funciona en juegos DirectX 11.
+help.setting.fsr4|mt|cf7167d8|Permite que un juego que incluye FSR 4 lo use. Solo lo obtienen los juegos que traen sus propios archivos de FSR 4; un juego con FSR 3 o anterior conserva lo que tiene. Los juegos con protección antitrampas nunca lo obtienen, aunque esto esté activado. Reinicie el juego después de un cambio.
+help.setting.vk-present|mt|31f80141|Cómo muestran sus fotogramas los juegos Vulkan, para todos los juegos a la vez. Rápido (flip) es el valor predeterminado: la tarjeta gráfica copia cada fotograma, y un juego en pantalla completa va directo a la pantalla. Compatible copia cada fotograma a través del procesador. Es más lento, pero funciona donde Rápido (flip) no funciona. Si un juego Vulkan muestra una imagen negra o congelada, elija Compatible.
+help.setting.vk-memory|mt|50303e03|Lo que recibe un juego DirectX 11 o DirectX 12 cuando la memoria de video está llena, para un juego o para todos. No se aplica a los juegos Vulkan. "Usar memoria del sistema" mantiene el juego en ejecución, pero más lento. "Informar falta de memoria" se lo indica al juego, para que pueda bajar su configuración.
+help.setting.sm|mt|f3b2ff18|El modelo de shader más alto que el controlador informa a un juego DirectX 12. 6.8 es el valor predeterminado. Algunos juegos fallan con un modelo de shader más nuevo; para ese juego, elija 6.7 o 6.6.
+help.setting.cpu-render|mt|7fc912cc|Ejecuta el DirectX 11 de este juego en el procesador en lugar del chip gráfico. Es mucho más lento y ofrece solo el nivel de características 10_0 de Direct3D, así que la mayoría de los juegos creados después de 2012 (por ejemplo, Counter-Strike 2) no inician con esto. Es un límite conocido de la ruta por el procesador. Úselo solo como último recurso para un juego antiguo que falla en el chip gráfico.
+gfx.choice.app|mt|e7f551b6|La aplicación decide
+gfx.choice.inherit|mt|efd0e1d0|Igual que todos los juegos: {0}
+gfx.choice.inherit-short|mt|1123f3b7|Igual que todos los juegos
+gfx.choice.invalid|mt|5a02ac31|Valor guardado no válido ({0})
+gfx.choice.invalid-type|mt|28ddf6e4|Valor guardado no válido
+gfx.choice.other|mt|fe8e078f|Definido fuera de esta aplicación
+gfx.choice.no-limit|mt|f7fcff0d|Sin límite
+gfx.choice.fps|mt-safe|88471b01|{0} fps
+gfx.choice.always-off|mt|4afd2db4|Siempre desactivado
+gfx.choice.always-on|mt|044ba8a9|Siempre activado
+gfx.choice.af-off|mt|9d03458d|1x (desactivado)
+gfx.choice.af|mt-safe|17c1da00|{0}x
+gfx.choice.latency-1|mt|4928c007|1 fotograma adelantado (latencia mínima)
+gfx.choice.latency|mt|ae07b17c|{0} fotogramas adelantados
+gfx.choice.on|mt-safe|13001175|Activado
+gfx.choice.off|mt-safe|ca7981b4|Desactivado
+gfx.choice.compat|mt-safe|04c72ef3|Compatible
+gfx.choice.flip|mt|6b5641fa|Rápido (flip)
+gfx.choice.flip-default|mt|1737ef17|Rápido (flip) (predeterminado)
+gfx.choice.sysmem|mt|c50a771a|Usar memoria del sistema (más lento, sigue funcionando)
+gfx.choice.sysmem-default|mt|5c867377|Usar memoria del sistema (predeterminado, más lento, sigue funcionando)
+gfx.choice.oom|mt|2cd3164e|Informar falta de memoria (el juego puede bajar su configuración)
+gfx.origin.means|mt|74467f34|El controlador usa: {0}.
+gfx.origin.invalid-global|mt|b6a732e5|El valor guardado para todos los juegos no es válido y se deja como está.
+gfx.origin.invalid-game|mt|4cc07720|El valor guardado para este juego no es válido y se deja como está.
+gfx.origin.default|mt|04e6cbc0|Sin definir: {0}.
+gfx.origin.stored|mt|2b5c4aeb|Guardado para todos los juegos.
+gfx.origin.global|mt|6617fcee|De la configuración para todos los juegos: {0}.
+gfx.note.overlay|mt|a4263f23|Por ahora funciona en juegos DirectX 11.
+gfx.note.fsr4|mt|f3f48859|Solo para juegos que incluyen FSR 4. Se excluyen los juegos con protección antitrampas.
+gfx.note.cpu-render|mt|bf2a9aa1|Mucho más lento, y solo con el nivel de características 10_0 de Direct3D: la mayoría de los juegos creados después de 2012 no inician con esto. Un último recurso para un juego DirectX 11 antiguo que falla en el chip gráfico.
+gfx.note.vk-present|mt|87500394|Si un juego Vulkan muestra una imagen negra o congelada, elija Compatible. Un juego en el que Rápido (flip) no funciona usa Compatible por sí solo.
+gfx.note.sm|mt|3efcfd20|Algunos juegos fallan con un modelo de shader más nuevo. Elija uno más bajo solo para ese juego.
+gfx.global.title|mt|c750f458|Configuración para todos los juegos
+gfx.global.intro|mt|20a33c5c|Se aplica a todos los juegos. La configuración propia de un juego en la página Juegos tiene prioridad. Los cambios se aplican la próxima vez que se inicie un juego.
+gfx.unreadable|mt|ff488b79|Ahora no se puede leer esta configuración.
+gfx.section.vulkan|mt|81ede1da|Juegos Vulkan
+games.section.d3d12|mt|3cf6f600|Compatibilidad con DirectX 12
+games.section.graphics|mt-safe|a874fca8|Gráficos
+games.sm.68|mt|6f32da37|6.8 (predeterminado)
+games.sm.67|mt-safe|01a6025a|6.7
+games.sm.66|mt-safe|66bc4f39|6.6
+plan.title.graphics-defaults|mt|c750f458|Configuración para todos los juegos
+plan.line.gfx-set|mt|71aab4a2|Todos los juegos, {0}: {1}.
+plan.line.gfx-game-set|mt-safe|c54706e6|{0}, {1}: {2}.
+plan.line.gfx-key|mt|220286cf|{0} ya no tiene configuración de gráficos propia.
+plan.game.sm|mt|c1663251|modelo de shader más alto {0}
+plan.when.games|mt|b0bc763f|Se aplica la próxima vez que se inicie un juego. Un juego en ejecución conserva la configuración anterior hasta que se vuelva a iniciar.
+display.rate|mt-safe|5fb6a929|{0} Hz
+display.modes.none|mt|7ed3bcf3|Windows no muestra ningún modo para este monitor.
+display.scaling.unknown|mt|c574918b|No se puede leer el escalado de este monitor.
+display.scaling.full|mt|d133925f|Pantalla completa (estirada)
+display.scaling.aspect|mt|2c3e2511|Mantener la relación de aspecto
+display.scaling.center|mt|eb28a6b5|Centrada (sin escalado)
+display.scaling.windows|mt|71ae8940|Como lo configuró Windows
+display.scaling.note|mt|c33519ca|Cómo llena la pantalla una imagen con una resolución menor que la del monitor.
+display.changed|mt|4889b3fe|Cambiado, todavía no aplicado. Ahora: {0}.
+display.keep.title|mt|b3e16247|¿Conservar esta configuración de pantalla?
+display.keep.text|mt|29e4a10e|Se volverá a la configuración de pantalla anterior en {0} s.
+display.keep.keep|mt|6ab75428|Conservar cambios
+display.keep.revert|mt|0026c505|Revertir
+display.result.kept|mt|66c7a50f|Se conserva la nueva configuración de pantalla.
+display.result.reverted|mt|ad2c3799|Volvió la configuración de pantalla anterior.
+display.result.failed|mt|ab18a02b|Windows no aceptó esta configuración de pantalla. No se cambió nada.
+display.result.keep-failed|mt|45a5a6dd|La nueva configuración de pantalla se aplica ahora, pero Windows no la guardó. Puede volver atrás después de un reinicio.
+display.result.revert-failed|mt|3d5b3356|La configuración de pantalla anterior no volvió. Elíjala de nuevo aquí o en la configuración de pantalla de Windows.
+
+# ---- how long Windows waits for the graphics before it resets them (src/TdrSetting.cs, the Help page) ----
+tdr.title|mt|ff352a9c|Tiempo de espera de los gráficos
+tdr.intro|mt|866aa1cd|Cuando un juego pide una imagen muy pesada, el chip gráfico puede necesitar mucho tiempo para terminarla. Windows espera una cantidad fija de segundos, luego decide que los gráficos dejaron de funcionar y los restablece. En este equipo, un restablecimiento cierra el juego y puede detener Windows con una pantalla azul. Una espera más larga permite que una imagen pesada termine.
+tdr.label|mt|a2aa568e|Tiempo de espera
+tdr.choice.not-set|mt|64c56966|Sin definir: Windows espera {0} segundos
+tdr.choice.windows|mt|6af5dc29|{0} segundos (lo que Windows usa por sí solo)
+tdr.choice.recommended|mt|4466478a|{0} segundos (recomendado para este controlador)
+tdr.choice.seconds|mt|e549e94b|{0} segundos
+tdr.now|mt|614c5ef2|Guardado ahora: {0} segundos.
+tdr.now.absent|mt|448aaa5f|No hay nada guardado, así que Windows espera {0} segundos.
+tdr.now.not-valid|mt|1b27a5bd|Guardado ahora: {0} segundos, fuera de lo que ofrece esta aplicación. Elija un tiempo de espera de la lista para reemplazarlo.
+tdr.after-restart|mt|d4991d13|Un nuevo tiempo de espera empieza a funcionar después de reiniciar Windows.
+tdr.apply|mt|66b53fd5|Guardar el tiempo de espera
+tdr.unreadable|mt|7d529569|No se puede leer el tiempo de espera en este equipo.
+tdr.in-main-window|mt|f60b3f14|El tiempo de espera se cambia en la ventana principal, en la página Ayuda.
+search.help.tdr|mt|ff352a9c|Tiempo de espera de los gráficos
+search.help.tdr.terms|mt|c2a4853d|congelamiento|congelado|se cuelga|pantalla negra|pantalla azul|no responde|espera|imagen pesada|tiempo de espera|timeout|TDR
+help.setting.tdr|mt|c224cc97|Cuántos segundos espera Windows una imagen pesada antes de decidir que los gráficos dejaron de funcionar. 10 segundos es lo adecuado para este controlador; 2 segundos es lo que Windows usa por sí solo. Un nuevo tiempo de espera funciona después de reiniciar Windows.
+plan.title.tdr-delay|mt|ff352a9c|Tiempo de espera de los gráficos
+plan.line.tdr|mt|c88deff7|Windows espera {0} segundos a los gráficos.
+plan.line.tdr-default|mt|e906ce42|El tiempo de espera vuelve al que Windows usa por sí solo.
+
+uma.active|mt|8289ad5a|En uso ahora
+uma.requested|mt|1ccff8ba|Después del próximo reinicio
+uma.unavailable|mt|67a926f7|No disponible
+uma.tradeoff|mt|fe12ec74|Más memoria de video deja menos memoria para Windows. Con 12 GiB, Windows tiene unos 3.8 GiB.
+uma.restart|mt|c790ea25|Este cambio se aplica después de un reinicio. Reinicie Windows cuando esté listo.
+uma.recovery|mt|f8e2d145|Si Windows no puede iniciar, borrar la CMOS restaura el valor predeterminado de la placa y también restablece el orden de arranque.
+uma.readonly|mt|7c6e555e|Esta configuración no se puede cambiar en este sistema.
+uma.apply|mt|6a7aeb33|Definir memoria de video
+uma.restore|mt|a7adc6e0|Restaurar la configuración anterior
+uma.confirm-restore|mt|c5081ee3|¿Restaurar la reserva de memoria guardada de la placa BC-250 de {0}?
+uma.pending|mt|f633949e|Hay un cambio esperando un reinicio.
+uma.title|mt|bac35af8|Reserva de memoria de la placa BC-250
+uma.confirm|mt|b1ad9514|¿Definir la reserva de memoria de la placa BC-250 en {0}? La configuración anterior se guardará antes del cambio.
+uma.windows-unavailable|mt|9da5686d|La comprobación automática no pudo confirmar un acceso seguro a esta configuración de memoria de la placa. Los cambios no están disponibles.
+uma.fallback.title|mt|6be52e48|Memoria de video
+uma.fallback.size|mt|2c73531b|Memoria dedicada informada por Windows
+uma.fallback.readonly|mt|0042c9fe|Este tamaño de memoria es solo de lectura. Este dispositivo no ofrece el control de reserva de memoria de la placa BC-250.
+uma.unknown-state|mt|76c05f2a|No se pudo verificar la copia de seguridad guardada ni la última escritura. Se bloquearon más cambios. No reinicie para aplicar esta configuración; comuníquese con soporte.
+
+board.unsupported|mt|bdd30095|No compatible con esta placa. Las lecturas en vivo siguen disponibles donde el controlador las ofrece.
+nav.system|mt-safe|d598026a|Windows
+page.system.title|mt|78ecd832|Configuración de Windows
+page.system.intro|mt|743deb73|Elija qué actividades en segundo plano se ejecutan. Cada cambio es opcional y se puede restaurar.
+help.page.system|mt|fb622a5a|Esta configuración se aplica a Windows con cualquier tarjeta gráfica. Revise el efecto de cada elemento antes de cambiarlo. Restaurar devuelve la configuración guardada; no elimina componentes de Windows.
+system.overview|mt|67e610e8|Actividades en segundo plano
+system.backup|mt|db982ac0|La configuración anterior se guarda antes de un cambio y se conserva entre actualizaciones de la aplicación. Restaurar solo afecta la configuración guardada por esta herramienta.
+system.read-failed|mt|28e2faa8|No se pudo leer la configuración actual. Actualice antes de hacer un cambio.
+system.reading|mt|296c909a|Leyendo la configuración de Windows...
+system.refresh|mt-safe|0e916101|Actualizar
+system.recommended|mt|7c59956a|Aplicar lo recomendado
+system.restore-all|mt|01d04991|Restaurar toda la configuración guardada
+system.current|mt|e9f9320d|Configuración actual
+system.managed|mt|b93f9481|Hay una configuración anterior guardada.
+system.unmanaged|mt|6aa491ee|No hay ninguna configuración anterior guardada.
+system.apply|mt-safe|31e392d1|Aplicar
+system.restore|mt-safe|a76e13b9|Restaurar
+system.days|mt|52fe4b04|Duración de la pausa en días (1-35)
+system.pause|mt|28fdf83b|Pausar actualizaciones
+system.resume|mt|adcaa107|Reanudar actualizaciones
+system.pause-policy|mt|afd58f7a|Esto define la pausa solicitada. Windows puede aplicarla más tarde; su estado informado se muestra aparte. Las ediciones de Windows no compatibles no pueden aplicar estos controles.
+system.requested-until|mt|9257abb6|Pausa solicitada hasta
+system.observed|mt|4fa86770|Windows informa
+system.observed.paused|mt|e159b061|En pausa
+system.observed.resumed|mt|1cfd0052|Sin pausa
+system.observed.mixed|mt|e29a44d0|Estados distintos para las actualizaciones de características y de calidad
+system.observed.unknown|mt|67a926f7|No disponible
+system.scope.machine|mt|102db83e|Todas las cuentas de Windows
+system.scope.user|mt|f5ad11e3|Inicio para esta cuenta de Windows
+system.plan.title|mt|f482ec59|Cambiar la configuración de Windows
+system.plan.apply|mt|f3954418|Aplicar el cambio descrito: {0}
+system.plan.restore|mt|2083b0f3|Restaurar la configuración guardada: {0}
+system.plan.pause|mt|47735b56|Solicitar una pausa de actualizaciones de {0} días.
+system.plan.resume|mt|2a631fe8|Quitar la pausa de actualizaciones de esta herramienta y volver a la configuración de actualizaciones guardada.
+system.plan.restore-all|mt|4ec97464|Restaurar la configuración guardada que se indica abajo, incluida la configuración de inicio de esta cuenta si existe.
+system.plan.recommended|mt|55d2022a|Reducir las actividades en segundo plano que se indican abajo. No se incluyen la optimización de unidades, el inicio de aplicaciones ni la configuración de actualizaciones.
+system.plan.recheck|mt|f35e7163|La configuración se vuelve a comprobar antes de escribir. Los elementos que cambiaron o que no se pueden leer pueden rechazarse. La seguridad, la red y el servicio de actualizaciones siguen activados.
+system.working|mt|6349602b|Aplicando la configuración solicitada...
+system.done|mt|6e604bdb|La operación terminó. Se está volviendo a leer la configuración actual.
+system.cancelled|mt|8758b752|No se otorgó el permiso de administrador. Esta operación no se inició.
+system.timeout|mt|1ff9b40f|La operación no terminó a tiempo. Es posible que algunas configuraciones hayan cambiado. Actualice el estado antes de intentarlo de nuevo.
+system.failed|mt|d2d04724|La operación no se completó del todo. Es posible que algunas configuraciones hayan cambiado. Revise el estado actualizado y restaure la configuración guardada si es necesario.
+system.state.unknown|mt|63977a32|Sin leer
+system.state.absent|mt|3372d1ec|No existe
+system.state.unavailable|mt|2e4a0a37|No disponible en esta instalación de Windows
+system.state.enabled|mt-safe|92c1cdfd|Activado
+system.state.disabled|mt-safe|75081b59|Desactivado
+system.state.mixed|mt|5f56858c|Configurado en parte
+system.state.configured|mt-safe|84aebc69|Configurado
+system.state.not-configured|mt|dd1841d2|Sin configurar
+system.item.sysmain|mt|e8c3a42c|Precarga de aplicaciones
+system.item.sysmain.description|mt|139310b7|Desactivar la precarga de aplicaciones en segundo plano. Puede reducir el uso de memoria, pero las aplicaciones pueden tardar más en iniciar.
+system.item.search|mt|25aa964c|Indexación de búsqueda de archivos
+system.item.search.description|mt|82e0e975|Desactivar la indexación de archivos en segundo plano. Las búsquedas de archivos y correo pueden ser más lentas o menos completas.
+system.item.diagnostics|mt|89414c70|Diagnóstico en segundo plano
+system.item.diagnostics.description|mt|a0f40177|Desactivar el servicio de diagnóstico de experiencias del usuario conectado.
+system.item.maps|mt|65354f53|Mapas descargados
+system.item.maps.description|mt|55498afa|Desactivar la administración en segundo plano de los mapas descargados. Es posible que los mapas sin conexión no se actualicen.
+system.item.drive|mt|2620764b|Optimización programada de unidades
+system.item.drive.description|mt|a942887e|Desactivar la optimización programada de unidades, incluido el mantenimiento de SSD. La optimización manual sigue disponible. Déjela activada salvo que usted mismo dé mantenimiento a sus unidades.
+system.item.compatibility|mt|8a1113d8|Comprobaciones de compatibilidad de actualización
+system.item.compatibility.description|mt|5b28cbd9|Desactivar la evaluación de compatibilidad programada. Windows puede tener menos información al comprobar si está listo para una actualización mayor.
+system.item.program-data|mt|f772ca9f|Tarea de inventario de uso de aplicaciones
+system.item.program-data.description|mt|d489b1a1|Desactivar la tarea programada de datos de experiencia de aplicaciones.
+system.item.experience|mt|0c03e40b|Tarea de mejora de la experiencia
+system.item.experience.description|mt|c6cf5ace|Desactivar la tarea programada de consolidación de datos de experiencia del cliente.
+system.item.usb|mt|b041ca28|Tarea de experiencia USB
+system.item.usb.description|mt|ef62167a|Desactivar la tarea programada de datos de experiencia USB. Los dispositivos USB siguen funcionando.
+system.item.teams|mt|69e79a08|Inicio de Teams clásico en el equipo
+system.item.teams.description|mt|051d9751|Quitar la entrada de inicio del instalador de Teams clásico para todas las cuentas. Teams en sí no se elimina; la configuración de inicio del Teams nuevo es aparte.
+system.item.onedrive|mt|5c1ab86d|Inicio de OneDrive
+system.item.onedrive.description|mt|166cbdd5|Evitar que OneDrive se inicie al iniciar sesión en esta cuenta. Los archivos no se sincronizarán hasta que usted abra OneDrive.
+system.item.teams-user|mt|5ce9ebb4|Inicio de Teams clásico en la cuenta
+system.item.teams-user.description|mt|1e25b15f|Quitar la entrada de inicio de Teams clásico para esta cuenta. La configuración de inicio del Teams nuevo o de Store es aparte.
+system.item.drivers|mt|ebb42406|Conservar los controladores instalados
+system.item.drivers.description|mt|03ed5ef4|Excluir los controladores de las actualizaciones de calidad habituales de Windows para todos los dispositivos. Los controladores críticos incluidos en Windows y los de las actualizaciones de características aún pueden reemplazarse.
+system.item.updates|mt|b94adecb|Pausa de Windows Update
+system.item.updates.description|mt|1fc64af6|Pausar temporalmente las actualizaciones de características y de calidad, incluidas las de seguridad. El servicio de actualizaciones sigue activado. Reanudar restaura la configuración de pausa guardada.
+search.system.background|mt|67e610e8|Actividades en segundo plano
+search.system.background.terms|mt|c6d2c919|debloat servicios tareas inicio memoria segundo plano
+search.system.updates|mt|a7059736|Pausar Windows Update
+search.system.updates.terms|mt|7d884345|actualizaciones pausar reanudar windows update
+search.system.drivers|mt|ebb42406|Conservar los controladores instalados
+search.system.drivers.terms|mt|fb85e197|controlador driver reemplazo actualización automática
+search.system.drive|mt|8c2c1356|Programación de la optimización de unidades
+search.system.drive.terms|mt|cc085891|disco ssd trim desfragmentar optimizar unidad
+help.setting.background|mt|013bf8ab|Cada elemento opcional explica su ventaja y su costo. El conjunto recomendado solo cambia las tareas en segundo plano de diagnóstico y de mapas descargados, no la seguridad ni Windows Update.
+help.setting.updates|mt|5062c6b1|Elija de 1 a 35 días. La fecha de fin solicitada y el estado de pausa que informa Windows son cosas distintas. Restaurar devuelve la configuración anterior, que también puede solicitar una pausa.
+help.setting.drivers|mt|d355e59e|Esto se aplica a las ofertas de controladores de las actualizaciones de calidad habituales para todos los dispositivos, no solo a este controlador de gráficos. No bloquea todos los reemplazos de controladores posibles.
+help.setting.drive|mt|9bc0a9f6|La optimización programada también da mantenimiento a los SSD. Desactivarla es opcional y no forma parte del conjunto recomendado. Restaurar devuelve el estado de programación guardado.
+# The ray tracing benchmark card on the Performance page (src/Benchmark.cs, src/MainForm.Bench.cs).
+bench.title|mt|0cc4b592|Prueba de rendimiento de trazado de rayos
+bench.intro|mt|e05a3369|Esta prueba mide qué tan rápido su tarjeta traza la luz. Ejecuta dos veces una escena corta del juego gratuito Quake II RTX y muestra cuántas imágenes por segundo dibujó. El paquete del controlador no incluye el juego y nunca lo descarga.
+bench.two-ways|mt|280d28a7|Su tarjeta puede trazar la luz de dos formas, y la prueba mide ambas. La imagen es la misma de cualquier forma; solo la velocidad puede variar.
+bench.pass.pipeline|mt|963af524|Primera forma
+bench.pass.query|mt|21418945|Segunda forma
+bench.pass.pipeline.note|mt|aaa9f3a1|conocida por los creadores de juegos como ray tracing pipeline
+bench.pass.query.note|mt|d989b1f9|conocida por los creadores de juegos como ray query
+bench.game|mt|5ba13e9b|Carpeta del juego
+bench.game.none|mt|4cc45c0a|No se encontró Quake II RTX en este equipo.
+bench.game.get|mt|4f79de90|La prueba necesita el juego. Quake II RTX es gratuito, en Steam o en la página de su creador.
+bench.open.steam|mt|63e6be11|Abrir la página de Steam
+bench.open.nvidia|mt|57f27fb0|Abrir la página del creador
+bench.choose|mt|0aab38df|Elegir la carpeta del juego...
+bench.choose.again|mt|0bef7b55|Elegir otra carpeta...
+bench.choose.title|mt|a72b4119|Elija la carpeta que contiene el programa del juego q2rtx.exe
+bench.bad.folder|mt|302a9c1c|Esa carpeta ya no existe.
+bench.bad.program|mt|fdbc015e|Esa carpeta no contiene el programa del juego.
+bench.bad.data|mt|da3cb445|Esa carpeta no contiene datos del juego.
+bench.bad.demo|mt|ab772e08|Esta copia del juego no contiene la escena de prueba, así que la prueba no puede ejecutarse. La versión gratuita de Quake II RTX sí la contiene.
+bench.start|mt|56381b85|Iniciar la prueba
+bench.cancel|mt|1317e849|Detener la prueba
+bench.size|mt|28a0f429|Tamaño de imagen
+bench.size.value|mt|e137b45b|{0} por {1}
+bench.result|mt-safe|6e7d50e8|Resultado
+bench.state.idle|mt|dedd1400|La prueba todavía no se ha ejecutado en este equipo.
+bench.state.starting|mt|84ce0a62|Iniciando el juego...
+bench.state.running|mt|e13f4a7a|Midiendo: {0}, {1} segundos hasta ahora.
+bench.state.reading|mt|65a88114|Leyendo el resultado...
+bench.state.done|mt|a44047b4|La prueba terminó.
+bench.state.stopped|mt|afcd9e6a|Usted detuvo la prueba.
+bench.state.saved|mt|536107a7|Abajo está la ejecución más reciente guardada en este equipo.
+bench.result.fps|mt|42b2f533|{0} imágenes por segundo
+bench.result.detail|mt|6554b9d5|{0} imágenes en {1} segundos
+bench.result.none|mt|a82cd647|Sin resultado: el juego se cerró antes de terminar la escena.
+bench.result.timeout|mt|e866995b|Sin resultado: la escena tardó más de tres minutos, así que la prueba la detuvo.
+bench.result.hot|mt|de80c33a|Se detuvo porque el chip se calentó demasiado.
+bench.result.cancelled|mt|ce2e1c7c|Detenida por usted.
+bench.result.failed|mt|388150f9|El juego no inició.
+bench.temp.max|mt|251b0a10|Temperatura máxima
+bench.temp.value|mt-safe|aa6b1ef9|{0} °C
+bench.clock.mean|mt|437b3dc8|Reloj promedio
+bench.clock.value|mt-safe|65d8ea4f|{0} MHz
+bench.notavailable|mt|67a926f7|No disponible
+bench.when|mt-safe|9298c8f4|Medido
+bench.driver|mt|5f4b1e9d|Versión del controlador
+bench.reference|mt|d66823aa|Nuestra propia placa dibujó de {0} a {1} imágenes por segundo a {2} por {3}, con la versión del controlador {4}. La suya puede variar con otra pantalla, otra versión del controlador y otra copia del juego.
+bench.reference.why|mt|6893bd0d|El número varía dentro de ese rango de una ejecución a otra, porque el chip sube su velocidad mientras corre la escena y la escena dura unos diez segundos.
+bench.history|mt|04ab162c|Ejecuciones anteriores
+bench.history.none|mt|d590dba0|No hay ejecuciones anteriores en este equipo.
+bench.history.line|mt|afe87a67|{0}  -  primera forma: {1}  -  segunda forma: {2}
+bench.busy|mt|3a08423a|La prueba ya está en curso.
+bench.note|mt|a3725789|El juego se abre en su propia ventana y se cierra solo. No lo toque mientras mide, y no inicie el juego una segunda vez. La prueba se detiene sola cuando el chip se mantiene a 87 °C, y después de tres minutos por cada forma.
+bench.note.notemp|mt|a2b8397f|El juego se abre en su propia ventana y se cierra solo. No lo toque mientras mide, y no inicie el juego una segunda vez. Esta tarjeta no informa su temperatura, así que la prueba solo se detiene después de tres minutos por cada forma.
+search.perf.benchmark|mt|0cc4b592|Prueba de rendimiento de trazado de rayos
+search.perf.benchmark.terms|mt|8e2c7bdd|benchmark|prueba de rendimiento|fps|fotogramas por segundo|velocidad|puntuación|medir|trazado de rayos|ray tracing|path tracing|quake|quake 2|q2rtx|qué tan rápido
+help.setting.benchmark|mt|6a6a4b69|Una prueba de su propia tarjeta. Ejecuta dos veces una escena corta con trazado de rayos del juego gratuito Quake II RTX, una vez por cada forma en que una tarjeta puede trazar la luz, y muestra cuántas imágenes por segundo dibujó su tarjeta. Necesita el juego en este equipo; el paquete del controlador no lo incluye. En nuestra propia placa, la prueba tarda unos veinte segundos por cada forma, abre el juego en una ventana pequeña y lo vuelve a cerrar, y se detiene sola cuando el chip se calienta demasiado. Las últimas diez ejecuciones quedan en este equipo para que pueda ver si una nueva versión del controlador cambió el número.
+help.auto.collecting|mt|1267cd3d|El controlador no completó un inicio confirmado. Recopilando un informe de soporte automáticamente (hasta 20 segundos).
+
+help.auto.saved|mt|ad41ef59|Informe de soporte guardado: {0}. Se filtraron los datos personales comunes. Revise el archivo antes de compartirlo. No se envió nada.
+
+help.auto.failed|mt|e242261b|No se pudo guardar el informe de soporte automático. Abra Ayuda para intentarlo de nuevo.
+drv.verify.earlier-boot|mt|d7afb829|La última comprobación completa falló antes de un reinicio. El controlador instalado está funcionando ahora.
+status.verification-earlier-boot|mt|6b5b86e8|La última comprobación completa fue antes de un reinicio. El controlador instalado está funcionando ahora.
+
+# ---- the sign-in notice, the one-click repair and the switch for the window after sign-in ----
+notice.guard.title|mt|660b2a51|El controlador de gráficos se desactivó
+notice.guard.text|mt|1f5d6130|El controlador de gráficos se desactivó para que este equipo siga siendo utilizable: sus últimos inicios no terminaron su comprobación.\nAhora Windows dibuja la pantalla con su pantalla básica, así que los juegos no funcionan y todo es más lento.\nPuede volver a activar el controlador de gráficos. No cambia nada más en este equipo.
+notice.failed.title|mt|fb8e175f|El controlador de gráficos no inició
+notice.failed.text|mt|1e13a43f|El controlador de gráficos no inició, así que Windows dibuja la pantalla con su pantalla básica: los juegos no funcionan y todo es más lento.\nNagi Control App muestra qué pasó y qué intentar a continuación.
+notice.open-app|mt|f8a181ac|Abrir Nagi Control App
+notice.close|mt-safe|7d9eb7ac|Cerrar
+notice.working|mt|2a07b127|Volviendo a activar el controlador de gráficos. Esto puede tardar hasta cuatro minutos, y la pantalla puede oscurecerse un momento.
+notice.working.seconds|mt-safe|dae58fb2|{0} s
+notice.done|mt|3d647c8d|El controlador de gráficos vuelve a funcionar.
+notice.action-failed|mt|26a5f377|Ahora no se pudo iniciar el controlador de gráficos. Lo siguiente que conviene intentar es reiniciar Windows.
+notice.restart-needed|mt|55461c06|Este equipo está configurado para volver a iniciar el controlador de gráficos. Reinicie Windows para terminar.
+notice.not-needed|mt|2890eefa|Esta reparación ya no es necesaria. Abra Nagi Control App para ver cómo está ahora el controlador de gráficos.
+notice.open-failed|mt|44569b54|No se pudo abrir Nagi Control App desde aquí. Ábrala desde el menú Inicio.
+status.action.enable-driver|mt|1aa40cb7|Volver a activar el controlador de gráficos...
+status.driver-refused|mt|0f7cc434|El controlador de gráficos se desactivó por seguridad, porque sus últimos inicios no terminaron su comprobación. Windows usa su pantalla básica, así que los juegos no funcionan.
+status.driver-refused.next|mt|449a51bf|Vuelva a activar el controlador de gráficos. Si no inicia, reinicie Windows.
+plan.title.enable-driver|mt|3ebf7632|Volver a activar el controlador de gráficos
+plan.line.enable-driver|mt|eb9dd536|El conteo de inicios sin comprobar vuelve a cero, para que el controlador pueda iniciar de nuevo.
+plan.line.enable-driver-confirm|mt|8eda43a1|El dispositivo gráfico vuelve a iniciar y el nuevo inicio se marca como funcional.
+plan.enable-driver.dark|mt|02d9a741|La pantalla puede oscurecerse unos segundos y puede cambiar de tamaño una vez.
+plan.enable-driver.restart|mt|73638369|Si el controlador de gráficos no inicia, esta aplicación lo indica y ofrece reiniciar Windows.
+plan.refuse.driver-on|mt|7532d61c|El controlador de gráficos ya está funcionando, así que no hay nada que volver a activar.
+plan.refuse.not-guard|mt|040c6a83|El controlador de gráficos no se desactivó por seguridad, así que esto no ayuda aquí. Abra Ayuda para encontrar el siguiente paso.
+search.settings.wallpaper|mt|42350221|Fondo de pantalla de Nagi
+search.settings.wallpaper.terms|mt|e2a1f213|fondo de pantalla|fondo|wallpaper|escritorio|imagen|Nagi
+settings.wallpaper.note|mt|af8edf22|Después de una instalación comprobada, el instalador pone una vez el fondo de pantalla de Nagi como fondo de su escritorio, salvo que usted haya desmarcado su casilla. Antes se guarda su fondo anterior. Aquí puede volver a poner el fondo de pantalla de Nagi o recuperar su fondo anterior.
+settings.wallpaper.set|mt|ce6e26e6|Poner el fondo de pantalla de Nagi
+settings.wallpaper.restore|mt|90ce1c66|Restaurar mi fondo de pantalla anterior
+settings.wallpaper.done|mt|64e92ae9|El fondo de pantalla de Nagi es ahora el fondo de su escritorio.
+settings.wallpaper.failed|mt|fd1e10bd|No se pudo poner el fondo de pantalla. No se cambió nada más. Si esto sigue pasando, repare la instalación.
+settings.wallpaper.restored|mt|a7c47858|Volvió su fondo anterior.
+settings.wallpaper.restored-partial|mt|c85e565d|Su fondo anterior era una presentación o Windows Spotlight. Una imagen vuelve solo donde Windows todavía la tenía. Para volver a activar la presentación o Spotlight, use Configuración de Windows, Personalización, Fondo.
+settings.wallpaper.restore-failed|mt|7af0bb53|No se pudo recuperar su fondo anterior: su imagen ya no está en esta PC. Elija un fondo en Configuración de Windows, Personalización, Fondo.
+settings.wallpaper.nothing-saved|mt|d8f54a55|No hay un fondo anterior guardado para su cuenta, así que no hay nada que restaurar.
+help.setting.wallpaper|mt|18d99de4|El instalador pone el fondo de pantalla de Nagi una vez para cada persona después de una instalación comprobada, salvo que se haya desmarcado su casilla, y antes guarda el fondo que tenía esa persona. "Poner el fondo de pantalla de Nagi" vuelve a poner la imagen. "Restaurar mi fondo de pantalla anterior" recupera el fondo guardado. Una presentación o Windows Spotlight vuelve solo como su última imagen: vuelva a activarlo en Configuración de Windows, Personalización, Fondo. Ambos botones cambian solo su propio fondo y no necesitan permisos de administrador.
+# "Record game logs" (src/GameLog.cs): the timed switch of the Help page.
+gamelog.title|mt|d9a04c61|Grabar registros de juegos
+gamelog.intro|mt|c1bbf41a|Si alguien que lo ayuda le pide un registro de un juego, active la grabación aquí y luego inicie el juego. Mientras la grabación está activa, cada juego escribe un archivo que indica lo que pidió a los gráficos. La grabación se detiene sola después del tiempo que elija, así que no puede dejarla activada por accidente.
+gamelog.label|mt|e3aac753|Grabar durante
+gamelog.choice.recommended|mt|81c7ab30|{0} minutos (una buena duración)
+gamelog.choice.one-minute|mt|e67b6f61|1 minuto
+gamelog.choice.minutes|mt|87086105|{0} minutos
+gamelog.now.off|mt|c952f548|La grabación está desactivada. No se escribe nada.
+gamelog.now.on|mt|8bf8c99c|La grabación está activada: quedan {0} minutos. Inicie el juego ahora.
+gamelog.now.on.one-minute|mt|4302708c|La grabación está activada: queda 1 minuto. Inicie el juego ahora.
+gamelog.where|mt|85e11f4f|Los archivos se guardan en {0} dentro de la carpeta compartida de datos de programas, {2} archivo(s) hasta ahora, {1} MB en total. Un informe de soporte toma los más recientes.
+gamelog.start|mt|bb8b2bb3|Grabar durante {0} minutos
+gamelog.stop|mt|6ebe3863|Detener ahora
+gamelog.open|mt|e241ab00|Abrir la carpeta
+gamelog.open-failed|mt|9bbdcc09|No se pudo abrir la carpeta.
+gamelog.unreadable|mt|9245ad83|La grabación no se puede activar en este equipo.
+search.help.gamelog|mt|d9a04c61|Grabar registros de juegos
+search.help.gamelog.terms|mt|ec6f3356|registro|registros|log|logs|grabar|registro de juego|diagnóstico|traza|informar un problema de un juego
+help.setting.gamelog|mt|5e282183|Graba lo que los juegos piden a los gráficos durante los minutos que elija y escribe un archivo por juego. Actívela, inicie el juego, juegue hasta que ocurra el problema y luego cree un informe de soporte: los archivos más recientes se incluyen en él. La grabación se detiene sola cuando termina el tiempo, y cada archivo se detiene en 64 MB. Los archivos son texto simple y usted mismo puede leerlos.
+plan.title.game-log-on|mt|d9a04c61|Grabar registros de juegos
+plan.title.game-log-off|mt|30cf650b|Dejar de grabar registros de juegos
+plan.line.gamelog-on|mt|7075c578|Los juegos escriben un registro de lo que piden a los gráficos, hasta que termine el tiempo que eligió.
+plan.line.gamelog-off|mt|1898e356|Los juegos dejan de escribir registros. Los archivos ya escritos se conservan.
+launch.starting|mt|ff3dab00|Iniciando. La aplicación primero revisa este equipo, lo que tarda unos segundos.
+launch.slow|mt|653d44fd|El inicio tarda más de lo habitual, porque Windows responde con lentitud. La aplicación se abre cuando tiene las respuestas. También puede cerrar esta ventana.
+launch.close|mt-safe|7d9eb7ac|Cerrar
+
+# ---- the picture on the start screen (BootLogoSetting.cs, docs/design/boot-logo.md) ----
+display.boot-logo.title|mt|a6b69697|Pantalla de inicio
+display.boot-logo|mt|a3ca25a1|Mostrar la imagen mientras Windows inicia
+display.boot-logo.help|mt|33890302|Mientras Windows inicia, la pantalla muestra un anillo giratorio sobre negro. Con esto activado, el controlador dibuja la imagen de Nagi sobre el anillo, una vez, y la imagen desaparece en cuanto aparece el escritorio. Una nueva configuración funciona después de reiniciar Windows.
+display.boot-logo.state-on|mt|7399a125|La imagen se muestra mientras Windows inicia.
+display.boot-logo.state-off|mt|225caa0e|La pantalla de inicio queda como la dibuja Windows.
+display.boot-logo.refuse.on-already|mt|bc05af2f|La imagen ya se muestra mientras Windows inicia.
+display.boot-logo.refuse.off-already|mt|7a148b33|Ya está configurado que la imagen no se muestre mientras Windows inicia.
+plan.line.boot-logo-on|mt|a13a3df6|La imagen se dibuja en la pantalla mientras Windows inicia.
+plan.line.boot-logo-off|mt|225caa0e|La pantalla de inicio queda como la dibuja Windows.
+search.display.boot-logo|mt|778d098c|Imagen en la pantalla de inicio
+search.display.boot-logo.terms|mt|0baabdd9|arranque|boot|pantalla de inicio|logo|logotipo|imagen|mascota|nagi|splash|indicador giratorio
+help.setting.boot-logo|mt|84cc314f|Permite que el controlador dibuje la mascota en la pantalla mientras Windows inicia, sobre el fondo negro del anillo giratorio. Está activado desde el principio. Desactívelo si quiere la pantalla de inicio exactamente como la dibuja Windows; una nueva configuración funciona después de reiniciar Windows.
+
+# ---- the driver's own switches of the Graphics page (DriverFeatures.cs, docs/design/compute-node.md) ----
+graphics.features.title|mt|64ba08b9|Funciones del controlador
+graphics.compute|mt|33ea933b|Segunda cola para cálculos
+graphics.compute.help|mt|ee3dec36|Los juegos y aplicaciones Vulkan pueden hacer cálculos en una segunda cola del chip gráfico, al mismo tiempo que dibujan. Está activado desde el principio. Desactívelo si un juego Vulkan se detiene o muestra imágenes incorrectas con esto. Una nueva configuración funciona después de reiniciar Windows.
+graphics.gdi|mt|ea06b4ca|Aceleración por hardware del dibujo clásico de Windows
+graphics.gdi.help|mt|52ad8280|Muchos programas de Windows dibujan sus ventanas, texto e imágenes a la manera clásica de Windows. Con esto activado, el chip gráfico hace gran parte de ese dibujo en lugar del procesador. Está activado desde el principio. Desactívelo si las ventanas o el texto de un programa se ven mal. Una nueva configuración funciona después de reiniciar Windows.
+graphics.feature.pending|mt|f11a2ffa|Reinicie Windows para usar su nueva elección.
+graphics.feature.refuse.on-already|mt|aeded930|Esto ya está activado.
+graphics.feature.refuse.off-already|mt|7bbfb381|Esto ya está desactivado.
+graphics.feature.refuse.unavailable|mt|e2b9777f|El controlador instalado no puede usar esta configuración en este equipo.
+plan.title.compute-queue-on|mt|6efee15e|Activar la segunda cola para cálculos
+plan.title.compute-queue-off|mt|16273546|Desactivar la segunda cola para cálculos
+plan.title.gdi-accel-on|mt|01cd15f9|Activar la aceleración por hardware del dibujo clásico de Windows
+plan.title.gdi-accel-off|mt|d6c344a3|Desactivar la aceleración por hardware del dibujo clásico de Windows
+plan.line.compute-queue-on|mt|c24b2655|Los juegos y aplicaciones Vulkan pueden hacer cálculos en una segunda cola del chip gráfico.
+plan.line.compute-queue-off|mt|e6c79e7d|Los juegos y aplicaciones Vulkan hacen todo su trabajo en una sola cola del chip gráfico.
+plan.line.gdi-accel-on|mt|b664324a|El chip gráfico dibuja las ventanas y el texto de los programas clásicos de Windows.
+plan.line.gdi-accel-off|mt|454d80c5|El procesador dibuja las ventanas y el texto de los programas clásicos de Windows.
+search.graphics.compute|mt|33ea933b|Segunda cola para cálculos
+search.graphics.compute.terms|mt|17f67293|compute|async compute|cómputo asíncrono|asíncrono|cola|vulkan|cálculos|paralelo
+search.graphics.gdi|mt|1cea1d53|Aceleración por hardware del dibujo clásico
+search.graphics.gdi.terms|mt|e9dfeb26|gdi|aceleración por hardware|aceleración|2d|clásico|dibujo|texto|ventanas|windows
+help.setting.compute|mt|9c34d158|Permite que los juegos y aplicaciones Vulkan hagan cálculos en una segunda cola de hardware del chip gráfico mientras dibujan, lo que puede hacerlos más rápidos. Está activado desde el principio. Desactívelo si un juego Vulkan deja de responder o muestra imágenes incorrectas; una nueva configuración funciona después de reiniciar Windows.
+help.setting.gdi|mt|57b5fd27|Permite que el chip gráfico haga el dibujo clásico de Windows de muchos programas: sus ventanas, texto e imágenes. Así el procesador tiene menos trabajo. Está activado desde el principio. Desactívelo si las ventanas o el texto de un programa se ven mal; una nueva configuración funciona después de reiniciar Windows.
+# ---- the hardware mouse pointer (HardwarePointerSetting.cs, docs/design/hardware-pointer.md) ----
+graphics.hw-pointer|mt|a49c1648|Puntero del mouse por hardware
+graphics.hw-pointer.help|mt|d0b780b8|El motor de pantalla dibuja el puntero del mouse, no Windows. Está activado desde el principio. Desactívelo si el puntero parpadea o tiene colores incorrectos. Una nueva configuración funciona después de reiniciar Windows.
+graphics.hw-pointer.now.default|mt|7f1b617f|Configuración guardada: activado (predeterminado).
+graphics.hw-pointer.now.on|mt|2933f0fb|Configuración guardada: activado.
+graphics.hw-pointer.now.off|mt|22c3fa24|Configuración guardada: desactivado.
+graphics.hw-pointer.unreadable|mt|51a085b4|No se puede leer la configuración guardada. El controlador usa el puntero del mouse por hardware.
+graphics.hw-pointer.refuse.unreadable|mt|d6227d77|No se puede leer la configuración guardada, así que no se cambia.
+plan.title.hw-pointer-on|mt|f82ef1e7|Activar el puntero del mouse por hardware
+plan.title.hw-pointer-off|mt|a5dc6483|Desactivar el puntero del mouse por hardware
+plan.line.hw-pointer-on|mt|4d63c8d1|El motor de pantalla dibuja el puntero del mouse.
+plan.line.hw-pointer-off|mt|dfdaedd0|Windows dibuja el puntero del mouse dentro de la imagen.
+search.graphics.hw-pointer|mt|a49c1648|Puntero del mouse por hardware
+search.graphics.hw-pointer.terms|mt|bb0a33b4|mouse|ratón|puntero|cursor|cursor por hardware|parpadeo|flecha
+help.setting.hw-pointer|mt|458914a7|Permite que el motor de pantalla del chip gráfico dibuje el puntero del mouse encima de la imagen, para que Windows no tenga que dibujarlo en cada fotograma. Está activado desde el principio. Desactívelo si el puntero parpadea, salta o tiene colores incorrectos; una nueva configuración funciona después de reiniciar Windows.
+
+# ---- the full resolution after a scaled start of the screen (ScaledStart.cs, BD-196) ----
+display.full-res.small|mt|bde46d0f|Windows ofrece solo {0} para este monitor, pero el monitor puede mostrar {1}. El equipo inició el monitor en un modo pequeño.
+display.full-res.fixed|mt|6c46c02f|La configuración de inicio de Windows define un modo pequeño para la pantalla.
+display.full-res.help|mt|fd2af2ef|Con el botón de abajo, Windows inicia el monitor en su modo más alto. La resolución completa se ofrece después de reiniciar Windows.
+display.full-res.button|mt|3819939b|Usar la resolución completa
+plan.title.full-resolution-start|mt|5bbbb857|Usar la resolución completa de la pantalla
+plan.line.full-resolution-start|mt|49a3cdbf|Windows inicia la pantalla en su modo más alto, así que la resolución completa se ofrece después del reinicio.
+plan.line.full-resolution-start-undo|mt|671892eb|Windows inicia la pantalla con la configuración de antes del cambio.
+plan.full-res.refuse.unreadable|mt|3dd425b8|No se puede leer la configuración de inicio de Windows, así que no se cambia.
+plan.full-res.refuse.already|mt|4299d1d9|La configuración de inicio ya está hecha. Reinicie Windows para usarla.
+
+# ---- the overclock unlock by cooling type (OcUnlock.cs, MainForm.Oc.cs) ----
+oc.title|mt|681c1eb4|Relojes más altos según su refrigeración
+oc.now|mt-safe|fe18013d|Ahora
+oc.next|mt|57faee03|Después del reinicio
+oc.intro|mt|da4766d4|Límites estándar: {0} MHz para los gráficos y {1} MHz para el procesador. Con un buen disipador de aire o una refrigeración líquida todo en uno, puede permitir límites más altos. La aplicación primero pregunta qué refrigeración tiene y luego muestra tres advertencias.
+oc.lock.short|mt|df47f387|Algunas placas se apagan bajo carga alta a relojes altos. Una placa así solo vuelve a encender después de desconectar el cable de alimentación por un momento.
+oc.unlock|mt|ddc6743b|Permitir relojes más altos...
+oc.off|mt|13536552|Límites estándar
+oc.not-installed|mt|8612d5cb|Instale el controlador para usar esto.
+oc.stopped|mt|54ca5460|No se cambió nada.
+oc.tier.none|mt|13536552|Límites estándar
+oc.tier.air|mt|59843b77|Refrigeración por aire
+oc.tier.liquid|mt|bd4d3df2|Refrigeración líquida todo en uno
+oc.state.runs|mt|9ca6fe57|{0}: hasta {1} MHz para los gráficos y {2} MHz para el procesador.
+oc.state.pending|mt|11e74224|Una nueva elección se aplica después del próximo reinicio de Windows.
+oc.state.board-changed|mt|2b7734f3|Los límites más altos se desactivaron porque el controlador encontró una placa distinta o un firmware nuevo de la placa. Responda de nuevo las preguntas para activarlos.
+oc.state.unbound|mt|eb2a6439|La elección guardada no pertenecía a esta placa, así que el controlador la desactivó. Responda de nuevo las preguntas para activarla.
+oc.state.invalid|mt|ad8e394b|La elección guardada no es válida, así que se aplican los límites estándar. Elija de nuevo o seleccione Límites estándar.
+oc.q.title|mt|763f00b7|Relojes más altos: su refrigeración
+oc.q.cooling|mt|e91ef188|¿Qué refrigeración tiene su placa? Los límites más altos dependen de ella.
+oc.q.air.text|mt|8906447d|Refrigeración por aire: un disipador con uno o más ventiladores que soplan a través de él. Hasta {0} MHz para los gráficos y {1} MHz para el procesador.
+oc.q.liquid.text|mt|773b1c27|Refrigeración líquida todo en uno: un bloque de bomba sobre el chip y un radiador con ventiladores. Hasta {0} MHz para los gráficos y {1} MHz para el procesador.
+oc.q.stock.text|mt|58d81d5c|El disipador propio de la placa sin ventilador, o no está seguro: mantenga los límites estándar.
+oc.q.stock|mt|857b227d|No estoy seguro, mantener estándar
+oc.q.air|mt|59843b77|Refrigeración por aire
+oc.q.liquid|mt|48de08ce|Refrigeración líquida
+oc.warn.title|mt|be0ce762|Advertencia {0} de {1}
+oc.warn.stop|mt-safe|cae7d57b|Detener
+oc.warn.accept|mt|86029644|Entiendo
+oc.warn.1|mt|9897a53c|Los relojes más altos generan más calor y consumen más energía. Hasta {0} MHz para los gráficos y {1} MHz para el procesador es lo que informan otros dueños con esta refrigeración. No es una promesa para su placa: cada chip es distinto. Una placa puede volverse inestable y, en el peor caso, puede dañarse. Usted usa los límites más altos bajo su propio riesgo.
+oc.warn.2|mt|44925bc7|Algunas placas, sobre todo las que tienen activados los 40 núcleos gráficos, se apagan por completo bajo carga alta a unos 1850 a 2200 MHz. El ventilador se detiene y la pantalla se oscurece. El botón de encendido y el botón de reinicio no hacen nada: la placa solo vuelve a encender después de desconectar el cable de alimentación por un momento, o de cortar la corriente en el tomacorriente, y luego volver a conectarla. Un juego pesado que carga el procesador y los gráficos a la vez lo provoca primero, y un reloj del procesador más alto hace que ocurra antes. Si ocurre, elija un reloj más bajo o menos núcleos gráficos.
+oc.warn.3|mt|f1d20762|Las reglas de seguridad siguen iguales: el controlador sigue bajando los relojes cuando el chip llega a 87 °C, y el control del ventilador no cambia. Use una buena fuente de alimentación con suficiente potencia para la placa: una débil puede apagarse o fallar a estos relojes. Cambie una sola cosa a la vez y pruébela con los juegos que usa. Si Windows no se cierra correctamente, el controlador inicia la próxima vez con el reloj fijo seguro. Puede volver a los límites estándar aquí en cualquier momento.
+oc.note.limits|mt|0abc2857|Después del reinicio, elija usted mismo los relojes más altos en el tope de reloj y el límite del procesador. Los valores estándar no cambian solos.
+plan.title.oc-tier|mt|681c1eb4|Relojes más altos según su refrigeración
+plan.line.oc-off|mt|db80c552|Los límites de reloj más altos están desactivados; se aplican los límites estándar.
+plan.line.oc-air|mt|813adea6|Se permiten límites de reloj más altos para refrigeración por aire.
+plan.line.oc-liquid|mt|2ea2c664|Se permiten límites de reloj más altos para refrigeración líquida todo en uno.
+plan.line.oc-board|mt|c39d0346|La elección pertenece a esta placa. En otra placa se desactiva sola.
+tuner.refuse.cpu-needs-uv|mt|18966afc|Un límite del procesador de {0} MHz necesita al menos {1} pasos de voltaje.
+oc.state.unclean|mt|bf3d28b8|Los límites más altos se desactivaron después de un apagado inesperado del equipo. A relojes altos, la placa puede apagarse sola de esta forma. Puede volver a activarlos con las preguntas.
+oc.note.lowered|mt|9f9534fd|Algunos de sus valores guardados superan los nuevos límites. La aplicación los baja a los nuevos límites, como muestra la lista de arriba.
+plan.line.cpu-clock|mt|56bf9d8a|Velocidad máxima del procesador: {0} MHz.
+plan.line.cpu-uv|mt|0babddfe|Voltaje del procesador: {0} pasos más bajo.
+
+# ---- ROCm / HIP venv attach (RocmAttach.cs, MainForm.Rocm.cs) ----
+rocm.title|mt-safe|b6198d0f|ROCm / PyTorch
+rocm.intro|mt|ae2500b5|Conecte el entorno de ejecución HIP del controlador a un entorno de Python de TheRock para que PyTorch use esta GPU.
+rocm.therock|mt|876e09a9|Paquete compilado para TheRock
+rocm.checking|mt|5acf7f39|Leyendo el estado de los entornos...
+rocm.no-venvs|mt|87249b61|No se encontraron entornos de Python conectados. Use el botón de abajo para elegir uno.
+rocm.attach|mt|d406ade2|Conectar
+rocm.detach|mt|74bc1174|Desconectar
+rocm.browse|mt|44816dc3|Elegir un entorno de Python...
+rocm.browse.description|mt|7fa3e190|Elija un entorno de Python de TheRock (la carpeta que contiene Lib\site-packages)
+rocm.refresh|mt-safe|0e916101|Actualizar
+rocm.failed|mt|c2b2ce13|La operación no tuvo éxito (salida {0}).
+rocm.state.attached|mt|ac6d9b76|Conectado
+rocm.state.detached|mt|13438579|Desconectado
+rocm.state.refused|mt|c1ebc781|Requiere atención
+rocm.state.missing|mt|50b45e7c|Entorno no encontrado
+rocm.state.recovery|mt|4f222673|Se requiere recuperación
+rocm.state.error|mt|cf91d056|No se pudo leer
+rocm.state.unknown|mt|d16948e7|Sin comprobar
+search.rocm.payload|mt-safe|b6198d0f|ROCm / PyTorch
+
+# ---- processor temperature limit (the default cap of 87 C, docs/design/tuner.md) ----
+graphics.limit.title|mt|49db3253|Límite de temperatura del procesador (throttling)
+graphics.limit.intro|mt|4cf75170|El procesador se ralentiza solo cuando llega a esta temperatura. Un límite más bajo lo mantiene más frío bajo una carga larga y pesada. Un límite más alto da un poco más de velocidad y más calor.
+graphics.limit.apply|mt|3aff98ba|Probar este límite
+tuner.limit.default|mt|5f68e9b0|El valor predeterminado es {0} °C. {1} °C es el límite máximo propio del procesador.
+tuner.limit.in-force.default|mt|0bbe6cf5|{0} °C (predeterminado)
+tuner.limit.off|mt|04306f74|El ajuste del procesador está desactivado, así que rige el límite propio del procesador de {0} °C.
+search.graphics.cpu-limit|mt|c90220a5|Límite de temperatura del procesador
+search.graphics.cpu-limit.terms|mt|8aa04853|temperatura de la CPU|temperatura CPU|CPU temp|throttling|límite térmico|Tctl|caliente|sobrecalentamiento
+help.setting.cpu-limit|mt|34c700af|La temperatura a la que el procesador se ralentiza solo. El valor predeterminado mantiene una carga larga y pesada lejos del límite máximo propio del procesador. Un cambio se ejecuta como una prueba que se revierte sola hasta que usted lo conserve.

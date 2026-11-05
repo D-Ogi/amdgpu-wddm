@@ -319,7 +319,7 @@ search.driver.version.terms|mt|63b1897d|バージョン|リリース|インス�
 search.driver.update|mt-safe|f26f3275|更新プログラムの確認
 search.driver.update.terms|mt|8e944c4d|更新|アップデート|新しいバージョン|ダウンロード|アップグレード
 search.settings.language|mt-safe|a4fe6526|言語
-search.settings.language.terms|mt|fd2aa88a|言語|English|英語|Polski|ポーランド語|日本語|한국어|韓国語
+search.settings.language.terms|mt|e5916771|言語|English|英語|Polski|ポーランド語|Português|ポルトガル語|Español|スペイン語|日本語|한국어|韓国語
 search.settings.update-start|mt|1795d304|アプリの起動時に更新を確認する
 search.settings.update-start.terms|mt|f9b8aeaa|更新|アップデート|自動|起動|起動時
 search.settings.recent|mt-safe|1584741a|起動したゲームを記憶する
@@ -363,7 +363,6 @@ ui.back|mt-safe|76900f1b|戻る
 ui.search|mt-safe|255b076d|設定の検索
 ui.search.results|mt-safe|e978b00d|検索結果
 ui.search.none|mt|4a80e7e4|設定が見つかりません。
-ui.language.current|mt-safe|45f00aed|現在の言語
 ui.nav.current|mt-safe|de2574e5|現在のページ
 ui.explain|mt|c68f3c5e|「{0}」は何をしますか？
 ui.explain.page|mt-safe|d2447d18|このページについて
@@ -545,7 +544,7 @@ driver.repair.title|mt-safe|1196b6c5|修復
 driver.repair.text|mt|e71e61c4|ドライバーが正しく動作しない場合は、ヘルプから修復してください。
 driver.repair.open|mt-safe|30dd758a|ヘルプを開く
 # ---- Settings (WU-003, WU-046, WU-075, WU-076, WU-077) ----
-settings.language.note|mt|3880569c|日本語と韓国語のテキストは、現在は機械翻訳です。
+settings.language.note|mt|6c69e5d7|ポルトガル語、スペイン語、日本語、韓国語のテキストは、現在は機械翻訳です。
 settings.updates.title|mt-safe|22e2bada|更新
 settings.update-start.note|mt|ae77c8bd|確認は最大で 1 時間に 1 回です。許可なしに何かがダウンロードまたはインストールされることはありません。
 settings.recent.title|mt-safe|085fe856|ゲーム一覧
