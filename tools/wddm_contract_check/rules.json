@@ -272,6 +272,14 @@
       "require": [{"qai_handled": "DXGKQAITYPE_DISPLAY_DRIVERCAPS_EXTENSION"}]
     },
     {
+      "id": "R44-UPDATEMONITORLINKINFO-FROM-2-4",
+      "declaration": "DXGK_DRIVERCAPS.WDDMVersion >= 2.4",
+      "requires_text": "the table carries DxgkDdiUpdateMonitorLinkInfo. With a NULL member dxgkrnl calls its own default, which returns STATUS_NOT_SUPPORTED, and from D3DKMT driver version 2400 the monitor arrival keeps that status, so StartDevice fails (Code 43, CM_PROB_FAILED_POST_START). Below 2.4 the status is changed to success",
+      "source": "DXGKRNL static reading of the lab failure (lab arm 1 of 352c4210, 22631): ADAPTER_DISPLAY::DefaultDdiUpdateMonitorLinkInfo 22621.6199 VA 0x1c01eeef0 'mov eax,0xC00000BB'; DXGMONITOR::_UpdateLinkInfo 0x1c0209870 calls vtable slot 0x60 (KernelDriver::UpdateMonitorLinkInfo) and on 0xC00000BB takes 0x1c02a4728..4786: 'cmp eax,0x960; jge' keeps the status, else 'xor r14d,r14d'; 26100.9549 _UpdateLinkInfo 0x140290b50 the same at 0x140290c21 and 0x140290ebf. ETW: DdiUpdateMonitorLinkInfo, then 'Adapter StartDevice has completed with status 0xC00000BB'",
+      "when": [{"wddm_version_at_least": "0x2400"}],
+      "require": [{"ddi_set": "DxgkDdiUpdateMonitorLinkInfo"}]
+    },
+    {
       "id": "R21-HIGHEST-ADDRESS",
       "declaration": "any full miniport",
       "requires_text": "DXGK_DRIVERCAPS.HighestAcceptableAddress is not left at a low value (-1 = no limit)",

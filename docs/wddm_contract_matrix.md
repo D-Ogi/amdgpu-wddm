@@ -175,9 +175,14 @@ Segment 2 has not been seen by a lab dxgkrnl yet; it is here as the compiled dri
 
 1376 bytes (832 before ADR 0019 B1), 60 DDI pointers set plus `Version` (`wddm.c` `WddmBuildTable`).
 `Version = DXGKDDI_INTERFACE_VERSION_WDDM3_1`, the binary compiled at `DXGKDDI_INTERFACE_VERSION 0x10004`
-(`bc250kmd.h`); every member after the WDDM 2.0 block (offset 832 on) is NULL and checked so at run time. Since ADR 0019 stage B4 (BD-307) `WDDMVersion` is
-`DXGKDDI_WDDMv2_9`: the static reading of dxgkrnl 22621.6199 and 26100.9549 finds no load check at 2.1-2.9 that
-names one of these members for a full adapter, and each one is tested for NULL before use. Stage B and stage C added code
+(`bc250kmd.h`); every member after the WDDM 2.0 block (offset 832 on) is NULL and checked so at run time, except
+`UpdateMonitorLinkInfo`. Since ADR 0019 stage B4 (BD-307) `WDDMVersion` is `DXGKDDI_WDDMv2_9`: the static reading
+of dxgkrnl 22621.6199 and 26100.9549 finds no load check at 2.1-2.9 that names one of these members for a full
+adapter. One check is not at load: at monitor arrival, `DXGMONITOR::_UpdateLinkInfo` calls `UpdateMonitorLinkInfo`,
+and with a NULL member it gets dxgkrnl's default answer `STATUS_NOT_SUPPORTED`. From D3DKMT driver version 2400
+(WDDMVersion 2.4) it keeps that status, and `StartDevice` fails with Code 43 (lab arm 1 of 352c4210 on 22631).
+The table therefore fills that one tail member (rule R44). Each other tail member is tested for NULL before use.
+Stage B and stage C added code
 behind these pointers but no pointer: the table is the same 60 it was before the ring path existed, which is
 what "no new capability and no new DDI" looks like from dxgkrnl's side.
 
@@ -242,6 +247,7 @@ making the declaration later is not free.
 | R41 | a full adapter reports `WDDMVersion` | one of 0x1200, 0x1300, 0x2000, 0x2100 ... 0x2900, 0x3000, 0x3100 (the set that both 22621 and 26100 accept. Only 26100 accepts 0x3200, and neither accepts 0x2105 or 0x2106) | DXGKRNL `DXGADAPTER::Initialize` "Miniport returned unknown WDDM version", 22621.6199 and 26100.9549 (BD-307) | OK |
 | R42 | `WDDMVersion` >= 2.6 | interface > 0xA00B | DXGKRNL `DXGADAPTER::Initialize` 22621.6197 VA 0x1c01fd2f1 (BD-307) | OK |
 | R43 | `WDDMVersion` >= 2.2 | type 16 (`DISPLAY_DRIVERCAPS_EXTENSION`) answered. A refusal makes dxgkrnl set `VirtualModeSupport` | DXGKRNL `ADAPTER_DISPLAY::Initialize` 22621.6197 VA 0x1c02a09e0 (BD-307) | OK |
+| R44 | `WDDMVersion` >= 2.4 | `DxgkDdiUpdateMonitorLinkInfo` in the table. dxgkrnl's default for a NULL member returns `STATUS_NOT_SUPPORTED`, and from D3DKMT version 2400 the monitor arrival keeps it: `StartDevice` fails, Code 43 | DXGKRNL `DXGMONITOR::_UpdateLinkInfo` 22621.6199 VA 0x1c02a4728 (`cmp eax,0x960` then `jge`), 26100.9549 0x140290ebf, lab arm 1 of 352c4210 | OK |
 | R21 | any full miniport | `HighestAcceptableAddress` not left low (-1) | LEARN mcdm; SAMPLE RosKmdAdapter.cpp:959 | OK |
 | R22 | a declared segment | `Flags.Agp` stays 0 | LEARN "Flags.Agp on a non-AGP aperture -> the adapter fails to initialize" | OK |
 | R23 | `PreemptionAware = 1` | granularity above NONE | LEARN gpu-preemption, NONE "may cause the TDR process to repeatedly reset the GPU" | OK (warning rule) |

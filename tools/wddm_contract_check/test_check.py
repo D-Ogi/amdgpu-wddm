@@ -520,8 +520,9 @@ class NegativeFixtures(unittest.TestCase):
         self.assertEqual(check.OK, result["R20-WDDMVERSION-VS-INTERFACE"])
 
     @staticmethod
-    def wddm29(answer_type16=True):
-        """The stage B4 shape (BD-307): interface 0xE003, table WDDM2_9, WDDMVersion 2.9, type 16 answered."""
+    def wddm29(answer_type16=True, link_info=True):
+        """The stage B4 shape (BD-307): interface 0xE003, table WDDM2_9, WDDMVersion 2.9, type 16 answered,
+        UpdateMonitorLinkInfo in the table."""
         wddm = GOOD_WDDM.replace("Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_0;",
                                  "Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_9;")
         wddm = wddm.replace("#define DXGKDDI_INTERFACE_VERSION 0x5023", "#define DXGKDDI_INTERFACE_VERSION 0xE003")
@@ -533,6 +534,10 @@ class NegativeFixtures(unittest.TestCase):
                                 "        status = STATUS_SUCCESS;\n"
                                 "        break;\n"
                                 "    case DXGKQAITYPE_NUMPOWERCOMPONENTS:")
+        if link_info:
+            wddm = wddm.replace("    Data->DxgkDdiQueryAdapterInfo = Bc250WddmQueryAdapterInfo;",
+                                "    Data->DxgkDdiQueryAdapterInfo = Bc250WddmQueryAdapterInfo;\n"
+                                "    Data->DxgkDdiUpdateMonitorLinkInfo = Bc250WddmTracedUpdateMonitorLinkInfo;")
         return wddm
 
     def test_wddm29_shape_passes(self):
@@ -541,7 +546,8 @@ class NegativeFixtures(unittest.TestCase):
         result, facts = statuses(wddm=wddm)
         self.assertEqual({}, {k: v for k, v in result.items() if v == check.VIOLATION})
         for rule_id in ("R20-WDDMVERSION-VS-INTERFACE", "R41-WDDMVERSION-ACCEPTED",
-                        "R42-WDDMVERSION-ABOVE-2-5-INTERFACE", "R43-QAI-16-ANSWERED-FROM-2-2"):
+                        "R42-WDDMVERSION-ABOVE-2-5-INTERFACE", "R43-QAI-16-ANSWERED-FROM-2-2",
+                        "R44-UPDATEMONITORLINKINFO-FROM-2-4"):
             self.assertEqual(check.OK, result[rule_id], rule_id)
         self.assertIn(16, facts.qai_handled)
 
@@ -549,6 +555,18 @@ class NegativeFixtures(unittest.TestCase):
         """At 2.2 or later a refused type 16 makes dxgkrnl set VirtualModeSupport by itself."""
         result, _ = statuses(wddm=self.wddm29(answer_type16=False))
         self.assertOnlyViolation(result, "R43-QAI-16-ANSWERED-FROM-2-2")
+
+    def test_wddm29_without_update_monitor_link_info(self):
+        """From 2.4 dxgkrnl keeps its default STATUS_NOT_SUPPORTED of a NULL UpdateMonitorLinkInfo (lab arm 1)."""
+        result, _ = statuses(wddm=self.wddm29(link_info=False))
+        self.assertOnlyViolation(result, "R44-UPDATEMONITORLINKINFO-FROM-2-4")
+
+    def test_wddm23_without_update_monitor_link_info(self):
+        """Below 2.4 dxgkrnl changes the default's status to success, so the member is not required."""
+        wddm = self.wddm29(link_info=False).replace("caps->WDDMVersion = DXGKDDI_WDDMv2_9;",
+                                                    "caps->WDDMVersion = DXGKDDI_WDDMv2_3;")
+        result, _ = statuses(wddm=wddm)
+        self.assertEqual({}, {k: v for k, v in result.items() if v == check.VIOLATION})
 
     def test_wddm32_is_not_accepted_by_22621(self):
         """0x3200 fails the adapter on 22621 (the 23H2 lab), so one binary for n-2 may not report it."""

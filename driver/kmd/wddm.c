@@ -5053,10 +5053,10 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
 
     // ADR 0019 stage B4 (BD-307): the feature level of the 2.9 interface this binary is compiled at. Static reading of
     // dxgkrnl 22621.6199 (the lab's 22631) and 26100.9549: both accept 0x2900, and no load check keyed on 2.1-2.9
-    // names a DDI that a full adapter must fill; each new DDI is tested for NULL before use (scratch plan
-    // t38/wddm-b4). What the level changes without a new DDI: the D3D11 runtime asks our UMD for its WDDM 2.2
-    // table (KMT version >= 2.2, BD-153), display state synchronization is the 2.3 one, and the type 16 answer
-    // below becomes necessary. Every optional 2.1-2.9 cap stays zero (RtlZeroMemory above).
+    // names a DDI that a full adapter must fill. The monitor arrival does: from 2.4 it needs UpdateMonitorLinkInfo
+    // (Bc250UpdateMonitorLinkInfo, lab arm 1 of 352c4210). What the level changes without a new DDI: the D3D11
+    // runtime asks our UMD for its WDDM 2.2 table (KMT version >= 2.2, BD-153), display state synchronization is the
+    // 2.3 one, and the type 16 answer below becomes necessary. Every optional 2.1-2.9 cap stays zero (RtlZeroMemory above).
     caps->WDDMVersion = DXGKDDI_WDDMv2_9;
     caps->HighestAcceptableAddress.QuadPart = -1;       // no addressing limit; too low a value fails the load
     caps->SupportNonVGA = TRUE;
@@ -11953,6 +11953,8 @@ C_ASSERT(sizeof(DRIVER_INITIALIZATION_DATA) ==
 // GetChildContainerId is a WDDM 1.2 member and this table fills it (step 4 of DP audio), so it has to sit before
 // that tail, or WddmCheckReserved would report it as a member of a version this driver does not declare.
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetChildContainerId) < BC250_WDDM_TABLE_TAIL_START);
+// UpdateMonitorLinkInfo is the one tail member this table fills (stage B4); WddmCheckReserved names it as the exception.
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiUpdateMonitorLinkInfo) >= BC250_WDDM_TABLE_TAIL_START);
 // Swizzling ranges are gone from WDDM, so the two DDIs must stay NULL and the cap must stay 0; the pair is here so
 // that the connection is visible where the table is built.
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiReleaseSwizzlingRange) >
@@ -11991,9 +11993,11 @@ static void WddmCheckReserved(_In_ const DRIVER_INITIALIZATION_DATA* Data)
     for (i = 0; i < RTL_NUMBER_OF(reserved); i++)
         if (*(PVOID* const*)((const UCHAR*)Data + reserved[i].Offset) != NULL)
             GuardLog("wddm: table member %s must be zero and is not", reserved[i].Name);
-    // ADR 0019 B1/B4: every WDDM 2.1-3.1 member stays NULL; at WDDMVersion 2.9 dxgkrnl tests each one before use.
+    // ADR 0019 B1/B4: every WDDM 2.1-3.1 member stays NULL except UpdateMonitorLinkInfo (a 2.1 member that dxgkrnl
+    // requires from WDDMVersion 2.4, see Bc250UpdateMonitorLinkInfo); dxgkrnl tests each other one before use.
     for (offset = BC250_WDDM_TABLE_TAIL_START; offset < sizeof(*Data); offset += sizeof(PVOID))
-        if (*(PVOID const*)((const UCHAR*)Data + offset) != NULL)
+        if (offset != FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiUpdateMonitorLinkInfo) &&
+            *(PVOID const*)((const UCHAR*)Data + offset) != NULL)
             GuardLog("wddm: table member at offset %u (after the WDDM 2.0 block) must be NULL and is not", (ULONG)offset);
 }
 
@@ -12008,7 +12012,8 @@ typedef enum _BC250_WDDM_TRACED {
     TracedQueryChildRelations = 0, TracedQueryChildStatus, TracedQueryDeviceDescriptor, TracedGetChildContainerId,
     TracedIsSupportedVidPn,
     TracedRecommendFunctionalVidPn, TracedEnumVidPnCofuncModality, TracedSetVidPnSourceVisibility, TracedCommitVidPn,
-    TracedUpdateActiveVidPnPresentPath, TracedRecommendMonitorModes, TracedQueryVidPnHWCapability, TracedCount
+    TracedUpdateActiveVidPnPresentPath, TracedRecommendMonitorModes, TracedQueryVidPnHWCapability,
+    TracedUpdateMonitorLinkInfo, TracedCount
 } BC250_WDDM_TRACED;
 
 static volatile LONG g_TracedCalls[TracedCount];
@@ -12074,6 +12079,31 @@ BC250_WDDM_TRACED_DDI(DXGKDDI_UPDATEACTIVEVIDPNPRESENTPATH, UpdateActiveVidPnPre
 BC250_WDDM_TRACED_DDI(DXGKDDI_RECOMMENDMONITORMODES, RecommendMonitorModes, const DXGKARG_RECOMMENDMONITORMODES* const)
 BC250_WDDM_TRACED_DDI(DXGKDDI_QUERYVIDPNHWCAPABILITY, QueryVidPnHWCapability, DXGKARG_QUERYVIDPNHWCAPABILITY*)
 
+// The link capabilities of the monitor on our one target, which dxgkrnl asks for after RecommendMonitorModes
+// (d3dkmddi.h DXGKDDI_UPDATEMONITORLINKINFO, a WDDM 2.1 member). This DDI is necessary from WDDMVersion 2.4: when
+// the table has no pointer, dxgkrnl calls its own default, which returns STATUS_NOT_SUPPORTED, and
+// DXGMONITOR::_UpdateLinkInfo keeps that status as the result of the monitor arrival when the D3DKMT driver version
+// is 2400 or more. Below 2400 it changes the status to success. dxgkrnl 22621.6199 (cold path 0x1c02a4728..4786)
+// and 26100.9549 (0x140290c21, 0x140290ebf) do the same. With no pointer, a 2.9 adapter fails StartDevice with
+// 0xC00000BB (lab arm 1 of 352c4210, scratch t38/wddm-b4/lab-run1).
+// The answer claims no capability: no stereo, no wide or high colour space, no dynamic wire format, no HDR10+, no
+// Dolby Vision and no variable refresh on the 8-bit SDR route of today, and no dithering per wire format.
+// dxgkrnl refuses a capability bit that the level does not define (0xC0000001), so zero is accepted at every
+// level. The HDR route sets its bits here when it has them.
+static DXGKDDI_UPDATEMONITORLINKINFO Bc250UpdateMonitorLinkInfo;
+static NTSTATUS Bc250UpdateMonitorLinkInfo(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_UPDATEMONITORLINKINFO* pArgs)
+{
+    UNREFERENCED_PARAMETER(hAdapter);
+    if (pArgs == NULL) return STATUS_INVALID_PARAMETER;
+    if (pArgs->VideoPresentTargetId != BC250_CHILD_UID) return STATUS_INVALID_PARAMETER;
+    // UsageHints is the input; the two output members are written in full.
+    pArgs->MonitorLinkInfo.Capabilities.Value = 0;
+    RtlZeroMemory(&pArgs->MonitorLinkInfo.DitheringSupport, sizeof(pArgs->MonitorLinkInfo.DitheringSupport));
+    return STATUS_SUCCESS;
+}
+
+BC250_WDDM_TRACED_DDI(DXGKDDI_UPDATEMONITORLINKINFO, UpdateMonitorLinkInfo, DXGKARG_UPDATEMONITORLINKINFO*)
+
 void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
 {
     RtlZeroMemory(Data, sizeof(*Data));
@@ -12113,6 +12143,8 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiUpdateActiveVidPnPresentPath = Bc250WddmTracedUpdateActiveVidPnPresentPath;
     Data->DxgkDdiRecommendMonitorModes = Bc250WddmTracedRecommendMonitorModes;
     Data->DxgkDdiQueryVidPnHWCapability = Bc250WddmTracedQueryVidPnHWCapability;
+    // WDDM 2.1 member, required from WDDMVersion 2.4 (Bc250UpdateMonitorLinkInfo says why).
+    Data->DxgkDdiUpdateMonitorLinkInfo = Bc250WddmTracedUpdateMonitorLinkInfo;
     Data->DxgkDdiSystemDisplayEnable = Bc250SystemDisplayEnable;
     Data->DxgkDdiSystemDisplayWrite = Bc250SystemDisplayWrite;
 
@@ -12181,8 +12213,10 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     // doorbell DDIs (no native fence, no user-mode submission), the flip-queue DDIs, SetTargetGamma and
     // SetTargetAdjustedColorimetry (not before stage B4), and the diagnostic DDIs, which dxgkrnl requires in
     // pairs (QueryDiagnosticTypesSupport with ControlDiagnosticReporting, from WDDMVersion 2.4). The interface
-    // version alone obliges none of them, and neither does WDDMVersion 2.9 for a full adapter (ADR 0019 B4: the
-    // dxgkrnl reading finds no load check that names one; the WHCP requirements are a separate list, BD-307).
+    // version alone obliges none of them. WDDMVersion 2.4 and higher obliges one tail member that the static load
+    // reading did not find, because dxgkrnl tests it at monitor arrival and not at load: UpdateMonitorLinkInfo,
+    // which the table fills above (lab arm 1 of 352c4210 failed StartDevice without it). The WHCP requirements are a
+    // separate list (BD-307).
     // QueryInterface, ControlEtwLogging,
     // NotifyAcpiEvent, SetPalette, NotifySurpriseRemoval, SetPowerComponentFState,
     // PowerRuntimeControlRequest and PowerRuntimeSetDeviceHandle stay NULL exactly as they are in the
