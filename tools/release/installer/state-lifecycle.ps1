@@ -1,7 +1,7 @@
 # State schema 2 installer transaction. PowerShell owns orchestration only; the
 # bounded SYSTEM worker owns capture, freeze, protected files and acknowledgment.
 function Invoke-DriverStateWorker {
-    param([string]$Worker,[ValidateSet('prepare','ack','archive')][string]$Operation,
+    param([string]$Worker,[ValidateSet('prepare','ack','archive','abandon')][string]$Operation,
         [string]$Transaction,[string]$Product,[string]$Device,[scriptblock]$Runner)
     if($Transaction -cnotmatch '\A[0-9a-f]{32}\z' -or $Transaction -eq ('0'*32)) { throw 'invalid state transaction identity' }
     [void](ConvertTo-DriverQuad $Product)
@@ -33,22 +33,114 @@ function Get-DriverStateRetiredRecords {
     return @($retired | ForEach-Object { $_.Name })
 }
 
+# BD-298: the installer record of the state transaction (state.json driver_state) is a state machine with explicit
+# phases. No record or the phase 'acknowledged' or 'abandoned' has no open transaction. 'prepared' has one: the worker
+# can hold its handoff (pending.bin) and its freeze of the installed store.
+#   (none), acknowledged, abandoned --install--> prepared (a new transaction)
+#   prepared --install of the same package--> prepared (the same transaction: the prepare is repeated)
+#   prepared --acknowledgment of the same package--> acknowledged
+#   prepared --install of another package, or uninstall--> abandoned (the worker step 'abandon', then a new transaction
+#                                                         or the removal)
+# 'abandoned' is terminal for its transaction: no step resumes or acknowledges it. The table gives the step for each
+# phase and intent. exact: the record names this product, device and INF ($null: either).
+$script:DriverStateSteps=@(
+    @{phase='none';intent='install';exact=$null;step='begin'}
+    @{phase='none';intent='complete';exact=$null;step='refuse'}
+    @{phase='none';intent='remove';exact=$null;step='proceed'}
+    @{phase='prepared';intent='install';exact=$true;step='resume'}
+    @{phase='prepared';intent='install';exact=$false;step='abandon'}
+    @{phase='prepared';intent='complete';exact=$true;step='acknowledge'}
+    @{phase='prepared';intent='complete';exact=$false;step='refuse'}
+    @{phase='prepared';intent='remove';exact=$null;step='abandon'}
+    @{phase='acknowledged';intent='install';exact=$null;step='begin'}
+    @{phase='acknowledged';intent='complete';exact=$true;step='acknowledge'}
+    @{phase='acknowledged';intent='complete';exact=$false;step='refuse'}
+    @{phase='acknowledged';intent='remove';exact=$null;step='proceed'}
+    @{phase='abandoned';intent='install';exact=$null;step='begin'}
+    @{phase='abandoned';intent='complete';exact=$null;step='refuse'}
+    @{phase='abandoned';intent='remove';exact=$null;step='proceed'}
+)
+function Get-DriverStateStep {
+    param($Record,[ValidateSet('install','complete','remove')][string]$Intent,[string]$Product,[string]$Device,[string]$InfSha256)
+    $phase='none'
+    if($Record) {
+        if($Record.schema -ne 2 -or [string]$Record.transaction -cnotmatch '\A[0-9a-f]{32}\z') { throw 'invalid driver state transaction record' }
+        $phase=[string]$Record.phase
+    }
+    $exact=[bool]($Record -and $Record.product -ceq $Product -and $Record.device -ceq $Device -and $Record.inf_sha256 -ieq $InfSha256)
+    foreach($row in $script:DriverStateSteps) {
+        if($row.phase -ceq $phase -and $row.intent -ceq $Intent -and ($null -eq $row.exact -or $row.exact -eq $exact)) { return $row.step }
+    }
+    throw 'invalid driver state transaction phase'
+}
+
+# The step 'abandon': the SYSTEM worker moves the handoff of the stopped install aside as
+# retired-<transaction>-pending.bin and releases the freeze of that transaction. Then the record is 'abandoned', and a
+# copy goes to driver_state_history. The record and the retired file stay as evidence. A retry after any failure
+# repeats the worker step: that step does only what remains.
+function Stop-DriverStateTransaction {
+    param($State,[string]$Worker,[ValidateSet('install','remove')][string]$Reason,[string]$Product,
+        [scriptblock]$Save,[scriptblock]$Runner,[string]$StateDirectory=(Get-DriverStateDirectory))
+    $record=$State.driver_state
+    if(-not $record -or $record.phase -cne 'prepared') { throw 'no prepared driver state transaction to abandon' }
+    $old=[string]$record.product
+    # Administrators may read the state directory: the log says what the worker found and left.
+    $pendingPath=Join-Path $StateDirectory 'pending.bin';$retiredPath=Join-Path $StateDirectory "retired-$($record.transaction)-pending.bin"
+    $hadPending=Test-Path -LiteralPath $pendingPath -PathType Leaf;$hadRetired=Test-Path -LiteralPath $retiredPath -PathType Leaf
+    try {
+        Invoke-DriverStateWorker -Worker $Worker -Operation abandon -Transaction $record.transaction -Product $old -Device $record.device -Runner $Runner
+    } catch {
+        $text=$_.Exception.Message
+        $why=switch -Regex ($text) {
+            '\(exit 13\)'   { 'its state file is damaged or of an unknown form. The file was kept.'; break }
+            '\(exit 1306\)' { 'the state files belong to another install. They were kept.'; break }
+            '\(exit 183\)'  { 'a retired file of an earlier attempt has other content. Both files were kept.'; break }
+            default         { 'the state worker failed.' }
+        }
+        throw "The stopped install of driver version $old cannot be abandoned: $why Directory: $StateDirectory. Detail: $text"
+    }
+    $record.phase='abandoned'
+    $record | Add-Member -NotePropertyName abandoned_utc -NotePropertyValue ([DateTime]::UtcNow.ToString('o')) -Force
+    $record | Add-Member -NotePropertyName abandoned_for -NotePropertyValue $(if($Reason -eq 'remove'){'uninstall'}else{"install of $Product"}) -Force
+    $history=@(@($State.driver_state_history) | Where-Object { $_ }) + @(($record | ConvertTo-Json -Depth 4 -Compress | ConvertFrom-Json))
+    Set-StateValue $State 'driver_state_history' @($history | Select-Object -Last 8)
+    & $Save $State
+    Write-Warn2 ("The install of driver version $old did not finish (for example after a power loss or a blocked program). " +
+        "It was abandoned. Its saved settings record was kept as evidence.")
+    Write-Log "   state: transaction $($record.transaction) abandoned; its handoff, if any, is retired-$($record.transaction)-pending.bin in $StateDirectory"
+    if($hadPending -and $hadRetired) {
+        Write-Log "   state: pending.bin was identical to the retired copy of an earlier abandon of this transaction; the worker removed pending.bin after a byte compare"
+    }
+    if(Test-Path -LiteralPath $retiredPath -PathType Leaf) {
+        try { Write-Log "   state: $retiredPath SHA256 $((Get-FileHash -LiteralPath $retiredPath -Algorithm SHA256).Hash)" } catch { }
+    }
+}
+
+# Before the install of a package: abandons a prepared transaction of another package. Returns the step of the table.
+function Resolve-DriverStateTransaction {
+    param($State,[string]$Worker,[string]$Product,[string]$Device,[string]$InfSha256,
+        [scriptblock]$Save,[scriptblock]$Runner,[string]$StateDirectory=(Get-DriverStateDirectory))
+    $step=Get-DriverStateStep -Record $State.driver_state -Intent install -Product $Product -Device $Device -InfSha256 $InfSha256
+    if($step -eq 'abandon') {
+        Stop-DriverStateTransaction -State $State -Worker $Worker -Reason install -Product $Product -Save $Save -Runner $Runner -StateDirectory $StateDirectory
+        $step=Get-DriverStateStep -Record $State.driver_state -Intent install -Product $Product -Device $Device -InfSha256 $InfSha256
+    }
+    return $step
+}
+
 function Start-DriverStateTransaction {
     param($State,[string]$Worker,[string]$Product,[string]$Device,[string]$InfSha256,
         [scriptblock]$Save,[scriptblock]$Runner,[string]$StateDirectory=(Get-DriverStateDirectory))
-    $record=$State.driver_state
-    if($record -and $record.phase -eq 'prepared') {
-        if($record.product -cne $Product -or $record.device -cne $Device -or $record.inf_sha256 -ine $InfSha256) {
-            throw 'another driver state transaction is pending; resume its exact package first'
-        }
-    } else {
-        if($record -and $record.phase -ne 'acknowledged') { throw 'invalid driver state transaction phase' }
+    $step=Resolve-DriverStateTransaction -State $State -Worker $Worker -Product $Product -Device $Device -InfSha256 $InfSha256 `
+        -Save $Save -Runner $Runner -StateDirectory $StateDirectory
+    if($step -eq 'begin') {
         $record=[pscustomobject]@{schema=2;transaction=[guid]::NewGuid().ToString('N');phase='prepared';
             product=$Product;device=$Device;inf_sha256=$InfSha256}
         Set-StateValue $State 'driver_state' $record
         # Identity reaches durable installer state before the worker can freeze.
         & $Save $State
-    }
+    } elseif($step -ne 'resume') { throw "unexpected driver state step $step" }
+    $record=$State.driver_state
     Invoke-DriverStateWorker -Worker $Worker -Operation prepare -Transaction $record.transaction -Product $Product -Device $Device -Runner $Runner
     $retired=@(Get-DriverStateRetiredRecords -Transaction $record.transaction -Directory $StateDirectory)
     if($retired.Count) {
@@ -64,10 +156,9 @@ function Complete-DriverStateTransaction {
     param($State,[string]$Worker,[string]$Product,[string]$Device,[string]$InfSha256,
         [scriptblock]$Save,[scriptblock]$Runner)
     $record=$State.driver_state
-    if(-not $record -or $record.schema -ne 2 -or $record.phase -notin @('prepared','acknowledged') -or
-       $record.product -cne $Product -or $record.device -cne $Device -or $record.inf_sha256 -ine $InfSha256) {
-        throw 'driver binding has no matching prepared state transaction'
-    }
+    $step='refuse'
+    try { $step=Get-DriverStateStep -Record $record -Intent complete -Product $Product -Device $Device -InfSha256 $InfSha256 } catch { }
+    if($step -ne 'acknowledge') { throw 'driver binding has no matching prepared state transaction' }
     # The native operation checks Active/Ready/Catalog with the common adapter,
     # archives first, and removes only the matching pending file by its handle.
     Invoke-DriverStateWorker -Worker $Worker -Operation ack -Transaction $record.transaction -Product $Product -Device $Device -Runner $Runner
@@ -75,10 +166,16 @@ function Complete-DriverStateTransaction {
 }
 
 function Save-DriverStateBeforeRemoval {
-    param($State,[string]$Worker,[string]$Product,[string]$Device,[scriptblock]$Save,[scriptblock]$Runner)
-    if($State.driver_state -and $State.driver_state.phase -ne 'acknowledged') {
-        throw 'uninstall requires the pending install transaction to finish first; no service data was removed'
-    }
+    param($State,[string]$Worker,[string]$Product,[string]$Device,[scriptblock]$Save,[scriptblock]$Runner,
+        [string]$StateDirectory=(Get-DriverStateDirectory),[string]$AbandonWorker='')
+    # BD-298: a stopped install (prepared) is abandoned first. Its settings stay in the store, and the archive below
+    # captures them for a later install. The worker of an installed release before BD-298 has no abandon step: the
+    # uninstaller of a newer package gives its own worker as -AbandonWorker.
+    if(-not $AbandonWorker){$AbandonWorker=$Worker}
+    $step=Get-DriverStateStep -Record $State.driver_state -Intent remove
+    if($step -eq 'abandon') {
+        Stop-DriverStateTransaction -State $State -Worker $AbandonWorker -Reason remove -Save $Save -Runner $Runner -StateDirectory $StateDirectory
+    } elseif($step -ne 'proceed') { throw "unexpected driver state step $step" }
     $record=$State.driver_state_removal
     if(-not $record) {
         $record=[pscustomobject]@{schema=2;transaction=[guid]::NewGuid().ToString('N');phase='capture';product=$Product;device=$Device}

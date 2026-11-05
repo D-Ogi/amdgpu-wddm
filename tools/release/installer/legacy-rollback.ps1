@@ -1,5 +1,18 @@
 # Explicit bridge owned by the new engine. A legacy engine never runs its install
 # phase after restoration: it would rewrite the state which this bridge preserves.
+# A rollback starts only from a completed schema 2 installation (driver_state phase acknowledged). Returns $null, or the
+# refusal that names the actual state and what the user can do (BD-298: a stopped install can be abandoned).
+function Get-LegacyRollbackStateRefusal($State) {
+    $record=$State.driver_state
+    if($record -and $record.phase -eq 'acknowledged'){return $null}
+    $version=if($record -and $record.product){[string]$record.product}else{'unknown'}
+    switch([string]$(if($record){$record.phase}else{''})) {
+        'prepared' {return "the install of driver version $version has not finished. Run the setup of that version again, or install the current version, and then start the rollback again"}
+        'abandoned' {return "the install of driver version $version stopped and was abandoned, so no completed installation is on this computer. Install a driver version with its setup first, and then start the rollback again"}
+        '' {return 'legacy rollback requires a completed schema 2 installation. Install a driver version with its setup first, and then start the rollback again'}
+        default {return "the installer state has an unknown driver state phase '$($record.phase)'; no rollback was started"}
+    }
+}
 function Get-LegacyRollbackTarget {
     param([string]$PackageRoot,[string]$FirmwareDir)
     $integrity=Test-PackageManifest -PackageRoot $PackageRoot
@@ -61,7 +74,7 @@ function Remove-LegacyRollbackDriverSets {
 }
 function Start-LegacyRollback {
     param($State,$Target,[string]$Device,[string]$Worker,[scriptblock]$Save,[scriptblock]$Runner,[string]$SourceInf)
-    if($State.driver_state -and $State.driver_state.phase -ne 'acknowledged'){throw 'finish the pending state migration before rollback'}
+    if($State.driver_state){$refusal=Get-LegacyRollbackStateRefusal $State;if($refusal){throw $refusal}}
     $r=$State.legacy_rollback
     if(-not $r){
         $r=[pscustomobject]@{schema=1;transaction=[guid]::NewGuid().ToString('N');phase='capture';device=$Device;

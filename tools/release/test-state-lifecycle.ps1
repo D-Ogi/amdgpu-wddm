@@ -21,9 +21,9 @@ Check ($script:events[0] -eq 'save:prepared' -and $script:events[1] -eq 'worker:
 $tx=$r.transaction
 [void](Start-DriverStateTransaction -State $s -Worker fixture.exe -Product '0.7.216.102' -Device $device -InfSha256 $sha -Save $save -Runner $run)
 Check ($s.driver_state.transaction -ceq $tx) 'interrupted preparation retries the same identity'
-Refuses {Start-DriverStateTransaction -State $s -Worker fixture.exe -Product '0.7.216.103' -Device $device -InfSha256 $sha -Save $save -Runner $run} 'different package cannot replace pending transaction'
+Refuses {Complete-DriverStateTransaction -State $s -Worker fixture.exe -Product '0.7.216.103' -Device $device -InfSha256 $sha -Save $save -Runner $run} 'different package cannot acknowledge'
 Refuses {Complete-DriverStateTransaction -State $s -Worker fixture.exe -Product '0.7.216.102' -Device $device -InfSha256 ('B'*64) -Save $save -Runner $run} 'different INF cannot acknowledge'
-Refuses {Save-DriverStateBeforeRemoval -State $s -Worker fixture.exe -Product '0.7.216.102' -Device $device -Save $save -Runner $run} 'uninstall blocks while migration pending'
+Check ($s.driver_state.phase -eq 'prepared' -and $s.driver_state.transaction -ceq $tx) 'refused acknowledgments leave the transaction'
 $script:failWorker=$true
 Refuses {Complete-DriverStateTransaction -State $s -Worker fixture.exe -Product '0.7.216.102' -Device $device -InfSha256 $sha -Save $save -Runner $run} 'failed native ack is retained'
 Check ($s.driver_state.phase -eq 'prepared') 'native failure never marks complete'
@@ -44,6 +44,118 @@ $badReply={param($exe,$arguments) @{code=0;text='{"abi":1}'}}
 Refuses {Invoke-DriverStateWorker fixture.exe prepare $tx '0.7.216.102' $device -Runner $badReply} 'zero process exit with missing durable ack is failure'
 $badReply={param($exe,$arguments) @{code=0;text='{"abi":99,"error":0}'}}
 Refuses {Invoke-DriverStateWorker fixture.exe prepare $tx '0.7.216.102' $device -Runner $badReply} 'ABI mismatch is failure'
+
+# BD-298: an install that stopped after its prepare (state.json driver_state phase prepared) is abandoned by the
+# uninstall and by the install of another package; the exact package still resumes it; 'abandoned' is terminal.
+$script:calls=New-Object Collections.Generic.List[string];$script:saves=New-Object Collections.Generic.List[string]
+$script:abandonCode=0
+$rec={param($exe,$arguments)
+    $script:calls.Add("$exe " + ($arguments -join ' '))
+    if($arguments[0] -eq 'abandon' -and $script:abandonCode){return @{code=$script:abandonCode;text="{`"abi`":1,`"error`":$($script:abandonCode)}"}}
+    return @{code=0;text='{"abi":1,"error":0}'}
+}
+$rsave={param($st) $script:saves.Add([string]$st.driver_state.phase)}
+$stopped=('e5'*16)
+function Stopped([string]$Product='0.7.216.102') {
+    [pscustomobject]@{phase='install-incomplete';driver_state=[pscustomobject]@{schema=2;transaction=$stopped;phase='prepared';
+        product=$Product;device=$device;inf_sha256=$sha}}
+}
+function Reset298 {$script:calls.Clear();$script:saves.Clear();$script:abandonCode=0}
+# Every phase and intent has one step in the table; an unknown phase and a damaged record are refused.
+foreach($phase in @('prepared','acknowledged','abandoned')) {
+    foreach($intent in @('install','complete','remove')) {
+        $p=Stopped;$p.driver_state.phase=$phase
+        [void](Get-DriverStateStep -Record $p.driver_state -Intent $intent -Product '0.7.216.102' -Device $device -InfSha256 $sha)
+    }
+}
+Check ((Get-DriverStateStep -Record $null -Intent install) -eq 'begin') 'no record begins a transaction'
+Check ((Get-DriverStateStep -Record (Stopped).driver_state -Intent install -Product '0.7.216.102' -Device $device -InfSha256 $sha) -eq 'resume') 'exact package resumes'
+Check ((Get-DriverStateStep -Record (Stopped).driver_state -Intent install -Product '0.7.216.110' -Device $device -InfSha256 $sha) -eq 'abandon') 'another product abandons'
+Check ((Get-DriverStateStep -Record (Stopped).driver_state -Intent install -Product '0.7.216.102' -Device $device -InfSha256 ('B'*64)) -eq 'abandon') 'another INF abandons'
+Check ((Get-DriverStateStep -Record (Stopped).driver_state -Intent install -Product '0.7.216.102' -Device 'PCI\VEN_1002&DEV_13FE\OTHER' -InfSha256 $sha) -eq 'abandon') 'another device abandons'
+Check ((Get-DriverStateStep -Record (Stopped).driver_state -Intent remove) -eq 'abandon') 'uninstall abandons'
+$p=Stopped;$p.driver_state.phase='half-done'
+Refuses {Get-DriverStateStep -Record $p.driver_state -Intent install} 'unknown phase refused'
+$p=Stopped;$p.driver_state.schema=1
+Refuses {Get-DriverStateStep -Record $p.driver_state -Intent remove} 'record of another schema refused'
+$p=Stopped;$p.driver_state.transaction='../x'
+Refuses {Get-DriverStateStep -Record $p.driver_state -Intent remove} 'malformed transaction refused'
+
+# The exact package resumes the same transaction: no abandon step.
+Reset298;$p=Stopped
+[void](Start-DriverStateTransaction -State $p -Worker new.exe -Product '0.7.216.102' -Device $device -InfSha256 $sha -Save $rsave -Runner $rec)
+Check ($p.driver_state.transaction -ceq $stopped -and $p.driver_state.phase -eq 'prepared') 'exact package keeps its transaction'
+Check ($script:calls.Count -eq 1 -and $script:calls[0] -ceq "new.exe prepare $stopped 0.7.216.102 $device") 'exact package only repeats its prepare'
+
+# The install of another package: the worker abandons the old transaction with its own identity, the record is
+# abandoned durably and kept in the history, and only then does the new transaction begin.
+Reset298;$p=Stopped
+$log298=Join-Path ([IO.Path]::GetTempPath()) ("bd298-" + [guid]::NewGuid().ToString('N') + '.log');$script:LogPath=$log298
+try {
+    [void](Start-DriverStateTransaction -State $p -Worker new.exe -Product '0.7.216.110' -Device $device -InfSha256 ('C'*64) -Save $rsave -Runner $rec -StateDirectory ([IO.Path]::GetTempPath()))
+    $text=[IO.File]::ReadAllText($log298)
+} finally { $script:LogPath=$null; Remove-Item -LiteralPath $log298 -ErrorAction SilentlyContinue }
+Check ($script:calls.Count -eq 2 -and $script:calls[0] -ceq "new.exe abandon $stopped 0.7.216.102 $device" -and
+    $script:calls[1] -like "new.exe prepare * 0.7.216.110 $device") 'abandon of the old identity precedes the new prepare'
+Check ($script:saves.Count -eq 2 -and $script:saves[0] -eq 'abandoned' -and $script:saves[1] -eq 'prepared') 'abandoned is durable before the new transaction'
+Check ($p.driver_state.transaction -cne $stopped -and $p.driver_state.product -eq '0.7.216.110' -and $p.driver_state.phase -eq 'prepared') 'new transaction of the new package'
+$h=@($p.driver_state_history)
+Check ($h.Count -eq 1 -and $h[0].transaction -ceq $stopped -and $h[0].phase -eq 'abandoned' -and $h[0].product -eq '0.7.216.102' -and
+    $h[0].inf_sha256 -eq $sha -and $h[0].abandoned_for -eq 'install of 0.7.216.110' -and $h[0].abandoned_utc) 'history keeps the abandoned identity'
+Check ($text -match 'WARNING: The install of driver version 0\.7\.216\.102 did not finish' -and $text -match 'kept as evidence' -and
+    $text -match "retired-$stopped-pending\.bin") 'the abandon is a warning with the evidence name in the log'
+
+# A second abandon of the same transaction (its handoff published again): the worker removes a pending.bin identical to
+# the retired copy, and the log says so with the hash of the retired copy.
+Reset298;$p=Stopped
+$dir298=Join-Path ([IO.Path]::GetTempPath()) ("bd298-" + [guid]::NewGuid().ToString('N'));New-Item -ItemType Directory -Force $dir298 | Out-Null
+$script:LogPath=Join-Path $dir298 'install.log'
+try {
+    [IO.File]::WriteAllBytes((Join-Path $dir298 'pending.bin'),[byte[]](1,2,3));[IO.File]::WriteAllBytes((Join-Path $dir298 "retired-$stopped-pending.bin"),[byte[]](1,2,3))
+    $removePending={param($exe,$arguments) $script:calls.Add("$exe " + ($arguments -join ' '));Remove-Item -LiteralPath (Join-Path $dir298 'pending.bin') -ErrorAction SilentlyContinue;@{code=0;text='{"abi":1,"error":0}'}}
+    [void](Start-DriverStateTransaction -State $p -Worker new.exe -Product '0.7.216.110' -Device $device -InfSha256 $sha -Save $rsave -Runner $removePending -StateDirectory $dir298)
+    $text=[IO.File]::ReadAllText($script:LogPath)
+} finally { $script:LogPath=$null; Remove-Item -LiteralPath $dir298 -Recurse -Force -ErrorAction SilentlyContinue }
+Check ($text -match 'identical to the retired copy' -and $text -match "retired-$stopped-pending\.bin SHA256 039058C6F2C0CB492C533B0A4D14EF77CC0F78ABCCCED5287D84A1A2011CFB81") 'second abandon: the removal of the identical pending file is in the log'
+# A failed abandon leaves the record prepared, starts no transaction and names the cause.
+foreach($case in @(@{code=13;text='damaged'},@{code=1306;text='another install'},@{code=183;text='other content'},@{code=5;text='worker failed'})) {
+    Reset298;$p=Stopped;$script:abandonCode=$case.code;$msg=''
+    try {[void](Start-DriverStateTransaction -State $p -Worker new.exe -Product '0.7.216.110' -Device $device -InfSha256 $sha -Save $rsave -Runner $rec)} catch {$msg=$_.Exception.Message}
+    Check ($msg -match 'cannot be abandoned' -and $msg -match $case.text -and $msg -match '0\.7\.216\.102') "failed abandon (exit $($case.code)) is a clear refusal"
+    Check ($p.driver_state.phase -eq 'prepared' -and $p.driver_state.transaction -ceq $stopped -and $script:saves.Count -eq 0 -and
+        @($script:calls | Where-Object {$_ -like '* prepare *'}).Count -eq 0) "failed abandon (exit $($case.code)) changes nothing"
+}
+# The retry after a failed abandon repeats it and then succeeds.
+$script:abandonCode=0
+[void](Start-DriverStateTransaction -State $p -Worker new.exe -Product '0.7.216.110' -Device $device -InfSha256 $sha -Save $rsave -Runner $rec)
+Check ($p.driver_state.phase -eq 'prepared' -and $p.driver_state.transaction -cne $stopped -and @($p.driver_state_history).Count -eq 1) 'retry after a failed abandon finishes'
+
+# 'abandoned' is terminal: no acknowledgment, and a new install begins a new transaction, also for the old package.
+Reset298;$p=Stopped;$p.driver_state.phase='abandoned'
+Refuses {Complete-DriverStateTransaction -State $p -Worker new.exe -Product '0.7.216.102' -Device $device -InfSha256 $sha -Save $rsave -Runner $rec} 'abandoned transaction cannot be acknowledged'
+[void](Start-DriverStateTransaction -State $p -Worker new.exe -Product '0.7.216.102' -Device $device -InfSha256 $sha -Save $rsave -Runner $rec)
+Check ($p.driver_state.transaction -cne $stopped -and $script:calls.Count -eq 1 -and $script:calls[0] -like 'new.exe prepare *') 'abandoned transaction is never resumed'
+
+# The uninstall over a stopped install: abandon with the given worker, then the normal archive with the installed one.
+Reset298;$p=Stopped
+Save-DriverStateBeforeRemoval -State $p -Worker installed.exe -AbandonWorker new.exe -Product '0.7.216.109' -Device $device -Save $rsave -Runner $rec
+Check ($script:calls.Count -eq 2 -and $script:calls[0] -ceq "new.exe abandon $stopped 0.7.216.102 $device" -and
+    $script:calls[1] -like "installed.exe archive * 0.7.216.109 $device") 'uninstall abandons and then archives'
+Check ($p.driver_state.phase -eq 'abandoned' -and $p.driver_state_removal.phase -eq 'archived' -and @($p.driver_state_history)[0].abandoned_for -eq 'uninstall') 'uninstall continues its removal'
+# A resumed uninstall does not abandon again.
+$script:calls.Clear()
+Save-DriverStateBeforeRemoval -State $p -Worker installed.exe -Product '0.7.216.109' -Device $device -Save $rsave -Runner $rec
+Check ($script:calls.Count -eq 1 -and $script:calls[0] -like 'installed.exe archive *') 'resumed uninstall only archives'
+# A failed abandon stops the uninstall before the archive.
+Reset298;$p=Stopped;$script:abandonCode=13
+Refuses {Save-DriverStateBeforeRemoval -State $p -Worker installed.exe -Product '0.7.216.109' -Device $device -Save $rsave -Runner $rec} 'failed abandon stops the uninstall'
+Check ($p.driver_state.phase -eq 'prepared' -and -not $p.driver_state_removal -and @($script:calls | Where-Object {$_ -like '* archive *'}).Count -eq 0) 'no removal step after a failed abandon'
+# install.ps1 abandons before the pre-stage settings comparison, which refuses a prepared record without its own comparison.
+$installText=[IO.File]::ReadAllText("$PSScriptRoot\installer\install.ps1")
+$iResolve=$installText.IndexOf('Resolve-DriverStateTransaction -State $state');$iCompare=$installText.IndexOf('Save-DriverSettingsComparison -State $state')
+Check ($iResolve -gt 0 -and $iResolve -lt $iCompare) 'install abandons a stopped install before its settings comparison'
+$uninstallText=[IO.File]::ReadAllText("$PSScriptRoot\installer\uninstall.ps1")
+Check ($uninstallText.Contains('-AbandonWorker $abandonWorker')) 'uninstall gives the worker of its own package for the abandon step'
 # BD-262: a removal record that the prepare moved aside (an unreadable catalog, fresh handoff) is a warning in the log.
 # A record that the prepare read by setting name (handoff origin 4) and a clean computer give no warning.
 $dir=Join-Path $(if($env:BC250_TEST_OUT){$env:BC250_TEST_OUT}else{[IO.Path]::GetTempPath()}) ("state-retired-" + [guid]::NewGuid().ToString('N'))
