@@ -186,6 +186,20 @@ The loader pins the engine and the ICD as soon as each one is loaded (module-pin
 BD-315). They stay loaded until the process ends, and close() only drops the
 references. The hosted modules keep process-wide state that they do not release
 when they are unloaded. The D3D12 shell pins its engine and ICD the same way.
+What the pin changes for a process that lives long:
+- `dwm.exe` does not load these shells. The router sends it to `bc250d3d_zink.dll`
+  or to the CPU UMD, and those do not pin. Other processes that live long (for
+  example `explorer.exe` and browser GPU processes under `gpu-default`) do pin.
+- A device removal or a TDR recovery opens the adapter again on the same engine
+  and ICD. Before BD-315, the last close unloaded them, and the next open loaded
+  them again with new process-wide state.
+- The shell loads the engine and the ICD from its own directory (umd-entry.cpp).
+  A driver update with no restart puts the shell in a new DriverStore directory.
+  A process that is still running then loads a second engine and ICD from that
+  directory, and the old pair stays mapped until the process ends. The installer
+  does not make this case: it stages the driver set, restarts Windows, and only
+  in the new boot deletes old packages (only those that are not bound and not
+  kept for a rollback).
 The loader fixture test covers successful load/close/reopen, second-module failure,
 ABI mismatch, missing function and export failure with cleared state. The adapter
 now owns this loader and verifies both configured SHA-256 values before loading.
