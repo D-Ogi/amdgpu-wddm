@@ -29,4 +29,6 @@ if ($LASTEXITCODE -ne 2) { throw 'an unknown argument was accepted' }
 if ($LASTEXITCODE -ne 2) { throw 'a run without --save was accepted' }
 & $exe --out x.json --save y.txt --states 3 2>$null
 if ($LASTEXITCODE -ne 2) { throw 'an unknown offer state was accepted' }
+& $exe --out x.json --save y.txt --texture other 2>$null
+if ($LASTEXITCODE -ne 2) { throw 'an unknown texture kind was accepted' }
 "offer-states.exe $((Get-FileHash $exe -Algorithm SHA256).Hash)"

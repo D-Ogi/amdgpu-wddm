@@ -2,11 +2,18 @@
 // BD-308 and BD-309 repro: the cases of HLK "WDDM - OfferReclaim11 - Offer States" and "WDDM2 - OfferReclaim11 -
 // Working Set" that failed on tester.37, as a console program with no window.
 //
-// Offer states (BD-308). For each offer state, workload and mode it creates a shared texture
-// (D3D11_RESOURCE_MISC_SHARED, as the HLK test: it opens the texture again through GetSharedHandle), sets the VidMm
-// verifier flags of the adapter with D3DKMT_ESCAPE_ADAPTER_VERIFIER_OPTION (escape 29, d3dkmthk.h:2645; option struct
-// d3dkmthk.h:3320, flags union d3dkmthk.h:3276), queues a GPU workload on the texture, offers it, reclaims it and prints
-// bDiscarded and the time of each call.
+// Offer states (BD-308). For each offer state, workload and mode it creates a texture, sets the VidMm verifier flags of
+// the adapter with D3DKMT_ESCAPE_ADAPTER_VERIFIER_OPTION (escape 29, d3dkmthk.h:2645; option struct d3dkmthk.h:3320,
+// flags union d3dkmthk.h:3276), queues a GPU workload on the texture, offers it, reclaims it and prints bDiscarded and
+// the time of each call. Two kinds of texture:
+//   shared   D3D11_RESOURCE_MISC_SHARED. The HLK test opens its texture again through GetSharedHandle in the
+//            WorkloadType 0 cases only (hlk-or12 log-00036, metadataSet0-5), and those cases pass on tester.37.
+//   private  no misc flag, with a shader resource view, plus a staging texture of the same size that the CPU writes
+//            through Map(WRITE): the sequence of the WorkloadType 1-4 cases, which use no shared handle (the four
+//            failures are state 5 of these). Both are offered, as the HLK does (texture, then staging); the texture's
+//            reclaim gives bDiscarded, the staging texture is reclaimed after it and read through Map(READ).
+// A private texture is engine-private in the D3D11 shell; before the BD-309 engine offer, its offer was a hint and its
+// reclaim answered FALSE whatever the verifier flags.
 //   state 0  the flags the adapter had before the program started (no verifier flag of this program)
 //   state 5  those flags with AlwaysDiscardOffer (d3dkmthk.h:3283): a reclaim after a completed offer must discard
 // Workload 0 queues no work on the texture after its clear. Workloads 1-4 queue 4, 20, 100 and 500 copy round trips of
@@ -37,7 +44,8 @@
 //
 // The program restores the flags of the adapter after each case and at its end. It writes the flags it found to
 // --save before it sets any, so that "--set-flags <hex>" can restore them if it is stopped in the middle.
-// Output: one line for each case, and one JSON file. Exit 0 every state 5 case discarded, 1 a state 5 case kept the
+// Output: one line for each case, and one JSON file; the last line is "OFFER-STATES <all> shared <s> private <p>",
+// each word KEPT, DISCARDED (or NONE for a kind not run, REMOVED for all). Exit 0 every state 5 case discarded, 1 a state 5 case kept the
 // content or a device was removed, 2 usage, 3 setup (no adapter, no device, no output file), 4 the verifier flags
 // could not be queried or set. The working-set rows do not change the exit code.
 #include <windows.h>
@@ -66,7 +74,7 @@ enum Mode { kNow=0, kNow1=1, kLater=2, kDrained=3 };
 const char *const kModeName[4]={"now","now1","later","drained"};
 
 struct Row {
-    unsigned state=0,workload=0,copies=0; Mode mode=kNow;
+    unsigned state=0,workload=0,copies=0; Mode mode=kNow; bool shared=true;
     UINT32 flags=0; NTSTATUS set=0;
     HRESULT setup=S_OK,offer=S_OK,reclaim=S_OK,removed=S_OK;
     bool discarded=false; const char *result="";
@@ -171,6 +179,58 @@ struct Probe {
         r.removed=device->GetDeviceRemovedReason();
         return r;
     }
+    // The HLK sequence of the WorkloadType 1-4 cases (hlk-or12 log-00036): CreateTexture2D, CreateShaderResourceView,
+    // CreateTexture2D of the staging copy, Map(WRITE), escape 29, the workload, OfferResources of the texture and of the
+    // staging copy, ReclaimResources of both, Map(READ) of the staging copy. The texture has no misc flag.
+    Row run_private(unsigned state,unsigned workload,Mode mode) {
+        Row r; r.state=state; r.workload=workload; r.mode=mode; r.copies=kCopies[workload]; r.shared=false;
+        D3D11_TEXTURE2D_DESC d{}; d.Width=2048; d.Height=2048; d.MipLevels=1; d.ArraySize=1;
+        d.Format=DXGI_FORMAT_B8G8R8A8_UNORM; d.SampleDesc={1,0}; d.Usage=D3D11_USAGE_DEFAULT;
+        d.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+        D3D11_TEXTURE2D_DESC sd=d; sd.Usage=D3D11_USAGE_STAGING; sd.BindFlags=0;
+        sd.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE|D3D11_CPU_ACCESS_READ;
+        ComPtr<ID3D11Texture2D> t,other,staging; ComPtr<ID3D11ShaderResourceView> srv; ComPtr<ID3D11RenderTargetView> rtv;
+        r.setup=device->CreateTexture2D(&d,nullptr,&t);
+        if (SUCCEEDED(r.setup)) r.setup=device->CreateShaderResourceView(t.Get(),nullptr,&srv);
+        if (SUCCEEDED(r.setup)) r.setup=device->CreateTexture2D(&sd,nullptr,&staging);
+        if (SUCCEEDED(r.setup)) r.setup=device->CreateTexture2D(&d,nullptr,&other);
+        if (SUCCEEDED(r.setup)) r.setup=device->CreateRenderTargetView(t.Get(),nullptr,&rtv);
+        if (FAILED(r.setup)) return r;
+        D3D11_MAPPED_SUBRESOURCE m{}; r.setup=context->Map(staging.Get(),0,D3D11_MAP_WRITE,0,&m);
+        if (FAILED(r.setup)) return r;
+        for (UINT y=0;y<sd.Height;++y) std::memset(static_cast<unsigned char *>(m.pData)+size_t(y)*m.RowPitch,0x3C,size_t(sd.Width)*4);
+        context->Unmap(staging.Get(),0);
+        const float colour[4]={0.25f,0.5f,0.75f,1.f};
+        context->ClearRenderTargetView(rtv.Get(),colour);
+        drain();
+        r.flags=state==5 ? (original|kAlwaysDiscardOffer) : original;
+        UINT32 v=r.flags; r.set=verifier_flags(adapter,D3DKMT_VERIFIER_OPTION_SET,v);
+        for (unsigned i=0;i<r.copies;++i) { context->CopyResource(other.Get(),t.Get()); context->CopyResource(t.Get(),other.Get()); }
+        context->Flush();
+        if (mode==kDrained) r.drain_ms=drain();
+        ComPtr<IDXGIResource> res,sres; t.As(&res); staging.As(&sres);
+        IDXGIResource *list[]={res.Get()}, *slist[]={sres.Get()};
+        double a=now_ms();
+        r.offer=dxgi->OfferResources(1,list,DXGI_OFFER_RESOURCE_PRIORITY_NORMAL);
+        r.offer_ms=now_ms()-a;
+        const HRESULT soffer=SUCCEEDED(r.offer) ? dxgi->OfferResources(1,slist,DXGI_OFFER_RESOURCE_PRIORITY_NORMAL) : E_ABORT;
+        if (mode==kLater) Sleep(200);
+        if (SUCCEEDED(r.offer)) {
+            a=now_ms();
+            BOOL discarded=FALSE; r.reclaim=dxgi->ReclaimResources(1,list,&discarded);
+            r.discarded=discarded!=FALSE; r.result=r.discarded ? "discarded" : "ok";
+            r.reclaim_ms=now_ms()-a;
+            if (SUCCEEDED(soffer)) {
+                BOOL dummy=FALSE; const HRESULT sr=dxgi->ReclaimResources(1,slist,&dummy);
+                if (SUCCEEDED(sr) && SUCCEEDED(context->Map(staging.Get(),0,D3D11_MAP_READ,0,&m))) context->Unmap(staging.Get(),0);
+                else if (FAILED(sr)) r.reclaim=sr;
+            }
+        } else r.result="not-offered";
+        if (FAILED(soffer) && SUCCEEDED(r.offer)) r.offer=soffer;
+        UINT32 back=original; verifier_flags(adapter,D3DKMT_VERIFIER_OPTION_SET,back);
+        r.removed=device->GetDeviceRemovedReason();
+        return r;
+    }
     WsRow working(UINT32 flags) {
         WsRow w; w.flags=flags;
         D3D11_TEXTURE2D_DESC d{}; d.Width=1024; d.Height=1024; d.MipLevels=1; d.ArraySize=1;
@@ -210,11 +270,11 @@ struct Probe {
 }
 
 int main(int argc,char **argv) {
-    const char *usage="offer-states --out result.json --save flags.txt [--states 0,5] [--any-adapter]\n"
+    const char *usage="offer-states --out result.json --save flags.txt [--states 0,5] [--texture shared|private|both] [--any-adapter]\n"
                       "offer-states --set-flags <hex> [--any-adapter]";
     if (argc==2 && !std::strcmp(argv[1],"--help")) { std::puts(usage); return 0; }
     const char *out=nullptr,*save=nullptr; bool anyAdapter=false,setOnly=false; UINT32 setValue=0;
-    std::vector<unsigned> states{0,5};
+    std::vector<unsigned> states{0,5}; bool doShared=true,doPrivate=true;
     auto list=[](const char *s,std::vector<unsigned> &v,unsigned max) {
         v.clear(); for (const char *p=s;*p;) { char *e=nullptr; unsigned long n=std::strtoul(p,&e,10);
             if (e==p || n>max) return false; v.push_back(unsigned(n)); p=*e==',' ? e+1 : e; if (*e && *e!=',') return false; }
@@ -225,6 +285,8 @@ int main(int argc,char **argv) {
         else if (!std::strcmp(argv[i],"--states") && i+1<argc) { if (!list(argv[++i],states,5)) return 2;
             for (unsigned s:states) if (s!=0 && s!=5) return 2; }
         else if (!std::strcmp(argv[i],"--set-flags") && i+1<argc) { setOnly=true; setValue=UINT32(std::strtoul(argv[++i],nullptr,16)); }
+        else if (!std::strcmp(argv[i],"--texture") && i+1<argc) { const char *k=argv[++i];
+            if (!std::strcmp(k,"shared")) doPrivate=false; else if (!std::strcmp(k,"private")) doShared=false; else if (std::strcmp(k,"both")) return 2; }
         else if (!std::strcmp(argv[i],"--any-adapter")) anyAdapter=true;
         else { std::fprintf(stderr,"%s\n",usage); return 2; }
     }
@@ -264,30 +326,32 @@ int main(int argc,char **argv) {
     ws.push_back(p.working(p.original|kAlwaysDiscardOffer|kAlwaysProcessOfferList));
     p.keep.clear();
     std::vector<Row> rows;
-    for (unsigned s:states) for (unsigned w=0;w<5;++w) for (Mode m:{kNow,kNow1,kLater,kDrained}) rows.push_back(p.run(s,w,m));
+    if (doShared) for (unsigned s:states) for (unsigned w=0;w<5;++w) for (Mode m:{kNow,kNow1,kLater,kDrained}) rows.push_back(p.run(s,w,m));
+    if (doPrivate) for (unsigned s:states) for (unsigned w=0;w<5;++w) for (Mode m:{kNow,kLater,kDrained}) rows.push_back(p.run_private(s,w,m));
     UINT32 back=p.original; const NTSTATUS restore=verifier_flags(p.adapter,D3DKMT_VERIFIER_OPTION_SET,back);
     UINT32 after=0; verifier_flags(p.adapter,D3DKMT_VERIFIER_OPTION_QUERY,after);
-    bool setOk=true,kept=false,anyRemoved=false;
+    bool setOk=true,kept=false,anyRemoved=false,keptShared=false,keptPrivate=false,anyShared=false,anyPrivate=false;
     for (const Row &r:rows) {
         setOk=setOk && r.set>=0;
         anyRemoved=anyRemoved || FAILED(r.removed);
-        if (r.state==5 && SUCCEEDED(r.setup) && SUCCEEDED(r.offer) && SUCCEEDED(r.reclaim) && !r.discarded) kept=true;
+        (r.shared ? anyShared : anyPrivate)=true;
+        if (r.state==5 && SUCCEEDED(r.setup) && SUCCEEDED(r.offer) && SUCCEEDED(r.reclaim) && !r.discarded) { kept=true; (r.shared ? keptShared : keptPrivate)=true; }
     }
     for (const WsRow &w:ws) { setOk=setOk && w.set>=0; anyRemoved=anyRemoved || FAILED(w.removed); }
     char name[256]{}; WideCharToMultiByte(CP_UTF8,0,ad.Description,-1,name,sizeof(name),nullptr,nullptr);
-    std::fprintf(f,"{\"tool\":\"offer-states\",\"version\":4,\"pid\":%lu,\"adapter\":\"%s\",\"vendor\":\"%04X\",\"device\":\"%04X\","
+    std::fprintf(f,"{\"tool\":\"offer-states\",\"version\":5,\"pid\":%lu,\"adapter\":\"%s\",\"vendor\":\"%04X\",\"device\":\"%04X\","
         "\"d3d11_umd\":\"%s\",\"original_flags\":\"%s\",\"restore_status\":\"%08X\",\"flags_after\":\"%s\",\"rows\":[",
         GetCurrentProcessId(),name,ad.VendorId,ad.DeviceId,module_path(L"amdgpu_wddm_d3d11.dll").c_str(),hex(p.original).c_str(),
         unsigned(restore),hex(after).c_str());
     for (size_t i=0;i<rows.size();++i) {
         const Row &r=rows[i];
-        std::fprintf(f,"%s\n {\"state\":%u,\"workload\":%u,\"copies\":%u,\"mode\":\"%s\",\"flags\":\"%s\",\"set\":\"%08X\","
+        std::fprintf(f,"%s\n {\"texture\":\"%s\",\"state\":%u,\"workload\":%u,\"copies\":%u,\"mode\":\"%s\",\"flags\":\"%s\",\"set\":\"%08X\","
             "\"setup\":\"%s\",\"drain_ms\":%.3f,\"offer\":\"%s\",\"offer_ms\":%.3f,\"reclaim\":\"%s\",\"reclaim_ms\":%.3f,"
-            "\"result\":\"%s\",\"discarded\":%s,\"removed_reason\":\"%s\"}",i?",":"",r.state,r.workload,r.copies,kModeName[r.mode],
+            "\"result\":\"%s\",\"discarded\":%s,\"removed_reason\":\"%s\"}",i?",":"",r.shared?"shared":"private",r.state,r.workload,r.copies,kModeName[r.mode],
             hex(r.flags).c_str(),unsigned(r.set),hex(r.setup).c_str(),r.drain_ms,hex(r.offer).c_str(),r.offer_ms,
             hex(r.reclaim).c_str(),r.reclaim_ms,r.result,r.discarded?"true":"false",hex(r.removed).c_str());
-        std::printf("state=%u workload=%u copies=%u mode=%-7s flags=%s set=%08X drain=%.1fms offer=%s %.2fms reclaim=%s %.2fms "
-            "result=%s bDiscarded=%d removed=%s\n",r.state,r.workload,r.copies,kModeName[r.mode],hex(r.flags).c_str(),
+        std::printf("texture=%-7s state=%u workload=%u copies=%u mode=%-7s flags=%s set=%08X drain=%.1fms offer=%s %.2fms reclaim=%s %.2fms "
+            "result=%s bDiscarded=%d removed=%s\n",r.shared?"shared":"private",r.state,r.workload,r.copies,kModeName[r.mode],hex(r.flags).c_str(),
             unsigned(r.set),r.drain_ms,hex(r.offer).c_str(),r.offer_ms,hex(r.reclaim).c_str(),r.reclaim_ms,r.result,
             r.discarded?1:0,hex(r.removed).c_str());
     }
@@ -320,6 +384,8 @@ int main(int argc,char **argv) {
     close();
     std::printf("flags original %s, restore %08X, after %s\n",hex(p.original).c_str(),unsigned(restore),hex(after).c_str());
     if (!setOk || restore<0 || after!=p.original) { std::puts("OFFER-STATES FLAGS"); return 4; }
-    std::printf("OFFER-STATES %s\n",kept ? "KEPT" : anyRemoved ? "REMOVED" : "DISCARDED");
+    auto word=[&](bool any,bool k) { return !any ? "NONE" : k ? "KEPT" : "DISCARDED"; };
+    std::printf("OFFER-STATES %s shared %s private %s\n",kept ? "KEPT" : anyRemoved ? "REMOVED" : "DISCARDED",word(anyShared,keptShared),
+        word(anyPrivate,keptPrivate));
     return kept || anyRemoved ? 1 : 0;
 }
