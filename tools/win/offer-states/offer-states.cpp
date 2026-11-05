@@ -20,9 +20,15 @@
 //            from work in flight at the offer.
 //
 // Working set (BD-309). A 1024x1024 BGRA staging texture (4 MiB) that the CPU writes in full through Map(WRITE), a
-// drain with EnqueueSetEvent, K32GetProcessMemoryInfo, OfferResources of the staging texture, 200 ms,
-// K32GetProcessMemoryInfo again, ReclaimResources. The HLK test asks for a drop of TEXTURE_SIZE - WORKING_SET_THRESHOLD,
-// which its log gives as 3932160 bytes. Run with the original flags, with AlwaysDiscardOffer, AlwaysProcessOfferList
+// drain with EnqueueSetEvent, a VidMm worker wake-up with flush, K32GetProcessMemoryInfo, OfferResources of the
+// staging texture, then the HLK read point: a VidMm worker wake-up (escape 1, D3DKMT_VIDMMESCAPETYPE_WAKE) and
+// K32GetProcessMemoryInfo at once. VidMm processes the offer list on its worker thread, so a read without the
+// wake-up can come before the decommit (kit-bd309c: the drop of one row showed in the next row). The HLK log does not
+// give bFlush, so the probe reads after a wake-up without flush (drop_wake), after a second one with flush (drop, the
+// value of hlk_limit_met), and again every 20 ms for at most 1000 ms until the limit is met (drop_settled, information
+// only: the HLK does not wait). Then ReclaimResources. Each row's texture stays alive until the three rows are done, so
+// that a late free of an earlier row's memory cannot fall into the window of a later row. The HLK test asks for a drop of
+// TEXTURE_SIZE - WORKING_SET_THRESHOLD, which its log gives as 3932160 bytes. Run with the original flags, with AlwaysDiscardOffer, AlwaysProcessOfferList
 // and AlwaysDecommitOffer (d3dkmthk.h:3283, 3295, 3296), and with AlwaysDiscardOffer and AlwaysProcessOfferList only.
 // The offer itself is always the plain OfferResources (no DXGI_OFFER_RESOURCE_FLAG_ALLOW_DECOMMIT). With the verifier
 // flags off, VidMm may keep the offered pages until memory pressure, so the first row is information only. The HLK test
@@ -67,9 +73,12 @@ struct Row {
     double drain_ms=0,offer_ms=0,reclaim_ms=0;
 };
 struct WsRow {
-    UINT32 flags=0; NTSTATUS set=0;
+    UINT32 flags=0; NTSTATUS set=0,wake_pre=0,wake=0,wake_flush=0;
     HRESULT setup=S_OK,offer=S_OK,reclaim=S_OK,removed=S_OK;
-    unsigned long long before=0,after=0; bool discarded=false; double offer_ms=0;
+    // after_wake: after the wake-up without flush; after: after the wake-up with flush (the HLK read point);
+    // after_settled: the last of the bounded re-reads (settle_ms after the flush wake-up).
+    unsigned long long before=0,after_wake=0,after=0,after_settled=0; bool discarded=false;
+    double offer_ms=0,wake_ms=0,wake_flush_ms=0,settle_ms=0;
 };
 std::string hex(UINT32 v) { char b[16]; std::snprintf(b,sizeof(b),"%08X",unsigned(v)); return b; }
 std::string module_path(const wchar_t *name) {
@@ -95,9 +104,23 @@ NTSTATUS verifier_flags(D3DKMT_HANDLE adapter,D3DKMT_VERIFIER_OPTION_MODE mode,U
     return s;
 }
 
+// Wakes the VidMm worker thread: escape 1 (D3DKMT_ESCAPE_VIDMM, d3dkmthk.h:2614) of type D3DKMT_VIDMMESCAPETYPE_WAKE
+// (d3dkmthk.h:2736, Wake.bFlush d3dkmthk.h:3042). The HLK Working Set test sends this escape after its offers and reads
+// the working set at once ("Waking VidMm worker thread", hlk-or16 log-00037). Its log does not give bFlush.
+NTSTATUS wake_vidmm(D3DKMT_HANDLE adapter,BOOL flush) {
+    D3DKMT_VIDMM_ESCAPE v{}; v.Type=D3DKMT_VIDMMESCAPETYPE_WAKE; v.Wake.bFlush=flush;
+    D3DKMT_ESCAPE e{}; e.hAdapter=adapter; e.Type=D3DKMT_ESCAPE_VIDMM;
+    e.pPrivateDriverData=&v; e.PrivateDriverDataSize=sizeof(v);
+    return D3DKMTEscape(&e);
+}
+
 struct Probe {
     ComPtr<ID3D11Device> device; ComPtr<ID3D11DeviceContext> context; ComPtr<IDXGIDevice4> dxgi;
     D3DKMT_HANDLE adapter=0; UINT32 original=0;
+    // The staging textures of the working-set rows stay alive until all of those rows are done: the hosted ICD frees
+    // memory later than the release (deferred destroy), and a free in the window of a later row would show as that
+    // row's drop.
+    std::vector<ComPtr<ID3D11Texture2D>> keep;
     // EnqueueSetEvent: the runtime signals the event when the device's submitted work is done.
     double drain() {
         const double a=now_ms();
@@ -155,17 +178,29 @@ struct Probe {
         d.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE|D3D11_CPU_ACCESS_READ;
         ComPtr<ID3D11Texture2D> staging; w.setup=device->CreateTexture2D(&d,nullptr,&staging);
         if (FAILED(w.setup)) return w;
+        keep.push_back(staging);
         D3D11_MAPPED_SUBRESOURCE m{}; w.setup=context->Map(staging.Get(),0,D3D11_MAP_WRITE,0,&m);
         if (FAILED(w.setup)) return w;
         for (UINT y=0;y<d.Height;++y) std::memset(static_cast<unsigned char *>(m.pData)+size_t(y)*m.RowPitch,0x5A,size_t(d.Width)*4);
         context->Unmap(staging.Get(),0);
         drain();
+        // A flush wake-up before the first read: work that VidMm still has from the row before (a late decommit) ends
+        // before this row's "before" value.
+        w.wake_pre=wake_vidmm(adapter,TRUE);
         UINT32 v=flags; w.set=verifier_flags(adapter,D3DKMT_VERIFIER_OPTION_SET,v);
         w.before=working_set();
         ComPtr<IDXGIResource> res; staging.As(&res); IDXGIResource *list[]={res.Get()};
-        const double a=now_ms(); w.offer=dxgi->OfferResources(1,list,DXGI_OFFER_RESOURCE_PRIORITY_NORMAL); w.offer_ms=now_ms()-a;
-        Sleep(200);
+        double a=now_ms(); w.offer=dxgi->OfferResources(1,list,DXGI_OFFER_RESOURCE_PRIORITY_NORMAL); w.offer_ms=now_ms()-a;
+        a=now_ms(); w.wake=wake_vidmm(adapter,FALSE); w.wake_ms=now_ms()-a;
+        w.after_wake=working_set();
+        a=now_ms(); w.wake_flush=wake_vidmm(adapter,TRUE); w.wake_flush_ms=now_ms()-a;
         w.after=working_set();
+        // Bounded settle: re-read every 20 ms for at most 1000 ms, stop when the drop meets the limit.
+        a=now_ms(); w.after_settled=w.after;
+        while ((long long)w.before-(long long)w.after_settled<(long long)kWorkingSetDrop && now_ms()-a<1000.0) {
+            Sleep(20); w.after_settled=working_set();
+        }
+        w.settle_ms=now_ms()-a;
         if (SUCCEEDED(w.offer)) { BOOL discarded=FALSE; w.reclaim=dxgi->ReclaimResources(1,list,&discarded); w.discarded=discarded!=FALSE; }
         UINT32 back=original; verifier_flags(adapter,D3DKMT_VERIFIER_OPTION_SET,back);
         w.removed=device->GetDeviceRemovedReason();
@@ -227,6 +262,7 @@ int main(int argc,char **argv) {
     ws.push_back(p.working(p.original));
     ws.push_back(p.working(p.original|kAlwaysDiscardOffer|kAlwaysProcessOfferList|kAlwaysDecommitOffer));
     ws.push_back(p.working(p.original|kAlwaysDiscardOffer|kAlwaysProcessOfferList));
+    p.keep.clear();
     std::vector<Row> rows;
     for (unsigned s:states) for (unsigned w=0;w<5;++w) for (Mode m:{kNow,kNow1,kLater,kDrained}) rows.push_back(p.run(s,w,m));
     UINT32 back=p.original; const NTSTATUS restore=verifier_flags(p.adapter,D3DKMT_VERIFIER_OPTION_SET,back);
@@ -239,7 +275,7 @@ int main(int argc,char **argv) {
     }
     for (const WsRow &w:ws) { setOk=setOk && w.set>=0; anyRemoved=anyRemoved || FAILED(w.removed); }
     char name[256]{}; WideCharToMultiByte(CP_UTF8,0,ad.Description,-1,name,sizeof(name),nullptr,nullptr);
-    std::fprintf(f,"{\"tool\":\"offer-states\",\"version\":3,\"pid\":%lu,\"adapter\":\"%s\",\"vendor\":\"%04X\",\"device\":\"%04X\","
+    std::fprintf(f,"{\"tool\":\"offer-states\",\"version\":4,\"pid\":%lu,\"adapter\":\"%s\",\"vendor\":\"%04X\",\"device\":\"%04X\","
         "\"d3d11_umd\":\"%s\",\"original_flags\":\"%s\",\"restore_status\":\"%08X\",\"flags_after\":\"%s\",\"rows\":[",
         GetCurrentProcessId(),name,ad.VendorId,ad.DeviceId,module_path(L"amdgpu_wddm_d3d11.dll").c_str(),hex(p.original).c_str(),
         unsigned(restore),hex(after).c_str());
@@ -259,14 +295,26 @@ int main(int argc,char **argv) {
     for (size_t i=0;i<ws.size();++i) {
         const WsRow &w=ws[i];
         const long long drop=(long long)w.before-(long long)w.after;
-        std::fprintf(f,"%s\n {\"flags\":\"%s\",\"set\":\"%08X\",\"setup\":\"%s\",\"offer\":\"%s\",\"offer_ms\":%.3f,\"before\":%llu,"
-            "\"after\":%llu,\"drop\":%lld,\"hlk_limit_met\":%s,\"reclaim\":\"%s\",\"discarded\":%s,\"removed_reason\":\"%s\"}",
-            i?",":"",hex(w.flags).c_str(),unsigned(w.set),hex(w.setup).c_str(),hex(w.offer).c_str(),w.offer_ms,w.before,w.after,
-            drop,drop>=(long long)kWorkingSetDrop?"true":"false",hex(w.reclaim).c_str(),w.discarded?"true":"false",hex(w.removed).c_str());
-        std::printf("working-set flags=%s set=%08X offer=%s %.2fms before=%llu after=%llu drop=%lld limit=%llu %s reclaim=%s "
-            "bDiscarded=%d removed=%s\n",hex(w.flags).c_str(),unsigned(w.set),hex(w.offer).c_str(),w.offer_ms,w.before,w.after,
-            drop,kWorkingSetDrop,drop>=(long long)kWorkingSetDrop?"MET":"NOT-MET",hex(w.reclaim).c_str(),w.discarded?1:0,
-            hex(w.removed).c_str());
+        const long long dropWake=(long long)w.before-(long long)w.after_wake;
+        const long long dropSettled=(long long)w.before-(long long)w.after_settled;
+        const long long limit=(long long)kWorkingSetDrop;
+        std::fprintf(f,"%s\n {\"flags\":\"%s\",\"set\":\"%08X\",\"setup\":\"%s\",\"offer\":\"%s\",\"offer_ms\":%.3f,"
+            "\"wake_pre\":\"%08X\",\"wake\":\"%08X\",\"wake_ms\":%.3f,\"wake_flush\":\"%08X\",\"wake_flush_ms\":%.3f,"
+            "\"before\":%llu,\"after_wake\":%llu,\"drop_wake\":%lld,\"limit_met_wake\":%s,"
+            "\"after\":%llu,\"drop\":%lld,\"hlk_limit_met\":%s,"
+            "\"after_settled\":%llu,\"drop_settled\":%lld,\"limit_met_settled\":%s,\"settle_ms\":%.3f,"
+            "\"reclaim\":\"%s\",\"discarded\":%s,\"removed_reason\":\"%s\"}",
+            i?",":"",hex(w.flags).c_str(),unsigned(w.set),hex(w.setup).c_str(),hex(w.offer).c_str(),w.offer_ms,
+            unsigned(w.wake_pre),unsigned(w.wake),w.wake_ms,unsigned(w.wake_flush),w.wake_flush_ms,
+            w.before,w.after_wake,dropWake,dropWake>=limit?"true":"false",
+            w.after,drop,drop>=limit?"true":"false",
+            w.after_settled,dropSettled,dropSettled>=limit?"true":"false",w.settle_ms,
+            hex(w.reclaim).c_str(),w.discarded?"true":"false",hex(w.removed).c_str());
+        std::printf("working-set flags=%s set=%08X offer=%s %.2fms wake=%08X/%08X/%08X before=%llu wake-only=%lld "
+            "after=%llu drop=%lld limit=%llu %s settled=%lld after %.0fms reclaim=%s bDiscarded=%d removed=%s\n",
+            hex(w.flags).c_str(),unsigned(w.set),hex(w.offer).c_str(),w.offer_ms,unsigned(w.wake_pre),unsigned(w.wake),
+            unsigned(w.wake_flush),w.before,dropWake,w.after,drop,kWorkingSetDrop,drop>=limit?"MET":"NOT-MET",dropSettled,
+            w.settle_ms,hex(w.reclaim).c_str(),w.discarded?1:0,hex(w.removed).c_str());
     }
     std::fprintf(f,"\n]}\n"); std::fclose(f);
     close();
