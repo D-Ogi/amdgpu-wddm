@@ -196,6 +196,22 @@ class AstOutput(unittest.TestCase):
         self.assertEqual(entry['path'], str(gone))
         self.assertTrue(entry['error'].startswith('parse'), entry['error'])
 
+    def test_a_file_that_does_not_come_back_stops_the_gate(self):
+        # An AST that answers nothing, as Windows PowerShell 5.1 does without a console (DETACHED_PROCESS: empty stdout,
+        # exit 0). Before the check the gate read that as "no loops" and passed.
+        with tempfile.TemporaryDirectory(dir=TMP) as d:
+            silent = Path(d) / 'silent-ast.ps1'
+            silent.write_text("param([string]$List)\n[Console]::Out.Write('[]')\n", encoding='utf-8')
+            tool = Path(d) / 'tool.ps1'
+            tool.write_text("while ($true) { & ping.exe -n 1 localhost; Start-Sleep 1 }\n", encoding='utf-8')
+            saved = lint.AST
+            lint.AST = silent
+            try:
+                with self.assertRaisesRegex(RuntimeError, 'no entry for 1 of 1 file'):
+                    lint.ps_loops([tool])
+            finally:
+                lint.AST = saved
+
 
 if __name__ == '__main__':
     unittest.main()
