@@ -85,6 +85,12 @@ def ps_loops(paths, jobs=None):
             starts = loop.get('starts') or []
             loop['starts'] = [starts] if isinstance(starts, dict) else starts
         result[str(Path(entry['path']))] = {'error': entry.get('error') or '', 'loops': loops}
+    # Every file asked must come back. Windows PowerShell 5.1 without a console (DETACHED_PROCESS) writes nothing to a
+    # redirected stdout and exits 0; the gate then read no file and passed with no loops.
+    missing = [str(Path(p)) for p in paths if str(Path(p)) not in result]
+    if missing:
+        raise RuntimeError('spawn-loop-ast.ps1 gave no entry for %d of %d file(s), first %s (a PowerShell without a '
+                           'console writes nothing)' % (len(missing), len(paths), missing[0]))
     return result
 
 
