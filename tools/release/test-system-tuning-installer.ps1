@@ -139,13 +139,27 @@ function Write-Step($s) { }
 function Write-Fail($s) { Write-Output ('FAIL: ' + $s) }
 function Get-LabInstallPaths { @() }
 function Get-OurDriverPackages { @() }
+function Read-SmartAppControlState { [pscustomobject]@{ state='off'; detail='off (test fixture)' } }
 function Read-Confirmation { throw 'QUESTION ASKED' }
-function Invoke-Change { throw 'MUTATION REACHED' }
+function Invoke-Change($Description) { throw ('MUTATION REACHED: ' + $Description) }
 '@
+# Every function of common.ps1 that uninstall.ps1 calls before its first change needs a stand-in above. A missing
+# one stops the run with "not recognized" before that change (BD-311: Read-SmartAppControlState, ae20bc6d), so the
+# refusal below carries the end of the uninstaller's output and names it.
+function Tail([string]$Text) {
+    $flat = ($Text -replace '\s*\r?\n\s*', ' ')
+    if ($flat -match "The term '([^']+)' is not recognized") { return "fixture lacks a stand-in for '$($Matches[1])'" }
+    (@($Text -split "`r?`n" | Where-Object { $_ -match '\S' }) | Select-Object -Last 4) -join ' | '
+}
 [IO.File]::WriteAllText((Join-Path $decline 'installer\common.ps1'), $fakeCommon)
 $hostExe = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $unasked = Invoke-Native -File $hostExe -Arguments @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $decline 'installer\uninstall.ps1'),'-RestoreSystemTuning')
-Assert ($unasked.text -match 'MUTATION REACHED' -and $unasked.text -notmatch 'QUESTION ASKED' -and $unasked.text -notmatch 'Nothing was changed') 'The uninstaller asked a question, or stopped before its first change, in a run without -Yes'
+Assert ($unasked.text -match 'MUTATION REACHED' -and $unasked.text -notmatch 'QUESTION ASKED' -and $unasked.text -notmatch 'Nothing was changed') ('The uninstaller asked a question, or stopped before its first change, in a run without -Yes: ' + (Tail $unasked.text))
+# Smart App Control on: its turn-off is the first change, and it comes without a question too.
+$sacOn = $fakeCommon.Replace("state='off'; detail='off (test fixture)'", "state='on'; detail='on (test fixture)'")
+[IO.File]::WriteAllText((Join-Path $decline 'installer\common.ps1'), $sacOn)
+$unaskedSac = Invoke-Native -File $hostExe -Arguments @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $decline 'installer\uninstall.ps1'),'-RestoreSystemTuning')
+Assert ($unaskedSac.text -match 'MUTATION REACHED: turn Smart App Control off \(on now\)' -and $unaskedSac.text -notmatch 'QUESTION ASKED') ('With Smart App Control on, the first change of a run without -Yes was not its turn-off, or a question came first: ' + (Tail $unaskedSac.text))
 # An unreadable driver store stops before tuning restoration or recovery copies, even with explicit consent.
 $failedInventory = $fakeCommon.Replace('function Get-OurDriverPackages { @() }', "function Get-OurDriverPackages { throw 'fixture inventory failure' }")
 [IO.File]::WriteAllText((Join-Path $decline 'installer\common.ps1'), $failedInventory)
