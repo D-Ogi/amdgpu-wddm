@@ -1094,6 +1094,8 @@ $o = Get-VulkanLoaderOutcome -Before $vkAbsent -After $vkAfterOk -Code 7
 Check ($o.ok -and $o.message -match 'exit code 7') 'an unknown exit code with both loaders in place is still done, and the code is reported'
 $o = Get-VulkanLoaderOutcome -Before $vkAbsent -After $vkAbsent -Code 0
 Check (-not $o.ok -and $o.message -match 'still not in place' -and $o.message -match 'vulkan\.lunarg\.com') 'negative control: exit 0 with no loader after the run is a warning with its remedy'
+$o = Get-VulkanLoaderOutcome -Before $vkAbsent -After $vkAbsent -Code 0 -Pending (Get-VulkanLoaderPendingReplacements -FromTest -Value @())
+Check (-not $o.ok -and -not $o.restart) 'no pending replacement, passed as the output of a command that writes nothing, is not a pending replacement (PowerShell 7 binds it as $null)'
 $o = Get-VulkanLoaderOutcome -Before $vkOld -After $vkOld -Code 0 -Pending @('\??\C:\Windows\System32\vulkan-1.dll')
 Check ($o.ok -and $o.restart -and $o.message -match 'next start') 'a loader in use that Windows replaces at the next start is done, with the restart this installation makes anyway'
 $o = Get-VulkanLoaderOutcome -Before $vkAbsent -After $vkAbsent -Code $null -TimedOut $true -TimeoutSeconds 300

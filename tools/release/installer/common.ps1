@@ -2097,6 +2097,9 @@ function Get-VulkanLoaderPendingReplacements {
 function Get-VulkanLoaderOutcome {
     param([Parameter(Mandatory)]$Before, [Parameter(Mandatory)]$After, $Code, [bool]$TimedOut = $false,
           [string[]]$Pending = @(), [double]$TimeoutSeconds = $script:VulkanLoaderTimeoutSeconds)
+    # A command in parentheses that writes nothing binds to [string[]] as $null, and @($null) has one element in
+    # PowerShell 7 (0 in 5.1). Keep only real entries, so that "no pending replacement" never reads as one.
+    $Pending = @(@($Pending) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     $downgraded = @()
     foreach ($b in @($Before.arches)) {
         $a = @($After.arches | Where-Object { $_.arch -eq $b.arch })[0]
