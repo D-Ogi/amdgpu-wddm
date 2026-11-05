@@ -567,6 +567,51 @@ HRESULT wait_present_value(HostBridge &bridge, UINT64 value)
    return SUCCEEDED(hr) ? Bc250HostStatus(s) : hr;
 }
 
+// BD-308: the fences of the device whose value is not reached yet. TRUE when a fence reads the lost-device value.
+static bool Bc250PendingWork(const HostBridge &s, D3DKMT_HANDLE (&objects)[17], UINT64 (&values)[17], UINT &count)
+{
+   count=0;
+   for (const auto &p:s.progress) {
+      if (!p.sync || !p.value || !p.cpu_address) continue;
+      const UINT64 reached=*(const volatile UINT64 *)p.cpu_address;
+      if (reached==UINT64_MAX) return true;
+      if (reached<p.value) { objects[count]=p.sync; values[count]=p.value; ++count; }
+   }
+   if (s.present_sync && s.present_value && s.present_cpu) {
+      const UINT64 reached=*(const volatile UINT64 *)s.present_cpu;
+      if (reached==UINT64_MAX) return true;
+      if (reached<s.present_value) { objects[count]=s.present_sync; values[count]=s.present_value; ++count; }
+   }
+   return false;
+}
+
+HRESULT wait_device_work_retired(HostBridge &bridge, DWORD timeout_ms)
+{
+   auto *device=bridge.device;
+   if (!device || !device->domain.entered() || timeout_ms>10000) return E_INVALIDARG;
+   D3DKMT_HANDLE objects[17]={}; UINT64 values[17]={}; UINT count=0;
+   if (Bc250PendingWork(bridge,objects,values,count)) return D3DDDIERR_DEVICEREMOVED;
+   if (!count) return S_OK;
+   if (!device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb) return E_NOTIMPL;
+   HANDLE event=CreateEventW(NULL,FALSE,FALSE,NULL);
+   if (!event) return HRESULT_FROM_WIN32(GetLastError());
+   // Flags stay 0: the wait ends when every object reached its value (WaitAny is 0).
+   D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU wait={};
+   wait.ObjectCount=count; wait.ObjectHandleArray=objects; wait.FenceValueArray=values; wait.hAsyncEvent=event;
+   HRESULT hr=device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb(device->hDevice,&wait);
+   if (SUCCEEDED(hr)) {
+      const DWORD result=WaitForSingleObject(event,timeout_ms);
+      if (result==WAIT_OBJECT_0 || result==WAIT_TIMEOUT) {
+         // The event and the timeout can race. The fences themselves decide, as in wait_paging_fence.
+         MemoryBarrier();
+         if (Bc250PendingWork(bridge,objects,values,count)) hr=D3DDDIERR_DEVICEREMOVED;
+         else hr=count ? S_FALSE : S_OK;
+      } else hr=HRESULT_FROM_WIN32(GetLastError());
+   }
+   CloseHandle(event);
+   return hr;
+}
+
 HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
     D3DKMT_HANDLE destination, void *dxgi_context, FlushEngine flush, void *engine,
     PresentSyncOverride sync, HRESULT *callback, char *step)
