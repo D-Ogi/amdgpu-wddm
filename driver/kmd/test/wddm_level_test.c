@@ -21,7 +21,7 @@
 int main(int argc, char** argv)
 {
     unsigned long checks = 0, failures = 0, i;
-    BC250_WDDM_LEVEL r;
+    BC250_WDDM_LEVEL_ANSWER r;
 
     /* ---- the set: rising, 2.0 first, 2.9 last, no 2.3, equal to the catalog's allowed list ------------------- */
     CHECK(BC250_WDDM_LEVEL_SET_COUNT == 9u);
@@ -38,12 +38,13 @@ int main(int argc, char** argv)
     }
 
     /* ---- no stored value: the catalog default, source default ---------------------------------------------- */
+    CHECK(BC250_WDDM_LEVEL_DEFAULT == 0x2900u);     /* the level of t38/wddm-29 (kit-22631-r5) */
     r = Bc250WddmLevelResolve(0, 0, BC250_WDDM_LEVEL_DEFAULT, IFACE_29, OS_22631);
-    CHECK(r.Level == 0x2000u && r.Source == BC250_WDDM_LEVEL_FROM_DEFAULT && r.Clamp == BC250_WDDM_CLAMP_NONE);
-    CHECK(r.Requested == 0x2000u && r.Ceiling == 0x2900u);
-    /* The default moves with the catalog: a package default of 2.9 is reported as 2.9, still source default. */
-    r = Bc250WddmLevelResolve(0, 0, 0x2900u, IFACE_29, OS_26100);
-    CHECK(r.Level == 0x2900u && r.Source == BC250_WDDM_LEVEL_FROM_DEFAULT);
+    CHECK(r.Level == 0x2900u && r.Source == BC250_WDDM_LEVEL_FROM_DEFAULT && r.Clamp == BC250_WDDM_CLAMP_NONE);
+    CHECK(r.Requested == 0x2900u && r.Ceiling == 0x2900u);
+    /* The default moves with the catalog: a package default of 2.0 is reported as 2.0, still source default. */
+    r = Bc250WddmLevelResolve(0, 0, 0x2000u, IFACE_29, OS_26100);
+    CHECK(r.Level == 0x2000u && r.Source == BC250_WDDM_LEVEL_FROM_DEFAULT);
     /* A stored value equal to the default is source state, not default: the log must tell the two apart. */
     r = Bc250WddmLevelResolve(1, 0x2000u, 0x2000u, IFACE_29, OS_22631);
     CHECK(r.Level == 0x2000u && r.Source == BC250_WDDM_LEVEL_FROM_STATE);
@@ -98,8 +99,10 @@ int main(int argc, char** argv)
     CHECK(r.Level == 0x2000u && r.Clamp == BC250_WDDM_CLAMP_OS);
     r = Bc250WddmLevelResolve(1, 0x2900u, BC250_WDDM_LEVEL_DEFAULT, IFACE_29, BC250_WDDM_LEVEL_MIN_OS_BUILD);
     CHECK(r.Level == 0x2900u && r.Clamp == BC250_WDDM_CLAMP_NONE);
-    /* The default 2.0 under the OS ceiling is not a clamp. */
+    /* The default 2.9 under the OS ceiling is clamped to 2.0; a default of 2.0 there is not a clamp. */
     r = Bc250WddmLevelResolve(0, 0, BC250_WDDM_LEVEL_DEFAULT, IFACE_29, 19045u);
+    CHECK(r.Level == 0x2000u && r.Source == BC250_WDDM_LEVEL_FROM_CLAMP && r.Clamp == BC250_WDDM_CLAMP_OS);
+    r = Bc250WddmLevelResolve(0, 0, 0x2000u, IFACE_29, 19045u);
     CHECK(r.Level == 0x2000u && r.Source == BC250_WDDM_LEVEL_FROM_DEFAULT);
 
     /* ---- the names the log prints -------------------------------------------------------------------------- */

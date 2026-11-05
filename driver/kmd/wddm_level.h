@@ -7,7 +7,8 @@
  * setting into the level of one start, and says where the level came from:
  *
  *   DEFAULT  the setting has no stored value: the default of the catalog (its "code" value, or the package
- *            value "factory" when the INF writes one), BC250_WDDM_LEVEL_DEFAULT in this tree (2.0).
+ *            value "factory" when the INF writes one), BC250_WDDM_LEVEL_DEFAULT in this tree (2.9, the level
+ *            of t38/wddm-29 that lab kit-22631-r5 passed on 22631).
  *   STATE    the stored value, unchanged.
  *   CLAMP    the stored value, lowered, for the reason in Clamp:
  *            INVALID    not one of Bc250WddmLevels (the catalog refuses it, so only a damaged store gets here):
@@ -19,6 +20,8 @@
  * The default changes in one place with two spellings: catalog.json "code" of WddmVersionCap and
  * BC250_WDDM_LEVEL_DEFAULT below. tools/state/check_settings.py fails the build when the two differ (the literal
  * default of the GuardReadSetting call in wddm.c).
+ * A lab bisection image (/DBC250_WDDM_LEVEL=0x2N00) does not read the setting: WddmLevelStart in wddm.c reports
+ * the level of the build, so that the image hash names the level that a lab arm measures.
  *
  * Where the numbers come from. dxgkrnl 22621.6197/6199 and 26100.9549 accept 0x1200, 0x1300, 0x2000, 0x2100 ...
  * 0x2900, 0x3000, 0x3100 (and 26100 also 0x3200) in DXGADAPTER::Initialize; any other value fails the start
@@ -46,7 +49,7 @@
 #define BC250_WDDM_LEVEL_2_8         0x2800u
 #define BC250_WDDM_LEVEL_2_9         0x2900u
 
-#define BC250_WDDM_LEVEL_DEFAULT     0x2000u   /* = catalog.json WddmVersionCap "code" (check_settings.py) */
+#define BC250_WDDM_LEVEL_DEFAULT     0x2900u   /* = catalog.json WddmVersionCap "code" (check_settings.py) */
 #define BC250_WDDM_LEVEL_FLOOR       BC250_WDDM_LEVEL_2_0   /* the 2.0 contract this binary always keeps */
 #define BC250_WDDM_LEVEL_MAX         BC250_WDDM_LEVEL_2_9
 #define BC250_WDDM_LEVEL_MIN_OS_BUILD 22621u
@@ -84,13 +87,13 @@ enum bc250_wddm_level_clamp {
     BC250_WDDM_CLAMP_OS = 3,
 };
 
-typedef struct BC250_WDDM_LEVEL {
+typedef struct BC250_WDDM_LEVEL_ANSWER {
     unsigned long Level;        /* what DXGK_DRIVERCAPS.WDDMVersion reports */
     unsigned long Requested;    /* the stored setting, or the default when there is none */
     unsigned long Ceiling;      /* the highest level this start admits (interface, OS, BC250_WDDM_LEVEL_MAX) */
     unsigned long Source;       /* enum bc250_wddm_level_source */
     unsigned long Clamp;        /* enum bc250_wddm_level_clamp */
-} BC250_WDDM_LEVEL;
+} BC250_WDDM_LEVEL_ANSWER;
 
 static __inline const char* Bc250WddmLevelSourceName(unsigned long Source)
 {
@@ -131,10 +134,10 @@ static __inline unsigned long Bc250WddmLevelOfInterface(unsigned long InterfaceV
  * InterfaceVersion: DXGKRNL_INTERFACE.Version of this start. OsBuild: RtlGetVersion's dwBuildNumber. The result
  * never goes below BC250_WDDM_LEVEL_FLOOR: this binary needs the 2.0 contract (FlipOnVSyncMmIo, GetNodeMetadata)
  * whatever the setting says. */
-static __inline BC250_WDDM_LEVEL Bc250WddmLevelResolve(int Present, unsigned long Stored, unsigned long Default,
+static __inline BC250_WDDM_LEVEL_ANSWER Bc250WddmLevelResolve(int Present, unsigned long Stored, unsigned long Default,
                                                       unsigned long InterfaceVersion, unsigned long OsBuild)
 {
-    BC250_WDDM_LEVEL r;
+    BC250_WDDM_LEVEL_ANSWER r;
     unsigned long ceiling, clampWhy, i;
 
     r.Requested = Present ? Stored : Default;

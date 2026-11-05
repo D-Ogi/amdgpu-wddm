@@ -69,7 +69,7 @@ handler writes over the whole `OutputDataSize` first.
 
 | Member | Source text | Value | Line |
 |---|---|---|---|
-| `WDDMVersion` | `Device->WddmLevel` | one of `Bc250WddmLevels` (`wddm_level.h`): 0x2000 (default), 0x2100, 0x2200, 0x2400 ... 0x2900, from the `WddmVersionCap` setting (ADR 0019 stage B4, BD-307) | 1034 |
+| `WDDMVersion` | `Device->WddmLevel` | one of `Bc250WddmLevels` (`wddm_level.h`): 0x2000, 0x2100, 0x2200, 0x2400 ... 0x2900 (default), from the `WddmVersionCap` setting (ADR 0019 stage B4, BD-307) | 1034 |
 | `HighestAcceptableAddress.QuadPart` | `-1` | no limit | 1035 |
 | `SupportNonVGA` | `TRUE` | 1 | 1036 |
 | `NumberOfSwizzlingRanges` | `0` | 0 | 1037 |

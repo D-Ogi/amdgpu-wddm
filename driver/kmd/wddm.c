@@ -5231,10 +5231,18 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
 // "no stored value" (source default) and "a stored 0x2000" (source state) stay two different lines in the log.
 void WddmLevelStart(_Inout_ BC250_DEVICE* Device)
 {
+#ifdef BC250_WDDM_LEVEL
+    // A lab bisection image (/DBC250_WDDM_LEVEL): its level is the build's, and the setting is not read, so that the
+    // image hash names the level that the arm measures.
+    Device->WddmLevel = (ULONG)BC250_WDDM_LEVEL;
+    Device->WddmLevelSource = BC250_WDDM_LEVEL_FROM_DEFAULT;
+    GuardLog("wddm: level 0x%lX fixed by the build (BC250_WDDM_LEVEL), %ws not read", Device->WddmLevel,
+             BC250_WDDM_LEVEL_SETTING);
+#else
     RTL_OSVERSIONINFOW os;
     ULONG stored = 0;
     NTSTATUS status = DriverStateNumber(L"", BC250_WDDM_LEVEL_SETTING, FALSE, &stored);
-    BC250_WDDM_LEVEL level;
+    BC250_WDDM_LEVEL_ANSWER level;
 
     RtlZeroMemory(&os, sizeof(os));
     os.dwOSVersionInfoSize = sizeof(os);
@@ -5250,6 +5258,7 @@ void WddmLevelStart(_Inout_ BC250_DEVICE* Device)
     GuardLog("wddm: level 0x%lX %s req 0x%lX ceil 0x%lX clamp %s if 0x%X os %lu",
              level.Level, Bc250WddmLevelSourceName(level.Source), level.Requested, level.Ceiling,
              Bc250WddmLevelClampName(level.Clamp), Device->Dxgk.Version, os.dwBuildNumber);
+#endif
 }
 
 // ---- QueryAdapterInfo ------------------------------------------------------------------------------------------
