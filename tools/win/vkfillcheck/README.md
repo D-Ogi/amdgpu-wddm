@@ -73,7 +73,7 @@ dword-aligned offset and a dword-multiple size, while a copy has no alignment ru
 destination residues that are not a multiple of four are therefore reached with copies, in the `dst-align`
 and `single-thread` groups.
 
-The cases come in four groups:
+The main groups are:
 
 | Group | Operations | Sizes | Destination offsets | Third axis |
 |---|---|---|---|---|
@@ -81,6 +81,22 @@ The cases come in four groups:
 | `dst-align` | `copy` | 12, 65540 | 0 to 15 | source offset 0, 3 |
 | `single-thread` | `copy` | 1, 2, 3, 5, 7 | 1, 2, 3, 5, 6, 7 | source offset 0, 1 |
 | `whole-size` | `fill` with `VK_WHOLE_SIZE` | 12, 4100 | 0, 4 | tail 1, 2, 3 |
+| `bd290-eom` | `copy-eom` | 13, 6, 255, 1025, 4090, 4091, 4093 | 4 | source ends at the end of its memory |
+
+The `partial-1`, `partial-1-copy-big`, `partial-1-fill`, `bd287-upd` and `bd287-copy` groups (BD-287) are
+described in the source, next to their tables.
+
+A `bd290-eom` case (BD-290) copies from a source that ends at the last byte of its own `VkDeviceMemory`. That
+memory is exactly one 4 KiB page, the buffer is bound at offset 0, and `srcOffset` is `4096 - size`. The
+compute copy shader loads whole threads of `S = dwords_per_thread * 4` bytes (8 up to 64 KiB) from a window
+that starts `dst_align_offset` bytes before the copy, so the last thread loads
+`S - (dst_align_offset + size) % S` bytes past the source range, into the next page. `dstOffset` 4 gives
+`dst_align_offset` 4, and the sizes give `(4 + size) % 8` = 1, 2, 3, 5, 6, 7 and 1: no size is a multiple of
+the per-thread load. In an ICD without `radv_copy_memory_overread_tail` (it copies that last thread with
+CP DMA), the load is a GPU page fault and a TDR when the next page is unmapped. When the next page is mapped,
+the load has no visible effect. So a pass on such an ICD proves nothing, and a fault or a fence
+timeout on any ICD is a failure. The bytes must match in every case. The client refuses to run the case
+(exit 3) when the driver reports more than one page for that memory.
 
 In `core`, 4 is one dword, 12 and 252 are not a multiple of the shader's dwords per thread, 65536 is the
 largest `vkCmdUpdateBuffer`, 65540 is the first size that takes four dwords per thread, and 1048580 needs
@@ -100,8 +116,13 @@ the readback are plain CPU writes and reads, so the case depends on nothing but 
 operation runs and reports a failure there as `stage prefill`. The client skips the 16 cases where the
 operation is `update` and the size is over 65536: `vkCmdUpdateBuffer` takes at most that many bytes.
 
-The full matrix is 880 cases, of which 864 run. It takes 0.6 s on an RTX 4090. `--quick` keeps the first two
-values of each axis of each group, 88 cases, for a smoke run.
+The full matrix is 938 cases, of which 922 run. It takes 0.7 s on an RTX 4090. `--quick` keeps the first two
+values of each axis of each group, 126 cases, for a smoke run. The reference results below are older and
+count the matrix of their date (864 cases run).
+
+The full matrix includes the BD-290 cases. To run one of them alone, give its operation, size and destination
+offset to `--case`, for example `--icd <DLL> --case copy-eom:4093:4`. `--case` keeps one filter, so this
+runs one size against both destination placements.
 
 ## Choosing the ICD
 

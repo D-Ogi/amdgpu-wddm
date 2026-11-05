@@ -24,7 +24,9 @@
  * them: vkCmdFillBuffer carries a dword in the command, vkCmdUpdateBuffer carries its bytes in the
  * command buffer, vkCmdCopyBuffer reads another buffer. A defect in one of them does not have to show in
  * the others. A fill also runs with VK_WHOLE_SIZE on a buffer that ends past a dword boundary, where the
- * driver has to round the range down and leave the last bytes alone.
+ * driver has to round the range down and leave the last bytes alone. A "copy-eom" copy (BD-290) reads
+ * a source that ends at the last byte of its own one-page VkDeviceMemory, where a compute copy that
+ * loads whole threads past the range reads into the next page.
  *
  * Both halves of our ICD need this: the x64 DLL serves 64-bit clients and the x86 DLL serves the WOW64
  * ones, and they are separate builds of the same source. build.ps1 -Arch both makes an x64 and an x86
@@ -111,8 +113,8 @@ static PFN_vkCreateInstance createInstance;
  * bytes a split copy reads past the end of its last region's source. */
 #define CAP (MAX_OFF + MAX_SIZE + GUARD + 4096u)
 
-enum { OP_FILL, OP_UPDATE, OP_COPY, OP_COPY_PARTS, OP_FILL_WHOLE, OP_COUNT };
-static const char *const kOpNames[OP_COUNT] = { "fill", "update", "copy", "copy-parts", "fill-whole" };
+enum { OP_FILL, OP_UPDATE, OP_COPY, OP_COPY_PARTS, OP_FILL_WHOLE, OP_COPY_EOM, OP_COUNT };
+static const char *const kOpNames[OP_COUNT] = { "fill", "update", "copy", "copy-parts", "fill-whole", "copy-eom" };
 enum { PLACE_HOST, PLACE_LOCAL, PLACE_COUNT };
 static const char *const kPlaceNames[PLACE_COUNT] = { "host", "local" };
 
@@ -205,6 +207,21 @@ static const uint32_t kBd287CopySizes[] = { 65536u };
 static const uint32_t kBd287CopyOffsets[] = { 4u };
 static const uint32_t kBd287CopySrc[] = { 0u };
 
+/* BD-290 source overread at the end of memory ("copy-eom"). The compute copy shader does not clamp the
+ * source: each thread loads S = dwords_per_thread * 4 bytes (8 up to 64 KiB), and the window of the first
+ * thread starts dst_align_offset bytes before the copy, so the last thread loads
+ * S - (dst_align_offset + size) % S bytes past the last source byte. Each case copies from a source that
+ * ends at the last byte of its own VkDeviceMemory of exactly one 4 KiB page (srcOffset = 4096 - size), so
+ * those bytes are in the next page, which belongs to no mapping of this memory. dstOffset 4 gives
+ * dst_align_offset 4. The sizes give (4 + size) % 8 = 1, 2, 3, 5, 6, 7 and 1, so none is a multiple of the
+ * per-thread load. An ICD without the fix (radv_copy_memory_overread_tail) loads past the page: a GPU page
+ * fault, which is a TDR on WDDM, when the next page is unmapped, and nothing visible when it is mapped. An
+ * ICD with the fix copies the tail with CP DMA. In both cases the bytes must match exactly. */
+#define EOM_PAGE 4096u
+static const uint32_t kEomSizes[] = { 13u, 6u, 255u, 1025u, 4090u, 4091u, 4093u };
+static const uint32_t kEomOffsets[] = { 4u };
+static const uint32_t kEomSrc[] = { 0u };
+
 #define SPAN(a) a, (uint32_t)(sizeof(a) / sizeof((a)[0]))
 
 static const Group kGroups[] = {
@@ -223,6 +240,7 @@ static const Group kGroups[] = {
       SPAN(kBd287UpdSizes), SPAN(kBd287UpdOffsets), SPAN(kBd287UpdSrc) },
     { "bd287-copy", OPS(OP(OP_COPY)),
       SPAN(kBd287CopySizes), SPAN(kBd287CopyOffsets), SPAN(kBd287CopySrc) },
+    { "bd290-eom", OPS(OP(OP_COPY_EOM)), SPAN(kEomSizes), SPAN(kEomOffsets), SPAN(kEomSrc) },
 };
 #define GROUP_COUNT (uint32_t)(sizeof(kGroups) / sizeof(kGroups[0]))
 /* --quick keeps the first two values of each axis of each group: the same shapes, a smoke-sized run. */
@@ -328,7 +346,7 @@ static void PrintIcdModules(void)
 
 /* ---- buffers -------------------------------------------------------------------------------------- */
 
-typedef struct { VkBuffer buffer; VkDeviceMemory memory; uint32_t type; uint8_t *map; } Buf;
+typedef struct { VkBuffer buffer; VkDeviceMemory memory; uint32_t type; uint8_t *map; VkDeviceSize size; } Buf;
 
 static int FindType(uint32_t bits, VkMemoryPropertyFlags want, VkMemoryPropertyFlags avoid)
 {
@@ -377,6 +395,7 @@ static Buf MakeBuf(VkDeviceSize size, int place)
     VK(vkAllocateMemory(dev, &ai, NULL, &b.memory));
     VK(vkBindBufferMemory(dev, b.buffer, b.memory, 0));
     b.type = (uint32_t)t;
+    b.size = ai.allocationSize;
     if (memProps.memoryTypes[t].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
         VK(vkMapMemory(dev, b.memory, 0, VK_WHOLE_SIZE, 0, (void **)&b.map));
     return b;
@@ -533,7 +552,9 @@ static int RunCase(const Case *c, Fixtures *f, uint32_t index, int onlyFail)
     const uint32_t window = whole_fill ? c->off + c->size + GUARD + c->var : c->off + c->size + GUARD;
     const uint32_t written = whole_fill ? ((window - c->off) & ~3u) : c->size;
     const uint32_t salt = index * 2654435761u + 1u;
-    Buf own = { VK_NULL_HANDLE, VK_NULL_HANDLE, 0, NULL };
+    Buf own = { VK_NULL_HANDLE, VK_NULL_HANDLE, 0, NULL, 0 };
+    Buf eom = { VK_NULL_HANDLE, VK_NULL_HANDLE, 0, NULL, 0 };  /* the one-page source of a copy-eom case */
+    VkBuffer srcBuffer = f->src.buffer;
     const Buf *dst = &f->dst[c->place];
     VkBufferCopy regions[3] = { { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 } };
     uint32_t regionCount = 0, srcEnd = 0;
@@ -591,6 +612,13 @@ static int RunCase(const Case *c, Fixtures *f, uint32_t index, int onlyFail)
         regionCount = 3;
         break;
     }
+    case OP_COPY_EOM:
+        /* The source range ends at the last byte of its own one-page memory (see kEomSizes). */
+        regions[0].srcOffset = EOM_PAGE - c->size;
+        regions[0].dstOffset = c->off;
+        regions[0].size = c->size;
+        regionCount = 1;
+        break;
     default:
         break;
     }
@@ -612,7 +640,25 @@ static int RunCase(const Case *c, Fixtures *f, uint32_t index, int onlyFail)
             for (uint32_t k = 0; k < n; k++) f->want[d + k] = SrcByte(s + k, salt);
         }
         for (uint32_t i = 0; i < srcEnd; i++) f->source[i] = SrcByte(i, salt);
-        memcpy(f->src.map, f->source, srcEnd);
+        if (c->op == OP_COPY_EOM) {
+            /* A memory object of its own for every case, exactly one page, with the buffer bound at
+             * offset 0 and as large as the memory: the byte after the source range is the first byte
+             * of the next page, outside this allocation. */
+            if (c->size > EOM_PAGE) {
+                fprintf(stderr, "vkfillcheck: copy-eom size %u is larger than a page\n", c->size);
+                exit(3);
+            }
+            eom = MakeBuf(EOM_PAGE, PLACE_HOST);
+            if (eom.size != EOM_PAGE || !eom.map) {
+                fprintf(stderr, "vkfillcheck: the copy-eom source memory is %llu bytes%s, not one mapped page\n",
+                        (unsigned long long)eom.size, eom.map ? "" : " and not mapped");
+                exit(3);
+            }
+            memcpy(eom.map, f->source, srcEnd);
+            srcBuffer = eom.buffer;
+        } else {
+            memcpy(f->src.map, f->source, srcEnd);
+        }
     }
 
     /* A case that expects what it already has would pass without the driver doing anything. */
@@ -654,7 +700,7 @@ static int RunCase(const Case *c, Fixtures *f, uint32_t index, int onlyFail)
         vkCmdUpdateBuffer(cb, dst->buffer, c->off + shift, c->size, f->data);
         break;
     default:
-        vkCmdCopyBuffer(cb, f->src.buffer, dst->buffer, regionCount, regions);
+        vkCmdCopyBuffer(cb, srcBuffer, dst->buffer, regionCount, regions);
         break;
     }
     if (c->place == PLACE_LOCAL) {
@@ -672,6 +718,7 @@ static int RunCase(const Case *c, Fixtures *f, uint32_t index, int onlyFail)
         memcpy(f->got, f->rb.map, window);
         if (Compare(c, f->got, f->pre, window, window, "prefill", onlyFail) == CASE_FAIL) {
             if (whole_fill) FreeBuf(&own);
+            FreeBuf(&eom);
             return CASE_FAIL;
         }
         memcpy(f->got, f->rb.map + CAP, window);
@@ -680,6 +727,7 @@ static int RunCase(const Case *c, Fixtures *f, uint32_t index, int onlyFail)
     }
     result = Compare(c, f->got, f->want, window, written, "op", onlyFail);
     if (whole_fill) FreeBuf(&own);
+    FreeBuf(&eom);
     return result;
 }
 
@@ -709,7 +757,9 @@ static void Usage(FILE *out, int code)
             "                      them in the guard after the range, and the exit code must be 1.\n"
             "  --case OP:SIZE:OFF  run only the case matching this operation, size and destination offset.\n"
             "  --skip-case OP:SIZE:OFF  skip the matching case (use to exclude a known TDR).\n"
-            "                      OP is one of fill, update, copy, copy-parts, fill-whole.\n"
+            "                      OP is one of fill, update, copy, copy-parts, fill-whole, copy-eom.\n"
+            "                      copy-eom (BD-290) copies from a source that ends at the end of its own\n"
+            "                      one-page memory; --case copy-eom:13:4 runs one of those cases.\n"
             "  --deadline SEC      end the run after this many seconds (default 60, at most 170).\n"
             "  --fence-timeout-ms  how long to wait for one submission (default 10000).\n"
             "\n"
