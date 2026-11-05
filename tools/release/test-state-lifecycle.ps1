@@ -130,7 +130,8 @@ Check ($p.driver_state.phase -eq 'abandoned' -and $kept -and $text -match 'stopp
 $p=Stopped;$script:LogPath=Join-Path ([IO.Path]::GetTempPath()) ("bd298-" + [guid]::NewGuid().ToString('N') + '.log')
 try { Stop-DriverStateTransaction -State $p -Worker new.exe -Reason install -Product '0.7.216.110' -Save $rsave -Runner $rec -StateDirectory ([IO.Path]::GetTempPath()) -StoreKey 'HKCU:\Software\bd298-test-absent'
     $text=[IO.File]::ReadAllText($script:LogPath) } finally { Remove-Item -LiteralPath $script:LogPath -ErrorAction SilentlyContinue;$script:LogPath=$null }
-Check ($text -notmatch 'stopped before it completed') 'no store: no line about an unfinished store'# A failed abandon leaves the record prepared, starts no transaction and names the cause.
+Check ($text -notmatch 'stopped before it completed') 'no store: no line about an unfinished store'
+# A failed abandon leaves the record prepared, starts no transaction and names the cause.
 foreach($case in @(@{code=13;text='damaged'},@{code=1306;text='another install'},@{code=183;text='other content'},@{code=5;text='worker failed'})) {
     Reset298;$p=Stopped;$script:abandonCode=$case.code;$msg=''
     try {[void](Start-DriverStateTransaction -State $p -Worker new.exe -Product '0.7.216.110' -Device $device -InfSha256 $sha -Save $rsave -Runner $rec)} catch {$msg=$_.Exception.Message}
@@ -192,6 +193,16 @@ try {
     $log=Prepared
     Check ($log -match 'WARNING: The saved settings of the driver version that was removed before this install cannot be carried over' -and
         $log -match 'default settings' -and $log -match "retired-$('ab'*16)-removed\.bin") 'moved record is a warning with the file name in the log'
+    # BD-298 follow-up: a moved legacy record (origin 2: the archive of an install that did not finish).
+    $b=New-Object byte[] 360;[BitConverter]::GetBytes([uint32]0x32545341).CopyTo($b,0);[BitConverter]::GetBytes([uint32]2).CopyTo($b,16)
+    [IO.File]::WriteAllBytes((Join-Path $dir "retired-$('ab'*16)-removed-v2.bin"),$b)
+    $log=Prepared
+    Check ($log -match 'WARNING' -and $log -match 'cannot be carried over' -and $log -match 'removed-v2\.bin') 'a legacy record beside a record of another catalog: the catalog warning'
+    Remove-Item -LiteralPath (Join-Path $dir "retired-$('ab'*16)-removed.bin")
+    $log=Prepared
+    Check ($log -match 'WARNING: The settings of the driver version that was removed before this install are not carried over' -and
+        $log -match 'did not finish' -and $log -match "retired-$('ab'*16)-removed-v2\.bin") 'a moved legacy record: the warning says the install did not finish'
+    Remove-Item -LiteralPath (Join-Path $dir "retired-$('ab'*16)-removed-v2.bin")
     Pending 4
     Check (-not ((Prepared) -match 'WARNING')) 'record read by setting name has no warning'
     Pending 1

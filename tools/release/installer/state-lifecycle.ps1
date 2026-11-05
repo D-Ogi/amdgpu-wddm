@@ -151,9 +151,19 @@ function Start-DriverStateTransaction {
     Invoke-DriverStateWorker -Worker $Worker -Operation prepare -Transaction $record.transaction -Product $Product -Device $Device -Runner $Runner
     $retired=@(Get-DriverStateRetiredRecords -Transaction $record.transaction -Directory $StateDirectory)
     if($retired.Count) {
-        Write-Warn2 ('The saved settings of the driver version that was removed before this install cannot be carried over: ' +
-            'that version saved them in a form that this version cannot read. The driver starts with its default settings. ' +
-            'Set your choices again in the control app.')
+        # BD-298 follow-up: a legacy removal record (origin 2, header offset 16) is the archive of a driver whose first
+        # install did not finish: its settings never became active.
+        $legacy=@($retired | Where-Object {
+            try { $b=[IO.File]::ReadAllBytes((Join-Path $StateDirectory $_)); $b.Length -ge 360 -and [BitConverter]::ToUInt32($b,16) -eq 2 } catch { $false } })
+        if($legacy.Count -eq $retired.Count) {
+            Write-Warn2 ('The settings of the driver version that was removed before this install are not carried over: ' +
+                'the install of that version did not finish, so its settings never became active. The driver starts with its default settings. ' +
+                'Set your choices again in the control app.')
+        } else {
+            Write-Warn2 ('The saved settings of the driver version that was removed before this install cannot be carried over: ' +
+                'that version saved them in a form that this version cannot read. The driver starts with its default settings. ' +
+                'Set your choices again in the control app.')
+        }
         Write-Log "   state: the removal record was kept as $($retired -join ', ') in $StateDirectory"
     }
     return $record
