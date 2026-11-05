@@ -23,6 +23,9 @@ if(([regex]::Matches($production,[regex]::Escape($log))).Count -ne 1){throw 'GUI
 # sink is removed: this fixture emits stdout and cannot write ProgramData.
 [IO.File]::WriteAllText("$Out\RecoveryActions.fixture.cs",$production.Replace($log,'// Fixture: stdout only.'))
 $sources=@((Get-ChildItem "$gui\src\*.cs").FullName | Where-Object { [IO.Path]::GetFileName($_) -ne 'RecoveryActions.cs' })
+# BD-296: Recovery.cs writes both copies of DwmForceCpu through the installer's RouteSwitch (namespace AmdgpuWddm),
+# which the control app compiles in from tools/release/installer (build.ps1 $routeSwitch).
+$sources+="$repo\tools\release\installer\RouteSwitch.cs"
 $fx="$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319"
 $refs='mscorlib.dll','System.dll','System.Core.dll','System.Drawing.dll','System.Windows.Forms.dll','System.IO.Compression.dll','System.Management.dll','System.Web.Extensions.dll','System.Security.dll' |
     ForEach-Object {"/reference:$fx\$_"}
