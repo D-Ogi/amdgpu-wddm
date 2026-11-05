@@ -567,7 +567,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
      $build=Join-Path $Out 'router-front'
      & pwsh -NoProfile -File "$repo\tools\build\build-umd-router.ps1" -OutputDir $build
      if($LASTEXITCODE -ne 0){ exit 1 }
-     foreach($suite in @('policy','front-tables','front-tables13','front-rule','front-record')){
+     foreach($suite in @('policy','compositor','front-tables','front-tables13','front-rule','front-record')){
          & "$build\test-router.exe" child $suite $build
          if($LASTEXITCODE -ne 0){ exit 1 }
      }

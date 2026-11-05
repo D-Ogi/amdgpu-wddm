@@ -115,6 +115,7 @@
 #include "router-provisional.h"
 #include "router-identity.h"
 #include "front-adapter.h"
+#include "router-compositor.h"
 #include "../app-settings/app-settings-core.h"
 #include "../../contract/bc250_desktop_route.h"
 #include "../../contract/amdgpu_driver_package.h"
@@ -428,17 +429,18 @@ static void WriteRouteLine(const wchar_t *directory, const wchar_t *exe, const c
 // appends columns at the end only (front=, then record=), so the kit's parser keeps working and an older log and
 // a newer one differ by the last fields.
 static void Report(const Config &c, const wchar_t *exe, const char *entry, const Decision &d, HRESULT hostedHr,
-                   bool fellBack, const wchar_t *module, HRESULT hr, const char *front, const char *record)
+                   bool fellBack, const wchar_t *module, HRESULT hr, const char *front, const char *record,
+                   const char *kmd)
 {
     char line[2048];
     int n = _snprintf_s(line, _TRUNCATE,
         "bc250d3d_router pid=%lu exe=%ls entry=%s route=%s reason=%s fallback=%u hosted_hr=%08lx hr=%08lx module=%ls "
         "cpu_source=%s hosted_source=%s force_cpu=%lu require_switches=%lu switch_source=%s blit=%u interop=%u "
-        "front=%s record=%s\n",
+        "front=%s record=%s kmd=%s\n",
         GetCurrentProcessId(), exe, entry, d.route == Route::Hosted && !fellBack ? "hosted" : "cpu",
         ReasonName(d.reason), fellBack ? 1u : 0u, (unsigned long)hostedHr, (unsigned long)hr, module,
         c.cpu_source, c.hosted_source, c.force_cpu, c.require_switches, c.switch_source, c.blit_on ? 1u : 0u,
-        c.interop_on ? 1u : 0u, front, record);
+        c.interop_on ? 1u : 0u, front, record, kmd);
     if (n < 0) n = (int)strlen(line);
     WriteRouteLine(c.log_directory, exe, line, n);
 }
@@ -465,6 +467,48 @@ static const char *PublishRoute(const wchar_t *exe, unsigned route, HRESULT host
     if (published) return "published";
     _snprintf_s(word, chars, _TRUNCATE, "failed-%lu", error);
     return word;
+}
+
+// BD-296 part (b): the compositor report to the kernel driver (router-compositor.h), dwm.exe only, at every desktop
+// decision: on a CPU route before the CPU UMD opens the adapter, on the GPU route after the hosted open. What the kmd
+// column says: none (not dwm.exe), or the word of ReportCompositor. The test builds of the router
+// (BC250_ROUTER_STATE_FIXTURE) answer with an adapter double that accepts every well-formed report, so that no test
+// can send an escape to a real adapter of the machine that runs it.
+#ifdef BC250_ROUTER_STATE_FIXTURE
+static NTSTATUS APIENTRY FixtureOpen(D3DKMT_OPENADAPTERFROMLUID *o)
+{
+    o->hAdapter = 0x4B4D;
+    return 0;
+}
+static NTSTATUS APIENTRY FixtureEscape(const D3DKMT_ESCAPE *e)
+{
+    if (e->hAdapter != 0x4B4D || e->Type != D3DKMT_ESCAPE_DRIVERPRIVATE ||
+        e->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DESKTOP_COMPOSITOR))
+        return (NTSTATUS)0xC000000DL; // STATUS_INVALID_PARAMETER
+    auto *d = (BC250_ESCAPE_DESKTOP_COMPOSITOR *)e->pPrivateDriverData;
+    const bool valid = d->Magic == BC250_ESCAPE_MAGIC && d->Command == BC250_ESCAPE_SET_DESKTOP_COMPOSITOR &&
+                       d->AbiVersion == BC250_DESKTOP_COMPOSITOR_ABI && d->Route >= BC250_DESKTOP_ROUTE_GPU &&
+                       d->Route <= BC250_DESKTOP_ROUTE_FALLBACK && d->Pid == GetCurrentProcessId();
+    d->Status = valid ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
+    d->Reason = valid ? BC250_COMPOSITOR_REASON_ACCEPTED : BC250_COMPOSITOR_REASON_ROUTE;
+    d->CpuCompositor = valid && d->Route != BC250_DESKTOP_ROUTE_GPU ? 1u : 0u;
+    d->ApertureOffered = 1;
+    return 0;
+}
+static NTSTATUS APIENTRY FixtureClose(const D3DKMT_CLOSEADAPTER *) { return 0; }
+static bc250router::CompositorKmt RouterCompositorKmt() { return {FixtureOpen, FixtureEscape, FixtureClose}; }
+#else
+static bc250router::CompositorKmt RouterCompositorKmt() { return bc250router::SystemCompositorKmt(); }
+#endif
+
+static const char *TellCompositor(const wchar_t *exe, const D3D10DDIARG_OPENADAPTER *args, unsigned route, char *word,
+                                  size_t chars)
+{
+    if (_wcsicmp(exe, L"dwm.exe")) return "none";
+    const PFND3DDDI_QUERYADAPTERINFOCB query =
+        args->pAdapterCallbacks ? args->pAdapterCallbacks->pfnQueryAdapterInfoCb : nullptr;
+    return bc250router::ReportCompositor(args->hRTAdapter.handle, query, RouterCompositorKmt(), route,
+                                         GetCurrentProcessId(), word, chars);
 }
 
 // The record's word for a desktop decision that ended on the CPU UMD.
@@ -670,21 +714,26 @@ static HRESULT Forward(const char *entry, D3D10DDIARG_OPENADAPTER *args, size_t 
     // Desktop: dwm.exe and HostedClients, as router 5BBEB783.
     HRESULT hostedHr = S_FALSE; // not tried
     char recordWord[32];
+    char kmdWord[48];
     if (d.route == Route::Hosted) {
         hostedHr = TryGpu(c.hosted, entry, args, tableBytes);
         if (SUCCEEDED(hostedHr)) {
             // The front goes on only after the hosted open succeeded, so the hosted table it saves is the
             // real one and a failed hosted open still restores the caller's table untouched (TryGpu).
             const char *front = InstallFront(c, entry, args, exe);
+            const char *kmd = TellCompositor(exe, args, BC250_DESKTOP_ROUTE_GPU, kmdWord, sizeof(kmdWord));
             Report(c, exe, entry, d, hostedHr, false, c.hosted, hostedHr, front,
-                   PublishRoute(exe, BC250_DESKTOP_ROUTE_GPU, hostedHr, recordWord, sizeof(recordWord)));
+                   PublishRoute(exe, BC250_DESKTOP_ROUTE_GPU, hostedHr, recordWord, sizeof(recordWord)), kmd);
             return hostedHr;
         }
     }
+    // The CPU compositor is reported before the CPU UMD opens the adapter, so that the textures of its windows are
+    // created with the CPU view. TryGpu restored the caller's arguments, so the adapter callbacks are the runtime's.
+    const char *kmd = TellCompositor(exe, args, CpuRouteWord(d), kmdWord, sizeof(kmdWord));
     const HRESULT hr = ForwardCpu(c, entry, args);
     Report(c, exe, entry, d, hostedHr, d.route == Route::Hosted, c.cpu, hr,
            c.front == Front::Invalid ? "invalid" : c.front == Front::Requested ? "unavailable" : "off",
-           PublishRoute(exe, CpuRouteWord(d), hostedHr, recordWord, sizeof(recordWord)));
+           PublishRoute(exe, CpuRouteWord(d), hostedHr, recordWord, sizeof(recordWord)), kmd);
     return hr;
 }
 
