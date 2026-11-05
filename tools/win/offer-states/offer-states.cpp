@@ -22,8 +22,12 @@
 // Working set (BD-309). A 1024x1024 BGRA staging texture (4 MiB) that the CPU writes in full through Map(WRITE), a
 // drain with EnqueueSetEvent, K32GetProcessMemoryInfo, OfferResources of the staging texture, 200 ms,
 // K32GetProcessMemoryInfo again, ReclaimResources. The HLK test asks for a drop of TEXTURE_SIZE - WORKING_SET_THRESHOLD,
-// which its log gives as 3932160 bytes. Run with the original flags and with AlwaysDiscardOffer, AlwaysProcessOfferList
-// and AlwaysDecommitOffer (d3dkmthk.h:3283, 3295, 3296).
+// which its log gives as 3932160 bytes. Run with the original flags, with AlwaysDiscardOffer, AlwaysProcessOfferList
+// and AlwaysDecommitOffer (d3dkmthk.h:3283, 3295, 3296), and with AlwaysDiscardOffer and AlwaysProcessOfferList only.
+// The offer itself is always the plain OfferResources (no DXGI_OFFER_RESOURCE_FLAG_ALLOW_DECOMMIT). With the verifier
+// flags off, VidMm may keep the offered pages until memory pressure, so the first row is information only. The HLK test
+// sets adapter verifier flags (escape 29) before its offer; its log does not give their value, so the third row shows
+// whether the drop needs the decommit flag.
 //
 // The program restores the flags of the adapter after each case and at its end. It writes the flags it found to
 // --save before it sets any, so that "--set-flags <hex>" can restore them if it is stopped in the middle.
@@ -217,11 +221,12 @@ int main(int argc,char **argv) {
     if (FAILED(D3D11CreateDevice(adapter.Get(),D3D_DRIVER_TYPE_UNKNOWN,nullptr,0,levels,2,D3D11_SDK_VERSION,&p.device,nullptr,
         &p.context)) || FAILED(p.device.As(&p.dxgi))) { close(); return 3; }
     FILE *f=nullptr; if (fopen_s(&f,out,"wb") || !f) { close(); return 3; }
-    // The working-set rows first: the shell's residency lines have a start budget of 64 (BD-283), so these two
+    // The working-set rows first: the shell's residency lines have a start budget of 64 (BD-283), so these three
     // offers are logged whatever the number of offer-state rows.
     std::vector<WsRow> ws;
     ws.push_back(p.working(p.original));
     ws.push_back(p.working(p.original|kAlwaysDiscardOffer|kAlwaysProcessOfferList|kAlwaysDecommitOffer));
+    ws.push_back(p.working(p.original|kAlwaysDiscardOffer|kAlwaysProcessOfferList));
     std::vector<Row> rows;
     for (unsigned s:states) for (unsigned w=0;w<5;++w) for (Mode m:{kNow,kNow1,kLater,kDrained}) rows.push_back(p.run(s,w,m));
     UINT32 back=p.original; const NTSTATUS restore=verifier_flags(p.adapter,D3DKMT_VERIFIER_OPTION_SET,back);
@@ -234,7 +239,7 @@ int main(int argc,char **argv) {
     }
     for (const WsRow &w:ws) { setOk=setOk && w.set>=0; anyRemoved=anyRemoved || FAILED(w.removed); }
     char name[256]{}; WideCharToMultiByte(CP_UTF8,0,ad.Description,-1,name,sizeof(name),nullptr,nullptr);
-    std::fprintf(f,"{\"tool\":\"offer-states\",\"version\":2,\"pid\":%lu,\"adapter\":\"%s\",\"vendor\":\"%04X\",\"device\":\"%04X\","
+    std::fprintf(f,"{\"tool\":\"offer-states\",\"version\":3,\"pid\":%lu,\"adapter\":\"%s\",\"vendor\":\"%04X\",\"device\":\"%04X\","
         "\"d3d11_umd\":\"%s\",\"original_flags\":\"%s\",\"restore_status\":\"%08X\",\"flags_after\":\"%s\",\"rows\":[",
         GetCurrentProcessId(),name,ad.VendorId,ad.DeviceId,module_path(L"amdgpu_wddm_d3d11.dll").c_str(),hex(p.original).c_str(),
         unsigned(restore),hex(after).c_str());
