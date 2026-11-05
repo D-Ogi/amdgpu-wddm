@@ -20,6 +20,7 @@
 #include "guard_keep_prune.h"
 #include "hang_recovery.h"
 #include "state_kernel.h"
+#include "gdi_admission.h"   /* Bc250DesktopKillSwitch (BD-296) */
 #include <ntstrsafe.h>
 #include <stdarg.h>
 
@@ -259,6 +260,47 @@ void GuardReadHardwarePointer(_In_ PDRIVER_OBJECT DriverObject)
 ULONG GuardHardwarePointerSetting(void)
 {
     return g_HardwarePointer;
+}
+
+// BD-296: the router's kill switch DwmForceCpu, as the KMD sees it. The router reads it from
+// HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter. The KMD reads the copy in its own Parameters key, read only, through
+// IoOpenDriverRegistryKey: an absolute path to the SOFTWARE hive is a driver isolation violation (Driver Verifier
+// rules 33 and 36), and no driver handle reaches that hive. One writer keeps the two values equal:
+// tools/release/installer/RouteSwitch.cs, which every route action of the control app and the installer use. Read
+// in DriverEntry, once: the value takes effect at the next Windows restart, as the router's own value does. Not a
+// catalog setting: like EnableHardwarePointer above, and because the switch is the recovery route of a broken
+// desktop, which a plain registry write (reg.exe, the lab emergency channel) must be able to set without the state
+// worker. The read is one of Bc250DesktopKillSwitch's inputs (gdi_admission.h); WddmStart takes the answer.
+static int g_DesktopKillSwitch;
+
+void GuardReadDesktopKillSwitch(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status;
+    ULONG value = 0;
+    int read;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (NT_SUCCESS(status)) {
+        status = ParameterDword(key, L"DwmForceCpu", &value);
+        ZwClose(key);
+    }
+    if (NT_SUCCESS(status)) read = BC250_KILL_SWITCH_READ_VALUE;
+    else if (status == STATUS_OBJECT_NAME_NOT_FOUND) read = BC250_KILL_SWITCH_READ_ABSENT;
+    else if (status == STATUS_OBJECT_TYPE_MISMATCH) read = BC250_KILL_SWITCH_READ_OTHER_TYPE;
+    else read = BC250_KILL_SWITCH_READ_FAILED;
+    g_DesktopKillSwitch = Bc250DesktopKillSwitch(read, value);
+    // One line, in DriverEntry: absent and unreadable keep the answer of the release before BD-296 (off).
+    GuardLog("desktop: kill switch DwmForceCpu %s, value %lu, status 0x%08X: %s",
+             read == BC250_KILL_SWITCH_READ_VALUE ? "read" :
+             read == BC250_KILL_SWITCH_READ_ABSENT ? "absent" :
+             read == BC250_KILL_SWITCH_READ_OTHER_TYPE ? "other type" : "unreadable",
+             value, (ULONG)status, g_DesktopKillSwitch ? "on, CPU route" : "off");
+}
+
+int GuardDesktopKillSwitch(void)
+{
+    return g_DesktopKillSwitch;
 }
 
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)

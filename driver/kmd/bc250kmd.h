@@ -696,6 +696,10 @@ ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and 
 // BC250_CURSOR_SETTING_* bits that dcn_cursor.c takes at the start. Not a catalog setting (guard.c says why).
 void GuardReadHardwarePointer(_In_ PDRIVER_OBJECT DriverObject);
 ULONG GuardHardwarePointerSetting(void);
+// BD-296: DwmForceCpu (REG_DWORD under Parameters, the copy of the router's kill switch, read only in DriverEntry,
+// both flavours, absent = off): nonzero when this start is on the CPU desktop route by the kill switch.
+void GuardReadDesktopKillSwitch(_In_ PDRIVER_OBJECT DriverObject);
+int GuardDesktopKillSwitch(void);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-235 lab experiment, lab flavour only: PagingRingStartBytes and PagingRingStartNonce (REG_QWORDs under the
 // driver's Parameters key) and PagingBoundaryMode (REG_DWORD), read only in DriverEntry (PASSIVE_LEVEL); the seed is

@@ -357,22 +357,44 @@ static void CreateRollback(void)
 }
 
 // BD-292: the capability needs the gate, the kernels and the GPU desktop route; the record says why it is off.
+// BD-296: and the router's kill switch off.
 static void GdiHwAccelRoute(void)
 {
-    int gate, kernels, gpu, capability;
+    int gate, kernels, gpu, kill, capability;
     unsigned long feature;
     for (gate = 0; gate < 2; gate++)
         for (kernels = 0; kernels < 2; kernels++)
-            for (gpu = 0; gpu < 2; gpu++) {
-                capability = -1;
-                feature = Bc250GdiHwAccelFeature(gate, kernels, gpu, &capability);
-                CHECK(capability == (gate && kernels && gpu));
-                CHECK(feature == (capability ? BC250_GDI_FEATURE_ON :
-                                  kernels && gpu ? BC250_GDI_FEATURE_OFF_BY_SWITCH : BC250_GDI_FEATURE_IMPOSSIBLE));
-            }
-    // The case of the defect: switch on, kernels in the image, CPU desktop route.
-    feature = Bc250GdiHwAccelFeature(1, 1, 0, &capability);
+            for (gpu = 0; gpu < 2; gpu++)
+                for (kill = 0; kill < 2; kill++) {
+                    const int route = gpu && !kill;
+                    capability = -1;
+                    feature = Bc250GdiHwAccelFeature(gate, kernels, gpu, kill, &capability);
+                    CHECK(capability == (gate && kernels && route));
+                    CHECK(feature == (capability ? BC250_GDI_FEATURE_ON :
+                                      kernels && route ? BC250_GDI_FEATURE_OFF_BY_SWITCH :
+                                      BC250_GDI_FEATURE_IMPOSSIBLE));
+                }
+    // The case of BD-292: switch on, kernels in the image, CPU desktop route.
+    feature = Bc250GdiHwAccelFeature(1, 1, 0, 0, &capability);
     CHECK(!capability && feature == BC250_GDI_FEATURE_IMPOSSIBLE);
+    // The case of BD-296: both KMD desktop switches on, but DwmForceCpu on.
+    feature = Bc250GdiHwAccelFeature(1, 1, 1, 1, &capability);
+    CHECK(!capability && feature == BC250_GDI_FEATURE_IMPOSSIBLE);
+    // The release before BD-296 for the same start: kill switch not read, capability 1.
+    feature = Bc250GdiHwAccelFeature(1, 1, 1, 0, &capability);
+    CHECK(capability && feature == BC250_GDI_FEATURE_ON);
+}
+
+// BD-296: the kill switch from one read, with the router's rules.
+static void KillSwitchRead(void)
+{
+    CHECK(Bc250DesktopKillSwitch(BC250_KILL_SWITCH_READ_VALUE, 1) == 1);
+    CHECK(Bc250DesktopKillSwitch(BC250_KILL_SWITCH_READ_VALUE, 0xffffffffu) == 1);
+    CHECK(Bc250DesktopKillSwitch(BC250_KILL_SWITCH_READ_VALUE, 0) == 0);
+    CHECK(Bc250DesktopKillSwitch(BC250_KILL_SWITCH_READ_ABSENT, 1) == 0);
+    CHECK(Bc250DesktopKillSwitch(BC250_KILL_SWITCH_READ_OTHER_TYPE, 0) == 1);
+    CHECK(Bc250DesktopKillSwitch(BC250_KILL_SWITCH_READ_FAILED, 1) == 0);
+    CHECK(Bc250DesktopKillSwitch(99, 1) == 0);
 }
 // The record values are the ones the control app reads (DriverFeatures.cs: 1 on, 2 off by the switch).
 typedef char gdi_feature_values_check[(BC250_GDI_FEATURE_ON == 1ul && BC250_GDI_FEATURE_OFF_BY_SWITCH == 2ul &&
@@ -787,6 +809,7 @@ int main(int argc, char** argv)
     CreateRollback();
     Masks();
     GdiHwAccelRoute();
+    KillSwitchRead();
     SizeQueryLeavesUnion();
     OddShapes();
     printf("gdi_admission_test: %d checks, %d failures\n", g_checks, g_failures);

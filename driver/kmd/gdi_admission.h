@@ -276,13 +276,35 @@ static __inline void Bc250GdiMasks(const BC250_STDALLOC_COUNTERS* C, BC250_GDI_M
 // capability follows the same two effective switches of this start. GpuDesktop is GpuPresentGate && CddDwmInterop
 // after InteropStart. The answer is also the Features\GdiHwAccel record of the control app: 1 on, 2 off by the switch
 // alone, 0 not possible on this start (no kernels in the image, or the desktop is on the CPU route).
+//   BD-296: the router's kill switch DwmForceCpu also sends the compositor to the CPU UMD, whatever the two KMD
+// switches say. KillSwitch is that switch as Bc250DesktopKillSwitch reads it at WddmStart; on, the start is on the
+// CPU route, and the answer is the one of the CPU route above (capability 0, record 0).
 #define BC250_GDI_FEATURE_IMPOSSIBLE 0ul
 #define BC250_GDI_FEATURE_ON 1ul
 #define BC250_GDI_FEATURE_OFF_BY_SWITCH 2ul
-static __inline unsigned long Bc250GdiHwAccelFeature(int Gate, int Kernels, int GpuDesktop, int* Capability)
+static __inline unsigned long Bc250GdiHwAccelFeature(int Gate, int Kernels, int GpuDesktop, int KillSwitch,
+                                                     int* Capability)
 {
-    *Capability = Gate && Kernels && GpuDesktop;
+    const int gpuRoute = GpuDesktop && !KillSwitch;
+    *Capability = Gate && Kernels && gpuRoute;
     if (*Capability) return BC250_GDI_FEATURE_ON;
-    return Kernels && GpuDesktop ? BC250_GDI_FEATURE_OFF_BY_SWITCH : BC250_GDI_FEATURE_IMPOSSIBLE;
+    return Kernels && gpuRoute ? BC250_GDI_FEATURE_OFF_BY_SWITCH : BC250_GDI_FEATURE_IMPOSSIBLE;
+}
+
+// BD-296: the kill switch from one read of its REG_DWORD, with the router's rules (driver/umd/router/router.cpp
+// ReadConfig): a value other than 0 is on; an absent key or value is off; a value of another type or size is on,
+// because the router reads it as on (fail safe). A read that failed for another reason (the hive not readable at
+// WddmStart, no memory) keeps the answer of the release before BD-296, off, and the caller logs the status.
+#define BC250_KILL_SWITCH_READ_VALUE 0
+#define BC250_KILL_SWITCH_READ_ABSENT 1
+#define BC250_KILL_SWITCH_READ_OTHER_TYPE 2
+#define BC250_KILL_SWITCH_READ_FAILED 3
+static __inline int Bc250DesktopKillSwitch(int Read, unsigned long Value)
+{
+    switch (Read) {
+    case BC250_KILL_SWITCH_READ_VALUE: return Value != 0;
+    case BC250_KILL_SWITCH_READ_OTHER_TYPE: return 1;
+    default: return 0;
+    }
 }
 #endif

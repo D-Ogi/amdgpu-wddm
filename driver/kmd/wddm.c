@@ -4319,20 +4319,23 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     //   BD-292: the capability also needs the GPU desktop route, the two effective switches that InteropStart
     // latched above (Bc250GdiHwAccelFeature, gdi_admission.h). On the CPU route the compositor cannot read the
     // standard GDI textures that the capability makes GDI draw into.
+    //   BD-296: the router's kill switch DwmForceCpu is a third route input. The KMD reads its copy in Parameters in
+    // DriverEntry (GuardReadDesktopKillSwitch); on, the compositor is the CPU UMD whatever the two switches say.
     wddm->GdiHwAccelGate = (BOOLEAN)(GuardReadSetting(L"EnableGdiHwAccel", 1) != 0 || GuardLabGdiHwAccel());
     {
         int capability = 0;
+        const int killSwitch = GuardDesktopKillSwitch();
         // What this start can do with GDI acceleration, for the control app (the switch shows only where it has an
         // effect): Features\GdiHwAccel, volatile, 1 on, 2 off by the switch alone, 0 not possible (no kernels, or
         // the CPU desktop route). A failed write leaves the switch hidden; the capability does not depend on it.
         ULONG feature = Bc250GdiHwAccelFeature(wddm->GdiHwAccelGate, Bc250GdiKernelsPresent(),
-                                               wddm->GpuPresentGate && wddm->CddDwmInterop, &capability);
+                                               wddm->GpuPresentGate && wddm->CddDwmInterop, killSwitch, &capability);
         NTSTATUS written;
 
         wddm->GdiHwAccel = (BOOLEAN)(capability != 0);
-        GuardLog("wddm: GDI hardware acceleration gate %u, kernels %u, GPU desktop route %u, capability %u",
+        GuardLog("wddm: GDI hardware acceleration gate %u, kernels %u, GPU desktop route %u, kill switch %u, capability %u",
                  (UINT)wddm->GdiHwAccelGate, (UINT)Bc250GdiKernelsPresent(),
-                 (UINT)(wddm->GpuPresentGate && wddm->CddDwmInterop), (UINT)wddm->GdiHwAccel);
+                 (UINT)(wddm->GpuPresentGate && wddm->CddDwmInterop), (UINT)(killSwitch != 0), (UINT)wddm->GdiHwAccel);
         written = GuardVolatileStore(L"Features", L"GdiHwAccel", feature);
 
         if (!NT_SUCCESS(written))
