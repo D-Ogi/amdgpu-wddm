@@ -1237,6 +1237,21 @@
         "host"
       ]
     },
+    "wddm-level": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "wddm-level-no-clamp": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "wddm-level-with-2-3": {
+      "inputs": [
+        "host"
+      ]
+    },
     "hang-recovery": {
       "inputs": [
         "host"
