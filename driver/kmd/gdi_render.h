@@ -250,15 +250,27 @@ int Bc250GdiItemToKernel(const BC250_GDI_OP* Op, BC250_GDI_ITEM* Item);
  * writes into Order[0..Count) the order to visit Subs in, and returns
  *   1  the given order is safe, and Order is 0, 1, 2, ...;
  *   2  another order was needed, and Order holds it;
- *   0  no order of whole items is safe, or Count is above BC250_GDI_ORDER_MAX, or the arguments
- *      are invalid. Order is then 0, 1, 2, ... (when Order can hold it) and the caller counts it.
- * Any command that is not a same-surface BITBLT answers 1. The cost is Count * Count rectangle
- * tests, which is why Count is bounded. The order between items that do not meet is unchanged,
- * and the items of one command have disjoint destinations, so no write-after-write order exists
- * between them. */
-#define BC250_GDI_ORDER_MAX 32u
+ *   0  no order of whole items is safe, or Count is above BC250_GDI_ORDER_LIMIT, or Work is too
+ *      small, or the arguments are invalid. Order is then 0, 1, 2, ... (when Order can hold it)
+ *      and the caller counts it.
+ * Any command that is not a same-surface BITBLT answers 1. The order between items that do not
+ * meet is unchanged, and the items of one command have disjoint destinations, so no
+ * write-after-write order exists between them.
+ *
+ * Any Count up to BC250_GDI_ORDER_LIMIT is ordered. The caller gives the work space: Work must be
+ * 8-byte aligned and hold BC250_GDI_ORDER_BYTES(Count) bytes (the clipped rectangles, a count of
+ * waiting predecessors, the items sorted by top edge and a bit per item; about 20 bytes per item).
+ * The function allocates nothing, so the caller decides where the space comes from and what a
+ * failed allocation does. The edges are not stored: each is found again when an item is placed,
+ * which keeps the space linear in Count. A query looks only at the blocks whose top edge is inside
+ * the tallest block's height of it, so strips and cells cost about Count * log(Count); the worst
+ * case (one tall block, or blocks that cross) stays below 2 * Count * Count rectangle tests. */
+#define BC250_GDI_ORDER_LIMIT 65535u
+#define BC250_GDI_ORDER_BYTES(Count) \
+    ((unsigned int)(Count) * 16u + (((unsigned int)(Count) * 2u + 7u) & ~7u) * 2u + \
+     (((unsigned int)(Count) + 63u) / 64u) * 8u)
 int Bc250GdiSameSurfaceOrder(const BC250_GDI_OP* Op, const BC250_GDI_RECT* Subs, unsigned int Count,
-                             unsigned char* Order);
+                             unsigned short* Order, void* Work, unsigned int WorkBytes);
 
 /* The contract's destination-to-source transform, exactly. Xd and Yd are absolute destination
  * coordinates. Both are total: with Ws==Wd they reduce to the translation the BITBLT Remarks give. */

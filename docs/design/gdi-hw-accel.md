@@ -955,11 +955,22 @@ surface:
   work-group release fence, `s_barrier` and an acquire fence between bands. The code object has
   `s_waitcnt vmcnt(0)`, `s_waitcnt_vscnt`, `s_barrier` and `buffer_gl0_inv` at that point.
 - Two items of one command can also meet: item i can write pixels that item j reads.
-  `Bc250GdiSameSurfaceOrder` in [gdi_render.c](../../driver/kmd/gdi_render.c) puts j before i, for up
-  to `BC250_GDI_ORDER_MAX` (32) sub-rectangles. The CDD normally sends the sub-rectangles of a scroll
-  in that order already, because it enumerates the clip region with a direction, and the function
-  then keeps the order as it is. The batch ends every item with `CP_SYNC` or with the dispatch's
-  `CS_PARTIAL_FLUSH`, so an item is complete before the next item writes.
+  `Bc250GdiSameSurfaceOrder` in [gdi_render.c](../../driver/kmd/gdi_render.c) puts j before i, for
+  any number of sub-rectangles up to `BC250_GDI_ORDER_LIMIT` (65535). It does not depend on the
+  order of the CDD. The CDD normally sends the sub-rectangles of a scroll in a safe order already,
+  because it enumerates the clip region with a direction. The function then keeps the order as it is.
+  The batch ends every item with `CP_SYNC` or with the dispatch's `CS_PARTIAL_FLUSH`, so an item is
+  complete before the next item writes.
+- The order is Kahn's topological sort. It always takes the lowest free index, so a safe order
+  stays the same. The function allocates no memory. `wddm.c` gives it the work space
+  (`BC250_GDI_ORDER_BYTES`, about 20 bytes for each item). The space is on the stack for up to 16
+  sub-rectangles, and in one nonpaged pool block for more. If that block is not available, the
+  command is drawn in the given order and counted as `unordered`. The edges are not stored. The
+  function finds them again with a sorted window on one axis. The window holds the blocks whose low
+  edge is within the longest block's extent. On a host CPU, 12287 sub-rectangles (the most that a
+  192 KiB command buffer holds) take about 3 ms for chains of strips or cells in either direction.
+  The worst case, a tall block and a wide block that make the window the whole span, takes
+  about 170 ms.
 - The hazards are all write-after-read: no pixel of the result depends on a pixel that the same
   command wrote. So no cache invalidation is necessary between bands or items for correctness, only
   the completion of the earlier reads.
@@ -968,10 +979,13 @@ surface:
 the destination's slot when the backing serial and the GPU address are the same. Any other repeated
 allocation is still refused. The stop totals line `wddm: gdi same-skip ordered reordered unordered`
 counts the skipped identities, the ordered items, the commands that were put in a new order, and the
-commands that no order could make safe or that had more than 32 sub-rectangles. A nonzero
+commands that no order could make safe (a cycle) or that got no work space for the order. A nonzero
 `unordered` can mean wrong pixels.
 
-Host tests: `TestBands`, `TestSameSurfaceStream` and `TestSameSurfaceOrder` in
+Host tests: `TestBands`, `TestSameSurfaceStream`, `TestSameSurfaceOrder`, `TestSameSurfaceOrderMany`
+(40 to 200 overlapping strips and columns in both directions of each axis and on a diagonal, with an
+image compare and the given order as the control) and `TestSameSurfaceOrderRandom` (3000 random
+commands compared with the definition of the order, with no window) in
 [gdi_render_test.c](../../driver/kmd/test/gdi_render_test.c), and `TestOrdered` and
 `TestOrderedBatch` in [gdi_kernel_test.c](../../driver/kmd/test/gdi_kernel_test.c). They cover the
 eight directions, the identity, one-pixel moves and moves near the block size. The engine stream is

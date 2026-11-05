@@ -1531,14 +1531,66 @@ static void TestSameSurfaceStream(void)
     }
 }
 
+/* Bc250GdiSameSurfaceOrder with work space for up to ORDER_TEST_MAX items. */
+#define ORDER_TEST_MAX 256u
+static unsigned long long g_orderWork[BC250_GDI_ORDER_BYTES(ORDER_TEST_MAX) / 8u + 1u];
+
+static int OrderOf(const BC250_GDI_OP* op, const BC250_GDI_RECT* subs, unsigned int n,
+                   unsigned short* order)
+{
+    return Bc250GdiSameSurfaceOrder(op, subs, n, order, g_orderWork, (unsigned int)sizeof(g_orderWork));
+}
+
+/* The strips of one same-surface copy, run one by one in the computed order and in the given
+ * order. The computed order must give GDI's result for the whole command; the given order must
+ * not (the positive control: the test can see a wrong order). */
+static void OrderImageCase(const char* name, const BC250_GDI_OP* op, const BC250_GDI_SURFACE* s,
+                           const BC250_GDI_RECT* subs, unsigned int n, const unsigned short* order,
+                           int expectOrdered)
+{
+    static unsigned char whole[MEM_BYTES];
+    unsigned char seen[ORDER_TEST_MAX];
+    unsigned int i, pass;
+    /* The order must be a permutation of the items before it can index them. */
+    memset(seen, 0, sizeof(seen));
+    for (i = 0; i < n; i++) {
+        if (n > ORDER_TEST_MAX || order[i] >= n || seen[order[i]]) {
+            fprintf(stderr, "FAIL same-surface order %s: the order is not a permutation of %u items\n", name, n);
+            g_failures++;
+            return;
+        }
+        seen[order[i]] = 1u;
+    }
+    for (pass = 0; pass < 2u; pass++) {
+        BC250_GDI_ITEM all;
+        BC250_GDI_RECT rect = op->DstRect;
+        SeedSameSurface();
+        CHECK_EQ(Bc250GdiPlanItem(op, s, 1, &rect, &all), Bc250GdiOk);
+        ReferenceSameCopy(&all);
+        /* RunSameCopy moves g_expected item by item, so the whole command's result is kept aside. */
+        memcpy(whole, g_expected, MEM_BYTES);
+        memcpy(g_expected, g_memory, MEM_BYTES);
+        for (i = 0; i < n; i++) RunSameCopy(op, s, &subs[pass == 0u ? order[i] : i], expectOrdered);
+        g_checks++;
+        if (pass == 0u && memcmp(g_memory, whole, MEM_BYTES) != 0) {
+            fprintf(stderr, "FAIL same-surface order %s: the ordered strips differ from GDI's rule\n", name);
+            g_failures++;
+        }
+        if (pass == 1u && memcmp(g_memory, whole, MEM_BYTES) == 0) {
+            fprintf(stderr, "FAIL same-surface order %s: the given order matched, so the test is blind\n", name);
+            g_failures++;
+        }
+    }
+}
+
 /* Several sub-rectangles of one scroll: the order of the items, and the image it gives. */
 static void TestSameSurfaceOrder(void)
 {
     BC250_GDI_SURFACE s[1];
     BC250_GDI_OP op;
-    BC250_GDI_RECT subs[BC250_GDI_ORDER_MAX + 1u];
-    unsigned char order[BC250_GDI_ORDER_MAX];
-    unsigned int i, pass;
+    BC250_GDI_RECT subs[ORDER_TEST_MAX];
+    unsigned short order[ORDER_TEST_MAX];
+    unsigned int i;
     s[0] = Surface(256, 128, 4, BC250_GDISURFACE_TEXTURE, 0);
 
     /* A scroll down by 3, in three strips given top first: each strip writes rows that the strip
@@ -1549,74 +1601,239 @@ static void TestSameSurfaceOrder(void)
     subs[0] = Rect(10, 10, 60, 20);
     subs[1] = Rect(10, 20, 60, 30);
     subs[2] = Rect(10, 30, 60, 50);
-    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 3, order), 2);
+    CHECK_EQ(OrderOf(&op, subs, 3, order), 2);
     CHECK(order[0] == 2u && order[1] == 1u && order[2] == 0u);
     /* Given bottom first, the order is kept as it is. */
     {
         BC250_GDI_RECT flipped[3];
         flipped[0] = subs[2]; flipped[1] = subs[1]; flipped[2] = subs[0];
-        CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, flipped, 3, order), 1);
+        CHECK_EQ(OrderOf(&op, flipped, 3, order), 1);
         CHECK(order[0] == 0u && order[1] == 1u && order[2] == 2u);
     }
-    /* The image: the strips in the computed order give GDI's result; in the given order they do
-     * not (the positive control: the test can see a wrong order). */
-    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 3, order), 2);
-    for (pass = 0; pass < 2u; pass++) {
-        static unsigned char whole[MEM_BYTES];
-        BC250_GDI_ITEM all;
-        BC250_GDI_RECT rect = op.DstRect;
-        SeedSameSurface();
-        CHECK_EQ(Bc250GdiPlanItem(&op, s, 1, &rect, &all), Bc250GdiOk);
-        ReferenceSameCopy(&all);
-        /* RunSameCopy moves g_expected item by item, so the whole command's result is kept aside. */
-        memcpy(whole, g_expected, MEM_BYTES);
-        memcpy(g_expected, g_memory, MEM_BYTES);
-        for (i = 0; i < 3u; i++) RunSameCopy(&op, s, &subs[pass == 0u ? order[i] : i], 1);
-        g_checks++;
-        if (pass == 0u && memcmp(g_memory, whole, MEM_BYTES) != 0) {
-            fprintf(stderr, "FAIL same-surface order: the ordered strips differ from GDI's rule\n");
-            g_failures++;
-        }
-        if (pass == 1u && memcmp(g_memory, whole, MEM_BYTES) == 0) {
-            fprintf(stderr, "FAIL same-surface order: the given order matched, so the test is blind\n");
-            g_failures++;
-        }
-    }
+    /* The image of the computed order, with the given order as the control. */
+    CHECK_EQ(OrderOf(&op, subs, 3, order), 2);
+    OrderImageCase("3 strips down", &op, s, subs, 3u, order, 1);
 
     /* Two rectangles of one band, moved right: the right one runs first. */
     op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(0, 0, 20, 10), Rect(3, 0, 23, 10));
     op.SrcAllocationIndex = op.DstAllocationIndex = 0;
     subs[0] = Rect(3, 0, 13, 10);
     subs[1] = Rect(13, 0, 23, 10);
-    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order), 2);
+    CHECK_EQ(OrderOf(&op, subs, 2, order), 2);
     CHECK(order[0] == 1u && order[1] == 0u);
     /* Moved left, the same pair is already in order. */
     op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(6, 0, 26, 10), Rect(3, 0, 23, 10));
     op.SrcAllocationIndex = op.DstAllocationIndex = 0;
-    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order), 1);
+    CHECK_EQ(OrderOf(&op, subs, 2, order), 1);
     /* The same rectangle twice is a cycle, which no order can make safe. */
     subs[1] = subs[0];
-    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order), 0);
+    CHECK_EQ(OrderOf(&op, subs, 2, order), 0);
     CHECK(order[0] == 0u && order[1] == 1u);
-    /* The identity, two allocations, too many rectangles and no arguments. */
+    /* The same cycle behind 38 items that do not meet it: the given order stays, whole. */
+    for (i = 2; i < 40u; i++) subs[i] = Rect(30 + 4 * (int)i, 50, 32 + 4 * (int)i, 51);
+    CHECK_EQ(OrderOf(&op, subs, 40u, order), 0);
+    for (i = 0; i < 40u; i++) CHECK_EQ(order[i], i);
+    /* The identity, two allocations, too many rectangles, too little work space and no arguments. */
     op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(3, 0, 23, 10), Rect(3, 0, 23, 10));
     op.SrcAllocationIndex = op.DstAllocationIndex = 0;
-    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order), 1);
+    CHECK_EQ(OrderOf(&op, subs, 2, order), 1);
     op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(0, 0, 20, 10), Rect(3, 0, 23, 10));
-    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order), 1);
+    CHECK_EQ(OrderOf(&op, subs, 2, order), 1);
     op.SrcAllocationIndex = op.DstAllocationIndex = 0;
-    for (i = 0; i <= BC250_GDI_ORDER_MAX; i++) subs[i] = Rect(3 + (int)i % 20, 0, 4 + (int)i % 20, 1);
-    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, BC250_GDI_ORDER_MAX + 1u, order), 0);
-    CHECK_EQ(Bc250GdiSameSurfaceOrder(0, subs, 2, order), 0);
-    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, 0, 2, order), 0);
-    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, 0), 0);
-    /* BC250_GDI_ORDER_MAX rectangles of one row, moved right by one: a chain of the full length,
-     * which comes back reversed. */
-    for (i = 0; i < BC250_GDI_ORDER_MAX; i++) subs[i] = Rect(1 + (int)i, 0, 2 + (int)i, 1);
+    subs[0] = Rect(3, 0, 13, 10);
+    subs[1] = Rect(13, 0, 23, 10);
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, BC250_GDI_ORDER_LIMIT + 1u, order, g_orderWork,
+                                      (unsigned int)sizeof(g_orderWork)), 0);
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order, g_orderWork, BC250_GDI_ORDER_BYTES(2) - 1u), 0);
+    CHECK(order[0] == 0u && order[1] == 1u);
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order, 0, (unsigned int)sizeof(g_orderWork)), 0);
+    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, 2, order, g_orderWork, BC250_GDI_ORDER_BYTES(2)), 2);
+    CHECK(order[0] == 1u && order[1] == 0u);
+    CHECK_EQ(OrderOf(0, subs, 2, order), 0);
+    CHECK_EQ(OrderOf(&op, 0, 2, order), 0);
+    CHECK_EQ(OrderOf(&op, subs, 2, 0), 0);
+    /* 32 rectangles of one row, moved right by one: a chain of 32, which comes back reversed. */
+    for (i = 0; i < 32u; i++) subs[i] = Rect(1 + (int)i, 0, 2 + (int)i, 1);
     op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(0, 0, 32, 1), Rect(1, 0, 33, 1));
     op.SrcAllocationIndex = op.DstAllocationIndex = 0;
-    CHECK_EQ(Bc250GdiSameSurfaceOrder(&op, subs, BC250_GDI_ORDER_MAX, order), 2);
-    for (i = 0; i < BC250_GDI_ORDER_MAX; i++) CHECK_EQ(order[i], BC250_GDI_ORDER_MAX - 1u - i);
+    CHECK_EQ(OrderOf(&op, subs, 32u, order), 2);
+    for (i = 0; i < 32u; i++) CHECK_EQ(order[i], 32u - 1u - i);
+}
+
+/* The definition of the order, with no window and no sort: repeatedly the lowest unplaced item i
+ * such that no other unplaced item j reads what i writes (i's clipped destination meets j's
+ * clipped destination moved back by the translation). Returns what Bc250GdiSameSurfaceOrder must. */
+static int ClipMeetsShifted(const BC250_GDI_OP* op, const BC250_GDI_RECT* a, const BC250_GDI_RECT* b,
+                            int ddx, int ddy)
+{
+    BC250_GDI_RECT ca = *a, cb = *b;
+    if (ca.Left < op->DstRect.Left) ca.Left = op->DstRect.Left;
+    if (ca.Top < op->DstRect.Top) ca.Top = op->DstRect.Top;
+    if (ca.Right > op->DstRect.Right) ca.Right = op->DstRect.Right;
+    if (ca.Bottom > op->DstRect.Bottom) ca.Bottom = op->DstRect.Bottom;
+    if (cb.Left < op->DstRect.Left) cb.Left = op->DstRect.Left;
+    if (cb.Top < op->DstRect.Top) cb.Top = op->DstRect.Top;
+    if (cb.Right > op->DstRect.Right) cb.Right = op->DstRect.Right;
+    if (cb.Bottom > op->DstRect.Bottom) cb.Bottom = op->DstRect.Bottom;
+    if (ca.Left >= ca.Right || ca.Top >= ca.Bottom || cb.Left >= cb.Right || cb.Top >= cb.Bottom) return 0;
+    cb.Left -= ddx; cb.Right -= ddx; cb.Top -= ddy; cb.Bottom -= ddy;
+    return ca.Left < cb.Right && cb.Left < ca.Right && ca.Top < cb.Bottom && cb.Top < ca.Bottom;
+}
+
+static int ReferenceOrder(const BC250_GDI_OP* op, const BC250_GDI_RECT* subs, unsigned int n,
+                          unsigned short* order)
+{
+    unsigned char placed[ORDER_TEST_MAX];
+    unsigned int done, i, j, moved = 0u;
+    int ddx = op->DstRect.Left - op->SrcRect.Left, ddy = op->DstRect.Top - op->SrcRect.Top;
+    memset(placed, 0, sizeof(placed));
+    for (done = 0; done < n; done++) {
+        for (i = 0; i < n; i++) {
+            if (placed[i]) continue;
+            for (j = 0; j < n; j++)
+                if (j != i && !placed[j] && ClipMeetsShifted(op, &subs[i], &subs[j], ddx, ddy)) break;
+            if (j == n) break;
+        }
+        if (i == n) {
+            for (i = 0; i < n; i++) order[i] = (unsigned short)i;
+            return 0;
+        }
+        if (i != done) moved = 1u;
+        order[done] = (unsigned short)i;
+        placed[i] = 1u;
+    }
+    return moved ? 2 : 1;
+}
+
+static unsigned int g_orderSeed = 0x2545F491u;
+static unsigned int OrderRand(unsigned int range)
+{
+    g_orderSeed = g_orderSeed * 1664525u + 1013904223u;
+    return (g_orderSeed >> 8) % range;
+}
+
+/* Random commands against the definition: blocks of mixed shapes (so both sort axes and long
+ * windows occur), mostly disjoint as a clip region gives them, some overlapping (so cycles occur),
+ * partly clipped by DstRect, with translations in all directions. */
+static void TestSameSurfaceOrderRandom(void)
+{
+    BC250_GDI_OP op;
+    BC250_GDI_RECT subs[ORDER_TEST_MAX];
+    unsigned short got[ORDER_TEST_MAX], want[ORDER_TEST_MAX];
+    unsigned int trial, i, k, results[3] = { 0u, 0u, 0u }, mismatches = 0u;
+    for (trial = 0; trial < 3000u; trial++) {
+        unsigned int n = 2u + OrderRand(trial < 2900u ? 60u : 200u), tries = 0u;
+        int disjoint = OrderRand(4u) != 0u, ddx, ddy;
+        do { ddx = (int)OrderRand(13u) - 6; ddy = (int)OrderRand(13u) - 6; } while (ddx == 0 && ddy == 0);
+        op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(4 - ddx, 4 - ddy, 196 - ddx, 196 - ddy), Rect(4, 4, 196, 196));
+        op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+        for (i = 0; i < n && tries < 20000u; tries++) {
+            /* One block in eight is long on each axis. */
+            int x, y, w, h;
+            w = OrderRand(8u) == 0u ? 40 + (int)OrderRand(120u) : 1 + (int)OrderRand(12u);
+            h = OrderRand(8u) == 0u ? 40 + (int)OrderRand(120u) : 1 + (int)OrderRand(12u);
+            x = (int)OrderRand(200u) - 2; y = (int)OrderRand(200u) - 2;
+            subs[i] = Rect(x, y, x + w, y + h);
+            if (disjoint) {
+                for (k = 0; k < i; k++)
+                    if (subs[k].Left < subs[i].Right && subs[i].Left < subs[k].Right &&
+                        subs[k].Top < subs[i].Bottom && subs[i].Top < subs[k].Bottom) break;
+                if (k != i) continue;
+            }
+            i++;
+        }
+        n = i;
+        if (n < 2u) continue;
+        {
+            int r = OrderOf(&op, subs, n, got), e = ReferenceOrder(&op, subs, n, want);
+            g_checks++;
+            if (r != e || memcmp(got, want, n * sizeof(got[0])) != 0) {
+                if (mismatches++ < 3u)
+                    fprintf(stderr, "FAIL same-surface order random trial %u: n=%u d=(%d,%d) got %d want %d\n",
+                            trial, n, ddx, ddy, r, e);
+                g_failures++;
+            }
+            if (r >= 0 && r <= 2) results[r]++;
+        }
+    }
+    /* The trials must reach all three answers, or the comparison proves less than it seems. */
+    CHECK(results[0] > 0u && results[1] > 0u && results[2] > 0u);
+    printf("same-surface order random: unordered %u, kept %u, reordered %u\n", results[0], results[1], results[2]);
+}
+
+/* More sub-rectangles than one 32-bit or 64-bit mask holds (the 32-item limit of the first
+ * version): long chains of overlapping strips in both directions of each axis and on a diagonal.
+ * Each case is given in the wrong order, so the order must be reversed, and the image of the
+ * computed order is compared with GDI's rule for the whole command. */
+static void TestSameSurfaceOrderMany(void)
+{
+    BC250_GDI_SURFACE s[1];
+    BC250_GDI_OP op;
+    BC250_GDI_RECT subs[ORDER_TEST_MAX];
+    unsigned short order[ORDER_TEST_MAX];
+    unsigned int i;
+    const unsigned int strips = 40u, columns = 200u;
+    s[0] = Surface(256, 128, 4, BC250_GDISURFACE_TEXTURE, 0);
+
+    /* Scroll down by 2: 40 strips of 3 rows, given top first. Strip i writes 2 rows strip i + 1
+     * reads, so the bottom strip runs first, and each strip is an Ordered copy of its own. */
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(10, 2, 60, 122), Rect(10, 4, 60, 124));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    for (i = 0; i < strips; i++) subs[i] = Rect(10, 4 + 3 * (int)i, 60, 7 + 3 * (int)i);
+    CHECK_EQ(OrderOf(&op, subs, strips, order), 2);
+    for (i = 0; i < strips; i++) CHECK_EQ(order[i], strips - 1u - i);
+    OrderImageCase("40 strips down", &op, s, subs, strips, order, 1);
+
+    /* Scroll up by 2: the same strips one block higher, given bottom first. */
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(10, 4, 60, 124), Rect(10, 2, 60, 122));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    for (i = 0; i < strips; i++) subs[i] = Rect(10, 119 - 3 * (int)i, 60, 122 - 3 * (int)i);
+    CHECK_EQ(OrderOf(&op, subs, strips, order), 2);
+    for (i = 0; i < strips; i++) CHECK_EQ(order[i], strips - 1u - i);
+    OrderImageCase("40 strips up", &op, s, subs, strips, order, 1);
+    /* Given top first, the up scroll is already in order. */
+    for (i = 0; i < strips; i++) subs[i] = Rect(10, 2 + 3 * (int)i, 60, 5 + 3 * (int)i);
+    CHECK_EQ(OrderOf(&op, subs, strips, order), 1);
+    for (i = 0; i < strips; i++) CHECK_EQ(order[i], i);
+
+    /* Down and right on a diagonal, by (1, 2): the chain of the down scroll. */
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(9, 2, 59, 122), Rect(10, 4, 60, 124));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    for (i = 0; i < strips; i++) subs[i] = Rect(10, 4 + 3 * (int)i, 60, 7 + 3 * (int)i);
+    CHECK_EQ(OrderOf(&op, subs, strips, order), 2);
+    for (i = 0; i < strips; i++) CHECK_EQ(order[i], strips - 1u - i);
+    OrderImageCase("40 strips diagonal", &op, s, subs, strips, order, 1);
+
+    /* Scroll right by 1: 200 columns of one pixel, given left first. Each column's own blocks do
+     * not meet, but column i writes the pixels column i + 1 reads. */
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(19, 10, 219, 40), Rect(20, 10, 220, 40));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    for (i = 0; i < columns; i++) subs[i] = Rect(20 + (int)i, 10, 21 + (int)i, 40);
+    CHECK_EQ(OrderOf(&op, subs, columns, order), 2);
+    for (i = 0; i < columns; i++) CHECK_EQ(order[i], columns - 1u - i);
+    OrderImageCase("200 columns right", &op, s, subs, columns, order, 0);
+
+    /* Scroll left by 1: the same columns, given right first. */
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(21, 10, 221, 40), Rect(20, 10, 220, 40));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    for (i = 0; i < columns; i++) subs[i] = Rect(219 - (int)i, 10, 220 - (int)i, 40);
+    CHECK_EQ(OrderOf(&op, subs, columns, order), 2);
+    for (i = 0; i < columns; i++) CHECK_EQ(order[i], columns - 1u - i);
+    OrderImageCase("200 columns left", &op, s, subs, columns, order, 0);
+
+    /* Two independent chains, interleaved in the given order: strips of 2 rows scrolled down by 1
+     * inside two columns, the even items one column and the odd items the other. Each chain is
+     * reversed. The lowest free index rule finishes the even chain (78, 76, ..., 0) before it
+     * starts the odd one (79, 77, ..., 1), because each placed even item frees the next lower. */
+    op = BitBltOp(BC250_GDI_ROP_SRCCOPY, Rect(10, 3, 110, 83), Rect(10, 4, 110, 84));
+    op.SrcAllocationIndex = op.DstAllocationIndex = 0;
+    for (i = 0; i < 80u; i++) {
+        int column = (int)(i % 2u), row = (int)(i / 2u);
+        subs[i] = Rect(10 + 50 * column, 4 + 2 * row, 60 + 50 * column, 6 + 2 * row);
+    }
+    CHECK_EQ(OrderOf(&op, subs, 80u, order), 2);
+    for (i = 0; i < 80u; i++) CHECK_EQ(order[i], i < 40u ? 78u - 2u * i : 79u - 2u * (i - 40u));
+    OrderImageCase("80 strips in two columns", &op, s, subs, 80u, order, 1);
 }
 
 static void TestStreamRefusals(void)
@@ -1709,6 +1926,8 @@ int main(void)
     TestBands();
     TestSameSurfaceStream();
     TestSameSurfaceOrder();
+    TestSameSurfaceOrderMany();
+    TestSameSurfaceOrderRandom();
     TestStreamRefusals();
     printf("gdi_render_test: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;

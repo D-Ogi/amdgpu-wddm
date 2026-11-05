@@ -485,6 +485,10 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'open-allocation-keep-earlier' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation-keep-earlier" -Kits "$Kits" -Mutation '--keep-earlier' -ExpectFailure }
  Check 'open-allocation-count-at-once' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation-count-at-once" -Kits "$Kits" -Mutation '--count-at-once' -ExpectFailure }
  Check 'gdi-render' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_render.ps1" -Root $Workspace -Out "$Out\gdi-render" -Kits "$Kits" }
+ # BD-306: the same-surface order for any count. The negative controls bring back the 32-item limit of the
+ # first version and break the sorted window; the strip scrolls and the random comparison must see them.
+ Check 'gdi-render-order-limit-32' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_render.ps1" -Root $Workspace -Out "$Out\gdi-render-order-limit-32" -Kits "$Kits" -Mutation order-limit-32 }
+ Check 'gdi-render-order-window' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_render.ps1" -Root $Workspace -Out "$Out\gdi-render-order-window" -Kits "$Kits" -Mutation order-window }
  # The walk of the OS command buffer, with the page behind the buffer inaccessible: the review r1
  # over-read was invisible to a test that only compares return values (driver\kmd\gdi_walk.h).
  Check 'gdi-walk' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_walk.ps1" -Root $Workspace -Out "$Out\gdi-walk" -Kits "$Kits" }
