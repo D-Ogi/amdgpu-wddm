@@ -73,6 +73,14 @@ The worker step `abandon <transaction> <product> <device>` then removes the hold
 2. The `pending.bin` of this transaction moves aside as `retired-<transaction>-pending.bin`. A file of another state catalog is accepted, because the stopped install can be of another release.
 3. The step releases the freeze of this transaction.
 
+A store whose first transaction did not finish needs one more rule.
+The KMD creates `StateV2` and `Generations\<transaction>` at the start of a transaction, and it writes `Active` only at the end.
+If a start of the KMD stops between these points, the store has no `Active` value, no installed generation and no freeze.
+The bound package already declares the state catalog.
+For such a store, the abandon step only moves the file.
+The prepare, the archive of an uninstall and the settings read then use the legacy state, which was the source of the unfinished transaction.
+The KMD accepts a legacy transfer into such a store, because no `Active` value and no earlier generation exist.
+In all other cases, a bound package that declares the catalog without a store with `Active` stays an error.
 If the KMD has already applied the handoff, `Active` names the transaction and the store has no freeze: only the file moves.
 The same transaction can publish its handoff again after an abandon. A retired copy with the same bytes then completes the step.
 The worker removes `pending.bin` only after a byte compare under the lock, and the installer log records this removal.
