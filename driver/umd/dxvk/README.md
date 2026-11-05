@@ -182,6 +182,10 @@ and System32. It validates the complete engine ABI function table, resolves ICD
 GIPA directly, and rolls back partial loads. DeviceOwner retains independent code
 references before opening its Vulkan session; the adapter loader must stay alive
 through that acquisition. No Vulkan instance is created by this loader.
+The loader pins the engine and the ICD as soon as each one is loaded (module-pin.h,
+BD-315). They stay loaded until the process ends, and close() only drops the
+references. The hosted modules keep process-wide state that they do not release
+when they are unloaded. The D3D12 shell pins its engine and ICD the same way.
 The loader fixture test covers successful load/close/reopen, second-module failure,
 ABI mismatch, missing function and export failure with cleared state. The adapter
 now owns this loader and verifies both configured SHA-256 values before loading.

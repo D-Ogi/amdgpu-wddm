@@ -2,6 +2,7 @@
 #include "engine-abi.h"
 #include "engine-modules.h"
 #include "artifact-hash.h"
+#include "module-pin.h"
 #include <cwchar>
 namespace bc250::umd {
 bool EngineModules::absolute_path(const wchar_t *p) {
@@ -30,6 +31,9 @@ HRESULT EngineModules::open(const wchar_t *enginePath,const wchar_t *icdPath,
     constexpr DWORD search=LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32;
     engine_=LoadLibraryExW(enginePath,nullptr,search);
     if (!engine_) return HRESULT_FROM_WIN32(GetLastError());
+    // BD-315: hosted modules stay loaded for the process (module-pin.h), each pinned as soon as it is loaded;
+    // close() only drops the reference.
+    pin_hosted_module(engine_);
     auto getter=reinterpret_cast<PFN_BC250_DXVK_ENGINE_GET_FUNCS>(GetProcAddress(engine_,BC250_DXVK_ENGINE_GET_FUNCS_NAME));
     if (!getter) { close(); return E_NOINTERFACE; }
     functions_.Size=sizeof(functions_);
@@ -39,6 +43,7 @@ HRESULT EngineModules::open(const wchar_t *enginePath,const wchar_t *icdPath,
     if (FAILED(hr)) { close(); return hr; }
     icd_=LoadLibraryExW(icdPath,nullptr,search);
     if (!icd_) { hr=HRESULT_FROM_WIN32(GetLastError()); close(); return hr; }
+    pin_hosted_module(icd_);
     get_=reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(icd_,"vk_icdGetInstanceProcAddr"));
     if (!get_) get_=reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(icd_,"vkGetInstanceProcAddr"));
     if (!get_) { close(); return E_NOINTERFACE; }

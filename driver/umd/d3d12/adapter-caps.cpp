@@ -9,6 +9,7 @@
 #include "instance-policy.h"
 #include "ddi-trace.h"
 #include "engine-ddi/engine-ddi.h"
+#include "../dxvk/module-pin.h"
 #include <memory>
 #include <string>
 #include <cstdio>
@@ -108,8 +109,19 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
     constexpr DWORD search=LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32;
     owner.engine=LoadLibraryExW((path+AMDGPU_VKD3D_FILE).c_str(),nullptr,search);
     if(!owner.engine)return HRESULT_FROM_WIN32(GetLastError());
+    // BD-315: the engine and the ICD stay loaded for the process (module-pin.h), each pinned as soon as it is loaded.
+    // ~AdapterCapsOwner only drops the reference, so CloseAdapter (or a failed load_caps) no longer unloads Mesa and
+    // vkd3d with their process-wide state; the next OpenAdapter gets the same modules and makes its owner, caps and
+    // query scope again.
+    const bool engine_pinned=bc250::umd::pin_hosted_module(owner.engine);
     owner.icd=LoadLibraryExW((path+AMDGPU_D3D12_ICD_FILE).c_str(),nullptr,search);
     if(!owner.icd)return HRESULT_FROM_WIN32(GetLastError());
+    const bool icd_pinned=bc250::umd::pin_hosted_module(owner.icd);
+    if(!engine_pinned || !icd_pinned){
+        // Not pinned: that module unloads at its last FreeLibrary, as before BD-315.
+        amdgpu_wddm_log::print("d3d12-caps module-pin engine=%u icd=%u\n",unsigned(engine_pinned),unsigned(icd_pinned));
+        amdgpu_wddm_log::flush();
+    }
     auto getter=reinterpret_cast<PFN_BC250_VKD3D_ENGINE_GET_FUNCS>(GetProcAddress(owner.engine,BC250_VKD3D_ENGINE_GET_FUNCS_NAME));
     auto get=reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(owner.icd,"vk_icdGetInstanceProcAddr"));
     if(!getter || !get)return E_NOINTERFACE;
