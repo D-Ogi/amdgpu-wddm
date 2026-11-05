@@ -198,7 +198,7 @@ struct OfferEngine final : IBc250DxvkDevice5 {
         if (prepareResult!=S_OK) return prepareResult;
         if (memories>capacity) return S_FALSE;
         const uintptr_t base=resource==second ? 0x110 : 0x100;
-        for (UINT i=0;i<memories;++i) memory[i]={reinterpret_cast<VkDeviceMemory>(base+i),4u<<20};
+        for (UINT i=0;i<memories;++i) memory[i]={VkDeviceMemory(uint64_t(base+i)),4u<<20};
         *count=memories; return S_OK;
     }
     HRESULT STDMETHODCALLTYPE EndOffer(ID3D11Resource *resource,UINT flags) override {
@@ -212,7 +212,7 @@ VkResult VKAPI_PTR offer_query(VkDevice device,VkDeviceMemory memory,MemoryAlloc
     if (device!=offerDevice || !info || info->revision!=kMemoryAllocationRevision || info->size!=sizeof(*info)) fail(__LINE__);
     ++queries;
     if (offerQueryResult!=VK_SUCCESS) return offerQueryResult;
-    const uint32_t index=uint32_t(reinterpret_cast<uintptr_t>(memory)-0x100);
+    const uint32_t index=uint32_t(uint64_t(memory)-0x100);
     info->allocation=querySame ? 500u : 500u+index; info->flags=queryFlags; info->bytes=4u<<20;
     return VK_SUCCESS;
 }
