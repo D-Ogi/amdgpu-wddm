@@ -81,6 +81,8 @@ function Show-Latch {
 # K32GetModuleFileNameExW, the method of bc250mon (src/GraphicsApiProvider.cs). The watch loop samples every 5 s, so
 # it must not start a process for each sample (the spawn-loop gate, BD-051). Add-Type compiles once, here.
 $modReader = $true
+$modReaderError = ''
+$modReaderTold = $false
 try {
     Add-Type -Namespace LogonProbe -Name Mods -ErrorAction Stop -MemberDefinition @'
 [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
@@ -105,18 +107,31 @@ public static string[] List(int pid, out string error) {
         System.Text.StringBuilder b = new System.Text.StringBuilder(1024);
         for (int i = 0; i < count; i++) {
             b.Length = 0;
-            paths[i] = GetModuleFileNameExW(h, mods[i], b, b.Capacity) > 0 ? b.ToString() : "?";
+            int n = GetModuleFileNameExW(h, mods[i], b, b.Capacity);
+            if (n >= b.Capacity) {
+                // A return equal to the capacity means a cut path: retry once with the extended-length limit.
+                b.Capacity = 32768;
+                b.Length = 0;
+                n = GetModuleFileNameExW(h, mods[i], b, b.Capacity);
+                if (n >= b.Capacity) { n = 0; }
+            }
+            paths[i] = n > 0 ? b.ToString() : "?";
         }
         return paths;
     } finally { CloseHandle(h); }
 }
 '@
-} catch { $modReader = $false }
+} catch { $modReader = $false; $modReaderError = $_.Exception.Message }
 
 function Read-Modules([int]$id) {
     # The second reader as module objects with the names Show-Processes uses, or $null with the reason in the report.
     # Say goes to the host here: its output in the pipeline would become part of the return value.
-    if (-not $modReader) { Say '  modules: no in-process reader (Add-Type failed)' | Out-Host; return $null }
+    if (-not $modReader) {
+        # Say the reason once, on the first sample that sees it; the later samples keep the short line.
+        if (-not $script:modReaderTold) { $script:modReaderTold = $true; Say ('  modules: no in-process reader: ' + $script:modReaderError) | Out-Host }
+        else { Say '  modules: no in-process reader (Add-Type failed)' | Out-Host }
+        return $null
+    }
     $err = ''
     $paths = [LogonProbe.Mods]::List($id, [ref]$err)
     if ($null -eq $paths) { Say ("  modules (in-process reader): " + $err) | Out-Host; return $null }
