@@ -59,6 +59,10 @@ public:
     size_t surface_count() const { return surfaces_.size(); }
     // The paging queue of the surfaces (prepare_surface_import creates it). The close tests set it.
     SurfacePagingQueue &surface_queue() { return surface_queue_; }
+    // BD-309: the same queue for the reclaim of an offered engine-private resource. A device whose application has no
+    // runtime surface has none, and the synchronous ReclaimAllocationsCb that is left answers E_FAIL on this driver
+    // (kit-bd309 F-full, 2026-11-05). S_OK when the queue is there or was created now.
+    HRESULT ensure_paging_queue();
     // BD-309: the offer path of engine-private resources (initialize fills it). The DXGI resource tests set it.
     EngineOfferPath &offer_path() { return offer_path_; }
     // BD-065: the B8G8R8A8 shadows of windowed Blt presents. Their surfaces are owned by surfaces_.

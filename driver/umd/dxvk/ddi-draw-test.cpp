@@ -217,10 +217,34 @@ HRESULT APIENTRY engine_kernel_offer(HANDLE h,const D3DDDICB_OFFERALLOCATIONS *p
     if (h!=&createIdentity || !expected->runtime().domain.entered()) fail(__LINE__);
     kernelOffered.assign(p->HandleList,p->HandleList+p->NumAllocations); ++kernelOffers; return S_OK;
 }
-HRESULT APIENTRY engine_kernel_reclaim(HANDLE h,const D3DDDICB_RECLAIMALLOCATIONS *p) {
+// The kit-bd309 F-full loss (2026-11-05): on the lab the synchronous callback answers E_FAIL for an offered engine
+// allocation. This fake answers so and counts, and the engine block below requires that nothing calls it.
+unsigned syncEngineReclaims=0;
+HRESULT APIENTRY engine_kernel_reclaim_lab(HANDLE h,const D3DDDICB_RECLAIMALLOCATIONS *p) {
     if (h!=&createIdentity || !expected->runtime().domain.entered() || !p->pDiscarded) fail(__LINE__);
+    ++syncEngineReclaims; return E_FAIL;
+}
+// The paging queue that the first engine offer creates (81, fence object 82) and ReclaimAllocations2Cb on it.
+unsigned engineQueueCreates=0; HRESULT engineQueueResult=S_OK;
+volatile UINT64 engineQueueCompleted=0; UINT64 engineReclaimFence=0;
+HRESULT APIENTRY engine_queue_create(HANDLE h,D3DDDICB_CREATEPAGINGQUEUE *p) {
+    if (h!=&createIdentity || !expected->runtime().domain.entered() || !p) fail(__LINE__);
+    ++engineQueueCreates;
+    if (FAILED(engineQueueResult)) return engineQueueResult;
+    p->hPagingQueue=81; p->hSyncObject=82; p->FenceValueCPUVirtualAddress=const_cast<UINT64 *>(&engineQueueCompleted);
+    return S_OK;
+}
+HRESULT APIENTRY engine_queue_destroy(HANDLE h,const D3DDDI_DESTROYPAGINGQUEUE *p) {
+    // The test hands the queue back to the owner's saved state; a destroy here would be the owner's close.
+    if (h!=&createIdentity || !p || p->hPagingQueue!=81) fail(__LINE__);
+    return S_OK;
+}
+HRESULT APIENTRY engine_kernel_reclaim2(HANDLE h,D3DDDICB_RECLAIMALLOCATIONS2 *p) {
+    if (h!=&createIdentity || !expected->runtime().domain.entered() || p->PagingQueue!=81 || p->pResources ||
+        !p->HandleList || !p->pDiscarded) fail(__LINE__);
     kernelReclaimed.assign(p->HandleList,p->HandleList+p->NumAllocations); ++kernelReclaims;
     for (UINT i=0;i<p->NumAllocations;++i) p->pDiscarded[i]=i<kernelDiscard.size() ? kernelDiscard[i] : FALSE;
+    p->PagingFenceValue=engineReclaimFence;
     return kernelReclaimResult;
 }
 }
@@ -1463,7 +1487,16 @@ int main() {
         const auto savedOffer=owner.runtime().KTCallbacks.pfnOfferAllocationsCb;
         const auto savedReclaim=owner.runtime().KTCallbacks.pfnReclaimAllocationsCb;
         owner.runtime().KTCallbacks.pfnOfferAllocationsCb=engine_kernel_offer;
-        owner.runtime().KTCallbacks.pfnReclaimAllocationsCb=engine_kernel_reclaim;
+        owner.runtime().KTCallbacks.pfnReclaimAllocationsCb=engine_kernel_reclaim_lab;
+        // The probe's device of the F-full arm: no runtime surface, so no paging queue before the first engine offer.
+        SurfacePagingQueue &engineQueue=owner.surface_queue(); const SurfacePagingQueue savedQueue=engineQueue;
+        engineQueue={};
+        const auto savedCreateQueue=owner.runtime().KTCallbacks.pfnCreatePagingQueueCb;
+        const auto savedDestroyQueue=owner.runtime().KTCallbacks.pfnDestroyPagingQueueCb;
+        owner.runtime().KTCallbacks.pfnCreatePagingQueueCb=engine_queue_create;
+        owner.runtime().KTCallbacks.pfnDestroyPagingQueueCb=engine_queue_destroy;
+        owner.runtime().KTCallbacks.pfnReclaimAllocations2Cb=engine_kernel_reclaim2;
+        engineQueueCompleted=0; engineReclaimFence=0;
         DdiResource engineResource{}; engineResource.object=reinterpret_cast<ID3D11Texture2D *>(&rotateIdentity[1]);
         DXGI_DDI_HRESOURCE one[1]={reinterpret_cast<DXGI_DDI_HRESOURCE>(&engineResource)};
         DXGI_DDI_ARG_OFFERRESOURCES engineOffer{reclaimArgs.hDevice,one,1,D3DDDI_OFFER_PRIORITY_NORMAL};
@@ -1483,9 +1516,20 @@ int main() {
         path.engine=&offerEngine; path.query=nullptr; path.device=offerDevice;
         if (prepare(taken)!=S_OK || taken || offerEngine.prepares) fail(__LINE__);
         path.query=offer_query;
-        // 2. The positive path: one memory object, one allocation, nothing CPU-locked.
+        // 1b. Nothing is offered that cannot be reclaimed: without ReclaimAllocations2Cb, and when the paging queue
+        //     cannot be created, the resource is a hint and PrepareOffer is not called.
+        owner.runtime().KTCallbacks.pfnReclaimAllocations2Cb=nullptr;
+        if (prepare(taken)!=S_OK || taken || offerEngine.prepares || engineQueueCreates || engineQueue.queue) fail(__LINE__);
+        owner.runtime().KTCallbacks.pfnReclaimAllocations2Cb=engine_kernel_reclaim2;
+        engineQueueResult=E_OUTOFMEMORY;
+        if (prepare(taken)!=S_OK || taken || offerEngine.prepares || engineQueueCreates!=1 || engineQueue.queue)
+            fail(__LINE__);
+        engineQueueResult=S_OK;
+        // 2. The positive path: one memory object, one allocation, nothing CPU-locked. The first engine offer of a
+        //    device without a runtime surface creates its paging queue, once.
         if (prepare(taken)!=S_OK || !taken || offerEngine.prepares!=1 || queries!=1 || offerEngine.ends ||
             engineResource.engine_offered_count!=1 || engineResource.engine_offered[0]!=500) fail(__LINE__);
+        if (engineQueueCreates!=2 || engineQueue.queue!=81 || engineQueue.sync!=82) fail(__LINE__);
         // 3. A second offer before the reclaim does not prepare again (the runtime never sends one; a hint if it did).
         if (prepare(taken)!=S_OK || taken || offerEngine.prepares!=1 || engineResource.engine_offered_count!=1 ||
             engineResource.engine_offered[0]!=500) fail(__LINE__);
@@ -1495,6 +1539,9 @@ int main() {
             kernelReclaimed!=std::vector<D3DKMT_HANDLE>{500} || gone[0]!=TRUE || offerEngine.ends!=1 ||
             offerEngine.endFlags!=BC250_DXVK_END_OFFER_DISCARDED || offerEngine.ended!=engineResource.object ||
             engineResource.engine_offered_count) fail(__LINE__);
+        // The reclaim went through ReclaimAllocations2Cb on that queue; the synchronous callback, which refuses on the
+        // lab, was not called.
+        if (syncEngineReclaims || engineQueueCreates!=2) fail(__LINE__);
         // 5. The control of (4): content kept, EndOffer without DISCARDED; and a second reclaim is a hint again.
         if (prepare(taken)!=S_OK || !taken) fail(__LINE__);
         kernelDiscard={FALSE}; gone[0]=9;
@@ -1572,7 +1619,13 @@ int main() {
         path.engine=nullptr;
         if (resourceTable.pfnOfferResources(&engineOffer)!=S_OK || offerEngine.prepares!=preparesBefore+1 ||
             kernelOffers!=offersBefore) fail(__LINE__);
+        // Reclaim2 refused (step 7) is the only way to the synchronous callback, and it was taken once.
+        if (syncEngineReclaims!=1 || engineQueueCreates!=2) fail(__LINE__);
         path=savedPath;
+        engineQueue=savedQueue;
+        owner.runtime().KTCallbacks.pfnCreatePagingQueueCb=savedCreateQueue;
+        owner.runtime().KTCallbacks.pfnDestroyPagingQueueCb=savedDestroyQueue;
+        owner.runtime().KTCallbacks.pfnReclaimAllocations2Cb=nullptr;
         owner.runtime().KTCallbacks.pfnOfferAllocationsCb=savedOffer;
         owner.runtime().KTCallbacks.pfnReclaimAllocationsCb=savedReclaim;
         if (owner.runtime().domain.entered()) fail(__LINE__);

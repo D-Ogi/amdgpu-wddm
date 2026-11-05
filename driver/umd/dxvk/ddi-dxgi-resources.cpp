@@ -104,6 +104,12 @@ HRESULT prepare_engine_offer(DeviceOwner &owner,DdiResource &r,std::vector<D3DKM
     taken=false;
     const EngineOfferPath &path=owner.offer_path();
     if (!path.ready() || !r.object || r.engine_offered_count) return S_OK;
+    // Nothing is offered that the shell cannot reclaim. The reclaim of an engine allocation goes through
+    // ReclaimAllocations2Cb on the device's paging queue (reclaim_allocations): the synchronous ReclaimAllocationsCb
+    // answered E_FAIL for it on the lab, and d3d11.dll removed the device (kit-bd309 F-full, 2026-11-05). A device
+    // without a runtime surface has no paging queue yet, so the first engine offer creates it; without the queue or
+    // the callback the resource stays a hint.
+    if (!owner.runtime().KTCallbacks.pfnReclaimAllocations2Cb || owner.ensure_paging_queue()!=S_OK) return S_OK;
     constexpr UINT capacity=DdiResource::kEngineOfferCapacity;
     BC250_DXVK_OFFER_MEMORY memory[capacity]{}; UINT count=0;
     const HRESULT hr=path.engine->PrepareOffer(r.object,capacity,memory,&count);

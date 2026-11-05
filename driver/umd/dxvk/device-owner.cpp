@@ -104,6 +104,10 @@ HRESULT DeviceOwner::prepare_surface_import() {
         memory(instance.PhysicalDevice,&surface_memory_);
         surface_vk_=vk;
     }
+    return ensure_paging_queue();
+}
+HRESULT DeviceOwner::ensure_paging_queue() {
+    if (!runtime_.domain.entered() || closing_) return E_UNEXPECTED;
     if (!surface_queue_.queue && !surface_queue_.sync && !surface_queue_.cpu)
         return create_surface_paging_queue(runtime_,surface_queue_);
     return surface_queue_.queue && surface_queue_.sync && surface_queue_.cpu ? S_OK : E_UNEXPECTED;
