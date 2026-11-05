@@ -2234,7 +2234,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
+      "commit": "ab0be78970914dd95155b1eed6ce5a7cda7fd4bf",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2267,7 +2267,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
+      "commit": "ab0be78970914dd95155b1eed6ce5a7cda7fd4bf",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2380,7 +2380,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
+      "commit": "ab0be78970914dd95155b1eed6ce5a7cda7fd4bf",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2413,7 +2413,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
+      "commit": "ab0be78970914dd95155b1eed6ce5a7cda7fd4bf",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
