@@ -1669,7 +1669,7 @@
         "router-front/*.exe",
         "router-front/**/*.json"
       ],
-      "timeout": 360
+      "timeout": 600
     },
     "router-stack": {
       "depends": [

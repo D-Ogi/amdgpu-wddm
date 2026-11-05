@@ -552,8 +552,9 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
  # the DirectFlip rule with one refusal per clause, and the E26R and LB7A decoders. A null entry in the front's
  # published table is a call into address zero inside dwm.exe, so "every slot is filled" belongs in the gate
  # that runs on every change and not only in a gate somebody remembers to run.
- # Its deadline is 360 s in gate-inputs.json (BD-316): 71 s alone, 129 s beside a build, 173.7 s and one timeout at the old
- # 180 s under load; 360 s is twice the loaded figure. Inputs: the host tree and clang-host (the WDK, SDK and MSVC trees
+ # Its deadline is 600 s in gate-inputs.json (BD-316): 71 s alone, 129 s beside a build, 160.5 s and 173.7 s under load,
+ # and stops at the old 180 s (2026-11-05). A stop at the deadline is only a lower bound of the loaded time, so twice
+ # 180 s is no margin; 600 s is 3.5x the longest completed run (173.7 s). Inputs: the host tree and clang-host (the WDK, SDK and MSVC trees
  # are in the toolchain key); the cache keeps the DLLs and test-router.exe that router-stack reads from this output.
  Check 'router-front' {
      $env:BC250_ROOT=$Workspace
