@@ -31,8 +31,11 @@ int wmain(int argc,wchar_t **argv) {
     if(modules.open(argv[1],argv[1],digest,nullptr)!=E_INVALIDARG || modules.loaded())std::abort();
     if(modules.open(argv[1],argv[1],wrong,digest)!=HRESULT_FROM_WIN32(ERROR_CRC) || modules.loaded())std::abort();
     if(modules.open(argv[1],argv[1],digest,wrong)!=HRESULT_FROM_WIN32(ERROR_CRC) || modules.loaded())std::abort();
+    if(GetModuleHandleW(argv[1]))std::abort();  // not loaded before the first successful open
     if(modules.open(argv[1],argv[1],digest,digest)!=S_OK || !modules.loaded())std::abort();
     modules.close();
+    // BD-315: the open pinned the module (module-pin.h): close() dropped the references, the module stays loaded.
+    if(!GetModuleHandleW(argv[1]))std::abort();
     // v3 uses the Windows image digest, including the same file lock and rollback.
     if(modules.open(argv[1],argv[1],wrong,imageDigest,true)!=HRESULT_FROM_WIN32(ERROR_CRC) || modules.loaded())std::abort();
     if(modules.open(argv[1],argv[1],imageDigest,wrong,true)!=HRESULT_FROM_WIN32(ERROR_CRC) || modules.loaded())std::abort();
@@ -65,5 +68,6 @@ int wmain(int argc,wchar_t **argv) {
     if (modules.open(argv[1],argv[1])!=S_OK) std::abort();
     modules.close();
     if (!FreeLibrary(fixture)) std::abort();
-    std::cout << "PASS DLL loader positive fixture, rollback, retry and path controls (no GPU)\n";
+    if (!GetModuleHandleW(argv[1])) std::abort();  // pinned: no FreeLibrary unloads it
+    std::cout << "PASS DLL loader positive fixture, rollback, retry, path controls and module pin (no GPU)\n";
 }

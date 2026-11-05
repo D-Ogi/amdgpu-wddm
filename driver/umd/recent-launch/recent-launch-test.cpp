@@ -2,7 +2,8 @@
 // Host tests of recent-launch.h, gate G-RG of the GUI plan: format, switch, duplicate basenames, Unicode and long
 // paths, the Windows directory boundary, the same process through both shells (also between notes of another
 // process), pruning, an oversized list of a later version, no memory with the temporary file open, simultaneous
-// creates in several processes, OFF + Clear in flight, prune/read races, the lock bound, an AppContainer child, the
+// creates in several processes, OFF + Clear in flight, prune/read races, the lock bound, the launch mark closed with the
+// module that made it (a fixture DLL, BD-315), an AppContainer child, the
 // whole note path and its timing. No driver is loaded: the tests drive the helper the shells compile in.
 //
 // Everything is written below the working directory (the build output) and below one test key
@@ -352,6 +353,40 @@ void test_launch_mark_failure() {
     // Once a mark can be created, A's next note counts A once, and its other shell only merges.
     CHECK(rl::commit(a,rl::ApiD3D11)==rl::Outcome::Recorded);
     CHECK(rl::commit(a,rl::ApiD3D12)==rl::Outcome::Merged);
+    CHECK(read_list(store,e) && e.size()==1 && e[0].starts==1 && e[0].pid==a.pid && e[0].apis==3);
+}
+
+void test_mark_closed_with_module() {
+    // BD-315: the launch mark lives as long as the module that made it. A fixture DLL with the helper compiled in,
+    // as each shell has it, notes a launch: while the DLL is loaded the mark exists, after FreeLibrary it is gone,
+    // so the module leaves no open handle behind at its unload (Application Verifier stop 0x901). A shell loaded
+    // again in the same process then only merges with the process's own entry.
+    const std::wstring store=fresh(L"module-mark"),exe=L"C:\\Games\\unloaded.exe";
+    const rl::Inputs a=inputs(store,exe,170);
+    const std::wstring dll=g_self.substr(0,g_self.rfind(L'\\'))+L"\\recent-launch-fixture.dll";
+    HMODULE fixture=LoadLibraryExW(dll.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
+    CHECK(fixture!=nullptr);
+    if(!fixture)return;
+    using Commit=unsigned(*)(const wchar_t*,const wchar_t*,const wchar_t*,const wchar_t*,unsigned,unsigned long long,unsigned);
+    const auto commit=reinterpret_cast<Commit>(reinterpret_cast<void*>(GetProcAddress(fixture,"FixtureCommit")));
+    const auto marks=reinterpret_cast<unsigned(*)()>(reinterpret_cast<void*>(GetProcAddress(fixture,"FixtureMarks")));
+    CHECK(commit && marks);
+    if(!commit || !marks){FreeLibrary(fixture);return;}
+    CHECK(commit(store.c_str(),g_switch_key.c_str(),exe.c_str(),g_windows.c_str(),a.pid,a.start,rl::ApiD3D12)==
+          unsigned(rl::Outcome::Recorded));
+    CHECK(marks()==1);
+    const std::wstring name=rl::launch_mark_name(a);
+    HANDLE open=OpenEventW(SYNCHRONIZE,FALSE,name.c_str());
+    CHECK(open!=nullptr);   // the fixture holds the mark
+    if(open)CloseHandle(open);
+    CHECK(FreeLibrary(fixture)!=FALSE);
+    CHECK(GetModuleHandleW(dll.c_str())==nullptr);
+    open=OpenEventW(SYNCHRONIZE,FALSE,name.c_str());
+    const DWORD error=GetLastError();
+    CHECK(open==nullptr && error==ERROR_FILE_NOT_FOUND);   // closed with the module
+    if(open)CloseHandle(open);
+    CHECK(rl::commit(a,rl::ApiD3D11)==rl::Outcome::Merged);
+    std::vector<rl::Entry> e;
     CHECK(read_list(store,e) && e.size()==1 && e[0].starts==1 && e[0].pid==a.pid && e[0].apis==3);
 }
 
@@ -805,6 +840,7 @@ int wmain(int argc,wchar_t** argv) {
     test_same_process();
     test_interleaved_processes();
     test_launch_mark_failure();
+    test_mark_closed_with_module();
     test_prune();
     test_store_states();
     test_allocation_failure();
