@@ -29,6 +29,13 @@ static bool lock_on_import=false;
 static unsigned fail_deallocate_count=0;       // the next N deallocate callbacks fail, then they succeed again
 static bool fail_lock=false,fail_unlock=false;  // BD-045: the kernel refuses Lock2 or Unlock2
 static HRESULT resident_result=S_OK;
+// BD-313 edge test: free() of a record while its residency hand-back runs. The Evict callback re-enters on
+// the same thread after the notice dropped lock_ (heap-import.cpp, end_residency_hold); the borrowed record
+// must answer E_PENDING. The hook fires once, for the named allocation.
+static native12::RuntimeHeapImports* evict_free_owner=nullptr;
+static engine_ddi::ImportedMemory* evict_free_target=nullptr;
+static HRESULT evict_free_result=S_OK;
+static bool evict_free_done=false;
 static unsigned surfaces=0;
 static unsigned scanout_surfaces=0;           // M15.14: primaries created with the v3 scan-out record
 static unsigned scanout_block_composed=0;     // the composed primaries the M15.14 block made
@@ -228,7 +235,11 @@ static HRESULT APIENTRY make_cb(HANDLE d,D3DDDI_MAKERESIDENT* a){
 }
 static HRESULT APIENTRY evict_cb(HANDLE d,D3DDDICB_EVICT* a){
  assert(d==handle<void*>(1) && a->NumAllocations==1 && a->AllocationList && a->AllocationList[0] && !a->Flags.Value);
- events+='E';if(fail_evict)return E_FAIL;++evictions;return S_OK;
+ events+='E';
+ if(evict_free_owner && !evict_free_done && a->AllocationList[0]==evict_free_target->allocation){
+     evict_free_done=true;evict_free_result=evict_free_owner->free(evict_free_target);
+ }
+ if(fail_evict)return E_FAIL;++evictions;return S_OK;
 }
 static HRESULT APIENTRY wait_cpu_cb(HANDLE d,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU* a){
  assert(d==handle<void*>(1) && a->ObjectCount==1 && a->ObjectHandleArray[0]==10 && !a->hAsyncEvent && !a->Flags.Value);
@@ -1443,6 +1454,52 @@ int main(){
    assert(r.close_after_engine_retirement()==S_OK && r.discard_metadata()==0);
    // Of the six imports only (e) still held a reference at its release: exactly one Evict from the unmaps.
    assert(evictions==before_g+1);
+  }
+  // ---- BD-313 edge (M3): one notice naming more than 16 allocations, one record named twice ----------------
+  // The scan takes at most 16 records per round (heap-import.cpp, take[16]); the second round meets the
+  // repeated handle with its residency_turn already cleared. Only hold_seen==epoch keeps it out, so the
+  // hand-backs are 17, one per record, not 18.
+  {
+   const ImportReleasePolicy real=ImportReleasePolicy::from_switches();
+   RuntimeHeapImports r(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,real);
+   assert(r.initialize()==S_OK);
+   engine_ddi::ImportedMemory many[17]{};
+   D3DKMT_HANDLE list[18];
+   for(unsigned i=0;i<17;++i){
+      events.clear();assert(r.allocate(&req,&many[i])==S_OK && events=="AMZI");
+      list[i]=many[i].allocation;
+   }
+   list[17]=many[0].allocation;   // named again: with a refused round it is still held, and only
+                                  // hold_seen==epoch keeps it out of the second round of one notice
+   const unsigned before_m3=evictions;
+   fail_evict=true;
+   events.clear();r.note_runtime_residency(list,18);
+   assert(events.size()==17u && r.hold_failures()==17u && evictions==before_m3);
+   fail_evict=false;
+   events.clear();r.note_runtime_residency(list,18);
+   assert(events.size()==17u && evictions==before_m3+17u && r.hold_handbacks()==17u);
+   for(unsigned i=0;i<17;++i) assert(r.free(&many[i])==S_OK);
+   assert(r.close_after_engine_retirement()==S_OK && r.discard_metadata()==0);
+  }
+  // ---- BD-313 edge (M4): free() of a record while its hand-back runs ---------------------------------------
+  // The end_residency_hold loop borrows the record (heap-import.cpp: ++r->borrowed) so free() answers
+  // E_PENDING while the release callback runs. The fake Evict callback re-enters on the same thread, after
+  // the notice dropped lock_; the release is clean once the notice has ended.
+  {
+   const ImportReleasePolicy real=ImportReleasePolicy::from_switches();
+   RuntimeHeapImports r(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,real);
+   assert(r.initialize()==S_OK);
+   engine_ddi::ImportedMemory x{};
+   events.clear();assert(r.allocate(&req,&x)==S_OK && events=="AMZI");
+   D3DKMT_HANDLE hx[]={x.allocation};
+   const unsigned before_m4=evictions;
+   evict_free_owner=&r;evict_free_target=&x;evict_free_done=false;
+   events.clear();r.note_runtime_residency(hx,1);
+   evict_free_owner=nullptr;evict_free_target=nullptr;
+   assert(evict_free_done && evict_free_result==E_PENDING);
+   assert(events=="E" && evictions==before_m4+1u && r.hold_handbacks()==1u);
+   assert(r.free(&x)==S_OK);
+   assert(r.close_after_engine_retirement()==S_OK && r.discard_metadata()==0);
   }
   // The hand-back at creation (import-residency-release-on): the notices find nothing to end.
   {
