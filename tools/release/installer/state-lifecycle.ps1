@@ -80,13 +80,17 @@ function Get-DriverStateStep {
 # repeats the worker step: that step does only what remains.
 function Stop-DriverStateTransaction {
     param($State,[string]$Worker,[ValidateSet('install','remove')][string]$Reason,[string]$Product,
-        [scriptblock]$Save,[scriptblock]$Runner,[string]$StateDirectory=(Get-DriverStateDirectory))
+        [scriptblock]$Save,[scriptblock]$Runner,[string]$StateDirectory=(Get-DriverStateDirectory),
+        [string]$StoreKey='HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\SharedState\StateV2')
     $record=$State.driver_state
     if(-not $record -or $record.phase -cne 'prepared') { throw 'no prepared driver state transaction to abandon' }
     $old=[string]$record.product
     # Administrators may read the state directory: the log says what the worker found and left.
     $pendingPath=Join-Path $StateDirectory 'pending.bin';$retiredPath=Join-Path $StateDirectory "retired-$($record.transaction)-pending.bin"
     $hadPending=Test-Path -LiteralPath $pendingPath -PathType Leaf;$hadRetired=Test-Path -LiteralPath $retiredPath -PathType Leaf
+    # A store whose first transaction did not finish (StateV2 with no Active): only the file moves, and the store stays.
+    $unfinished=$false
+    try { if(Test-Path -LiteralPath $StoreKey){ $unfinished=$null -eq (Get-Item -LiteralPath $StoreKey).GetValue('Active') } } catch { }
     try {
         Invoke-DriverStateWorker -Worker $Worker -Operation abandon -Transaction $record.transaction -Product $old -Device $record.device -Runner $Runner
     } catch {
@@ -110,6 +114,9 @@ function Stop-DriverStateTransaction {
     Write-Log "   state: transaction $($record.transaction) abandoned; its handoff, if any, is retired-$($record.transaction)-pending.bin in $StateDirectory"
     if($hadPending -and $hadRetired) {
         Write-Log "   state: pending.bin was identical to the retired copy of an earlier abandon of this transaction; the worker removed pending.bin after a byte compare"
+    }
+    if($unfinished) {
+        Write-Log "   state: the driver had started this install and stopped before it completed (StateV2 with no Active); the store stays, and the next transaction reads the legacy settings"
     }
     if(Test-Path -LiteralPath $retiredPath -PathType Leaf) {
         try { Write-Log "   state: $retiredPath SHA256 $((Get-FileHash -LiteralPath $retiredPath -Algorithm SHA256).Hash)" } catch { }

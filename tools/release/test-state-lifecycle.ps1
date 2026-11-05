@@ -117,7 +117,20 @@ try {
     $text=[IO.File]::ReadAllText($script:LogPath)
 } finally { $script:LogPath=$null; Remove-Item -LiteralPath $dir298 -Recurse -Force -ErrorAction SilentlyContinue }
 Check ($text -match 'identical to the retired copy' -and $text -match "retired-$stopped-pending\.bin SHA256 039058C6F2C0CB492C533B0A4D14EF77CC0F78ABCCCED5287D84A1A2011CFB81") 'second abandon: the removal of the identical pending file is in the log'
-# A failed abandon leaves the record prepared, starts no transaction and names the cause.
+# The driver began the first transaction of the store and stopped before Active (lab 26200): the log says so, and
+# the store stays.
+Reset298;$p=Stopped
+$key298="HKCU:\Software\bd298-test-$([guid]::NewGuid().ToString('N'))";[void](New-Item -Path "$key298\Generations\$stopped\Migration" -Force)
+$script:LogPath=Join-Path ([IO.Path]::GetTempPath()) ("bd298-" + [guid]::NewGuid().ToString('N') + '.log')
+try {
+    Stop-DriverStateTransaction -State $p -Worker new.exe -Reason install -Product '0.7.216.110' -Save $rsave -Runner $rec -StateDirectory ([IO.Path]::GetTempPath()) -StoreKey $key298
+    $text=[IO.File]::ReadAllText($script:LogPath);$kept=Test-Path -LiteralPath $key298
+} finally { Remove-Item -LiteralPath $script:LogPath -ErrorAction SilentlyContinue;$script:LogPath=$null;Remove-Item -LiteralPath $key298 -Recurse -Force -ErrorAction SilentlyContinue }
+Check ($p.driver_state.phase -eq 'abandoned' -and $kept -and $text -match 'stopped before it completed' -and $text -match 'reads the legacy settings') 'unfinished store: the log says so and the store stays'
+$p=Stopped;$script:LogPath=Join-Path ([IO.Path]::GetTempPath()) ("bd298-" + [guid]::NewGuid().ToString('N') + '.log')
+try { Stop-DriverStateTransaction -State $p -Worker new.exe -Reason install -Product '0.7.216.110' -Save $rsave -Runner $rec -StateDirectory ([IO.Path]::GetTempPath()) -StoreKey 'HKCU:\Software\bd298-test-absent'
+    $text=[IO.File]::ReadAllText($script:LogPath) } finally { Remove-Item -LiteralPath $script:LogPath -ErrorAction SilentlyContinue;$script:LogPath=$null }
+Check ($text -notmatch 'stopped before it completed') 'no store: no line about an unfinished store'# A failed abandon leaves the record prepared, starts no transaction and names the cause.
 foreach($case in @(@{code=13;text='damaged'},@{code=1306;text='another install'},@{code=183;text='other content'},@{code=5;text='worker failed'})) {
     Reset298;$p=Stopped;$script:abandonCode=$case.code;$msg=''
     try {[void](Start-DriverStateTransaction -State $p -Worker new.exe -Product '0.7.216.110' -Device $device -InfSha256 $sha -Save $rsave -Runner $rec)} catch {$msg=$_.Exception.Message}
