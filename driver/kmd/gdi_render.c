@@ -510,9 +510,9 @@ int Bc250GdiSameSurfaceOrder(const BC250_GDI_OP* Op, const BC250_GDI_RECT* Subs,
             for (k = FirstOnAxis(&w, AxisLo(&w, &w.Dst[i]) - d);
                  k < w.Rows && AxisLo(&w, &w.Dst[w.Sorted[k]]) < hi; k++) {
                 j = w.Sorted[k];
-                if (w.Waiting[j] != 0u && WritesWhatReads(&w.Dst[j], &w.Dst[i], ddx, ddy) &&
-                    --w.Waiting[j] == 0u)
-                    w.Ready[j / 64u] |= 1ull << (j % 64u);
+                if (w.Waiting[j] == 0u || !WritesWhatReads(&w.Dst[j], &w.Dst[i], ddx, ddy)) continue;
+                w.Waiting[j]--;
+                if (w.Waiting[j] == 0u) w.Ready[j / 64u] |= 1ull << (j % 64u);
             }
         }
     }
