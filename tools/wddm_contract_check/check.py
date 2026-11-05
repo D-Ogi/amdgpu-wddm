@@ -83,11 +83,27 @@ INTERFACE_VERSIONS = {
     "DXGKDDI_INTERFACE_VERSION_WDDM3_2": 0x11007,
 }
 
+# DXGK_WDDMVERSION, WDK 10.0.26100 shared/d3dkmddi.h:2383-2404.
 WDDM_VERSIONS = {
+    "DXGKDDI_WDDMv1": 0x1000,
     "DXGKDDI_WDDMv1_2": 0x1200,
     "DXGKDDI_WDDMv1_3": 0x1300,
     "DXGKDDI_WDDMv2": 0x2000,
     "DXGKDDI_WDDMv2_0": 0x2000,
+    "DXGKDDI_WDDMv2_1": 0x2100,
+    "DXGKDDI_WDDMv2_1_5": 0x2105,
+    "DXGKDDI_WDDMv2_1_6": 0x2106,
+    "DXGKDDI_WDDMv2_2": 0x2200,
+    "DXGKDDI_WDDMv2_3": 0x2300,
+    "DXGKDDI_WDDMv2_4": 0x2400,
+    "DXGKDDI_WDDMv2_5": 0x2500,
+    "DXGKDDI_WDDMv2_6": 0x2600,
+    "DXGKDDI_WDDMv2_7": 0x2700,
+    "DXGKDDI_WDDMv2_8": 0x2800,
+    "DXGKDDI_WDDMv2_9": 0x2900,
+    "DXGKDDI_WDDMv3_0": 0x3000,
+    "DXGKDDI_WDDMv3_1": 0x3100,
+    "DXGKDDI_WDDMv3_2": 0x3200,
 }
 
 
@@ -292,6 +308,7 @@ class Facts:
         self.node_count = None
         self.notes = []
         self.wddm_lines = 0
+        self.text = ""                  # wddm.c without comments, for the function_matches predicate
 
     def cap(self, name):
         return self.caps.get(name)
@@ -328,6 +345,7 @@ def read_facts_text(wddm_text, header_text="", inf_text="", build_text=""):
     raw = wddm_text
     facts.wddm_lines = raw.count("\n") + 1
     text = strip_comments(raw)
+    facts.text = text
 
     header = strip_comments(header_text) if header_text else ""
     constants = Constants(text, header)
@@ -676,6 +694,15 @@ def predicate(facts: Facts, pred: dict):
             return None, "caps.WDDMVersion = %s, not a known constant" % entry["raw"]
         want = int(pred["wddm_version_at_least"], 16)
         return value >= want, "caps.WDDMVersion = %s (0x%04X)" % (entry["raw"], value)
+    if "wddm_version_in" in pred:
+        entry = facts.cap("WDDMVersion")
+        if entry is None:
+            return False, "caps.WDDMVersion not set"
+        value = WDDM_VERSIONS.get(entry["raw"].strip())
+        if value is None:
+            return None, "caps.WDDMVersion = %s, not a known constant" % entry["raw"]
+        allowed = {int(v, 16) for v in pred["wddm_version_in"]}
+        return value in allowed, "caps.WDDMVersion = %s (0x%04X)" % (entry["raw"], value)
     if "inf_umd_name" in pred:
         if facts.inf_umd_active:
             return True, "bc250kmd.inf writes UserModeDriverName in every package"
@@ -685,6 +712,24 @@ def predicate(facts: Facts, pred: dict):
         if facts.inf_umd_marked:
             return False, "bc250kmd.inf has the ;@UMD block but build.ps1 does not generate that package"
         return False, "no UserModeDriverName anywhere in bc250kmd.inf"
+    # The body of one function, without comments: every pattern of "all" must occur in it and none of "none".
+    # A missing function is a violation, never "cannot tell": a renamed report must not read as compliant.
+    if "function_matches" in pred:
+        spec = pred["function_matches"]
+        name = spec["function"]
+        body, line = function_body(facts.text, name)
+        if body is None:
+            return False, "%s() not found" % name
+        missing = [p for p in spec.get("all", []) if not re.search(p, body)]
+        present = [p for p in spec.get("none", []) if re.search(p, body)]
+        if missing or present:
+            parts = []
+            if missing:
+                parts.append("lacks %s" % ", ".join(repr(p) for p in missing))
+            if present:
+                parts.append("has %s" % ", ".join(repr(p) for p in present))
+            return False, "%s() (line %d) %s" % (name, line, "; ".join(parts))
+        return True, "%s() (line %d) has every required pattern" % (name, line)
     if "always" in pred:
         return bool(pred["always"]), "unconditional"
     return None, "unknown predicate %s" % sorted(pred)

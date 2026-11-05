@@ -10,9 +10,9 @@
 #pragma once
 
 // ADR 0019 stage B1 (was M7, ADR 0008 point 2 at WDDM 2.0): the whole binary is compiled at the WDDM 2.9 DDI
-// interface version (0xE003), which is the version the full table is declared with. Only the interface version
-// moves in B1: DXGK_DRIVERCAPS.WDDMVersion stays DXGKDDI_WDDMv2 (wddm.c), and every DDI and cap the 2.9 headers add
-// stays NULL or zero. The display-only table keeps telling dxgkrnl DXGKDDI_INTERFACE_VERSION_WIN8, exactly as it
+// interface version (0xE003), which is the version the full table is declared with. B1 moved the interface version
+// only; stage B4 (BD-307) moved DXGK_DRIVERCAPS.WDDMVersion to DXGKDDI_WDDMv2_9 (wddm.c WddmDriverCaps). Every DDI
+// and optional cap the 2.1-2.9 headers add stays NULL or zero. The display-only table keeps telling dxgkrnl DXGKDDI_INTERFACE_VERSION_WIN8, exactly as it
 // does today; that value is a run-time field, not this macro.
 //
 // Why 0xE003 and not 3.1 (0x10004, KMD 186-189): from DRIVER_INITIALIZATION_DATA.Version 0xF002 (WDDM 3.0) on, the

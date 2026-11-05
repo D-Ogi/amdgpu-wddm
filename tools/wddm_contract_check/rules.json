@@ -235,14 +235,78 @@
     },
     {
       "id": "R20-WDDMVERSION-VS-INTERFACE",
-      "declaration": "DXGK_DRIVERCAPS.WDDMVersion = DXGKDDI_WDDMv2 (0x2000)",
+      "declaration": "DXGK_DRIVERCAPS.WDDMVersion >= DXGKDDI_WDDMv2 (0x2000)",
       "requires_text": "the table declares the interface version the whole binary is compiled at, and that version is >= 0x5000 (WDDMVersion 2.x needs a WDDM 2.0 or later table), so that DXGK_DRIVERCAPS, DRIVER_INITIALIZATION_DATA and DXGKRNL_INTERFACE have the shapes dxgkrnl sizes them to for the declared version (ADR 0019 B1: 0x10004 -> 0x250, 0x560, 0x240; at 0x5023 they were 0x240, 0x340, 0x138)",
       "source": "DXGKRNL dxgk_caps_static.md 2.1 GetDriverCapsSizeFromDdiVersion: 'version >= 0x5011 -> 0x240', and for 22621.6199 also >= 0x9002 -> 0x248, >= 0xE003 -> 0x250 (scratch/m15/offgpu/wddm-uplift/b1/dxgk); DpiGetDriverDataSizeFromVersion 0x560 at >= 0x10004; DpiFdoStartAdapter+0x4de (RVA 0x2009ee) DXGKRNL_INTERFACE.Size 0x240 at >= 0xD001; 2.2 the WDDMVersion normalisation at +0x676 ('0x2000: pass'); 2.6 at +0x1031 the accepted set 0x1200, 0x1300, 0x2000 ... 0x3100; docs/facts.md M63 measured the 576-byte buffer on the lab machine at 0x5023",
-      "when": [{"wddm_version_is": "DXGKDDI_WDDMv2"}],
+      "when": [{"wddm_version_at_least": "0x2000"}],
       "require": [
         {"interface_at_least": "0x5000"},
         {"table_version_matches_interface": true}
       ]
+    },
+    {
+      "id": "R43-WDDMVERSION-ACCEPTED",
+      "declaration": "a full adapter reports DXGK_DRIVERCAPS.WDDMVersion",
+      "requires_text": "the value is one that every supported dxgkrnl accepts: 0x1200, 0x1300, 0x2000, 0x2100 ... 0x2900, 0x3000, 0x3100. Any other value fails the adapter with 'Miniport returned unknown WDDM version'. 0x2105 and 0x2106 are in the enum and in neither list; 0x3200 is accepted by 26100 but not by 22621, which the 23H2 lab and the n-2 support policy still need",
+      "source": "DXGKRNL static reading, ADR 0019 stage B4 (BD-307): DXGADAPTER::Initialize, the run of cmp/je on the reported value, 22621.6197 VA 0x1c01fdca5-0x1c01fdd48 and 22621.6199 file offset 0x1facb4 (0x1200 ... 0x3100); 26100.9549 file offset 0x1a292e (0x1000, 0x1200, 0x1300, 0x2000 ... 0x3200, 0x2200 through a register)",
+      "when": [{"always": true}],
+      "require": [
+        {"wddm_version_in": ["0x1200", "0x1300", "0x2000", "0x2100", "0x2200", "0x2300", "0x2400", "0x2500",
+                             "0x2600", "0x2700", "0x2800", "0x2900", "0x3000", "0x3100"]}
+      ]
+    },
+    {
+      "id": "R44-WDDMVERSION-ABOVE-2-5-INTERFACE",
+      "declaration": "DXGK_DRIVERCAPS.WDDMVersion > 2.5 (>= 0x2600)",
+      "requires_text": "the compiled DDI interface version is above WDDM 2.5 (0xA00B); a lower one fails the adapter",
+      "source": "DXGKRNL static reading, ADR 0019 stage B4 (BD-307): DXGADAPTER::Initialize 22621.6197 VA 0x1c01fd2f1-0x1c01fd307, 'cmpl $0x2500, WDDMVersion; jle' then 'cmpl $0xa00b, interface; ja', else the failing exit",
+      "when": [{"wddm_version_at_least": "0x2600"}],
+      "require": [{"interface_at_least": "0xA00C"}]
+    },
+    {
+      "id": "R45-QAI-16-ANSWERED-FROM-2-2",
+      "declaration": "DXGK_DRIVERCAPS.WDDMVersion >= 2.2",
+      "requires_text": "QueryAdapterInfo answers DXGKQAITYPE_DISPLAY_DRIVERCAPS_EXTENSION (16). At 2.2 or later a refusal makes dxgkrnl set VirtualModeSupport (bit 0x2) by itself, a promise that the driver scales virtual modes; an answer states the bits",
+      "source": "DXGKRNL static reading, ADR 0019 stage B4 (BD-307): ADAPTER_DISPLAY::Initialize 22621.6197 VA 0x1c01ff3a4 (DdiQueryAdapterInfo type 0x10) and the failure path 0x1c02a09e0-0x1c02a0a0e ('cmpl $0x2200, WDDMVersion; jl'; 'orl $0x2, caps extension'); WDK 26100 d3dkmddi.h:2792-2826 DXGK_DISPLAY_DRIVERCAPS_EXTENSION bit 1 VirtualModeSupport",
+      "when": [{"wddm_version_at_least": "0x2200"}],
+      "require": [{"qai_handled": "DXGKQAITYPE_DISPLAY_DRIVERCAPS_EXTENSION"}]
+    },
+    {
+      "id": "R46-UPDATEMONITORLINKINFO-FROM-2-4",
+      "declaration": "DXGK_DRIVERCAPS.WDDMVersion >= 2.4",
+      "requires_text": "the table carries DxgkDdiUpdateMonitorLinkInfo. With a NULL member dxgkrnl calls its own default, which returns STATUS_NOT_SUPPORTED, and from D3DKMT driver version 2400 the monitor arrival keeps that status, so StartDevice fails (Code 43, CM_PROB_FAILED_POST_START). Below 2.4 the status is changed to success",
+      "source": "DXGKRNL static reading of the lab failure (lab arm 1 of 352c4210, 22631): ADAPTER_DISPLAY::DefaultDdiUpdateMonitorLinkInfo 22621.6199 VA 0x1c01eeef0 'mov eax,0xC00000BB'; DXGMONITOR::_UpdateLinkInfo 0x1c0209870 calls vtable slot 0x60 (KernelDriver::UpdateMonitorLinkInfo) and on 0xC00000BB takes 0x1c02a4728..4786: 'cmp eax,0x960; jge' keeps the status, else 'xor r14d,r14d'; 26100.9549 _UpdateLinkInfo 0x140290b50 the same at 0x140290c21 and 0x140290ebf. ETW: DdiUpdateMonitorLinkInfo, then 'Adapter StartDevice has completed with status 0xC00000BB'",
+      "when": [{"wddm_version_at_least": "0x2400"}],
+      "require": [{"ddi_set": "DxgkDdiUpdateMonitorLinkInfo"}]
+    },
+    {
+      "id": "R47-MPO3-TRIO-FROM-2-1",
+      "declaration": "DXGK_DRIVERCAPS.WDDMVersion >= 2.1",
+      "requires_text": "the table carries DxgkDdiCheckMultiPlaneOverlaySupport3, DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3 and DxgkDdiPostMultiPlaneOverlayPresent, also with no multiplane-overlay cap. From 2.1 the graphics kernel sends flips of plane 0 through the MPO3 flip DDI and calls the member without testing it: the disable-planes flip of CddDisable through the NULL member is bugcheck 0x139/0xA (guard_icall_bugcheck)",
+      "source": "DXGKRNL lab minidump of the 2.9 image B46D3A9A on 22631 (BD-307, 2026-11-05, pnputil disable, LabScaledPlane absent so no MPO cap): cdd!PresentWorkerThread -> DxgkCddDisable -> FlushPresentReferencesAndDisableOverlays -> VidSchiSubmitDisablePlanesFlip -> VidSchiExecuteMmIoFlipMultiPlaneOverlayAtISR -> ADAPTER_DISPLAY::DdiSetVidPnSourceAddressWithMultiPlaneOverlay+0x1c4 -> guard_icall_bugcheck, args 2-4 zero; WDK km/dispmprt.h 10.0.26100 lines 2891-2900: the three members are in the WDDM 2.1 block of DRIVER_INITIALIZATION_DATA; LEARN d3dkmddi.md: MPO2 'replaced by' MPO3",
+      "when": [{"wddm_version_at_least": "0x2100"}],
+      "require": [{"ddi_set": "DxgkDdiCheckMultiPlaneOverlaySupport3"},
+                  {"ddi_set": "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3"},
+                  {"ddi_set": "DxgkDdiPostMultiPlaneOverlayPresent"}]
+    },
+    {
+      "id": "R48-MPO3-FLIP-RETIRED-BY-PRESENTID",
+      "declaration": "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3 is in the table",
+      "requires_text": "every MPO3 request hands its PresentId on, the flip to the transaction and a request with no new surface to the tracker, and the VSync report in the MPO3 mode is DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2 with a DXGK_MULTIPLANE_OVERLAY_VSYNC_INFO2 that carries the PresentId (WddmMpo3Notify, called by WddmNotifyRoutine before the CRTC_VSYNC call). An MPO3 flip is retired by PresentId, so an address report leaves it pending for ever. Type 18 (OVERLAY3) is the hardware flip queue's report and this driver has no flip queue, so it may not appear",
+      "source": "LEARN windows-driver-docs hardware-flip-queue.md:242: CrtcVSyncWithMultiPlaneOverlay2 carries 'a single last completed PresentId for each plane', OVERLAY3 the flip queue log; WDK shared/d3dkmddi.h 10.0.26100 line 709 (type 10), line 780 (VSYNC_INFO2 {LayerIndex, PresentId, Flags}), line 1090 (union member); LEARN DXGK_PLANE_SPECIFIC_OUTPUT_FLAGS HsyncInterruptCompletion: a pending flip completes on 'the PresentId greater or equal to pending'",
+      "when": [{"ddi_set": "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3"}],
+      "require": [{"function_matches": {"function": "WddmMpo3Notify",
+                                        "all": ["InterruptType\\s*=\\s*DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2\\b",
+                                                "\\bDXGK_MULTIPLANE_OVERLAY_VSYNC_INFO2\\b",
+                                                "\\.PresentId\\s*=",
+                                                "CrtcVsyncWithMultiPlaneOverlay2\\.pMultiPlaneOverlayVsyncInfo\\s*=",
+                                                "DxgkCbNotifyInterrupt\\s*\\("],
+                                        "none": ["DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY3"]}},
+                  {"function_matches": {"function": "WddmNotifyRoutine",
+                                        "all": ["if\\s*\\(\\s*!\\s*WddmMpo3Notify\\s*\\([^;]*\\)\\s*\\)\\s*WddmNotifyCall\\s*\\("]}},
+                  {"function_matches": {"function": "Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3",
+                                        "all": ["WddmFlipEntry\\s*\\([^;]*\\bTRUE\\s*,\\s*plane->PresentId\\s*\\)",
+                                                "WddmMpo3Keep\\s*\\([^;]*\\bTRUE\\s*,\\s*plane->PresentId\\s*\\)"]}}]
     },
     {
       "id": "R21-HIGHEST-ADDRESS",

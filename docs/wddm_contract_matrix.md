@@ -40,6 +40,7 @@ before it writes anything. Every one of these was called on the host with the bu
 | 14 | `PAGETABLELEVELDESC` | `WddmPageTableLevelDesc()` `wddm.c:1177` | `OutputDataSize < sizeof(*desc)`, `desc == NULL` | 20 | per level; `STATUS_INVALID_PARAMETER` above level 3 |
 | 15 | `PHYSICALADAPTERCAPS` | `WddmPhysicalAdapterCaps()` | `InputDataSize < sizeof(*in)`, `in == NULL`, `OutputDataSize < sizeof(*caps)`, `caps == NULL`, index not 0, no `DeviceHandle` yet | 32 | the DRIVERCAPS node count and paging node, `GpuMmuSupported`, the StartDevice handle. Zeroes `OutputDataSize` first (since 0.7.216.62) |
 | 47 | `64BITONLYCAPS` | inline | `pOutputData == NULL`, `OutputDataSize < sizeof(UINT)` | 4 | four zero bytes: not 64-bit only (since 0.7.216.62) |
+| 16 | `DISPLAY_DRIVERCAPS_EXTENSION` | inline | `pOutputData == NULL`, `OutputDataSize < sizeof(DXGK_DISPLAY_DRIVERCAPS_EXTENSION)` | 4 | every bit zero: no virtual modes, no HDR, no virtual refresh rate. Refused (tolerated, M65) until ADR 0019 stage B4. From WDDMVersion 2.2, a refusal makes dxgkrnl set `VirtualModeSupport` (R45) |
 
 The two inline arms check the size and not the pointer. That is defect D1; see section (g).
 
@@ -50,7 +51,6 @@ Refused, all through one `default:` arm at `wddm.c:1195` with `STATUS_NOT_SUPPOR
 | 0 | `UMDRIVERPRIVATE` | no UMD of ours yet; the stub package carries a name, not a driver |
 | 2, 4, 5 | `QUERYSEGMENT`, `QUERYSEGMENT2`, `QUERYSEGMENT3` | a WDDM 2 driver must not answer the pre-WDDM2 segment queries (R15) |
 | 7 | `POWERCOMPONENTINFO` | never asked once type 6 answers zero components |
-| 16 | `DISPLAY_DRIVERCAPS_EXTENSION` | asked on the lab and tolerated (M65) |
 
 Types 15 and 47 were refused until 0.7.216.62. dxgkrnl tolerates a refusal of either, but after a refusal of
 15 it builds the physical-adapter caps itself from DRIVERCAPS members we leave zero and takes the FDO as the
@@ -69,7 +69,7 @@ handler writes over the whole `OutputDataSize` first.
 
 | Member | Source text | Value | Line |
 |---|---|---|---|
-| `WDDMVersion` | `DXGKDDI_WDDMv2` | `0x2000` | 1034 |
+| `WDDMVersion` | `DXGKDDI_WDDMv2_9` | `0x2900` (ADR 0019 stage B4, BD-307) | 1034 |
 | `HighestAcceptableAddress.QuadPart` | `-1` | no limit | 1035 |
 | `SupportNonVGA` | `TRUE` | 1 | 1036 |
 | `NumberOfSwizzlingRanges` | `0` | 0 | 1037 |
@@ -175,8 +175,14 @@ Segment 2 has not been seen by a lab dxgkrnl yet; it is here as the compiled dri
 
 1376 bytes (832 before ADR 0019 B1), 60 DDI pointers set plus `Version` (`wddm.c` `WddmBuildTable`).
 `Version = DXGKDDI_INTERFACE_VERSION_WDDM3_1`, the binary compiled at `DXGKDDI_INTERFACE_VERSION 0x10004`
-(`bc250kmd.h`); every member after the WDDM 2.0 block (offset 832 on) is NULL and checked so at run time, and
-`WDDMVersion` stays `DXGKDDI_WDDMv2`. Stage B and stage C added code
+(`bc250kmd.h`); every member after the WDDM 2.0 block (offset 832 on) is NULL and checked so at run time, except
+`UpdateMonitorLinkInfo`. Since ADR 0019 stage B4 (BD-307) `WDDMVersion` is `DXGKDDI_WDDMv2_9`: the static reading
+of dxgkrnl 22621.6199 and 26100.9549 finds no load check at 2.1-2.9 that names one of these members for a full
+adapter. One check is not at load: at monitor arrival, `DXGMONITOR::_UpdateLinkInfo` calls `UpdateMonitorLinkInfo`,
+and with a NULL member it gets dxgkrnl's default answer `STATUS_NOT_SUPPORTED`. From D3DKMT driver version 2400
+(WDDMVersion 2.4) it keeps that status, and `StartDevice` fails with Code 43 (lab arm 1 of 352c4210 on 22631).
+The table therefore fills that tail member (rule R46). A second gap is in the path that disables the device. From WDDMVersion 2.1, dxgmms2 sends plane 0 flips through `SetVidPnSourceAddressWithMultiPlaneOverlay3`, also without the MPO cap. It calls that member without a NULL test. The disable-planes flip of `CddDisable` through the NULL member was bugcheck 0x139/0xA (BD-307, `pnputil` disable on the 2.9 image). The table therefore also fills the MPO3 trio, for plane 0 only (rules R47 and R48). A NULL member that the lab runs do not reach is not proof that dxgkrnl tests it.
+Stage B and stage C added code
 behind these pointers but no pointer: the table is the same 60 it was before the ring path existed, which is
 what "no new capability and no new DDI" looks like from dxgkrnl's side.
 
@@ -237,7 +243,13 @@ making the declaration later is not free.
 | R17 | answers `HISTORYBUFFERPRECISION` (10) | `FormatHistoryBuffer` | LEARN mcdm table; SAMPLE CosKmdGlobal.cpp:332 | OK |
 | R18 | `NumberOfSwizzlingRanges = 0` | `AcquireSwizzlingRange`, `ReleaseSwizzlingRange` stay NULL | LEARN what-s-new-for-prior-wddm-2-x-versions "Support for swizzling ranges has been removed."; SAMPLE RosKmdGlobal.cpp:265-266 | OK |
 | R19 | any table | the ten reserved members stay NULL | LEARN; the WDDM 1.x page-table trap | OK |
-| R20 | `WDDMVersion = DXGKDDI_WDDMv2` | `Version = ..._WDDM2_0` and interface >= 0x5000, so `DXGK_DRIVERCAPS` is the 0x240-byte shape | DXGKRNL `GetDriverCapsSizeFromDdiVersion` ">= 0x5011 -> 0x240"; facts M63 measured 576 | OK |
+| R20 | `WDDMVersion >= DXGKDDI_WDDMv2` | `Version` equals the compiled interface and interface >= 0x5000, so `DXGK_DRIVERCAPS` has the shape dxgkrnl sizes for that version (0x250 at 0xE003) | DXGKRNL `GetDriverCapsSizeFromDdiVersion` ">= 0x5011 -> 0x240", ">= 0xE003 -> 0x250"; facts M63 measured 576 at 0x5023 | OK |
+| R43 | a full adapter reports `WDDMVersion` | one of 0x1200, 0x1300, 0x2000, 0x2100 ... 0x2900, 0x3000, 0x3100 (the set that both 22621 and 26100 accept. Only 26100 accepts 0x3200, and neither accepts 0x2105 or 0x2106) | DXGKRNL `DXGADAPTER::Initialize` "Miniport returned unknown WDDM version", 22621.6199 and 26100.9549 (BD-307) | OK |
+| R44 | `WDDMVersion` >= 2.6 | interface > 0xA00B | DXGKRNL `DXGADAPTER::Initialize` 22621.6197 VA 0x1c01fd2f1 (BD-307) | OK |
+| R45 | `WDDMVersion` >= 2.2 | type 16 (`DISPLAY_DRIVERCAPS_EXTENSION`) answered. A refusal makes dxgkrnl set `VirtualModeSupport` | DXGKRNL `ADAPTER_DISPLAY::Initialize` 22621.6197 VA 0x1c02a09e0 (BD-307) | OK |
+| R46 | `WDDMVersion` >= 2.4 | `DxgkDdiUpdateMonitorLinkInfo` in the table. dxgkrnl's default for a NULL member returns `STATUS_NOT_SUPPORTED`, and from D3DKMT version 2400 the monitor arrival keeps it: `StartDevice` fails, Code 43 | DXGKRNL `DXGMONITOR::_UpdateLinkInfo` 22621.6199 VA 0x1c02a4728 (`cmp eax,0x960` then `jge`), 26100.9549 0x140290ebf, lab arm 1 of 352c4210 | OK |
+| R47 | `WDDMVersion` >= 2.1 | `CheckMultiPlaneOverlaySupport3`, `SetVidPnSourceAddressWithMultiPlaneOverlay3` and `PostMultiPlaneOverlayPresent` in the table, also with no MPO cap. A NULL flip member is a bugcheck in the disable-planes flip of `CddDisable` | DXGKRNL lab minidump, 2.9 image B46D3A9A on 22631: `VidSchiExecuteMmIoFlipMultiPlaneOverlayAtISR` to `DdiSetVidPnSourceAddressWithMultiPlaneOverlay+0x1c4` to `guard_icall_bugcheck` (BD-307), and WDK km/dispmprt.h 2891-2900 | OK |
+| R48 | the MPO3 flip member in the table | each MPO3 request hands its PresentId on, and the VSync report in the MPO3 mode is type 10 (`CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2`) with the PresentId. Type 18 is the hardware flip queue report | LEARN hardware-flip-queue.md:242, WDK shared/d3dkmddi.h 709, 780, 1090 | OK |
 | R21 | any full miniport | `HighestAcceptableAddress` not left low (-1) | LEARN mcdm; SAMPLE RosKmdAdapter.cpp:959 | OK |
 | R22 | a declared segment | `Flags.Agp` stays 0 | LEARN "Flags.Agp on a non-AGP aperture -> the adapter fails to initialize" | OK |
 | R23 | `PreemptionAware = 1` | granularity above NONE | LEARN gpu-preemption, NONE "may cause the TDR process to repeatedly reset the GPU" | OK (warning rule) |

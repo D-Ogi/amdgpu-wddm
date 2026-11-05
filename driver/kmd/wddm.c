@@ -32,6 +32,7 @@
 #include "ring_gap.h"            // C48/C49: the node's own idle-gap accounting, the same object the ETW analysis used
 #include "notify_pairing.h"      // C50: which pass pairs a completion report with DxgkCbNotifyDpc
 #include "flip_state.h"          // BD-170 r6: the decisions of the flip state machine
+#include "mpo3_track.h"          // BD-307: plane 0 of the WDDM 2.1 MPO3 DDIs, its PresentId and its plane rule
 #include "amd_identity.h"        // the 608-byte AMD identity answer per process (FSR 4)
 #include <limits.h>               // UINT_MAX, ULLONG_MAX: the UNKNOWN values of shared/d3dkmdt.h (BD-170 E5)
 // shared/d3dkmdt.h writes DXGK_PRIMITIVE_API_SEQUENCE_NUMBER_UNKNOWN as ULONGLONG_MAX, a name of ntintsafe.h. That
@@ -39,6 +40,31 @@
 #ifndef ULONGLONG_MAX
 #define ULONGLONG_MAX ULLONG_MAX
 #endif
+
+// ADR 0019 stage B4: a lab bisection compiles fixed images with /DBC250_WDDM_LEVEL=0x2100 and similar values in
+// place of the default DXGK_DRIVERCAPS.WDDMVersion (WddmDriverCaps); there is no runtime setting yet. The level must
+// be one that dxgkrnl knows and that this table and these answers were read against. Without the define the image
+// is the default one, which tools/wddm_contract_check reads.
+#ifdef BC250_WDDM_LEVEL
+C_ASSERT(BC250_WDDM_LEVEL == DXGKDDI_WDDMv2 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_1 ||
+         BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_2 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_3 ||
+         BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_4 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_5 ||
+         BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_6 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_7 ||
+         BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_8 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_9);
+#endif
+// The level as a number the preprocessor can compare: the table fills the DDIs a level obliges under #if, and the
+// DXGKDDI_WDDMv2_x names are enum constants, which #if cannot read. The asserts keep the numbers equal to the names.
+#ifdef BC250_WDDM_LEVEL
+#define BC250_WDDM_REPORTED_LEVEL BC250_WDDM_LEVEL
+#else
+#define BC250_WDDM_REPORTED_LEVEL 0x2900
+#endif
+C_ASSERT(DXGKDDI_WDDMv2_1 == 0x2100);
+C_ASSERT(DXGKDDI_WDDMv2_9 == 0x2900);
+// BD-307: the MPO3 plane rule (mpo3_track.h) holds the values of these two names.
+C_ASSERT(D3DDDI_ROTATION_IDENTITY == BC250_MPO3_ROTATION_IDENTITY);
+C_ASSERT(D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 == BC250_MPO3_COLOR_SRGB);
+
 #include "bc250kmd_escape.h"     // BC250_PJ_* record kinds of the paging journal
 #include "regs.generated.h"      // the CP/GRBM/GCVM offsets of the timeout snapshot (tools/regcalc)
 #include "ih_fault.h"            // GCVM_L2_PROTECTION_FAULT_STATUS field decode and the gfxhub CID names
@@ -1039,6 +1065,21 @@ typedef struct _BC250_WDDM {
     volatile LONG PlaneNotes;                           // the log budget of both DDIs
     // The planes that DML approved, with their display plans, are dcn.c's (DcnPlaneCheck, DcnPlaneApproved).
 #endif
+    // BD-307: plane 0 of the WDDM 2.1 MPO3 DDIs, both flavours. Mpo3 is written inside L only (WddmFlipLocked,
+    // WddmMpo3KeepLocked, WddmMpo3Notify). The counters: Check answers by verdict, flips handed to the transaction,
+    // requests with no new surface (a disabled plane, or none), refusals before the transaction, flips the transaction
+    // failed, next-VSync requests answered as immediate, the OVERLAY2 reports with and without a plane, and
+    // PostMultiPlaneOverlayPresent calls. Mpo3Notes is the log budget of the three DDIs.
+    BC250_MPO3_TRACK Mpo3;
+    volatile LONG Mpo3Checks[BC250_MPO3_VERDICTS];
+    volatile LONG Mpo3Flips, Mpo3Kept, Mpo3Empty, Mpo3Refused, Mpo3Failed, Mpo3Converted;
+    volatile LONG Mpo3Reports, Mpo3ReportsEmpty, Mpo3PostPresents, Mpo3Notes;
+    volatile LONG Mpo3Retries;          // flips refused while a writer owned the pipe, answered STATUS_RETRY
+    // The plane rule's verdict for every enabled plane 0 the flip DDI was given, and the first plane with a verdict
+    // other than ok (the flip programs the full surface anyway, Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3).
+    volatile LONG Mpo3FlipVerdicts[BC250_MPO3_VERDICTS];
+    volatile LONG Mpo3FlipOddTaken;
+    BC250_MPO3_PLANE Mpo3FlipOdd;
 } BC250_WDDM;
 
 // The gate-closed starting value of wddm->NodeCount (WddmStart) and of the DXGK_DRIVERCAPS answer before
@@ -1356,6 +1397,37 @@ typedef struct _BC250_WDDM_NOTIFY {
     DXGKARGCB_NOTIFY_INTERRUPT_DATA Data;
 } BC250_WDDM_NOTIFY;
 
+// BD-307, inside L at DIRQL: while plane 0 is in the MPO3 mode (mpo3_track.h), a VSync goes to the OS as
+// DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2, with layer 0 and the newest PresentId the plane shows, or with no
+// layer before the first one is shown. That report, not the address, retires an MPO3 flip (d3dkmddi.h 10.0.26100,
+// DXGK_MULTIPLANE_OVERLAY_VSYNC_INFO2). Type 18, CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY3, is the hardware flip queue's
+// report (hardware-flip-queue.md:242), and this driver has no flip queue. Returns FALSE when the report stays the
+// CRTC_VSYNC one. The caller keeps its own copy of the data, so DesiredOwed is decided on the CRTC_VSYNC address.
+static BOOLEAN WddmMpo3Notify(_In_ BC250_DEVICE* Device, _In_ const DXGKARGCB_NOTIFY_INTERRUPT_DATA* Data)
+{
+    BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+    DXGKARGCB_NOTIFY_INTERRUPT_DATA mpo;
+    DXGK_MULTIPLANE_OVERLAY_VSYNC_INFO2 layer;
+    unsigned count = 0;
+    unsigned long long presentId = 0;
+
+    if (wddm == NULL || Data->InterruptType != DXGK_INTERRUPT_CRTC_VSYNC) return FALSE;
+    if (!Bc250Mpo3Report(&wddm->Mpo3, Data->CrtcVsync.PhysicalAddress.QuadPart, &count, &presentId)) return FALSE;
+    RtlZeroMemory(&mpo, sizeof(mpo));
+    RtlZeroMemory(&layer, sizeof(layer));
+    layer.LayerIndex = 0;
+    layer.PresentId = presentId;
+    mpo.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2;
+    mpo.Flags = Data->Flags;
+    mpo.CrtcVsyncWithMultiPlaneOverlay2.VidPnTargetId = Data->CrtcVsync.VidPnTargetId;
+    mpo.CrtcVsyncWithMultiPlaneOverlay2.PhysicalAdapterMask = Data->CrtcVsync.PhysicalAdapterMask;
+    mpo.CrtcVsyncWithMultiPlaneOverlay2.MultiPlaneOverlayVsyncInfoCount = count;
+    mpo.CrtcVsyncWithMultiPlaneOverlay2.pMultiPlaneOverlayVsyncInfo = count ? &layer : NULL;
+    InterlockedIncrement(count ? &wddm->Mpo3Reports : &wddm->Mpo3ReportsEmpty);
+    Device->Dxgk.DxgkCbNotifyInterrupt(Device->Dxgk.DeviceHandle, &mpo);
+    return TRUE;
+}
+
 // Runs at the device's interrupt IRQL, under the interrupt's own lock: DxgkCbNotifyInterrupt must be called at
 // DIRQL and never reentrantly, and DxgkCbSynchronizeExecution is the documented way to get there from a DDI
 // (LEARN nc-d3dkmddi-dxgkcb_notify_interrupt, and the same recipe in the PreemptCommand page). No log here: this
@@ -1365,7 +1437,7 @@ static BOOLEAN WddmNotifyRoutine(_In_ PVOID Context)
     BC250_WDDM_NOTIFY* notify = (BC250_WDDM_NOTIFY*)Context;
     BC250_WDDM* wddm = (BC250_WDDM*)notify->Device->Wddm;
 
-    WddmNotifyCall(notify->Device, &notify->Data);
+    if (!WddmMpo3Notify(notify->Device, &notify->Data)) WddmNotifyCall(notify->Device, &notify->Data);
     if (notify->Data.InterruptType == DXGK_INTERRUPT_CRTC_VSYNC)
     {
         InterlockedExchange64(&notify->Device->DcnVsyncNotifyTime, (LONG64)KeQueryInterruptTime());
@@ -3658,6 +3730,39 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     // driver" cannot be told from "nobody was asked", which is the one distinction the whole handshake is
     // about. It is a state, so it is printed as a word, not as a count.
     GuardLog("wddm summary: DirectFlip handshake %s", Wddm->DirectFlipHandshake ? "on" : "off");
+    // BD-307: plane 0 of the MPO3 DDIs, both flavours. What the OS sent, what the reports carried, what Check was
+    // asked and answered, and the first flip whose plane the rule would not approve.
+    {
+        LONG check[BC250_MPO3_VERDICTS];
+        LONG odd = 0, checks = 0;
+        ULONG v;
+
+        for (v = 0; v < BC250_MPO3_VERDICTS; v++) {
+            check[v] = Wddm->Mpo3Checks[v];
+            checks += check[v];
+            if (v != BC250_MPO3_OK) odd += Wddm->Mpo3FlipVerdicts[v];
+        }
+        GuardLog("wddm summary: MPO3 flips %ld failed %ld kept %ld empty %ld refused %ld converted %ld post-presents %ld",
+                 Wddm->Mpo3Flips, Wddm->Mpo3Failed, Wddm->Mpo3Kept, Wddm->Mpo3Empty, Wddm->Mpo3Refused,
+                 Wddm->Mpo3Converted, Wddm->Mpo3PostPresents);
+        GuardLog("wddm summary: MPO3 reports %ld without a plane %ld, flips with odd planes %ld retried %ld, checks %ld ok %ld",
+                 Wddm->Mpo3Reports, Wddm->Mpo3ReportsEmpty, odd, Wddm->Mpo3Retries, checks, check[BC250_MPO3_OK]);
+        // Two lines: one with all eleven refusal counts is wider than BC250_LOG_TEXT (guardlog-width).
+        GuardLog("wddm summary: MPO3 check no count/src/layer/geom/rot/flags %ld/%ld/%ld/%ld/%ld/%ld",
+                 check[BC250_MPO3_COUNT], check[BC250_MPO3_SOURCE], check[BC250_MPO3_LAYER],
+                 check[BC250_MPO3_GEOMETRY], check[BC250_MPO3_ROTATION], check[BC250_MPO3_FLAGS]);
+        GuardLog("wddm summary: MPO3 check no blend/color/post/scanout/gate %ld/%ld/%ld/%ld/%ld",
+                 check[BC250_MPO3_BLEND], check[BC250_MPO3_COLOR], check[BC250_MPO3_POST], check[BC250_MPO3_SCANOUT],
+                 check[BC250_MPO3_GATE]);
+        if (Wddm->Mpo3FlipOddTaken) {
+            const BC250_MPO3_PLANE* p = &Wddm->Mpo3FlipOdd;
+            GuardLog("wddm summary: MPO3 first odd flip %s rot %u flags 0x%X color %u",
+                     Bc250Mpo3VerdictText(Bc250Mpo3PlaneVerdict(p)), p->Rotation, p->Flags, p->ColorSpace);
+            GuardLog("wddm summary: MPO3 first odd flip src %ld,%ld,%ld,%ld dst %ld,%ld,%ld,%ld",
+                     p->Src.Left, p->Src.Top, p->Src.Right, p->Src.Bottom, p->Dst.Left, p->Dst.Top, p->Dst.Right,
+                     p->Dst.Bottom);
+        }
+    }
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     // BD-223: the scaled plane, with the shape writes of dcn.c. Verdicts with no count are left out.
     {
@@ -5046,12 +5151,22 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     UINT nodeCount = (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT;
 
     if (Query->OutputDataSize < sizeof(*caps) || caps == NULL) return STATUS_BUFFER_TOO_SMALL;
-    // The caller's buffer, not our sizeof: this driver is compiled at WDDM 2.0 and will run under a dxgkrnl that
+    // The caller's buffer, not our sizeof: this driver is compiled at interface 2.9 and will run under a dxgkrnl that
     // knows a longer DXGK_DRIVERCAPS. Zeroing all of it means the members we have never heard of read as zero
     // rather than as whatever was on the stack. The same rule applies everywhere below.
     RtlZeroMemory(caps, Query->OutputDataSize);
 
-    caps->WDDMVersion = DXGKDDI_WDDMv2;                 // ADR 0008 point 2: the version that introduced GpuMmu
+    // ADR 0019 stage B4 (BD-307): the feature level of the 2.9 interface this binary is compiled at. Static reading of
+    // dxgkrnl 22621.6199 (the lab's 22631) and 26100.9549: both accept 0x2900, and no load check keyed on 2.1-2.9
+    // names a DDI that a full adapter must fill. The monitor arrival does: from 2.4 it needs UpdateMonitorLinkInfo
+    // (Bc250UpdateMonitorLinkInfo, lab arm 1 of 352c4210). What the level changes without a new DDI: the D3D11
+    // runtime asks our UMD for its WDDM 2.2 table (KMT version >= 2.2, BD-153), display state synchronization is the
+    // 2.3 one, and the type 16 answer below becomes necessary. Every optional 2.1-2.9 cap stays zero (RtlZeroMemory above).
+#ifdef BC250_WDDM_LEVEL
+    caps->WDDMVersion = (DXGK_WDDMVERSION)BC250_WDDM_LEVEL;   // a lab bisection image (the define above)
+#else
+    caps->WDDMVersion = DXGKDDI_WDDMv2_9;
+#endif
     caps->HighestAcceptableAddress.QuadPart = -1;       // no addressing limit; too low a value fails the load
     caps->SupportNonVGA = TRUE;
     caps->NumberOfSwizzlingRanges = 0;                  // swizzling range support has been removed from WDDM
@@ -5076,7 +5191,9 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     // BD-223: MaxOverlayPlanes counts the primary, so 1 is plane 0 alone (LabScaledPlane bit 2 asks 2, a lab
     // question; Check still refuses a second plane). The count is the trailer's (WddmMpoFlags), which the front
-    // reports too. WDDM 2.0 has no MPO immediate-flip cap.
+    // reports too. No MPO immediate-flip cap, and MaxQueuedMultiPlaneOverlayFlipVSync stays 0 as it was at
+    // WDDMVersion 2.0: no dxgkrnl check found asks for it at 2.9, so the WHCP queue-depth item (WDDM21.FlipQueueLatency)
+    // belongs to the MPO work (BD-223), not to the WDDMVersion change.
     if (Device->Wddm && (((BC250_WDDM*)Device->Wddm)->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK)) {
         caps->SupportMultiPlaneOverlay = TRUE;
         caps->MaxOverlayPlanes = bc250_scanout_mpo_planes(WddmMpoFlags(((BC250_WDDM*)Device->Wddm)->ScaledPlane));
@@ -5367,6 +5484,17 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         // reading of 26100.9549, BD-134). Zero: this driver has 32-bit user-mode drivers too. VirtualBox's WDDM
         // miniport also answers this type with a zeroed buffer.
         if (QueryAdapterInfo->pOutputData == NULL || QueryAdapterInfo->OutputDataSize < sizeof(UINT)) { status = STATUS_BUFFER_TOO_SMALL; break; }
+        RtlZeroMemory(QueryAdapterInfo->pOutputData, QueryAdapterInfo->OutputDataSize);
+        status = STATUS_SUCCESS;
+        break;
+    case DXGKQAITYPE_DISPLAY_DRIVERCAPS_EXTENSION:
+        // Every bit zero: no secure display, no virtual modes, no HDR scan-out, no HDR10 metadata, no virtual refresh
+        // rate. The answer is needed from WDDMVersion 2.2 on: when this type fails there, dxgkrnl sets
+        // VirtualModeSupport by itself (ADAPTER_DISPLAY::Initialize, static reading of 22621.6197 and 26100.9549),
+        // and our scan-out path does not scale virtual modes. At 2.0 the refusal read as zero (facts M65), so this
+        // answer keeps the display behaviour of 2.0. HDR (M15.4) sets its bits here when it exists.
+        if (QueryAdapterInfo->pOutputData == NULL ||
+            QueryAdapterInfo->OutputDataSize < sizeof(DXGK_DISPLAY_DRIVERCAPS_EXTENSION)) { status = STATUS_BUFFER_TOO_SMALL; break; }
         RtlZeroMemory(QueryAdapterInfo->pOutputData, QueryAdapterInfo->OutputDataSize);
         status = STATUS_SUCCESS;
         break;
@@ -11243,6 +11371,8 @@ typedef struct _BC250_WDDM_FLIP {
     ULONG Pitch;
     ULONGLONG Bytes;
     ULONG PlaneFormat;
+    BOOLEAN Mpo3;                       // BD-307: plane 0 of the MPO3 DDI, retired by PresentId (mpo3_track.h)
+    ULONGLONG PresentId;
 } BC250_WDDM_FLIP;
 
 // E5's node (section 7.2, E5 step 3): the node of the first context that the flip call carries, when it is a context
@@ -11548,6 +11678,16 @@ static BOOLEAN WddmFlipLocked(_In_ PVOID Context)
     LONGLONG us;
 
     (void)WddmFlipTransaction(Context);
+    // BD-307: an accepted flip sets how its VSync reports retire it. An MPO3 flip is retired by PresentId, from the
+    // address it published; any other flip ends the MPO3 mode. A refused flip changes neither.
+    if (NT_SUCCESS(flip->Result))
+    {
+        if (flip->Mpo3)
+            Bc250Mpo3Flipped(&flip->Wddm->Mpo3, flip->Wddm->PrimaryAddress.QuadPart, flip->PresentId,
+                             flip->Args->Flags.FlipImmediate ? 1u : 0u);
+        else
+            Bc250Mpo3Legacy(&flip->Wddm->Mpo3);
+    }
     us = KeQueryPerformanceCounter(NULL).QuadPart - start;
     if (frequency > 0 && us > 0)
     {
@@ -11559,10 +11699,11 @@ static BOOLEAN WddmFlipLocked(_In_ PVOID Context)
 }
 
 // The two entries of a flip (below), for SetVidPnSourceAddress and, with Shape, for the plane 0 of
-// SetVidPnSourceAddressWithMultiPlaneOverlay2 (BD-223).
+// SetVidPnSourceAddressWithMultiPlaneOverlay2 (BD-223). Mpo3 with its PresentId: plane 0 of
+// SetVidPnSourceAddressWithMultiPlaneOverlay3 (BD-307).
 static NTSTATUS WddmFlipEntry(_In_ const HANDLE hAdapter,
                               _In_ const DXGKARG_SETVIDPNSOURCEADDRESS* pSetVidPnSourceAddress,
-                              _In_opt_ const BC250_SCALER_PLAN* Shape)
+                              _In_opt_ const BC250_SCALER_PLAN* Shape, BOOLEAN Mpo3, ULONGLONG PresentId)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
     BC250_WDDM* wddm = WddmOf(hAdapter);
@@ -11582,6 +11723,8 @@ static NTSTATUS WddmFlipEntry(_In_ const HANDLE hAdapter,
     flip.Wddm = wddm;
     flip.Args = pSetVidPnSourceAddress;
     flip.Shape = Shape;
+    flip.Mpo3 = Mpo3;
+    flip.PresentId = PresentId;
     if (high)
     {
         (void)WddmFirstCalls(wddm, WddmDdiSetVidPnSourceAddress);  // the count only: FALSE above DISPATCH_LEVEL
@@ -11623,7 +11766,267 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
     // The contract of an adapter with overlay planes: this DDI disables every plane but the primary, and the primary
     // keeps the shape of its last flip when the allocation is NULL (WddmFlipTransaction). This adapter has plane 0
     // only.
-    return WddmFlipEntry(hAdapter, pSetVidPnSourceAddress, NULL);
+    return WddmFlipEntry(hAdapter, pSetVidPnSourceAddress, NULL, FALSE, 0);
+}
+
+// ---- BD-307: plane 0 of the WDDM 2.1 MPO3 DDIs -----------------------------------------------------------------------
+//
+// From WDDMVersion 2.1 the graphics kernel sends flips of plane 0 through SetVidPnSourceAddressWithMultiPlaneOverlay3,
+// also to an adapter whose DRIVERCAPS has no multiplane overlay: the disable-planes flip of CddDisable came that way to
+// the 2.9 image of 2026-11-05, through the NULL member, and stopped the system (0x139/0xA, guard_icall_bugcheck under
+// ADAPTER_DISPLAY::DdiSetVidPnSourceAddressWithMultiPlaneOverlay). The three members are filled at every level that has
+// them (WddmBuildTable). This adapter has plane 0 only, the plane that SetVidPnSourceAddress programs:
+//  - Check3 approves the full-size plane 0 and nothing else (mpo3_track.h Bc250Mpo3PlaneVerdict), with an allocation
+//    that the scan-out rule admits and the flip gate open. DWM composes every other configuration. Every answer is
+//    counted by verdict, and the first BC250_WDDM_MPO3_LOG_CALLS are logged with the request.
+//  - The flip maps an enabled plane 0 onto the transaction of SetVidPnSourceAddress (WddmFlipEntry). A disabled plane 0
+//    or no plane at all changes no surface: the request is complete on the return of the DDI, and its PresentId is
+//    reported when the plane shows the surface it already has (Bc250Mpo3Kept). The VSync report of the mode is
+//    WddmMpo3Notify.
+//  - PostMultiPlaneOverlayPresent is called only for a plane whose PostPresentNeeded this driver set, and it sets none.
+#define BC250_WDDM_MPO3_LOG_CALLS 32
+
+typedef struct _BC250_WDDM_MPO3_KEEP {
+    BC250_WDDM* Wddm;
+    BOOLEAN Plane;                      // FALSE: PlaneCount 0, no PresentId to report
+    ULONGLONG PresentId;
+} BC250_WDDM_MPO3_KEEP;
+
+static BOOLEAN WddmMpo3KeepLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_MPO3_KEEP* keep = (BC250_WDDM_MPO3_KEEP*)Context;
+    if (keep->Plane) Bc250Mpo3Kept(&keep->Wddm->Mpo3, keep->PresentId);
+    else Bc250Mpo3Enter(&keep->Wddm->Mpo3);
+    return TRUE;
+}
+
+// A request with no new surface, inside L like every write of the tracker. Above DISPATCH_LEVEL the call is dxgmms2's
+// synchronized one (the ...MultiPlaneOverlayAtISR frame of the 0x139 stack, the same path as the high entry of the
+// flip, facts M904), so L is held and the routine runs directly; at or below it, inside one section.
+static NTSTATUS WddmMpo3Keep(_In_ BC250_DEVICE* Device, _In_ BC250_WDDM* Wddm, BOOLEAN Plane, ULONGLONG PresentId)
+{
+    BC250_WDDM_MPO3_KEEP keep;
+    NTSTATUS section;
+
+    keep.Wddm = Wddm;
+    keep.Plane = Plane;
+    keep.PresentId = PresentId;
+    if (KeGetCurrentIrql() > DISPATCH_LEVEL) { (void)WddmMpo3KeepLocked(&keep); return STATUS_SUCCESS; }
+    section = WddmSection(Device, WddmMpo3KeepLocked, &keep);
+    if (!NT_SUCCESS(section)) InterlockedIncrement(&Wddm->LowSyncFailed);
+    return section;
+}
+
+static void WddmMpo3Rect(_In_ const RECT* From, _Out_ BC250_MPO3_RECT* To)
+{
+    To->Left = From->left;
+    To->Top = From->top;
+    To->Right = From->right;
+    To->Bottom = From->bottom;
+}
+
+// The facts of one plane for Bc250Mpo3PlaneVerdict, against the committed source mode. Post is the post-composition
+// of source 0, NULL for none.
+static void WddmMpo3PlaneOf(_In_ BC250_DEVICE* Device, UINT PlaneCount, UINT SourceId, UINT LayerIndex,
+                            _In_ const DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES3* A,
+                            _In_opt_ const DXGK_MULTIPLANE_OVERLAY_POST_COMPOSITION* Post, _Out_ BC250_MPO3_PLANE* P)
+{
+    RtlZeroMemory(P, sizeof(*P));
+    P->PlaneCount = PlaneCount;
+    P->SourceId = SourceId;
+    P->LayerIndex = LayerIndex;
+    WddmMpo3Rect(&A->SrcRect, &P->Src);
+    WddmMpo3Rect(&A->DstRect, &P->Dst);
+    WddmMpo3Rect(&A->ClipRect, &P->Clip);
+    P->Rotation = (unsigned)A->Rotation;
+    P->Flags = A->Flags.Value;
+    P->AlphaBlend = A->Blend.AlphaBlend ? 1u : 0u;
+    P->ColorSpace = (unsigned)A->ColorSpaceType;
+    if (Post != NULL) {
+        P->PostPresent = 1u;
+        P->PostFlags = Post->Flags.Value;
+        P->PostRotation = (unsigned)Post->Rotation;
+        WddmMpo3Rect(&Post->SrcRect, &P->PostSrc);
+        WddmMpo3Rect(&Post->DstRect, &P->PostDst);
+    }
+    P->ModeWidth = DisplaySourceWidth(Device);
+    P->ModeHeight = DisplaySourceHeight(Device);
+}
+
+// The scan-out rule for an allocation of a Check, before it has an address: the description of the transaction
+// (WddmFlipTransaction), which admits the flip again with its address and segment.
+static int WddmMpo3Admit(_In_ BC250_DEVICE* Device, _In_ const BC250_WDDM* Wddm, _In_opt_ HANDLE hAllocation,
+                         _Out_ BC250_SCANOUT_CANDIDATE* Candidate)
+{
+    BC250_WDDM_OBJECT* allocation = hAllocation ? WddmObject(hAllocation, BC250_WDDM_MAGIC_ALLOCATION) : NULL;
+    ULONG pitch = 0;
+    ULONGLONG bytes = 0;
+
+    RtlZeroMemory(Candidate, sizeof(*Candidate));
+    if (allocation == NULL) return BC250_SCANOUT_NO_ALLOCATION;
+    Candidate->UmdAlloc = allocation->UmdAlloc ? 1 : 0;
+    Candidate->ScanoutRequested = allocation->ScanoutRequested ? 1 : 0;
+    Candidate->Width = allocation->UmdAlloc ? allocation->ScanoutWidth : allocation->Allocation.Width;
+    Candidate->Height = allocation->UmdAlloc ? allocation->ScanoutHeight : allocation->Allocation.Height;
+    Candidate->Pitch = allocation->UmdAlloc ? allocation->ScanoutPitch : allocation->Allocation.Pitch;
+    Candidate->Format = allocation->UmdAlloc ? allocation->ScanoutFormat : allocation->Allocation.Format;
+    Candidate->Size = allocation->UmdAlloc ? allocation->UmdBytes : allocation->Allocation.Size;
+    Candidate->Segment = BC250_WDDM_SEGMENT_VRAM;
+    Candidate->Address = 0;
+    if (Candidate->ScanoutRequested && !Wddm->ScanoutAdmitGate) return BC250_SCANOUT_GATED;
+    return Bc250ScanoutAdmit(Candidate, DisplaySourceWidth(Device), DisplaySourceHeight(Device),
+                             BC250_WDDM_SEGMENT_VRAM, &pitch, &bytes);
+}
+
+static DXGKDDI_CHECKMULTIPLANEOVERLAYSUPPORT3 Bc250WddmCheckMultiPlaneOverlaySupport3;
+static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport3(_In_ const HANDLE hAdapter,
+                                                        _Inout_ DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3* pCheck)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+    const DXGK_MULTIPLANE_OVERLAY_PLANE_WITH_SOURCE2* p = NULL;
+    const DXGK_MULTIPLANE_OVERLAY_POST_COMPOSITION* post = NULL;
+    BC250_SCANOUT_CANDIDATE candidate;
+    BC250_MPO3_PLANE plane;
+    unsigned verdict = BC250_MPO3_COUNT;
+    int scanout = BC250_SCANOUT_NO_ALLOCATION;
+    LONG note;
+    UINT i;
+
+    pCheck->Supported = FALSE;
+    pCheck->ReturnInfo.Value = 0;
+    if (wddm == NULL) return STATUS_DEVICE_NOT_READY;
+    RtlZeroMemory(&candidate, sizeof(candidate));
+    RtlZeroMemory(&plane, sizeof(plane));
+    for (i = 0; pCheck->ppPostComposition != NULL && i < pCheck->PostCompositionCount; i++)
+        if (pCheck->ppPostComposition[i] != NULL && pCheck->ppPostComposition[i]->VidPnSourceId == 0) {
+            post = &pCheck->ppPostComposition[i]->PostComposition;
+            break;
+        }
+    if (pCheck->PlaneCount != 0 && pCheck->ppPlanes != NULL && pCheck->ppPlanes[0] != NULL) {
+        p = pCheck->ppPlanes[0];
+        WddmMpo3PlaneOf(device, pCheck->PlaneCount, p->VidPnSourceId, p->LayerIndex, &p->PlaneAttributes, post, &plane);
+        verdict = Bc250Mpo3PlaneVerdict(&plane);
+        // The scan-out rule after the geometry, and the gate last: a refused count or rectangle says more.
+        if (verdict == BC250_MPO3_OK) {
+            scanout = WddmMpo3Admit(device, wddm, p->hAllocation, &candidate);
+            if (scanout != BC250_SCANOUT_ADMIT_OK) verdict = BC250_MPO3_SCANOUT;
+            else if (!device->VidPnFlipEnabled) verdict = BC250_MPO3_GATE;
+        }
+    }
+    InterlockedIncrement(&wddm->Mpo3Checks[verdict]);
+    pCheck->Supported = verdict == BC250_MPO3_OK ? TRUE : FALSE;
+    // FailingPlane is the first plane this adapter cannot take: the second one when only the count refused.
+    if (!pCheck->Supported) pCheck->ReturnInfo.FailingPlane = verdict == BC250_MPO3_COUNT && pCheck->PlaneCount > 1 ? 1u : 0u;
+    note = InterlockedIncrement(&wddm->Mpo3Notes);
+    if (note <= BC250_WDDM_MPO3_LOG_CALLS) {
+        // Three lines: one with every field is wider than BC250_LOG_TEXT (guardlog-width).
+        GuardLog("wddm: MPO3 check %ld n %u post %u src %u layer %u rot %u flags 0x%X color %u", note,
+                 pCheck->PlaneCount, pCheck->PostCompositionCount, plane.SourceId, plane.LayerIndex, plane.Rotation,
+                 plane.Flags, plane.ColorSpace);
+        GuardLog("wddm: MPO3 check %ld src %ld,%ld,%ld,%ld dst %ld,%ld,%ld,%ld", note,
+                 plane.Src.Left, plane.Src.Top, plane.Src.Right, plane.Src.Bottom, plane.Dst.Left, plane.Dst.Top,
+                 plane.Dst.Right, plane.Dst.Bottom);
+        GuardLog("wddm: MPO3 check %ld clip %ld,%ld,%ld,%ld -> %s/%s", note, plane.Clip.Left, plane.Clip.Top,
+                 plane.Clip.Right, plane.Clip.Bottom, Bc250Mpo3VerdictText(verdict), Bc250ScanoutStatusText(scanout));
+    }
+    return STATUS_SUCCESS;
+}
+
+static DXGKDDI_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY3 Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3;
+static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const HANDLE hAdapter,
+    _Inout_ DXGKARG_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY3* pSet)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+    DXGK_MULTIPLANE_OVERLAY_PLANE3* plane = NULL;
+    const DXGK_PRIMARYCONTEXTDATA* data;
+    DXGKARG_SETVIDPNSOURCEADDRESS flip;
+    BC250_MPO3_PLANE facts;
+    unsigned verdict;
+    NTSTATUS status;
+    UINT i;
+
+    if (pSet->VidPnSourceId != 0) return STATUS_INVALID_PARAMETER;
+    if (wddm == NULL) return STATUS_DEVICE_NOT_READY;
+    pSet->OutputFlags.Value = 0;
+    if (pSet->PlaneCount != 0 && pSet->ppPlanes == NULL) { InterlockedIncrement(&wddm->Mpo3Refused); return STATUS_INVALID_PARAMETER; }
+    // Plane 0 is layer 0. A plane of another layer was never approved: a disabled one asks for nothing and is
+    // complete on return, an enabled one is data this adapter cannot show (STATUS_INVALID_PARAMETER, the contract's
+    // answer for a request the driver cannot process).
+    for (i = 0; i < pSet->PlaneCount; i++) {
+        DXGK_MULTIPLANE_OVERLAY_PLANE3* p = pSet->ppPlanes[i];
+        if (p == NULL) { InterlockedIncrement(&wddm->Mpo3Refused); return STATUS_INVALID_PARAMETER; }
+        p->OutputFlags.Value = 0;
+        if (p->LayerIndex == 0 && plane == NULL) { plane = p; continue; }
+        if (p->InputFlags.Enabled) { InterlockedIncrement(&wddm->Mpo3Refused); return STATUS_INVALID_PARAMETER; }
+        if (!p->InputFlags.FlipImmediate) { p->OutputFlags.FlipConvertedToImmediate = 1; InterlockedIncrement(&wddm->Mpo3Converted); }
+    }
+    if (plane == NULL) {
+        // No plane 0 in the request: the plane keeps its surface, and there is no PresentId to report.
+        InterlockedIncrement(&wddm->Mpo3Empty);
+        return WddmMpo3Keep(device, wddm, FALSE, 0);
+    }
+    if (!plane->InputFlags.Enabled || plane->ContextCount == 0 || plane->ppContextData == NULL ||
+        plane->ppContextData[0] == NULL)
+    {
+        // The disable-planes flip, or an enabled plane with no surface: nothing to program. The plane keeps what it
+        // shows, so the request is complete now; a next-VSync one is answered as converted to immediate
+        // (DXGK_PLANE_SPECIFIC_OUTPUT_FLAGS), and the reports name its PresentId from now on.
+        InterlockedIncrement(&wddm->Mpo3Kept);
+        if (!plane->InputFlags.FlipImmediate) { plane->OutputFlags.FlipConvertedToImmediate = 1; InterlockedIncrement(&wddm->Mpo3Converted); }
+        return WddmMpo3Keep(device, wddm, TRUE, plane->PresentId);
+    }
+    // The flip programs the full surface whatever the rectangles say, as SetVidPnSourceAddress does: a geometry that
+    // Check would refuse is counted by verdict and the first one is kept for the summary, not refused, because this
+    // call may be the OS's own flip of the desktop (it can come without any Check) and a refusal of it has no
+    // recovery here.
+    WddmMpo3PlaneOf(device, 1, 0, 0, &plane->PlaneAttributes, pSet->pPostComposition, &facts);
+    verdict = Bc250Mpo3PlaneVerdict(&facts);
+    InterlockedIncrement(&wddm->Mpo3FlipVerdicts[verdict]);
+    if (verdict != BC250_MPO3_OK && InterlockedCompareExchange(&wddm->Mpo3FlipOddTaken, 1, 0) == 0)
+        wddm->Mpo3FlipOdd = facts;
+    data = plane->ppContextData[0];
+    RtlZeroMemory(&flip, sizeof(flip));
+    flip.VidPnSourceId = 0;
+    flip.hAllocation = data->hAllocation;
+    flip.PrimarySegment = data->SegmentId;
+    flip.PrimaryAddress = data->SegmentAddress;
+    flip.ContextCount = plane->ContextCount < RTL_NUMBER_OF(flip.Context) ? plane->ContextCount : RTL_NUMBER_OF(flip.Context);
+    for (i = 0; i < flip.ContextCount; i++)
+        flip.Context[i] = plane->ppContextData[i] != NULL ? plane->ppContextData[i]->hContext : NULL;
+    // FlipImmediateNoTearing (2.6) asks for no tear, which only the next VSync gives here.
+    flip.Flags.FlipImmediate = plane->InputFlags.FlipImmediate ? 1 : 0;
+    flip.Flags.FlipOnNextVSync = plane->InputFlags.FlipImmediate ? 0 : 1;
+    flip.Flags.SharedPrimaryTransition = plane->InputFlags.SharedPrimaryTransition ? 1 : 0;
+    flip.Flags.IndependentFlipExclusive = plane->InputFlags.IndependentFlipExclusive ? 1 : 0;
+    flip.Duration = pSet->Duration;
+    InterlockedIncrement(&wddm->Mpo3Flips);
+    status = WddmFlipEntry(hAdapter, &flip, NULL, TRUE, plane->PresentId);
+    // A writer owns the pipe (the deposit edges): the transaction refuses the flip with STATUS_DEVICE_BUSY, as for
+    // SetVidPnSourceAddress. That code is outside the return set of this DDI (d3dkmddi.md, STATUS_SUCCESS,
+    // STATUS_INVALID_PARAMETER, STATUS_RETRY). STATUS_RETRY is its answer for a request that the driver could not
+    // queue because of pending work. PrePresentNeeded stays clear: a later call at the same IRQL can take the flip.
+    if (status == STATUS_DEVICE_BUSY) { InterlockedIncrement(&wddm->Mpo3Retries); status = STATUS_RETRY; }
+    if (!NT_SUCCESS(status)) InterlockedIncrement(&wddm->Mpo3Failed);
+    return status;
+}
+
+static DXGKDDI_POSTMULTIPLANEOVERLAYPRESENT Bc250WddmPostMultiPlaneOverlayPresent;
+static NTSTATUS Bc250WddmPostMultiPlaneOverlayPresent(_In_ const HANDLE hAdapter,
+                                                      _In_ const DXGKARG_POSTMULTIPLANEOVERLAYPRESENT* pPost)
+{
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+    LONG note;
+
+    if (wddm == NULL) return STATUS_DEVICE_NOT_READY;
+    InterlockedIncrement(&wddm->Mpo3PostPresents);
+    note = InterlockedIncrement(&wddm->Mpo3Notes);
+    (void)pPost;                        // read by the log line only, which the host fixture does not evaluate
+    if (note <= BC250_WDDM_MPO3_LOG_CALLS)
+        GuardLog("wddm: MPO3 post-present target %u layer %lu id %llu (this driver asks for none)",
+                 (ULONG)pPost->VidPnTargetId, (ULONG)pPost->LayerIndex, pPost->PresentID);
+    return STATUS_SUCCESS;
 }
 
 // ---- interrupts ---------------------------------------------------------------------------------------------------
@@ -11887,13 +12290,13 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay2(_In_ const 
     flip.Flags = pSet->Flags;
     flip.Duration = pSet->Duration;
     // No allocation: the plane keeps its surface and its shape, as for SetVidPnSourceAddress.
-    if (p->hAllocation == NULL) return WddmFlipEntry(hAdapter, &flip, NULL);
+    if (p->hAllocation == NULL) return WddmFlipEntry(hAdapter, &flip, NULL, FALSE, 0);
     WddmPlaneRequestOf(device, wddm, 1, 0, TRUE, p->hAllocation, &p->PlaneAttributes, &r, &scanout);
     verdict = Bc250PlanePrepare(&r, &plan);
     if (verdict == BC250_PLANE_OK && scanout != BC250_SCANOUT_ADMIT_OK) verdict = BC250_PLANE_SCANOUT;
     if (verdict != BC250_PLANE_OK) goto refused;
     // A plane of the source mode's own size at its origin is the full-size flip of today.
-    if (plan.Identity) return WddmFlipEntry(hAdapter, &flip, NULL);
+    if (plan.Identity) return WddmFlipEntry(hAdapter, &flip, NULL, FALSE, 0);
     if (!DcnPlaneApproved(device, &plan.Scaler, r.SurfacePitch)) {
         InterlockedIncrement(&wddm->PlaneSetsUnapproved);
         verdict = BC250_PLANE_DML;
@@ -11901,7 +12304,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay2(_In_ const 
     }
     shape = plan.Scaler;
     InterlockedIncrement(&wddm->PlaneSetsScaled);
-    return WddmFlipEntry(hAdapter, &flip, &shape);
+    return WddmFlipEntry(hAdapter, &flip, &shape, FALSE, 0);
 refused:
     InterlockedIncrement(&wddm->PlaneSetsRefused);
     // GuardLog drops a line above DISPATCH_LEVEL, so only the low entry logs.
@@ -11934,6 +12337,13 @@ C_ASSERT(sizeof(DRIVER_INITIALIZATION_DATA) ==
 // GetChildContainerId is a WDDM 1.2 member and this table fills it (step 4 of DP audio), so it has to sit before
 // that tail, or WddmCheckReserved would report it as a member of a version this driver does not declare.
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetChildContainerId) < BC250_WDDM_TABLE_TAIL_START);
+// UpdateMonitorLinkInfo and the three MPO3 members (BD-307) are the tail members this table fills (stage B4);
+// WddmCheckReserved names them as the exceptions.
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiUpdateMonitorLinkInfo) >= BC250_WDDM_TABLE_TAIL_START);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiCheckMultiPlaneOverlaySupport3) >= BC250_WDDM_TABLE_TAIL_START);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3) >=
+         BC250_WDDM_TABLE_TAIL_START);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiPostMultiPlaneOverlayPresent) >= BC250_WDDM_TABLE_TAIL_START);
 // Swizzling ranges are gone from WDDM, so the two DDIs must stay NULL and the cap must stay 0; the pair is here so
 // that the connection is visible where the table is built.
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiReleaseSwizzlingRange) >
@@ -11972,9 +12382,16 @@ static void WddmCheckReserved(_In_ const DRIVER_INITIALIZATION_DATA* Data)
     for (i = 0; i < RTL_NUMBER_OF(reserved); i++)
         if (*(PVOID* const*)((const UCHAR*)Data + reserved[i].Offset) != NULL)
             GuardLog("wddm: table member %s must be zero and is not", reserved[i].Name);
-    // ADR 0019 B1: every WDDM 2.1-3.1 member stays NULL while WDDMVersion is 2.0 (see the asserts above).
+    // ADR 0019 B1/B4: every WDDM 2.1-3.1 member stays NULL except UpdateMonitorLinkInfo (a 2.1 member that dxgkrnl
+    // requires from WDDMVersion 2.4, see Bc250UpdateMonitorLinkInfo) and the MPO3 trio (2.1 members that dxgkrnl
+    // calls from WDDMVersion 2.1 without testing them first: the 0x139 of BD-307). Every other member is optional
+    // only as far as the load reading and the lab runs show; a NULL member is not proof that dxgkrnl tests it.
     for (offset = BC250_WDDM_TABLE_TAIL_START; offset < sizeof(*Data); offset += sizeof(PVOID))
-        if (*(PVOID const*)((const UCHAR*)Data + offset) != NULL)
+        if (offset != FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiUpdateMonitorLinkInfo) &&
+            offset != FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiCheckMultiPlaneOverlaySupport3) &&
+            offset != FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3) &&
+            offset != FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiPostMultiPlaneOverlayPresent) &&
+            *(PVOID const*)((const UCHAR*)Data + offset) != NULL)
             GuardLog("wddm: table member at offset %u (after the WDDM 2.0 block) must be NULL and is not", (ULONG)offset);
 }
 
@@ -11989,7 +12406,8 @@ typedef enum _BC250_WDDM_TRACED {
     TracedQueryChildRelations = 0, TracedQueryChildStatus, TracedQueryDeviceDescriptor, TracedGetChildContainerId,
     TracedIsSupportedVidPn,
     TracedRecommendFunctionalVidPn, TracedEnumVidPnCofuncModality, TracedSetVidPnSourceVisibility, TracedCommitVidPn,
-    TracedUpdateActiveVidPnPresentPath, TracedRecommendMonitorModes, TracedQueryVidPnHWCapability, TracedCount
+    TracedUpdateActiveVidPnPresentPath, TracedRecommendMonitorModes, TracedQueryVidPnHWCapability,
+    TracedUpdateMonitorLinkInfo, TracedCount
 } BC250_WDDM_TRACED;
 
 static volatile LONG g_TracedCalls[TracedCount];
@@ -12055,11 +12473,36 @@ BC250_WDDM_TRACED_DDI(DXGKDDI_UPDATEACTIVEVIDPNPRESENTPATH, UpdateActiveVidPnPre
 BC250_WDDM_TRACED_DDI(DXGKDDI_RECOMMENDMONITORMODES, RecommendMonitorModes, const DXGKARG_RECOMMENDMONITORMODES* const)
 BC250_WDDM_TRACED_DDI(DXGKDDI_QUERYVIDPNHWCAPABILITY, QueryVidPnHWCapability, DXGKARG_QUERYVIDPNHWCAPABILITY*)
 
+// The link capabilities of the monitor on our one target, which dxgkrnl asks for after RecommendMonitorModes
+// (d3dkmddi.h DXGKDDI_UPDATEMONITORLINKINFO, a WDDM 2.1 member). This DDI is necessary from WDDMVersion 2.4: when
+// the table has no pointer, dxgkrnl calls its own default, which returns STATUS_NOT_SUPPORTED, and
+// DXGMONITOR::_UpdateLinkInfo keeps that status as the result of the monitor arrival when the D3DKMT driver version
+// is 2400 or more. Below 2400 it changes the status to success. dxgkrnl 22621.6199 (cold path 0x1c02a4728..4786)
+// and 26100.9549 (0x140290c21, 0x140290ebf) do the same. With no pointer, a 2.9 adapter fails StartDevice with
+// 0xC00000BB (lab arm 1 of 352c4210, scratch t38/wddm-b4/lab-run1).
+// The answer claims no capability: no stereo, no wide or high colour space, no dynamic wire format, no HDR10+, no
+// Dolby Vision and no variable refresh on the 8-bit SDR route of today, and no dithering per wire format.
+// dxgkrnl refuses a capability bit that the level does not define (0xC0000001), so zero is accepted at every
+// level. The HDR route sets its bits here when it has them.
+static DXGKDDI_UPDATEMONITORLINKINFO Bc250UpdateMonitorLinkInfo;
+static NTSTATUS Bc250UpdateMonitorLinkInfo(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_UPDATEMONITORLINKINFO* pArgs)
+{
+    UNREFERENCED_PARAMETER(hAdapter);
+    if (pArgs == NULL) return STATUS_INVALID_PARAMETER;
+    if (pArgs->VideoPresentTargetId != BC250_CHILD_UID) return STATUS_INVALID_PARAMETER;
+    // UsageHints is the input; the two output members are written in full.
+    pArgs->MonitorLinkInfo.Capabilities.Value = 0;
+    RtlZeroMemory(&pArgs->MonitorLinkInfo.DitheringSupport, sizeof(pArgs->MonitorLinkInfo.DitheringSupport));
+    return STATUS_SUCCESS;
+}
+
+BC250_WDDM_TRACED_DDI(DXGKDDI_UPDATEMONITORLINKINFO, UpdateMonitorLinkInfo, DXGKARG_UPDATEMONITORLINKINFO*)
+
 void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
 {
     RtlZeroMemory(Data, sizeof(*Data));
     // ADR 0019 B1: the table version is the compiled interface version (bc250kmd.h says why 2.9); the WDDM
-    // feature level is DXGK_DRIVERCAPS.WDDMVersion, which stays 2.0 until stage B4.
+    // feature level is DXGK_DRIVERCAPS.WDDMVersion, 2.9 since stage B4 (WddmDriverCaps).
     Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_9;
 
     // The 28 pointers the display-only table already has; since 0.7.6 the child and VidPN ones go through the
@@ -12094,6 +12537,8 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiUpdateActiveVidPnPresentPath = Bc250WddmTracedUpdateActiveVidPnPresentPath;
     Data->DxgkDdiRecommendMonitorModes = Bc250WddmTracedRecommendMonitorModes;
     Data->DxgkDdiQueryVidPnHWCapability = Bc250WddmTracedQueryVidPnHWCapability;
+    // WDDM 2.1 member, required from WDDMVersion 2.4 (Bc250UpdateMonitorLinkInfo says why).
+    Data->DxgkDdiUpdateMonitorLinkInfo = Bc250WddmTracedUpdateMonitorLinkInfo;
     Data->DxgkDdiSystemDisplayEnable = Bc250SystemDisplayEnable;
     Data->DxgkDdiSystemDisplayWrite = Bc250SystemDisplayWrite;
 
@@ -12153,16 +12598,35 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiCheckMultiPlaneOverlaySupport2 = Bc250WddmCheckMultiPlaneOverlaySupport2;
     Data->DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay2 = Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay2;
 #endif
+#if BC250_WDDM_REPORTED_LEVEL >= 0x2100
+    // BD-307: from WDDMVersion 2.1 the graphics kernel flips plane 0 through the MPO3 DDI, also without the MPO cap,
+    // and does not test the member first (0x139/0xA in the CddDisable path, 2026-11-05). Plane 0 only; see the block
+    // above Bc250WddmCheckMultiPlaneOverlaySupport3. tools/wddm_contract_check rule R47 holds the three together.
+    Data->DxgkDdiCheckMultiPlaneOverlaySupport3 = Bc250WddmCheckMultiPlaneOverlaySupport3;
+    Data->DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3 = Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3;
+    Data->DxgkDdiPostMultiPlaneOverlayPresent = Bc250WddmPostMultiPlaneOverlayPresent;
+#else
+    // A WDDMVersion 2.0 image: dxgkrnl reads no 2.1 member. The three stay compiled, and are used here only so that
+    // an unused static function does not stop the build.
+    (void)Bc250WddmCheckMultiPlaneOverlaySupport3;
+    (void)Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3;
+    (void)Bc250WddmPostMultiPlaneOverlayPresent;
+#endif
 
     // Left NULL on purpose: Patch and Render (physical addressing only), QueryCurrentFence, RecommendVidPnTopology,
-    // StopCapture, every overlay and multi-plane member (in the release flavour; BD-223 sets two in the lab one), LinkDevice, SetDisplayPrivateDriverFormat,
+    // StopCapture, every overlay and multi-plane member but the MPO3 trio above (in the release flavour; BD-223 sets
+    // the two MPO2 members in the lab one), LinkDevice, SetDisplayPrivateDriverFormat,
     // ControlInterrupt2 (WDDM 2.1+), CancelCommand (CancelCommandAware = 0), MapCpuHostAperture and
     // UnmapCpuHostAperture (no host aperture), SetVideoProtectedRegion, and everything the 2.1-3.1 headers append
     // after SetStablePowerState: the hardware-queue and hardware-scheduling DDIs (no HWS), the native-fence and
     // doorbell DDIs (no native fence, no user-mode submission), the flip-queue DDIs, SetTargetGamma and
     // SetTargetAdjustedColorimetry (not before stage B4), and the diagnostic DDIs, which dxgkrnl requires in
     // pairs (QueryDiagnosticTypesSupport with ControlDiagnosticReporting, from WDDMVersion 2.4). The interface
-    // version alone obliges none of them; WDDMVersion stays 2.0 (ADR 0019 B1). QueryInterface, ControlEtwLogging,
+    // version alone obliges none of them. WDDMVersion 2.4 and higher obliges one tail member that the static load
+    // reading did not find, because dxgkrnl tests it at monitor arrival and not at load: UpdateMonitorLinkInfo,
+    // which the table fills above (lab arm 1 of 352c4210 failed StartDevice without it). The WHCP requirements are a
+    // separate list (BD-307).
+    // QueryInterface, ControlEtwLogging,
     // NotifyAcpiEvent, SetPalette, NotifySurpriseRemoval, SetPowerComponentFState,
     // PowerRuntimeControlRequest and PowerRuntimeSetDeviceHandle stay NULL exactly as they are in the
     // display-only table today. ControlInterrupt, GetScanLine and GetChildContainerId are **not** in this list

@@ -722,6 +722,9 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='flip-state';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   # Its deadline is 600 s in gate-inputs.json: 22 s to 92.3 s on 2026-10-28, half of the old 180 s under load.
   @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
+  # BD-307: the PresentId of plane 0 for the MPO3 flip DDI and the plane rule of its Check, with 13 controls.
+  @{n='mpo3-track';s='driver\kmd\test\run_mpo3_track.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  @{n='mpo3-track-controls';s='driver\kmd\test\run_mpo3_track.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
   @{n='display-rotation';s='driver\kmd\test\run_display_rotation.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='display-rotation-controls';s='driver\kmd\test\run_display_rotation.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
   @{n='dcn-cursor';s='driver\kmd\test\run_dcn_cursor.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
