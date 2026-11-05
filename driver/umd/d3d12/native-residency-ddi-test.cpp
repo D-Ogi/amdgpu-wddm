@@ -3,10 +3,26 @@
 #include "device-state.h"
 #include "engine-ddi/engine-ddi.h"
 #include <algorithm>
+#include <atomic>
 #include <cassert>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <new>
 #include <vector>
+// BD-312: allocation failures inside the offer and reclaim slots. While fail_after is not negative, the allocation
+// after fail_after more allocations throws std::bad_alloc, once. news counts every allocation of this test program.
+namespace alloc_fault {std::atomic<long> fail_after{-1};std::atomic<unsigned> news{0};}
+_Ret_notnull_ _Post_writable_byte_size_(size) void* operator new(std::size_t size){
+ alloc_fault::news.fetch_add(1);
+ const long left=alloc_fault::fail_after.load();
+ if(left==0){alloc_fault::fail_after.store(-1);throw std::bad_alloc();}
+ if(left>0)alloc_fault::fail_after.store(left-1);
+ if(void* p=std::malloc(size?size:1))return p;
+ throw std::bad_alloc();
+}
+void operator delete(void* p) noexcept{std::free(p);}
+void operator delete(void* p,std::size_t) noexcept{std::free(p);}
 namespace {
 struct Fixture {native12::Device device;unsigned resolved{},makes{},evicts{},errors{};unsigned expected_resolved{};HRESULT status{S_OK};UINT64 fence{42};
  // BD-052: what the heap imports were told, and the allocation list of the last notice.
@@ -60,10 +76,30 @@ struct Kernel {
  std::vector<D3DKMT_HANDLE> discard;                      // discarded on reclaim
  std::vector<D3DKMT_HANDLE> last;                         // the list of the last callback
  unsigned offers{},reclaims{},errors{},bad{};
+ unsigned remove_at{0};                                   // the offer callback with this number reports a removed device
  D3DDDI_OFFER_PRIORITY priority{};
  HRESULT offer_status{S_OK},reclaim_status{S_OK};UINT64 reclaim_fence{0};
+ // Allocations of a measured DDI call: inside the kernel callbacks, and the count when the first callback started.
+ unsigned in_callbacks{};long first_callback{-1};
  bool contains(D3DKMT_HANDLE a) const {return std::find(held.begin(),held.end(),a)!=held.end();}
 };
+// The model's own allocations are no failure point of the driver: a callback turns the fault off and counts them apart.
+class InCallback final {
+ Kernel& k_;unsigned start_;
+public:
+ explicit InCallback(Kernel& k):k_(k),start_(alloc_fault::news.load()){
+  alloc_fault::fail_after.store(-1);if(k_.first_callback<0)k_.first_callback=static_cast<long>(start_);}
+ ~InCallback(){k_.in_callbacks+=alloc_fault::news.load()-start_;}
+ InCallback(const InCallback&)=delete;InCallback& operator=(const InCallback&)=delete;
+};
+void measure(Kernel& k,long fail_after=-1){k.in_callbacks=0;k.first_callback=-1;alloc_fault::news.store(0);alloc_fault::fail_after.store(fail_after);}
+// The driver's allocations of the measured call after its first kernel callback. An allocation there could fail
+// after the kernel took an offer, and the driver would lose the record of it.
+long after_first_callback(const Kernel& k){
+ alloc_fault::fail_after.store(-1);
+ const long driver=static_cast<long>(alloc_fault::news.load()-k.in_callbacks);
+ return k.first_callback<0 ? 0 : driver-k.first_callback;
+}
 Kernel* kernel=nullptr;
 constexpr D3DKMT_HANDLE kLocked=11;
 const D3D12DDI_HRTPAGINGQUEUE kQueue{reinterpret_cast<HANDLE>(UINT64_C(0x100004321))};
@@ -79,8 +115,9 @@ HRESULT resolve(void*,D3D12DDI_HANDLE_AND_TYPE object,D3DKMT_HANDLE* allocation)
  }
 }
 HRESULT APIENTRY offer(D3D12DDI_HRTDEVICE rt,const D3D12DDICB_OFFERALLOCATIONS* args){
- auto k=static_cast<Kernel*>(rt.handle);++k->offers;k->priority=args->Priority;
+ auto k=static_cast<Kernel*>(rt.handle);InCallback counted(*k);++k->offers;k->priority=args->Priority;
  k->last.assign(args->HandleList,args->HandleList+args->NumAllocations);
+ if(k->remove_at && k->offers==k->remove_at)return D3DDDIERR_DEVICEREMOVED;
  if(k->offer_status!=S_OK)return k->offer_status;
  for(UINT i=0;i<args->NumAllocations;++i){
   if(args->HandleList[i]==kLocked)return E_INVALIDARG;
@@ -90,7 +127,7 @@ HRESULT APIENTRY offer(D3D12DDI_HRTDEVICE rt,const D3D12DDICB_OFFERALLOCATIONS* 
  return S_OK;
 }
 HRESULT APIENTRY reclaim(D3D12DDI_HRTDEVICE rt,D3D12DDI_HRTPAGINGQUEUE queue,D3D12DDICB_RECLAIMALLOCATIONS2* args){
- auto k=static_cast<Kernel*>(rt.handle);++k->reclaims;
+ auto k=static_cast<Kernel*>(rt.handle);InCallback counted(*k);++k->reclaims;
  k->last.assign(args->HandleList,args->HandleList+args->NumAllocations);
  if(!args->pDiscarded){++k->bad;return E_INVALIDARG;}
  if(queue.handle!=kQueue.handle)++k->bad;
@@ -122,8 +159,90 @@ HRESULT offer_objects(Kernel& k,std::vector<D3D12DDI_HANDLE_AND_TYPE> objects,D3
  return native12::native_residency_offer(k.device,&args,resolve,nullptr);
 }
 std::vector<D3DKMT_HANDLE> offered(Kernel& k){return k.device.offered;}
+// The cases below have functions of their own: each Kernel model holds a Device, and in run() they pass the
+// /analyze stack limit (C6262).
+void removal_in_retry(){
+ using V=std::vector<D3DKMT_HANDLE>;
+ // A removed device in the middle of the per-allocation retry: the batch {7,9,11} is refused (11 is locked), 7 alone
+ // is taken, the offer of 9 alone reports a removed device. The slot answers D3DDDIERR_DEVICEREMOVED and asks for
+ // nothing more (11 is never offered). What the kernel took stays on the sorted offered list, so the driver's list is
+ // the kernel's, and a later reclaim gives back exactly that.
+ Kernel k;initialize(k);
+ assert(offer_objects(k,{object(12)})==S_OK && offered(k)==V({13}) && k.offers==1);
+ k.remove_at=4;
+ assert(offer_objects(k,{object(10),object(3),object(1)})==D3DDDIERR_DEVICEREMOVED);
+ assert(k.offers==4 && k.last==V({9}) && offered(k)==V({7,13}));
+ auto held=k.held;std::sort(held.begin(),held.end());assert(held==offered(k));
+ std::vector<D3D12DDI_HANDLE_AND_TYPE> objects{object(1),object(3),object(10),object(12)};Reclaim r(objects);
+ assert(native12::native_residency_reclaim(k.device,&r.args,resolve,nullptr)==S_OK);
+ assert(k.last==V({7,13}) && offered(k).empty() && k.held.empty() && !k.bad);
+}
+void reclaim_allocation_failures(){
+ using V=std::vector<D3DKMT_HANDLE>;
+ // Allocation failures. Each allocation that ReclaimResources makes before its kernel callback is a failure point;
+ // a failure there (std::bad_alloc) reclaims nothing and answers E_OUTOFMEMORY, as a kernel E_OUTOFMEMORY does:
+ // the allocations stay offered, the device stays, no wait and no discard go to the runtime, the kernel is not
+ // called. After the callback the slot allocates nothing. A later reclaim takes the allocations.
+ std::vector<D3D12DDI_HANDLE_AND_TYPE> objects{object(1),object(3)};
+ long points=0;
+ {
+  Kernel c;initialize(c);
+  assert(offer_objects(c,{object(1),object(3)})==S_OK);
+  Reclaim r(objects);
+  measure(c);
+  assert(native12::native_residency_reclaim(c.device,&r.args,resolve,nullptr)==S_OK);
+  points=c.first_callback;
+  assert(after_first_callback(c)==0 && c.reclaims==1 && offered(c).empty());
+ }
+ assert(points>=3);                                     // the object map, the reclaim list, the discarded flags
+ Kernel k;initialize(k);
+ assert(offer_objects(k,{object(1),object(3)})==S_OK);
+ for(long n=0;n<points;++n){
+  Reclaim r(objects);
+  measure(k,n);
+  const HRESULT hr=native12::native_residency_reclaim(k.device,&r.args,resolve,nullptr);
+  alloc_fault::fail_after.store(-1);
+  assert(hr==E_OUTOFMEMORY && !k.reclaims && offered(k)==V({7,9}) && !k.device.lost && !k.errors);
+  assert(!r.args.WaitMask && !r.fence && r.discarded==std::vector<BOOL>({FALSE,FALSE}));
+ }
+ Reclaim s(objects);
+ assert(native12::native_residency_reclaim(k.device,&s.args,resolve,nullptr)==S_OK && k.reclaims==1 && offered(k).empty());
+ assert(!k.bad);
+}
+void offer_allocation_failures(){
+ using V=std::vector<D3DKMT_HANDLE>;
+ // The same for OfferResources: a failure before the kernel callback offers nothing and still answers S_OK (an offer
+ // is a permission, never an obligation). On the per-allocation retry the slot allocates nothing after its first
+ // callback, so an allocation the kernel took cannot miss the offered list.
+ long points=0;
+ std::vector<D3D12DDI_HANDLE_AND_TYPE> objects{object(1),object(3)};
+ {
+  Kernel c;initialize(c);
+  D3D12DDIARG_OFFERRESOURCES args{};args.NumObjects=2;args.pObjects=objects.data();args.Priority=D3DDDI_OFFER_PRIORITY_NORMAL;
+  measure(c);
+  assert(native12::native_residency_offer(c.device,&args,resolve,nullptr)==S_OK);
+  points=c.first_callback;
+  assert(after_first_callback(c)==0 && c.offers==1 && offered(c)==V({7,9}));
+ }
+ assert(points>=2);                                     // the object map, the room on the offered list
+ Kernel k;initialize(k);
+ for(long n=0;n<points;++n){
+  D3D12DDIARG_OFFERRESOURCES args{};args.NumObjects=2;args.pObjects=objects.data();args.Priority=D3DDDI_OFFER_PRIORITY_NORMAL;
+  measure(k,n);
+  const HRESULT hr=native12::native_residency_offer(k.device,&args,resolve,nullptr);
+  alloc_fault::fail_after.store(-1);
+  assert(hr==S_OK && !k.offers && offered(k).empty() && k.held.empty() && !k.device.lost && !k.errors);
+ }
+ Kernel j;initialize(j);
+ std::vector<D3D12DDI_HANDLE_AND_TYPE> locked{object(10),object(1),object(12)};
+ D3D12DDIARG_OFFERRESOURCES args{};args.NumObjects=3;args.pObjects=locked.data();args.Priority=D3DDDI_OFFER_PRIORITY_NORMAL;
+ measure(j);
+ assert(native12::native_residency_offer(j.device,&args,resolve,nullptr)==S_OK);
+ assert(after_first_callback(j)==0 && j.offers==4 && offered(j)==V({7,13}) && !j.bad);
+}
 void run(){
  using V=std::vector<D3DKMT_HANDLE>;
+ removal_in_retry();reclaim_allocation_failures();offer_allocation_failures();
  {
   // Offer: one callback for the deduplicated, sorted allocations; S_FALSE and refused objects are left out.
   Kernel k;initialize(k);
@@ -182,12 +301,13 @@ void run(){
   assert(!k.bad);
  }
  {
-  // Negative control: any other reclaim failure, and E_PENDING without a fence, leave allocations the application
-  // now uses in an unknown state. The device is removed and the DDI answers D3DDDIERR_DEVICEREMOVED.
-  for(const auto mode:{0,1}){
+  // Negative control: any other reclaim failure, and E_PENDING without a valid fence (0, or UINT64_MAX, which no
+  // paging fence reaches), leave allocations the application now uses in an unknown state. The device is removed
+  // and the DDI answers D3DDDIERR_DEVICEREMOVED; no wait goes to the runtime.
+  for(const auto mode:{0,1,2}){
    Kernel k;initialize(k);
    assert(offer_objects(k,{object(1)})==S_OK);
-   k.reclaim_status=mode?E_PENDING:E_FAIL;k.reclaim_fence=0;
+   k.reclaim_status=mode?E_PENDING:E_FAIL;k.reclaim_fence=mode==2?UINT64_MAX:0;
    std::vector<D3D12DDI_HANDLE_AND_TYPE> objects{object(1)};Reclaim r(objects);
    assert(native12::native_residency_reclaim(k.device,&r.args,resolve,nullptr)==D3DDDIERR_DEVICEREMOVED);
    assert(k.device.lost && k.errors==1 && !r.args.WaitMask && !r.fence && r.discarded[0]==FALSE);
@@ -308,5 +428,5 @@ int main(){
  f.expected_resolved=f.resolved+5;f.status=E_PENDING;f.fence=0;
  assert(table.pfnMakeResident({&f.device},&args)==E_UNEXPECTED && f.device.lost && f.errors==1 && !fence && !args.WaitMask);
  auto calls=f.makes;assert(table.pfnMakeResident({&f.device},&args)==D3DDDIERR_DEVICEREMOVED && f.makes==calls);
- puts("PASS native residency DDI: pre-resolve/deduplicate single callback, real paging token, pending fence/wait mask, empty/internal skips, unknown refusal, typed installer, malformed acceptance removal, BD-052 residency and eviction notices to the heap imports, BD-312 offer/reclaim (batch, per-allocation retry of a locked heap, discarded map, pending fence, OOM keeps the offer, removal on any other failure, missing callbacks, malformed arguments, released allocations)");
+ puts("PASS native residency DDI: pre-resolve/deduplicate single callback, real paging token, pending fence/wait mask, empty/internal skips, unknown refusal, typed installer, malformed acceptance removal, BD-052 residency and eviction notices to the heap imports, BD-312 offer/reclaim (batch, per-allocation retry of a locked heap, discarded map, pending fence, OOM keeps the offer, removal on any other failure or a pending fence 0/UINT64_MAX, removal in the middle of the retry, std::bad_alloc at each allocation of both slots, no allocation after the first kernel callback, missing callbacks, malformed arguments, released allocations)");
 }
