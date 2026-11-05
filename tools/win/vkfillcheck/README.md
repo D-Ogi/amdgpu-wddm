@@ -73,7 +73,7 @@ dword-aligned offset and a dword-multiple size, while a copy has no alignment ru
 destination residues that are not a multiple of four are therefore reached with copies, in the `dst-align`
 and `single-thread` groups.
 
-The cases come in four groups:
+The main groups are:
 
 | Group | Operations | Sizes | Destination offsets | Third axis |
 |---|---|---|---|---|
@@ -81,6 +81,51 @@ The cases come in four groups:
 | `dst-align` | `copy` | 12, 65540 | 0 to 15 | source offset 0, 3 |
 | `single-thread` | `copy` | 1, 2, 3, 5, 7 | 1, 2, 3, 5, 6, 7 | source offset 0, 1 |
 | `whole-size` | `fill` with `VK_WHOLE_SIZE` | 12, 4100 | 0, 4 | tail 1, 2, 3 |
+| `bd290-eom` | `copy-eom` | 13, 6, 255, 1025, 4090, 4091, 4093 | 4 | source ends at the end of its memory |
+
+The `partial-1`, `partial-1-copy-big`, `partial-1-fill`, `bd287-upd` and `bd287-copy` groups (BD-287) are
+described in the source, next to their tables.
+
+A `bd290-eom` case (BD-290) copies from a source that ends at the last byte of its own `VkDeviceMemory`. That
+memory is 2 MiB, the buffer is bound at offset 0 and is as large as the memory, and `srcOffset` is
+`2 MiB - size`. The compute copy shader loads whole threads of `S = dwords_per_thread * 4` bytes (8 up to
+64 KiB) from a window that starts `dst_align_offset` bytes before the copy, so the last thread loads
+`S - (dst_align_offset + size) % S` bytes past the source range, into the page after the memory. `dstOffset` 4
+gives `dst_align_offset` 4, and the sizes give `(4 + size) % 8` = 1, 2, 3, 5, 6, 7 and 1: no size is a
+multiple of the per-thread load. In an ICD with `radv_copy_memory_overread_tail`, CP DMA copies that last
+thread and nothing is loaded past the range.
+
+Two rules of our WDDM stack decide where that page is:
+
+- RADV creates each `VkDeviceMemory` BO with the addrlib maximum alignment (`radv_device_memory.c`), and the
+  winsys rounds the BO size up to it (`radv_wddm2_bo.c`). A 4 KiB memory can therefore be a larger BO, with the
+  next page inside it. 2 MiB is a multiple of every power-of-two alignment up to 2 MiB.
+- When the device has `bufferDeviceAddressCaptureReplay`, the client allocates the memory with
+  `VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT`. RADV makes it a replayable BO, and the winsys maps
+  replayable BOs only in their own VA window, which nothing else of the process uses. The page after the source
+  is then unmapped. The client says `eom placement capture-replay` at start-up, or `eom placement ORDINARY`
+  when the feature is not available.
+
+For each case the client prints an `eom` line with the source range, its last page and the page after it.
+
+A read of an unmapped page does not fail the case. The KMD sets up the VM contexts as amdgpu does
+(`driver/amdgpu-import/gfxhub_v2_0.c`): the load reads the default page, the shader stores only the bytes of
+the range, and the bytes match. The KMD logs the interrupt as `ih: GPU FAULT va 0x...` (`driver/kmd/ih.c`).
+That log line is the witness, and `bd290-fault-witness.ps1` reads it:
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File bd290-fault-witness.ps1 -Exe <vkfillcheck-x64.exe>
+    -Icd <absolute ICD DLL> -Cli <bc250kmd_cli.exe> [-Size 4093] [-OutDir <directory>]
+```
+
+The script reads `bc250kmd_cli log` (and `bc250kmd_cli ih state`, which only a lab-flavour KMD answers) before
+and after one `copy-eom` case. It prints the new `ih: GPU FAULT va` lines by page: the page after the source,
+the last source page, or elsewhere. Exit 1 (`OVERREAD`) is a fault in the page after the source, also when the
+fault stopped the copy and vkfillcheck failed (on unit A the fence can time out, exit 3). Exit 0
+(`NO-OVERREAD`) is no such fault with the capture-replay placement. Exit 4 is inconclusive: an ordinary
+placement, or a log ring that restarted. Exit 3 is a failed vkfillcheck run with no fault in that page. Exit 2
+is a setup error or an error of the script itself, never a verdict. The
+script keeps the logs and the vkfillcheck output in `-OutDir`.
 
 In `core`, 4 is one dword, 12 and 252 are not a multiple of the shader's dwords per thread, 65536 is the
 largest `vkCmdUpdateBuffer`, 65540 is the first size that takes four dwords per thread, and 1048580 needs
@@ -100,8 +145,13 @@ the readback are plain CPU writes and reads, so the case depends on nothing but 
 operation runs and reports a failure there as `stage prefill`. The client skips the 16 cases where the
 operation is `update` and the size is over 65536: `vkCmdUpdateBuffer` takes at most that many bytes.
 
-The full matrix is 880 cases, of which 864 run. It takes 0.6 s on an RTX 4090. `--quick` keeps the first two
-values of each axis of each group, 88 cases, for a smoke run.
+The full matrix is 938 cases, of which 922 run. It takes 0.7 s on an RTX 4090. `--quick` keeps the first two
+values of each axis of each group, 126 cases, for a smoke run. The reference results below are older and
+count the matrix of their date (864 cases run).
+
+The full matrix includes the BD-290 cases. To run one of them alone, give its operation, size and destination
+offset to `--case`, for example `--icd <DLL> --case copy-eom:4093:4`. `--case` keeps one filter, so this
+runs one size against both destination placements.
 
 ## Choosing the ICD
 
