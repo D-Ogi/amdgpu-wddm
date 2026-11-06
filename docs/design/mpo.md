@@ -138,6 +138,10 @@ alpha blend and the sRGB colour space, so no capability bit is true. A stage tha
 the same commit as its check rule. A source other than 0 and a null argument are refused with
 `STATUS_INVALID_PARAMETER`, and a query before a successful start with `STATUS_DEVICE_NOT_READY`.
 
+In the lab flavour only, bit 3 (`STRETCH_CAPS`) of the `LabScaledPlane` selector, together with bit 0, makes
+`DxgkDdiGetMultiPlaneOverlayCaps` answer the stretch caps of the contract header (`StretchRGB`, the two filters,
+16.0 and 4.0) as a lab question. The bit table is in [scaled-flip.md](scaled-flip.md#the-switch).
+
 ### The present
 
 - No MPO DDI carries private driver data. The KMD reads the plane attributes that dxgkrnl gives it

@@ -477,7 +477,8 @@ and the refusals.
 flavour reads it. It is not a catalog setting, so a lab arm can swap the KMD image over the installed package.
 Absent means 0, and the installer does not write it. Bit 0 offers the multiplane-overlay caps
 and the Check answer for one plane 0 that is smaller than the source mode and that DSCL0 scales up. Bit 1 reports
-the VSync as the MPO type. Bit 2 says `MaxOverlayPlanes` 2. The switch is open only while the DirectFlip handshake
+the VSync as the MPO type. Bit 2 says `MaxOverlayPlanes` 2. Bit 3 makes the two caps DDIs answer the stretch caps
+(16.0 and 4.0). The start keeps only these four bits (mask 0xF). The switch is open only while the DirectFlip handshake
 is on. The design is in [scaled-flip.md](../../docs/design/scaled-flip.md). The start log says which way it went:
 
 ```
