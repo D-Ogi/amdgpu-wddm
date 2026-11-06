@@ -199,6 +199,28 @@ typedef struct {
 typedef NTSTATUS DXGKDDI_CHECKMULTIPLANEOVERLAYSUPPORT3(const HANDLE, DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3*);
 typedef NTSTATUS DXGKDDI_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY3(const HANDLE, DXGKARG_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY3*);
 typedef NTSTATUS DXGKDDI_POSTMULTIPLANEOVERLAYPRESENT(const HANDLE, const DXGKARG_POSTMULTIPLANEOVERLAYPRESENT*);
+/* BD-223 (T004): DXGKARG_GETMULTIPLANEOVERLAYCAPS (shared/d3dkmddi.h 10.0.26100, line 6695) and
+ * DXGKARG_GETPOSTCOMPOSITIONCAPS (line 6720), the caps a WDDM 2.2 KMD answers in place of the compositor's
+ * user-mode entries. */
+typedef struct {
+    union {
+        struct {
+            UINT Rotation:1; UINT RotationWithoutIndependentFlip:1; UINT VerticalFlip:1; UINT HorizontalFlip:1;
+            UINT StretchRGB:1; UINT StretchYUV:1; UINT BilinearFilter:1; UINT HighFilter:1;
+            UINT Shared:1; UINT Immediate:1; UINT Plane0ForVirtualModeOnly:1; UINT Reserved:21;
+        };
+        UINT Value;
+    };
+} DXGK_MULTIPLANEOVERLAYCAPS;
+typedef struct {
+    unsigned VidPnSourceId;
+    UINT MaxPlanes, MaxRGBPlanes, MaxYUVPlanes;
+    DXGK_MULTIPLANEOVERLAYCAPS OverlayCaps;
+    float MaxStretchFactor, MaxShrinkFactor;
+} DXGKARG_GETMULTIPLANEOVERLAYCAPS;
+typedef NTSTATUS DXGKDDI_GETMULTIPLANEOVERLAYCAPS(const HANDLE, DXGKARG_GETMULTIPLANEOVERLAYCAPS*);
+typedef struct { unsigned VidPnSourceId; float MaxStretchFactor, MaxShrinkFactor; } DXGKARG_GETPOSTCOMPOSITIONCAPS;
+typedef NTSTATUS DXGKDDI_GETPOSTCOMPOSITIONCAPS(const HANDLE, DXGKARG_GETPOSTCOMPOSITIONCAPS*);
 /* The part of DXGKARG_PRESENT that WddmPresentDmaFlip reads: DXGK_PRESENTFLAGS in the WDK's declaration order
  * (shared/d3dkmddi.h 10.0.26100, Blt 0x1, ColorFill 0x2, Flip 0x4, FlipWithNoWait 0x8), the DMA buffer and its size. */
 typedef struct {
@@ -2533,6 +2555,43 @@ static void Mpo3Checks(void)
     CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_DEVICE_NOT_READY && !c.Supported);
     CHECK(Bc250WddmPostMultiPlaneOverlayPresent(&d,&pres)==STATUS_DEVICE_NOT_READY);
 }
+/* BD-223 (T004): the two caps DDIs answer what the check admits and nothing more. */
+static void MpoCaps(void)
+{
+    BC250_WDDM w;BC250_DEVICE d;
+    DXGKARG_GETMULTIPLANEOVERLAYCAPS c;
+    DXGKARG_GETPOSTCOMPOSITIONCAPS p;
+    unsigned logged;
+
+    Setup(&d,&w,0);
+    memset(&c,0,sizeof(c));
+    memset(&p,0,sizeof(p));
+    logged=logs;
+    /* One plane (the primary), RGB only, no scaling, and no capability bit the check does not admit. */
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_SUCCESS);
+    CHECK(c.MaxPlanes==1 && c.MaxRGBPlanes==1 && c.MaxYUVPlanes==0 && c.OverlayCaps.Value==0);
+    CHECK(c.MaxStretchFactor==1.0f && c.MaxShrinkFactor==1.0f);
+    CHECK(logs==logged+1);
+    /* A second source is not this pipeline, a null answer is no answer, and no adapter state is not ready. */
+    c.VidPnSourceId=1;
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_INVALID_PARAMETER);
+    c.VidPnSourceId=0;
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,NULL)==STATUS_INVALID_PARAMETER);
+    d.Wddm=NULL;
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_DEVICE_NOT_READY);
+    d.Wddm=&w;
+    /* Post-composition: the identity only, so no scaling. */
+    logged=logs;
+    CHECK(Bc250WddmGetPostCompositionCaps(&d,&p)==STATUS_SUCCESS);
+    CHECK(p.MaxStretchFactor==1.0f && p.MaxShrinkFactor==1.0f);
+    CHECK(logs==logged+1);
+    p.VidPnSourceId=2;
+    CHECK(Bc250WddmGetPostCompositionCaps(&d,&p)==STATUS_INVALID_PARAMETER);
+    p.VidPnSourceId=0;
+    CHECK(Bc250WddmGetPostCompositionCaps(&d,NULL)==STATUS_INVALID_PARAMETER);
+    d.Wddm=NULL;
+    CHECK(Bc250WddmGetPostCompositionCaps(&d,&p)==STATUS_DEVICE_NOT_READY);
+}
 int main(void)
 {
     int level;
@@ -2555,6 +2614,7 @@ int main(void)
     }
     Plane3InputFlagBits();
     Mpo3Checks();
+    MpoCaps();
     FlipFlagBits();
     PlaneFormatFlips();
     FaultDpcs();
