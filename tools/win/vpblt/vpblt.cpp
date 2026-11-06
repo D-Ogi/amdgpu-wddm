@@ -178,6 +178,9 @@ const Case kCases[] = {
     {"bgra-nv12-709s-cs1", Kind::Bgra, {true, true}, false, Kind::Nv12, {true, true}, false, true},
     {"nv12dyn-709s-bgra", Kind::Nv12, {true, true}, false, Kind::Bgra, {true, true}, false, false, true},
     {"nv12dyn-709s-bgra-cs1", Kind::Nv12, {true, true}, false, Kind::Bgra, {true, true}, false, true, true},
+    // The NV12 swap chain of a browser overlay: NV12 in and NV12 out, both YCbCr studio G22 left P709.
+    {"nv12-709s-nv12-709s-cs1", Kind::Nv12, {true, true}, false, Kind::Nv12, {true, true}, false, true},
+    {"nv12dyn-709s-nv12-709s-cs1", Kind::Nv12, {true, true}, false, Kind::Nv12, {true, true}, false, true, true},
 };
 
 bool is_ycc(Kind k) { return k != Kind::Bgra; }
