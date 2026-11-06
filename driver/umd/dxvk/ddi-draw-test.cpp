@@ -32,6 +32,7 @@
 #include "ddi-format.h"
 #include "ddi-resource-status.h"
 #include "diagnostics.h"
+#include <algorithm>
 #include <cstring>
 #include <d3d9.h>
 #include <cstdlib>
@@ -157,6 +158,110 @@ HRESULT APIENTRY runtime_residency(HANDLE h,const D3DDDICB_QUERYRESIDENCY *p) {
     }
     if (residencyMode==2) p->pResidencyStatus[1]=static_cast<D3DDDI_RESIDENCYSTATUS>(42);
     return residencyMode==1 ? E_FAIL : S_OK;
+}
+}
+namespace {
+// BD-309: the engine half (IBc250DxvkDevice5) and the ICD half (bc250GetMemoryAllocation) of an offer of an
+// engine-private resource. Memory object i of a prepared resource is VkDeviceMemory 0x100+i, and the query names it
+// as allocation 500+i unless a test asks otherwise.
+struct OfferEngine final : IBc250DxvkDevice5 {
+    ULONG refs=1; HRESULT prepareResult=S_OK; UINT memories=1; HRESULT endResult=S_OK;
+    unsigned prepares=0,ends=0; UINT endFlags=~0u; ID3D11Resource *ended=nullptr;
+    // A batch of two engine resources: the memory of `second` is VkDeviceMemory 0x110+i (allocation 516+i), and
+    // PrepareOffer of `failOn` answers failResult. endLog keeps every EndOffer in its order.
+    ID3D11Resource *second=nullptr,*failOn=nullptr; HRESULT failResult=S_OK;
+    std::vector<std::pair<ID3D11Resource *,UINT>> endLog;
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID,void **out) override { *out=nullptr; return E_NOINTERFACE; }
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++refs; }
+    ULONG STDMETHODCALLTYPE Release() override { return --refs; }
+    HRESULT STDMETHODCALLTYPE GetD3D11Device(REFIID,void **) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE GetImmediateContext(REFIID,void **) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE CreateShader(const BC250_DXVK_SHADER_DESC *,REFIID,void **) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE CreateInputLayout(const BC250_DXVK_INPUT_LAYOUT *,ID3D11InputLayout **) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE GetVertexFormat(DXGI_FORMAT,VkFormat *,UINT *) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE GetImageCreateInfo(const D3D11_TEXTURE2D_DESC1 *,VkImageCreateInfo *) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE CreateTexture2DFromImage(const D3D11_TEXTURE2D_DESC1 *,VkImage,ID3D11Texture2D **) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE WaitForResourceIdle(ID3D11Resource *) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE IsResourceBusy(ID3D11Resource *,UINT) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE SubmitForPresent(ID3D11Resource *,UINT) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE RotateResourceIdentities(ID3D11Resource *const *,UINT) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE Blt(const BC250_DXVK_BLT *) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE Blt1(const BC250_DXVK_BLT1 *) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE CreateTexture2DFromImage2(const D3D11_TEXTURE2D_DESC1 *,const VkImageCreateInfo *,VkImage,ID3D11Texture2D **) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE CheckFeatureSupportAtLevel(D3D_FEATURE_LEVEL,D3D11_FEATURE,void *,UINT) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE TrimMemory() override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE TakeDeferredError() override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE PrepareOffer(ID3D11Resource *resource,UINT capacity,BC250_DXVK_OFFER_MEMORY *memory,UINT *count) override {
+        if (!expected->runtime().domain.entered() || !resource || !memory || !count) fail(__LINE__);
+        ++prepares; *count=0;
+        if (failOn && resource==failOn) return failResult;
+        if (prepareResult!=S_OK) return prepareResult;
+        if (memories>capacity) return S_FALSE;
+        const uintptr_t base=resource==second ? 0x110 : 0x100;
+        for (UINT i=0;i<memories;++i) memory[i]={VkDeviceMemory(uint64_t(base+i)),4u<<20};
+        *count=memories; return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE EndOffer(ID3D11Resource *resource,UINT flags) override {
+        if (!expected->runtime().domain.entered()) fail(__LINE__);
+        ++ends; ended=resource; endFlags=flags; endLog.emplace_back(resource,flags); return endResult;
+    }
+};
+VkDevice const offerDevice=reinterpret_cast<VkDevice>(uintptr_t(0x77));
+VkResult offerQueryResult=VK_SUCCESS; uint32_t queryFlags=0; bool querySame=false; unsigned queries=0;
+VkResult VKAPI_PTR offer_query(VkDevice device,VkDeviceMemory memory,MemoryAllocationInfo *info) {
+    if (device!=offerDevice || !info || info->revision!=kMemoryAllocationRevision || info->size!=sizeof(*info)) fail(__LINE__);
+    ++queries;
+    if (offerQueryResult!=VK_SUCCESS) return offerQueryResult;
+    const uint32_t index=uint32_t(uint64_t(memory)-0x100);
+    info->allocation=querySame ? 500u : 500u+index; info->flags=queryFlags; info->bytes=4u<<20;
+    return VK_SUCCESS;
+}
+// The kernel side of these offers and reclaims: the handles each call names, and the discarded flags it answers.
+std::vector<D3DKMT_HANDLE> kernelOffered,kernelReclaimed; unsigned kernelOffers=0,kernelReclaims=0;
+HRESULT kernelReclaimResult=S_OK; std::vector<BOOL> kernelDiscard;
+HRESULT APIENTRY engine_kernel_offer(HANDLE h,const D3DDDICB_OFFERALLOCATIONS *p) {
+    if (h!=&createIdentity || !expected->runtime().domain.entered()) fail(__LINE__);
+    kernelOffered.assign(p->HandleList,p->HandleList+p->NumAllocations); ++kernelOffers; return S_OK;
+}
+// The kit-bd309 F-full loss (2026-11-05): on the lab the synchronous callback answers E_FAIL for an offered engine
+// allocation. This fake answers so and counts, and the engine block below requires that nothing calls it.
+unsigned syncEngineReclaims=0;
+HRESULT APIENTRY engine_kernel_reclaim_lab(HANDLE h,const D3DDDICB_RECLAIMALLOCATIONS *p) {
+    if (h!=&createIdentity || !expected->runtime().domain.entered() || !p->pDiscarded) fail(__LINE__);
+    ++syncEngineReclaims; return E_FAIL;
+}
+// The paging queue that the first engine offer creates (81, fence object 82) and ReclaimAllocations2Cb on it.
+unsigned engineQueueCreates=0; HRESULT engineQueueResult=S_OK;
+volatile UINT64 engineQueueCompleted=0; UINT64 engineReclaimFence=0;
+HRESULT APIENTRY engine_queue_create(HANDLE h,D3DDDICB_CREATEPAGINGQUEUE *p) {
+    if (h!=&createIdentity || !expected->runtime().domain.entered() || !p) fail(__LINE__);
+    ++engineQueueCreates;
+    if (FAILED(engineQueueResult)) return engineQueueResult;
+    p->hPagingQueue=81; p->hSyncObject=82; p->FenceValueCPUVirtualAddress=const_cast<UINT64 *>(&engineQueueCompleted);
+    return S_OK;
+}
+HRESULT APIENTRY engine_queue_destroy(HANDLE h,const D3DDDI_DESTROYPAGINGQUEUE *p) {
+    // The test hands the queue back to the owner's saved state; a destroy here would be the owner's close.
+    if (h!=&createIdentity || !p || p->hPagingQueue!=81) fail(__LINE__);
+    return S_OK;
+}
+HRESULT APIENTRY engine_kernel_reclaim2(HANDLE h,D3DDDICB_RECLAIMALLOCATIONS2 *p) {
+    if (h!=&createIdentity || !expected->runtime().domain.entered() || p->PagingQueue!=81 || p->pResources ||
+        !p->HandleList || !p->pDiscarded) fail(__LINE__);
+    kernelReclaimed.assign(p->HandleList,p->HandleList+p->NumAllocations); ++kernelReclaims;
+    for (UINT i=0;i<p->NumAllocations;++i) p->pDiscarded[i]=i<kernelDiscard.size() ? kernelDiscard[i] : FALSE;
+    p->PagingFenceValue=engineReclaimFence;
+    return kernelReclaimResult;
+}
+// The CPU wait for the paging fence of that queue: on success it completes the fence and sets the event.
+unsigned engineWaits=0; HRESULT engineWaitResult=S_OK;
+HRESULT APIENTRY engine_paging_wait(HANDLE h,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU *p) {
+    if (h!=&createIdentity || !expected->runtime().domain.entered() || p->ObjectCount!=1 || !p->ObjectHandleArray ||
+        p->ObjectHandleArray[0]!=82 || !p->FenceValueArray || p->FenceValueArray[0]!=engineReclaimFence || !p->hAsyncEvent)
+        fail(__LINE__);
+    ++engineWaits;
+    if (SUCCEEDED(engineWaitResult)) { engineQueueCompleted=engineReclaimFence; SetEvent(p->hAsyncEvent); }
+    return engineWaitResult;
 }
 }
 void test_wddm2_0_ddi();
@@ -1389,6 +1494,238 @@ int main() {
             privateStatus!=DXGI_DDI_RESIDENCY_FULLY_RESIDENT || owner.runtime().domain.entered()) fail(__LINE__);
         mixedReclaim.Resources=1; kept[0]=9;
         if (resourceTable.pfnReclaimResources(&mixedReclaim)!=S_OK || reclaimCalls!=reclaims+1 || kept[0]) fail(__LINE__);
+    }
+    // BD-309: an engine-private resource goes to the kernel when the engine and the ICD name its allocations, and its
+    // reclaim reports what the kernel reports, to the runtime and to the engine (EndOffer). Every refusal of either
+    // half leaves it a hint with nothing prepared. The kernel fakes record what they are given.
+    {
+        OfferEngine offerEngine; EngineOfferPath &path=owner.offer_path(); const EngineOfferPath savedPath=path;
+        const auto savedOffer=owner.runtime().KTCallbacks.pfnOfferAllocationsCb;
+        const auto savedReclaim=owner.runtime().KTCallbacks.pfnReclaimAllocationsCb;
+        owner.runtime().KTCallbacks.pfnOfferAllocationsCb=engine_kernel_offer;
+        owner.runtime().KTCallbacks.pfnReclaimAllocationsCb=engine_kernel_reclaim_lab;
+        // The probe's device of the F-full arm: no runtime surface, so no paging queue before the first engine offer.
+        SurfacePagingQueue &engineQueue=owner.surface_queue(); const SurfacePagingQueue savedQueue=engineQueue;
+        engineQueue={};
+        const auto savedCreateQueue=owner.runtime().KTCallbacks.pfnCreatePagingQueueCb;
+        const auto savedDestroyQueue=owner.runtime().KTCallbacks.pfnDestroyPagingQueueCb;
+        owner.runtime().KTCallbacks.pfnCreatePagingQueueCb=engine_queue_create;
+        owner.runtime().KTCallbacks.pfnDestroyPagingQueueCb=engine_queue_destroy;
+        owner.runtime().KTCallbacks.pfnReclaimAllocations2Cb=engine_kernel_reclaim2;
+        engineQueueCompleted=0; engineReclaimFence=0;
+        DdiResource engineResource{}; engineResource.object=reinterpret_cast<ID3D11Texture2D *>(&rotateIdentity[1]);
+        DXGI_DDI_HRESOURCE one[1]={reinterpret_cast<DXGI_DDI_HRESOURCE>(&engineResource)};
+        DXGI_DDI_ARG_OFFERRESOURCES engineOffer{reclaimArgs.hDevice,one,1,D3DDDI_OFFER_PRIORITY_NORMAL};
+        BOOL gone[1]={9};
+        DXGI_DDI_ARG_RECLAIMRESOURCES engineReclaim{reclaimArgs.hDevice,one,gone,1};
+        auto prepare=[&](bool &taken) {
+            RuntimeDomain::Scope scope(owner.runtime().domain);
+            std::vector<D3DKMT_HANDLE> handles; taken=true;
+            const HRESULT hr=engine_prepare_offer(owner,engineResource,handles,taken);
+            if (taken && (handles.size()!=engineResource.engine_offered_count ||
+                !std::equal(handles.begin(),handles.end(),engineResource.engine_offered))) fail(__LINE__);
+            if (!taken && !handles.empty()) fail(__LINE__);
+            return hr;
+        };
+        bool taken=false;
+        // 1. The engine is there, the ICD query is not (an older ICD): no PrepareOffer, the resource is a hint.
+        path.engine=&offerEngine; path.query=nullptr; path.device=offerDevice;
+        if (prepare(taken)!=S_OK || taken || offerEngine.prepares) fail(__LINE__);
+        path.query=offer_query;
+        // 1b. Nothing is offered that cannot be reclaimed: without ReclaimAllocations2Cb, and when the paging queue
+        //     cannot be created, the resource is a hint and PrepareOffer is not called.
+        owner.runtime().KTCallbacks.pfnReclaimAllocations2Cb=nullptr;
+        if (prepare(taken)!=S_OK || taken || offerEngine.prepares || engineQueueCreates || engineQueue.queue) fail(__LINE__);
+        owner.runtime().KTCallbacks.pfnReclaimAllocations2Cb=engine_kernel_reclaim2;
+        engineQueueResult=E_OUTOFMEMORY;
+        if (prepare(taken)!=S_OK || taken || offerEngine.prepares || engineQueueCreates!=1 || engineQueue.queue)
+            fail(__LINE__);
+        engineQueueResult=S_OK;
+        // 2. The positive path: one memory object, one allocation, nothing CPU-locked. The first engine offer of a
+        //    device without a runtime surface creates its paging queue, once.
+        if (prepare(taken)!=S_OK || !taken || offerEngine.prepares!=1 || queries!=1 || offerEngine.ends ||
+            engineResource.engine_offered_count!=1 || engineResource.engine_offered[0]!=500) fail(__LINE__);
+        if (engineQueueCreates!=2 || engineQueue.queue!=81 || engineQueue.sync!=82) fail(__LINE__);
+        // 3. A second offer before the reclaim does not prepare again (the runtime never sends one; a hint if it did).
+        if (prepare(taken)!=S_OK || taken || offerEngine.prepares!=1 || engineResource.engine_offered_count!=1 ||
+            engineResource.engine_offered[0]!=500) fail(__LINE__);
+        // 4. The reclaim: the kernel gets allocation 500, discards it, and the engine hears DISCARDED; the runtime too.
+        kernelDiscard={TRUE};
+        if (resourceTable.pfnReclaimResources(&engineReclaim)!=S_OK || kernelReclaims!=1 ||
+            kernelReclaimed!=std::vector<D3DKMT_HANDLE>{500} || gone[0]!=TRUE || offerEngine.ends!=1 ||
+            offerEngine.endFlags!=BC250_DXVK_END_OFFER_DISCARDED || offerEngine.ended!=engineResource.object ||
+            engineResource.engine_offered_count) fail(__LINE__);
+        // The reclaim went through ReclaimAllocations2Cb on that queue; the synchronous callback, which refuses on the
+        // lab, was not called.
+        if (syncEngineReclaims || engineQueueCreates!=2) fail(__LINE__);
+        // 5. The control of (4): content kept, EndOffer without DISCARDED; and a second reclaim is a hint again.
+        if (prepare(taken)!=S_OK || !taken) fail(__LINE__);
+        kernelDiscard={FALSE}; gone[0]=9;
+        if (resourceTable.pfnReclaimResources(&engineReclaim)!=S_OK || kernelReclaims!=2 || gone[0]!=FALSE ||
+            offerEngine.ends!=2 || offerEngine.endFlags!=0u || engineResource.engine_offered_count) fail(__LINE__);
+        gone[0]=9;
+        if (resourceTable.pfnReclaimResources(&engineReclaim)!=S_OK || kernelReclaims!=2 || gone[0]!=FALSE ||
+            offerEngine.ends!=2) fail(__LINE__);
+        // 6. ReclaimResources1 reports DISCARDED for the resource whose allocation the kernel discarded.
+        {
+            DXGI1_6_1_DDI_BASE_FUNCTIONS table161{}; install_dxgi1_6_1_resource_ddi(table161);
+            D3DDDI_RECLAIM_RESULT results[1]={static_cast<D3DDDI_RECLAIM_RESULT>(9)};
+            DXGI_DDI_ARG_RECLAIMRESOURCES1 reclaim1{reclaimArgs.hDevice,one,results,1};
+            if (prepare(taken)!=S_OK || !taken) fail(__LINE__);
+            kernelDiscard={TRUE};
+            if (table161.pfnReclaimResources1(&reclaim1)!=S_OK || kernelReclaims!=3 ||
+                results[0]!=D3DDDI_RECLAIM_RESULT_DISCARDED || offerEngine.ends!=3 ||
+                offerEngine.endFlags!=BC250_DXVK_END_OFFER_DISCARDED) fail(__LINE__);
+        }
+        // 7. A failed kernel reclaim leaves the resource offered: its memory is not usable, so no EndOffer; the next
+        //    reclaim that succeeds ends it.
+        if (prepare(taken)!=S_OK || !taken) fail(__LINE__);
+        kernelReclaimResult=E_FAIL; kernelDiscard={FALSE}; gone[0]=9;
+        if (resourceTable.pfnReclaimResources(&engineReclaim)!=E_FAIL || gone[0]!=9 || offerEngine.ends!=3 ||
+            engineResource.engine_offered_count!=1) fail(__LINE__);
+        kernelReclaimResult=S_OK;
+        if (resourceTable.pfnReclaimResources(&engineReclaim)!=S_OK || offerEngine.ends!=4 || gone[0]!=FALSE ||
+            engineResource.engine_offered_count) fail(__LINE__);
+        // 8. EndOffer could not map the memory again: the device is lost, and the entry says so.
+        if (prepare(taken)!=S_OK || !taken) fail(__LINE__);
+        const bool lostBefore=owner.bridge().device_lost,reportedBefore=owner.bridge().lost_reported;
+        offerEngine.endResult=E_OUTOFMEMORY;
+        if (resourceTable.pfnReclaimResources(&engineReclaim)!=D3DDDIERR_DEVICEREMOVED || !owner.bridge().device_lost ||
+            engineResource.engine_offered_count) fail(__LINE__);
+        owner.bridge().device_lost=lostBefore; owner.bridge().lost_reported=reportedBefore; offerEngine.endResult=S_OK;
+        // 9. Refusals, each a hint with nothing left prepared. The engine refuses (S_FALSE): no EndOffer is owed.
+        unsigned ends=offerEngine.ends;
+        offerEngine.prepareResult=S_FALSE;
+        if (prepare(taken)!=S_OK || taken || offerEngine.ends!=ends) fail(__LINE__);
+        // The engine reports the device lost: that is the status, nothing prepared.
+        offerEngine.prepareResult=DXGI_ERROR_DEVICE_REMOVED;
+        if (prepare(taken)!=DXGI_ERROR_DEVICE_REMOVED || taken || offerEngine.ends!=ends) fail(__LINE__);
+        offerEngine.prepareResult=S_OK;
+        // The ICD still holds a CPU lock of the allocation: not offerable, and PrepareOffer is ended at once.
+        queryFlags=kMemoryAllocationCpuMapped;
+        if (prepare(taken)!=S_OK || taken || offerEngine.ends!=++ends || offerEngine.endFlags!=0u) fail(__LINE__);
+        queryFlags=0;
+        // The ICD does not know the memory as one allocation (imported, sparse).
+        offerQueryResult=VK_ERROR_FEATURE_NOT_PRESENT;
+        if (prepare(taken)!=S_OK || taken || offerEngine.ends!=++ends) fail(__LINE__);
+        offerQueryResult=VK_SUCCESS;
+        // Two memory objects that name one allocation are not memory of their own.
+        offerEngine.memories=2; querySame=true;
+        if (prepare(taken)!=S_OK || taken || offerEngine.ends!=++ends) fail(__LINE__);
+        querySame=false;
+        // Two memory objects with two allocations: both go, in the engine's order.
+        if (prepare(taken)!=S_OK || !taken || engineResource.engine_offered_count!=2 ||
+            engineResource.engine_offered[0]!=500 || engineResource.engine_offered[1]!=501) fail(__LINE__);
+        kernelDiscard={FALSE,TRUE}; gone[0]=9;
+        if (resourceTable.pfnReclaimResources(&engineReclaim)!=S_OK ||
+            kernelReclaimed!=std::vector<D3DKMT_HANDLE>({500,501}) || gone[0]!=TRUE ||
+            offerEngine.endFlags!=BC250_DXVK_END_OFFER_DISCARDED || engineResource.engine_offered_count) fail(__LINE__);
+        ends=offerEngine.ends;
+        // More memory objects than the shell keeps: the engine refuses with S_FALSE.
+        offerEngine.memories=DdiResource::kEngineOfferCapacity+1;
+        if (prepare(taken)!=S_OK || taken || offerEngine.ends!=ends) fail(__LINE__);
+        offerEngine.memories=1;
+        // 10. The OfferResources entry: the allocation reaches the kernel's offer, and an offer that cannot happen
+        //     (this owner has no context to flush, E_FAIL) ends PrepareOffer and offers nothing.
+        const unsigned offersBefore=kernelOffers,preparesBefore=offerEngine.prepares;
+        if (resourceTable.pfnOfferResources(&engineOffer)!=E_FAIL || offerEngine.prepares!=preparesBefore+1 ||
+            kernelOffers!=offersBefore || offerEngine.ends!=ends+1 || engineResource.engine_offered_count)
+            fail(__LINE__);
+        // Without the engine half the same entry is the hint it was before BD-309: S_OK, nothing to the kernel.
+        path.engine=nullptr;
+        if (resourceTable.pfnOfferResources(&engineOffer)!=S_OK || offerEngine.prepares!=preparesBefore+1 ||
+            kernelOffers!=offersBefore) fail(__LINE__);
+        // 11. A batch of two engine resources with two memory objects each: A is allocations 500 and 501, B 516 and 517.
+        path.engine=&offerEngine;
+        DdiResource second{}; second.object=reinterpret_cast<ID3D11Texture2D *>(&rotateIdentity[2]);
+        offerEngine.second=second.object; offerEngine.memories=2;
+        DXGI_DDI_HRESOURCE two[2]={one[0],reinterpret_cast<DXGI_DDI_HRESOURCE>(&second)};
+        DXGI_DDI_ARG_OFFERRESOURCES twoOffer{reclaimArgs.hDevice,two,2,D3DDDI_OFFER_PRIORITY_NORMAL};
+        BOOL twoGone[2]={9,9};
+        DXGI_DDI_ARG_RECLAIMRESOURCES twoReclaim{reclaimArgs.hDevice,two,twoGone,2};
+        auto ended_as=[&](size_t i,const DdiResource &r,UINT flags) {
+            return i<offerEngine.endLog.size() && offerEngine.endLog[i].first==r.object && offerEngine.endLog[i].second==flags;
+        };
+        auto prepare_both=[&]() {
+            RuntimeDomain::Scope scope(owner.runtime().domain);
+            std::vector<D3DKMT_HANDLE> handles; bool a=false,b=false;
+            if (engine_prepare_offer(owner,engineResource,handles,a)!=S_OK || !a ||
+                engine_prepare_offer(owner,second,handles,b)!=S_OK || !b ||
+                handles!=std::vector<D3DKMT_HANDLE>({500,501,516,517})) fail(__LINE__);
+            offerEngine.endLog.clear();
+        };
+        // 11a. The second PrepareOffer reports the device lost: the entry answers removal, the first resource is ended
+        //      once without DISCARDED, the second owes no EndOffer, and nothing reaches the kernel.
+        {
+            const unsigned offers=kernelOffers; offerEngine.endLog.clear();
+            offerEngine.failOn=second.object; offerEngine.failResult=DXGI_ERROR_DEVICE_REMOVED;
+            if (resourceTable.pfnOfferResources(&twoOffer)!=D3DDDIERR_DEVICEREMOVED || kernelOffers!=offers ||
+                offerEngine.endLog.size()!=1 || !ended_as(0,engineResource,0u) || engineResource.engine_offered_count ||
+                second.engine_offered_count) fail(__LINE__);
+            offerEngine.failOn=nullptr;
+        }
+        // 11b. Both prepared, then the offer cannot happen (no context to flush): both are ended, in batch order.
+        {
+            const unsigned offers=kernelOffers; offerEngine.endLog.clear();
+            if (resourceTable.pfnOfferResources(&twoOffer)!=E_FAIL || kernelOffers!=offers || offerEngine.endLog.size()!=2 ||
+                !ended_as(0,engineResource,0u) || !ended_as(1,second,0u) || engineResource.engine_offered_count ||
+                second.engine_offered_count) fail(__LINE__);
+        }
+        // 11c. The reclaim of both: one callback for the four allocations, and each resource takes the OR of its own
+        //      allocations' flags (B starts at the third flag). One discarded allocation is enough, in either position.
+        {
+            const std::vector<BOOL> answers[3]={{FALSE,FALSE,FALSE,TRUE},{TRUE,FALSE,FALSE,FALSE},{FALSE,FALSE,FALSE,FALSE}};
+            for (const auto &answer:answers) {
+                prepare_both(); kernelDiscard=answer; twoGone[0]=twoGone[1]=9;
+                const BOOL a=answer[0]||answer[1],b=answer[2]||answer[3];
+                if (resourceTable.pfnReclaimResources(&twoReclaim)!=S_OK ||
+                    kernelReclaimed!=std::vector<D3DKMT_HANDLE>({500,501,516,517}) || twoGone[0]!=a || twoGone[1]!=b ||
+                    offerEngine.endLog.size()!=2 || !ended_as(0,engineResource,a ? BC250_DXVK_END_OFFER_DISCARDED : 0u) ||
+                    !ended_as(1,second,b ? BC250_DXVK_END_OFFER_DISCARDED : 0u) || engineResource.engine_offered_count ||
+                    second.engine_offered_count) fail(__LINE__);
+            }
+        }
+        offerEngine.second=nullptr; offerEngine.memories=1;
+        // 12. The paging fence of an engine reclaim is ahead of the queue: the entry waits for it on the CPU.
+        {
+            const auto savedWait=owner.runtime().KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb;
+            owner.runtime().KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb=engine_paging_wait;
+            const unsigned syncBefore=syncEngineReclaims;
+            // 12a. The wait fails: that is the entry's status. The memory is not known to be resident, so the resource
+            //      stays offered with no EndOffer; the next reclaim whose wait succeeds ends it.
+            if (prepare(taken)!=S_OK || !taken) fail(__LINE__);
+            offerEngine.endLog.clear(); kernelDiscard={FALSE}; gone[0]=9;
+            engineReclaimFence=engineQueueCompleted+3; engineWaitResult=E_OUTOFMEMORY;
+            if (resourceTable.pfnReclaimResources(&engineReclaim)!=E_OUTOFMEMORY || engineWaits!=1 || gone[0]!=9 ||
+                !offerEngine.endLog.empty() || engineResource.engine_offered_count!=1) fail(__LINE__);
+            engineWaitResult=S_OK;
+            if (resourceTable.pfnReclaimResources(&engineReclaim)!=S_OK || engineWaits!=2 ||
+                engineQueueCompleted!=engineReclaimFence || gone[0]!=FALSE || offerEngine.endLog.size()!=1 ||
+                !ended_as(0,engineResource,0u) || engineResource.engine_offered_count) fail(__LINE__);
+            // 12b. A lost paging queue reads UINT64_MAX: removal without a wait, and the resource stays offered.
+            if (prepare(taken)!=S_OK || !taken) fail(__LINE__);
+            offerEngine.endLog.clear(); gone[0]=9;
+            const UINT64 completed=engineQueueCompleted; engineQueueCompleted=UINT64_MAX; engineReclaimFence=completed+1;
+            if (resourceTable.pfnReclaimResources(&engineReclaim)!=D3DDDIERR_DEVICEREMOVED || engineWaits!=2 ||
+                gone[0]!=9 || !offerEngine.endLog.empty() || engineResource.engine_offered_count!=1) fail(__LINE__);
+            engineQueueCompleted=engineReclaimFence;              // the fence is complete: no wait
+            if (resourceTable.pfnReclaimResources(&engineReclaim)!=S_OK || engineWaits!=2 ||
+                offerEngine.endLog.size()!=1 || engineResource.engine_offered_count) fail(__LINE__);
+            if (syncEngineReclaims!=syncBefore) fail(__LINE__);
+            owner.runtime().KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb=savedWait;
+            engineReclaimFence=0;
+        }
+        path.engine=nullptr;
+        // Reclaim2 refused (step 7) is the only way to the synchronous callback, and it was taken once.
+        if (syncEngineReclaims!=1 || engineQueueCreates!=2) fail(__LINE__);
+        path=savedPath;
+        engineQueue=savedQueue;
+        owner.runtime().KTCallbacks.pfnCreatePagingQueueCb=savedCreateQueue;
+        owner.runtime().KTCallbacks.pfnDestroyPagingQueueCb=savedDestroyQueue;
+        owner.runtime().KTCallbacks.pfnReclaimAllocations2Cb=nullptr;
+        owner.runtime().KTCallbacks.pfnOfferAllocationsCb=savedOffer;
+        owner.runtime().KTCallbacks.pfnReclaimAllocationsCb=savedReclaim;
+        if (owner.runtime().domain.entered()) fail(__LINE__);
     }
     // BD-283 follow-up: the line allowance of a long-lived process. Start-up lines first, then a few in each minute,
     // and the next line let through carries the count of the lines the minute limit skipped.

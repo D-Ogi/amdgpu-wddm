@@ -21,6 +21,11 @@ struct DdiResource {
     // shared with the compositor or are primaries; only a blt-model swap chain presents a buffer like this.
     bool blt_model_buffer=false;
     RuntimeSurface *runtime_surface=nullptr; // DeviceOwner owns; COM object is borrowed.
+    // BD-309: the kernel allocations of an engine-private resource from its offer until its reclaim. The engine
+    // names at most kEngineOfferCapacity memory objects; a resource with more stays an offer hint.
+    static constexpr UINT kEngineOfferCapacity=8;
+    D3DKMT_HANDLE engine_offered[kEngineOfferCapacity]{};
+    UINT engine_offered_count=0;
 };
 struct ResourceDescription {
     D3D10DDIRESOURCE_TYPE dimension{};
