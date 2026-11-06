@@ -309,6 +309,12 @@ class Facts:
         self.notes = []
         self.wddm_lines = 0
         self.text = ""                  # wddm.c without comments, for the function_matches predicate
+        # The WDDMVersion values a start can report. One value when wddm.c assigns a constant; the array
+        # Bc250WddmLevels of wddm_level.h when it assigns the level of the start (ADR 0019 stage B4,
+        # WddmVersionCap). evaluate() checks every rule at each of them.
+        self.wddm_levels = []
+        self.wddm_levels_from = None
+        self.level = None               # the level under evaluation, or None for "the constant"
 
     def cap(self, name):
         return self.caps.get(name)
@@ -325,11 +331,11 @@ def read_file(path):
         return handle.read()
 
 
-def read_facts(wddm_path, header_path, inf_path, build_path):
+def read_facts(wddm_path, header_path, inf_path, build_path, level_path=None):
     """The tree on disk. The work is done by read_facts_text, which the unit tests drive with fixture
     strings instead of files."""
     facts = read_facts_text(read_file(wddm_path), read_file(header_path),
-                            read_file(inf_path), read_file(build_path))
+                            read_file(inf_path), read_file(build_path), read_file(level_path))
     facts.source["wddm.c"] = wddm_path
     if header_path and os.path.exists(header_path):
         facts.source["bc250kmd.h"] = header_path
@@ -337,10 +343,12 @@ def read_facts(wddm_path, header_path, inf_path, build_path):
         facts.source["bc250kmd.inf"] = inf_path
     if build_path and os.path.exists(build_path):
         facts.source["build.ps1"] = build_path
+    if level_path and os.path.exists(level_path):
+        facts.source["wddm_level.h"] = level_path
     return facts
 
 
-def read_facts_text(wddm_text, header_text="", inf_text="", build_text=""):
+def read_facts_text(wddm_text, header_text="", inf_text="", build_text="", level_text=""):
     facts = Facts()
     raw = wddm_text
     facts.wddm_lines = raw.count("\n") + 1
@@ -380,6 +388,7 @@ def read_facts_text(wddm_text, header_text="", inf_text="", build_text=""):
         match = re.search(r"OutputDataSize\s*<\s*sizeof\(([^)]*)\)", body)
         facts.size_checks["WddmDriverCaps"] = match.group(1) if match else None
         facts.node_count = facts.cap_value("GpuEngineTopology.NbAsymetricProcessingNodes")
+    read_wddm_levels(facts, strip_comments(level_text) if level_text else "")
 
     # (c) the segment descriptors. Stage B added a second one, so they are kept apart: the handler walks
     # a single `descriptor` pointer and re-aims it, and merging the two would make the aperture segment's
@@ -457,6 +466,56 @@ def read_facts_text(wddm_text, header_text="", inf_text="", build_text=""):
                                      and "UserModeDriverName" in build_text
                                      and "-UmdStub" in build_text.replace("$UmdStub", "-UmdStub"))
     return facts
+
+
+LEVEL_ARRAY = "wddm_level.h Bc250WddmLevels"
+
+
+def read_wddm_levels(facts: Facts, level_text: str):
+    """facts.wddm_levels: the constant of the assignment, or every member of Bc250WddmLevels when the
+    assignment is not a known constant and wddm_level.h declares the array. Empty means "cannot tell"."""
+    entry = facts.cap("WDDMVersion")
+    if entry is None:
+        return
+    known = WDDM_VERSIONS.get(entry["raw"].strip())
+    if known is not None:
+        facts.wddm_levels = [known]
+        facts.wddm_levels_from = entry["raw"].strip()
+        return
+    match = re.search(r"Bc250WddmLevels\[\]\s*=\s*\{([^}]*)\}", level_text)
+    if not match:
+        return
+    constants = Constants(level_text)
+
+    def literal(name):
+        # A name of wddm_level.h, followed to its literal (evaluate_int does not fold hexadecimal literals).
+        for _ in range(8):
+            name = name.strip().strip("()").strip()
+            match = re.fullmatch(r"(0[xX][0-9a-fA-F]+|\d+)[uUlL]*", name)
+            if match:
+                return int(match.group(1), 0)
+            if name not in constants.values:
+                return None
+            name = constants.values[name]
+        return None
+
+    values = [literal(item) for item in match.group(1).split(",") if item.strip()]
+    if values and all(isinstance(v, int) for v in values):
+        facts.wddm_levels = values
+        facts.wddm_levels_from = LEVEL_ARRAY
+
+
+def wddm_level(facts: Facts):
+    """(value, text) of the WDDMVersion under evaluation; value None when it cannot be told."""
+    if facts.level is not None:
+        return facts.level, "caps.WDDMVersion = 0x%04X (a level of %s)" % (facts.level, facts.wddm_levels_from)
+    entry = facts.cap("WDDMVersion")
+    if entry is None:
+        return None, "caps.WDDMVersion not set"
+    value = WDDM_VERSIONS.get(entry["raw"].strip())
+    if value is None:
+        return None, "caps.WDDMVersion = %s, not a known constant" % entry["raw"]
+    return value, "caps.WDDMVersion = %s (0x%04X)" % (entry["raw"], value)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -681,28 +740,27 @@ def predicate(facts: Facts, pred: dict):
         return facts.interface_version >= want, "DXGKDDI_INTERFACE_VERSION = 0x%04X (>= 0x%04X)" % (
             facts.interface_version, want)
     if "wddm_version_is" in pred:
-        entry = facts.cap("WDDMVersion")
         want = pred["wddm_version_is"]
+        if facts.level is not None:
+            value, text = wddm_level(facts)
+            return value == WDDM_VERSIONS.get(want), text
+        entry = facts.cap("WDDMVersion")
         got = entry["raw"] if entry else "not set"
         return got == want, "caps.WDDMVersion = %s" % got
     if "wddm_version_at_least" in pred:
-        entry = facts.cap("WDDMVersion")
-        if entry is None:
+        if facts.cap("WDDMVersion") is None:
             return False, "caps.WDDMVersion not set"
-        value = WDDM_VERSIONS.get(entry["raw"].strip())
+        value, text = wddm_level(facts)
         if value is None:
-            return None, "caps.WDDMVersion = %s, not a known constant" % entry["raw"]
-        want = int(pred["wddm_version_at_least"], 16)
-        return value >= want, "caps.WDDMVersion = %s (0x%04X)" % (entry["raw"], value)
+            return None, text
+        return value >= int(pred["wddm_version_at_least"], 16), text
     if "wddm_version_in" in pred:
-        entry = facts.cap("WDDMVersion")
-        if entry is None:
+        if facts.cap("WDDMVersion") is None:
             return False, "caps.WDDMVersion not set"
-        value = WDDM_VERSIONS.get(entry["raw"].strip())
+        value, text = wddm_level(facts)
         if value is None:
-            return None, "caps.WDDMVersion = %s, not a known constant" % entry["raw"]
-        allowed = {int(v, 16) for v in pred["wddm_version_in"]}
-        return value in allowed, "caps.WDDMVersion = %s (0x%04X)" % (entry["raw"], value)
+            return None, text
+        return value in {int(v, 16) for v in pred["wddm_version_in"]}, text
     if "inf_umd_name" in pred:
         if facts.inf_umd_active:
             return True, "bc250kmd.inf writes UserModeDriverName in every package"
@@ -735,7 +793,37 @@ def predicate(facts: Facts, pred: dict):
     return None, "unknown predicate %s" % sorted(pred)
 
 
+RANK = {"VIOLATION": 4, "WARNING": 3, "UNKNOWN": 2, "OK": 1, "n/a": 0}
+
+
 def evaluate(facts: Facts, rules: dict):
+    """Every rule at every WDDMVersion the start can report. A rule takes its worst status over the levels
+    (violation, warning, unknown, OK, n/a), and the detail names the level of that status."""
+    if not facts.wddm_levels or facts.wddm_levels_from != LEVEL_ARRAY:
+        return evaluate_once(facts, rules)
+    runs = []
+    for level in facts.wddm_levels:
+        facts.level = level
+        try:
+            runs.append((level, evaluate_once(facts, rules)))
+        finally:
+            facts.level = None
+    results = []
+    for index, first in enumerate(runs[0][1]):
+        worst_level, worst = max(((lvl, res[index]) for lvl, res in runs), key=lambda p: (RANK[p[1]["status"]], p[0]))
+        merged = dict(worst)
+        applied = [lvl for lvl, res in runs if res[index]["status"] != NA]
+        if worst["status"] in (OK, NA):
+            where = ("at every level it applies to (%s)" % ", ".join("0x%04X" % lvl for lvl in applied)
+                     if applied else "at no level")
+        else:
+            where = "at level 0x%04X" % worst_level
+        merged["detail"] = "%s: %s" % (where, worst["detail"])
+        results.append(merged)
+    return results
+
+
+def evaluate_once(facts: Facts, rules: dict):
     results = []
     for rule in rules["rules"]:
         whens = [predicate(facts, p) for p in rule.get("when", [{"always": True}])]
@@ -895,7 +983,7 @@ def main(argv=None):
         print("cannot read %s" % wddm, file=sys.stderr)
         return 2
 
-    facts = read_facts(wddm, header, inf, build)
+    facts = read_facts(wddm, header, inf, build, os.path.join(kmd, "wddm_level.h"))
     with open(args.rules, "r", encoding="utf-8") as handle:
         rules = json.load(handle)
     results = evaluate(facts, rules)

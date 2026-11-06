@@ -270,7 +270,9 @@ return, with a `CrtcVsyncWithMultiPlaneOverlay2` notification (`d3dkmddi.md:2527
 in-call observation: the flip completes at the next interrupt after it latches. dxgmms2 waits for it in state 15,
 which its head timeout watches. So a flip that never completes ends in the OS's timeout, which is a TDR and, until
 this part has a working GPU reset, bugcheck 0x116. The route needs the MPO3 DDIs
-(`SetVidPnSourceAddressWithMultiPlaneOverlay3` and their caps). It is not in tester.31.
+(`SetVidPnSourceAddressWithMultiPlaneOverlay3` and their caps). It is not in tester.31. Since ADR 0019 stage B4
+(BD-307), the KMD fills the MPO3 flip DDI for plane 0 and retires such a flip by its PresentId (`mpo3_track.h`).
+From `WDDMVersion` 2.1, dxgkrnl sends the flips of plane 0 there.
 
 **Several requests in one refresh.** Each immediate request is programmed and observed before the DDI returns.
 A second request in the same frame programs its own address, and the first may never be shown, which is what

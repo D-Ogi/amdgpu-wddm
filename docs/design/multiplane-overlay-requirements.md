@@ -19,7 +19,8 @@ The [MPO hardware requirements](https://learn.microsoft.com/en-us/windows-hardwa
 were checked against Microsoft Learn on 2026-10-22. The local conceptual source
 revision is `110f60eaf2ac5836e644d320c1e92c1011f2af5e`. Interface declarations use
 WDK 10.0.26100. The compiled interface and full initialization table use WDDM
-2.9. The reported `DXGK_DRIVERCAPS.WDDMVersion` remains WDDM 2.0. These are
+2.9. The reported `DXGK_DRIVERCAPS.WDDMVersion` is the level of the start (ADR 0019
+stage B4, BD-307: the `WddmVersionCap` setting, default 2.9). These are
 different declarations. Neither enables MPO by itself.
 
 | Requirement | Implementation needed | Acceptance evidence still needed |

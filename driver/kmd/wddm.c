@@ -41,13 +41,13 @@
 #define ULONGLONG_MAX ULLONG_MAX
 #endif
 
-// ADR 0019 stage B4: a lab bisection compiles fixed images with /DBC250_WDDM_LEVEL=0x2100 and similar values in
-// place of the default DXGK_DRIVERCAPS.WDDMVersion (WddmDriverCaps); there is no runtime setting yet. The level must
-// be one that dxgkrnl knows and that this table and these answers were read against. Without the define the image
-// is the default one, which tools/wddm_contract_check reads.
+// ADR 0019 stage B4: a lab bisection compiles fixed images with /DBC250_WDDM_LEVEL=0x2100 and similar values. Such an
+// image does not read the WddmVersionCap setting (WddmLevelStart). The level must be one of the set of that setting
+// (wddm_level.h Bc250WddmLevels, without 2.3), so that a fixed image and a stored value of the same level answer the
+// same. Without the define the image takes the level of each start, which tools/wddm_contract_check reads.
 #ifdef BC250_WDDM_LEVEL
 C_ASSERT(BC250_WDDM_LEVEL == DXGKDDI_WDDMv2 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_1 ||
-         BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_2 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_3 ||
+         BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_2 ||
          BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_4 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_5 ||
          BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_6 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_7 ||
          BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_8 || BC250_WDDM_LEVEL == DXGKDDI_WDDMv2_9);
@@ -69,6 +69,26 @@ C_ASSERT(D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 == BC250_MPO3_COLOR_SRGB);
 #include "regs.generated.h"      // the CP/GRBM/GCVM offsets of the timeout snapshot (tools/regcalc)
 #include "ih_fault.h"            // GCVM_L2_PROTECTION_FAULT_STATUS field decode and the gfxhub CID names
 #include <ntstrsafe.h>
+#include "wddm_level.h"          // ADR 0019 stage B4: the WDDMVersion of this start (WddmVersionCap)
+
+// wddm_level.h keeps the numbers without the WDK, for its host test. They must be the numbers of the WDK.
+C_ASSERT(BC250_WDDM_LEVEL_2_0 == DXGKDDI_WDDMv2 && BC250_WDDM_LEVEL_2_1 == DXGKDDI_WDDMv2_1);
+C_ASSERT(BC250_WDDM_LEVEL_2_2 == DXGKDDI_WDDMv2_2 && BC250_WDDM_LEVEL_2_3 == DXGKDDI_WDDMv2_3);
+C_ASSERT(BC250_WDDM_LEVEL_2_4 == DXGKDDI_WDDMv2_4 && BC250_WDDM_LEVEL_2_5 == DXGKDDI_WDDMv2_5);
+C_ASSERT(BC250_WDDM_LEVEL_2_6 == DXGKDDI_WDDMv2_6 && BC250_WDDM_LEVEL_2_7 == DXGKDDI_WDDMv2_7);
+C_ASSERT(BC250_WDDM_LEVEL_2_8 == DXGKDDI_WDDMv2_8 && BC250_WDDM_LEVEL_2_9 == DXGKDDI_WDDMv2_9);
+C_ASSERT(BC250_WDDM_INTERFACE_2_0 == DXGKDDI_INTERFACE_VERSION_WDDM2_0);
+C_ASSERT(BC250_WDDM_INTERFACE_2_1 == DXGKDDI_INTERFACE_VERSION_WDDM2_1);
+C_ASSERT(BC250_WDDM_INTERFACE_2_2 == DXGKDDI_INTERFACE_VERSION_WDDM2_2);
+C_ASSERT(BC250_WDDM_INTERFACE_2_3 == DXGKDDI_INTERFACE_VERSION_WDDM2_3);
+C_ASSERT(BC250_WDDM_INTERFACE_2_4 == DXGKDDI_INTERFACE_VERSION_WDDM2_4);
+C_ASSERT(BC250_WDDM_INTERFACE_2_5 == DXGKDDI_INTERFACE_VERSION_WDDM2_5);
+C_ASSERT(BC250_WDDM_INTERFACE_2_6 == DXGKDDI_INTERFACE_VERSION_WDDM2_6);
+C_ASSERT(BC250_WDDM_INTERFACE_2_7 == DXGKDDI_INTERFACE_VERSION_WDDM2_7);
+C_ASSERT(BC250_WDDM_INTERFACE_2_8 == DXGKDDI_INTERFACE_VERSION_WDDM2_8);
+C_ASSERT(BC250_WDDM_INTERFACE_2_9 == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
+// The top level is the level of the interface this binary is compiled at, never above it.
+C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9 && BC250_WDDM_LEVEL_MAX == DXGKDDI_WDDMv2_9);
 
 #define BC250_WDDM_TAG 'wW2B'
 #define BC250_WDDM_LOG_CALLS 8              // how many first calls of each DDI reach the guard log
@@ -5203,6 +5223,45 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
     return STATUS_SUCCESS;
 }
 
+// ---- the WDDM level of this start (ADR 0019 stage B4, BD-307) ----------------------------------------------------
+
+// StartDevice, PASSIVE_LEVEL, after the DXGKRNL_INTERFACE copy and before dxgkrnl asks for DXGK_DRIVERCAPS. The level
+// is fixed for the start: dxgkrnl reads DRIVERCAPS once per adapter start, and an answer that moved inside a start
+// would disagree with what dxgkrnl decided from the first one. The setting is read as the stored override, so that
+// "no stored value" (source default) and "a stored 0x2000" (source state) stay two different lines in the log.
+void WddmLevelStart(_Inout_ BC250_DEVICE* Device)
+{
+#ifdef BC250_WDDM_LEVEL
+    // A lab bisection image (/DBC250_WDDM_LEVEL): its level is the build's, and the setting is not read, so that the
+    // image hash names the level that the arm measures. The log text does not name the macro: the BD-167 flavour
+    // gate reads each BC250_* name in an image as a setting that it must find declared.
+    Device->WddmLevel = (ULONG)BC250_WDDM_LEVEL;
+    Device->WddmLevelSource = BC250_WDDM_LEVEL_FROM_DEFAULT;
+    GuardLog("wddm: level 0x%lX fixed by this bisection image, %ws not read", Device->WddmLevel,
+             BC250_WDDM_LEVEL_SETTING);
+#else
+    RTL_OSVERSIONINFOW os;
+    ULONG stored = 0;
+    NTSTATUS status = DriverStateNumber(L"", BC250_WDDM_LEVEL_SETTING, FALSE, &stored);
+    BC250_WDDM_LEVEL_ANSWER level;
+
+    RtlZeroMemory(&os, sizeof(os));
+    os.dwOSVersionInfoSize = sizeof(os);
+    if (!NT_SUCCESS(RtlGetVersion(&os))) os.dwBuildNumber = 0;     // unknown build: the OS clamp, level 2.0
+    if (!NT_SUCCESS(status) && status != STATUS_OBJECT_NAME_NOT_FOUND)
+        GuardLog("wddm: reading %ws failed 0x%08X, the default level is used", BC250_WDDM_LEVEL_SETTING, status);
+    // Without a stored value: the catalog default (WddmVersionCap "code", or the package's "factory" value).
+    level = Bc250WddmLevelResolve(NT_SUCCESS(status), stored,
+                                  NT_SUCCESS(status) ? stored : GuardReadSetting(BC250_WDDM_LEVEL_SETTING, BC250_WDDM_LEVEL_DEFAULT),
+                                  Device->Dxgk.Version, os.dwBuildNumber);
+    Device->WddmLevel = level.Level;
+    Device->WddmLevelSource = level.Source;
+    GuardLog("wddm: level 0x%lX %s req 0x%lX ceil 0x%lX clamp %s if 0x%X os %lu",
+             level.Level, Bc250WddmLevelSourceName(level.Source), level.Requested, level.Ceiling,
+             Bc250WddmLevelClampName(level.Clamp), Device->Dxgk.Version, os.dwBuildNumber);
+#endif
+}
+
 // ---- QueryAdapterInfo ------------------------------------------------------------------------------------------
 
 static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKARG_QUERYADAPTERINFO* Query)
@@ -5219,17 +5278,16 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // rather than as whatever was on the stack. The same rule applies everywhere below.
     RtlZeroMemory(caps, Query->OutputDataSize);
 
-    // ADR 0019 stage B4 (BD-307): the feature level of the 2.9 interface this binary is compiled at. Static reading of
-    // dxgkrnl 22621.6199 (the lab's 22631) and 26100.9549: both accept 0x2900, and no load check keyed on 2.1-2.9
-    // names a DDI that a full adapter must fill. The monitor arrival does: from 2.4 it needs UpdateMonitorLinkInfo
-    // (Bc250UpdateMonitorLinkInfo, lab arm 1 of 352c4210). What the level changes without a new DDI: the D3D11
-    // runtime asks our UMD for its WDDM 2.2 table (KMT version >= 2.2, BD-153), display state synchronization is the
-    // 2.3 one, and the type 16 answer below becomes necessary. Every optional 2.1-2.9 cap stays zero (RtlZeroMemory above).
-#ifdef BC250_WDDM_LEVEL
-    caps->WDDMVersion = (DXGK_WDDMVERSION)BC250_WDDM_LEVEL;   // a lab bisection image (the define above)
-#else
-    caps->WDDMVersion = DXGKDDI_WDDMv2_9;
-#endif
+    // ADR 0019 stage B4 (BD-307): the feature level of this start (WddmLevelStart: the WddmVersionCap setting,
+    // default 2.9, at most 2.9, the level of the interface this binary is compiled at). A lab bisection image
+    // (/DBC250_WDDM_LEVEL, the define above) reports its fixed level and does not read the setting. Static reading
+    // of dxgkrnl 22621.6199 (the lab's 22631) and 26100.9549: both accept every level of Bc250WddmLevels, and no
+    // load check keyed on 2.1-2.9 names a DDI that a full adapter must fill. The monitor arrival does: from 2.4 it
+    // needs UpdateMonitorLinkInfo (Bc250UpdateMonitorLinkInfo, lab arm 1 of 352c4210). What the level changes
+    // without a new DDI: from 2.2 the D3D11 runtime asks our UMD for its WDDM 2.2 table (KMT version >= 2.2,
+    // BD-153) and the type 16 answer below becomes necessary. From 2.3 the display state synchronization is the
+    // new one. Every optional 2.1-2.9 cap stays zero (RtlZeroMemory above).
+    caps->WDDMVersion = (DXGK_WDDMVERSION)Device->WddmLevel;
     caps->HighestAcceptableAddress.QuadPart = -1;       // no addressing limit; too low a value fails the load
     caps->SupportNonVGA = TRUE;
     caps->NumberOfSwizzlingRanges = 0;                  // swizzling range support has been removed from WDDM
@@ -5434,12 +5492,16 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // to a table declaring >= 0xE003; it was 576 at 0x5023; node 0). BD-223: the multiplane-overlay caps go on a
     // line of their own (the line above has no room), the witness of the lab arms of LabScaledPlane.
     if (WddmAnswersLogged(Device)) {
-        GuardLog("wddm: DRIVERCAPS into %u bytes: wddm %u sched 0x%X mm 0x%X flip 0x%X slots %u "
-                 "tdr %u dflip %u rot %u",
-             Query->OutputDataSize, (ULONG)caps->WDDMVersion, caps->SchedulingCaps.Value,
+        // "wddm 10496/s": the level and the first letter of its source (d default, s state, c clamp; the line
+        // "wddm: level" of the start has the whole story). The three flags print as one character each, which
+        // keeps the worst case of the line under the 159 characters of the log ring (guardlog_width.py).
+        GuardLog("wddm: DRIVERCAPS into %u bytes: wddm %u/%c sched 0x%X mm 0x%X flip 0x%X slots %u "
+                 "tdr %c dflip %c rot %c",
+             Query->OutputDataSize, (ULONG)caps->WDDMVersion, Bc250WddmLevelSourceName(Device->WddmLevelSource)[0],
+             caps->SchedulingCaps.Value,
              caps->MemoryManagementCaps.Value, caps->FlipCaps.Value,
-             caps->MaxAllocationListSlotId, caps->SupportPerEngineTDR ? 1u : 0u, caps->SupportDirectFlip ? 1u : 0u,
-             caps->SupportSmoothRotation ? 1u : 0u);
+             caps->MaxAllocationListSlotId, caps->SupportPerEngineTDR ? '1' : '0', caps->SupportDirectFlip ? '1' : '0',
+             caps->SupportSmoothRotation ? '1' : '0');
         GuardLog("wddm: DRIVERCAPS mpo %u planes %lu", caps->SupportMultiPlaneOverlay ? 1u : 0u,
                  (ULONG)caps->MaxOverlayPlanes);
     }
