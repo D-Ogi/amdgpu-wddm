@@ -56,13 +56,20 @@ change the catalog. The start log has a line for the read: `lab: scaled plane se
 | --- | --- |
 | 0 | The MPO caps and the Check answer. Without this bit, Check says "not supported" and the caps stay as before |
 | 1 | The VSync goes to the OS as the MPO type |
-| 2 | `MaxOverlayPlanes` 2 in place of 1, and `MPO_PLANE1` in the caps trailer, so that the front of the compositor also reports 2. A lab question only: Check still refuses a second plane |
+| 2 | `MaxOverlayPlanes` 2 in place of 1, and `MPO_PLANE1` in the caps trailer, so that the front of the compositor also reports 2. A lab question only: Check still refuses a second plane. Only on a start below WDDM 2.2 (the planes clamp, below) |
 | 3 | `STRETCH_CAPS` (0x8). The caps DDI `DxgkDdiGetMultiPlaneOverlayCaps` ([mpo.md](mpo.md#the-caps-of-a-22-and-later-driver)) answers `StretchRGB`, both filters, a stretch of 16.0 and a shrink of 4.0. It has an effect only with bit 0 |
 
 `WddmStart` masks the value with 0xF (`BC250_WDDM_SCALED_PLANE_MASK`), so it keeps only the four bits above, and
 it stores 0 when bit 0 is clear or the handshake is off (`WddmScaledPlaneLatch`). The start log has
 `wddm: scaled plane 0x<stored> (LabScaledPlane 0x<raw>, handshake <0|1>)`: the stored value first, then the raw
 value of the selector. An unknown bit is visible as the difference between the two.
+
+The planes clamp: from WDDM 2.2 the graphics kernel also reads the plane count of
+`DxgkDdiGetMultiPlaneOverlayCaps`, which answers `MaxPlanes` 1. On such a start, `WddmMpoFlags` ignores bit 2, so
+that `MaxOverlayPlanes` and the front of the compositor also say 1, and the start log has
+`wddm: scaled plane bit 2 clamped at level 0x<level>: 1 plane, the count of the caps DDI`. On 2026-11-06 (kit-s2d-r3,
+`LabScaledPlane` 5 at 2.9, before the caps DDI), a `MaxOverlayPlanes` of 2 lost the native DirectFlip. A second
+plane comes back with the commit that makes the check and the caps DDI admit it (Part Y).
 
 ## What the KMD admits
 
