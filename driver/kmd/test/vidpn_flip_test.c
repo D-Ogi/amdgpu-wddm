@@ -2580,7 +2580,7 @@ static void MpoCaps(void)
     CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_SUCCESS);
     CHECK(c.MaxPlanes==1 && c.MaxRGBPlanes==1 && c.MaxYUVPlanes==0 && c.OverlayCaps.Value==0);
     CHECK(c.MaxStretchFactor==1.0f && c.MaxShrinkFactor==1.0f);
-    CHECK(logs==logged+1);
+    CHECK(logs==logged+2);   /* the caps answer is two log lines: the counts, then the factors */
     /* The factors are IEEE-754 patterns: 1.0 and the two contract limits. */
     CHECK(BitsOfFloat(BC250_WDDM_MPO_ONE_BITS)==1.0f);
     CHECK(BitsOfFloat(BC250_WDDM_MPO_STRETCH_BITS)==(float)BC250_MPO_MAX_STRETCH_MILLI/1000.0f);
