@@ -399,6 +399,82 @@ static void test_reset_returns_to_the_default_cap(void)
            native_firmware.set[1].parameter, d.BaselineTempC);
 }
 
+/* ---- the cap in force after the cap write (BD-321) ------------------------------------------------- */
+/* Before BD-321 the surface showed the 0x40 answer of the read stage, which runs before the start's cap write: on
+ * unit A "firmware cap 100 C" next to "applied 87", while 87 C was in force (a later readback read 87). */
+
+/* The start's cap goes in: the cap in force is the chip's answer right after the write, with no read stage. */
+static void test_the_cap_in_force_is_read_after_the_write(void)
+{
+    Reset();
+    native_firmware.cap_c = 100u;
+    StartWith();
+    CHECK(native_firmware.writes == 1 && CapSent(0, BC250_CPU_TEMP_DEFAULT_C));
+    CHECK(device.Cpu.Snap.CapC == BC250_CPU_TEMP_DEFAULT_C);
+    CHECK(device.Cpu.Snap.LastMessage == BC250_CPU_MSG_READ_CPU_MV);    /* the voltage read stays the last */
+    CHECK(native_log_has("cap 87 C in force (read back)"));
+    CHECK(!native_log_has("NOT in force"));
+    printf("  %-31s sent %lu C, in force %lu C\n", "cap_read_after_write", native_firmware.set[0].parameter,
+           device.Cpu.Snap.CapC);
+}
+
+/* The chip answers OK to 0x8B and keeps its own 100 C: the surface says 100 C, and the log says so. */
+static void test_a_dropped_cap_write_shows(void)
+{
+    Reset();
+    native_firmware.cap_c = 100u;
+    native_firmware.drop_cap_writes = 1;
+    StartWith();
+    CHECK(native_firmware.writes == 1 && CapSent(0, BC250_CPU_TEMP_DEFAULT_C));
+    CHECK(native_firmware.cap_c == 100u);
+    CHECK(device.Cpu.Applied.temp_given && device.Cpu.Applied.temp_c == BC250_CPU_TEMP_DEFAULT_C);
+    CHECK(device.Cpu.Snap.CapC == 100u);
+    CHECK(native_log_has("sent the cap of 87 C and the chip answers 100 C: the cap is NOT in force"));
+    CHECK(!native_log_has("in force (read back)"));
+    printf("  %-31s sent %lu C, in force %lu C\n", "cap_write_dropped", native_firmware.set[0].parameter,
+           device.Cpu.Snap.CapC);
+}
+
+/* The read back of the cap is refused: the cap in force is not known (0), never the stale read stage value, and the
+ * start itself goes on (the cap write answered OK). */
+static void test_a_refused_cap_read_is_unknown(void)
+{
+    Reset();
+    native_firmware.cap_c = 100u;
+    StageWindow(3500u);
+    ProbeWindow(3500u, 0);
+    CHECK(Stage() == STATUS_SUCCESS);
+    CHECK(device.Cpu.Snap.CapC == 100u);                    /* the read stage's answer, before the write */
+    native_firmware.accept_writes = 1;
+    native_firmware.refuse_cap_reads = 1;
+    CpuLock(&device.Cpu);
+    CpuApplyStart(&device);
+    CpuUnlock(&device.Cpu);
+    CHECK(native_firmware.cap_c == BC250_CPU_TEMP_DEFAULT_C);
+    CHECK(device.Cpu.Applied.temp_given && device.Cpu.Applied.temp_c == BC250_CPU_TEMP_DEFAULT_C);
+    CHECK(device.Cpu.Snap.CapC == 0u);
+    CHECK(native_log_has("the read back of the cap was refused"));
+    CHECK(!native_log_has("the steps that did are undone now"));
+}
+
+/* A change without a cap step reads no cap: the clock limit alone leaves the cap value as it was. */
+static void test_no_cap_step_no_cap_read(void)
+{
+    BC250_ESCAPE_CPU d;
+
+    Reset();
+    native_firmware.cap_c = 100u;
+    StartWith();
+    CHECK(device.Cpu.Snap.CapC == BC250_CPU_TEMP_DEFAULT_C);
+    native_firmware.cap_c = 90u;                            /* a change the driver did not make */
+    device.Cpu.Enabled = TRUE;
+    device.Cpu.Created = TRUE;
+    device.Cpu.Start = BC250_CPU_START_PROVEN;
+    ResetEscape(&d);                                        /* the default cap is in Applied: nothing to send */
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && native_firmware.writes == 1);
+    CHECK(device.Cpu.Snap.CapC == BC250_CPU_TEMP_DEFAULT_C);
+}
+
 /* The stop rule as the loop asks it, next to the sweep that uses it: only the bound ends the sweep. */
 static void test_the_stop_rule(void)
 {
@@ -788,6 +864,10 @@ int main(void)
     test_start_keeps_a_stored_cap();
     test_start_adds_the_cap_to_stored_settings();
     test_reset_returns_to_the_default_cap();
+    test_the_cap_in_force_is_read_after_the_write();
+    test_a_dropped_cap_write_shows();
+    test_a_refused_cap_read_is_unknown();
+    test_no_cap_step_no_cap_read();
     test_failed_transaction_admits_the_cpu();
     test_first_start_writes_the_boot_record();
     test_a_kept_limit_does_not_become_the_baseline();

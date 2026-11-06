@@ -110,6 +110,8 @@ static struct {
     int refuse_core_reads;                  /* 1: message 0x43 is refused, for the no-answer arm */
     int refuse_getters;                     /* 1: every getter is refused, as at the BD-297 boot (0x80000011) */
     int accept_writes;                      /* 1: a setter is taken (the start and reset arms), 0: refused */
+    int drop_cap_writes;                    /* 1: 0x8B answers OK and the cap does not change (BD-321) */
+    int refuse_cap_reads;                   /* 1: 0x40 is refused, the other getters answer (BD-321) */
     /* The chip's state, which outlives a driver stop and start as the real one does (BD-295): the clock limit of
      * message 0x8F (0 for none, as after a cold boot) holds every core reply under it; 0x50's curve scale. */
     unsigned int limit_mhz, scale;
@@ -574,7 +576,8 @@ static NTSTATUS SmuCpuMessage(BC250_SMU_OWNER_NATIVE *owner, ULONG queue, ULONG 
         }
         native_firmware.writes++;
         if (!native_firmware.accept_writes) return STATUS_NOT_SUPPORTED;
-        if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_SET_CAP_C) native_firmware.cap_c = parameter;
+        if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_SET_CAP_C && !native_firmware.drop_cap_writes)
+            native_firmware.cap_c = parameter;
         if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_SET_MAX_MHZ) native_firmware.limit_mhz = parameter;
         if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_SET_CURVE_SCALE) native_firmware.scale = parameter;
         return STATUS_SUCCESS;
@@ -593,6 +596,7 @@ static NTSTATUS SmuCpuMessage(BC250_SMU_OWNER_NATIVE *owner, ULONG queue, ULONG 
     } else if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_READ_GPU_MV) {
         answer = native_firmware.gpu_mv;
     } else if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_READ_CAP_C) {
+        if (native_firmware.refuse_cap_reads) return STATUS_IO_DEVICE_ERROR;
         answer = native_firmware.cap_c;
     } else if (queue == BC250_CPU_QUEUE_GFX && message == BC250_CPU_MSG_GET_ENABLED_FEATURES) {
         answer = native_firmware.features;
