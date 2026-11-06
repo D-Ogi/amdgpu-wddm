@@ -146,7 +146,7 @@ The draw installer now also supplies DrawInstancedIndirect, DrawIndexedInstanced
 
 `make_render_device_table` now constructs the single zero-initialized rendering table from all seventeen module installers. The existing DDI control runs this same constructor, instead of independently assembling its own table. This is intentionally not yet published through OpenAdapter: lifecycle, query/capability, shared-resource and other required entries still need integration. An initial source-name inventory against WDK26100 found a missed DynamicConstantBufferMapNoOverwrite slot; it is now connected to the existing Map implementation and covered by the output-clearing/domain control. Source-name counts alone are not a capability or conformance gate.
 
-`install_format_ddi` supplies CheckFormatSupport and CheckMultisampleQualityLevels from the engine device. D3D11 FORMAT_SUPPORT/FORMAT_SUPPORT2 are explicitly translated to the D3D11.1 DDI mask, including typed UAV store and logic operations; blendability requires render-target support. Video/capture/overlay and later-version capability bits are not advertised by this table. Invalid/unknown formats produce zero support; other query failures are reported without publishing partial capabilities. MSAA quality levels come from the engine, not a fixed count. Local controls verify the flag conversion and cleared failure outputs; a real runtime capability negotiation is still required before publication.
+`install_format_ddi` supplies CheckFormatSupport and CheckMultisampleQualityLevels from the engine device. D3D11 FORMAT_SUPPORT/FORMAT_SUPPORT2 are explicitly translated to the D3D11.1 DDI mask, including typed UAV store and logic operations; blendability requires render-target support. The video processor bits come from the video format table (see "Video DDIs (BD-223)"). Decoder, capture, overlay and later-version capability bits are not advertised by this table. Invalid/unknown formats produce zero support; other query failures are reported without publishing partial capabilities. MSAA quality levels come from the engine, not a fixed count. Local controls verify the flag conversion and cleared failure outputs; a real runtime capability negotiation is still required before publication.
 
 The buffer-binding installer now supplies SoSetTargets. It validates stream-output bind usage and explicit byte offsets while preserving UINT_MAX append positions. COM replaces the full target array and clears omitted slots, matching DDI ClearTargets semantics. Null targets remain null; count+clear validation avoids overflow. Local checks cover append, exact-end and misaligned/out-of-range offsets plus typed error paths. This does not fix or validate the engine's known no-GS line/triangle stream-output limitation, nor does it yet wire the GS-with-SO creation callback.
 
@@ -236,7 +236,7 @@ ClearView forwards texture RTV and UAV clears to the engine, preserving float
 colors and rectangle coordinates. NULL rectangles mean a whole-view clear.
 Buffer RTV ClearView is forwarded with engine fix dd35ce7c (included in the
 fba2c2d2 ABI1.1 candidate). The prior temporary E_NOTIMPL guard has been removed.
-Video views are not exposed. RelocateDeviceFuncs rebuilds the same dispatch table;
+ClearView also accepts a video processor output view. RelocateDeviceFuncs rebuilds the same dispatch table;
 the shell retains no pointer to runtime-owned table storage. Host tests cover view
 type selection, relocation and missing-engine handling, not GPU clear pixels.
 
@@ -515,3 +515,59 @@ failure, invalid latch results, ABI minimum and session cleanup. Exact pair
 admission passes with frozen DC65 engine1.4; native runtime fault injection and
 normal rendering with this new pair remain unmeasured. Trim/residency handling
 is not implemented by this change.
+
+## Video DDIs (BD-223)
+
+The runtime asks for the video functions through `RetrieveSubObject`
+(`ddi-video.cpp`). The device sets `ppfnRetrieveSubObject` at CreateDevice.
+Without it, `ID3D11Device::QueryInterface(ID3D11VideoDevice)` fails, and a
+browser then has no video processor and no overlay.
+
+`RetrieveSubObject` answers three sub IDs with one table:
+
+| Sub ID | Table | Members |
+|---|---|---|
+| 2 | `D3D11_1DDI_VIDEO_FUNCTIONS` | 81 |
+| 3 | `D3DWDDM2_0DDI_VIDEO_FUNCTIONS` | 94 |
+| 5 | `D3DWDDM2_1DDI_VIDEO_FUNCTIONS` | 96 |
+
+Each table is the first part of the next one, so the shell fills the 2.1 table
+and copies the size of the table that the runtime asked for. The other IDs
+(the WDDM 2.4 tables 6 and 7 included) return E_NOTIMPL. The first eight calls
+write one line each with the sub ID and the sizes.
+
+What the device does:
+
+- The video processor: the enumerator, the processor, the input and output
+  views and VideoProcessorBlt go to the video device of the engine.
+- The formats come from one table (`ddi-video-caps.h`). Input: NV12, P010,
+  YUY2, B8G8R8A8, R8G8B8A8 and R10G10B10A2. Output: NV12, B8G8R8A8, R8G8B8A8
+  and R10G10B10A2. CheckFormatSupport adds the two video processor bits from
+  the same table, and only when the engine runs.
+- ColorSpace1: the shell maps a DXGI colour space to the legacy colour space.
+  It admits six spaces: RGB full and studio (G22, P709), and YCbCr studio and
+  full with the BT.601 or BT.709 matrix (G22, left siting). A conversion with
+  any other space is refused, so the device makes no HDR claim.
+- The engine converts the colour with one matrix per blit. The matrix includes
+  the YCbCr matrix and the range of both sides (`d3d11_video_csc.h` in the
+  engine fork).
+
+What the device does not do (known deviations):
+
+- No decoder and no content protection. The decoder profile count is 0, the
+  content protection caps are 0, and each decoder, crypto and channel entry
+  refuses with a status that its reference page permits. The
+  `ddi_error_policy` gate reads those statuses.
+- Progressive frames only. The rate conversion caps show no deinterlacing and
+  no custom rate.
+- One input stream, no filters, no stereo, no rotation and no mirror.
+- No HDR. HDR metadata is accepted and has no effect.
+- The overlay answers stay "none" until the KMD reports the YUV plane
+  (`bc250_scanout_mpo_yuv`).
+
+Host test: `ddi-video-test.cpp` in `ddi-draw-test.exe`
+(`tools/build/test-umd-ddi-draw.ps1`). It checks the tables, the sub IDs,
+the format bits, the colour spaces, the view plans and each refusal status
+against `d3d10umddi.md`. Negative controls make sure that each check can fail.
+The picture check on a GPU is `tools/win/vpblt`. The linear NV12 layout of a
+Vulkan driver is `tools/win/nv12layout`.
