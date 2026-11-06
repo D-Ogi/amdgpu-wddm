@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.38",
   "version": "0.7.216.110-tester.38",
-  "note": "tester.38 release manifest, started from the tester.37 manifest: the kmd and control rows move to the main commit with BD-292, BD-293, BD-295, BD-297 and the stage 2 queue reset of node 2; every other row keeps its tester.37 commit. BD-315: the system, wow64, desktop, zink and gl rows move to the t38/bd315-uqueue-* heads (global locks deleted at unload; the system head also has the util tests Windows build fix), and recipe_commit to the main commit with BD-317 (the RADV host tests link the real monitored fence). BD-211: the zink and gl rows move to merges of their BD-315 heads with the memstream temporary-file fix. rc1 (main 99a91dc8): the kmd, control, control-exe, router, d3d11 shell and state-worker rows move to main 99a91dc8 (BD-205, BD-296, BD-306, BD-307, BD-298, BD-291, bd309), because main had commits under their source paths that they did not ship.",
+  "note": "tester.38 release manifest, started from the tester.37 manifest: the kmd and control rows move to the main commit with BD-292, BD-293, BD-295, BD-297 and the stage 2 queue reset of node 2; every other row keeps its tester.37 commit. BD-315: the system, wow64, desktop, zink and gl rows move to the t38/bd315-uqueue-* heads (global locks deleted at unload; the system head also has the util tests Windows build fix), and recipe_commit to the main commit with BD-317 (the RADV host tests link the real monitored fence). BD-211: the zink and gl rows move to merges of their BD-315 heads with the memstream temporary-file fix. rc1 (main 99a91dc8): the kmd, control, control-exe, router, d3d11 shell and state-worker rows move to main 99a91dc8, and the kmd rows to main b9f5e3bb with BD-321 (BD-205, BD-296, BD-306, BD-307, BD-298, BD-291, bd309), because main had commits under their source paths that they did not ship.",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "6acd88041915c618dd2640b895cbe6e8a2ea5fb7",
   "repositories": {
@@ -80,7 +80,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "99a91dc8017da83b571a8e8ad45cd5a409c1a0b3",
+      "commit": "b9f5e3bb64f95ffb826d94ce273491de9f773dc4",
       "tree": "shared",
       "recipe": "driver/kmd/build.ps1",
       "args": [
@@ -126,7 +126,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "99a91dc8017da83b571a8e8ad45cd5a409c1a0b3",
+      "commit": "b9f5e3bb64f95ffb826d94ce273491de9f773dc4",
       "tree": "shared",
       "recipe": "driver/kmd/build.ps1",
       "args": [
