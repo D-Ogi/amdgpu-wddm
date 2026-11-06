@@ -76,6 +76,15 @@ static const char *const ROUTE_NAMES[] = {"gdi", "dxgi", "dxgi-composition", "un
 #define ROUTE_UNKNOWN 3                 /* a foreign ICD: the modules say nothing about our WSI route */
 #define ROUTE_DEFAULT ROUTE_DXGI
 #define ROUTE_COUNT 3                   /* the routes a caller may ask for; "unknown" is a result only */
+/* The 32-bit system ICD has the GDI route only (tools/win/amdgpu_wddm_control/README.md, WsiRoute): it reads
+ * the switch, logs what was asked with reason=x86-gdi-only, and presents through GDI with every value. So an x86
+ * run expects gdi unless --expect-route says otherwise; a run that compared with the switch failed on a correct
+ * ICD (BD-256, dead-rules kit-r2 L4a). */
+#if defined(_WIN64)
+#define ARCH_ONLY_ROUTE (-1)
+#else
+#define ARCH_ONLY_ROUTE ROUTE_GDI
+#endif
 /* Where the asked route came from, as radv_wddm2_wsi_route_source_name spells it. */
 static const char *const SOURCE_NAMES[] = {"default", "env", "registry"};
 #define SOURCE_DEFAULT 0
@@ -253,7 +262,8 @@ static int module_dir_is_system32(const char *path, const char *system_dir)
  * under. Nothing else in the process carries those names. */
 static int is_icd_name(const char *name)
 {
-   return _stricmp(name, "vulkan_radeon.dll") == 0 || _stricmp(name, "amdgpu_wddm_radv.dll") == 0 ||
+   return _stricmp(name, "vulkan_radeon.dll") == 0 || _stricmp(name, "vulkan_radeon32.dll") == 0 ||
+          _stricmp(name, "amdgpu_wddm_radv.dll") == 0 ||
           _stricmp(name, "amdgpu_wddm_radv_d3d11.dll") == 0 ||
           _stricmp(name, "amdgpu_wddm_radv_d3d1132.dll") == 0;
 }
@@ -710,7 +720,8 @@ struct run_result {
    uint32_t surface_usage;     /* supportedUsageFlags of the surface: what our WSI exposes */
    double max_ms;
    double total_s;
-   int route_asked;
+   int route_asked;            /* the route this run requires: --expect-route, else the switch, gdi on x86 */
+   int route_switch;           /* what the switch asks, as the ICD logs it (asked=) */
    int route_taken;
    int route_source;           /* SOURCE_DEFAULT, SOURCE_ENV or SOURCE_REGISTRY */
    char device[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE];
@@ -989,6 +1000,7 @@ static void write_json(const struct options *o, const struct run_result *r, int 
    fprintf(f, "  \"result\": \"%s\",\n", rc == EXIT_PASS ? "PASS" : "FAIL");
    fprintf(f, "  \"exit\": %d,\n", rc);
    fprintf(f, "  \"route_asked\": \"%s\",\n", ROUTE_NAMES[r->route_asked]);
+   fprintf(f, "  \"route_switch\": \"%s\",\n", ROUTE_NAMES[r->route_switch]);
    fprintf(f, "  \"route_taken\": \"%s\",\n", ROUTE_NAMES[r->route_taken]);
    fprintf(f, "  \"route_source\": \"%s\",\n", SOURCE_NAMES[r->route_source]);
    fprintf(f, "  \"icd\": \"");
@@ -1071,9 +1083,19 @@ int main(int argc, char **argv)
    }
    memset(&res, 0, sizeof(res));
    res.frames = o.frames;
-   res.route_asked = route_wanted(&res.route_source);
-   if (o.expect_route >= 0)
+   res.route_switch = route_wanted(&res.route_source);
+   res.route_asked = res.route_switch;
+   if (o.expect_route >= 0) {
       res.route_asked = o.expect_route;
+   }
+#if !defined(_WIN64)
+   else if (res.route_switch != ARCH_ONLY_ROUTE) {
+      res.route_asked = ARCH_ONLY_ROUTE;
+      printf("vkpresent note: the switch asks %s (source=%s), but the 32-bit ICD presents through %s only "
+             "(its log says reason=x86-gdi-only), so this run expects %s\n", ROUTE_NAMES[res.route_switch],
+             SOURCE_NAMES[res.route_source], ROUTE_NAMES[ARCH_ONLY_ROUTE], ROUTE_NAMES[ARCH_ONLY_ROUTE]);
+   }
+#endif
 
    read_modules(&before);
    strncpy(res.app_local, before.app_local, sizeof(res.app_local) - 1);
