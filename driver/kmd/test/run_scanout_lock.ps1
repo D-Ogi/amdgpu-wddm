@@ -35,7 +35,15 @@ $sdk="$Root\toolchain\nuget\microsoft.windows.sdk.cpp\c";$libs="$Root\toolchain\
 & $clang /nologo /TC /W4 /WX /O2 /MT -fuse-ld=lld "/I$repo\driver\kmd" "/imsvc$($msvc.FullName)\include" "/imsvc$sdk\Include\10.0.26100.0\ucrt" "/imsvc$sdk\Include\10.0.26100.0\um" "/imsvc$sdk\Include\10.0.26100.0\shared" "/Fo$Out\" "/Fe$Out\scanout_lock_test.exe" "$PSScriptRoot\scanout_lock_test.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64" kernel32.lib
 if($LASTEXITCODE -ne 0){throw 'Scanout lock test compile failed'}
 $arg=@();if($Mutation -eq 'nolock'){$arg=@('--no-lock')}
-$lines=@(& "$Out/scanout_lock_test.exe" @arg);$code=$LASTEXITCODE;$lines | Tee-Object "$Out/test.log"
+# The negative control needs the threads to interleave, and on a loaded host (the parallel quality gates) a run can
+# go by with the flip thread starved: 7 remaps in 80000 blits and no fault. One run with faults proves that the model
+# sees the race, so the control gets up to five runs. The fixed rule gets one: a fault there is never retried away.
+$tries=if($Mutation -eq 'nolock'){5}else{1}
+for($try=1;$try -le $tries;$try++){
+ $lines=@(& "$Out/scanout_lock_test.exe" @arg);$code=$LASTEXITCODE;$lines | Tee-Object "$Out/test.log" -Append:($try -gt 1)
+ if($code -eq 0){break}
+}
+$lines+="runs: $([Math]::Min($try,$tries)) of $tries"
 $hashes=@{};foreach($path in @('driver/kmd/scanout_map.h','driver/kmd/dcn.c','driver/kmd/wddm.c','driver/kmd/test/scanout_lock_test.c')){$hashes[$path]=(Get-FileHash "$repo/$path").Hash}
 @{Sources=$hashes;Mutation=$Mutation;ExitCode=$code;Output=$lines} | ConvertTo-Json -Depth 4 | Set-Content "$Out/record.json"
 exit $code
