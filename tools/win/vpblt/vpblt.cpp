@@ -5,7 +5,7 @@
 // public D3D11 video API, so the same binary is the positive control on any other GPU (the development PC) and the
 // check of our driver on the lab. No window, no swap chain; the run takes a few seconds.
 //
-//   vpblt.exe --out <file.json> [--adapter <index>] [--debug] [--mutant matrix|chroma]
+//   vpblt.exe --out <file.json> [--adapter <index>] [--debug] [--mutant matrix|chroma] [--simulate-removal <case>]
 //
 // --debug turns the D3D11 debug layer on and prints its messages (host diagnosis; the lab has no debug layer).
 // --mutant replaces the reference with a wrong one (601 and 709 exchanged, or the studio chroma range unexpanded as
@@ -16,6 +16,13 @@
 //   VPBLT <PASS|FAIL|SETUP> bits=<32|64> vendor=<hex> cases=<n> pass=<p> skipped=<s> first=<case/bar/channel got want|->
 // A case whose formats the processor does not admit (CheckVideoProcessorFormat) is SKIPPED, not failed; the JSON
 // names each such case, so a skipped case is visible.
+// A device that is removed during a case (GetDeviceRemovedReason after the case) is replaced by a new one for the
+// next case, so one removal does not hide the later cases (kit-vddi2 lab run: the YUY2 case removed the device and
+// the 10 cases after it only reported DXGI_ERROR_DEVICE_REMOVED). Each removal prints
+//   VPBLT-REMOVED <case> reason=<hr> recreate=<hr|->
+// and is named in the JSON (removed_after); the case that removed the device is ERROR, never PASS. At most 4 new
+// devices; after that the remaining cases are ERROR. --simulate-removal <case> (host test only) treats the device as
+// removed after that case.
 #include <windows.h>
 #include <d3d11_4.h>
 #include <dxgi1_2.h>
@@ -453,9 +460,10 @@ int main(int argc, char **argv) {
     std::string out;
     UINT adapterIndex = 0;
     bool debugLayer = false;
+    std::string simulateRemoval;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
-        if (a == "--help") { std::printf("vpblt.exe --out <file.json> [--adapter <index>] [--debug] [--mutant matrix|chroma]\n"); return 0; }
+        if (a == "--help") { std::printf("vpblt.exe --out <file.json> [--adapter <index>] [--debug] [--mutant matrix|chroma] [--simulate-removal <case>]\n"); return 0; }
         if (a == "--debug") { debugLayer = true; continue; }
         if (a == "--mutant" && i + 1 < argc) {
             const std::string m = argv[++i];
@@ -465,6 +473,7 @@ int main(int argc, char **argv) {
             continue;
         }
         if (a == "--out" && i + 1 < argc) { out = argv[++i]; continue; }
+        if (a == "--simulate-removal" && i + 1 < argc) { simulateRemoval = argv[++i]; continue; }
         if (a == "--adapter" && i + 1 < argc) { adapterIndex = UINT(std::strtoul(argv[++i], nullptr, 10)); continue; }
         std::fprintf(stderr, "vpblt: unknown argument %s\n", a.c_str());
         return 2;
@@ -495,21 +504,23 @@ int main(int argc, char **argv) {
         char n[128] = {};
         WideCharToMultiByte(CP_UTF8, 0, ad.Description, -1, n, sizeof(n) - 1, nullptr, nullptr);
         adapterName = n;
+    }
+    // One video device: the device, its immediate context and their video interfaces. Empty on success.
+    auto make_device = [&]() -> std::string {
+        vctx.reset(); video.reset(); context.reset(); device.reset();
         const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0};
         // Chromium creates its decode and overlay device with VIDEO_SUPPORT; so does the probe.
         const UINT flags = D3D11_CREATE_DEVICE_VIDEO_SUPPORT | (debugLayer ? D3D11_CREATE_DEVICE_DEBUG : 0u);
-        hr = D3D11CreateDevice(adapter.p, D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, levels, 2,
-                               D3D11_SDK_VERSION, device.put(), nullptr, context.put());
-        if (FAILED(hr)) setup = "D3D11CreateDevice(VIDEO_SUPPORT) hr=" + hr_text(hr);
-    }
-    if (setup.empty()) {
-        hr = device->QueryInterface(__uuidof(ID3D11VideoDevice), reinterpret_cast<void **>(video.put()));
-        if (FAILED(hr)) setup = "QueryInterface(ID3D11VideoDevice) hr=" + hr_text(hr);
-    }
-    if (setup.empty()) {
-        hr = context->QueryInterface(__uuidof(ID3D11VideoContext), reinterpret_cast<void **>(vctx.put()));
-        if (FAILED(hr)) setup = "QueryInterface(ID3D11VideoContext) hr=" + hr_text(hr);
-    }
+        HRESULT h = D3D11CreateDevice(adapter.p, D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, levels, 2,
+                                      D3D11_SDK_VERSION, device.put(), nullptr, context.put());
+        if (FAILED(h)) return "D3D11CreateDevice(VIDEO_SUPPORT) hr=" + hr_text(h);
+        h = device->QueryInterface(__uuidof(ID3D11VideoDevice), reinterpret_cast<void **>(video.put()));
+        if (FAILED(h)) return "QueryInterface(ID3D11VideoDevice) hr=" + hr_text(h);
+        h = context->QueryInterface(__uuidof(ID3D11VideoContext), reinterpret_cast<void **>(vctx.put()));
+        if (FAILED(h)) return "QueryInterface(ID3D11VideoContext) hr=" + hr_text(h);
+        return "";
+    };
+    if (setup.empty()) setup = make_device();
     if (setup.empty()) {
         // The interfaces Chromium asks for (overlayprobe step 2 needs ID3D11VideoDevice1 and ID3D11VideoContext1).
         IUnknown *u = nullptr;
@@ -526,8 +537,38 @@ int main(int argc, char **argv) {
     }
 
     std::vector<Result> results;
+    std::vector<std::string> removedAfter;
+    unsigned recreated = 0;
+    bool deviceOk = setup.empty();
     if (setup.empty())
-        for (const auto &c : kCases) results.push_back(run_case(device.p, context.p, video.p, vctx.p, c));
+        for (const auto &c : kCases) {
+            if (!deviceOk) {
+                Result r;
+                r.name = c.name;
+                r.status = "ERROR";
+                r.detail = "no device: the device was removed and no new device was made";
+                results.push_back(r);
+                continue;
+            }
+            results.push_back(run_case(device.p, context.p, video.p, vctx.p, c));
+            HRESULT reason = device->GetDeviceRemovedReason();
+            if (reason == S_OK && simulateRemoval == c.name) reason = DXGI_ERROR_DEVICE_REMOVED;
+            if (reason == S_OK) continue;
+            Result &r = results.back();
+            if (r.status == "PASS" || r.status == "SKIPPED") r.status = "ERROR";
+            r.detail += std::string(r.detail.empty() ? "" : "; ") + "the device was removed (reason " + hr_text(reason) + ")";
+            removedAfter.push_back(c.name);
+            std::string again = "-";
+            if (recreated < 4) {
+                ++recreated;
+                const std::string s = make_device();
+                again = s.empty() ? "00000000" : s;
+                deviceOk = s.empty();
+            } else {
+                deviceOk = false;
+            }
+            std::printf("VPBLT-REMOVED %s reason=%s recreate=%s\n", c.name, hr_text(reason).c_str(), again.c_str());
+        }
     // --debug (host diagnosis only; the debug layer is not on the lab): the messages of the D3D11 debug layer.
     if (debugLayer && device) {
         Ref<ID3D11InfoQueue> iq;
@@ -568,7 +609,9 @@ int main(int argc, char **argv) {
                 std::fprintf(f, "%s\"%s\"", s ? ", " : "", json_text(r.samples[s]).c_str());
             std::fprintf(f, "]}%s\n", i + 1 < results.size() ? "," : "");
         }
-        std::fprintf(f, "  ],\n  \"verdict\": \"VPBLT-%s\"\n}\n", verdict);
+        std::fprintf(f, "  ],\n  \"removed_after\": [");
+        for (size_t i = 0; i < removedAfter.size(); ++i) std::fprintf(f, "%s\"%s\"", i ? ", " : "", removedAfter[i].c_str());
+        std::fprintf(f, "],\n  \"verdict\": \"VPBLT-%s\"\n}\n", verdict);
         std::fclose(f);
     } else {
         std::fprintf(stderr, "vpblt: cannot write %s\n", out.c_str());
