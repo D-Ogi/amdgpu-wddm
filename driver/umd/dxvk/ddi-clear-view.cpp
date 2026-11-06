@@ -2,13 +2,16 @@
 #include "ddi-clear-view.h"
 #include "ddi-rtv.h"
 #include "ddi-uav.h"
+#include "ddi-video.h"
 namespace bc250::umd {
 ID3D11View *clear_view_object(D3D11DDI_HANDLETYPE type,void *handle) {
     if (!handle) return nullptr;
     switch(type) {
     case D3D10DDI_HT_RENDERTARGETVIEW: return static_cast<DdiRenderTargetView *>(handle)->object;
     case D3D11DDI_HT_UNORDEREDACCESSVIEW: return static_cast<DdiUnorderedAccessView *>(handle)->object;
-    default: return nullptr; // Video DDI is not exposed by this rendering table.
+    // ClearView of a video processor output view (D3D11.1): the engine clears each plane of it.
+    case D3D11_1DDI_HT_VIDEOPROCESSOROUTPUTVIEW: return static_cast<DdiVideoProcessorOutputView *>(handle)->object;
+    default: return nullptr;
     }
 }
 namespace {

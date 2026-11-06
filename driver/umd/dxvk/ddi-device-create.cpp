@@ -8,6 +8,7 @@
 #include "ddi-experiment.h"
 #include "ddi-lifecycle.h"
 #include "ddi-status-note.h"
+#include "ddi-video.h"
 #include <cstring>
 namespace bc250::umd {
 HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
@@ -130,6 +131,9 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
         *args.DXGIBaseDDI.pDXGIDDIBaseFunctions3=make_dxgi_device_table();
         *args.p11_1DeviceFuncs=make_render_device_table();
     }
+    // BD-223: the video DDIs. The runtime asks for the video table through this entry when an application asks the
+    // device for ID3D11VideoDevice; without it that query fails, and a browser has no video processor and no overlay.
+    if (args.ppfnRetrieveSubObject) *args.ppfnRetrieveSubObject=retrieve_subobject;
     owner->set_created_ms(GetTickCount64());
     storage->owner=owner;
     {

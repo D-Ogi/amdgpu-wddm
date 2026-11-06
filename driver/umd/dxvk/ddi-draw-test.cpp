@@ -267,7 +267,9 @@ HRESULT APIENTRY engine_paging_wait(HANDLE h,const D3DDDICB_WAITFORSYNCHRONIZATI
 void test_wddm2_0_ddi();
 void test_wddm2_2_ddi();
 void test_present_batches();
+void test_video_ddi();
 int main() {
+    test_video_ddi();
     test_wddm2_0_ddi();
     test_wddm2_2_ddi();
     test_present_batches();
