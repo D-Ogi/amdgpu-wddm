@@ -41,6 +41,44 @@ FENCE_REL = 'src/vulkan/runtime/vk_wddm2_monitored_fence.c'
 FENCE_CALL = 'vk_wddm2_monitored_fence_note_submitted('
 FENCE_RENAMES = ['/Dvk_wddm2_monitored_fence_type=bd317_real_vk_wddm2_monitored_fence_type',
                  '/Dvk_wddm2_monitored_fence_hosted_type=bd317_real_vk_wddm2_monitored_fence_hosted_type']
+FENCE_PREFIX = 'vk_wddm2_monitored_fence_'
+
+
+def test_defined_fence_names(text):
+    """The vk_wddm2_monitored_fence_* names that a test file defines at file scope.
+
+    The tests of a line define their own stubs of the fence names the winsys uses (the D3D ICD line also has
+    _hosted_bound_type, and its lifetime test a _note_submitted function). The real object then gets each of these
+    names renamed too, else the link finds two definitions. A data name counts when '=' follows it; a function name
+    when its declarator ends in '{' before any ';'. Indented lines, declarations and extern lines do not count."""
+    lines = text.splitlines()
+    names = set()
+    for i, line in enumerate(lines):
+        if not line or line[0].isspace() or line.startswith(('extern', '#', '/', '*')):
+            continue
+        # A static definition does not clash with the real object, and a rename would leave the real name unresolved.
+        if line.startswith('static') or (i and lines[i - 1].startswith('static')):
+            continue
+        for m in re.finditer(r'\b(' + FENCE_PREFIX + r'\w+)\b', line):
+            rest = line[m.end():]
+            if re.match(r'\s*=', rest):
+                names.add(m.group(1))
+            elif rest.lstrip().startswith('('):
+                text_after, j = rest, i
+                while ';' not in text_after and '{' not in text_after and j + 1 < len(lines):
+                    j += 1
+                    text_after += lines[j]
+                if '{' in text_after and (';' not in text_after or text_after.index('{') < text_after.index(';')):
+                    names.add(m.group(1))
+    return sorted(names)
+
+
+def fence_renames(test, switch):
+    """FENCE_RENAMES plus a rename of each fence name the test file defines itself (switch is '/D' or '-D')."""
+    base = [switch + r[2:] for r in FENCE_RENAMES]
+    have = {r[2:].split('=')[0] for r in FENCE_RENAMES}
+    extra = [n for n in test_defined_fence_names(test.read_text(encoding='utf-8', errors='replace')) if n not in have]
+    return base + [switch + n + '=bd317_real_' + n for n in extra]
 WDDM2 = 'src/amd/vulkan/winsys/wddm2'
 QUEUE_TEST = WDDM2 + '/tests/radv_wddm2_queue_binding_test.c'
 SYNC_TEST = WDDM2 + '/tests/radv_wddm2_hosted_sync_test.c'
@@ -209,7 +247,9 @@ def main():
     with (out / 'build.log').open('w', encoding='utf-8', errors='replace') as log:
         if fence:
             fcwd, fargv = compile_command(FENCE_REL)
-            if run([fargv[0], *flags_only(fargv, FENCE_REL), *FENCE_RENAMES, '/c', '/Fo' + str(fence_obj),
+            renames = fence_renames(Path(SRC) / QUEUE_TEST, '/D')
+            record['fence_renames'] = renames
+            if run([fargv[0], *flags_only(fargv, FENCE_REL), *renames, '/c', '/Fo' + str(fence_obj),
                     str(Path(SRC) / FENCE_REL)], fcwd, log):
                 raise SystemExit('vk_wddm2_monitored_fence.c did not compile; see build.log')
             record['inputs'][str(fence_obj)] = sha(fence_obj)

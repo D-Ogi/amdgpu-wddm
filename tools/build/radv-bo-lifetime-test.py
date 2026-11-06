@@ -57,6 +57,41 @@ FENCE_REL = 'src/vulkan/runtime/vk_wddm2_monitored_fence.c'
 FENCE_CALL = 'vk_wddm2_monitored_fence_note_submitted('
 FENCE_RENAMES = ['-Dvk_wddm2_monitored_fence_type=bd317_real_vk_wddm2_monitored_fence_type',
                  '-Dvk_wddm2_monitored_fence_hosted_type=bd317_real_vk_wddm2_monitored_fence_hosted_type']
+FENCE_PREFIX = 'vk_wddm2_monitored_fence_'
+
+
+def test_defined_fence_names(text):
+    """The vk_wddm2_monitored_fence_* names that a test file defines at file scope (the same rule as
+    radv-queue-tests.py). The D3D ICD line's test also defines _hosted_bound_type and a _note_submitted stub; the
+    real object gets each of these names renamed too, else the link finds two definitions. A data name counts when
+    '=' follows it; a function name when its declarator ends in '{' before any ';'."""
+    lines = text.splitlines()
+    names = set()
+    for i, line in enumerate(lines):
+        if not line or line[0].isspace() or line.startswith(('extern', '#', '/', '*')):
+            continue
+        # A static definition does not clash with the real object, and a rename would leave the real name unresolved.
+        if line.startswith('static') or (i and lines[i - 1].startswith('static')):
+            continue
+        for m in re.finditer(r'\b(' + FENCE_PREFIX + r'\w+)\b', line):
+            rest = line[m.end():]
+            if re.match(r'\s*=', rest):
+                names.add(m.group(1))
+            elif rest.lstrip().startswith('('):
+                text_after, j = rest, i
+                while ';' not in text_after and '{' not in text_after and j + 1 < len(lines):
+                    j += 1
+                    text_after += lines[j]
+                if '{' in text_after and (';' not in text_after or text_after.index('{') < text_after.index(';')):
+                    names.add(m.group(1))
+    return sorted(names)
+
+
+def fence_renames(test):
+    """FENCE_RENAMES plus a rename of each fence name the test file defines itself."""
+    have = {r[2:].split('=')[0] for r in FENCE_RENAMES}
+    extra = [n for n in test_defined_fence_names(test.read_text(encoding='utf-8', errors='replace')) if n not in have]
+    return FENCE_RENAMES + ['-D' + n + '=bd317_real_' + n for n in extra]
 RUNTIME_LIBS = ['src/vulkan/runtime/libvulkan_lite_runtime.a', 'src/vulkan/runtime/libvulkan_instance.a',
                 'src/compiler/libcompiler.a']
 SYSLIBS = ['kernel32.lib', 'synchronization.lib', 'ws2_32.lib', 'advapi32.lib',
@@ -225,7 +260,9 @@ def main():
         extra = []
         if fence:
             fcwd, fence_argv = compile_command(build, FENCE_REL)
-            if run([fence_argv[0], *flags_only(fence_argv, FENCE_REL, source), *FENCE_RENAMES,
+            renames = fence_renames(test)
+            record['fence_renames'] = renames
+            if run([fence_argv[0], *flags_only(fence_argv, FENCE_REL, source), *renames,
                     '/c', '/Fo' + str(fence_obj), str(Path(source) / FENCE_REL)], fcwd, log):
                 raise SystemExit('vk_wddm2_monitored_fence.c did not compile; see build.log')
             extra = [str(fence_obj), 'gdi32.lib']
