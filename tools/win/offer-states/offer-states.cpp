@@ -344,9 +344,11 @@ int main(int argc,char **argv) {
     }
     for (const WsRow &w:ws) { setOk=setOk && w.set>=0; anyRemoved=anyRemoved || FAILED(w.removed); }
     char name[256]{}; WideCharToMultiByte(CP_UTF8,0,ad.Description,-1,name,sizeof(name),nullptr,nullptr);
-    std::fprintf(f,"{\"tool\":\"offer-states\",\"version\":6,\"pid\":%lu,\"adapter\":\"%s\",\"vendor\":\"%04X\",\"device\":\"%04X\","
+    // The DriverStore name of the shell: the 32-bit copy has the suffix 32 (tools/release/driver_package.py, WOW).
+    const wchar_t *const shell=sizeof(void *)==4 ? L"amdgpu_wddm_d3d1132.dll" : L"amdgpu_wddm_d3d11.dll";
+    std::fprintf(f,"{\"tool\":\"offer-states\",\"version\":6,\"bits\":%u,\"pid\":%lu,\"adapter\":\"%s\",\"vendor\":\"%04X\",\"device\":\"%04X\","
         "\"d3d11_umd\":\"%s\",\"original_flags\":\"%s\",\"restore_status\":\"%08X\",\"flags_after\":\"%s\",\"rows\":[",
-        GetCurrentProcessId(),name,ad.VendorId,ad.DeviceId,module_path(L"amdgpu_wddm_d3d11.dll").c_str(),hex(p.original).c_str(),
+        unsigned(sizeof(void *)*8),GetCurrentProcessId(),name,ad.VendorId,ad.DeviceId,module_path(shell).c_str(),hex(p.original).c_str(),
         unsigned(restore),hex(after).c_str());
     for (size_t i=0;i<rows.size();++i) {
         const Row &r=rows[i];
