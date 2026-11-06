@@ -239,6 +239,9 @@ Check 'pdb-repro' { & pwsh -NoProfile -File "$repo\tools\build\test-pdb-repro.ps
  # BD-167: the source lookup of the flavour byte check (tools/release/flavour_bytes.py) on a throwaway repository. A
  # commit or a checkout that Git cannot read is an error, never the absence of a lab string.
  Check 'release-flavour-bytes' { & python -m unittest discover -s "$repo\tools\release" -p 'test_flavour_bytes.py' }
+ # BD-322: the state catalog in the bytes of a staged payload (tools/release/state_catalog_bytes.py), which
+ # build-release.ps1 runs for every flavour and with -NoProvenance: a router of another catalog is a finding.
+ Check 'release-catalog-bytes' { & python -B -m unittest discover -s "$repo\tools\release" -p 'test_state_catalog_bytes.py' }
  # BD-166: the D3D11 configuration record of a staged package (tools/release/check_package_v3.py). b15 shipped a new
  # ICD with the old record and every D3D11 device failed with ERROR_CRC, so the record is checked in the package that
  # ships. The test stages a package of its own images: no device and no machine state.
