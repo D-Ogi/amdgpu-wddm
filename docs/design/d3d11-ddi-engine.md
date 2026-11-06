@@ -87,6 +87,16 @@ offline (see Gaps). Optimized pipeline compiles are kept off draws (see Gaps). A
 broker mode, in which workers hand runtime-reaching work back to a DDI entry; the engine will use it only when
 the shell asks for it.
 
+Pipeline workers that compile outside a DDI entry (`dxvk.compilePipelinesOnWorkers`) use ABI 1.7 (BD-327).
+Each worker calls `BC250_DXVK_SHELL_SERVICES::WorkerScope(shell, TRUE)` when it starts and
+`WorkerScope(shell, FALSE)` before it ends, on its own thread. The shell binds that thread to the
+`EngineWorkerGate` of its device (`driver/umd/dxvk/engine-worker-gate.h`). On a bound thread `host_dispatch`
+admits only the driver-internal memory calls of hosted RADV, for example a new shader arena, and refuses each
+other runtime callback. The admitted calls of one device are serialized. `DeviceOwner::close` closes the gate
+when it returns: a successful close joined the workers in the engine's final Release, and after a failed close
+the remaining workers get only refusals. An engine before 1.7 never calls `WorkerScope`, and a shell before
+1.7 passes the shorter structure (`BC250_DXVK_SHELL_SERVICES_SIZE_1_0`), which the engine accepts.
+
 ### Shaders from DDI token streams
 
 `CreateShader` builds a DXBC container around the unchanged program, so DXVK's own compiler (dxbc-spirv) sees
