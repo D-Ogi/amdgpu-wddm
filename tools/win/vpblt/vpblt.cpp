@@ -158,6 +158,9 @@ struct Case {
     Space outSpace;       // for a YCbCr output
     bool outRgbStudio;
     bool colorSpace1;     // set the spaces through ID3D11VideoContext1 (DXGI_COLOR_SPACE_TYPE), as Chromium does
+    // The upload of a software-decoded frame as Chromium does it (UploadVideoImage): an NV12 texture with
+    // USAGE_DYNAMIC, BIND_DECODER and CPU write, filled through Map(WRITE_DISCARD), then an input view on it.
+    bool dynamicUpload = false;
 };
 
 const Case kCases[] = {
@@ -173,6 +176,8 @@ const Case kCases[] = {
     {"nv12-709s-bgra-cs1", Kind::Nv12, {true, true}, false, Kind::Bgra, {true, true}, false, true},
     {"nv12-601s-bgra-cs1", Kind::Nv12, {false, true}, false, Kind::Bgra, {true, true}, false, true},
     {"bgra-nv12-709s-cs1", Kind::Bgra, {true, true}, false, Kind::Nv12, {true, true}, false, true},
+    {"nv12dyn-709s-bgra", Kind::Nv12, {true, true}, false, Kind::Bgra, {true, true}, false, false, true},
+    {"nv12dyn-709s-bgra-cs1", Kind::Nv12, {true, true}, false, Kind::Bgra, {true, true}, false, true, true},
 };
 
 bool is_ycc(Kind k) { return k != Kind::Bgra; }
@@ -316,14 +321,32 @@ Result run_case(ID3D11Device *device, ID3D11DeviceContext *context, ID3D11VideoD
     td.Width = kWidth; td.Height = kHeight; td.MipLevels = 1; td.ArraySize = 1;
     td.Format = dxgi_of(c.in); td.SampleDesc.Count = 1; td.Usage = D3D11_USAGE_DEFAULT;
     // The runtime admits an input surface with DECODER, VIDEO_ENCODER, RENDER_TARGET, UNORDERED_ACCESS or no bind flag
-    // (D3D11 debug layer, CreateVideoProcessorInputView); a software-decoded frame has none.
+    // (D3D11 debug layer, CreateVideoProcessorInputView).
     td.BindFlags = 0;
     D3D11_SUBRESOURCE_DATA sd = {initial.data(), pitch, 0};
     Ref<ID3D11Texture2D> inTex;
-    hr = device->CreateTexture2D(&td, &sd, inTex.put());
-    if (FAILED(hr)) return fail("CreateTexture2D(in)", hr);
+    if (c.dynamicUpload) {
+        td.Usage = D3D11_USAGE_DYNAMIC;
+        td.BindFlags = D3D11_BIND_DECODER;
+        td.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        hr = device->CreateTexture2D(&td, nullptr, inTex.put());
+        if (FAILED(hr)) return fail("CreateTexture2D(in, DYNAMIC DECODER)", hr);
+        D3D11_MAPPED_SUBRESOURCE wm = {};
+        hr = context->Map(inTex.p, 0, D3D11_MAP_WRITE_DISCARD, 0, &wm);
+        if (FAILED(hr)) return fail("Map(in, WRITE_DISCARD)", hr);
+        // NV12 as mapped: kHeight rows of Y, then kHeight / 2 rows of CbCr, each at RowPitch.
+        auto *dst = static_cast<uint8_t *>(wm.pData);
+        for (UINT row = 0; row < kHeight * 3 / 2; ++row)
+            std::memcpy(dst + size_t(row) * wm.RowPitch, initial.data() + size_t(row) * pitch, pitch);
+        context->Unmap(inTex.p, 0);
+    } else {
+        hr = device->CreateTexture2D(&td, &sd, inTex.put());
+        if (FAILED(hr)) return fail("CreateTexture2D(in)", hr);
+    }
     D3D11_TEXTURE2D_DESC od = td;
     od.Format = dxgi_of(c.out);
+    od.Usage = D3D11_USAGE_DEFAULT;
+    od.CPUAccessFlags = 0;
     od.BindFlags = D3D11_BIND_RENDER_TARGET;
     Ref<ID3D11Texture2D> outTex;
     hr = device->CreateTexture2D(&od, nullptr, outTex.put());
