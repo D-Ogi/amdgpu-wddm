@@ -57,8 +57,12 @@ change the catalog. The start log has a line for the read: `lab: scaled plane se
 | 0 | The MPO caps and the Check answer. Without this bit, Check says "not supported" and the caps stay as before |
 | 1 | The VSync goes to the OS as the MPO type |
 | 2 | `MaxOverlayPlanes` 2 in place of 1, and `MPO_PLANE1` in the caps trailer, so that the front of the compositor also reports 2. A lab question only: Check still refuses a second plane |
+| 3 | `STRETCH_CAPS` (0x8). The caps DDI `DxgkDdiGetMultiPlaneOverlayCaps` ([mpo.md](mpo.md#the-caps-of-a-22-and-later-driver)) answers `StretchRGB`, both filters, a stretch of 16.0 and a shrink of 4.0. It has an effect only with bit 0 |
 
-The start log has `wddm: scaled plane 0x<value> (LabScaledPlane 0x<value>, handshake <0|1>)`.
+`WddmStart` masks the value with 0xF (`BC250_WDDM_SCALED_PLANE_MASK`), so it keeps only the four bits above, and
+it stores 0 when bit 0 is clear or the handshake is off (`WddmScaledPlaneLatch`). The start log has
+`wddm: scaled plane 0x<stored> (LabScaledPlane 0x<raw>, handshake <0|1>)`: the stored value first, then the raw
+value of the selector. An unknown bit is visible as the difference between the two.
 
 ## What the KMD admits
 

@@ -18,6 +18,7 @@
 #include "flip_state.h"
 #include "dcn_scale.h"   /* BD-223: BC250_SCALER_PLAN, the shape of a multiplane-overlay plane 0 */
 #include "mpo3_track.h"  /* BD-307: plane 0 of the MPO3 DDIs */
+#include "bc250_scanout_caps.h"  /* BD-223: the stretch and shrink limits the caps DDI answers */
 typedef int32_t NTSTATUS;
 typedef long LONG;
 typedef unsigned long ULONG;
@@ -199,6 +200,28 @@ typedef struct {
 typedef NTSTATUS DXGKDDI_CHECKMULTIPLANEOVERLAYSUPPORT3(const HANDLE, DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3*);
 typedef NTSTATUS DXGKDDI_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY3(const HANDLE, DXGKARG_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY3*);
 typedef NTSTATUS DXGKDDI_POSTMULTIPLANEOVERLAYPRESENT(const HANDLE, const DXGKARG_POSTMULTIPLANEOVERLAYPRESENT*);
+/* BD-223 (T004): DXGKARG_GETMULTIPLANEOVERLAYCAPS (shared/d3dkmddi.h 10.0.26100, line 6695) and
+ * DXGKARG_GETPOSTCOMPOSITIONCAPS (line 6720), the caps a WDDM 2.2 KMD answers in place of the compositor's
+ * user-mode entries. */
+typedef struct {
+    union {
+        struct {
+            UINT Rotation:1; UINT RotationWithoutIndependentFlip:1; UINT VerticalFlip:1; UINT HorizontalFlip:1;
+            UINT StretchRGB:1; UINT StretchYUV:1; UINT BilinearFilter:1; UINT HighFilter:1;
+            UINT Shared:1; UINT Immediate:1; UINT Plane0ForVirtualModeOnly:1; UINT Reserved:21;
+        };
+        UINT Value;
+    };
+} DXGK_MULTIPLANEOVERLAYCAPS;
+typedef struct {
+    unsigned VidPnSourceId;
+    UINT MaxPlanes, MaxRGBPlanes, MaxYUVPlanes;
+    DXGK_MULTIPLANEOVERLAYCAPS OverlayCaps;
+    float MaxStretchFactor, MaxShrinkFactor;
+} DXGKARG_GETMULTIPLANEOVERLAYCAPS;
+typedef NTSTATUS DXGKDDI_GETMULTIPLANEOVERLAYCAPS(const HANDLE, DXGKARG_GETMULTIPLANEOVERLAYCAPS*);
+typedef struct { unsigned VidPnSourceId; float MaxStretchFactor, MaxShrinkFactor; } DXGKARG_GETPOSTCOMPOSITIONCAPS;
+typedef NTSTATUS DXGKDDI_GETPOSTCOMPOSITIONCAPS(const HANDLE, DXGKARG_GETPOSTCOMPOSITIONCAPS*);
 /* The part of DXGKARG_PRESENT that WddmPresentDmaFlip reads: DXGK_PRESENTFLAGS in the WDK's declaration order
  * (shared/d3dkmddi.h 10.0.26100, Blt 0x1, ColorFill 0x2, Flip 0x4, FlipWithNoWait 0x8), the DMA buffer and its size. */
 typedef struct {
@@ -313,6 +336,7 @@ typedef struct {
     volatile LONG Mpo3FlipVerdicts[BC250_MPO3_VERDICTS];
     volatile LONG Mpo3FlipOddTaken;
     BC250_MPO3_PLANE Mpo3FlipOdd;
+    ULONG ScaledPlane;              /* BD-223: LabScaledPlane, which the caps DDI reads for its lab bit */
 } BC250_WDDM;
 /* BD-170: bc250kmd.h's immediate-flip record, for the summary's copy of it (WddmImmediateRecordCopy). */
 #define BC250_DCN_IMMEDIATE_RECORDS 8u
@@ -2533,6 +2557,96 @@ static void Mpo3Checks(void)
     CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_DEVICE_NOT_READY && !c.Supported);
     CHECK(Bc250WddmPostMultiPlaneOverlayPresent(&d,&pres)==STATUS_DEVICE_NOT_READY);
 }
+/* BD-223: an IEEE-754 pattern as the float it stands for. */
+static float BitsOfFloat(ULONG Bits)
+{
+    union { ULONG Bits; float Value; } u;
+    u.Bits=Bits;
+    return u.Value;
+}
+/* BD-223 (T004): the two caps DDIs answer what the check admits and nothing more. */
+static void MpoCaps(void)
+{
+    BC250_WDDM w;BC250_DEVICE d;
+    DXGKARG_GETMULTIPLANEOVERLAYCAPS c;
+    DXGKARG_GETPOSTCOMPOSITIONCAPS p;
+    unsigned logged;
+
+    Setup(&d,&w,0);
+    memset(&c,0,sizeof(c));
+    memset(&p,0,sizeof(p));
+    logged=logs;
+    /* One plane (the primary), RGB only, no scaling, and no capability bit the check does not admit. */
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_SUCCESS);
+    CHECK(c.MaxPlanes==1 && c.MaxRGBPlanes==1 && c.MaxYUVPlanes==0 && c.OverlayCaps.Value==0);
+    CHECK(c.MaxStretchFactor==1.0f && c.MaxShrinkFactor==1.0f);
+    CHECK(logs==logged+2);   /* the caps answer is two log lines: the counts, then the factors */
+    /* The factors are IEEE-754 patterns: 1.0 and the two contract limits. */
+    CHECK(BitsOfFloat(BC250_WDDM_MPO_ONE_BITS)==1.0f);
+    CHECK(BitsOfFloat(BC250_WDDM_MPO_STRETCH_BITS)==(float)BC250_MPO_MAX_STRETCH_MILLI/1000.0f);
+    CHECK(BitsOfFloat(BC250_WDDM_MPO_SHRINK_BITS)==(float)BC250_MPO_MAX_SHRINK_MILLI/1000.0f);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    /* Another lab bit changes nothing: the plane count never comes from the selector. */
+    w.ScaledPlane=0x1ul|0x4ul;
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_SUCCESS && c.OverlayCaps.Value==0 && c.MaxPlanes==1 &&
+          c.MaxStretchFactor==1.0f && c.MaxShrinkFactor==1.0f);
+    /* The caps bit lifts the stretch factor and the two filters, and only those. */
+    w.ScaledPlane=BC250_WDDM_SCALED_PLANE_STRETCH_CAPS;
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_SUCCESS);
+    CHECK(c.MaxPlanes==1 && c.MaxRGBPlanes==1 && c.MaxYUVPlanes==0);
+    CHECK(c.OverlayCaps.StretchRGB==1 && c.OverlayCaps.BilinearFilter==1 && c.OverlayCaps.HighFilter==1);
+    CHECK(c.OverlayCaps.StretchYUV==0 && c.OverlayCaps.Rotation==0 && c.OverlayCaps.RotationWithoutIndependentFlip==0 &&
+          c.OverlayCaps.VerticalFlip==0 && c.OverlayCaps.HorizontalFlip==0 && c.OverlayCaps.Shared==0 &&
+          c.OverlayCaps.Immediate==0 && c.OverlayCaps.Plane0ForVirtualModeOnly==0);
+    CHECK(c.MaxStretchFactor==(float)BC250_MPO_MAX_STRETCH_MILLI/1000.0f &&
+          c.MaxShrinkFactor==(float)BC250_MPO_MAX_SHRINK_MILLI/1000.0f);
+    w.ScaledPlane=0;
+#else
+    /* The release flavour reads no selector, so even that bit changes nothing. */
+    w.ScaledPlane=0x8ul;
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_SUCCESS && c.OverlayCaps.Value==0 &&
+          c.MaxStretchFactor==1.0f && c.MaxShrinkFactor==1.0f);
+    w.ScaledPlane=0;
+#endif
+    /* A second source is not this pipeline, a null answer is no answer, and no adapter state is not ready. */
+    c.VidPnSourceId=1;
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_INVALID_PARAMETER);
+    c.VidPnSourceId=0;
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,NULL)==STATUS_INVALID_PARAMETER);
+    d.Wddm=NULL;
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_DEVICE_NOT_READY);
+    d.Wddm=&w;
+    /* Post-composition: the identity only, so no scaling. */
+    logged=logs;
+    CHECK(Bc250WddmGetPostCompositionCaps(&d,&p)==STATUS_SUCCESS);
+    CHECK(p.MaxStretchFactor==1.0f && p.MaxShrinkFactor==1.0f);
+    CHECK(logs==logged+1);
+    p.VidPnSourceId=2;
+    CHECK(Bc250WddmGetPostCompositionCaps(&d,&p)==STATUS_INVALID_PARAMETER);
+    p.VidPnSourceId=0;
+    CHECK(Bc250WddmGetPostCompositionCaps(&d,NULL)==STATUS_INVALID_PARAMETER);
+    d.Wddm=NULL;
+    CHECK(Bc250WddmGetPostCompositionCaps(&d,&p)==STATUS_DEVICE_NOT_READY);
+}
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+/* BD-223 (T004): the step of WddmStart that stores ScaledPlane from the raw LabScaledPlane value (WddmScaledPlaneLatch,
+ * extracted from wddm.c). An unknown bit goes, and nothing is stored without bit 0 or without the handshake. */
+static void ScaledPlaneLatch(void)
+{
+    static const struct { ULONG Raw, On; } cases[]={
+        {0x10ul,0x0ul},   /* an unknown bit alone: no CHECK bit after the mask */
+        {0x1Ful,0xFul},   /* every bit: the unknown one goes, the four lab bits stay */
+        {0x8ul,0x0ul},    /* STRETCH_CAPS without CHECK */
+        {0x9ul,0x9ul},    /* STRETCH_CAPS with CHECK */
+        {0x1ul,0x1ul},
+        {0x0ul,0x0ul}};
+    unsigned i;
+    for(i=0;i<sizeof(cases)/sizeof(cases[0]);++i){
+        CHECK(WddmScaledPlaneLatch(cases[i].Raw,TRUE)==cases[i].On);
+        CHECK(WddmScaledPlaneLatch(cases[i].Raw,FALSE)==0);   /* a closed handshake closes the plane */
+    }
+}
+#endif
 int main(void)
 {
     int level;
@@ -2555,6 +2669,10 @@ int main(void)
     }
     Plane3InputFlagBits();
     Mpo3Checks();
+    MpoCaps();
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    ScaledPlaneLatch();
+#endif
     FlipFlagBits();
     PlaneFormatFlips();
     FaultDpcs();

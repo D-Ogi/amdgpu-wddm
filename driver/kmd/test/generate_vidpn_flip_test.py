@@ -22,6 +22,9 @@ def between(first,last):
     return s[start:once(last)]
 body='\n'.join([
     between('typedef struct _BC250_WDDM_NOTIFY {','// The pairing counters'),
+    # The bit block ends before WddmMpoFlags, so its own #endif has to be closed inside the extracted text.
+    between('#if defined(AMDGPU_WDDM_LAB_FLAVOUR)\n// BD-223 (lab flavour): the bits of LabScaledPlane',
+            '// The multiplane-overlay bits of the caps trailer') + '#endif\n',
     *(function(x) for x in (
         'static BOOLEAN WddmReadCompletedPrimary(',
         'static void WddmVSyncControlNote(',

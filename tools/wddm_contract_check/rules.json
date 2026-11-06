@@ -524,6 +524,15 @@
         {"cap_false": "PresentationCaps.NoSameBitmapOverlappedBitBlt"}
       ],
       "require": [{"cap_false": "PresentationCaps.NoSameBitmapBitBlt"}]
+    },
+    {
+      "id": "R49-MPO-CAPS-DDIS-FROM-2-2",
+      "declaration": "DXGK_DRIVERCAPS.WDDMVersion >= 2.2",
+      "requires_text": "the table carries DxgkDdiGetMultiPlaneOverlayCaps and DxgkDdiGetPostCompositionCaps. From 2.2 the graphics kernel takes the multiplane overlay capabilities from these kernel-mode DDIs 'rather than the user mode DDIs', and the first is 'required for any WDDM 2.2 driver that wants to support multiple planes', so a NULL member leaves the kernel with no caps to plan a plane set from",
+      "source": "LEARN ref/ddi-display/d3dkmddi.md:7341 ('For WDDM 2.2 drivers, this DDI is used to retrieve the multiplane overlay capabilities rather than the user mode DDIs') and :7315 ('required for any WDDM 2.2 driver that wants to support multiple planes'); the same requirement sentence in ref/windows-driver-docs/windows-driver-docs-pr/display/multiplane-overlay-support.md:79; WDK shared/d3dkmddi.h 10.0.26100 line 6714 (DXGKDDI_GETMULTIPLANEOVERLAYCAPS) and line 6735 (DXGKDDI_GETPOSTCOMPOSITIONCAPS), both inside the WDDM2_2 guard that closes at line 6741",
+      "when": [{"wddm_version_at_least": "0x2200"}],
+      "require": [{"ddi_set": "DxgkDdiGetMultiPlaneOverlayCaps"},
+                  {"ddi_set": "DxgkDdiGetPostCompositionCaps"}]
     }
   ]
 }

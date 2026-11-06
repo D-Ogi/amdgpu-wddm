@@ -488,7 +488,19 @@ static __inline ULONG WddmRecordKind(unsigned long Version)
 #define BC250_WDDM_SCALED_PLANE_CHECK 0x1ul
 #define BC250_WDDM_SCALED_PLANE_MPO_VSYNC 0x2ul
 #define BC250_WDDM_SCALED_PLANE_TWO_PLANES 0x4ul
-#define BC250_WDDM_SCALED_PLANE_MASK 0x7ul
+// BD-223: asks the two caps DDIs for the stretch caps of the contract header (StretchRGB and the two filters, 16.0
+// and 4.0). It has an effect only with CHECK, because WddmStart keeps ScaledPlane at 0 without bit 0.
+#define BC250_WDDM_SCALED_PLANE_STRETCH_CAPS 0x8ul
+#define BC250_WDDM_SCALED_PLANE_MASK 0xful
+
+// The ScaledPlane value that WddmStart stores for the raw LabScaledPlane value: the known bits only (MASK), and 0
+// unless bit 0 (CHECK) is set and the DirectFlip handshake is on, because the plane needs the flip path and the
+// scan-out rule. A pure function, so that the host test runs this step itself (vidpn_flip_test.c ScaledPlaneLatch).
+static __inline ULONG WddmScaledPlaneLatch(ULONG Raw, BOOLEAN Handshake)
+{
+    const ULONG scaled = Raw & BC250_WDDM_SCALED_PLANE_MASK;
+    return ((scaled & BC250_WDDM_SCALED_PLANE_CHECK) && Handshake) ? scaled : 0;
+}
 
 // The multiplane-overlay bits of the caps trailer for these LabScaledPlane bits. DRIVERCAPS MaxOverlayPlanes is
 // bc250_scanout_mpo_planes of the same word, so the kernel and the compositor's front report one plane count.
@@ -4475,11 +4487,12 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         }
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         // BD-223: LabScaledPlane, read once at DriverEntry (guard.c), absent = 0. The plane needs the flip path and the
-        // scan-out rule, so it follows the DirectFlip handshake: a closed handshake closes it too.
+        // scan-out rule, so it follows the DirectFlip handshake: a closed handshake closes it too. The line gives the
+        // stored value (WddmScaledPlaneLatch, masked) and the raw selector, so an unknown bit shows as the difference.
         {
-            const ULONG scaled = GuardLabScaledPlane() & BC250_WDDM_SCALED_PLANE_MASK;
-            wddm->ScaledPlane = ((scaled & BC250_WDDM_SCALED_PLANE_CHECK) && wddm->DirectFlipHandshake) ? scaled : 0;
-            GuardLog("wddm: scaled plane 0x%lX (LabScaledPlane 0x%lX, handshake %u)", wddm->ScaledPlane, scaled,
+            const ULONG raw = GuardLabScaledPlane();
+            wddm->ScaledPlane = WddmScaledPlaneLatch(raw, wddm->DirectFlipHandshake ? TRUE : FALSE);
+            GuardLog("wddm: scaled plane 0x%lX (LabScaledPlane 0x%lX, handshake %u)", wddm->ScaledPlane, raw,
                      (ULONG)(wddm->DirectFlipHandshake ? 1 : 0));
         }
 #endif
@@ -12062,6 +12075,90 @@ static int WddmMpo3Admit(_In_ BC250_DEVICE* Device, _In_ const BC250_WDDM* Wddm,
                              BC250_WDDM_SEGMENT_VRAM, &pitch, &bytes);
 }
 
+// The factors as IEEE-754 bit patterns, so that the kernel emits no floating-point or SSE instruction for a caps
+// answer. A host test checks each pattern against the contract constants.
+#define BC250_WDDM_MPO_ONE_BITS     0x3F800000u   // 1.0f
+#define BC250_WDDM_MPO_STRETCH_BITS 0x41800000u   // 16.0f, BC250_MPO_MAX_STRETCH_MILLI / 1000
+#define BC250_WDDM_MPO_SHRINK_BITS  0x40800000u   // 4.0f, BC250_MPO_MAX_SHRINK_MILLI / 1000
+static void WddmMpoCapsFactor(_Out_ float* Factor, _In_ ULONG Bits)
+{
+    // A 32-bit integer store of the IEEE-754 pattern, so no floating-point or SSE instruction is emitted. The
+    // target is the caps structure field, which dxgkrnl reads as a float; MSVC does not reorder a store through
+    // ULONG* against it.
+    *(ULONG*)Factor = Bits;
+}
+
+// BD-223: the two caps DDIs of the WDDM 2.2 and later contract. From 2.2 the graphics kernel takes the multiplane
+// overlay capabilities from the kernel driver "rather than the user mode DDIs" (shared/d3dkmddi.h,
+// DXGKDDI_GETMULTIPLANEOVERLAYCAPS and DXGKDDI_GETPOSTCOMPOSITIONCAPS; the WDK pages of both).
+// The answers describe what the check admits today, not what the hardware could do later: Check3 takes exactly one
+// plane, plane 0, in the mode's own geometry, with identity rotation, no flip, no alpha blend and the sRGB colour
+// space (Bc250Mpo3PlaneVerdict, driver/kmd/mpo3_track.h). One plane means MaxPlanes 1, because that count includes
+// the primary, and the count never comes from the selector. No scaling means a stretch and a shrink factor of 1.0
+// and no stretch or filter cap bit. The lab flavour answers the stretch caps of the contract header only when the
+// lab bit BC250_WDDM_SCALED_PLANE_STRETCH_CAPS asks for them, and the release flavour never offers them. wddm-b4 lifts
+// the limits when plane 0 scaling lands.
+static volatile LONG g_MpoCapsCalls;
+static DXGKDDI_GETMULTIPLANEOVERLAYCAPS Bc250WddmGetMultiplaneOverlayCaps;
+static NTSTATUS Bc250WddmGetMultiplaneOverlayCaps(_In_ const HANDLE hAdapter,
+                                                  _Inout_ DXGKARG_GETMULTIPLANEOVERLAYCAPS* pCaps)
+{
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+    ULONG stretch = 0;
+    LONG note;
+
+    if (pCaps == NULL || hAdapter == NULL) return STATUS_INVALID_PARAMETER;
+    if (wddm == NULL) return STATUS_DEVICE_NOT_READY;
+    // One display source owns the overlay pipeline (docs/design/mpo.md, The hardware). Any other source is a
+    // request this adapter cannot answer, and the set-address flip of the same family refuses it the same way.
+    if (pCaps->VidPnSourceId != 0) return STATUS_INVALID_PARAMETER;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    if (wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_STRETCH_CAPS) stretch = 1;
+#endif
+    RtlZeroMemory(&pCaps->OverlayCaps, sizeof(pCaps->OverlayCaps));
+    pCaps->MaxPlanes = 1u;
+    pCaps->MaxRGBPlanes = 1u;
+    pCaps->MaxYUVPlanes = 0u;          // the check admits no YUV plane
+    if (stretch) {
+        pCaps->OverlayCaps.StretchRGB = 1;
+        pCaps->OverlayCaps.BilinearFilter = 1;
+        pCaps->OverlayCaps.HighFilter = 1;
+    }
+    WddmMpoCapsFactor(&pCaps->MaxStretchFactor, stretch ? BC250_WDDM_MPO_STRETCH_BITS : BC250_WDDM_MPO_ONE_BITS);
+    WddmMpoCapsFactor(&pCaps->MaxShrinkFactor, stretch ? BC250_WDDM_MPO_SHRINK_BITS : BC250_WDDM_MPO_ONE_BITS);
+    note = InterlockedIncrement(&g_MpoCapsCalls);
+    if (note <= BC250_WDDM_MPO3_LOG_CALLS) {
+        // Integers only, in thousandths: no float in a log line. Two lines, because one format is over the
+        // guardlog-width limit of 159 characters. The second line names the lab bit when it is set.
+        GuardLog("wddm: MPO caps %ld src %u planes %u rgb %u yuv %u", note, pCaps->VidPnSourceId, pCaps->MaxPlanes,
+                 pCaps->MaxRGBPlanes, pCaps->MaxYUVPlanes);
+        GuardLog("wddm: MPO caps %ld stretch %u shrink %u caps 0x%X%s", note,
+                 stretch ? BC250_MPO_MAX_STRETCH_MILLI : 1000u, stretch ? BC250_MPO_MAX_SHRINK_MILLI : 1000u,
+                 pCaps->OverlayCaps.Value, stretch ? " stretch-caps-bit" : "");
+    }
+    return STATUS_SUCCESS;
+}
+
+static DXGKDDI_GETPOSTCOMPOSITIONCAPS Bc250WddmGetPostCompositionCaps;
+static NTSTATUS Bc250WddmGetPostCompositionCaps(_In_ const HANDLE hAdapter,
+                                                _Inout_ DXGKARG_GETPOSTCOMPOSITIONCAPS* pCaps)
+{
+    LONG note;
+
+    if (pCaps == NULL || hAdapter == NULL) return STATUS_INVALID_PARAMETER;
+    if (WddmOf(hAdapter) == NULL) return STATUS_DEVICE_NOT_READY;
+    if (pCaps->VidPnSourceId != 0) return STATUS_INVALID_PARAMETER;
+    // A post-composition of anything but the identity is refused by the same check (BC250_MPO3_POST), so no
+    // post-composition scaling is offered, in either flavour and for every selector value.
+    WddmMpoCapsFactor(&pCaps->MaxStretchFactor, BC250_WDDM_MPO_ONE_BITS);
+    WddmMpoCapsFactor(&pCaps->MaxShrinkFactor, BC250_WDDM_MPO_ONE_BITS);
+    note = InterlockedIncrement(&g_MpoCapsCalls);
+    if (note <= BC250_WDDM_MPO3_LOG_CALLS) {
+        GuardLog("wddm: MPO post caps %ld src %u stretch 1000 shrink 1000", note, pCaps->VidPnSourceId);
+    }
+    return STATUS_SUCCESS;
+}
+
 static DXGKDDI_CHECKMULTIPLANEOVERLAYSUPPORT3 Bc250WddmCheckMultiPlaneOverlaySupport3;
 static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport3(_In_ const HANDLE hAdapter,
                                                         _Inout_ DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3* pCheck)
@@ -12528,6 +12625,8 @@ C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiCheckMultiPlaneOverlayS
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3) >=
          BC250_WDDM_TABLE_TAIL_START);
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiPostMultiPlaneOverlayPresent) >= BC250_WDDM_TABLE_TAIL_START);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetMultiPlaneOverlayCaps) >= BC250_WDDM_TABLE_TAIL_START);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetPostCompositionCaps) >= BC250_WDDM_TABLE_TAIL_START);
 // Swizzling ranges are gone from WDDM, so the two DDIs must stay NULL and the cap must stay 0; the pair is here so
 // that the connection is visible where the table is built.
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiReleaseSwizzlingRange) >
@@ -12575,6 +12674,8 @@ static void WddmCheckReserved(_In_ const DRIVER_INITIALIZATION_DATA* Data)
             offset != FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiCheckMultiPlaneOverlaySupport3) &&
             offset != FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3) &&
             offset != FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiPostMultiPlaneOverlayPresent) &&
+            offset != FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetMultiPlaneOverlayCaps) &&
+            offset != FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetPostCompositionCaps) &&
             *(PVOID const*)((const UCHAR*)Data + offset) != NULL)
             GuardLog("wddm: table member at offset %u (after the WDDM 2.0 block) must be NULL and is not", (ULONG)offset);
 }
@@ -12795,6 +12896,19 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     (void)Bc250WddmCheckMultiPlaneOverlaySupport3;
     (void)Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3;
     (void)Bc250WddmPostMultiPlaneOverlayPresent;
+#endif
+
+#if BC250_WDDM_REPORTED_LEVEL >= 0x2200
+    // BD-223 (T004): from WDDMVersion 2.2 the graphics kernel takes the multiplane overlay capabilities from these
+    // two DDIs instead of the compositor's user-mode entries. Both flavours: the answers are what the check admits,
+    // so they are true in either. tools/wddm_contract_check rule R49 holds them together with the level.
+    Data->DxgkDdiGetMultiPlaneOverlayCaps = Bc250WddmGetMultiplaneOverlayCaps;
+    Data->DxgkDdiGetPostCompositionCaps = Bc250WddmGetPostCompositionCaps;
+#else
+    // A bisection image below 2.2: dxgkrnl asks neither DDI. They stay compiled and are used here only so that an
+    // unused static function does not stop the build.
+    (void)Bc250WddmGetMultiplaneOverlayCaps;
+    (void)Bc250WddmGetPostCompositionCaps;
 #endif
 
     // Left NULL on purpose: Patch and Render (physical addressing only), QueryCurrentFence, RecommendVidPnTopology,

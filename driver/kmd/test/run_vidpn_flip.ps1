@@ -34,7 +34,7 @@ param(
                  'mpo3-keep-unlocked', 'mpo3-immediate-lost', 'mpo3-extra-layer-shown', 'mpo3-check-scanout-skipped',
                  'mpo3-check-gate-skipped', 'mpo3-busy-passed',
                  'witness-before-decision', 'witness-changes-answer', 'witness-stale-compared',
-                 'witness-lost-uncounted')][string]$Mutation = '',
+                 'witness-lost-uncounted', 'scaled-plane-mask-dropped')][string]$Mutation = '',
     [switch]$Lab
 )
 
@@ -209,6 +209,8 @@ $labMutations = [ordered]@{
         why = 'an event the clear did not reset is compared with Q' }
     'witness-lost-uncounted' = @{ find = 'else InterlockedIncrement(&Wddm->WitnessLost);'; with = 'else (void)0;'
         why = 'a disagreement past the record bound is neither kept nor counted' }
+    'scaled-plane-mask-dropped' = @{ find = '    const ULONG scaled = Raw & BC250_WDDM_SCALED_PLANE_MASK;'; with = '    const ULONG scaled = Raw;'
+        why = 'WddmStart stores an unknown LabScaledPlane bit (the mask of WddmScaledPlaneLatch is gone)' }
 }
 $flavour = @()
 if ($Lab) { $flavour = @('/DAMDGPU_WDDM_LAB_FLAVOUR=1'); $mutations = $labMutations }
@@ -237,7 +239,7 @@ function Invoke-VidPnFlip([string]$Dir, [string]$Actual) {
     # runtime rejection of these mutants, not a compiler-warning substitute.
     [string[]]$mutationWarnings = @()
     if ($Mutation) { $mutationWarnings = @('-Wno-tautological-negation-compare') }
-    & $cl @('/nologo', '/TC', '/W4', '/WX', '/wd4201', '/O2', '/MT', '-fuse-ld=lld') @mutationWarnings @flavour @("/I$repo\driver\kmd", "/I$repo\third_party\linux-amdgpu",
+    & $cl @('/nologo', '/TC', '/W4', '/WX', '/wd4201', '/O2', '/MT', '-fuse-ld=lld') @mutationWarnings @flavour @("/I$repo\driver\kmd", "/I$repo\driver\contract", "/I$repo\third_party\linux-amdgpu",
         "/I$($msvc.FullName)\include", "/I$sdk\Include\10.0.26100.0\ucrt", "/Fo$obj\", "/Fe$Dir\vidpn_flip_test.exe", $Actual,
         "$repo\driver\kmd\dcn_translate.c", '/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$libs\ucrt\x64",
         "/LIBPATH:$libs\um\x64") | Out-Host
@@ -264,7 +266,8 @@ foreach ($name in $names) {
     [IO.File]::WriteAllText("$dir\vidpn_flip_actual.c", $actual.Replace($m.find, $m.with))
     $run = Invoke-VidPnFlip $dir "$dir\vidpn_flip_actual.c"
     $failed = $run.Code -ne 0 -and $run.Output -match 'FAIL line'
-    Write-Output ("mutation {0}: {1} ({2})" -f $name, $(if ($failed) { 'caught' } else { 'NOT CAUGHT' }), $m.why)
+    $failLines = @($run.Output -split "`n" | Where-Object { $_ -match '^FAIL line' }).Count
+    Write-Output ("mutation {0}: {1}, {2} FAIL lines ({3})" -f $name, $(if ($failed) { 'caught' } else { 'NOT CAUGHT' }), $failLines, $m.why)
     if (-not $failed) { $passed += $name }
 }
 if ($passed.Count) { Write-Output "mutations not caught: $($passed -join ', ')"; exit 1 }
