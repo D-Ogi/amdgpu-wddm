@@ -486,6 +486,11 @@ wddm: scaled plane 0x1 (LabScaledPlane 0x1, handshake 1)
 ```
 
 After each DRIVERCAPS line comes `wddm: DRIVERCAPS mpo <SupportMultiPlaneOverlay> planes <MaxOverlayPlanes>`.
+The log ring keeps the first 256 lines of a start, and the first DRIVERCAPS line comes after them, so a busy start
+can lose it (BD-324). The KMD keeps the first reply of the start, and `bc250kmd_cli log summary` prints it:
+`wddm summary: DRIVERCAPS first <size> bytes: wddm <version>/<source> ...` with the fields of the
+`wddm: DRIVERCAPS into` line, then `wddm summary: DRIVERCAPS first mpo <0|1> planes <n>`. Before the first reply
+the summary says `wddm summary: DRIVERCAPS first: no reply in this start yet`.
 
 The summary lines `wddm summary: scaled plane ...`, `wddm summary: plane shape ...` and
 `wddm summary: plane check <verdict> <count>` count the Check answers, the flips and the shape writes.
