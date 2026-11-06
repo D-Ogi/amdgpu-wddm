@@ -12901,7 +12901,7 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
 #if BC250_WDDM_REPORTED_LEVEL >= 0x2200
     // BD-223 (T004): from WDDMVersion 2.2 the graphics kernel takes the multiplane overlay capabilities from these
     // two DDIs instead of the compositor's user-mode entries. Both flavours: the answers are what the check admits,
-    // so they are true in either. tools/wddm_contract_check rule R48 holds them together with the level.
+    // so they are true in either. tools/wddm_contract_check rule R49 holds them together with the level.
     Data->DxgkDdiGetMultiPlaneOverlayCaps = Bc250WddmGetMultiplaneOverlayCaps;
     Data->DxgkDdiGetPostCompositionCaps = Bc250WddmGetPostCompositionCaps;
 #else
