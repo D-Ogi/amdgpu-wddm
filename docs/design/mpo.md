@@ -126,6 +126,18 @@ The caps are advisory. The KMD check refuses every configuration outside its sta
 that changes a limit changes the constant in the same commit. `scanout_admit_test.c` fails the build when the
 constants and `dcn_plane.h` disagree.
 
+### The caps of a 2.2 and later driver
+
+The driver reports `WDDMVersion` 2.9 since BD-307. From WDDM 2.2 the graphics kernel takes the multiplane-overlay
+caps from `DxgkDdiGetMultiPlaneOverlayCaps` and `DxgkDdiGetPostCompositionCaps`, not from the compositor's user-mode
+entries (`ref/ddi-display/d3dkmddi.md`, the pages of both DDIs). Both flavours fill them, in the reported level 2.2
+block of the initialization table (`driver/kmd/wddm.c`). The answers state what the check admits and nothing more:
+one plane, which is the primary, RGB only, no YUV plane, and a stretch and a shrink factor of 1.0, because the check
+admits the mode's own geometry only. `OverlayCaps` is zero, because the check admits identity rotation, no flip, no
+alpha blend and the sRGB colour space, so no capability bit is true. A stage that admits more changes these values in
+the same commit as its check rule. A source other than 0 and a null argument are refused with
+`STATUS_INVALID_PARAMETER`, and a query before a successful start with `STATUS_DEVICE_NOT_READY`.
+
 ### The present
 
 - No MPO DDI carries private driver data. The KMD reads the plane attributes that dxgkrnl gives it
