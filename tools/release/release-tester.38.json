@@ -2,9 +2,9 @@
   "schema": 1,
   "release": "tester.38",
   "version": "0.7.216.110-tester.38",
-  "note": "tester.38 release manifest, started from the tester.37 manifest: the kmd and control rows move to the main commit with BD-292, BD-293, BD-295, BD-297 and the stage 2 queue reset of node 2; every other row keeps its tester.37 commit.",
+  "note": "tester.38 release manifest, started from the tester.37 manifest: the kmd and control rows move to the main commit with BD-292, BD-293, BD-295, BD-297 and the stage 2 queue reset of node 2; every other row keeps its tester.37 commit. BD-315: the system, wow64, desktop, zink and gl rows move to the t38/bd315-uqueue-* heads (global locks deleted at unload; the system head also has the util tests Windows build fix), and recipe_commit to the main commit with BD-317 (the RADV host tests link the real monitored fence).",
   "recipe_repository": "amdgpu-wddm",
-  "recipe_commit": "0e8ebe818b3dede203be6f6b1354f57b47ec1806",
+  "recipe_commit": "6acd88041915c618dd2640b895cbe6e8a2ea5fb7",
   "repositories": {
     "amdgpu-wddm": {
       "url": "https://github.com/D-Ogi/amdgpu-wddm",
@@ -1101,7 +1101,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "b11faa28fb08b57c53690ee2f7f571181e83843d",
+      "commit": "96bae368cc10e6c7b2786ae06b5e4dbc36a8e9f8",
       "base": "9d8168c994752cd5c6fda8ae485022849c751e7d",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1165,7 +1165,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "9e14530f3d022c383a49d2f4bb91cc4447be564e",
+      "commit": "cd3b0dda4cb8e3ef6a2150b08ea0439aca7807ea",
       "base": "5dea8835db0f53f81a4c6af0e483d5ab7449220f",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1203,6 +1203,7 @@
           "path": "payload/vulkan/vulkan_radeon.dll"
         }
       ],
+      "role": "The system Vulkan ICD (radv-system): the tester.38 system line 9e14530f with BD-315: the global u_queue exit_mutex and the vk_wddm2 pending lock and condition are deleted when the ICD unloads (c6c3c0c1, the port of e4ec7ede) and the u_queue flag is set under the lock (d43c47d5, 72100150), and the Windows build fix of the util tests cache_test and u_queue_test (cd3b0dda, the pick of e7348711c92). That pick changes only src/util/tests: vulkan_radeon.dll of cd3b0dda differs from the d43c47d5 build only in the embedded git version string, the PE and debug directory stamps and the PDB GUID (28 bytes, same recipe and build directory), so the kit-bd315-av3 result of d43c47d5 (2026-11-05, 22631: the ICD unloads with no Application Verifier stop) holds for it.",
       "tests": [
         {
           "name": "radv-queue",
@@ -1274,7 +1275,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "1883ef02178679b233a1bff4ec2a67dfb7459753",
+      "commit": "fa9d1e57c6cdfc9ef574f883e4b210c06e851b03",
       "base": "038cb72013baf4ebd6c22dc2440b9dda88ffaf97",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1550,7 +1551,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "b11faa28fb08b57c53690ee2f7f571181e83843d",
+      "commit": "96bae368cc10e6c7b2786ae06b5e4dbc36a8e9f8",
       "base": "9d8168c994752cd5c6fda8ae485022849c751e7d",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1615,7 +1616,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "9e14530f3d022c383a49d2f4bb91cc4447be564e",
+      "commit": "cd3b0dda4cb8e3ef6a2150b08ea0439aca7807ea",
       "base": "5dea8835db0f53f81a4c6af0e483d5ab7449220f",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1654,6 +1655,7 @@
           "path": "payload/vulkan/vulkan_radeon.dll"
         }
       ],
+      "role": "The system Vulkan ICD (radv-system): the tester.38 system line 9e14530f with BD-315: the global u_queue exit_mutex and the vk_wddm2 pending lock and condition are deleted when the ICD unloads (c6c3c0c1, the port of e4ec7ede) and the u_queue flag is set under the lock (d43c47d5, 72100150), and the Windows build fix of the util tests cache_test and u_queue_test (cd3b0dda, the pick of e7348711c92). That pick changes only src/util/tests: vulkan_radeon.dll of cd3b0dda differs from the d43c47d5 build only in the embedded git version string, the PE and debug directory stamps and the PDB GUID (28 bytes, same recipe and build directory), so the kit-bd315-av3 result of d43c47d5 (2026-11-05, 22631: the ICD unloads with no Application Verifier stop) holds for it.",
       "tests": [
         {
           "name": "radv-queue",
@@ -1740,7 +1742,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "1883ef02178679b233a1bff4ec2a67dfb7459753",
+      "commit": "fa9d1e57c6cdfc9ef574f883e4b210c06e851b03",
       "base": "038cb72013baf4ebd6c22dc2440b9dda88ffaf97",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1834,7 +1836,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "63fd611f283c94929215c0282d6e4538c694ca7d",
+      "commit": "2aea6f7e7156f072d082370736bf6640ee3d0e37",
       "base": "088a15881c6115549956743b8d9bfda1a1f15e10",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1872,7 +1874,7 @@
           "path": "payload/desktop/bc250d3d_zink.dll"
         }
       ],
-      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f)."
+      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (210100d8) and its flag is set under the lock (2aea6f7e)."
     },
     {
       "id": "cpu-x64-rel",
@@ -1986,7 +1988,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "7906871a9d179648d6278c209d94a20904dd6500",
+      "commit": "4f72c0ad34528f8091f57e8a95176ace4ba58872",
       "base": "1226ec984d45b17f6730de84b2b7e98073b679cd",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -2024,7 +2026,7 @@
           "path": "payload/opengl/amdgpu_wddm_gl.dll"
         }
       ],
-      "role": "OpenGL ICD for 64-bit applications (BD-076): the tester.33 OpenGL line e0d424ff with the Windows driconf fixes (regular expressions bd7a5452, sections with an invalid pattern 8b184803, a build check of the static table 8cd482a7), the process name at any path length (557e06af), driver options read from the environment only in the lab flavour (de70a080) and the zstd 1.5.7 wrap for the disk cache (08e8ebfd). x64 only: opengl_icd.architectures registers x64 alone."
+      "role": "OpenGL ICD for 64-bit applications (BD-076): the tester.33 OpenGL line e0d424ff with the Windows driconf fixes (regular expressions bd7a5452, sections with an invalid pattern 8b184803, a build check of the static table 8cd482a7), the process name at any path length (557e06af), driver options read from the environment only in the lab flavour (de70a080) and the zstd 1.5.7 wrap for the disk cache (08e8ebfd), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (a924b23c) and its flag is set under the lock (4f72c0ad). x64 only: opengl_icd.architectures registers x64 alone."
     },
     {
       "id": "zink-x64-lab",
@@ -2032,7 +2034,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "63fd611f283c94929215c0282d6e4538c694ca7d",
+      "commit": "2aea6f7e7156f072d082370736bf6640ee3d0e37",
       "base": "088a15881c6115549956743b8d9bfda1a1f15e10",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -2071,7 +2073,7 @@
           "path": "payload/desktop/bc250d3d_zink.dll"
         }
       ],
-      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f)."
+      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (210100d8) and its flag is set under the lock (2aea6f7e)."
     },
     {
       "id": "cpu-x64-lab",
@@ -2187,7 +2189,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "7906871a9d179648d6278c209d94a20904dd6500",
+      "commit": "4f72c0ad34528f8091f57e8a95176ace4ba58872",
       "base": "1226ec984d45b17f6730de84b2b7e98073b679cd",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -2226,7 +2228,7 @@
           "path": "payload/opengl/amdgpu_wddm_gl.dll"
         }
       ],
-      "role": "OpenGL ICD for 64-bit applications (BD-076): the tester.33 OpenGL line e0d424ff with the Windows driconf fixes (regular expressions bd7a5452, sections with an invalid pattern 8b184803, a build check of the static table 8cd482a7), the process name at any path length (557e06af), driver options read from the environment only in the lab flavour (de70a080) and the zstd 1.5.7 wrap for the disk cache (08e8ebfd). x64 only: opengl_icd.architectures registers x64 alone."
+      "role": "OpenGL ICD for 64-bit applications (BD-076): the tester.33 OpenGL line e0d424ff with the Windows driconf fixes (regular expressions bd7a5452, sections with an invalid pattern 8b184803, a build check of the static table 8cd482a7), the process name at any path length (557e06af), driver options read from the environment only in the lab flavour (de70a080) and the zstd 1.5.7 wrap for the disk cache (08e8ebfd), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (a924b23c) and its flag is set under the lock (4f72c0ad). x64 only: opengl_icd.architectures registers x64 alone."
     },
     {
       "id": "router-x64-rel",
