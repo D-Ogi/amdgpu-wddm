@@ -243,7 +243,19 @@ static HRESULT Bc250HostOperation(HostBridge *s, uint32_t op, void *argument)
    }
    case BC250_HOST_DestroyAllocation2: {
       auto *a=(D3DKMT_DESTROYALLOCATION2 *)argument;
-      if (a->hResource || a->Flags.Value) return E_NOTIMPL;
+      // BD-200: AssumeNotInUse is the one flag admitted (D3DDDICB_DESTROYALLOCATION2FLAGS, d3dukmdt.h line 579,
+      // WDK 10.0.26100: AssumeNotInUse 0x1, SynchronousDestroy 0x2, Reserved, SystemUseOnly). The ICD sets it only
+      // for a BO it held until the progress values captured at its destroy retired (radv_wddm2_bo.c,
+      // buffer_destroy_queued). It goes to pfnDeallocate2Cb, whose D3DDDICB_DEALLOCATE2 carries the same flags
+      // (d3dumddi.h line 4045); flags 0 keep the plain Deallocate, which is the same call with all flags clear
+      // (d3dumddi.md, pfnDeallocate2Cb). Every other bit stays refused.
+      D3DDDICB_DESTROYALLOCATION2FLAGS assume = {}; assume.AssumeNotInUse = 1;
+      if (a->hResource || (a->Flags.Value & ~assume.Value)) return E_NOTIMPL;
+      if (a->Flags.AssumeNotInUse) {
+         D3DDDICB_DEALLOCATE2 b = {};
+         b.NumAllocations=a->AllocationCount; b.HandleList=a->phAllocationList; b.Flags=assume;
+         return HOST_CALL(Deallocate2, &b);
+      }
       D3DDDICB_DEALLOCATE b = {};
       b.NumAllocations=a->AllocationCount; b.HandleList=a->phAllocationList;
       return HOST_CALL(Deallocate, &b);
@@ -444,7 +456,9 @@ bool worker_admits_call(uint32_t operation, const void *argument) noexcept
    }
    case BC250_HOST_DestroyAllocation2: {
       const auto *a=static_cast<const D3DKMT_DESTROYALLOCATION2 *>(argument);
-      return !a->hResource && !a->Flags.Value;
+      // BD-200: flags 0 or AssumeNotInUse alone, as the dispatch admits them.
+      D3DDDICB_DESTROYALLOCATION2FLAGS assume = {}; assume.AssumeNotInUse = 1;
+      return !a->hResource && !(a->Flags.Value & ~assume.Value);
    }
    case BC250_HOST_WaitForSynchronizationObjectFromCpu: {
       // The paging fence wait of an allocation: one object, no event (the call returns when the fence reached it).

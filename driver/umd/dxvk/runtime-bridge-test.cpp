@@ -59,6 +59,13 @@ static HRESULT APIENTRY deallocate(HANDLE device, CONST D3DDDICB_DEALLOCATE *a) 
     require(device==&identity && !a->hResource && a->NumAllocations==1 && a->HandleList && a->HandleList[0]==37);
     ++deallocated; return S_OK;
 }
+// BD-200: the AssumeNotInUse destroy, with that flag alone.
+static unsigned deallocated2;
+static HRESULT APIENTRY deallocate2(HANDLE device, CONST D3DDDICB_DEALLOCATE2 *a) {
+    require(device==&identity && !a->hResource && a->NumAllocations==1 && a->HandleList && a->HandleList[0]==37);
+    require(a->Flags.Value==1 && a->Flags.AssumeNotInUse);
+    ++deallocated2; return S_OK;
+}
 static HRESULT APIENTRY map_range(HANDLE device, D3DDDI_MAPGPUVIRTUALADDRESS *a) {
     require(device==&identity && a->hAllocation==37);
     a->VirtualAddress=UINT64_C(0x600000000); a->PagingFenceValue=3; return E_PENDING;
@@ -185,6 +192,12 @@ static HRESULT APIENTRY worker_allocate(HANDLE device, D3DDDICB_ALLOCATE *a) {
 static HRESULT APIENTRY worker_deallocate(HANDLE device, CONST D3DDDICB_DEALLOCATE *a) {
     require(device==&identity && a->NumAllocations==1 && a->HandleList[0]==38); ++worker_deallocated; return S_OK;
 }
+// BD-200: a destroy with AssumeNotInUse reaches pfnDeallocate2Cb with that flag alone.
+static unsigned worker_deallocated2;
+static HRESULT APIENTRY worker_deallocate2(HANDLE device, CONST D3DDDICB_DEALLOCATE2 *a) {
+    require(device==&identity && !a->hResource && a->NumAllocations==1 && a->HandleList[0]==38 && a->Flags.Value==1);
+    ++worker_deallocated2; return S_OK;
+}
 static HRESULT APIENTRY worker_map(HANDLE device, D3DDDI_MAPGPUVIRTUALADDRESS *a) {
     require(device==&identity); a->VirtualAddress=UINT64_C(0x80000000); a->PagingFenceValue=4; return E_PENDING;
 }
@@ -196,6 +209,7 @@ static void test_worker_scope() {
     RuntimeDevice device; device.hDevice=&identity;
     device.KTCallbacks.pfnAllocateCb=worker_allocate;
     device.KTCallbacks.pfnDeallocateCb=worker_deallocate;
+    device.KTCallbacks.pfnDeallocate2Cb=worker_deallocate2;
     device.KTCallbacks.pfnMapGpuVirtualAddressCb=worker_map;
     device.KTCallbacks.pfnMakeResidentCb=resident;
     device.KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb=worker_wait;
@@ -237,8 +251,15 @@ static void test_worker_scope() {
         require(host_dispatch(&bridge,BC250_HOST_WaitForSynchronizationObjectFromCpu,&wait)==RuntimeDomain::wrong_domain);
         D3DKMT_DESTROYALLOCATION2 destroy{}; destroy.phAllocationList=&handle; destroy.AllocationCount=1;
         require(host_dispatch(&bridge,BC250_HOST_DestroyAllocation2,&destroy)==0 && worker_deallocated==1);
+        // BD-200: AssumeNotInUse alone is admitted on a worker too and reaches pfnDeallocate2Cb; with another bit
+        // next to it the call is refused before the runtime.
+        destroy.Flags.AssumeNotInUse=1;
+        require(host_dispatch(&bridge,BC250_HOST_DestroyAllocation2,&destroy)==0 && worker_deallocated2==1);
+        destroy.Flags.SynchronousDestroy=1;
+        require(host_dispatch(&bridge,BC250_HOST_DestroyAllocation2,&destroy)==RuntimeDomain::wrong_domain);
+        require(worker_deallocated==1 && worker_deallocated2==1);
     });
-    require(worker_allocated==1 && worker_waits==1 && bridge.worker_calls==5 && bridge.worker_refused==2);
+    require(worker_allocated==1 && worker_waits==1 && bridge.worker_calls==6 && bridge.worker_refused==3);
     // Shared, runtime-resource, existing-memory and cross-adapter allocations stay refused on a worker.
     on_thread(&device.workers,[&] {
         reset(); internal.Flags.CreateShared=1;
@@ -272,11 +293,11 @@ static void test_worker_scope() {
         bridge.device_lost=false;
     });
     require(worker_allocated==1 && worker_deallocated==1 && submitted==0 && worker_errors==0 && !bridge.lost_reported);
-    require(bridge.worker_calls==5 && bridge.worker_refused==13);
+    require(bridge.worker_calls==6 && bridge.worker_refused==14);
     // A worker of another device that reaches this bridge (a winsys kept for another identity, BD-253): refused.
     reset();
     on_thread(&other.workers,[&] { require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==RuntimeDomain::wrong_domain); });
-    require(worker_allocated==1 && bridge.worker_calls==5);
+    require(worker_allocated==1 && bridge.worker_calls==6);
     (void)otherBridge;
     // revoke waits for the admitted call in flight, and after it the worker's calls are refused.
     worker_inside=CreateEventW(nullptr,TRUE,FALSE,nullptr); worker_release=CreateEventW(nullptr,TRUE,FALSE,nullptr);
@@ -298,12 +319,12 @@ static void test_worker_scope() {
     CloseHandle(worker_inside); CloseHandle(worker_release); worker_inside=worker_release=nullptr;
     reset();
     on_thread(&device.workers,[&] { require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==RuntimeDomain::wrong_domain); });
-    require(worker_allocated==2 && bridge.worker_calls==6 && bridge.worker_refused==14);
+    require(worker_allocated==2 && bridge.worker_calls==7 && bridge.worker_refused==15);
     // A new initialize of the owner (after a close that joined the workers) opens the gate again.
     device.workers.reopen();
     reset();
     on_thread(&device.workers,[&] { require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==0); });
-    require(!device.workers.revoked() && worker_allocated==3 && bridge.worker_calls==7 && bridge.worker_refused==14);
+    require(!device.workers.revoked() && worker_allocated==3 && bridge.worker_calls==8 && bridge.worker_refused==15);
     device.workers.revoke();
     // The DDI thread of the device is not a worker: its path is the RuntimeDomain's, unchanged by the gate.
     {
@@ -408,21 +429,41 @@ int main() {
     require(host_dispatch(&bridge, BC250_HOST_MakeResident, &residency)==0x103);
     // BD-201: DestroyAllocation2 with a mapped range reaches the plain Deallocate callback, whose default
     // behaviour is VidMm's deferral (allocation-usage-tracking.md), and nothing else releases the range on
-    // the way. Non-zero flags stay refused, so the ICD can never ask for the immediate destroy.
+    // the way. BD-200: AssumeNotInUse alone reaches pfnDeallocate2Cb (below); every other flag stays refused.
     D3DDDI_MAPGPUVIRTUALADDRESS mapping{};
     mapping.hAllocation=info.hAllocation; mapping.SizeInPages=1;
     require(host_dispatch(&bridge, BC250_HOST_MapGpuVirtualAddress, &mapping)==0x103);
     require(mapping.VirtualAddress==UINT64_C(0x600000000));
     D3DKMT_DESTROYALLOCATION2 release{};
     release.AllocationCount=1; release.phAllocationList=&info.hAllocation;
+    // A runtime without pfnDeallocate2Cb: the AssumeNotInUse destroy is not supported, and the ICD's retry with
+    // flags 0 is the one that reaches the runtime (radv_wddm2_bo_destroy_now).
     release.Flags.AssumeNotInUse=1;
+    require(host_dispatch(&bridge, BC250_HOST_DestroyAllocation2, &release)==static_cast<int32_t>(0xc00000bbu));
+    device.KTCallbacks.pfnDeallocate2Cb=deallocate2;
+    // Every other bit, alone or next to AssumeNotInUse, is refused before the runtime.
+    release.Flags.SynchronousDestroy=1;
+    require(host_dispatch(&bridge, BC250_HOST_DestroyAllocation2, &release)==static_cast<int32_t>(0xc00000bbu));
+    release.Flags.AssumeNotInUse=0;
+    require(host_dispatch(&bridge, BC250_HOST_DestroyAllocation2, &release)==static_cast<int32_t>(0xc00000bbu));
+    release.Flags.Value=0; release.Flags.SystemUseOnly=1;
+    require(host_dispatch(&bridge, BC250_HOST_DestroyAllocation2, &release)==static_cast<int32_t>(0xc00000bbu));
+    release.Flags.Value=0; release.Flags.Reserved=1;
     require(host_dispatch(&bridge, BC250_HOST_DestroyAllocation2, &release)==static_cast<int32_t>(0xc00000bbu));
     release.Flags.Value=0; release.hResource=91;
     require(host_dispatch(&bridge, BC250_HOST_DestroyAllocation2, &release)==static_cast<int32_t>(0xc00000bbu));
-    release.hResource=0;
-    require(deallocated==0);
+    release.Flags.AssumeNotInUse=1;
+    require(host_dispatch(&bridge, BC250_HOST_DestroyAllocation2, &release)==static_cast<int32_t>(0xc00000bbu));
+    release.Flags.Value=0; release.hResource=0;
+    require(deallocated==0 && deallocated2==0);
+    // BD-200: AssumeNotInUse alone reaches pfnDeallocate2Cb with that flag alone, and nothing else on the way.
+    release.Flags.AssumeNotInUse=1;
     require(host_dispatch(&bridge, BC250_HOST_DestroyAllocation2, &release)==0);
-    require(deallocated==1 && !freed_ranges && !evicted);
+    require(deallocated==0 && deallocated2==1 && !freed_ranges && !evicted);
+    // Flags 0 keep the plain Deallocate callback.
+    release.Flags.Value=0;
+    require(host_dispatch(&bridge, BC250_HOST_DestroyAllocation2, &release)==0);
+    require(deallocated==1 && deallocated2==1 && !freed_ranges && !evicted);
     command.BroadcastContext[0]=2;
     require(host_dispatch(&bridge, BC250_HOST_SubmitCommand, &command)<0 && submitted==3);
     // BD-198: the GPU work count: the three submissions and the one sparse update that reached the runtime. The fence
@@ -528,7 +569,7 @@ int main() {
         require(!bc250_host_fence_valid(&host,UINT64_MAX,"sync value",3) && reporting.device_lost);
     }
     test_adapter_presence();
-    std::cout << "PASS runtime bridge: allocation outputs, context translation, submission, sparse update, mapped destroy to Deallocate, worker denial, host-lost class, adapter check, teardown\n";
+    std::cout << "PASS runtime bridge: allocation outputs, context translation, submission, sparse update, mapped destroy to Deallocate, AssumeNotInUse to Deallocate2, worker denial, host-lost class, adapter check, teardown\n";
 }
 
 
