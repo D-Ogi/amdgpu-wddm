@@ -173,71 +173,7 @@ static void test_adapter_presence() {
     require(probe_adapter_presence(luid,AdapterPresenceKmt{})==AdapterPresence::unknown);
     require(probe_adapter_presence(0,kmt)==AdapterPresence::unknown);
 }
-// BD-308: the CPU wait of an offer for the device's work. The fake kernel wait records what it was asked and, like
-// the kernel, sets the event when the fences reach their values; "complete" decides whether it writes them.
-static volatile UINT64 work_fence[3];
-static unsigned work_waits; static UINT work_count; static D3DKMT_HANDLE work_objects[17]; static UINT64 work_values[17];
-static bool work_complete; static HRESULT work_result;
-static HRESULT APIENTRY wait_cpu_work(HANDLE device, const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU *a) {
-    require(device==&identity && a->hAsyncEvent && !a->Flags.Value && a->ObjectCount<=17);
-    ++work_waits; work_count=a->ObjectCount;
-    for (UINT i=0;i<a->ObjectCount;++i) { work_objects[i]=a->ObjectHandleArray[i]; work_values[i]=a->FenceValueArray[i]; }
-    if (FAILED(work_result)) return work_result;
-    if (work_complete) {
-        for (UINT i=0;i<a->ObjectCount;++i) {
-            const D3DKMT_HANDLE h=a->ObjectHandleArray[i];
-            if (h>=80 && h<83) work_fence[h-80]=a->FenceValueArray[i];
-        }
-        SetEvent(a->hAsyncEvent);
-    }
-    return S_OK;
-}
-static void test_offer_work_wait() {
-    RuntimeDevice d; d.hDevice=&identity;
-    HostBridge b{}; b.device=&d;
-    // Outside the runtime scope the call is refused, and so is a bound above 10 s.
-    require(wait_device_work_retired(b,0)==E_INVALIDARG);
-    RuntimeDomain::Scope scope(d.domain);
-    require(wait_device_work_retired(b,10001)==E_INVALIDARG);
-    work_waits=0; work_result=S_OK;
-    // No published work: no kernel call, even without the callback.
-    require(wait_device_work_retired(b,50)==S_OK && !work_waits);
-    // Two queues with published progress, one already retired; the Present fence is behind as well.
-    work_fence[0]=4; work_fence[1]=9; work_fence[2]=2;
-    b.progress[0]={1,80,6,const_cast<const UINT64 *>(&work_fence[0])};
-    b.progress[3]={4,81,9,const_cast<const UINT64 *>(&work_fence[1])};
-    b.present_sync=82; b.present_value=3; b.present_cpu=const_cast<const UINT64 *>(&work_fence[2]);
-    // Work pending and no CPU wait callback: the caller is told, and nothing is waited for.
-    require(wait_device_work_retired(b,50)==E_NOTIMPL && !work_waits);
-    d.KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb=wait_cpu_work;
-    // The kernel retires the work: one call names exactly the two fences that are behind, with their values.
-    work_complete=true;
-    require(wait_device_work_retired(b,50)==S_OK && work_waits==1 && work_count==2);
-    require(work_objects[0]==80 && work_values[0]==6 && work_objects[1]==82 && work_values[1]==3);
-    require(work_fence[0]==6 && work_fence[2]==3);
-    // Everything retired now: no second kernel call.
-    require(wait_device_work_retired(b,50)==S_OK && work_waits==1);
-    // A new submission that does not retire inside the bound: S_FALSE after about the bound, not earlier.
-    b.progress[3].value=12; work_complete=false;
-    const ULONGLONG start=GetTickCount64();
-    require(wait_device_work_retired(b,40)==S_FALSE && work_waits==2 && work_count==1 && work_values[0]==12);
-    require(GetTickCount64()-start>=30);
-    // A failed kernel call is returned as it is.
-    work_result=E_INVALIDARG;
-    require(wait_device_work_retired(b,40)==E_INVALIDARG && work_waits==3);
-    work_result=S_OK;
-    // The lost-device value in any fence is a loss, before and instead of a wait.
-    work_fence[1]=UINT64_MAX;
-    require(wait_device_work_retired(b,40)==D3DDDIERR_DEVICEREMOVED && work_waits==3);
-    work_fence[1]=12;
-    work_fence[2]=UINT64_MAX;
-    require(wait_device_work_retired(b,40)==D3DDDIERR_DEVICEREMOVED && work_waits==3);
-    // A progress record without a value or a CPU address is not work.
-    work_fence[2]=3; b.progress[0]={}; b.progress[3]={4,81,0,const_cast<const UINT64 *>(&work_fence[1])};
-    require(wait_device_work_retired(b,40)==S_OK && work_waits==3);
-}
 int main() {
-    test_offer_work_wait();
     test_present_bridge();
     test_runtime_present();
     RuntimeDevice device;
@@ -450,7 +386,7 @@ int main() {
         require(!bc250_host_fence_valid(&host,UINT64_MAX,"sync value",3) && reporting.device_lost);
     }
     test_adapter_presence();
-    std::cout << "PASS runtime bridge: allocation outputs, context translation, submission, sparse update, mapped destroy to Deallocate, worker denial, host-lost class, adapter check, offer work wait, teardown\n";
+    std::cout << "PASS runtime bridge: allocation outputs, context translation, submission, sparse update, mapped destroy to Deallocate, worker denial, host-lost class, adapter check, teardown\n";
 }
 
 

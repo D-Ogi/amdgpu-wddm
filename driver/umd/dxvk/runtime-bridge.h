@@ -157,14 +157,6 @@ HRESULT wait_present_idle(HostBridge &bridge);
 // CPU wait until the Present that signalled value has retired; value must be one this bridge signalled.
 // Returns at once when the fence already reached it. Used before the engine writes a Present shadow again.
 HRESULT wait_present_value(HostBridge &bridge, UINT64 value);
-// BD-308: a CPU wait until the kernel has retired all GPU work that this device submitted: each progress value that
-// the hosted ICD published (bc250_host_progress) and the last Present value. The ICD signals a progress value with
-// SignalSynchronizationObjectFromGpu2 behind its submission (radv_wddm2_cs.c), so the scheduler writes the value only
-// after it has retired that submission. When this returns S_OK, the kernel has no work of this device in flight.
-// Results: S_OK when all values are reached (also when nothing is pending, with no kernel call), S_FALSE when the wait
-// timed out, D3DDDIERR_DEVICEREMOVED when a fence reads the lost-device value, E_NOTIMPL when work is pending and the
-// runtime gave no CPU wait callback, or the status of a failed callback. timeout_ms is at most 10000.
-HRESULT wait_device_work_retired(HostBridge &bridge, DWORD timeout_ms);
 int32_t host_dispatch(void *userdata, uint32_t operation, void *argument);
 // Descriptor is copied by the hosted ICD, but userdata and device remain borrowed.
 // Only call with a live, initialized bridge. Device destruction must first drain
