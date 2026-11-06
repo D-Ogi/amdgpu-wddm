@@ -137,6 +137,7 @@ function Read-InstallState { [pscustomobject]@{install_root=$PSScriptRoot} }
 function Write-Info($s) { }
 function Write-Step($s) { }
 function Write-Fail($s) { Write-Output ('FAIL: ' + $s) }
+function Write-Warn2($s) { Write-Output ('WARN: ' + $s) }
 function Get-LabInstallPaths { @() }
 function Get-OurDriverPackages { @() }
 function Read-SmartAppControlState { [pscustomobject]@{ state='off'; detail='off (test fixture)' } }
@@ -160,6 +161,11 @@ $sacOn = $fakeCommon.Replace("state='off'; detail='off (test fixture)'", "state=
 [IO.File]::WriteAllText((Join-Path $decline 'installer\common.ps1'), $sacOn)
 $unaskedSac = Invoke-Native -File $hostExe -Arguments @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $decline 'installer\uninstall.ps1'),'-RestoreSystemTuning')
 Assert ($unaskedSac.text -match 'MUTATION REACHED: turn Smart App Control off \(on now\)' -and $unaskedSac.text -notmatch 'QUESTION ASKED') ('With Smart App Control on, the first change of a run without -Yes was not its turn-off, or a question came first: ' + (Tail $unaskedSac.text))
+# Smart App Control unknown: the warning goes out, no question is asked, and the first change is reached.
+$sacUnknown = $fakeCommon.Replace("state='off'; detail='off (test fixture)'", "state='unknown'; detail='unknown (test fixture)'")
+[IO.File]::WriteAllText((Join-Path $decline 'installer\common.ps1'), $sacUnknown)
+$unaskedUnknown = Invoke-Native -File $hostExe -Arguments @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $decline 'installer\uninstall.ps1'),'-RestoreSystemTuning')
+Assert ($unaskedUnknown.text -match 'Smart App Control: state unknown' -and $unaskedUnknown.text -notmatch 'QUESTION ASKED' -and $unaskedUnknown.text -match 'MUTATION REACHED') ('With Smart App Control unknown, the warning, the question or the first change was not as expected: ' + (Tail $unaskedUnknown.text))
 # An unreadable driver store stops before tuning restoration or recovery copies, even with explicit consent.
 $failedInventory = $fakeCommon.Replace('function Get-OurDriverPackages { @() }', "function Get-OurDriverPackages { throw 'fixture inventory failure' }")
 [IO.File]::WriteAllText((Join-Path $decline 'installer\common.ps1'), $failedInventory)
