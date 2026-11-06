@@ -12118,9 +12118,11 @@ static NTSTATUS Bc250WddmGetMultiplaneOverlayCaps(_In_ const HANDLE hAdapter,
     WddmMpoCapsFactor(&pCaps->MaxShrinkFactor, stretch ? BC250_WDDM_MPO_SHRINK_BITS : BC250_WDDM_MPO_ONE_BITS);
     note = InterlockedIncrement(&g_MpoCapsCalls);
     if (note <= BC250_WDDM_MPO3_LOG_CALLS) {
-        // Integers only, in thousandths: no float in a log line. The line names the lab bit when it is set.
-        GuardLog("wddm: MPO caps %ld src %u planes %u rgb %u yuv %u stretch %u shrink %u caps 0x%X%s", note,
-                 pCaps->VidPnSourceId, pCaps->MaxPlanes, pCaps->MaxRGBPlanes, pCaps->MaxYUVPlanes,
+        // Integers only, in thousandths: no float in a log line. Two lines, because one format is over the
+        // guardlog-width limit of 159 characters. The second line names the lab bit when it is set.
+        GuardLog("wddm: MPO caps %ld src %u planes %u rgb %u yuv %u", note, pCaps->VidPnSourceId, pCaps->MaxPlanes,
+                 pCaps->MaxRGBPlanes, pCaps->MaxYUVPlanes);
+        GuardLog("wddm: MPO caps %ld stretch %u shrink %u caps 0x%X%s", note,
                  stretch ? BC250_MPO_MAX_STRETCH_MILLI : 1000u, stretch ? BC250_MPO_MAX_SHRINK_MILLI : 1000u,
                  pCaps->OverlayCaps.Value, stretch ? " stretch-caps-bit" : "");
     }
