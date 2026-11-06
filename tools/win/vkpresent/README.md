@@ -66,6 +66,13 @@ either: the arm that sets the route and the client that runs under it cannot the
 asked. The line names the source (`source=env`, `registry` or `default`). `--expect-route` overrides what the
 line reports as asked, for an arm that wants to state its own expectation.
 
+The 32-bit system ICD has the GDI route only (`tools/win/amdgpu_wddm_control/README.md`, `WsiRoute`). It reads
+the switch, logs it as `asked=` with `reason=x86-gdi-only`, and presents through GDI with every value. So
+`vkpresent-x86.exe` without `--expect-route` expects `gdi` whatever the switch asks, and prints a note with the
+value of the switch when the two differ. The JSON keeps that value as `route_switch`. Before this rule, an x86
+run without `--expect-route` compared with the default `dxgi` and failed on a correct ICD (BD-256, dead-rules
+kit-r2 L4a).
+
 Both ICD flavours read the variable. BD-167 took the shader overrides out of the release flavour, not this
 switch.
 
@@ -92,7 +99,7 @@ statically.
 ## The line
 
 ```
-vkpresent PASS arch=x86 route=dxgi/dxgi source=registry icd=C:\...\wow64\vulkan\vulkan_radeon.dll
+vkpresent PASS arch=x86 route=gdi/gdi source=registry icd=C:\...\wow64\vulkan\vulkan_radeon32.dll
   device="AMD Custom GPU 0405 (RADV GFX1013)" api=1.4.0 driver=... format=44 usage=0x9F frames=60
   presented=60 lost=0 readback=ok maxms=16.904 total=1.021s
 ```
