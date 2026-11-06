@@ -714,6 +714,12 @@ if ($NoProvenance) {
     $r.text -split "`r?`n" | Where-Object { $_ -match '^(FAIL|provenance: (FAIL|PASS))' } | ForEach-Object { "  package $_" }
     if ($r.code -ne 0) { throw 'provenance: a packaged file is not the recorded one (see above)' }
 }
+# BD-322: the state catalog in the bytes of the staged payload, for every flavour and also with -NoProvenance (which
+# skips the source-input check of provenance.py). Every state reader carries the catalog of amdgpu-state.bin; a
+# router that compiles another one cannot open the store, and DWM then takes the CPU route with no message.
+$r = Invoke-Headless -File $pythonExe -Arguments @('-I', (Join-Path $PSScriptRoot 'state_catalog_bytes.py'), '--payload', (Join-Path $pkg 'payload'), '--repo', $repo) -TimeoutSeconds 300
+$r.text
+if ($r.code -ne 0) { throw 'state catalog: a state reader of the package compiles another catalog than amdgpu-state.bin (see above)' }
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-parse51.ps1'), '-Directory', $inst) -TimeoutSeconds 120
 $r.text
