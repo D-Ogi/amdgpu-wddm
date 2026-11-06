@@ -4,10 +4,13 @@
 // header. The real umd_blob.c, gdi_admission.h, object_index.h and dcn_translate.c are compiled beside it.
 //
 // The contract (d3dkmddi.md, DxgkDdiOpenAllocation): STATUS_SUCCESS promises a non-NULL hDeviceSpecificAllocation for
-// every allocation, and STATUS_NO_MEMORY is a listed return. The pool allocation of the object is failed at the first,
-// a middle and the last allocation of a five-allocation call. Each case must answer STATUS_NO_MEMORY and leave nothing
-// of the call behind: no pool block, no object on the adapter's list or in its index, no ObjectCount, no handle data
-// held, no LB7A open count. A blob the driver does not admit keeps the BD-060 NULL handle and the success.
+// every allocation, and STATUS_NO_MEMORY and STATUS_INVALID_PARAMETER are listed returns. The pool allocation of the
+// object is failed at the first, a middle and the last allocation of a five-allocation call. Each case must answer
+// STATUS_NO_MEMORY and leave nothing of the call behind: no pool block, no object on the adapter's list or in its
+// index, no ObjectCount, no handle data held, no LB7A open count.
+// BD-205: a blob the driver does not admit (a BC2A blob that does not parse, an LB7A blob that is refused or that is
+// no LB7A blob) fails the whole call with STATUS_INVALID_PARAMETER at the first, a middle and the last position, leaves
+// nothing behind in the same way, and counts one refusal: UmdOpenRefused or StdAlloc.GdiOpened[slot][1].
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -131,6 +134,7 @@ typedef struct {
     LONG ObjectCount;
     ULONGLONG ObjectSerial;
     BC250_STDALLOC_COUNTERS StdAlloc;
+    LONG UmdOpenRefused;
     LONG Calls[1];
     BOOLEAN GpuPresentGate, HandleIdentityProbe;
     LONG HandleIdentityProbeCalls[2];
@@ -163,10 +167,11 @@ static void* g_buckets[BC250_OBJECT_INDEX_BUCKETS];
 static BC250_WDDM g_wddm;
 static BC250_DEVICE g_device;
 static BC250_WDDM_OBJECT* g_parent;
-static unsigned char g_bc2a[UMD_BLOB_ALLOC_BYTES];
-static BC250_GDI_PRIVATE g_lb7a, g_refused;
+static unsigned char g_bc2a[UMD_BLOB_ALLOC_BYTES], g_badBc2a[UMD_BLOB_ALLOC_BYTES];
+static BC250_GDI_PRIVATE g_lb7a, g_refused, g_unread;
 
-enum { K_LB7A, K_BC2A, K_REFUSED };
+enum { K_LB7A, K_BC2A, K_REFUSED, K_BAD_BC2A, K_UNREAD };
+#define UNREAD_SLOT (BC250_GDI_SLOTS - 1)
 #define MAX_ALLOCS 8
 static DXGK_OPENALLOCATIONINFO g_info[MAX_ALLOCS];
 
@@ -193,10 +198,18 @@ static void Blobs(void)
     g_lb7a.Magic = BC250_GDI_PRIVATE_MAGIC; g_lb7a.Type = 2;
     g_refused = g_lb7a;
     g_refused.Type = 5;                                                                   // a type no policy admits
-    // Preconditions: the three blobs are what the cases below call them.
+    memcpy(g_badBc2a, g_bc2a, sizeof(g_bc2a));
+    Put32(g_badBc2a + 32, 0x99u);                                                         // no heap of the contract
+    g_unread = g_lb7a;
+    g_unread.Surface.Magic = 0;                                                           // no blob this driver wrote
+    // Preconditions: the five blobs are what the cases below call them.
     CHECK(UmdBlobIsAlloc(g_bc2a, sizeof(g_bc2a)) && UmdBlobParseAlloc(g_bc2a, sizeof(g_bc2a), &view) == UMD_BLOB_OK);
     CHECK(Bc250Lb7aAdmit(&g_lb7a, sizeof(g_lb7a), 0, 0, 1, &type, &policy) == BC250_LB7A_ADMITTED && type == 2);
     CHECK(Bc250Lb7aAdmit(&g_refused, sizeof(g_refused), 0, 0, 1, &type, &policy) == BC250_LB7A_REFUSED && type == 5);
+    CHECK(UmdBlobIsAlloc(g_badBc2a, sizeof(g_badBc2a)) &&
+          UmdBlobParseAlloc(g_badBc2a, sizeof(g_badBc2a), &view) != UMD_BLOB_OK);
+    CHECK(!UmdBlobIsAlloc(&g_unread, sizeof(g_unread)) &&
+          Bc250Lb7aAdmit(&g_unread, sizeof(g_unread), 0, 0, 1, &type, &policy) == BC250_LB7A_UNREAD);
 }
 
 static void Setup(void)
@@ -232,8 +245,13 @@ static DXGKARG_OPENALLOCATION Call(const int* Kinds, unsigned Count)
     for (i = 0; i < Count; i++)
     {
         g_info[i].hAllocation = 0x40000100u + i;
-        if (Kinds[i] == K_BC2A) { g_info[i].pPrivateDriverData = g_bc2a; g_info[i].PrivateDriverDataSize = sizeof(g_bc2a); }
-        else { g_info[i].pPrivateDriverData = Kinds[i] == K_LB7A ? &g_lb7a : &g_refused; g_info[i].PrivateDriverDataSize = sizeof(g_lb7a); }
+        if (Kinds[i] == K_BC2A || Kinds[i] == K_BAD_BC2A) {
+            g_info[i].pPrivateDriverData = Kinds[i] == K_BC2A ? g_bc2a : g_badBc2a;
+            g_info[i].PrivateDriverDataSize = sizeof(g_bc2a);
+        } else {
+            g_info[i].pPrivateDriverData = Kinds[i] == K_LB7A ? &g_lb7a : Kinds[i] == K_REFUSED ? &g_refused : &g_unread;
+            g_info[i].PrivateDriverDataSize = sizeof(g_lb7a);
+        }
     }
     memset(&call, 0, sizeof(call));
     call.NumAllocations = Count;
@@ -244,7 +262,7 @@ static DXGKARG_OPENALLOCATION Call(const int* Kinds, unsigned Count)
 // What the adapter holds: list length, index entries, ObjectCount, pool blocks, handle data and the counters.
 typedef struct {
     unsigned Listed, Indexed, Pool, Acquires, Releases;
-    LONG Count;
+    LONG Count, UmdOpenRefused;
     BC250_STDALLOC_COUNTERS Counters;
 } SNAPSHOT;
 static SNAPSHOT Snap(void)
@@ -261,6 +279,7 @@ static SNAPSHOT Snap(void)
     }
     s.Pool = g_poolLive; s.Acquires = g_acquires; s.Releases = g_releases;
     s.Count = g_wddm.ObjectCount;
+    s.UmdOpenRefused = g_wddm.UmdOpenRefused;
     s.Counters = g_wddm.StdAlloc;
     return s;
 }
@@ -271,14 +290,15 @@ static void CloseAll(unsigned Count)
     for (i = 0; i < Count; i++) WddmFreeObject(WddmObject(g_info[i].hDeviceSpecificAllocation, BC250_WDDM_MAGIC_OPENED));
 }
 
-// Every admitted allocation of a successful call has its own opened object, bound to the allocation dxgkrnl named.
+// Every allocation of a successful call has its own opened object, bound to the allocation dxgkrnl named: the
+// contract's non-NULL handle (BD-205: a successful call has no refused entry left).
 static void CheckOpened(const int* Kinds, unsigned Count)
 {
     unsigned i;
     for (i = 0; i < Count; i++)
     {
         BC250_WDDM_OBJECT* o = WddmObject(g_info[i].hDeviceSpecificAllocation, BC250_WDDM_MAGIC_OPENED);
-        if (Kinds[i] == K_REFUSED) { CHECK(g_info[i].hDeviceSpecificAllocation == NULL); continue; }   // BD-060
+        CHECK(g_info[i].hDeviceSpecificAllocation != NULL);
         CHECK(o != NULL);
         if (o == NULL) continue;
         CHECK(Bc250ObjectIndexFind(&g_wddm.ObjectIndex, o) == o && o->OwnerDevice == g_parent);
@@ -290,7 +310,6 @@ static void CheckOpened(const int* Kinds, unsigned Count)
 static void Success(void)
 {
     static const int five[] = { K_LB7A, K_BC2A, K_LB7A, K_BC2A, K_LB7A };
-    static const int refused[] = { K_LB7A, K_REFUSED, K_BC2A };
     DXGKARG_OPENALLOCATION call;
     SNAPSHOT before, after;
 
@@ -302,20 +321,20 @@ static void Success(void)
     after = Snap();
     CHECK(after.Count == before.Count + 5 && after.Listed == before.Listed + 5 && after.Indexed == before.Indexed + 5);
     CHECK(after.Pool == before.Pool + 5 && after.Acquires == before.Acquires + 5 && after.Releases == after.Acquires);
-    CHECK(after.Counters.GdiOpened[2][0] == 3 && after.Counters.GdiOpened[2][1] == 0);
+    CHECK(after.Counters.GdiOpened[2][0] == 3 && after.Counters.GdiOpened[2][1] == 0 && after.UmdOpenRefused == 0);
     CloseAll(5);
     after = Snap();
     CHECK(after.Count == before.Count && after.Listed == before.Listed && after.Pool == before.Pool);
-
-    // BD-060 stays: a blob the driver does not admit gets a NULL handle in a call that succeeds, and is counted as
-    // refused under its type.
-    call = Call(refused, 3);
-    CHECK(Bc250WddmOpenAllocation(g_parent, &call) == STATUS_SUCCESS);
-    CheckOpened(refused, 3);
-    after = Snap();
-    CHECK(after.Count == before.Count + 2 && after.Counters.GdiOpened[2][0] == 4 && after.Counters.GdiOpened[5][1] == 1);
-    CloseAll(3);
     Teardown();
+}
+
+// True when every entry of Kinds is a blob the driver admits.
+static int AllAdmitted(const int* Kinds, unsigned Count)
+{
+    unsigned i;
+    for (i = 0; i < Count; i++)
+        if (Kinds[i] != K_LB7A && Kinds[i] != K_BC2A) return 0;
+    return 1;
 }
 
 // The pool allocation of entry Fail fails. Kinds have only admitted entries before Fail, so it is the (Fail + 1)th
@@ -339,19 +358,66 @@ static void NoMemory(const int* Kinds, unsigned Count, unsigned Fail, unsigned A
     CHECK(after.Pool == before.Pool && g_wddm.ObjectIndex.Misses == 0);
     CHECK(after.Releases == after.Acquires && after.Acquires == before.Acquires + AllocationsBefore);
     CHECK(!memcmp(&after.Counters, &before.Counters, sizeof(after.Counters)));
+    CHECK(after.UmdOpenRefused == before.UmdOpenRefused);
     CHECK(g_lastLog != NULL && strstr(g_lastLog, "no memory") != NULL);
-    // The same call again with memory: it succeeds and every admitted allocation has a handle.
+    // The same call again with memory: it succeeds and every allocation has a handle, or, when a refused blob
+    // follows the failed entry, it now reaches that blob and fails with STATUS_INVALID_PARAMETER.
     call = Call(Kinds, Count);
+    if (AllAdmitted(Kinds, Count)) {
+        CHECK(Bc250WddmOpenAllocation(g_parent, &call) == STATUS_SUCCESS);
+        CheckOpened(Kinds, Count);
+        CloseAll(Count);
+    } else
+        CHECK(Bc250WddmOpenAllocation(g_parent, &call) == STATUS_INVALID_PARAMETER);
+    Teardown();
+}
+
+// BD-205: entry Fail is a blob the driver does not admit, and every entry before it is admitted. The call answers
+// STATUS_INVALID_PARAMETER, frees what it opened, publishes no handle, and counts the one refusal: in UmdOpenRefused
+// for a BC2A blob, in StdAlloc.GdiOpened[Slot][1] for an LB7A one, and in nothing else.
+static void Refusal(const int* Kinds, unsigned Count, unsigned Fail, unsigned AllocationsBefore, int Slot)
+{
+    DXGKARG_OPENALLOCATION call;
+    SNAPSHOT before, after;
+    BC250_STDALLOC_COUNTERS expected;
+    unsigned i;
+
+    Setup();
+    before = Snap();
+    call = Call(Kinds, Count);
+    g_lastLog = NULL;
+    CHECK(Bc250WddmOpenAllocation(g_parent, &call) == STATUS_INVALID_PARAMETER);
+    after = Snap();
+    for (i = 0; i < Count; i++) CHECK(g_info[i].hDeviceSpecificAllocation == NULL);
+    CHECK(after.Count == before.Count && after.Listed == before.Listed && after.Indexed == before.Indexed);
+    CHECK(after.Pool == before.Pool && g_wddm.ObjectIndex.Misses == 0);
+    CHECK(after.Releases == after.Acquires && after.Acquires == before.Acquires + AllocationsBefore);
+    expected = before.Counters;
+    if (Kinds[Fail] == K_BAD_BC2A)
+        CHECK(after.UmdOpenRefused == before.UmdOpenRefused + 1);
+    else {
+        CHECK(after.UmdOpenRefused == before.UmdOpenRefused);
+        expected.GdiOpened[Slot][1]++;
+    }
+    CHECK(!memcmp(&after.Counters, &expected, sizeof(expected)));
+    CHECK(g_lastLog != NULL && strstr(g_lastLog, "invalid parameter") != NULL);
+    // The admitted entries alone open as before: the refusal left nothing that stops the next call.
+    call = Call(Kinds, Fail);
     CHECK(Bc250WddmOpenAllocation(g_parent, &call) == STATUS_SUCCESS);
-    CheckOpened(Kinds, Count);
-    CloseAll(Count);
+    CheckOpened(Kinds, Fail);
+    CloseAll(Fail);
     Teardown();
 }
 
 int main(void)
 {
     static const int five[] = { K_LB7A, K_BC2A, K_LB7A, K_BC2A, K_LB7A };
-    static const int afterRefused[] = { K_LB7A, K_REFUSED, K_BC2A };
+    static const int beforeRefused[] = { K_LB7A, K_BC2A, K_REFUSED };
+    static const int refusedFirst[] = { K_REFUSED, K_LB7A, K_BC2A };
+    static const int refusedMiddle[] = { K_LB7A, K_REFUSED, K_BC2A };
+    static const int badBc2aMiddle[] = { K_LB7A, K_BC2A, K_BAD_BC2A, K_LB7A };
+    static const int badBc2aOnly[] = { K_BAD_BC2A };
+    static const int unreadLast[] = { K_BC2A, K_LB7A, K_LB7A, K_UNREAD };
     static const int one[] = { K_BC2A };
 
     Blobs();
@@ -359,8 +425,13 @@ int main(void)
     NoMemory(five, 5, 0, 0);            // the first allocation of the call
     NoMemory(five, 5, 2, 2);            // a middle one, after an LB7A and a BC2A object
     NoMemory(five, 5, 4, 4);            // the last one, after four objects
-    NoMemory(afterRefused, 3, 2, 1);    // behind a BD-060 refusal: the refusal is not counted either
+    NoMemory(beforeRefused, 3, 1, 1);   // before a refused blob: the refusal is never reached and not counted
     NoMemory(one, 1, 0, 0);             // a one-allocation call
+    Refusal(refusedFirst, 3, 0, 0, 5);  // an LB7A type no policy admits, first: nothing opened yet
+    Refusal(refusedMiddle, 3, 1, 1, 5); // the same in the middle, after one opened LB7A object
+    Refusal(badBc2aMiddle, 4, 2, 2, 0); // a BC2A blob that does not parse, after two opened objects
+    Refusal(badBc2aOnly, 1, 0, 0, 0);   // a one-allocation call
+    Refusal(unreadLast, 4, 3, 3, UNREAD_SLOT); // no LB7A blob at all, last: filed under the last slot
     if (g_failures) { printf("open_allocation_test: %d of %d checks FAILED\n", g_failures, g_checks); return 1; }
     printf("open_allocation_test: %d checks passed\n", g_checks);
     return 0;

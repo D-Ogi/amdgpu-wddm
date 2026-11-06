@@ -1,15 +1,18 @@
-# Host test of DxgkDdiOpenAllocation (F-q44-mem-3): the actual Bc250WddmOpenAllocation and object list code of
-# wddm.c, extracted by generate_open_allocation_test.py, with the pool allocation failed at the first, a middle and
-# the last allocation of a call (open_allocation_test.c). Built and run with no WDK header.
+# Host test of DxgkDdiOpenAllocation (F-q44-mem-3, BD-205): the actual Bc250WddmOpenAllocation and object list code
+# of wddm.c, extracted by generate_open_allocation_test.py, with the pool allocation failed and a refused blob placed
+# at the first, a middle and the last allocation of a call (open_allocation_test.c). Built and run with no WDK header.
 #
 #   pwsh driver\kmd\test\run_open_allocation.ps1 -Out P:\BC-250\scratch\open-allocation
 #   pwsh driver\kmd\test\run_open_allocation.ps1 -Mutation --keep-earlier -ExpectFailure
 #
 # The negative controls each change the extracted copy, never the tree, and must fail by a CHECK (a FAIL line), not
 # by a build error:
-#   --success-null    an admitted blob with no object answers STATUS_SUCCESS with a NULL handle (before F-q44-mem-3)
+#   --success-null    no failure exit: an admitted blob with no object answers STATUS_SUCCESS with a NULL handle
+#                     (before F-q44-mem-3), and so does a refused blob
 #   --keep-earlier    the objects opened earlier in the failed call are not freed
-#   --count-at-once   the LB7A open counts go straight into StdAlloc, the failed allocation among them as refused
+#   --count-at-once   the LB7A open counts go straight into StdAlloc, the failed allocation among them as opened
+#   --refusal-null    a blob the driver does not admit keeps a NULL handle in a call that succeeds (before BD-205)
+#   --refusal-uncounted  a refused blob fails the call but is not counted
 # Everything is written under -Out, never into the repository and never onto drive C:.
 
 param(
@@ -17,7 +20,7 @@ param(
     [string]$Out = "$Root\scratch\open-allocation",
     [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0',
-    [ValidateSet('', '--success-null', '--keep-earlier', '--count-at-once')][string]$Mutation = '',
+    [ValidateSet('', '--success-null', '--keep-earlier', '--count-at-once', '--refusal-null', '--refusal-uncounted')][string]$Mutation = '',
     [switch]$ExpectFailure
 )
 
