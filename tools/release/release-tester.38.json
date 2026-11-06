@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.38",
   "version": "0.7.216.110-tester.38",
-  "note": "tester.38 release manifest, started from the tester.37 manifest: the kmd and control rows move to the main commit with BD-292, BD-293, BD-295, BD-297 and the stage 2 queue reset of node 2; every other row keeps its tester.37 commit. BD-315: the system, wow64, desktop, zink and gl rows move to the t38/bd315-uqueue-* heads (global locks deleted at unload; the system head also has the util tests Windows build fix), and recipe_commit to the main commit with BD-317 (the RADV host tests link the real monitored fence).",
+  "note": "tester.38 release manifest, started from the tester.37 manifest: the kmd and control rows move to the main commit with BD-292, BD-293, BD-295, BD-297 and the stage 2 queue reset of node 2; every other row keeps its tester.37 commit. BD-315: the system, wow64, desktop, zink and gl rows move to the t38/bd315-uqueue-* heads (global locks deleted at unload; the system head also has the util tests Windows build fix), and recipe_commit to the main commit with BD-317 (the RADV host tests link the real monitored fence). BD-211: the zink and gl rows move to merges of their BD-315 heads with the memstream temporary-file fix.",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "6acd88041915c618dd2640b895cbe6e8a2ea5fb7",
   "repositories": {
@@ -1836,7 +1836,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "2aea6f7e7156f072d082370736bf6640ee3d0e37",
+      "commit": "64c082d37c48de149cd90a1e9e308ee3250ee26f",
       "base": "088a15881c6115549956743b8d9bfda1a1f15e10",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1874,7 +1874,7 @@
           "path": "payload/desktop/bc250d3d_zink.dll"
         }
       ],
-      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (210100d8) and its flag is set under the lock (2aea6f7e)."
+      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (210100d8) and its flag is set under the lock (2aea6f7e), and with BD-211: a memstream leaves no temporary file on Windows (fe84531a), merged in 64c082d3."
     },
     {
       "id": "cpu-x64-rel",
@@ -1988,7 +1988,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "4f72c0ad34528f8091f57e8a95176ace4ba58872",
+      "commit": "8ed290efc7e45669624445bc3642b7b022a89f58",
       "base": "1226ec984d45b17f6730de84b2b7e98073b679cd",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -2026,7 +2026,7 @@
           "path": "payload/opengl/amdgpu_wddm_gl.dll"
         }
       ],
-      "role": "OpenGL ICD for 64-bit applications (BD-076): the tester.33 OpenGL line e0d424ff with the Windows driconf fixes (regular expressions bd7a5452, sections with an invalid pattern 8b184803, a build check of the static table 8cd482a7), the process name at any path length (557e06af), driver options read from the environment only in the lab flavour (de70a080) and the zstd 1.5.7 wrap for the disk cache (08e8ebfd), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (a924b23c) and its flag is set under the lock (4f72c0ad). x64 only: opengl_icd.architectures registers x64 alone."
+      "role": "OpenGL ICD for 64-bit applications (BD-076): the tester.33 OpenGL line e0d424ff with the Windows driconf fixes (regular expressions bd7a5452, sections with an invalid pattern 8b184803, a build check of the static table 8cd482a7), the process name at any path length (557e06af), driver options read from the environment only in the lab flavour (de70a080) and the zstd 1.5.7 wrap for the disk cache (08e8ebfd), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (a924b23c) and its flag is set under the lock (4f72c0ad), and with BD-211: a memstream leaves no temporary file on Windows (eb20cf39), merged in 8ed290ef. x64 only: opengl_icd.architectures registers x64 alone."
     },
     {
       "id": "zink-x64-lab",
@@ -2034,7 +2034,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "2aea6f7e7156f072d082370736bf6640ee3d0e37",
+      "commit": "64c082d37c48de149cd90a1e9e308ee3250ee26f",
       "base": "088a15881c6115549956743b8d9bfda1a1f15e10",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -2073,7 +2073,7 @@
           "path": "payload/desktop/bc250d3d_zink.dll"
         }
       ],
-      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (210100d8) and its flag is set under the lock (2aea6f7e)."
+      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (210100d8) and its flag is set under the lock (2aea6f7e), and with BD-211: a memstream leaves no temporary file on Windows (fe84531a), merged in 64c082d3."
     },
     {
       "id": "cpu-x64-lab",
@@ -2189,7 +2189,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "4f72c0ad34528f8091f57e8a95176ace4ba58872",
+      "commit": "8ed290efc7e45669624445bc3642b7b022a89f58",
       "base": "1226ec984d45b17f6730de84b2b7e98073b679cd",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -2228,7 +2228,7 @@
           "path": "payload/opengl/amdgpu_wddm_gl.dll"
         }
       ],
-      "role": "OpenGL ICD for 64-bit applications (BD-076): the tester.33 OpenGL line e0d424ff with the Windows driconf fixes (regular expressions bd7a5452, sections with an invalid pattern 8b184803, a build check of the static table 8cd482a7), the process name at any path length (557e06af), driver options read from the environment only in the lab flavour (de70a080) and the zstd 1.5.7 wrap for the disk cache (08e8ebfd), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (a924b23c) and its flag is set under the lock (4f72c0ad). x64 only: opengl_icd.architectures registers x64 alone."
+      "role": "OpenGL ICD for 64-bit applications (BD-076): the tester.33 OpenGL line e0d424ff with the Windows driconf fixes (regular expressions bd7a5452, sections with an invalid pattern 8b184803, a build check of the static table 8cd482a7), the process name at any path length (557e06af), driver options read from the environment only in the lab flavour (de70a080) and the zstd 1.5.7 wrap for the disk cache (08e8ebfd), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (a924b23c) and its flag is set under the lock (4f72c0ad), and with BD-211: a memstream leaves no temporary file on Windows (eb20cf39), merged in 8ed290ef. x64 only: opengl_icd.architectures registers x64 alone."
     },
     {
       "id": "router-x64-rel",
