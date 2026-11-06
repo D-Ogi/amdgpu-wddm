@@ -466,7 +466,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmControlInterrupt",
-       "source": "driver/kmd/wddm.c:12219",
+       "source": "driver/kmd/wddm.c:12275",
        "done": true,
        "reason": "does work",
        "partial": true,
@@ -528,7 +528,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmQueryChildRelations",
-       "source": "driver/kmd/wddm.c:12616",
+       "source": "driver/kmd/wddm.c:12676",
        "done": true,
        "reason": "forwards to Bc250QueryChildRelations: does work",
        "applicability": {
@@ -542,7 +542,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmQueryChildStatus",
-       "source": "driver/kmd/wddm.c:12623",
+       "source": "driver/kmd/wddm.c:12683",
        "done": true,
        "reason": "forwards to Bc250QueryChildStatus: does work",
        "partial": true,
@@ -557,7 +557,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmQueryDeviceDescriptor",
-       "source": "driver/kmd/wddm.c:12631",
+       "source": "driver/kmd/wddm.c:12691",
        "done": true,
        "reason": "forwards to Bc250QueryDeviceDescriptor: does work",
        "applicability": {
@@ -614,7 +614,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedIsSupportedVidPn",
-       "source": "driver/kmd/wddm.c:12651",
+       "source": "driver/kmd/wddm.c:12711",
        "done": true,
        "reason": "forwards to Bc250IsSupportedVidPn: does work",
        "applicability": {
@@ -628,7 +628,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedRecommendFunctionalVidPn",
-       "source": "driver/kmd/wddm.c:12652",
+       "source": "driver/kmd/wddm.c:12712",
        "done": false,
        "reason": "forwards to Bc250RecommendFunctionalVidPn: every return is a failure constant",
        "applicability": {
@@ -642,7 +642,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedEnumVidPnCofuncModality",
-       "source": "driver/kmd/wddm.c:12653",
+       "source": "driver/kmd/wddm.c:12713",
        "done": true,
        "reason": "forwards to Bc250EnumVidPnCofuncModality: does work",
        "applicability": {
@@ -656,7 +656,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedSetVidPnSourceVisibility",
-       "source": "driver/kmd/wddm.c:12654",
+       "source": "driver/kmd/wddm.c:12714",
        "done": true,
        "reason": "forwards to Bc250SetVidPnSourceVisibility: does work",
        "applicability": {
@@ -670,7 +670,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedCommitVidPn",
-       "source": "driver/kmd/wddm.c:12655",
+       "source": "driver/kmd/wddm.c:12715",
        "done": true,
        "reason": "forwards to Bc250CommitVidPn: does work",
        "applicability": {
@@ -684,7 +684,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedRecommendMonitorModes",
-       "source": "driver/kmd/wddm.c:12657",
+       "source": "driver/kmd/wddm.c:12717",
        "done": true,
        "reason": "forwards to Bc250RecommendMonitorModes: does work",
        "applicability": {
@@ -712,7 +712,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmGetScanLine",
-       "source": "driver/kmd/wddm.c:12254",
+       "source": "driver/kmd/wddm.c:12310",
        "done": true,
        "reason": "does work",
        "partial": true,
@@ -741,7 +741,7 @@
        "since": "WIN7",
        "targeted": true,
        "function": "Bc250WddmTracedQueryVidPnHWCapability",
-       "source": "driver/kmd/wddm.c:12658",
+       "source": "driver/kmd/wddm.c:12718",
        "done": true,
        "reason": "forwards to Bc250QueryVidPnHWCapability: does work",
        "applicability": {
@@ -784,7 +784,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250WddmGetChildContainerId",
-       "source": "driver/kmd/wddm.c:12637",
+       "source": "driver/kmd/wddm.c:12697",
        "done": false,
        "reason": "forwards to Bc250GetChildContainerId: every return is a failure constant",
        "applicability": {
@@ -812,7 +812,7 @@
        "since": "WDDM2_1",
        "targeted": true,
        "function": "Bc250WddmTracedUpdateMonitorLinkInfo",
-       "source": "driver/kmd/wddm.c:12683",
+       "source": "driver/kmd/wddm.c:12743",
        "done": false,
        "reason": "forwards to Bc250UpdateMonitorLinkInfo: only logs, counts, reads or writes zeros",
        "applicability": {
@@ -2107,7 +2107,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedUpdateActiveVidPnPresentPath",
-       "source": "driver/kmd/wddm.c:12656",
+       "source": "driver/kmd/wddm.c:12716",
        "done": true,
        "reason": "forwards to Bc250UpdateActiveVidPnPresentPath: does work",
        "applicability": {
@@ -2233,7 +2233,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmCheckMultiPlaneOverlaySupport2",
-       "source": "driver/kmd/wddm.c:12383",
+       "source": "driver/kmd/wddm.c:12439",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -2247,7 +2247,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay2",
-       "source": "driver/kmd/wddm.c:12445",
+       "source": "driver/kmd/wddm.c:12501",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -2261,7 +2261,7 @@
        "since": "WDDM2_1",
        "targeted": true,
        "function": "Bc250WddmCheckMultiPlaneOverlaySupport3",
-       "source": "driver/kmd/wddm.c:12066",
+       "source": "driver/kmd/wddm.c:12122",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -2275,7 +2275,7 @@
        "since": "WDDM2_1",
        "targeted": true,
        "function": "Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3",
-       "source": "driver/kmd/wddm.c:12121",
+       "source": "driver/kmd/wddm.c:12177",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -2289,7 +2289,7 @@
        "since": "WDDM2_1",
        "targeted": true,
        "function": "Bc250WddmPostMultiPlaneOverlayPresent",
-       "source": "driver/kmd/wddm.c:12200",
+       "source": "driver/kmd/wddm.c:12256",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros",
        "applicability": {
@@ -2330,10 +2330,10 @@
        "name": "DxgkDdiGetMultiPlaneOverlayCaps",
        "since": "WDDM2_2",
        "targeted": true,
-       "function": null,
-       "done": false,
-       "reason": "NULL in WddmBuildTable",
-       "source": null,
+       "function": "Bc250WddmGetMultiplaneOverlayCaps",
+       "source": "driver/kmd/wddm.c:12076",
+       "done": true,
+       "reason": "does work",
        "applicability": {
         "class": "optional",
         "reason": "Multiplane overlay (MPO): optional, required only of a driver that reports overlay planes.",
@@ -2344,10 +2344,10 @@
        "name": "DxgkDdiGetPostCompositionCaps",
        "since": "WDDM2_2",
        "targeted": true,
-       "function": null,
-       "done": false,
-       "reason": "NULL in WddmBuildTable",
-       "source": null,
+       "function": "Bc250WddmGetPostCompositionCaps",
+       "source": "driver/kmd/wddm.c:12102",
+       "done": true,
+       "reason": "does work",
        "applicability": {
         "class": "optional",
         "reason": "Post-composition scaling: required only of a driver that supports it.",
@@ -2746,10 +2746,10 @@
     }
    ],
    "summary": {
-    "done": 61,
+    "done": 63,
     "total": 147,
     "partial": 8,
-    "percent": 41.5,
+    "percent": 42.86,
     "applicable": {
      "done": 57,
      "total": 77,
@@ -2762,10 +2762,10 @@
      "not-applicable": 16
     },
     "all_versions": {
-     "done": 61,
+     "done": 63,
      "total": 181,
      "partial": 8,
-     "percent": 33.7,
+     "percent": 34.81,
      "applicable": {
       "done": 57,
       "total": 77,
