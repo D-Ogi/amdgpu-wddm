@@ -58,7 +58,7 @@ HRESULT retire_device_handle(DdiDeviceHandle &handle) noexcept {
     const ULONGLONG created=owner->created_ms();
     const ULONGLONG now=GetTickCount64();
     note_retired_device(lost,created && now>=created ? now-created : 0,now);
-    // BD-327, lab flavour: the worker host calls of this device and the host calls refused outside any scope.
+    // BD-327, both flavours, game log only: the worker host calls of this device, the calls refused outside a scope.
     report_host_scope_calls(owner->bridge());
     {
         RuntimeDomain::Scope scope(owner->runtime().domain);

@@ -94,9 +94,9 @@ struct HostBridge {
 // GPU addresses, residency and CPU mapping, the synchronous wait for the paging fence of that work, and the status
 // check. No submission, context, sync object creation, present, progress publication or loss report.
 bool worker_admits_call(uint32_t operation, const void *argument) noexcept;
-// BD-327, lab flavour: one line for the device (DestroyDevice): its worker host calls, and the host calls that
-// threads outside any scope of any device made since the last such line, by thread name. Nothing in the release
-// flavour.
+// BD-327: one line for the device (DestroyDevice): its worker host calls, and the host calls that threads outside a
+// scope made since the last such line, by thread name. Both flavours write it, to the game log only. The lab flavour
+// also writes a note for each of the first 16 worker calls that the filter refuses.
 void report_host_scope_calls(HostBridge &bridge) noexcept;
 // BD-179: the states of the adapter check. The check is armed only when it first finds the adapter of the device in
 // the list: a LUID that the list never had (a wrong LUID, a list that this process cannot read) never reports a loss.
