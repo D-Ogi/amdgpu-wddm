@@ -2600,9 +2600,6 @@ static void MpoCaps(void)
           c.OverlayCaps.Immediate==0 && c.OverlayCaps.Plane0ForVirtualModeOnly==0);
     CHECK(c.MaxStretchFactor==(float)BC250_MPO_MAX_STRETCH_MILLI/1000.0f &&
           c.MaxShrinkFactor==(float)BC250_MPO_MAX_SHRINK_MILLI/1000.0f);
-    /* An unknown selector bit is masked away by the start: only the four lab bits survive. */
-    CHECK((BC250_WDDM_SCALED_PLANE_STRETCH_CAPS & BC250_WDDM_SCALED_PLANE_MASK)==BC250_WDDM_SCALED_PLANE_STRETCH_CAPS);
-    CHECK((0x10ul & BC250_WDDM_SCALED_PLANE_MASK)==0);
     w.ScaledPlane=0;
 #else
     /* The release flavour reads no selector, so even that bit changes nothing. */
@@ -2631,6 +2628,25 @@ static void MpoCaps(void)
     d.Wddm=NULL;
     CHECK(Bc250WddmGetPostCompositionCaps(&d,&p)==STATUS_DEVICE_NOT_READY);
 }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+/* BD-223 (T004): the step of WddmStart that stores ScaledPlane from the raw LabScaledPlane value (WddmScaledPlaneLatch,
+ * extracted from wddm.c). An unknown bit goes, and nothing is stored without bit 0 or without the handshake. */
+static void ScaledPlaneLatch(void)
+{
+    static const struct { ULONG Raw, On; } cases[]={
+        {0x10ul,0x0ul},   /* an unknown bit alone: no CHECK bit after the mask */
+        {0x1Ful,0xFul},   /* every bit: the unknown one goes, the four lab bits stay */
+        {0x8ul,0x0ul},    /* STRETCH_CAPS without CHECK */
+        {0x9ul,0x9ul},    /* STRETCH_CAPS with CHECK */
+        {0x1ul,0x1ul},
+        {0x0ul,0x0ul}};
+    unsigned i;
+    for(i=0;i<sizeof(cases)/sizeof(cases[0]);++i){
+        CHECK(WddmScaledPlaneLatch(cases[i].Raw,TRUE)==cases[i].On);
+        CHECK(WddmScaledPlaneLatch(cases[i].Raw,FALSE)==0);   /* a closed handshake closes the plane */
+    }
+}
+#endif
 int main(void)
 {
     int level;
@@ -2654,6 +2670,9 @@ int main(void)
     Plane3InputFlagBits();
     Mpo3Checks();
     MpoCaps();
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    ScaledPlaneLatch();
+#endif
     FlipFlagBits();
     PlaneFormatFlips();
     FaultDpcs();

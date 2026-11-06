@@ -493,6 +493,15 @@ static __inline ULONG WddmRecordKind(unsigned long Version)
 #define BC250_WDDM_SCALED_PLANE_STRETCH_CAPS 0x8ul
 #define BC250_WDDM_SCALED_PLANE_MASK 0xful
 
+// The ScaledPlane value that WddmStart stores for the raw LabScaledPlane value: the known bits only (MASK), and 0
+// unless bit 0 (CHECK) is set and the DirectFlip handshake is on, because the plane needs the flip path and the
+// scan-out rule. A pure function, so that the host test runs this step itself (vidpn_flip_test.c ScaledPlaneLatch).
+static __inline ULONG WddmScaledPlaneLatch(ULONG Raw, BOOLEAN Handshake)
+{
+    const ULONG scaled = Raw & BC250_WDDM_SCALED_PLANE_MASK;
+    return ((scaled & BC250_WDDM_SCALED_PLANE_CHECK) && Handshake) ? scaled : 0;
+}
+
 // The multiplane-overlay bits of the caps trailer for these LabScaledPlane bits. DRIVERCAPS MaxOverlayPlanes is
 // bc250_scanout_mpo_planes of the same word, so the kernel and the compositor's front report one plane count.
 // TWO_PLANES sets MPO_PLANE1: in the arms of 2026-10-29 it changed MaxOverlayPlanes alone, and the front said 1.
@@ -4478,11 +4487,12 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         }
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         // BD-223: LabScaledPlane, read once at DriverEntry (guard.c), absent = 0. The plane needs the flip path and the
-        // scan-out rule, so it follows the DirectFlip handshake: a closed handshake closes it too.
+        // scan-out rule, so it follows the DirectFlip handshake: a closed handshake closes it too. The line gives the
+        // stored value (WddmScaledPlaneLatch, masked) and the raw selector, so an unknown bit shows as the difference.
         {
-            const ULONG scaled = GuardLabScaledPlane() & BC250_WDDM_SCALED_PLANE_MASK;
-            wddm->ScaledPlane = ((scaled & BC250_WDDM_SCALED_PLANE_CHECK) && wddm->DirectFlipHandshake) ? scaled : 0;
-            GuardLog("wddm: scaled plane 0x%lX (LabScaledPlane 0x%lX, handshake %u)", wddm->ScaledPlane, scaled,
+            const ULONG raw = GuardLabScaledPlane();
+            wddm->ScaledPlane = WddmScaledPlaneLatch(raw, wddm->DirectFlipHandshake ? TRUE : FALSE);
+            GuardLog("wddm: scaled plane 0x%lX (LabScaledPlane 0x%lX, handshake %u)", wddm->ScaledPlane, raw,
                      (ULONG)(wddm->DirectFlipHandshake ? 1 : 0));
         }
 #endif
