@@ -237,7 +237,7 @@ function Invoke-VidPnFlip([string]$Dir, [string]$Actual) {
     # runtime rejection of these mutants, not a compiler-warning substitute.
     [string[]]$mutationWarnings = @()
     if ($Mutation) { $mutationWarnings = @('-Wno-tautological-negation-compare') }
-    & $cl @('/nologo', '/TC', '/W4', '/WX', '/wd4201', '/O2', '/MT', '-fuse-ld=lld') @mutationWarnings @flavour @("/I$repo\driver\kmd", "/I$repo\third_party\linux-amdgpu",
+    & $cl @('/nologo', '/TC', '/W4', '/WX', '/wd4201', '/O2', '/MT', '-fuse-ld=lld') @mutationWarnings @flavour @("/I$repo\driver\kmd", "/I$repo\driver\contract", "/I$repo\third_party\linux-amdgpu",
         "/I$($msvc.FullName)\include", "/I$sdk\Include\10.0.26100.0\ucrt", "/Fo$obj\", "/Fe$Dir\vidpn_flip_test.exe", $Actual,
         "$repo\driver\kmd\dcn_translate.c", '/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$libs\ucrt\x64",
         "/LIBPATH:$libs\um\x64") | Out-Host

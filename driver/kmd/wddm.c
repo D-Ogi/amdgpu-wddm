@@ -488,7 +488,10 @@ static __inline ULONG WddmRecordKind(unsigned long Version)
 #define BC250_WDDM_SCALED_PLANE_CHECK 0x1ul
 #define BC250_WDDM_SCALED_PLANE_MPO_VSYNC 0x2ul
 #define BC250_WDDM_SCALED_PLANE_TWO_PLANES 0x4ul
-#define BC250_WDDM_SCALED_PLANE_MASK 0x7ul
+// BD-223: asks the two caps DDIs for the stretch caps of the contract header (StretchRGB and the two filters, 16.0
+// and 4.0). It has an effect only with CHECK, because WddmStart keeps ScaledPlane at 0 without bit 0.
+#define BC250_WDDM_SCALED_PLANE_STRETCH_CAPS 0x8ul
+#define BC250_WDDM_SCALED_PLANE_MASK 0xful
 
 // The multiplane-overlay bits of the caps trailer for these LabScaledPlane bits. DRIVERCAPS MaxOverlayPlanes is
 // bc250_scanout_mpo_planes of the same word, so the kernel and the compositor's front report one plane count.
@@ -12062,38 +12065,64 @@ static int WddmMpo3Admit(_In_ BC250_DEVICE* Device, _In_ const BC250_WDDM* Wddm,
                              BC250_WDDM_SEGMENT_VRAM, &pitch, &bytes);
 }
 
+// The factors as IEEE-754 bit patterns, so that the kernel emits no floating-point or SSE instruction for a caps
+// answer. A host test checks each pattern against the contract constants.
+#define BC250_WDDM_MPO_ONE_BITS     0x3F800000u   // 1.0f
+#define BC250_WDDM_MPO_STRETCH_BITS 0x41800000u   // 16.0f, BC250_MPO_MAX_STRETCH_MILLI / 1000
+#define BC250_WDDM_MPO_SHRINK_BITS  0x40800000u   // 4.0f, BC250_MPO_MAX_SHRINK_MILLI / 1000
+static void WddmMpoCapsFactor(_Out_ float* Factor, _In_ ULONG Bits)
+{
+    // A 32-bit integer store of the IEEE-754 pattern, so no floating-point or SSE instruction is emitted. The
+    // target is the caps structure field, which dxgkrnl reads as a float; MSVC does not reorder a store through
+    // ULONG* against it.
+    *(ULONG*)Factor = Bits;
+}
+
 // BD-223: the two caps DDIs of the WDDM 2.2 and later contract. From 2.2 the graphics kernel takes the multiplane
 // overlay capabilities from the kernel driver "rather than the user mode DDIs" (shared/d3dkmddi.h,
 // DXGKDDI_GETMULTIPLANEOVERLAYCAPS and DXGKDDI_GETPOSTCOMPOSITIONCAPS; the WDK pages of both).
 // The answers describe what the check admits today, not what the hardware could do later: Check3 takes exactly one
 // plane, plane 0, in the mode's own geometry, with identity rotation, no flip, no alpha blend and the sRGB colour
 // space (Bc250Mpo3PlaneVerdict, driver/kmd/mpo3_track.h). One plane means MaxPlanes 1, because that count includes
-// the primary. No scaling means a stretch and a shrink factor of 1.0 and no stretch or filter cap bit. The values
-// are constants and not selector values, so both flavours tell the same truth; a stage that admits more changes
-// them in the same commit. wddm-b4 lifts them when plane 0 scaling lands.
+// the primary, and the count never comes from the selector. No scaling means a stretch and a shrink factor of 1.0
+// and no stretch or filter cap bit. The lab flavour answers the stretch caps of the contract header only when the
+// lab bit BC250_WDDM_SCALED_PLANE_STRETCH_CAPS asks for them, and the release flavour never offers them. wddm-b4 lifts
+// the limits when plane 0 scaling lands.
 static volatile LONG g_MpoCapsCalls;
 static DXGKDDI_GETMULTIPLANEOVERLAYCAPS Bc250WddmGetMultiplaneOverlayCaps;
 static NTSTATUS Bc250WddmGetMultiplaneOverlayCaps(_In_ const HANDLE hAdapter,
                                                   _Inout_ DXGKARG_GETMULTIPLANEOVERLAYCAPS* pCaps)
 {
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+    ULONG stretch = 0;
     LONG note;
 
     if (pCaps == NULL || hAdapter == NULL) return STATUS_INVALID_PARAMETER;
-    if (WddmOf(hAdapter) == NULL) return STATUS_DEVICE_NOT_READY;
+    if (wddm == NULL) return STATUS_DEVICE_NOT_READY;
     // One display source owns the overlay pipeline (docs/design/mpo.md, The hardware). Any other source is a
     // request this adapter cannot answer, and the set-address flip of the same family refuses it the same way.
     if (pCaps->VidPnSourceId != 0) return STATUS_INVALID_PARAMETER;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    if (wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_STRETCH_CAPS) stretch = 1;
+#endif
     RtlZeroMemory(&pCaps->OverlayCaps, sizeof(pCaps->OverlayCaps));
     pCaps->MaxPlanes = 1u;
     pCaps->MaxRGBPlanes = 1u;
     pCaps->MaxYUVPlanes = 0u;          // the check admits no YUV plane
-    pCaps->MaxStretchFactor = 1.0f;    // the check admits the mode's own geometry only
-    pCaps->MaxShrinkFactor = 1.0f;
+    if (stretch) {
+        pCaps->OverlayCaps.StretchRGB = 1;
+        pCaps->OverlayCaps.BilinearFilter = 1;
+        pCaps->OverlayCaps.HighFilter = 1;
+    }
+    WddmMpoCapsFactor(&pCaps->MaxStretchFactor, stretch ? BC250_WDDM_MPO_STRETCH_BITS : BC250_WDDM_MPO_ONE_BITS);
+    WddmMpoCapsFactor(&pCaps->MaxShrinkFactor, stretch ? BC250_WDDM_MPO_SHRINK_BITS : BC250_WDDM_MPO_ONE_BITS);
     note = InterlockedIncrement(&g_MpoCapsCalls);
     if (note <= BC250_WDDM_MPO3_LOG_CALLS) {
-        // No float in a log line: the factors are 1.0 and the comment above says why.
-        GuardLog("wddm: MPO caps %ld src %u planes %u rgb %u yuv %u caps 0x%X", note, pCaps->VidPnSourceId,
-                 pCaps->MaxPlanes, pCaps->MaxRGBPlanes, pCaps->MaxYUVPlanes, pCaps->OverlayCaps.Value);
+        // Integers only, in thousandths: no float in a log line. The line names the lab bit when it is set.
+        GuardLog("wddm: MPO caps %ld src %u planes %u rgb %u yuv %u stretch %u shrink %u caps 0x%X%s", note,
+                 pCaps->VidPnSourceId, pCaps->MaxPlanes, pCaps->MaxRGBPlanes, pCaps->MaxYUVPlanes,
+                 stretch ? BC250_MPO_MAX_STRETCH_MILLI : 1000u, stretch ? BC250_MPO_MAX_SHRINK_MILLI : 1000u,
+                 pCaps->OverlayCaps.Value, stretch ? " stretch-caps-bit" : "");
     }
     return STATUS_SUCCESS;
 }
@@ -12108,12 +12137,12 @@ static NTSTATUS Bc250WddmGetPostCompositionCaps(_In_ const HANDLE hAdapter,
     if (WddmOf(hAdapter) == NULL) return STATUS_DEVICE_NOT_READY;
     if (pCaps->VidPnSourceId != 0) return STATUS_INVALID_PARAMETER;
     // A post-composition of anything but the identity is refused by the same check (BC250_MPO3_POST), so no
-    // post-composition scaling is offered.
-    pCaps->MaxStretchFactor = 1.0f;
-    pCaps->MaxShrinkFactor = 1.0f;
+    // post-composition scaling is offered, in either flavour and for every selector value.
+    WddmMpoCapsFactor(&pCaps->MaxStretchFactor, BC250_WDDM_MPO_ONE_BITS);
+    WddmMpoCapsFactor(&pCaps->MaxShrinkFactor, BC250_WDDM_MPO_ONE_BITS);
     note = InterlockedIncrement(&g_MpoCapsCalls);
     if (note <= BC250_WDDM_MPO3_LOG_CALLS) {
-        GuardLog("wddm: MPO post caps %ld src %u", note, pCaps->VidPnSourceId);
+        GuardLog("wddm: MPO post caps %ld src %u stretch 1000 shrink 1000", note, pCaps->VidPnSourceId);
     }
     return STATUS_SUCCESS;
 }

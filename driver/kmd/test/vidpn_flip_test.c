@@ -18,6 +18,7 @@
 #include "flip_state.h"
 #include "dcn_scale.h"   /* BD-223: BC250_SCALER_PLAN, the shape of a multiplane-overlay plane 0 */
 #include "mpo3_track.h"  /* BD-307: plane 0 of the MPO3 DDIs */
+#include "bc250_scanout_caps.h"  /* BD-223: the stretch and shrink limits the caps DDI answers */
 typedef int32_t NTSTATUS;
 typedef long LONG;
 typedef unsigned long ULONG;
@@ -335,7 +336,13 @@ typedef struct {
     volatile LONG Mpo3FlipVerdicts[BC250_MPO3_VERDICTS];
     volatile LONG Mpo3FlipOddTaken;
     BC250_MPO3_PLANE Mpo3FlipOdd;
+    ULONG ScaledPlane;              /* BD-223: LabScaledPlane, which the caps DDI reads for its lab bit */
 } BC250_WDDM;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+/* BD-223: mirrors of wddm.c's LabScaledPlane bit and mask, which live outside the block this fixture extracts. */
+#define BC250_WDDM_SCALED_PLANE_STRETCH_CAPS 0x8ul
+#define BC250_WDDM_SCALED_PLANE_MASK 0xful
+#endif
 /* BD-170: bc250kmd.h's immediate-flip record, for the summary's copy of it (WddmImmediateRecordCopy). */
 #define BC250_DCN_IMMEDIATE_RECORDS 8u
 #define BC250_DCN_IMMEDIATE_READS 3u
@@ -2555,6 +2562,13 @@ static void Mpo3Checks(void)
     CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_DEVICE_NOT_READY && !c.Supported);
     CHECK(Bc250WddmPostMultiPlaneOverlayPresent(&d,&pres)==STATUS_DEVICE_NOT_READY);
 }
+/* BD-223: an IEEE-754 pattern as the float it stands for. */
+static float BitsOfFloat(ULONG Bits)
+{
+    union { ULONG Bits; float Value; } u;
+    u.Bits=Bits;
+    return u.Value;
+}
 /* BD-223 (T004): the two caps DDIs answer what the check admits and nothing more. */
 static void MpoCaps(void)
 {
@@ -2572,6 +2586,36 @@ static void MpoCaps(void)
     CHECK(c.MaxPlanes==1 && c.MaxRGBPlanes==1 && c.MaxYUVPlanes==0 && c.OverlayCaps.Value==0);
     CHECK(c.MaxStretchFactor==1.0f && c.MaxShrinkFactor==1.0f);
     CHECK(logs==logged+1);
+    /* The factors are IEEE-754 patterns: 1.0 and the two contract limits. */
+    CHECK(BitsOfFloat(BC250_WDDM_MPO_ONE_BITS)==1.0f);
+    CHECK(BitsOfFloat(BC250_WDDM_MPO_STRETCH_BITS)==(float)BC250_MPO_MAX_STRETCH_MILLI/1000.0f);
+    CHECK(BitsOfFloat(BC250_WDDM_MPO_SHRINK_BITS)==(float)BC250_MPO_MAX_SHRINK_MILLI/1000.0f);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    /* Another lab bit changes nothing: the plane count never comes from the selector. */
+    w.ScaledPlane=0x1ul|0x4ul;
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_SUCCESS && c.OverlayCaps.Value==0 && c.MaxPlanes==1 &&
+          c.MaxStretchFactor==1.0f && c.MaxShrinkFactor==1.0f);
+    /* The caps bit lifts the stretch factor and the two filters, and only those. */
+    w.ScaledPlane=BC250_WDDM_SCALED_PLANE_STRETCH_CAPS;
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_SUCCESS);
+    CHECK(c.MaxPlanes==1 && c.MaxRGBPlanes==1 && c.MaxYUVPlanes==0);
+    CHECK(c.OverlayCaps.StretchRGB==1 && c.OverlayCaps.BilinearFilter==1 && c.OverlayCaps.HighFilter==1);
+    CHECK(c.OverlayCaps.StretchYUV==0 && c.OverlayCaps.Rotation==0 && c.OverlayCaps.RotationWithoutIndependentFlip==0 &&
+          c.OverlayCaps.VerticalFlip==0 && c.OverlayCaps.HorizontalFlip==0 && c.OverlayCaps.Shared==0 &&
+          c.OverlayCaps.Immediate==0 && c.OverlayCaps.Plane0ForVirtualModeOnly==0);
+    CHECK(c.MaxStretchFactor==(float)BC250_MPO_MAX_STRETCH_MILLI/1000.0f &&
+          c.MaxShrinkFactor==(float)BC250_MPO_MAX_SHRINK_MILLI/1000.0f);
+    /* An unknown selector bit is masked away by the start: only the four lab bits survive. */
+    CHECK((BC250_WDDM_SCALED_PLANE_STRETCH_CAPS & BC250_WDDM_SCALED_PLANE_MASK)==BC250_WDDM_SCALED_PLANE_STRETCH_CAPS);
+    CHECK((0x10ul & BC250_WDDM_SCALED_PLANE_MASK)==0);
+    w.ScaledPlane=0;
+#else
+    /* The release flavour reads no selector, so even that bit changes nothing. */
+    w.ScaledPlane=0x8ul;
+    CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_SUCCESS && c.OverlayCaps.Value==0 &&
+          c.MaxStretchFactor==1.0f && c.MaxShrinkFactor==1.0f);
+    w.ScaledPlane=0;
+#endif
     /* A second source is not this pipeline, a null answer is no answer, and no adapter state is not ready. */
     c.VidPnSourceId=1;
     CHECK(Bc250WddmGetMultiplaneOverlayCaps(&d,&c)==STATUS_INVALID_PARAMETER);
