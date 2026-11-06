@@ -16,7 +16,8 @@ param(
     [string]$KitVersion = '10.0.26100.0',
     [ValidateSet('', 'all', 'immediate-pending', 'kept-retires-pending', 'report-before-shown', 'legacy-keeps-mode',
                  'report-inactive', 'count-without-current', 'count-one', 'layer', 'clip-unchecked',
-                 'origin-unchecked', 'rotation', 'post-unchecked', 'flags-mirror-only')][string]$Mutation = ''
+                 'origin-unchecked', 'rotation', 'post-unchecked', 'flags-mirror-only', 'scaled-keeps-geometry',
+                 'scaled-skips-all')][string]$Mutation = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -44,8 +45,13 @@ $mutations = [ordered]@{
         why = 'Check approves a second plane' }
     'layer' = @{ find = 'if (P->LayerIndex != 0u) return BC250_MPO3_LAYER;'; with = 'if (((void)P, 0)) return BC250_MPO3_LAYER;'
         why = 'Check approves a layer other than 0' }
-    'clip-unchecked' = @{ find = '        !Bc250Mpo3WholeMode(&P->Clip, P->ModeWidth, P->ModeHeight))'; with = '        0)'
+    'clip-unchecked' = @{ find = '         !Bc250Mpo3WholeMode(&P->Clip, P->ModeWidth, P->ModeHeight)))'; with = '         0))'
         why = 'Check approves a clipped plane' }
+    'scaled-keeps-geometry' = @{ find = 'if (!Scaled &&'; with = 'if (((void)Scaled, 1) &&'
+        why = 'the scaled rule refuses every plane that is not the whole mode, so no scaled plane reaches dcn_plane.c' }
+    'scaled-skips-all' = @{ find = '    if (P->PlaneCount != 1u) return BC250_MPO3_COUNT;'
+        with = '    if (Scaled) return BC250_MPO3_OK;' + "`n" + '    if (P->PlaneCount != 1u) return BC250_MPO3_COUNT;'
+        why = 'the scaled rule approves a rotated, blended or second plane' }
     'origin-unchecked' = @{ find = 'return R->Left == 0 && R->Top == 0 && R->Right'; with = 'return R->Right'
         why = 'Check approves a plane that is not at the origin' }
     'rotation' = @{ find = 'if (P->Rotation != BC250_MPO3_ROTATION_IDENTITY) return BC250_MPO3_ROTATION;'

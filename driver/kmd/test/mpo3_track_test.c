@@ -136,6 +136,23 @@ static void Verdicts(void)
     p = Plane(); p.PostPresent = 1u; p.PostSrc.Top = 4; CHECK(Bc250Mpo3PlaneVerdict(&p) == BC250_MPO3_POST);
     /* Without a post-composition its fields are not read. */
     p = Plane(); p.PostFlags = 2u; p.PostRotation = 0u; CHECK(Bc250Mpo3PlaneVerdict(&p) == BC250_MPO3_OK);
+    /* BD-223: the scaled rule leaves the rectangles to dcn_plane.c and keeps every other test. */
+    p = Plane(); p.Src.Right = 1280; p.Src.Bottom = 720; p.Clip.Right = 1919;
+    CHECK(Bc250Mpo3PlaneRule(&p, 1u) == BC250_MPO3_OK && Bc250Mpo3PlaneRule(&p, 0u) == BC250_MPO3_GEOMETRY);
+    p.Dst.Left = 100; p.Dst.Top = 50; CHECK(Bc250Mpo3PlaneRule(&p, 1u) == BC250_MPO3_OK);
+    p.PlaneCount = 2u; CHECK(Bc250Mpo3PlaneRule(&p, 1u) == BC250_MPO3_COUNT); p.PlaneCount = 1u;
+    p.SourceId = 1u; CHECK(Bc250Mpo3PlaneRule(&p, 1u) == BC250_MPO3_SOURCE); p.SourceId = 0u;
+    p.LayerIndex = 1u; CHECK(Bc250Mpo3PlaneRule(&p, 1u) == BC250_MPO3_LAYER); p.LayerIndex = 0u;
+    p.Rotation = 2u; CHECK(Bc250Mpo3PlaneRule(&p, 1u) == BC250_MPO3_ROTATION); p.Rotation = BC250_MPO3_ROTATION_IDENTITY;
+    p.Flags = 2u; CHECK(Bc250Mpo3PlaneRule(&p, 1u) == BC250_MPO3_FLAGS); p.Flags = 0u;
+    p.AlphaBlend = 1u; CHECK(Bc250Mpo3PlaneRule(&p, 1u) == BC250_MPO3_BLEND); p.AlphaBlend = 0u;
+    p.ColorSpace = 12u; CHECK(Bc250Mpo3PlaneRule(&p, 1u) == BC250_MPO3_COLOR); p.ColorSpace = BC250_MPO3_COLOR_SRGB;
+    /* A post-composition is the mode's own in both rules: the plane scales, the post-composition does not. */
+    p.PostPresent = 1u; p.PostDst.Right = 1280; CHECK(Bc250Mpo3PlaneRule(&p, 1u) == BC250_MPO3_POST);
+    p.PostDst.Right = 1920; CHECK(Bc250Mpo3PlaneRule(&p, 1u) == BC250_MPO3_OK);
+    /* The full-size rule is the rule with Scaled 0. */
+    p = Plane(); CHECK(Bc250Mpo3PlaneRule(&p, 0u) == Bc250Mpo3PlaneVerdict(&p) && Bc250Mpo3PlaneRule(&p, 1u) == BC250_MPO3_OK);
+    CHECK(strcmp(Bc250Mpo3VerdictText(BC250_MPO3_SCALED_RULE), "scaled-rule") == 0);
     /* Every verdict has a name, and an unknown one is "?". */
     for (v = 0; v < BC250_MPO3_VERDICTS; v++) CHECK(Bc250Mpo3VerdictText(v)[0] != '?');
     CHECK(Bc250Mpo3VerdictText(BC250_MPO3_VERDICTS)[0] == '?');

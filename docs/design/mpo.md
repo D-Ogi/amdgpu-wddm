@@ -210,7 +210,21 @@ own. The steps change what the KMD check admits and the constants of the header.
 
 ## The plane attributes
 
-`WddmPlaneRequestOf` (`driver/kmd/wddm.c`) maps the attributes of a plane to the request that `dcn_plane.c` decides:
+`WddmPlaneRequestOf` (`driver/kmd/wddm.c`) maps the attributes of a plane to the request that `dcn_plane.c` decides.
+It takes both families through one structure (`BC250_WDDM_PLANE_ATTRS`): `WddmPlaneAttrs2` for
+`DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES2` (Check2, SetAddress2) and `WddmPlaneAttrs3` for `ATTRIBUTES3` (Check3, SetAddress3).
+`ATTRIBUTES3` has no frame format and no stereo fields, so its `Interlaced` and `Stereo` are 0. Check3 gives a plane 0 to
+this rule only in the lab flavour with `LabScaledPlane` bit 0, and only when the full-size rule (`mpo3_track.h`) refuses
+nothing but its rectangles. The other refusals of that rule stay and keep their verdicts. A refusal of `dcn_plane.c` is
+the Check3 verdict `scaled-rule`, and the summary counts the `dcn_plane.h` verdict too (`MPO3 plane check`).
+
+With the same lab bit, SetAddress3 passes an approved scaler plan to `WddmFlipEntry`, with the plane's PresentId.
+`DcnPlaneApproved` checks the shape, pitch and mode stamp without running DML at the flip's IRQL. The DCN code checks
+the approval again inside the programming section. A full-size compositor flip restores the 1:1 plane. A request with
+no allocation keeps the current shape. If the scaled request has no approval, SetAddress3 uses the existing full-size
+transaction and counts `MPO3 scaled flips ... unapproved`. That transaction still refuses an allocation whose size
+cannot cover the source mode. The counter is not evidence that such a fallback was displayed. These steps remain in
+the lab flavour until the scaled-plane hardware checks pass.
 
 | `DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES2` | Request | Present stage |
 | --- | --- | --- |

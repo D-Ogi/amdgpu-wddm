@@ -104,7 +104,10 @@ static __inline unsigned Bc250Mpo3Report(BC250_MPO3_TRACK* T, long long Shown, u
 /* ---- the plane this adapter scans out through the MPO3 DDIs ------------------------------------------------------ */
 
 /* The verdicts, in the order Bc250Mpo3PlaneVerdict tests them. wddm.c adds SCANOUT (the allocation, by scanout_admit.h)
- * and GATE (the flip gate closed, EnableVidPnFlip) after the geometry, and counts every answer by verdict. */
+ * and GATE (the flip gate closed, EnableVidPnFlip) after the geometry, and counts every answer by verdict. SCALED_RULE is
+ * the scaled-plane rule of dcn_plane.c (BD-223): a plane 0 that only its geometry kept from OK, refused by that rule
+ * (Bc250PlanePrepare or the DML step); wddm.c counts that rule's own verdict too. Append only: the summary lines name
+ * the verdicts by their text. */
 enum {
     BC250_MPO3_OK = 0,
     BC250_MPO3_COUNT,                   /* not exactly one plane */
@@ -118,6 +121,7 @@ enum {
     BC250_MPO3_POST,                    /* a post-composition that is not the identity */
     BC250_MPO3_SCANOUT,
     BC250_MPO3_GATE,
+    BC250_MPO3_SCALED_RULE,             /* the scaled-plane rule refused a plane 0 of another geometry */
     BC250_MPO3_VERDICTS
 };
 
@@ -143,16 +147,19 @@ static __inline unsigned Bc250Mpo3WholeMode(const BC250_MPO3_RECT* R, unsigned l
     return R->Left == 0 && R->Top == 0 && R->Right == (long)Width && R->Bottom == (long)Height;
 }
 
-/* The full-size flip of plane 0 and nothing else: what SetVidPnSourceAddress programs. A scaled or placed plane is
- * the lab flavour's MPO2 work (BD-223), not this rule's. */
-static __inline unsigned Bc250Mpo3PlaneVerdict(const BC250_MPO3_PLANE* P)
+/* The rule of one plane 0. Scaled 0: the full-size flip of plane 0 and nothing else, what SetVidPnSourceAddress
+ * programs. Scaled 1: the same rule without the geometry test, for a plane 0 whose rectangles the scaled-plane rule of
+ * dcn_plane.c decides (Bc250PlanePrepare: the whole allocation, inside the source mode, the scaler limits). Every other
+ * test stays: one plane, source 0, layer 0, identity rotation, no flag, opaque, sRGB, an identity post-composition. */
+static __inline unsigned Bc250Mpo3PlaneRule(const BC250_MPO3_PLANE* P, unsigned Scaled)
 {
     if (P->PlaneCount != 1u) return BC250_MPO3_COUNT;
     if (P->SourceId != 0u) return BC250_MPO3_SOURCE;
     if (P->LayerIndex != 0u) return BC250_MPO3_LAYER;
-    if (!Bc250Mpo3WholeMode(&P->Src, P->ModeWidth, P->ModeHeight) ||
-        !Bc250Mpo3WholeMode(&P->Dst, P->ModeWidth, P->ModeHeight) ||
-        !Bc250Mpo3WholeMode(&P->Clip, P->ModeWidth, P->ModeHeight))
+    if (!Scaled &&
+        (!Bc250Mpo3WholeMode(&P->Src, P->ModeWidth, P->ModeHeight) ||
+         !Bc250Mpo3WholeMode(&P->Dst, P->ModeWidth, P->ModeHeight) ||
+         !Bc250Mpo3WholeMode(&P->Clip, P->ModeWidth, P->ModeHeight)))
         return BC250_MPO3_GEOMETRY;
     if (P->Rotation != BC250_MPO3_ROTATION_IDENTITY) return BC250_MPO3_ROTATION;
     if (P->Flags != 0u) return BC250_MPO3_FLAGS;
@@ -166,10 +173,17 @@ static __inline unsigned Bc250Mpo3PlaneVerdict(const BC250_MPO3_PLANE* P)
     return BC250_MPO3_OK;
 }
 
+/* The full-size rule (Scaled 0). */
+static __inline unsigned Bc250Mpo3PlaneVerdict(const BC250_MPO3_PLANE* P)
+{
+    return Bc250Mpo3PlaneRule(P, 0u);
+}
+
 static __inline const char* Bc250Mpo3VerdictText(unsigned V)
 {
     static const char* const text[BC250_MPO3_VERDICTS] = {
-        "ok", "count", "source", "layer", "geometry", "rotation", "flags", "blend", "color", "post", "scanout", "gate"
+        "ok", "count", "source", "layer", "geometry", "rotation", "flags", "blend", "color", "post", "scanout", "gate",
+        "scaled-rule"
     };
     return V < BC250_MPO3_VERDICTS ? text[V] : "?";
 }

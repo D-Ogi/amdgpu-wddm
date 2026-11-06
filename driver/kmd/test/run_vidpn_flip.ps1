@@ -34,7 +34,10 @@ param(
                  'mpo3-keep-unlocked', 'mpo3-immediate-lost', 'mpo3-extra-layer-shown', 'mpo3-check-scanout-skipped',
                  'mpo3-check-gate-skipped', 'mpo3-busy-passed',
                  'witness-before-decision', 'witness-changes-answer', 'witness-stale-compared',
-                 'witness-lost-uncounted', 'scaled-plane-mask-dropped', 'planes-clamp-dropped')][string]$Mutation = '',
+                 'witness-lost-uncounted', 'scaled-plane-mask-dropped', 'planes-clamp-dropped',
+                 'mpo3-scaled-route-off', 'mpo3-scaled-dml-skipped', 'mpo3-scaled-scanout-skipped',
+                 'mpo3-scaled-rule-unnamed', 'mpo3-scaled-shape-lost', 'mpo3-scaled-approval-skipped',
+                 'mpo3-scaled-selector-skipped', 'mpo3-scaled-presentid-lost')][string]$Mutation = '',
     [switch]$Lab
 )
 
@@ -192,8 +195,8 @@ $mutations = [ordered]@{
     'mpo3-check-scanout-skipped' = @{ find = 'if (scanout != BC250_SCANOUT_ADMIT_OK) verdict = BC250_MPO3_SCANOUT;'
         with = 'if (((void)scanout, 0)) verdict = BC250_MPO3_SCANOUT;'
         why = 'Check approves an allocation the scan-out rule refuses' }
-    'mpo3-check-gate-skipped' = @{ find = 'else if (!device->VidPnFlipEnabled) verdict = BC250_MPO3_GATE;'
-        with = 'else if (((void)device, 0)) verdict = BC250_MPO3_GATE;'
+    'mpo3-check-gate-skipped' = @{ find = 'if (verdict == BC250_MPO3_OK && !device->VidPnFlipEnabled) verdict = BC250_MPO3_GATE;'
+        with = 'if (((void)device, 0)) verdict = BC250_MPO3_GATE;'
         why = 'Check approves a plane with the flip gate closed' }
 }
 
@@ -214,9 +217,41 @@ $labMutations = [ordered]@{
     'planes-clamp-dropped' = @{ find = '(ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) && Level < BC250_WDDM_MPO_CAPS_DDI_LEVEL'
         with = '(ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) && (Level || 1)'
         why = 'DRIVERCAPS says 2 planes at level 2.2 or later, where the caps DDI says 1' }
+    # BD-223 Part S1: Check3's scaled plane 0.
+    'mpo3-scaled-route-off' = @{ find = 'scaled = verdict == BC250_MPO3_OK ? 1u : 0u;'; with = 'scaled = ((void)verdict, 0u);'
+        why = 'with the lab bit, a scaled plane 0 never reaches the scaled-plane rule' }
+    'mpo3-scaled-dml-skipped' = @{ find = 'if (verdict == BC250_PLANE_OK && !plan.Identity) { verdict = WddmPlaneDml(Device, &r, &plan, &dml); dmlRan = TRUE; }'
+        with = 'if (((void)plan, 0)) { verdict = WddmPlaneDml(Device, &r, &plan, &dml); dmlRan = TRUE; }'
+        why = 'Check3 approves a scaled plane that DML never fitted into the clocks and the global sync' }
+    'mpo3-scaled-scanout-skipped' = @{ find = 'if (verdict == BC250_PLANE_OK && *Scanout != BC250_SCANOUT_ADMIT_OK) verdict = BC250_PLANE_SCANOUT;'
+        with = 'if (((void)*Scanout, 0)) verdict = BC250_PLANE_SCANOUT;'
+        why = 'Check3 approves a scaled plane whose allocation the scan-out rule refuses' }
+    'mpo3-scaled-rule-unnamed' = @{ find = '            verdict = Bc250Mpo3PlaneRule(&plane, 1u);'
+        with = '            verdict = Bc250Mpo3PlaneRule(&plane, 1u) == BC250_MPO3_OK ? BC250_MPO3_OK : BC250_MPO3_GEOMETRY;'
+        why = 'a rotated or blended plane of another geometry is counted as a geometry refusal' }
+    'mpo3-scaled-shape-lost' = @{ find = 'status = WddmFlipEntry(hAdapter, &flip, requestedShape, TRUE, plane->PresentId);'
+        with = 'status = WddmFlipEntry(hAdapter, &flip, ((void)requestedShape, NULL), TRUE, plane->PresentId);'
+        why = 'the approved scaler plan never reaches the flip transaction' }
+    'mpo3-scaled-approval-skipped' = @{ find = 'else if (DcnPlaneApproved(device, &plan.Scaler, r.SurfacePitch)) {'
+        with = 'else if (DcnPlaneApproved(device, &plan.Scaler, r.SurfacePitch) || 1) {'
+        why = 'an unapproved shape, pitch or stale mode reaches the plane' }
+    'mpo3-scaled-selector-skipped' = @{ find = "data->hAllocation != NULL &&`n        (wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK))"
+        with = "data->hAllocation != NULL &&`n        ((wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK) || 1))"
+        why = 'the lab-only path takes a scaled flip with its selector off' }
+    'mpo3-scaled-presentid-lost' = @{ find = 'status = WddmFlipEntry(hAdapter, &flip, requestedShape, TRUE, plane->PresentId);'
+        with = 'status = WddmFlipEntry(hAdapter, &flip, requestedShape, TRUE, 0);'
+        why = 'the scaled flip reports another PresentId instead of the one Windows queued' }
 }
 $flavour = @()
-if ($Lab) { $flavour = @('/DAMDGPU_WDDM_LAB_FLAVOUR=1'); $mutations = $labMutations }
+# The lab flavour links the scaled-plane rule of Check3 (BD-223 Part S1) as it is: dcn_plane.c with the scaler plan
+# and its tables, the set of run_dcn_plane_state.ps1.
+[string[]]$labSources = @()
+if ($Lab) {
+    $flavour = @('/DAMDGPU_WDDM_LAB_FLAVOUR=1', '-Wno-multichar', "/I$repo\driver\kmd\test", "/I$repo\driver\shim\dml201")
+    $mutations = $labMutations
+    $labSources = @("$repo\driver\kmd\dcn_plane.c", "$repo\driver\kmd\dcn_scale.c", "$repo\driver\shim\bc250_scaler_buffer.c",
+                    "$repo\driver\shim\bc250_scaler_filter.c", "$repo\driver\kmd\display_io.c", "$repo\driver\kmd\edid.c")
+}
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
@@ -244,7 +279,7 @@ function Invoke-VidPnFlip([string]$Dir, [string]$Actual) {
     if ($Mutation) { $mutationWarnings = @('-Wno-tautological-negation-compare') }
     & $cl @('/nologo', '/TC', '/W4', '/WX', '/wd4201', '/O2', '/MT', '-fuse-ld=lld') @mutationWarnings @flavour @("/I$repo\driver\kmd", "/I$repo\driver\contract", "/I$repo\third_party\linux-amdgpu",
         "/I$($msvc.FullName)\include", "/I$sdk\Include\10.0.26100.0\ucrt", "/Fo$obj\", "/Fe$Dir\vidpn_flip_test.exe", $Actual,
-        "$repo\driver\kmd\dcn_translate.c", '/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$libs\ucrt\x64",
+        "$repo\driver\kmd\dcn_translate.c") @labSources @('/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$libs\ucrt\x64",
         "/LIBPATH:$libs\um\x64") | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Host build failed ($Dir)" }
     $output = & "$Dir\vidpn_flip_test.exe"
