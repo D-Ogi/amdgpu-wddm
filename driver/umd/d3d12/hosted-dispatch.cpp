@@ -668,7 +668,14 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
     }
     case BC250_HOST_DestroyAllocation2:{
         auto& a=*static_cast<D3DKMT_DESTROYALLOCATION2*>(argument);
-        if(a.hResource || a.Flags.Value || a.AllocationCount!=1 || !a.phAllocationList)return E_INVALIDARG;
+        // BD-200: AssumeNotInUse is the one flag admitted (D3DDDICB_DESTROYALLOCATION2FLAGS, d3dukmdt.h line
+        // 579, WDK 10.0.26100: AssumeNotInUse 0x1, SynchronousDestroy 0x2, Reserved, SystemUseOnly). The ICD
+        // sets it only for a BO it held until the progress values captured at its destroy retired
+        // (radv_wddm2_bo.c, buffer_destroy_queued), and it goes to the runtime as ASSUME_NOT_IN_USE alone.
+        // Every other bit stays refused.
+        D3DDDICB_DESTROYALLOCATION2FLAGS assume{};assume.AssumeNotInUse=1;
+        if(a.hResource || (a.Flags.Value&~assume.Value) || a.AllocationCount!=1 || !a.phAllocationList)return E_INVALIDARG;
+        const bool not_in_use=a.Flags.AssumeNotInUse;
         Held held(lock_);
         auto record=find(a.phAllocationList[0]);
         if(!record || record->busy || record->borrowed || record->locked)return E_INVALIDARG;
@@ -678,13 +685,15 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         // freeing it first. freeing takes the extent out of owned() before the lock goes, because the runtime
         // releases the range somewhere inside the callback and may hand it to a map or a reservation on
         // another thread before this thread takes lock_ again (trial 172 removed the device at the map check).
-        // Flags stay 0 above, so VidMm keeps deferring the destruction until the commands queued on this
-        // device before the request have finished (d3dukmdt.md:3398-3402).
+        // With flags 0 VidMm keeps deferring the destruction until the commands queued on this device before
+        // the request have finished (d3dukmdt.md:3398-3402). With AssumeNotInUse it does not wait for them
+        // (d3dukmdt.md:3403): the ICD has proven that none of them uses the allocation.
         // What the destroy does not do: unmap a reservation's MAP_PROTECT views of this allocation. Those PTEs
         // live in a UMD reservation, which no allocation destroy frees; Vulkan requires the application to
         // unbind sparse memory before it frees the memory.
         record->busy=record->freeing=true;held.release();
-        HRESULT hr=record->owner.close();
+        HRESULT hr=record->owner.close(native12::ReleaseForm::Handle,
+                                       not_in_use?native12::Retirement::NotInUse:native12::Retirement::Unknown);
         held.acquire();record->busy=false;
         // Success means the request was accepted, not that the memory came back.
         if(SUCCEEDED(hr)){unlink(record);held.release();delete record;return hr;}

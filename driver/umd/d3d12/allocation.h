@@ -17,7 +17,11 @@ namespace native12 {
 enum class ReleaseForm { Handle, Owner };
 // Retired: the caller has proven that no GPU work uses the allocation. Only then does the release
 // carry ASSUME_NOT_IN_USE and SYNCHRONOUS_DESTROY. Owner is never released otherwise.
-enum class Retirement { Unknown, Retired };
+// NotInUse (BD-200): the hosted ICD has proven it, and asked for DestroyAllocation2 with AssumeNotInUse
+// alone (D3DDDICB_DESTROYALLOCATION2FLAGS, d3dukmdt.h, WDK 10.0.26100). The release carries
+// ASSUME_NOT_IN_USE alone, so the runtime destroys the allocation without waiting for the work queued
+// later and does not wait for the memory to come back. The handle form only.
+enum class Retirement { Unknown, Retired, NotInUse };
 class RuntimeAllocation final {
     D3D12DDI_HRTDEVICE runtime_{};
     PFND3D12DDI_ALLOCATE_CB_0022 allocate_{};
@@ -89,6 +93,8 @@ public:
         if(!deallocate_) return E_UNEXPECTED;
         const bool by_resource=form==ReleaseForm::Owner;
         if(by_resource && (!resource_ || retirement!=Retirement::Retired)) return E_UNEXPECTED;
+        static_assert(D3D12DDI_DEALLOCATE_FLAGS_0022_ASSUME_NOT_IN_USE==0x1,
+                      "d3d12umddi.h: ASSUME_NOT_IN_USE is the AssumeNotInUse bit of D3DDDICB_DESTROYALLOCATION2FLAGS");
         D3D12DDICB_DEALLOCATE_0022 args{};
         if(by_resource)args.hResource=resource_;
         else {args.NumAllocations=1;args.HandleList=&allocation_;}  // this allocation only
@@ -97,6 +103,7 @@ public:
         // caller's proof of retirement the flags stay NONE.
         args.Flags=retirement==Retirement::Retired?static_cast<D3D12DDI_DEALLOCATE_FLAGS_0022>(
             D3D12DDI_DEALLOCATE_FLAGS_0022_ASSUME_NOT_IN_USE|D3D12DDI_DEALLOCATE_FLAGS_0022_SYNCHRONOUS_DESTROY):
+            retirement==Retirement::NotInUse?D3D12DDI_DEALLOCATE_FLAGS_0022_ASSUME_NOT_IN_USE:
             D3D12DDI_DEALLOCATE_FLAGS_0022_NONE;
         const bool traced=ddi_trace_enabled();
         if(traced){
