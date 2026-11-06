@@ -568,6 +568,10 @@ def main(argv):
     cmd, args = argv[0], argv[1:]
     if cmd == "boot":
         boot_main(args)
+    # A help flag is never a remote command: "run --help" once sent "--help" to the target as PowerShell.
+    if cmd in ("-h", "--help", "help") or (args and args[0] in ("-h", "--help")):
+        print(__doc__)
+        sys.exit(0)
     try:
         target = Target()
         if cmd == "addr":

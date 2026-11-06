@@ -40,5 +40,21 @@ class ScriptArg(unittest.TestCase):
                                 f'"C:\\BC250\\tmp\\d3d12-putback.ps1" -Step putback -Expect "{EXPECT}"; exit $LASTEXITCODE'])
 
 
+class HelpFlag(unittest.TestCase):
+    def test_a_help_flag_never_reaches_the_target(self):
+        # 2026-11-06: "run --help" sent "--help" to the target as one PowerShell command.
+        made = []
+        real = target.Target
+        target.Target = lambda *a, **k: made.append(1)
+        try:
+            for argv in (["run", "--help"], ["run", "-h"], ["ps", "--help"], ["push", "-h"], ["--help"], ["help"]):
+                with self.assertRaises(SystemExit) as end:
+                    target.main(argv)
+                self.assertEqual(end.exception.code, 0, argv)
+        finally:
+            target.Target = real
+        self.assertEqual(made, [])
+
+
 if __name__ == "__main__":
     unittest.main()
