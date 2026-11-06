@@ -2,12 +2,15 @@
 #include "device-owner.h"
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <iostream>
 #include <thread>
 using namespace bc250::umd;
 namespace {
 void check(bool ok) { if (!ok) std::abort(); }
 int identity, context; unsigned creates, destroys; bool fail_create=false,fail_destroy=false,lost_destroy=false;
+// BD-327: on_destroy runs inside the destroy callback of close; locks counts the Lock2 calls of the workers.
+unsigned locks; std::function<void()> on_destroy;
 unsigned sync_destroys, paging_destroys; HRESULT sync_status=S_OK, paging_status=S_OK;
 HRESULT APIENTRY create(HANDLE h,D3DDDICB_CREATECONTEXTVIRTUAL *c) {
     check(h==&identity && c->EngineAffinity==1); ++creates;
@@ -16,6 +19,7 @@ HRESULT APIENTRY create(HANDLE h,D3DDDICB_CREATECONTEXTVIRTUAL *c) {
 }
 HRESULT APIENTRY destroy(HANDLE h,const D3DDDICB_DESTROYCONTEXT *c) {
     check(h==&identity && c->hContext==&context); ++destroys;
+    if (on_destroy) on_destroy();
     return fail_destroy ? E_FAIL : lost_destroy ? D3DDDIERR_DEVICEREMOVED : S_OK;
 }
 HRESULT APIENTRY destroy_sync(HANDLE h,const D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT *d) {
@@ -25,6 +29,20 @@ HRESULT APIENTRY destroy_paging(HANDLE h,const D3DDDI_DESTROYPAGINGQUEUE *d) {
     check(h==&identity && d->hPagingQueue==11); ++paging_destroys; return paging_status;
 }
 void APIENTRY set_error(D3D10DDI_HRTCORELAYER,HRESULT) { std::abort(); }
+// BD-327: a call of a pipeline worker (Lock2, one of the admitted driver-internal calls), on a thread of its own that
+// is bound to the gate of the owner's device.
+HRESULT APIENTRY lock2(HANDLE h,D3DDDICB_LOCK2 *l) { check(h==&identity && l->hAllocation==5); ++locks; l->pData=&identity; return S_OK; }
+int32_t worker_lock(DeviceOwner &owner) {
+    int32_t status=-1;
+    std::thread worker([&]() {
+        EngineWorkerGate::bind(&owner.runtime().workers);
+        D3DKMT_LOCK2 lock{}; lock.hAllocation=5;
+        status=host_dispatch(&owner.bridge(),BC250_HOST_Lock2,&lock);
+        EngineWorkerGate::bind(nullptr);
+    });
+    worker.join();
+    return status;
+}
 }
 int main() {
     D3DDDI_DEVICECALLBACKS cb{}; cb.pfnCreateContextVirtualCb=create;
@@ -174,6 +192,42 @@ int main() {
         lost_destroy=false;
         check(owner.close()==S_OK && destroys==before+3 && !owner.has_live_objects());
     }
+    // BD-327: the gate of the engine's pipeline workers. close closes it when it returns, on each path, and only an
+    // initialize after a successful close opens it again. A successful close joined the workers in the engine's final
+    // Release, so a worker call until then is admitted; a failed close keeps the engine and its workers, and their
+    // later calls are refused. The tests open the gate as initialize does (no engine runs here).
+    {
+        RuntimeDevice &rt=owner.runtime();
+        rt.KTCallbacks.pfnLock2Cb=lock2;
+        check(rt.workers.revoked() && worker_lock(owner)==RuntimeDomain::wrong_domain && locks==0);
+        // A successful close: a worker call inside close (here in its destroy callback) is admitted; after the
+        // return it is refused.
+        rt.workers.reopen(); rt.present_context=&context;
+        int32_t inClose=-1; on_destroy=[&]() { inClose=worker_lock(owner); };
+        check(owner.close()==S_OK && inClose==0 && locks==1);
+        check(rt.workers.revoked() && worker_lock(owner)==RuntimeDomain::wrong_domain && locks==1);
+        // An initialize after a successful close opens the gate again (it fails here at its argument check).
+        D3D10DDIARG_CREATEDEVICE bad{};
+        check(owner.initialize(bad,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_INVALIDARG && !rt.workers.revoked());
+        rt.KTCallbacks.pfnLock2Cb=lock2;
+        check(worker_lock(owner)==0 && locks==2);
+        // A failed close before the engine's release (the paging queue of the surfaces): the engine and its workers
+        // would stay, so the gate is closed when close returns, and their later calls are refused.
+        UINT64 queueFence=0; paging_status=E_FAIL; owner.surface_queue()={11,12,&queueFence};
+        inClose=-1; on_destroy=nullptr;
+        check(owner.close()==E_FAIL && !std::strcmp(owner.step(),"close-paging-queue") && owner.has_live_objects());
+        check(rt.workers.revoked() && worker_lock(owner)==RuntimeDomain::wrong_domain && locks==2);
+        // No reopen after a failed close: initialize refuses the kept owner.
+        check(owner.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_UNEXPECTED && rt.workers.revoked());
+        check(worker_lock(owner)==RuntimeDomain::wrong_domain && locks==2);
+        // The retries of a failed close keep the gate closed: the workers of the kept engine are refused also while a
+        // retry runs, until the retry that succeeds.
+        paging_status=S_OK; rt.present_context=&context; fail_destroy=true;
+        on_destroy=[&]() { inClose=worker_lock(owner); };
+        check(owner.close()==E_FAIL && inClose==RuntimeDomain::wrong_domain && rt.workers.revoked());
+        on_destroy=nullptr; fail_destroy=false;
+        check(owner.close()==S_OK && !owner.has_live_objects() && rt.workers.revoked() && locks==2);
+    }
     std::cout << "PASS DDI device owner: runtime arguments, initialization rollback, failed cleanup retention/retry, "
-        "close on a lost device\n";
+        "close on a lost device, engine worker gate\n";
 }

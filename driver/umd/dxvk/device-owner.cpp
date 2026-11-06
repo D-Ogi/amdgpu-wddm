@@ -2,7 +2,15 @@
 #include "device-owner.h"
 #include <algorithm>
 namespace bc250::umd {
-namespace { void module_anchor() {} }
+namespace {
+void module_anchor() {}
+#if BC250_DXVK_ENGINE_ABI_MINOR>=7
+// BD-327, engine ABI 1.7: Services.WorkerScope. shell is the RuntimeDevice of this owner (initialize).
+void APIENTRY engine_worker_scope(void *shell,BOOL enter) {
+    EngineWorkerGate::bind(enter && shell ? &static_cast<RuntimeDevice *>(shell)->workers : nullptr);
+}
+#endif
+}
 HRESULT DeviceOwner::retain_code_modules(const void *engineEntry,const void *icdEntry) {
     if (!runtime_.domain.entered() || retained_module_count()) return E_UNEXPECTED;
     if (!engineEntry || !icdEntry) return E_INVALIDARG;
@@ -22,6 +30,8 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     step_="arguments";
     if (!runtime_.domain.entered() || initialized_ || closing_ || has_live_objects())
         return E_UNEXPECTED;
+    // BD-327: the close before this one, if any, succeeded and joined the workers of its engine.
+    runtime_.workers.reopen();
     if (!args.pKTCallbacks || !args.pUMCallbacks || !args.DXGIBaseDDI.pDXGIBaseCallbacks || !args.hRTDevice.handle)
         return E_INVALIDARG;
     if (!args.pKTCallbacks->pfnCreateContextVirtualCb || !args.pKTCallbacks->pfnDestroyContextCb ||
@@ -47,7 +57,14 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     step_="modules";
     hr=retain_code_modules(reinterpret_cast<const void *>(funcs.CreateDevice),reinterpret_cast<const void *>(get));
     if (SUCCEEDED(hr)) { step_="instance"; hr=instance_.open(get,host,policy_flags); }
-    if (SUCCEEDED(hr)) { step_="session"; hr=session_.open(funcs,instance_.info(),level,services); }
+    // BD-327: the engine's services of this device. Shell is the runtime device, which the engine passes back to
+    // Log and WorkerScope; the pipeline workers of an engine of ABI 1.7 or later bind to its gate.
+    BC250_DXVK_SHELL_SERVICES own=services;
+    own.Shell=&runtime_;
+#if BC250_DXVK_ENGINE_ABI_MINOR>=7
+    own.WorkerScope=engine_worker_scope;
+#endif
+    if (SUCCEEDED(hr)) { step_="session"; hr=session_.open(funcs,instance_.info(),level,own); }
     if (SUCCEEDED(hr)) {
         step_="engine";
         hr=session_.engine()->QueryInterface(__uuidof(IBc250DxvkDevice4),reinterpret_cast<void **>(&engine4_));
@@ -170,6 +187,15 @@ HRESULT DeviceOwner::release_surface_handle(RuntimeSurface &surface) {
 HRESULT DeviceOwner::close() {
     if (!runtime_.domain.entered()) return E_UNEXPECTED;
     closing_=true;
+    // BD-327: the gate of the pipeline workers closes when close returns, on each path. A successful close joined the
+    // workers in the engine's final Release (session_.close), so a compile in flight until then keeps its scope and
+    // ends normally. A failed close keeps the engine device and its workers alive after DestroyDevice returned, with
+    // a runtime device handle that is no longer valid: from then on their host calls are refused. revoke waits for an
+    // admitted call in flight, and DestroyDevice returns only after it.
+    struct RevokeOnReturn {
+        EngineWorkerGate &gate;
+        ~RevokeOnReturn() { gate.revoke(); }
+    } revokeOnReturn{runtime_.workers};
     step_="close-engine";
     if (session_.must_retain_owner()) return E_UNEXPECTED;
     HRESULT hr=S_OK;

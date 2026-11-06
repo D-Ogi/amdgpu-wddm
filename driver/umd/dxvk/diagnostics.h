@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include "../d3d12/stdio-log.h"
 namespace bc250::umd {
 inline void adapter_diagnostic(const char *stage,UINT interfaceVersion,UINT version,UINT flags) noexcept {
@@ -76,13 +77,24 @@ private:
     std::atomic<ULONGLONG> minute_{~0ull};
     std::atomic_uint used_{0},skipped_{0};
 };
-inline void APIENTRY engine_diagnostic(void *,UINT32 level,const char *message) noexcept {
+inline void APIENTRY engine_diagnostic(void *shell,UINT32 level,const char *message) noexcept {
     if(!message || level<1 || level>3)return;
     if(level==3){
         // Info lines only on the AMDGPU_WDDM_LOG sink, when the process asked for one (d3d12/stdio-log.h): DXVK's
         // "Effective configuration" there shows the options of the per-application settings. Bounded apart from
         // the errors and warnings below: 256 at the start, then 16 in each minute.
         if(!amdgpu_wddm_log::enabled())return;
+        // BD-327: the engine's shader stats line of a device (one at each final Release) is never skipped by the
+        // minute limit, and it names the device: shell is the RuntimeDevice of the device (DeviceOwner::initialize),
+        // the device= of its BD-327 line. A bound of its own, 4096 lines in a process.
+        static constexpr char kStats[]="amdgpu_wddm_dxvk: Shader stats:";
+        if(!std::strncmp(message,kStats,sizeof(kStats)-1)){
+            static std::atomic_uint stats{4096};
+            unsigned left=stats.load(std::memory_order_relaxed);
+            while(left && !stats.compare_exchange_weak(left,left-1,std::memory_order_relaxed)){}
+            if(left)amdgpu_wddm_log::print("M14 engine stats: device=%p %.1024s\n",shell,message);
+            return;
+        }
         static LineAllowance info{256,16};
         unsigned skipped=0; bool last=false;
         if(!info.take(GetTickCount64()/60000,skipped,last))return;

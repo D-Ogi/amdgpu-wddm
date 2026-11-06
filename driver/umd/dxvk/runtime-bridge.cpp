@@ -30,7 +30,9 @@
 #include "runtime-bridge.h"
 #include "ddi-error-policy.h"
 #include "diagnostics.h"
+#include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <mutex>
 namespace bc250::umd {
 namespace {
@@ -410,10 +412,152 @@ static HRESULT Bc250HostOperation(HostBridge *s, uint32_t op, void *argument)
 #undef HOST_CALL
 }
 
+// BD-327: the D3DKMT_CREATEALLOCATIONFLAGS bits (d3dkmthk.h, SDK 10.0.26100) that a worker's allocation must not
+// have: shared or cross-adapter memory, memory the caller already owns, a standard allocation, a swap chain buffer.
+// CreateResource, NonSecure and ReadOnly stay allowed: hosted RADV sets CreateResource and NonSecure on each of its
+// allocations (radv_wddm2_bo.c), and the runtime callback creates no runtime resource for them (hResource is 0).
+static constexpr UINT kWorkerRefusedAllocationFlags=
+   0x00000002u | // CreateShared
+   0x00000008u | // CreateProtected
+   0x00000010u | // RestrictSharedAccess
+   0x00000020u | // ExistingSysMem
+   0x00000040u | // NtSecuritySharing
+   0x00000400u | // SwapChainBackBuffer
+   0x00000800u | // CrossAdapter
+   0x00001000u | // OpenCrossAdapter
+   0x00002000u | // PartialSharedCreation
+   0x00010000u | // StandardAllocation
+   0x00020000u | // ExistingSection
+   0x00200000u;  // SharedDisplayable
+static_assert(sizeof(D3DKMT_CREATEALLOCATIONFLAGS)==sizeof(UINT));
+bool worker_admits_call(uint32_t operation, const void *argument) noexcept
+{
+   if (!argument) return operation==BC250_HOST_CHECK_STATUS;
+   switch (operation) {
+   case BC250_HOST_CHECK_STATUS: return true;
+   case BC250_HOST_CreateAllocation2: {
+      const auto *a=static_cast<const D3DKMT_CREATEALLOCATION *>(argument);
+      UINT flags=0; std::memcpy(&flags,&a->Flags,sizeof(flags));
+      if ((flags & kWorkerRefusedAllocationFlags) || a->hResource || a->pPrivateRuntimeData || a->PrivateRuntimeDataSize ||
+          a->NumAllocations!=1 || !a->pAllocationInfo2) return false;
+      return a->pAllocationInfo2[0].pSystemMem==nullptr;
+   }
+   case BC250_HOST_DestroyAllocation2: {
+      const auto *a=static_cast<const D3DKMT_DESTROYALLOCATION2 *>(argument);
+      return !a->hResource && !a->Flags.Value;
+   }
+   case BC250_HOST_WaitForSynchronizationObjectFromCpu: {
+      // The paging fence wait of an allocation: one object, no event (the call returns when the fence reached it).
+      const auto *a=static_cast<const D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMCPU *>(argument);
+      return a->ObjectCount==1 && !a->hAsyncEvent;
+   }
+   case BC250_HOST_ReserveGpuVirtualAddress: case BC250_HOST_MapGpuVirtualAddress:
+   case BC250_HOST_FreeGpuVirtualAddress: case BC250_HOST_MakeResident:
+   case BC250_HOST_Lock2: case BC250_HOST_Unlock2:
+      return true;
+   default: return false;
+   }
+}
+namespace {
+// BD-327: host calls refused because the calling thread was in no scope of the device, by thread name (the
+// description the thread set, for example dxvk-shader-n). Kept only while the process writes the AMDGPU_WDDM_LOG
+// sink (the game log, both flavours), which is the only reader. A fixed table: the names after the first 15 count
+// as "other". report_host_scope_calls prints it and starts it again.
+struct RefusedByThread { char name[40]; unsigned count; unsigned last_op; };
+std::mutex g_refused_mutex;
+RefusedByThread g_refused[16];
+unsigned g_refused_rows;
+void note_refused_thread(uint32_t operation) noexcept
+{
+   if (!amdgpu_wddm_log::enabled()) return;
+   char name[40]="unnamed";
+   PWSTR wide=nullptr;
+   if (SUCCEEDED(GetThreadDescription(GetCurrentThread(),&wide)) && wide) {
+      if (wide[0] && !WideCharToMultiByte(CP_UTF8,0,wide,-1,name,sizeof(name),nullptr,nullptr))
+         std::snprintf(name,sizeof(name),"unreadable");
+      LocalFree(wide);
+   }
+   // One word in the line: the list separates its entries with spaces and a count with '='.
+   for (char *p=name;*p;++p) if (*p==' ' || *p=='=' || *p=='(' || static_cast<unsigned char>(*p)<0x20) *p='_';
+   std::lock_guard<std::mutex> lock(g_refused_mutex);
+   for (unsigned i=0;i<g_refused_rows;++i) {
+      if (!std::strcmp(g_refused[i].name,name)) { ++g_refused[i].count; g_refused[i].last_op=operation; return; }
+   }
+   const unsigned other=sizeof(g_refused)/sizeof(g_refused[0])-1;
+   const bool named=g_refused_rows<other;
+   RefusedByThread &row=g_refused[named ? g_refused_rows++ : other];
+   if (!row.count) std::snprintf(row.name,sizeof(row.name),"%s",named ? name : "other");
+   ++row.count; row.last_op=operation;
+}
+}
+void report_host_scope_calls(HostBridge &bridge) noexcept
+{
+   if (!amdgpu_wddm_log::enabled()) return;
+   char list[512]; size_t used=0; list[0]=0;
+   {
+      std::lock_guard<std::mutex> lock(g_refused_mutex);
+      for (const auto &row:g_refused) {
+         if (!row.count || used>=sizeof(list)-1) continue;
+         const int n=std::snprintf(list+used,sizeof(list)-used,"%s%s=%u(op %u)",used ? " " : "",row.name,row.count,
+            row.last_op);
+         if (n>0) used=(std::min)(sizeof(list)-1,used+size_t(n));
+      }
+      for (auto &row:g_refused) row={};
+      g_refused_rows=0;
+   }
+   // One line for each DestroyDevice, with no bound of its own: kit-bd327-diag counts these lines.
+   amdgpu_wddm_log::print("BC250 BD-327: host scope calls: device=%p runtime=%p identity=%p worker admitted=%u refused=%u "
+      "gate=%s; refused outside a scope since the last line, by thread: %s\n",
+      static_cast<void *>(bridge.device),bridge.device ? bridge.device->hDevice : nullptr,
+      bridge.device ? bridge.device->host_identity() : nullptr,std::atomic_ref<unsigned>(bridge.worker_calls).load(std::memory_order_relaxed),
+      std::atomic_ref<unsigned>(bridge.worker_refused).load(std::memory_order_relaxed),
+      bridge.device && bridge.device->workers.revoked() ? "revoked" : "open",used ? list : "none");
+}
+// BD-327: a call of a pipeline worker of this device's engine (EngineWorkerGate). It runs outside the RuntimeDomain:
+// no runtime error callback (pfnSetErrorCb belongs to a DDI thread), no loss latch and no call counter of the DDI
+// path. A lost-device status goes back to hosted RADV as STATUS_DEVICE_REMOVED; the next DDI entry of the device
+// finds the loss itself (Bc250HostStatus reads the same fences).
+static int32_t Bc250WorkerDispatch(HostBridge &s, uint32_t operation, void *argument)
+{
+   std::atomic_ref<unsigned> refused(s.worker_refused);
+   if (!worker_admits_call(operation,argument)) {
+      refused.fetch_add(1,std::memory_order_relaxed);
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+      static std::atomic_uint notes{16};
+      device_life_note(notes,"BC250 BD-327: worker host op %u refused: not a driver-internal memory call: runtime=%p "
+         "identity=%p thread=%lu\n",operation,s.device->hDevice,s.device->host_identity(),
+         (unsigned long)GetCurrentThreadId());
+#endif
+      return RuntimeDomain::wrong_domain;
+   }
+   if (operation==BC250_HOST_CHECK_STATUS) {
+      // Read-only: a loss already latched, or the kernel's proof that the device's work ended.
+      const bool lost=std::atomic_ref<bool>(s.device_lost).load(std::memory_order_relaxed) ||
+         kernel_ended_device_work(s);
+      return lost ? (int32_t)0xc00002b6 : 0;
+   }
+   EngineWorkerGate &gate=s.device->workers;
+   if (!gate.enter()) {
+      refused.fetch_add(1,std::memory_order_relaxed);
+      return RuntimeDomain::wrong_domain;
+   }
+   const HRESULT hr=Bc250HostOperation(&s,operation,argument);
+   gate.leave();
+   std::atomic_ref<unsigned>(s.worker_calls).fetch_add(1,std::memory_order_relaxed);
+   if (Bc250DeviceLostResult(hr)) return (int32_t)0xc00002b6;
+   if (hr==E_PENDING && (operation==BC250_HOST_MapGpuVirtualAddress || operation==BC250_HOST_MakeResident)) return 0x103;
+   return SUCCEEDED(hr) ? 0 : hr==E_NOTIMPL ? (int32_t)0xc00000bb :
+          hr==E_OUTOFMEMORY ? (int32_t)0xc0000017 :
+          hr==E_INVALIDARG ? (int32_t)0xc000000d : (int32_t)0xc0000001;
+}
+
 int32_t host_dispatch(void *userdata, uint32_t operation, void *argument)
 {
    auto *s=(HostBridge *)userdata;
+   if (s && s->device && !s->device->domain.entered() && s->device->workers.bound())
+      return Bc250WorkerDispatch(*s,operation,argument);
    if (!s || !s->device || !s->device->domain.entered()) {
+      note_refused_thread(operation);
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
       // BD-253, lab flavour (BD-167): a call that reached a device whose runtime scope this thread has not
       // entered, for example a winsys that the hosted ICD kept for another device with the same identity.

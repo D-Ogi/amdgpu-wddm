@@ -6,12 +6,16 @@
 #include <d3d11.h>
 #include <d3d10umddi.h>
 #include "runtime-domain.h"
+#include "engine-worker-gate.h"
 #include "host-bootstrap.h"
 #include "adapter-presence.h"
 #include <atomic>
 namespace bc250::umd {
 struct RuntimeDevice {
     RuntimeDomain domain;
+    // BD-327: the engine's pipeline workers of this device (engine-worker-gate.h). The engine's Services.Shell is
+    // this object, so that its WorkerScope service finds the gate.
+    EngineWorkerGate workers;
     HANDLE hDevice = nullptr;
     HANDLE present_context = nullptr;
     D3D10DDI_HRTCORELAYER hRTCoreLayer = {};
@@ -43,7 +47,8 @@ struct HostFence {
 };
 inline constexpr unsigned kHostFenceRecords=32;
 // Zero initialize; lifetime and cleanup belong to the UMD device. Context tokens
-// are bridge-local, not kernel handles. No DXVK worker may enter a runtime scope.
+// are bridge-local, not kernel handles. No DXVK worker may enter a runtime scope: a pipeline worker gets only the
+// calls of host_dispatch's worker path (BD-327, RuntimeDevice::workers).
 struct HostBridge {
    RuntimeDevice *device;
    HANDLE contexts[16];
@@ -78,7 +83,21 @@ struct HostBridge {
    unsigned adapter_state;
    // The kernel entries of the check; null means those of gdi32.dll. Only the tests set it.
    const AdapterPresenceKmt *adapter_kmt;
+   // BD-327: host calls of the engine's pipeline workers of this device that reached the runtime, and those that
+   // the worker path refused (an operation outside worker_admits_call, or a gate that close revoked). Workers and
+   // DDI threads read and write them through std::atomic_ref, as adapter_state.
+   unsigned worker_calls;
+   unsigned worker_refused;
 };
+// BD-327: TRUE when a pipeline worker of the engine may make this host call: driver-internal memory work of
+// hosted RADV only. A non-shared allocation with no runtime resource and no existing memory, its destruction, its
+// GPU addresses, residency and CPU mapping, the synchronous wait for the paging fence of that work, and the status
+// check. No submission, context, sync object creation, present, progress publication or loss report.
+bool worker_admits_call(uint32_t operation, const void *argument) noexcept;
+// BD-327, lab flavour: one line for the device (DestroyDevice): its worker host calls, and the host calls that
+// threads outside any scope of any device made since the last such line, by thread name. Nothing in the release
+// flavour.
+void report_host_scope_calls(HostBridge &bridge) noexcept;
 // BD-179: the states of the adapter check. The check is armed only when it first finds the adapter of the device in
 // the list: a LUID that the list never had (a wrong LUID, a list that this process cannot read) never reports a loss.
 enum AdapterCheck : unsigned { kAdapterUnchecked=0, kAdapterSeen=1, kAdapterLeft=2 };

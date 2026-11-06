@@ -173,7 +173,149 @@ static void test_adapter_presence() {
     require(probe_adapter_presence(luid,AdapterPresenceKmt{})==AdapterPresence::unknown);
     require(probe_adapter_presence(0,kmt)==AdapterPresence::unknown);
 }
+// BD-327: the host calls of an engine pipeline worker (EngineWorkerGate). The worker is outside the RuntimeDomain;
+// its device admits only driver-internal memory calls on it while the gate is open, and none after close revoked it.
+static unsigned worker_allocated, worker_deallocated, worker_waits, worker_errors;
+static HANDLE worker_inside, worker_release;
+static HRESULT APIENTRY worker_allocate(HANDLE device, D3DDDICB_ALLOCATE *a) {
+    require(device==&identity && a->NumAllocations==1 && !a->hResource);
+    if (worker_inside) { SetEvent(worker_inside); WaitForSingleObject(worker_release,INFINITE); }
+    ++worker_allocated; a->hKMResource=92; a->pAllocationInfo2[0].hAllocation=38; return S_OK;
+}
+static HRESULT APIENTRY worker_deallocate(HANDLE device, CONST D3DDDICB_DEALLOCATE *a) {
+    require(device==&identity && a->NumAllocations==1 && a->HandleList[0]==38); ++worker_deallocated; return S_OK;
+}
+static HRESULT APIENTRY worker_map(HANDLE device, D3DDDI_MAPGPUVIRTUALADDRESS *a) {
+    require(device==&identity); a->VirtualAddress=UINT64_C(0x80000000); a->PagingFenceValue=4; return E_PENDING;
+}
+static HRESULT APIENTRY worker_wait(HANDLE device, const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU *a) {
+    require(device==&identity && a->ObjectCount==1); ++worker_waits; return S_OK;
+}
+static void APIENTRY worker_error(D3D10DDI_HRTCORELAYER, HRESULT) { ++worker_errors; }
+static void test_worker_scope() {
+    RuntimeDevice device; device.hDevice=&identity;
+    device.KTCallbacks.pfnAllocateCb=worker_allocate;
+    device.KTCallbacks.pfnDeallocateCb=worker_deallocate;
+    device.KTCallbacks.pfnMapGpuVirtualAddressCb=worker_map;
+    device.KTCallbacks.pfnMakeResidentCb=resident;
+    device.KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb=worker_wait;
+    device.KTCallbacks.pfnSubmitCommandCb=submit;
+    device.UMCallbacks.pfnSetErrorCb=worker_error;
+    HostBridge bridge{}; bridge.device=&device;
+    RuntimeDevice other; HostBridge otherBridge{}; otherBridge.device=&other;
+    D3DDDI_ALLOCATIONINFO2 info{};
+    D3DKMT_CREATEALLOCATION internal{};
+    auto reset=[&] {
+        info={}; internal={}; internal.NumAllocations=1; internal.pAllocationInfo2=&info;
+        internal.PrivateDriverDataSize=4; internal.Flags.CreateResource=1; internal.Flags.NonSecure=1;
+    };
+    auto on_thread=[](const EngineWorkerGate *gate, auto &&body) {
+        std::thread t([&] { EngineWorkerGate::bind(gate); body(); EngineWorkerGate::bind(nullptr); }); t.join();
+    };
+    // A thread in no scope: refused, as before BD-327.
+    reset();
+    on_thread(nullptr,[&] { require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==RuntimeDomain::wrong_domain); });
+    require(worker_allocated==0 && bridge.worker_calls==0 && bridge.worker_refused==0);
+    // A worker of this device: the internal allocation of hosted RADV (CreateResource and NonSecure set, as
+    // radv_wddm2_bo.c sets them), its mapping, residency, paging wait and destruction reach the runtime.
+    on_thread(&device.workers,[&] {
+        require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==0);
+        require(internal.hResource==92 && info.hAllocation==38);
+        D3DDDI_MAPGPUVIRTUALADDRESS map{}; map.hAllocation=38;
+        require(host_dispatch(&bridge,BC250_HOST_MapGpuVirtualAddress,&map)==0x103 && map.VirtualAddress==0x80000000);
+        D3DKMT_HANDLE handle=38;
+        D3DDDI_MAKERESIDENT residency{}; residency.NumAllocations=1; residency.AllocationList=&handle;
+        require(host_dispatch(&bridge,BC250_HOST_MakeResident,&residency)==0x103);
+        D3DKMT_HANDLE fence=60; UINT64 value=4;
+        D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMCPU wait{}; wait.ObjectCount=1; wait.ObjectHandleArray=&fence;
+        wait.FenceValueArray=&value;
+        require(host_dispatch(&bridge,BC250_HOST_WaitForSynchronizationObjectFromCpu,&wait)==0 && worker_waits==1);
+        // An event wait or one of two objects is not the paging wait of an allocation.
+        HANDLE event=reinterpret_cast<HANDLE>(1); wait.hAsyncEvent=event;
+        require(host_dispatch(&bridge,BC250_HOST_WaitForSynchronizationObjectFromCpu,&wait)==RuntimeDomain::wrong_domain);
+        wait.hAsyncEvent=nullptr; wait.ObjectCount=2;
+        require(host_dispatch(&bridge,BC250_HOST_WaitForSynchronizationObjectFromCpu,&wait)==RuntimeDomain::wrong_domain);
+        D3DKMT_DESTROYALLOCATION2 destroy{}; destroy.phAllocationList=&handle; destroy.AllocationCount=1;
+        require(host_dispatch(&bridge,BC250_HOST_DestroyAllocation2,&destroy)==0 && worker_deallocated==1);
+    });
+    require(worker_allocated==1 && worker_waits==1 && bridge.worker_calls==5 && bridge.worker_refused==2);
+    // Shared, runtime-resource, existing-memory and cross-adapter allocations stay refused on a worker.
+    on_thread(&device.workers,[&] {
+        reset(); internal.Flags.CreateShared=1;
+        require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==RuntimeDomain::wrong_domain);
+        reset(); internal.Flags.NtSecuritySharing=1;
+        require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==RuntimeDomain::wrong_domain);
+        reset(); internal.Flags.CrossAdapter=1;
+        require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==RuntimeDomain::wrong_domain);
+        reset(); internal.Flags.ExistingSection=1;
+        require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==RuntimeDomain::wrong_domain);
+        reset(); internal.hResource=91;
+        require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==RuntimeDomain::wrong_domain);
+        static const char memory[4096]={};
+        reset(); info.pSystemMem=memory;
+        require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==RuntimeDomain::wrong_domain);
+        reset(); internal.NumAllocations=2;
+        require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==RuntimeDomain::wrong_domain);
+        D3DKMT_HANDLE handle=38;
+        D3DKMT_DESTROYALLOCATION2 destroy{}; destroy.phAllocationList=&handle; destroy.AllocationCount=1; destroy.hResource=92;
+        require(host_dispatch(&bridge,BC250_HOST_DestroyAllocation2,&destroy)==RuntimeDomain::wrong_domain);
+        // No submission, context or loss report from a worker.
+        D3DKMT_SUBMITCOMMAND command{}; command.Commands=4096; command.CommandLength=64;
+        require(host_dispatch(&bridge,BC250_HOST_SubmitCommand,&command)==RuntimeDomain::wrong_domain);
+        D3DKMT_CREATECONTEXTVIRTUAL create{}; create.NodeOrdinal=2; create.EngineAffinity=1;
+        require(host_dispatch(&bridge,BC250_HOST_CreateContextVirtual,&create)==RuntimeDomain::wrong_domain);
+        require(host_dispatch(&bridge,BC250_HOST_REPORT_LOST,nullptr)==RuntimeDomain::wrong_domain);
+        // The status check reads only: a latched loss is STATUS_DEVICE_REMOVED with no runtime error callback.
+        require(host_dispatch(&bridge,BC250_HOST_CHECK_STATUS,nullptr)==0);
+        bridge.device_lost=true;
+        require(host_dispatch(&bridge,BC250_HOST_CHECK_STATUS,nullptr)==(int32_t)0xc00002b6);
+        bridge.device_lost=false;
+    });
+    require(worker_allocated==1 && worker_deallocated==1 && submitted==0 && worker_errors==0 && !bridge.lost_reported);
+    require(bridge.worker_calls==5 && bridge.worker_refused==13);
+    // A worker of another device that reaches this bridge (a winsys kept for another identity, BD-253): refused.
+    reset();
+    on_thread(&other.workers,[&] { require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==RuntimeDomain::wrong_domain); });
+    require(worker_allocated==1 && bridge.worker_calls==5);
+    (void)otherBridge;
+    // revoke waits for the admitted call in flight, and after it the worker's calls are refused.
+    worker_inside=CreateEventW(nullptr,TRUE,FALSE,nullptr); worker_release=CreateEventW(nullptr,TRUE,FALSE,nullptr);
+    require(worker_inside && worker_release);
+    reset();
+    std::atomic_bool revoked{false};
+    std::thread inFlight([&] {
+        EngineWorkerGate::bind(&device.workers);
+        require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==0);
+        EngineWorkerGate::bind(nullptr);
+    });
+    require(WaitForSingleObject(worker_inside,10000)==WAIT_OBJECT_0);
+    std::thread closer([&] { device.workers.revoke(); revoked=true; });
+    Sleep(100);
+    require(!revoked.load());
+    SetEvent(worker_release);
+    inFlight.join(); closer.join();
+    require(revoked.load() && device.workers.revoked() && worker_allocated==2);
+    CloseHandle(worker_inside); CloseHandle(worker_release); worker_inside=worker_release=nullptr;
+    reset();
+    on_thread(&device.workers,[&] { require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==RuntimeDomain::wrong_domain); });
+    require(worker_allocated==2 && bridge.worker_calls==6 && bridge.worker_refused==14);
+    // A new initialize of the owner (after a close that joined the workers) opens the gate again.
+    device.workers.reopen();
+    reset();
+    on_thread(&device.workers,[&] { require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==0); });
+    require(!device.workers.revoked() && worker_allocated==3 && bridge.worker_calls==7 && bridge.worker_refused==14);
+    device.workers.revoke();
+    // The DDI thread of the device is not a worker: its path is the RuntimeDomain's, unchanged by the gate.
+    {
+        RuntimeDomain::Scope scope(device.domain);
+        reset();
+        require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==0 && worker_allocated==4);
+    }
+    report_host_scope_calls(bridge);
+    std::cout << "worker scope: PASS\n";
+}
 int main() {
+    test_worker_scope();
     test_present_bridge();
     test_runtime_present();
     RuntimeDevice device;
