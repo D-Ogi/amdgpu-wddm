@@ -841,6 +841,14 @@ typedef struct _BC250_WDDM {
     BC250_PRESENT_OBSERVATION PresentObservations[BC250_PRESENT_OBSERVATIONS];
     volatile LONG64 DriverCapsInteropReturned[2]; // successful replies, not registry state
     volatile LONG64 DriverCapsFirstTime[2], DriverCapsLastTime[2]; // interrupt time, 100 ns
+    // BD-324: the first successful DRIVERCAPS reply, for the summary. The log ring keeps the first 256 lines of a
+    // start and wraps after them; the reply line comes at about line 285, so a busy start can lose it. Kept: 0 none,
+    // 1 the first reply writes the fields, 2 the fields are complete (the summary reads them only then).
+    volatile LONG DriverCapsKept;
+    ULONG DriverCapsKeptSize, DriverCapsKeptVersion, DriverCapsKeptSched, DriverCapsKeptMm, DriverCapsKeptFlip;
+    ULONG DriverCapsKeptSlots, DriverCapsKeptPlanes;
+    char DriverCapsKeptSource;              // the first letter of the level source (d default, s state, c clamp)
+    UCHAR DriverCapsKeptFlags;              // 1 per-engine TDR, 2 direct flip, 4 smooth rotation, 8 multiplane overlay
 
     volatile LONG Blits;                        // presents copied
     volatile LONG BlitSkips;                    // presents that named no usable source (reason in the log)
@@ -3887,6 +3895,18 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         GuardLog("wddm: DRIVERCAPS interop%u first100ns%lld last100ns%lld",
             i,InterlockedCompareExchange64(&Wddm->DriverCapsFirstTime[i],0,0),
             InterlockedCompareExchange64(&Wddm->DriverCapsLastTime[i],0,0));
+    // BD-324: the first reply of the start, the fields of the "wddm: DRIVERCAPS into" line, which the ring can lose.
+    if (InterlockedCompareExchange(&Wddm->DriverCapsKept,0,0) == 2) {
+        UCHAR f = Wddm->DriverCapsKeptFlags;
+        GuardLog("wddm summary: DRIVERCAPS first %u bytes: wddm %u/%c sched 0x%X mm 0x%X flip 0x%X slots %u "
+                 "tdr %c dflip %c rot %c",
+            Wddm->DriverCapsKeptSize, Wddm->DriverCapsKeptVersion, Wddm->DriverCapsKeptSource,
+            Wddm->DriverCapsKeptSched, Wddm->DriverCapsKeptMm, Wddm->DriverCapsKeptFlip, Wddm->DriverCapsKeptSlots,
+            (f & 1) ? '1' : '0', (f & 2) ? '1' : '0', (f & 4) ? '1' : '0');
+        GuardLog("wddm summary: DRIVERCAPS first mpo %u planes %lu", (f & 8) ? 1u : 0u, Wddm->DriverCapsKeptPlanes);
+    } else {
+        GuardLog("wddm summary: DRIVERCAPS first: no reply in this start yet");
+    }
     GuardLog("wddm: Blt observation calls%lld capacity%u",
         InterlockedCompareExchange64(&Wddm->PresentObservationCalls,0,0),BC250_PRESENT_OBSERVATIONS);
     for (i=0;i<BC250_PRESENT_OBSERVATIONS;i++) {
@@ -5514,6 +5534,21 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // it: both are constants of the build (592 = 0x250 at interface 0xE003, which is what the lab's dxgkrnl offers
     // to a table declaring >= 0xE003; it was 576 at 0x5023; node 0). BD-223: the multiplane-overlay caps go on a
     // line of their own (the line above has no room), the witness of the lab arms of LabScaledPlane.
+    // BD-324: the first reply of the start is also kept for the summary, whatever the log budget says.
+    if (wddm && InterlockedCompareExchange(&wddm->DriverCapsKept, 1, 0) == 0) {
+        wddm->DriverCapsKeptSize = Query->OutputDataSize;
+        wddm->DriverCapsKeptVersion = (ULONG)caps->WDDMVersion;
+        wddm->DriverCapsKeptSource = Bc250WddmLevelSourceName(Device->WddmLevelSource)[0];
+        wddm->DriverCapsKeptSched = caps->SchedulingCaps.Value;
+        wddm->DriverCapsKeptMm = caps->MemoryManagementCaps.Value;
+        wddm->DriverCapsKeptFlip = caps->FlipCaps.Value;
+        wddm->DriverCapsKeptSlots = caps->MaxAllocationListSlotId;
+        wddm->DriverCapsKeptPlanes = (ULONG)caps->MaxOverlayPlanes;
+        wddm->DriverCapsKeptFlags = (UCHAR)((caps->SupportPerEngineTDR ? 1u : 0u) | (caps->SupportDirectFlip ? 2u : 0u) |
+                                            (caps->SupportSmoothRotation ? 4u : 0u) |
+                                            (caps->SupportMultiPlaneOverlay ? 8u : 0u));
+        InterlockedExchange(&wddm->DriverCapsKept, 2);  // a full barrier: the fields above are visible before the 2
+    }
     if (WddmAnswersLogged(Device)) {
         // "wddm 10496/s": the level and the first letter of its source (d default, s state, c clamp; the line
         // "wddm: level" of the start has the whole story). The three flags print as one character each, which
