@@ -338,11 +338,6 @@ typedef struct {
     BC250_MPO3_PLANE Mpo3FlipOdd;
     ULONG ScaledPlane;              /* BD-223: LabScaledPlane, which the caps DDI reads for its lab bit */
 } BC250_WDDM;
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-/* BD-223: mirrors of wddm.c's LabScaledPlane bit and mask, which live outside the block this fixture extracts. */
-#define BC250_WDDM_SCALED_PLANE_STRETCH_CAPS 0x8ul
-#define BC250_WDDM_SCALED_PLANE_MASK 0xful
-#endif
 /* BD-170: bc250kmd.h's immediate-flip record, for the summary's copy of it (WddmImmediateRecordCopy). */
 #define BC250_DCN_IMMEDIATE_RECORDS 8u
 #define BC250_DCN_IMMEDIATE_READS 3u
