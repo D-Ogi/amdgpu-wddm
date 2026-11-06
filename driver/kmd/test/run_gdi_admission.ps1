@@ -51,4 +51,13 @@ Write-Host 'run'
 $code = $LASTEXITCODE
 Write-Host ''
 Write-Host "gdi_admission_test.exe exit code $code"
-exit $code
+if ($code -ne 0) { exit $code }
+
+# BD-296 part (b) negative control: the same checks with the compositor report forced to the CPU compositor must
+# fail. A pass here means that the placement checks cannot see a texture moved for the GPU compositor.
+Write-Host 'negative control (--compositor-control, must fail)'
+& "$Out\gdi_admission_test.exe" --compositor-control 2>&1 | Select-Object -First 3 | ForEach-Object { Write-Host "  $_" }
+$control = $LASTEXITCODE
+if ($control -eq 0) { Write-Host 'negative control passed: the placement checks see nothing'; exit 2 }
+Write-Host "negative control failed as it must (exit $control)"
+exit 0

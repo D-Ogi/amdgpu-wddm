@@ -53,6 +53,9 @@ static void HwmonRequest(BC250_DEVICE*d,BC250_ESCAPE_HWMON*p,ULONG f){(void)d;(v
 /* The per-process FSR 4 policy (amd_identity.c): a record of the calling process, no register. */
 static void* WddmProcessIdentity(HANDLE p){return p;}
 static void AmdIdentityEscape(void*r,BC250_ESCAPE_PROCESS_POLICY*p){(void)r;(void)p;others++;}
+/* BD-296 part (b): the compositor report (escape 39), software state answered before the gates as well. */
+static BOOLEAN CallerIsCompositor(void){return FALSE;}
+static void WddmDesktopCompositorEscape(BC250_DEVICE*d,BC250_ESCAPE_DESKTOP_COMPOSITOR*p,BOOLEAN c){(void)d;(void)p;(void)c;others++;}
 /* The two surfaces of 0.7.210: the V/F curve answers with the software snapshots, the CPU surface past the gate. */
 static void DpmCurveRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM_CURVE*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
 static void CpuRequest(BC250_DEVICE*d,BC250_ESCAPE_CPU*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}

@@ -297,6 +297,8 @@ Check 'bd167probe' { & pwsh -NoProfile -File "$repo\tools\win\bd167probe\test-ho
  }
  # Upgrade defaults and explicit clock choices must survive the same registry writes as an installation.
  Check 'registry-defaults' { & powershell -NoProfile -File "$repo\tools\release\test-registry-defaults.ps1" }
+# BD-296: the installer's writer of both copies of DwmForceCpu, compiled as the installer compiles it (PS 5.1).
+Check 'installer-route-switch' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-route-switch.ps1" }
 # The work ledger gate must judge the manifest the builder is building from, not the published one. This parses
 # build-release.ps1 and demands that the ledger call and the manifest read name one variable, so a path that is
 # passed but wrong fails here instead of turning a train's own integrations into release debt.
@@ -567,7 +569,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
      $build=Join-Path $Out 'router-front'
      & pwsh -NoProfile -File "$repo\tools\build\build-umd-router.ps1" -OutputDir $build
      if($LASTEXITCODE -ne 0){ exit 1 }
-     foreach($suite in @('policy','front-tables','front-tables13','front-rule','front-record')){
+     foreach($suite in @('policy','compositor','front-tables','front-tables13','front-rule','front-record')){
          & "$build\test-router.exe" child $suite $build
          if($LASTEXITCODE -ne 0){ exit 1 }
      }

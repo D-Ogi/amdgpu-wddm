@@ -179,7 +179,8 @@ $dwm = [int]$m.defaults.desktop_router.DwmForceCpu
 # DirectFlipFront is between them from 0.7.213.100-tester.15: the D3D11_1 front of route C is a finished
 # feature, so the installer writes it on, and the value is read from the same defaults table as DwmForceCpu.
 $front = [int]$m.defaults.desktop_router.DirectFlipFront
-$desktopEnd = if (Test-DriverStoreUmdPackage $m) { '(?:\r?\n|$)' } else { '; CpuUmdPath=' }
+# BD-296: the line ends with the step that writes DwmForceCpu into both copies (RouteSwitch.cs).
+$desktopEnd = if (Test-DriverStoreUmdPackage $m) { "; DwmForceCpu $dwm in both copies " } else { '; CpuUmdPath=' }
 Check ($r.text -match ("DesktopRouter: DwmForceCpu=$dwm \(new\); RequireKmdSwitches=1 \(new\); " +
                        "DirectFlipFront=$front \(new\)" + $desktopEnd)) `
       "desktop route DwmForceCpu $dwm and DirectFlipFront $front from the defaults table"

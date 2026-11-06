@@ -1259,6 +1259,49 @@ BC250_AMD_IDENTITY_PROCESS* WddmProcessIdentity(_In_opt_ HANDLE KmdProcess)
     return object != NULL ? &object->AmdIdentity : NULL;
 }
 
+// BD-296 part (b): the router in dwm.exe reports the compositor of its desktop decision. Software state of the device
+// only (the four Desktop* words, which WddmStart resets), so the escape needs no adapter synchronization and reads no
+// WDDM block. Compositor is display.c's check of the caller's token user. Every refusal leaves the placement as it was.
+// The log is bounded: each accepted change is logged up to 8 times per start, each refusal up to 4 times.
+void WddmDesktopCompositorEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DESKTOP_COMPOSITOR* Data,
+                                 BOOLEAN Compositor)
+{
+    ULONG reason = BC250_COMPOSITOR_REASON_ACCEPTED;
+    const ULONG route = Data->Route;
+
+    if (Data->AbiVersion != BC250_DESKTOP_COMPOSITOR_ABI) reason = BC250_COMPOSITOR_REASON_ABI;
+    else if (!Bc250CompositorRouteValid(route)) reason = BC250_COMPOSITOR_REASON_ROUTE;
+    else if (!Compositor) reason = BC250_COMPOSITOR_REASON_ACCOUNT;
+    if (reason == BC250_COMPOSITOR_REASON_ACCEPTED) {
+        const LONG cpu = Bc250CompositorRouteCpu(route) ? 1 : 0;
+        const LONG before = InterlockedExchange(&Device->DesktopCpuCompositor, cpu);
+        if (before != cpu) {
+            const LONG changes = InterlockedIncrement(&Device->DesktopCompositorChanges);
+            if (changes <= 8)
+                GuardLog("wddm: desktop compositor pid %lu is the %s UMD, route %lu, new GDI textures: %s",
+                         Data->Pid, cpu ? "CPU" : "GPU", route,
+                         cpu ? (g_ApertureOffered ? "aperture, CPU view" : "VRAM, no aperture") : "VRAM");
+        }
+        Data->Status = BC250_ESCAPE_STATUS_DONE;
+        Data->NtStatus = (ULONG)STATUS_SUCCESS;
+    } else {
+        const LONG refused = InterlockedIncrement(&Device->DesktopCompositorRefused);
+        if (refused <= 4)
+            GuardLog("wddm: desktop compositor report of pid %lu refused: abi %lu route %lu reason %lu",
+                     Data->Pid, Data->AbiVersion, route, reason);
+        Data->Status = BC250_ESCAPE_STATUS_REFUSED;
+        Data->NtStatus = (ULONG)STATUS_ACCESS_DENIED;
+    }
+    Data->Version = BC250_DESKTOP_COMPOSITOR_ABI;
+    Data->Reason = reason;
+    Data->CpuCompositor = (ULONG)InterlockedCompareExchange(&Device->DesktopCpuCompositor, 0, 0);
+    Data->ApertureOffered = g_ApertureOffered ? 1u : 0u;
+    Data->Changes = (ULONG)InterlockedCompareExchange(&Device->DesktopCompositorChanges, 0, 0);
+    Data->Placed = (ULONG)InterlockedCompareExchange(&Device->GdiCpuCompositorPlaced, 0, 0);
+    Data->Refused = (ULONG)InterlockedCompareExchange(&Device->DesktopCompositorRefused, 0, 0);
+    RtlZeroMemory(Data->Reserved, sizeof(Data->Reserved));
+}
+
 // For a handle that did not come back through a DDI's own handle parameter but out of an array dxgkrnl filled - the
 // DXGK_ALLOCATIONLIST entries of a Present (review 16). Nothing is read through the value: it is compared against the
 // adapter's live objects in the index under the lock, and only a match is dereferenced. <= DISPATCH_LEVEL.
@@ -4328,20 +4371,29 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     //   BD-292: the capability also needs the GPU desktop route, the two effective switches that InteropStart
     // latched above (Bc250GdiHwAccelFeature, gdi_admission.h). On the CPU route the compositor cannot read the
     // standard GDI textures that the capability makes GDI draw into.
+    //   BD-296: the router's kill switch DwmForceCpu is a third route input. The KMD reads its copy in Parameters in
+    // DriverEntry (GuardReadDesktopKillSwitch); on, the compositor is the CPU UMD whatever the two switches say.
     wddm->GdiHwAccelGate = (BOOLEAN)(GuardReadSetting(L"EnableGdiHwAccel", 1) != 0 || GuardLabGdiHwAccel());
+    // BD-296 part (b): the compositor report of the router (WddmDesktopCompositorEscape) belongs to one start. A new
+    // start begins with the GPU placement until the router of the new compositor reports again.
+    InterlockedExchange(&Device->DesktopCpuCompositor, 0);
+    InterlockedExchange(&Device->DesktopCompositorChanges, 0);
+    InterlockedExchange(&Device->DesktopCompositorRefused, 0);
+    InterlockedExchange(&Device->GdiCpuCompositorPlaced, 0);
     {
         int capability = 0;
+        const int killSwitch = GuardDesktopKillSwitch();
         // What this start can do with GDI acceleration, for the control app (the switch shows only where it has an
         // effect): Features\GdiHwAccel, volatile, 1 on, 2 off by the switch alone, 0 not possible (no kernels, or
         // the CPU desktop route). A failed write leaves the switch hidden; the capability does not depend on it.
         ULONG feature = Bc250GdiHwAccelFeature(wddm->GdiHwAccelGate, Bc250GdiKernelsPresent(),
-                                               wddm->GpuPresentGate && wddm->CddDwmInterop, &capability);
+                                               wddm->GpuPresentGate && wddm->CddDwmInterop, killSwitch, &capability);
         NTSTATUS written;
 
         wddm->GdiHwAccel = (BOOLEAN)(capability != 0);
-        GuardLog("wddm: GDI hardware acceleration gate %u, kernels %u, GPU desktop route %u, capability %u",
+        GuardLog("wddm: GDI hardware acceleration gate %u, kernels %u, GPU desktop route %u, kill switch %u, capability %u",
                  (UINT)wddm->GdiHwAccelGate, (UINT)Bc250GdiKernelsPresent(),
-                 (UINT)(wddm->GpuPresentGate && wddm->CddDwmInterop), (UINT)wddm->GdiHwAccel);
+                 (UINT)(wddm->GpuPresentGate && wddm->CddDwmInterop), (UINT)(killSwitch != 0), (UINT)wddm->GdiHwAccel);
         written = GuardVolatileStore(L"Features", L"GdiHwAccel", feature);
 
         if (!NT_SUCCESS(written))
@@ -6344,6 +6396,17 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     // hAllocation behind. The values are the ones Bc250Lb7aAdmit computed above for a type-0 blob, and
     // the gdi-admission gate asserts that equality for every record shape.
     if (!gdiType) policy = call->RecordPolicy;
+    // BD-296 part (b): with the CPU compositor reported for this start (WddmDesktopCompositorEscape), a standard
+    // texture gets the type 2 placement, the aperture with a cached CPU view, so that the CPU UMD can map the window
+    // contents that GDI draws into it. Only the placement changes: the object keeps type 1 and its LB7A blob, and the
+    // GDI paths address the texture through its GPU virtual address in either segment (Bc250GdiCompositorPlacement).
+    if (Bc250GdiCompositorPlacement(gdiType, InterlockedCompareExchange(&device->DesktopCpuCompositor, 0, 0) != 0,
+                                    g_ApertureOffered, &policy)) {
+        const LONG placed = InterlockedIncrement(&device->GdiCpuCompositorPlaced);
+        if (placed <= 4 || placed % 1000 == 0)
+            GuardLog("wddm: standard texture %lu with a CPU view for the CPU compositor (%lux%lu, %llu bytes)",
+                     (ULONG)placed, (ULONG)private->Width, (ULONG)private->Height, (ULONGLONG)private->Size);
+    }
     info->PreferredSegment.SegmentId0 = policy.Aperture ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
     info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(info->PreferredSegment.SegmentId0);
     info->SupportedWriteSegmentSet = info->SupportedReadSegmentSet;

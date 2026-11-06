@@ -30,6 +30,7 @@
 #include "../router-policy.h"
 #include "../router-identity.h"
 #include "../front-direct-flip.h"   // the front: front-adapter.h, front-resource.h and the pure flip rule
+#include "../router-compositor.h"   // BD-296 part (b): the compositor report to the kernel driver
 #include "bc250_adapter_identity.h" // driver/contract (build.ps1 /I)
 #include "bc250_scanout_caps.h"
 #include "bc250_scanout_primary.h"
@@ -2555,9 +2556,118 @@ static void FrontWddm13Checks(const Opened &o, bool admitted, const char *(*reco
     CHECK(strstr(record(), "destroy-device") != nullptr, "the hosted DestroyDevice was not called: %s", record());
 }
 
+// ---------------------------------------------------------------- compositor report (BD-296 part (b), pure)
+
+// The kernel driver double of the compositor report: what it was asked, and how it answers.
+enum class Kmd { Cpu, Gpu, NoAperture, Refuse, OpenFails, EscapeFails };
+static Kmd KmdMode;
+static unsigned KmdOpens, KmdEscapes, KmdCloses;
+static LUID KmdLuid;
+static BC250_ESCAPE_DESKTOP_COMPOSITOR KmdSeen;
+static UINT KmdSeenBytes;
+
+static NTSTATUS APIENTRY KmdOpen(D3DKMT_OPENADAPTERFROMLUID *o)
+{
+    ++KmdOpens;
+    KmdLuid = o->AdapterLuid;
+    if (KmdMode == Kmd::OpenFails) return (NTSTATUS)0xC0000022L; // STATUS_ACCESS_DENIED
+    o->hAdapter = 0x77;
+    return 0;
+}
+static NTSTATUS APIENTRY KmdEscape(const D3DKMT_ESCAPE *e)
+{
+    ++KmdEscapes;
+    KmdSeenBytes = e->PrivateDriverDataSize;
+    if (e->hAdapter != 0x77 || e->Type != D3DKMT_ESCAPE_DRIVERPRIVATE || !e->pPrivateDriverData ||
+        e->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DESKTOP_COMPOSITOR))
+        return (NTSTATUS)0xC000000DL;
+    auto *d = (BC250_ESCAPE_DESKTOP_COMPOSITOR *)e->pPrivateDriverData;
+    KmdSeen = *d;
+    if (KmdMode == Kmd::EscapeFails) return (NTSTATUS)0xC00000BBL; // STATUS_NOT_SUPPORTED, an older KMD
+    d->Status = KmdMode == Kmd::Refuse ? BC250_ESCAPE_STATUS_REFUSED : BC250_ESCAPE_STATUS_DONE;
+    d->Reason = KmdMode == Kmd::Refuse ? BC250_COMPOSITOR_REASON_ACCOUNT : BC250_COMPOSITOR_REASON_ACCEPTED;
+    d->CpuCompositor = KmdMode == Kmd::Cpu || KmdMode == Kmd::NoAperture ? 1u : 0u;
+    d->ApertureOffered = KmdMode == Kmd::NoAperture ? 0u : 1u;
+    d->Placed = 7;
+    return 0;
+}
+static NTSTATUS APIENTRY KmdClose(const D3DKMT_CLOSEADAPTER *c)
+{
+    if (c->hAdapter == 0x77) ++KmdCloses;
+    return 0;
+}
+
+static void CompositorTests()
+{
+    using namespace bc250router;
+    const CompositorKmt kmt = {KmdOpen, KmdEscape, KmdClose};
+    const HANDLE adapter = (HANDLE)(UINT_PTR)0x5A5A;
+    const auto query = (PFND3DDDI_QUERYADAPTERINFOCB)FakeQueryAdapterInfo;
+    char word[64];
+    auto run = [&](Kmd mode, Query q, unsigned route) {
+        KmdMode = mode; QueryMode = q;
+        KmdOpens = KmdEscapes = KmdCloses = 0; KmdSeen = {}; KmdSeenBytes = 0; KmdLuid = {};
+        return std::string(ReportCompositor(adapter, query, kmt, route, 4242, word, sizeof(word)));
+    };
+
+    // The request: header, command, ABI, route and pid; the out fields start at zero.
+    std::string w = run(Kmd::Cpu, Query::Trailer, BC250_DESKTOP_ROUTE_KILL_SWITCH);
+    CHECK(w == "cpu-7", "kill switch: %s", w.c_str());
+    CHECK(KmdSeenBytes == 80 && KmdSeen.Magic == BC250_ESCAPE_MAGIC &&
+          KmdSeen.Command == BC250_ESCAPE_SET_DESKTOP_COMPOSITOR && KmdSeen.AbiVersion == BC250_DESKTOP_COMPOSITOR_ABI &&
+          KmdSeen.Route == BC250_DESKTOP_ROUTE_KILL_SWITCH && KmdSeen.Pid == 4242 && !KmdSeen.Status &&
+          !KmdSeen.CpuCompositor && !KmdSeen.Placed,
+          "request bytes %u magic %08lx command %lu abi %lu route %lu pid %lu", KmdSeenBytes, KmdSeen.Magic,
+          KmdSeen.Command, KmdSeen.AbiVersion, KmdSeen.Route, KmdSeen.Pid);
+    // The adapter is the one of the identity trailer, and it is closed again.
+    CHECK(KmdLuid.LowPart == (DWORD)QueryLuid && KmdLuid.HighPart == (LONG)(QueryLuid >> 32),
+          "LUID %08lx:%08lx", (unsigned long)KmdLuid.HighPart, KmdLuid.LowPart);
+    CHECK(KmdOpens == 1 && KmdEscapes == 1 && KmdCloses == 1, "open %u escape %u close %u", KmdOpens, KmdEscapes,
+          KmdCloses);
+    CHECK(QuerySize == BC250_SCANOUT_CAPS_TOTAL && QueryHandle == adapter, "query size %u", QuerySize);
+
+    // Each route word goes to the KMD unchanged.
+    for (unsigned route : {(unsigned)BC250_DESKTOP_ROUTE_GPU, (unsigned)BC250_DESKTOP_ROUTE_SWITCHES_OFF,
+                           (unsigned)BC250_DESKTOP_ROUTE_FALLBACK}) {
+        w = run(route == BC250_DESKTOP_ROUTE_GPU ? Kmd::Gpu : Kmd::Cpu, Query::Trailer, route);
+        CHECK(KmdSeen.Route == route && w == (route == BC250_DESKTOP_ROUTE_GPU ? "gpu-7" : "cpu-7"),
+              "route %u: sent %lu, %s", route, KmdSeen.Route, w.c_str());
+    }
+    w = run(Kmd::NoAperture, Query::Trailer, BC250_DESKTOP_ROUTE_FALLBACK);
+    CHECK(w == "cpu-noaperture-7", "no aperture: %s", w.c_str());
+    w = run(Kmd::Refuse, Query::Trailer, BC250_DESKTOP_ROUTE_FALLBACK);
+    CHECK(w == "refused-3" && KmdCloses == 1, "refused: %s close %u", w.c_str(), KmdCloses);
+    w = run(Kmd::EscapeFails, Query::Trailer, BC250_DESKTOP_ROUTE_FALLBACK);
+    CHECK(w == "escape-c00000bb" && KmdCloses == 1, "escape fails: %s close %u", w.c_str(), KmdCloses);
+    w = run(Kmd::OpenFails, Query::Trailer, BC250_DESKTOP_ROUTE_FALLBACK);
+    CHECK(w == "open-c0000022" && KmdEscapes == 0 && KmdCloses == 0, "open fails: %s escape %u", w.c_str(),
+          KmdEscapes);
+
+    // No identity: no adapter is opened. A failed query, no trailer, another version, a zero LUID, a reserved word.
+    const struct { Query q; const char *word; } noIdentity[] = {
+        {Query::Fail, "identity-80004005"},        {Query::NoTrailer, "identity-887a0004"},
+        {Query::BadVersion, "identity-887a0004"},  {Query::ZeroLuid, "identity-887a0004"},
+        {Query::BadReserved, "identity-887a0004"},
+    };
+    for (const auto &n : noIdentity) {
+        w = run(Kmd::Cpu, n.q, BC250_DESKTOP_ROUTE_FALLBACK);
+        CHECK(w == n.word && KmdOpens == 0, "query mode %d: %s, opens %u", (int)n.q, w.c_str(), KmdOpens);
+    }
+    w = std::string(ReportCompositor(nullptr, query, kmt, BC250_DESKTOP_ROUTE_GPU, 1, word, sizeof(word)));
+    CHECK(w == "identity-80070057" && KmdOpens == 0, "no adapter handle: %s", w.c_str());
+    w = std::string(ReportCompositor(adapter, nullptr, kmt, BC250_DESKTOP_ROUTE_GPU, 1, word, sizeof(word)));
+    CHECK(w == "identity-80070057", "no query callback: %s", w.c_str());
+    // gdi32 without the entry points: nothing is queried or opened.
+    QueryCalls = 0;
+    w = std::string(ReportCompositor(adapter, query, CompositorKmt{}, BC250_DESKTOP_ROUTE_GPU, 1, word, sizeof(word)));
+    CHECK(w == "nokmt" && QueryCalls == 0, "no kmt: %s, queries %u", w.c_str(), QueryCalls);
+    QueryMode = Query::Trailer;
+}
+
 static void Child(const std::string &s)
 {
     if (s == "policy") { PolicyTests(); return; }
+    if (s == "compositor") { CompositorTests(); return; }
     if (s == "identity") { IdentityTests(); return; }
     if (s == "front-tables") { FrontTableTests(); return; }
     if (s == "front-tables13") { FrontTableTests13(); return; }
@@ -2600,7 +2710,7 @@ static void Child(const std::string &s)
         // A HostedClients entry is a test client, not the compositor: no desktop-route record of this process.
         bc250_desktop_route record;
         const unsigned status = ReadRecord(&record);
-        CHECK(Has(log, "record=none") && !Has(log, "record=published") &&
+        CHECK(Has(log, "record=none kmd=none") && !Has(log, "record=published") &&
               (status != BC250_DESKTOP_ROUTE_READ_OK || record.pid != GetCurrentProcessId()),
               "a HostedClients entry wrote the record: status %u pid %u; route log: %s", status, record.pid, log.c_str());
     } else if (s == "route-kill-switch") {
@@ -2759,6 +2869,8 @@ static void Child(const std::string &s)
               bc250_scanout_primary_text(RuleOverRecord()));
         std::string log = ReadAll(RouteLog(Layout + L"\\routelogs"));
         CHECK(Has(log, "route=hosted reason=hosted fallback=0") && Has(log, "record=published"), "route log: %s", log.c_str());
+        // BD-296 part (b): the compositor report of the GPU route reached the adapter double.
+        CHECK(Has(log, "record=published kmd=gpu-0"), "route log: %s", log.c_str());
     } else if (s == "route-dwm-name-kill") {
         RouterBase(false); Switches(true, true); SetDw(RouterKey, L"DwmForceCpu", 1); OverrideHklm();
         Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
@@ -2781,6 +2893,8 @@ static void Child(const std::string &s)
         std::string log = ReadAll(RouteLog(Layout + L"\\routelogs"));
         CHECK(Has(log, "route=cpu reason=hosted fallback=1 hosted_hr=80004005") && Has(log, "force_cpu=0") &&
               Has(log, "record=published"), "route log: %s", log.c_str());
+        // BD-296 part (b): the fallback is the case the report exists for. The KMD is told the CPU compositor.
+        CHECK(Has(log, "record=published kmd=cpu-0"), "route log: %s", log.c_str());
         CheckRecord(BC250_DESKTOP_ROUTE_FALLBACK, E_FAIL, 1);
         CHECK(RuleOverRecord() == BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE, "rule over the fallback record: %s",
               bc250_scanout_primary_text(RuleOverRecord()));
@@ -4115,6 +4229,8 @@ static int RunAll(const std::wstring &out)
         {"stack-hosted", nullptr, {}}, {"stack-hosted-no-identity", nullptr, {}}, {"stack-cpu-real", nullptr, {}},
         // M15.14: the D3D11_1 front. Three pure suites and one scenario per state of DirectFlipFront.
         {"front-tables", nullptr, {}}, {"front-rule", nullptr, {}}, {"front-record", nullptr, {}},
+        // BD-296 part (b): the compositor report to the kernel driver, pure.
+        {"compositor", nullptr, {}},
         {"front-absent", nullptr, {}}, {"front-zero", nullptr, {}}, {"front-wrong-type", nullptr, {}},
         {"front-on", nullptr, {}}, {"front-d3d10-entry", nullptr, {}}, {"front-cpu-route", nullptr, {}},
         {"front-d3d10-interface", nullptr, {}}, {"front-stack", nullptr, {}}, {"front-answer", nullptr, {}},

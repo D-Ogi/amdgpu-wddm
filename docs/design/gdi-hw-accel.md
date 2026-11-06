@@ -1097,9 +1097,64 @@ E_INVALIDARG, the runtime removes the compositor's device, and no window gets it
 router sends the compositor to the CPU UMD when the two desktop switches are not both on. So a
 start reports the capability only when `EnableGpuPresentBlit` and `EnableCddDwmInterop` are both
 in force after `InteropStart` (`Bc250GdiHwAccelFeature` in `gdi_admission.h`). On the CPU route
-the record `Features\GdiHwAccel` is 0 (not possible), and the control app hides the switch. Two
-other CPU routes stay outside this rule, because the kernel driver cannot see them at its start:
-the router's kill switch `DwmForceCpu` and a hosted open that failed in the compositor.
+the record `Features\GdiHwAccel` is 0 (not possible), and the control app hides the switch.
+
+The router's kill switch `DwmForceCpu` is a third input of the same rule (BD-296). The router reads
+it from `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`. The kernel driver may not open that hive by an
+absolute path: Driver Verifier's driver isolation rules 33 and 36 forbid it, and no driver handle
+reaches it. So the switch has a second copy in the driver's own `Parameters` key. `guard.c`
+(`GuardReadDesktopKillSwitch`) reads that copy once, in `DriverEntry`, through
+`IoOpenDriverRegistryKey`, and `WddmStart` gives it to `Bc250GdiHwAccelFeature`. With the switch
+on, the capability is 0. An absent or unreadable copy keeps the answer of the release before BD-296
+(off), and the driver writes one log line about it. The value is a raw value outside the state
+catalog, like `EnableHardwarePointer`, because the switch is the recovery route of a broken desktop
+and a plain registry write must set it without the state worker.
+
+One writer keeps the two copies equal: `RouteSwitch.Write` (`tools/release/installer/RouteSwitch.cs`).
+The control app's route actions and the installer give it both copies in one call. A person who
+writes the copies by hand follows `docs/testing/INSTALL.md`. If only the router's copy is set, the
+desktop is on the CPU route and the driver still reports the capability. For that case the CPU UMD
+has a safety net of its own: an `OpenResource` whose only failure is the Lock2 of a surface with no
+CPU view opens the surface without content (cleared, log line `BC250 NoContent open`), instead of
+E_INVALIDARG and a removed device. The same net covers the last CPU route that the kernel driver
+cannot see: a hosted open that failed in the compositor.
+
+The safety net keeps the device, but the windows then have no content. So the router also tells the
+kernel driver which UMD composes (BD-296 part (b)). In `dwm.exe` only, at each desktop decision, the
+router sends the escape `BC250_ESCAPE_SET_DESKTOP_COMPOSITOR` (39) with the route word of its
+desktop-route record (`router-compositor.h`): on a CPU route before the CPU UMD opens the adapter, on
+the GPU route after the hosted open. The router finds the adapter through the identity trailer of the
+adapter query and opens it with `D3DKMTOpenAdapterFromLuid`, so no device is necessary.
+
+The kernel driver accepts the escape only from a Window Manager account, `S-1-5-90-0-<session>`, the
+token user of `dwm.exe` (`CallerIsCompositor` in `display.c`, `Bc250CompositorAccount` in
+`gdi_admission.h`). No other process can have that account, so an application cannot move the
+textures of its compositor. The state is in the device, not in the WDDM block, and `WddmStart` sets it
+to the GPU placement at each start.
+
+With the CPU compositor reported, `CreateAllocation` gives each standard texture created after the
+report the placement of a CPU-visible staging surface: the aperture segment, a cached CPU view
+(`Bc250GdiCompositorPlacement`). Only the placement changes. The allocation keeps type 1 and its LB7A
+record. The GDI paths address it through its GPU virtual address in either segment, and the CPU UMD
+maps it with Lock2. A start that offers no aperture segment keeps the texture in local memory. The
+GPU route gives local memory back to the textures created after it. Textures created before a report
+keep the placement they were created with. The aperture segment has the commit limit of the OS
+aperture (256 MiB by default, `ApertureSegmentMegabytes`). On the CPU route the window textures share
+it with the staging surfaces, so a desktop with many large windows can reach the limit. VidMm then
+has no room for the next texture. The lab kit of part (b) does not measure that limit.
+
+The aperture segment is cache coherent (snooped PTEs), and each GDI batch starts with a GL2
+invalidate and write-back, and ends with the ring fence's GL2 write-back. Coherence alone does not
+order the CPU read after the GDI write: the CPU UMD reads a texture in place and does not wait for
+the GDI batch. The lab kit of part (b) measures that order with a GDI-only window whose colours
+change at each frame, sampled on the composed screen at delays from 16 ms to 500 ms
+(`scratch` kit, not in the repository). Until that measurement, part (b) is a candidate.
+
+The route line of `dwm.exe` has a last column `kmd=` with the answer: `cpu-<n>` or `gpu-<n>` (`<n>`
+standard textures placed with a CPU view in this start), `cpu-noaperture-<n>`, `refused-<reason>`,
+`identity-<hr>`, `open-<status>`, `escape-<status>` (an older kernel driver), or `none` (not
+`dwm.exe`). The kernel driver writes one log line for each accepted change (8 per start), one for each
+refusal (4 per start), and one for the first 4 placed textures, then one for each 1000th.
 
 ## Recorded contract gaps
 

@@ -68,6 +68,8 @@ static void Unexpected(void) { ++UnexpectedCalls;CHECK(0); }
 #define FanRequest(...) Unexpected()
 #define InteropRequest(...) Unexpected()
 #define AmdIdentityEscape(...) Unexpected()
+#define WddmDesktopCompositorEscape(...) Unexpected()   /* BD-296 part (b), escape 39 */
+#define CallerIsCompositor() (Unexpected(),FALSE)
 #define DcnObserve(...) Unexpected()
 #define DpAudioRequest(...) Unexpected()
 #define CpuRequest(...) Unexpected()

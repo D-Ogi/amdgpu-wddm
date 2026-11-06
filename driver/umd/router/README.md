@@ -72,6 +72,16 @@ CPU compositor cannot read a scan-out primary, and the fallback after a failed h
 else. The desktop route line ends with `record=published`, `record=failed-<Win32 error>` (no record, so the shells
 keep the composed primary) or `record=none` (a `HostedClients` entry, which writes nothing).
 
+In `dwm.exe`, the router also reports each desktop decision to the kernel driver (BD-296 part (b),
+`router-compositor.h`): the escape `BC250_ESCAPE_SET_DESKTOP_COMPOSITOR` with the same route word, on a CPU route
+before the CPU UMD opens the adapter, on the GPU route after the hosted open. With a CPU route the kernel driver
+gives new standard GDI textures a CPU view, so that the CPU UMD can show the window contents
+(`docs/design/gdi-hw-accel.md`). The report never changes the route or its HRESULT. Its answer is the last column of
+the route line, after `record=`: `kmd=cpu-<n>`, `kmd=gpu-<n>`, `kmd=cpu-noaperture-<n>`, `kmd=refused-<reason>`,
+`kmd=identity-<hr>`, `kmd=open-<status>`, `kmd=escape-<status>` or `kmd=none`. The test builds of the router
+(`BC250_ROUTER_STATE_FIXTURE`) send the report to an adapter double, so that no host test reaches a real adapter.
+The `compositor` suite drives every answer of `ReportCompositor` with injected D3DKMT functions.
+
 The registry interface (`HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`, `...\AppRouter` and the KMD's
 `InteropLastState`) is documented value by value at the top of `router.cpp`. The decisions themselves are free of
 I/O in `router-policy.h`, so the host tests drive them directly; the path resolution in `router-identity.h` is

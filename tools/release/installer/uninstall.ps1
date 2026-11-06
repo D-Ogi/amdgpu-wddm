@@ -266,7 +266,11 @@ if ($icdLeft.Count) {
 # runs this uninstaller. Another account keeps its preferences, which are window state only.
 $softwareKeyWow = "HKLM:\SOFTWARE\WOW6432Node\$($script:ReleaseName)"
 $userKey = "HKCU:\Software\$($script:ReleaseName)"
-Invoke-Change "remove $($script:SoftwareKey) (router policy, application profile, release record), $softwareKeyWow and $userKey" {
+# BD-296: the driver's copy of the desktop route's kill switch (Parameters DwmForceCpu) goes in the same step as the
+# router's key, first: the service key below takes Parameters with it only once the driver is unloaded, and the two
+# copies of one switch go together.
+Invoke-Change "remove $($script:ParametersKey)\DwmForceCpu, $($script:SoftwareKey) (router policy, application profile, release record), $softwareKeyWow and $userKey" {
+    Remove-ItemProperty -LiteralPath $script:ParametersKey -Name DwmForceCpu -Force -ErrorAction SilentlyContinue
     foreach ($k in @($script:SoftwareKey, $softwareKeyWow, $userKey)) { Remove-Item -LiteralPath $k -Recurse -Force -ErrorAction SilentlyContinue }
 } | Out-Null
 # The H.264 encoder MFT (driver/umd/mft-h264/INSTALL.md): the class id key with its InprocServer32, the transform key

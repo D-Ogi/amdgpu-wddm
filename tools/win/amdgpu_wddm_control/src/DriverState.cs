@@ -65,7 +65,9 @@ namespace AmdgpuWddmControl
         // reads and writes raw because it is not in the catalog (HardwarePointerSetting.cs).
         public static bool IsStateValue(string path, string name)
         {
-            return IsPath(path) && !HardwarePointerSetting.Allowed(path, name);
+            // The two raw values of the Parameters key: the hardware pointer and the driver's copy of the desktop
+            // route's kill switch (BD-296, RouteSwitch.cs). Neither is in the state catalog.
+            return IsPath(path) && !HardwarePointerSetting.Allowed(path, name) && !AmdgpuWddm.RouteSwitch.Owns(path, name);
         }
         public static DriverStateKey OpenPath(string path, bool writable = false, bool effective = true)
         {

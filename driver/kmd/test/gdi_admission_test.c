@@ -8,6 +8,8 @@
 // M15.14 increment 2: the one builder of a scan-out resource record, so that the producer and the rule
 // its only consumer applies are checked against each other on this PC and not on the lab.
 #include "../../contract/bc250_scanout_record.h"
+// BD-296 part (b): the compositor report escape, its route words and its size.
+#include "../bc250kmd_escape.h"
 
 static int g_failures, g_checks;
 
@@ -357,23 +359,111 @@ static void CreateRollback(void)
 }
 
 // BD-292: the capability needs the gate, the kernels and the GPU desktop route; the record says why it is off.
+// BD-296: and the router's kill switch off.
 static void GdiHwAccelRoute(void)
 {
-    int gate, kernels, gpu, capability;
+    int gate, kernels, gpu, kill, capability;
     unsigned long feature;
     for (gate = 0; gate < 2; gate++)
         for (kernels = 0; kernels < 2; kernels++)
-            for (gpu = 0; gpu < 2; gpu++) {
-                capability = -1;
-                feature = Bc250GdiHwAccelFeature(gate, kernels, gpu, &capability);
-                CHECK(capability == (gate && kernels && gpu));
-                CHECK(feature == (capability ? BC250_GDI_FEATURE_ON :
-                                  kernels && gpu ? BC250_GDI_FEATURE_OFF_BY_SWITCH : BC250_GDI_FEATURE_IMPOSSIBLE));
-            }
-    // The case of the defect: switch on, kernels in the image, CPU desktop route.
-    feature = Bc250GdiHwAccelFeature(1, 1, 0, &capability);
+            for (gpu = 0; gpu < 2; gpu++)
+                for (kill = 0; kill < 2; kill++) {
+                    const int route = gpu && !kill;
+                    capability = -1;
+                    feature = Bc250GdiHwAccelFeature(gate, kernels, gpu, kill, &capability);
+                    CHECK(capability == (gate && kernels && route));
+                    CHECK(feature == (capability ? BC250_GDI_FEATURE_ON :
+                                      kernels && route ? BC250_GDI_FEATURE_OFF_BY_SWITCH :
+                                      BC250_GDI_FEATURE_IMPOSSIBLE));
+                }
+    // The case of BD-292: switch on, kernels in the image, CPU desktop route.
+    feature = Bc250GdiHwAccelFeature(1, 1, 0, 0, &capability);
     CHECK(!capability && feature == BC250_GDI_FEATURE_IMPOSSIBLE);
+    // The case of BD-296: both KMD desktop switches on, but DwmForceCpu on.
+    feature = Bc250GdiHwAccelFeature(1, 1, 1, 1, &capability);
+    CHECK(!capability && feature == BC250_GDI_FEATURE_IMPOSSIBLE);
+    // The release before BD-296 for the same start: kill switch not read, capability 1.
+    feature = Bc250GdiHwAccelFeature(1, 1, 1, 0, &capability);
+    CHECK(capability && feature == BC250_GDI_FEATURE_ON);
 }
+
+// BD-296: the kill switch from one read, with the router's rules.
+static void KillSwitchRead(void)
+{
+    CHECK(Bc250DesktopKillSwitch(BC250_KILL_SWITCH_READ_VALUE, 1) == 1);
+    CHECK(Bc250DesktopKillSwitch(BC250_KILL_SWITCH_READ_VALUE, 0xffffffffu) == 1);
+    CHECK(Bc250DesktopKillSwitch(BC250_KILL_SWITCH_READ_VALUE, 0) == 0);
+    CHECK(Bc250DesktopKillSwitch(BC250_KILL_SWITCH_READ_ABSENT, 1) == 0);
+    CHECK(Bc250DesktopKillSwitch(BC250_KILL_SWITCH_READ_OTHER_TYPE, 0) == 1);
+    CHECK(Bc250DesktopKillSwitch(BC250_KILL_SWITCH_READ_FAILED, 1) == 0);
+    CHECK(Bc250DesktopKillSwitch(99, 1) == 0);
+}
+// BD-296 part (b): the compositor report of the router (escape 39) and the placement it gives standard textures.
+static void CompositorReport(int Mutation)
+{
+    // S-1-5-90-0-1, the Window Manager account of session 1, in its binary form: revision 1, three
+    // sub-authorities, authority 5, then 90, 0 and the session number (little-endian dwords), 20 bytes.
+    unsigned char dwm[20] = {1, 3, 0, 0, 0, 0, 0, 5, 90, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0};
+    unsigned char sid[24];
+    BC250_GDI_ALLOCATION_POLICY p, before, staging;
+    unsigned long type, route;
+    int cpu, aperture, i;
+    CHECK(Bc250CompositorAccount(dwm, 20));
+    CHECK(!Bc250CompositorAccount(dwm, 19));
+    CHECK(!Bc250CompositorAccount(NULL, 20));
+    for (i = 0; i < 16; i++) {
+        memcpy(sid, dwm, sizeof(dwm));
+        sid[i] ^= 0x01u;
+        CHECK(!Bc250CompositorAccount(sid, 20)); // every changed byte before the session is another account
+    }
+    for (i = 0; i < 4; i++) {
+        memcpy(sid, dwm, sizeof(dwm));
+        sid[16 + i] = 0x7fu;
+        CHECK(Bc250CompositorAccount(sid, 20)); // every session number is the account of that session
+    }
+    // S-1-5-18 (SYSTEM) and S-1-5-32-544 (Administrators) are refused.
+    { unsigned char sys[12] = {1, 1, 0, 0, 0, 0, 0, 5, 18, 0, 0, 0}; CHECK(!Bc250CompositorAccount(sys, 12)); }
+    { unsigned char adm[16] = {1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 0x20, 2, 0, 0};
+      CHECK(!Bc250CompositorAccount(adm, 16)); }
+    // A Window Manager SID with four sub-authorities is not the account dwm.exe runs as.
+    memcpy(sid, dwm, sizeof(dwm)); sid[1] = 4; sid[20] = sid[21] = sid[22] = sid[23] = 0;
+    CHECK(!Bc250CompositorAccount(sid, 24));
+
+    for (route = 0; route < 8; route++) {
+        CHECK(Bc250CompositorRouteValid(route) == (route >= 1 && route <= 4));
+        CHECK(Bc250CompositorRouteCpu(route) == (route >= 2 && route <= 4));
+    }
+    CHECK(!Bc250CompositorRouteValid(0xffffffffu) && !Bc250CompositorRouteCpu(0xffffffffu));
+
+    // Placement: only a standard texture moves, only with the CPU compositor and the aperture.
+    CHECK(WddmGdiAllocationPolicy(2, 0, 0, &staging));
+    for (type = 0; type <= 4; type++)
+        for (cpu = 0; cpu <= 1; cpu++)
+            for (aperture = 0; aperture <= 1; aperture++) {
+                int admitted = WddmGdiAllocationPolicy(type, 0, 0, &before);
+                int moved;
+                if (!admitted) continue;
+                p = before;
+                moved = Bc250GdiCompositorPlacement(type, Mutation ? 1 : cpu, aperture, &p);
+                CHECK(moved == (type == 1 && cpu && aperture));
+                if (moved) {
+                    CHECK(!memcmp(&p, &staging, sizeof(p)));
+                    CHECK(p.CpuVisible && p.Aperture && p.Cached); // the CPU UMD can map it in place
+                } else {
+                    CHECK(!memcmp(&p, &before, sizeof(p))); // every other case keeps its admitted placement
+                }
+            }
+    CHECK(!Bc250GdiCompositorPlacement(1, 1, 1, NULL));
+}
+// The route words of the escape are the words of the session record (bc250_desktop_route.h; the router checks the
+// same equality at compile time against that header), and the range of Bc250CompositorRouteValid is these words.
+// The ABI: 80 bytes, command 39 in the one namespace (escape_commands.h).
+typedef char compositor_words_check[(BC250_COMPOSITOR_ROUTE_GPU == BC250_COMPOSITOR_ROUTE_WORD_FIRST &&
+    BC250_COMPOSITOR_ROUTE_KILL_SWITCH == 2u && BC250_COMPOSITOR_ROUTE_SWITCHES_OFF == 3u &&
+    BC250_COMPOSITOR_ROUTE_FALLBACK == BC250_COMPOSITOR_ROUTE_WORD_LAST &&
+    sizeof(BC250_ESCAPE_DESKTOP_COMPOSITOR) == 80 && BC250_ESCAPE_SET_DESKTOP_COMPOSITOR == 39u &&
+    BC250_DESKTOP_COMPOSITOR_ABI == 1u) ? 1 : -1];
+
 // The record values are the ones the control app reads (DriverFeatures.cs: 1 on, 2 off by the switch).
 typedef char gdi_feature_values_check[(BC250_GDI_FEATURE_ON == 1ul && BC250_GDI_FEATURE_OFF_BY_SWITCH == 2ul &&
                                        BC250_GDI_FEATURE_IMPOSSIBLE == 0ul) ? 1 : -1];
@@ -777,6 +867,10 @@ int main(int argc, char** argv)
         ShadowBacking(2);  // must fail: the pre-BD-156 staging placement cannot meet the new contract
         return g_failures ? 1 : 0;
     }
+    if (argc == 2 && strcmp(argv[1], "--compositor-control") == 0) {
+        CompositorReport(1); // must fail: a texture moved with the GPU compositor is a placement the rule refuses
+        return g_failures ? 1 : 0;
+    }
     ShadowBacking(0);
     SameAsBefore();
     ScanoutPlacement();
@@ -787,6 +881,8 @@ int main(int argc, char** argv)
     CreateRollback();
     Masks();
     GdiHwAccelRoute();
+    KillSwitchRead();
+    CompositorReport(0);
     SizeQueryLeavesUnion();
     OddShapes();
     printf("gdi_admission_test: %d checks, %d failures\n", g_checks, g_failures);

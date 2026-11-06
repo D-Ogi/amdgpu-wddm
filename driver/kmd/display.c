@@ -19,6 +19,7 @@
 #endif
 #include "boot_logo.h"              // the boot-screen mascot drawn into the firmware's framebuffer at start
 #include "display_rotation.h"       // BD-247: which path rotations this driver shows, and the rotated bugcheck screen
+#include "gdi_admission.h"          // BD-296 part (b): Bc250CompositorAccount, the caller check of the compositor report
 
 // display_rotation.h names the path rotation values as plain numbers for its host test; these are the WDK's.
 C_ASSERT(BC250_VPPR_UNINITIALIZED == D3DKMDT_VPPR_UNINITIALIZED && BC250_VPPR_IDENTITY == D3DKMDT_VPPR_IDENTITY);
@@ -276,6 +277,31 @@ static BOOLEAN CallerIsAdmin(void)
     SeUnlockSubjectContext(&subject);
     SeReleaseSubjectContext(&subject);
     return admin;
+}
+
+// BD-296 part (b): TRUE when the effective caller (the subject context, as CallerIsAdmin) runs as a Window Manager
+// account, S-1-5-90-0-<session>, the account of dwm.exe (Bc250CompositorAccount, gdi_admission.h). No other process
+// can have that token user, so a process of the session cannot move the standard textures of its compositor.
+// PASSIVE_LEVEL (SeQueryInformationToken).
+static BOOLEAN CallerIsCompositor(void)
+{
+    SECURITY_SUBJECT_CONTEXT subject;
+    PTOKEN_USER user = NULL;
+    BOOLEAN compositor = FALSE;
+    NTSTATUS status;
+
+    SeCaptureSubjectContext(&subject);
+    SeLockSubjectContext(&subject);
+    status = SeQueryInformationToken(SeQuerySubjectContextToken(&subject), TokenUser, (PVOID*)&user);
+    SeUnlockSubjectContext(&subject);
+    SeReleaseSubjectContext(&subject);
+    if (NT_SUCCESS(status) && user != NULL) {
+        PSID sid = user->User.Sid;
+        if (sid != NULL && RtlValidSid(sid))
+            compositor = (BOOLEAN)Bc250CompositorAccount((const unsigned char*)sid, RtlLengthSid(sid));
+    }
+    if (user != NULL) ExFreePool(user);
+    return compositor;
 }
 
 // Full WDDM owns the engines and translation tables for its entire lifetime.
@@ -776,6 +802,14 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     if (command == BC250_ESCAPE_SET_PROCESS_POLICY) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_PROCESS_POLICY)) return STATUS_INVALID_PARAMETER;
         AmdIdentityEscape(WddmProcessIdentity(Escape->hKmdProcessHandle), (BC250_ESCAPE_PROCESS_POLICY*)data);
+        return STATUS_SUCCESS;
+    }
+    // BD-296 part (b): the compositor of the desktop decision, from the router in dwm.exe. Software state of the
+    // device (WddmDesktopCompositorEscape), so it is answered with any flags and in every power phase: the router
+    // sends it while dwm.exe opens the adapter, and a refusal there would leave the placement of the previous route.
+    if (command == BC250_ESCAPE_SET_DESKTOP_COMPOSITOR) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DESKTOP_COMPOSITOR)) return STATUS_INVALID_PARAMETER;
+        WddmDesktopCompositorEscape(device, (BC250_ESCAPE_DESKTOP_COMPOSITOR*)data, CallerIsCompositor());
         return STATUS_SUCCESS;
     }
     // Only adapter-owned health, the separately joined SMU owner and the two

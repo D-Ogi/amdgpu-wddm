@@ -490,6 +490,13 @@ typedef struct _BC250_DEVICE {
     // inside a DDI can never outlive them (the Level Three guarantee WddmSummary's comment names).
     KEVENT GfxRetireEvent;              // NotificationEvent, set by GfxRetireSignal, cleared by the waiter
     volatile LONG GfxRetireGeneration;  // bumped by every signal; snapshot closes the test/wait window
+    // BD-296 part (b): the compositor that the router in dwm.exe reported (BC250_ESCAPE_SET_DESKTOP_COMPOSITOR).
+    // In the device, not in the WDDM block, so that the escape never reads a block that a stop frees. WddmStart sets
+    // all four to 0: each start begins with the GPU placement. Interlocked reads and writes, any IRQL.
+    volatile LONG DesktopCpuCompositor;      // 1: new standard GDI textures get the type 2 placement
+    volatile LONG DesktopCompositorChanges;  // accepted changes of that word in this start
+    volatile LONG DesktopCompositorRefused;  // refused escapes of this kind in this start
+    volatile LONG GdiCpuCompositorPlaced;    // standard GDI textures placed with a CPU view in this start
 } BC250_DEVICE;
 
 // The committed source size (modeset.c): the size of the surface the plane reads. Post's until a commit changes it;
@@ -696,6 +703,10 @@ ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and 
 // BC250_CURSOR_SETTING_* bits that dcn_cursor.c takes at the start. Not a catalog setting (guard.c says why).
 void GuardReadHardwarePointer(_In_ PDRIVER_OBJECT DriverObject);
 ULONG GuardHardwarePointerSetting(void);
+// BD-296: DwmForceCpu (REG_DWORD under Parameters, the copy of the router's kill switch, read only in DriverEntry,
+// both flavours, absent = off): nonzero when this start is on the CPU desktop route by the kill switch.
+void GuardReadDesktopKillSwitch(_In_ PDRIVER_OBJECT DriverObject);
+int GuardDesktopKillSwitch(void);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-235 lab experiment, lab flavour only: PagingRingStartBytes and PagingRingStartNonce (REG_QWORDs under the
 // driver's Parameters key) and PagingBoundaryMode (REG_DWORD), read only in DriverEntry (PASSIVE_LEVEL); the seed is
@@ -1514,6 +1525,11 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data);
 NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device);   // required resources fail before paging DDIs begin
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
 void WddmStop(_Inout_ BC250_DEVICE* Device);
+// BD-296 part (b): display.c's BC250_ESCAPE_SET_DESKTOP_COMPOSITOR. Compositor: the caller's token user is a Window
+// Manager account (display.c checks it). Software state of the device only, any escape flags, PASSIVE_LEVEL.
+struct _BC250_ESCAPE_DESKTOP_COMPOSITOR;
+void WddmDesktopCompositorEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DESKTOP_COMPOSITOR* Data,
+                                 BOOLEAN Compositor);
 // BD-167 (G3): CP fault -> close the node of the faulting ring (Compute: a MEC queue, node 2 when it exists).
 void WddmReportEngineFault(_In_ const BC250_DEVICE* Device, _In_z_ const char* Why, BOOLEAN Compute);
 // The writers' primary transaction (the flip DDI's PrimarySequence) at PASSIVE_LEVEL: modeset.c, connector_link.c,

@@ -412,6 +412,22 @@ the whole description.
   the automatic clock together. "Reopen the GPU desktop path" on the Recovery page opens the path alone.
   `DwmForceCpu` 1 keeps the
   desktop on the CPU route. An upgrade keeps the value you set.
+- `DwmForceCpu` has two copies: the router's copy in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter` and the driver's
+  copy in `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`. The driver reads its copy when it starts.
+  While the switch is on, the driver turns off the GPU drawing of classic Windows programs (GDI hardware
+  acceleration), because the CPU route cannot open the surfaces of that drawing. The actions of Nagi Control App
+  and the installer always write both copies. If the desktop is black or restarts again and again and Nagi Control
+  App does not open, write both copies by hand from an administrator command prompt (Safe Mode also works), then
+  restart Windows:
+
+  ```
+  reg add "HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter" /v DwmForceCpu /t REG_DWORD /d 1 /f
+  reg add "HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters" /v DwmForceCpu /t REG_DWORD /d 1 /f
+  ```
+
+  To go back to the GPU route, write 0 into both copies, or use "Desktop on the GPU route" in Nagi Control App. If
+  you write only the router's copy, the desktop goes to the CPU route all the same. The Recovery page then shows
+  that the two copies differ, and its action writes both.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU through the Vulkan ICD.
 - 64-bit OpenGL applications run on the GPU through the OpenGL driver (ICD) of this release. Windows loads it
