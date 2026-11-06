@@ -673,7 +673,9 @@ static NTSTATUS CpuApplyEx(BC250_DEVICE* Device, const struct bc250_cpu_settings
     struct bc250_cpu_plan plan;
     struct bc250_cpu_settings applied;
     NTSTATUS status = STATUS_SUCCESS;
-    ULONG i, mv = 0;
+    NTSTATUS capRead = STATUS_PENDING;      // BD-321: STATUS_PENDING = the cap was not read back
+    ULONG i, mv = 0, capNow = 0;
+    BOOLEAN capSent = FALSE;
     enum bc250_cpu_error error;
 
     RtlZeroMemory(&plan, sizeof(plan));
@@ -719,7 +721,11 @@ static NTSTATUS CpuApplyEx(BC250_DEVICE* Device, const struct bc250_cpu_settings
         // The chip has this step now, whatever happens to the next one.
         if (plan.step[i].kind == BC250_CPU_STEP_CLOCK) { applied.max_given = 1; applied.max_mhz = To->max_mhz; }
         else if (plan.step[i].kind == BC250_CPU_STEP_UV) { applied.uv_given = 1; applied.uv_steps = To->uv_steps; }
-        else if (plan.step[i].kind == BC250_CPU_STEP_TEMP) { applied.temp_given = 1; applied.temp_c = To->temp_c; }
+        else if (plan.step[i].kind == BC250_CPU_STEP_TEMP) {
+            applied.temp_given = 1;
+            applied.temp_c = To->temp_c;
+            capSent = TRUE;
+        }
         // The undervolt is in place and another step follows: read the voltage now and stop here if it is not a
         // voltage this driver understands, so that a raise never goes out over an operating point nobody knows.
         // The plan puts the undervolt step before a clock raise exactly so that this reading comes first.
@@ -737,12 +743,34 @@ static NTSTATUS CpuApplyEx(BC250_DEVICE* Device, const struct bc250_cpu_settings
             }
         }
     }
+    // BD-321: the cap that the chip holds after the cap step. Without this read the surface shows the 0x40 answer of
+    // the last read stage, which is the value from BEFORE the write (100 C after a cold boot, while 87 C is in force).
+    // A joint plan is the clock limit alone, so it never gets here. The voltage read below stays the last message.
+    if (NT_SUCCESS(status) && capSent) {
+        CpuWait(BC250_CPU_MESSAGE_GAP_MS);
+        capRead = CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CAP_C, 0, FALSE, TRUE, &capNow);
+    }
     if (NT_SUCCESS(status)) {
         CpuWait(BC250_CPU_MESSAGE_GAP_MS);
         status = CpuMessageEx(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 0, FALSE, TRUE, Joint, &mv);
     }
     SmuCpuEnd(&Device->Smu);
     s->Applied = applied;
+    if (capSent && capRead != STATUS_PENDING) {
+        KIRQL irql;
+        // 0 when the read was refused, as the read stage leaves it: "no answer", never the stale value.
+        KeAcquireSpinLock(&s->SnapLock, &irql);
+        s->Snap.CapC = NT_SUCCESS(capRead) ? capNow : 0;
+        KeReleaseSpinLock(&s->SnapLock, irql);
+        if (!NT_SUCCESS(capRead))
+            GuardLog("cpu: %s sent the cap of %lu C and the read back of the cap was refused 0x%08X: the cap in force "
+                     "is not known", Why, applied.temp_c, capRead);
+        else if (capNow != applied.temp_c)
+            GuardLog("cpu: %s sent the cap of %lu C and the chip answers %lu C: the cap is NOT in force", Why,
+                     applied.temp_c, capNow);
+        else
+            GuardLog("cpu: %s cap %lu C in force (read back)", Why, capNow);
+    }
     if (NT_SUCCESS(status)) {
         KIRQL irql;
         KeAcquireSpinLock(&s->SnapLock, &irql);
