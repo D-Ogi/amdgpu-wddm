@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.38",
   "version": "0.7.216.110-tester.38",
-  "note": "tester.38 release manifest, started from the tester.37 manifest: the kmd and control rows move to the main commit with BD-292, BD-293, BD-295, BD-297 and the stage 2 queue reset of node 2; every other row keeps its tester.37 commit. BD-315: the system, wow64, desktop, zink and gl rows move to the t38/bd315-uqueue-* heads (global locks deleted at unload), and recipe_commit to the main commit with BD-317 (the RADV host tests link the real monitored fence).",
+  "note": "tester.38 release manifest, started from the tester.37 manifest: the kmd and control rows move to the main commit with BD-292, BD-293, BD-295, BD-297 and the stage 2 queue reset of node 2; every other row keeps its tester.37 commit. BD-315: the system, wow64, desktop, zink and gl rows move to the t38/bd315-uqueue-* heads (global locks deleted at unload; the system head also has the util tests Windows build fix), and recipe_commit to the main commit with BD-317 (the RADV host tests link the real monitored fence).",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "6acd88041915c618dd2640b895cbe6e8a2ea5fb7",
   "repositories": {
@@ -1165,7 +1165,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "d43c47d51f9d47b2c230301d07ad7b351436c5f1",
+      "commit": "cd3b0dda4cb8e3ef6a2150b08ea0439aca7807ea",
       "base": "5dea8835db0f53f81a4c6af0e483d5ab7449220f",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1203,6 +1203,7 @@
           "path": "payload/vulkan/vulkan_radeon.dll"
         }
       ],
+      "role": "The system Vulkan ICD (radv-system): the tester.38 system line 9e14530f with BD-315: the global u_queue exit_mutex and the vk_wddm2 pending lock and condition are deleted when the ICD unloads (c6c3c0c1, the port of e4ec7ede) and the u_queue flag is set under the lock (d43c47d5, 72100150), and the Windows build fix of the util tests cache_test and u_queue_test (cd3b0dda, the pick of e7348711c92). That pick changes only src/util/tests: vulkan_radeon.dll of cd3b0dda differs from the d43c47d5 build only in the embedded git version string, the PE and debug directory stamps and the PDB GUID (28 bytes, same recipe and build directory), so the kit-bd315-av3 result of d43c47d5 (2026-11-05, 22631: the ICD unloads with no Application Verifier stop) holds for it.",
       "tests": [
         {
           "name": "radv-queue",
@@ -1615,7 +1616,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "d43c47d51f9d47b2c230301d07ad7b351436c5f1",
+      "commit": "cd3b0dda4cb8e3ef6a2150b08ea0439aca7807ea",
       "base": "5dea8835db0f53f81a4c6af0e483d5ab7449220f",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1654,6 +1655,7 @@
           "path": "payload/vulkan/vulkan_radeon.dll"
         }
       ],
+      "role": "The system Vulkan ICD (radv-system): the tester.38 system line 9e14530f with BD-315: the global u_queue exit_mutex and the vk_wddm2 pending lock and condition are deleted when the ICD unloads (c6c3c0c1, the port of e4ec7ede) and the u_queue flag is set under the lock (d43c47d5, 72100150), and the Windows build fix of the util tests cache_test and u_queue_test (cd3b0dda, the pick of e7348711c92). That pick changes only src/util/tests: vulkan_radeon.dll of cd3b0dda differs from the d43c47d5 build only in the embedded git version string, the PE and debug directory stamps and the PDB GUID (28 bytes, same recipe and build directory), so the kit-bd315-av3 result of d43c47d5 (2026-11-05, 22631: the ICD unloads with no Application Verifier stop) holds for it.",
       "tests": [
         {
           "name": "radv-queue",
