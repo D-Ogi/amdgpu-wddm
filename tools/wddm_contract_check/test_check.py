@@ -572,7 +572,9 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
                                 "    Data->DxgkDdiCheckMultiPlaneOverlaySupport3 = Bc250WddmCheckMultiPlaneOverlaySupport3;\n"
                                 "    Data->DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3 = "
                                 "Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3;\n"
-                                "    Data->DxgkDdiPostMultiPlaneOverlayPresent = Bc250WddmPostMultiPlaneOverlayPresent;")
+                                "    Data->DxgkDdiPostMultiPlaneOverlayPresent = Bc250WddmPostMultiPlaneOverlayPresent;\n"
+                                "    Data->DxgkDdiGetMultiPlaneOverlayCaps = Bc250WddmGetMultiplaneOverlayCaps;\n"
+                                "    Data->DxgkDdiGetPostCompositionCaps = Bc250WddmGetPostCompositionCaps;")
             wddm += NegativeFixtures.MPO3_SOURCE
         return wddm
 
@@ -584,7 +586,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
         for rule_id in ("R20-WDDMVERSION-VS-INTERFACE", "R43-WDDMVERSION-ACCEPTED",
                         "R44-WDDMVERSION-ABOVE-2-5-INTERFACE", "R45-QAI-16-ANSWERED-FROM-2-2",
                         "R46-UPDATEMONITORLINKINFO-FROM-2-4", "R47-MPO3-TRIO-FROM-2-1",
-                        "R48-MPO3-FLIP-RETIRED-BY-PRESENTID"):
+                        "R48-MPO3-FLIP-RETIRED-BY-PRESENTID", "R49-MPO-CAPS-DDIS-FROM-2-2"):
             self.assertEqual(check.OK, result[rule_id], rule_id)
         self.assertIn(16, facts.qai_handled)
 
@@ -593,6 +595,24 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
         result, _ = statuses()
         self.assertEqual(check.NA, result["R47-MPO3-TRIO-FROM-2-1"])
         self.assertEqual(check.NA, result["R48-MPO3-FLIP-RETIRED-BY-PRESENTID"])
+        self.assertEqual(check.NA, result["R49-MPO-CAPS-DDIS-FROM-2-2"])
+
+    def test_wddm29_without_the_caps_ddis(self):
+        """BD-223 (T004): from 2.2 the kernel takes the overlay caps from these two DDIs; each one on its own."""
+        for needle in ("Data->DxgkDdiGetMultiPlaneOverlayCaps", "Data->DxgkDdiGetPostCompositionCaps"):
+            wddm = drop(self.wddm29(), needle)
+            result, _ = statuses(wddm=wddm)
+            self.assertOnlyViolation(result, "R49-MPO-CAPS-DDIS-FROM-2-2")
+
+    def test_wddm21_needs_no_caps_ddis(self):
+        """Below 2.2 dxgkrnl asks neither caps DDI, so a 2.1 table without them is not a violation."""
+        wddm = self.wddm29().replace("    Data->DxgkDdiGetMultiPlaneOverlayCaps = "
+                                     "Bc250WddmGetMultiplaneOverlayCaps;\n", "")
+        wddm = wddm.replace("    Data->DxgkDdiGetPostCompositionCaps = Bc250WddmGetPostCompositionCaps;", "")
+        wddm = wddm.replace("caps->WDDMVersion = DXGKDDI_WDDMv2_9;", "caps->WDDMVersion = DXGKDDI_WDDMv2_1;")
+        result, _ = statuses(wddm=wddm)
+        self.assertEqual(check.NA, result["R49-MPO-CAPS-DDIS-FROM-2-2"])
+        self.assertEqual(check.OK, result["R47-MPO3-TRIO-FROM-2-1"])
 
     def test_wddm29_without_the_mpo3_flip_ddi(self):
         """The 0x139/0xA of 2026-11-05: a 2.9 table with the MPO3 flip member NULL."""
