@@ -2646,6 +2646,25 @@ static void ScaledPlaneLatch(void)
         CHECK(WddmScaledPlaneLatch(cases[i].Raw,FALSE)==0);   /* a closed handshake closes the plane */
     }
 }
+/* BD-223: the planes clamp (WddmMpoFlags, extracted from wddm.c). From level 2.2 the caps DDI answers MaxPlanes 1, so
+ * DRIVERCAPS MaxOverlayPlanes and the front (bc250_scanout_mpo_planes of these flags) say 1 too; bit 2 asks 2 only
+ * on a start below 2.2. */
+static void MpoPlanesClamp(void)
+{
+    static const struct { ULONG Plane, Level; unsigned Planes; } cases[]={
+        {0x5ul,0x2900ul,1u},   /* bit 2 at the default level: clamped to the caps DDI's count */
+        {0x5ul,0x2200ul,1u},   /* the first level with the caps DDI */
+        {0x5ul,0x2100ul,2u},   /* below 2.2: the lab question of 2026-10-29 stays */
+        {0x5ul,0x2000ul,2u},
+        {0x1ul,0x2900ul,1u},   /* plane 0 alone */
+        {0x1ul,0x2000ul,1u},
+        {0xDul,0x2900ul,1u},   /* with STRETCH_CAPS too */
+        {0x4ul,0x2000ul,0u},   /* no CHECK bit: no multiplane overlay */
+        {0x0ul,0x2900ul,0u}};
+    unsigned i;
+    for(i=0;i<sizeof(cases)/sizeof(cases[0]);++i)
+        CHECK(bc250_scanout_mpo_planes(WddmMpoFlags(cases[i].Plane,cases[i].Level))==cases[i].Planes);
+}
 #endif
 int main(void)
 {
@@ -2672,6 +2691,7 @@ int main(void)
     MpoCaps();
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     ScaledPlaneLatch();
+    MpoPlanesClamp();
 #endif
     FlipFlagBits();
     PlaneFormatFlips();

@@ -34,7 +34,7 @@ param(
                  'mpo3-keep-unlocked', 'mpo3-immediate-lost', 'mpo3-extra-layer-shown', 'mpo3-check-scanout-skipped',
                  'mpo3-check-gate-skipped', 'mpo3-busy-passed',
                  'witness-before-decision', 'witness-changes-answer', 'witness-stale-compared',
-                 'witness-lost-uncounted', 'scaled-plane-mask-dropped')][string]$Mutation = '',
+                 'witness-lost-uncounted', 'scaled-plane-mask-dropped', 'planes-clamp-dropped')][string]$Mutation = '',
     [switch]$Lab
 )
 
@@ -211,6 +211,9 @@ $labMutations = [ordered]@{
         why = 'a disagreement past the record bound is neither kept nor counted' }
     'scaled-plane-mask-dropped' = @{ find = '    const ULONG scaled = Raw & BC250_WDDM_SCALED_PLANE_MASK;'; with = '    const ULONG scaled = Raw;'
         why = 'WddmStart stores an unknown LabScaledPlane bit (the mask of WddmScaledPlaneLatch is gone)' }
+    'planes-clamp-dropped' = @{ find = '(ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) && Level < BC250_WDDM_MPO_CAPS_DDI_LEVEL'
+        with = '(ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) && (Level || 1)'
+        why = 'DRIVERCAPS says 2 planes at level 2.2 or later, where the caps DDI says 1' }
 }
 $flavour = @()
 if ($Lab) { $flavour = @('/DAMDGPU_WDDM_LAB_FLAVOUR=1'); $mutations = $labMutations }

@@ -505,12 +505,18 @@ static __inline ULONG WddmScaledPlaneLatch(ULONG Raw, BOOLEAN Handshake)
 // The multiplane-overlay bits of the caps trailer for these LabScaledPlane bits. DRIVERCAPS MaxOverlayPlanes is
 // bc250_scanout_mpo_planes of the same word, so the kernel and the compositor's front report one plane count.
 // TWO_PLANES sets MPO_PLANE1: in the arms of 2026-10-29 it changed MaxOverlayPlanes alone, and the front said 1.
-static unsigned int WddmMpoFlags(ULONG ScaledPlane)
+// The planes clamp (docs/design/scaled-flip.md, The switch): from WDDMVersion 2.2 the graphics kernel also reads the
+// plane count of the caps DDI (Bc250WddmGetMultiplaneOverlayCaps, MaxPlanes 1), so DRIVERCAPS and the front say 1
+// too, and TWO_PLANES sets MPO_PLANE1 only on a start below 2.2. On 2026-11-06 (kit-s2d-r3, LabScaledPlane 5 at 2.9,
+// before the caps DDI) DRIVERCAPS 2 lost the native DirectFlip. Level is the WDDMVersion of the start (WddmLevelStart).
+#define BC250_WDDM_MPO_CAPS_DDI_LEVEL 0x2200ul
+static unsigned int WddmMpoFlags(ULONG ScaledPlane, ULONG Level)
 {
     unsigned int flags = 0;
     if (ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK) {
         flags |= BC250_SCANOUT_CAPS_MPO;
-        if (ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) flags |= BC250_SCANOUT_CAPS_MPO_PLANE1;
+        if ((ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) && Level < BC250_WDDM_MPO_CAPS_DDI_LEVEL)
+            flags |= BC250_SCANOUT_CAPS_MPO_PLANE1;
     }
     return flags;
 }
@@ -4494,6 +4500,9 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
             wddm->ScaledPlane = WddmScaledPlaneLatch(raw, wddm->DirectFlipHandshake ? TRUE : FALSE);
             GuardLog("wddm: scaled plane 0x%lX (LabScaledPlane 0x%lX, handshake %u)", wddm->ScaledPlane, raw,
                      (ULONG)(wddm->DirectFlipHandshake ? 1 : 0));
+            if ((wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) &&
+                !(WddmMpoFlags(wddm->ScaledPlane, Device->WddmLevel) & BC250_SCANOUT_CAPS_MPO_PLANE1))
+                GuardLog("wddm: scaled plane bit 2 clamped at level 0x%lX: 1 plane, the count of the caps DDI", Device->WddmLevel);
         }
 #endif
     }
@@ -5323,14 +5332,15 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     caps->SupportDirectFlip = TRUE;
     caps->SupportSurpriseRemoval = FALSE;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-    // BD-223: MaxOverlayPlanes counts the primary, so 1 is plane 0 alone (LabScaledPlane bit 2 asks 2, a lab
-    // question; Check still refuses a second plane). The count is the trailer's (WddmMpoFlags), which the front
+    // BD-223: MaxOverlayPlanes counts the primary, so 1 is plane 0 alone (LabScaledPlane bit 2 asks 2 below level 2.2, a
+    // lab question; Check still refuses a second plane). The count is the trailer's (WddmMpoFlags), which the front
     // reports too. No MPO immediate-flip cap, and MaxQueuedMultiPlaneOverlayFlipVSync stays 0 as it was at
     // WDDMVersion 2.0: no dxgkrnl check found asks for it at 2.9, so the WHCP queue-depth item (WDDM21.FlipQueueLatency)
     // belongs to the MPO work (BD-223), not to the WDDMVersion change.
     if (Device->Wddm && (((BC250_WDDM*)Device->Wddm)->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK)) {
         caps->SupportMultiPlaneOverlay = TRUE;
-        caps->MaxOverlayPlanes = bc250_scanout_mpo_planes(WddmMpoFlags(((BC250_WDDM*)Device->Wddm)->ScaledPlane));
+        caps->MaxOverlayPlanes = bc250_scanout_mpo_planes(WddmMpoFlags(((BC250_WDDM*)Device->Wddm)->ScaledPlane,
+                                                                        Device->WddmLevel));
     }
 #endif
     caps->InterruptMessageNumber = 0;                   // the INF asks for one MSI message, so it is message 0 (M38)
@@ -5728,8 +5738,9 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
             // BD-223 (docs/design/mpo.md): the user-mode half of the MPO contract follows DRIVERCAPS
             // SupportMultiPlaneOverlay (WddmDriverCaps), with the same plane count: MPO_PLANE1 goes with
-            // LabScaledPlane bit 2, which reports two planes as a lab question while no second pipe scans out.
-            scanout.flags |= WddmMpoFlags(wddm->ScaledPlane);
+            // LabScaledPlane bit 2, which reports two planes as a lab question while no second pipe scans out (below
+            // level 2.2 only: the planes clamp of WddmMpoFlags).
+            scanout.flags |= WddmMpoFlags(wddm->ScaledPlane, device->WddmLevel);
 #endif
             scanout.post_width = (unsigned int)DisplaySourceWidth(device);
             scanout.post_height = (unsigned int)DisplaySourceHeight(device);
