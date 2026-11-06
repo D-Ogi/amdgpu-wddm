@@ -65,6 +65,10 @@
     { "marker": "BD-254", "on": "hosted", "missing": "system", "kind": "open",
       "reason": "No preamble idle wait when the winsys releases a BO only after the queued work retires. The system line has that release since BD-201, but not this change; not ported at the tester.38 pins." },
     { "marker": "BD-288", "on": "hosted", "missing": "system", "kind": "line-only",
-      "reason": "The query sites of the BC-250 DGC program in radv_bc250_dgc.c, which is on the hosted line only." }
+      "reason": "The query sites of the BC-250 DGC program in radv_bc250_dgc.c, which is on the hosted line only." },
+    { "marker": "BD-309", "on": "hosted", "missing": "system", "kind": "line-only",
+      "reason": "bc250GetMemoryAllocation is a private contract between our shells and the hosted ICD (the D3D11 shell names the kernel allocation of a VkDeviceMemory through it; the D3D12 shell does not call it); vulkan_radeon.dll serves Vulkan applications, which have no caller of it." },
+    { "marker": "BD-315", "on": "hosted", "missing": "system", "kind": "line-only",
+      "reason": "The D3D12 and D3D11 shells pin the hosted ICD for the process, so its winsys cache lives as long as the process. The Vulkan loader can unload the system ICD: the system line's half of BD-315 is c6c3c0c1 (u_queue and the WDDM2 runtime delete their global locks when the ICD unloads)." }
   ]
 }
