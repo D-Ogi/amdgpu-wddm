@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.38",
   "version": "0.7.216.110-tester.38",
-  "note": "tester.38 release manifest, started from the tester.37 manifest: the kmd and control rows move to the main commit with BD-292, BD-293, BD-295, BD-297 and the stage 2 queue reset of node 2; every other row keeps its tester.37 commit. BD-315: the system, wow64, desktop, zink and gl rows move to the t38/bd315-uqueue-* heads (global locks deleted at unload; the system head also has the util tests Windows build fix), and recipe_commit to the main commit with BD-317 (the RADV host tests link the real monitored fence). BD-211: the zink and gl rows move to merges of their BD-315 heads with the memstream temporary-file fix. rc1 (main 99a91dc8): the kmd, control, control-exe, router, d3d11 shell and state-worker rows move to main 99a91dc8, and the kmd rows to main b9f5e3bb with BD-321 (BD-205, BD-296, BD-306, BD-307, BD-298, BD-291, bd309), because main had commits under their source paths that they did not ship.",
+  "note": "tester.38 release manifest, started from the tester.37 manifest: the kmd and control rows move to the main commit with BD-292, BD-293, BD-295, BD-297 and the stage 2 queue reset of node 2; every other row keeps its tester.37 commit. BD-315: the system, wow64, desktop, zink and gl rows move to the t38/bd315-uqueue-* heads (global locks deleted at unload; the system head also has the util tests Windows build fix), and recipe_commit to the main commit with BD-317 (the RADV host tests link the real monitored fence). BD-211: the zink and gl rows move to merges of their BD-315 heads with the memstream temporary-file fix. rc1 (main 99a91dc8): the kmd, control, control-exe, router, d3d11 shell and state-worker rows move to main 99a91dc8, and the kmd rows to main b9f5e3bb with BD-321 (BD-205, BD-296, BD-306, BD-307, BD-298, BD-291, bd309), because main had commits under their source paths that they did not ship. BD-308/BD-309 (rc1): the dxvk engine rows (x64 and x86) move to dxvk t38/bd309-offer f9c4f228 (engine ABI 1.6, PrepareOffer) and the hosted ICD rows (x64 and x86) to mesa t38/bd309-hosted-t38 8b7160da (bc250GetMemoryAllocation), so that the d3d11 shell at 99a91dc8 gives offered engine resources to the kernel.",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "6acd88041915c618dd2640b895cbe6e8a2ea5fb7",
   "repositories": {
@@ -425,7 +425,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "dxvk",
-      "commit": "54ecf2192ec5b48fa4a6367e184c8072d5229829",
+      "commit": "f9c4f228114226d6ff9d68e0af17b5dbefa1a50e",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -508,7 +508,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "dxvk",
-      "commit": "54ecf2192ec5b48fa4a6367e184c8072d5229829",
+      "commit": "f9c4f228114226d6ff9d68e0af17b5dbefa1a50e",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -591,7 +591,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "dxvk",
-      "commit": "54ecf2192ec5b48fa4a6367e184c8072d5229829",
+      "commit": "f9c4f228114226d6ff9d68e0af17b5dbefa1a50e",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -675,7 +675,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "dxvk",
-      "commit": "54ecf2192ec5b48fa4a6367e184c8072d5229829",
+      "commit": "f9c4f228114226d6ff9d68e0af17b5dbefa1a50e",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -935,7 +935,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "0b5b1ff7e965d14d22e32bc33746f350c7c4aef1",
+      "commit": "8b7160dad04c31e6aac37e3c33cec19cb4e361e3",
       "base": "7def507b03541117ce0f48482f3f4022263ad763",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1047,7 +1047,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "0b5b1ff7e965d14d22e32bc33746f350c7c4aef1",
+      "commit": "8b7160dad04c31e6aac37e3c33cec19cb4e361e3",
       "base": "7def507b03541117ce0f48482f3f4022263ad763",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1396,7 +1396,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "0b5b1ff7e965d14d22e32bc33746f350c7c4aef1",
+      "commit": "8b7160dad04c31e6aac37e3c33cec19cb4e361e3",
       "base": "7def507b03541117ce0f48482f3f4022263ad763",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1524,7 +1524,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "0b5b1ff7e965d14d22e32bc33746f350c7c4aef1",
+      "commit": "8b7160dad04c31e6aac37e3c33cec19cb4e361e3",
       "base": "7def507b03541117ce0f48482f3f4022263ad763",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
