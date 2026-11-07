@@ -16,6 +16,21 @@ struct RuntimeImageDispatch {
     PFN_vkGetImageSubresourceLayout layout;
     ImageMemoryDispatch memory;
 };
+// The image is retained while its layout is used to allocate backing storage.
+// No engine pointer/pNext chain is retained. The caller owns the exact image,
+// and must destroy it on every refusal before releasing its runtime allocation.
+struct RuntimeImageLayout {
+    VkFormat format=VK_FORMAT_UNDEFINED;
+    UINT width=0,height=0,planes=0;
+    VkSubresourceLayout plane[2]{};
+    VkMemoryRequirements memory{};
+};
+// No memory allocation or binding. The create flags/usage/view-list are the
+// engine's exact description, with LINEAR selected by the caller. Supports the
+// current packed formats and one non-disjoint NV12 image. NV12 success describes
+// storage only: no COMPOSED or overlay capability follows from it.
+HRESULT prepare_linear_runtime_image(RuntimeDevice &,VkDevice,const RuntimeImageDispatch &,
+    const VkImageCreateInfo &,RuntimeImage &,RuntimeImageLayout &);
 // Import path: single-mip/layer linear 2D color surface of a composed format
 // (A8 at 1 byte a texel, RGBA8/BGRA8/RGB10A2 at 4, RGBA16F at 8).
 // imageInfo retains the engine-required format/usage/flags/pNext. The caller

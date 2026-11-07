@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-image-memory.h"
 #include "diagnostics.h"
+#include "../../contract/bc250_nv12_layout.h"
 namespace bc250::umd {
 namespace {
 HRESULT status(VkResult result) {
@@ -20,6 +21,56 @@ VkDeviceSize texel_bytes(VkFormat format) {
     default: return 0;
     }
 }
+}
+HRESULT prepare_linear_runtime_image(RuntimeDevice &runtime,VkDevice device,const RuntimeImageDispatch &vk,
+    const VkImageCreateInfo &info,RuntimeImage &out,RuntimeImageLayout &layout) {
+    if (out.image || out.memory) return E_UNEXPECTED;
+    layout={};
+    if (!runtime.domain.entered() || !device || !vk.create || !vk.destroy || !vk.layout ||
+        !vk.memory.requirements || info.sType!=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO ||
+        !info.extent.width || !info.extent.height) return E_INVALIDARG;
+    if (info.imageType!=VK_IMAGE_TYPE_2D || info.extent.depth!=1 || info.mipLevels!=1 || info.arrayLayers!=1 ||
+        info.samples!=VK_SAMPLE_COUNT_1_BIT || info.tiling!=VK_IMAGE_TILING_LINEAR ||
+        (info.flags&(VK_IMAGE_CREATE_DISJOINT_BIT|VK_IMAGE_CREATE_SPARSE_BINDING_BIT|
+                     VK_IMAGE_CREATE_SPARSE_RESIDENCY_BIT|VK_IMAGE_CREATE_SPARSE_ALIASED_BIT))) return E_NOTIMPL;
+    const bool nv12=info.format==VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
+    const VkDeviceSize texel=texel_bytes(info.format);
+    if (!nv12 && !texel) return E_NOTIMPL;
+    if (nv12 && ((info.extent.width|info.extent.height)&1u)) return E_INVALIDARG;
+    RuntimeImage created{}; RuntimeImageLayout measured{};
+    VkResult result=vk.create(device,&info,nullptr,&created.image);
+    if (result!=VK_SUCCESS) return status(result);
+    if (!created.image) return E_FAIL;
+    measured.format=info.format; measured.width=info.extent.width; measured.height=info.extent.height;
+    measured.planes=nv12 ? 2u : 1u;
+    for (UINT i=0;i<measured.planes;++i) {
+        VkImageSubresource sub{VkImageAspectFlags(nv12 ? (i ? VK_IMAGE_ASPECT_PLANE_1_BIT : VK_IMAGE_ASPECT_PLANE_0_BIT)
+                                    : VK_IMAGE_ASPECT_COLOR_BIT),0,0};
+        vk.layout(device,created.image,&sub,&measured.plane[i]);
+    }
+    vk.memory.requirements(device,created.image,&measured.memory);
+    bool valid=measured.memory.size && measured.memory.alignment && measured.memory.memoryTypeBits &&
+        !(measured.memory.alignment&(measured.memory.alignment-1));
+    for (UINT i=0;i<measured.planes && valid;++i) {
+        const auto &p=measured.plane[i];
+        const VkDeviceSize row=VkDeviceSize(info.extent.width)*(nv12 ? 1u : texel);
+        const VkDeviceSize rows=i ? info.extent.height/2u : info.extent.height;
+        valid=p.size && p.rowPitch>=row && p.offset<=measured.memory.size &&
+            p.size<=measured.memory.size-p.offset && row<=p.size && rows-1<=(p.size-row)/p.rowPitch;
+    }
+    if (nv12 && valid) {
+        // Validate full padded rows, not just the last visible texel. A future
+        // allocation record can retain these offsets without guessing UV.
+        const auto &y=measured.plane[0]; const auto &uv=measured.plane[1];
+        BC250_NV12_STORAGE storage{info.extent.width,info.extent.height,
+            UINT(y.rowPitch),UINT(uv.rowPitch),measured.memory.size,y.offset,uv.offset};
+        valid=y.rowPitch<=UINT32_MAX && uv.rowPitch<=UINT32_MAX &&
+            y.size>=y.rowPitch*info.extent.height && uv.size>=uv.rowPitch*(info.extent.height/2u) &&
+            !(y.offset<uv.offset+uv.size && uv.offset<y.offset+y.size) &&
+            Bc250Nv12StorageValid(&storage);
+    }
+    if (!valid) { vk.destroy(device,created.image,nullptr); return E_INVALIDARG; }
+    out=created; layout=measured; return S_OK;
 }
 HRESULT import_runtime_image_memory(RuntimeDevice &runtime,VkDevice device,VkImage image,
     const ImageMemoryDispatch &vk,const VkPhysicalDeviceMemoryProperties &properties,
@@ -71,12 +122,10 @@ HRESULT create_linear_runtime_image(RuntimeDevice &runtime,VkDevice device,const
     if (rowBytes!=VkDeviceSize(info.extent.width)*texel) return E_INVALIDARG;
     // Division avoids overflow in (height-1)*pitch + rowBytes.
     if (rowBytes>source.size || VkDeviceSize(info.extent.height-1)>(source.size-rowBytes)/pitch) return E_INVALIDARG;
-    RuntimeImage created{};
-    VkResult result=vk.create(device,&info,nullptr,&created.image);
-    if (result!=VK_SUCCESS) return status(result);
-    if (!created.image) return E_FAIL;
-    VkImageSubresource subresource{VK_IMAGE_ASPECT_COLOR_BIT,0,0};
-    VkSubresourceLayout layout{}; vk.layout(device,created.image,&subresource,&layout);
+    RuntimeImage created{}; RuntimeImageLayout measured{};
+    HRESULT prepared=prepare_linear_runtime_image(runtime,device,vk,info,created,measured);
+    if (FAILED(prepared)) return prepared;
+    const auto &layout=measured.plane[0];
     // Runtime allocation starts with pixel (0,0); there is no implicit offset
     // adjustment or row-by-row CPU fallback for a mismatching Vulkan layout.
     HRESULT hr=E_INVALIDARG;

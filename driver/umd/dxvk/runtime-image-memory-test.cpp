@@ -6,13 +6,16 @@
 #include <iostream>
 using namespace bc250::umd;
 namespace {
-int identity; unsigned allocations,bindings,frees;
+int identity; unsigned allocations,bindings,frees,checks;
 // BD-253: the identity the hosted ICD knows the device by, RuntimeDevice::host_identity, not the runtime handle.
 void *hostIdentity=nullptr;
 VkDeviceMemory memory=(VkDeviceMemory)(uintptr_t(7));
 VkResult allocationResult=VK_SUCCESS,bindResult=VK_SUCCESS;
-void check(bool b) { if (!b) std::abort(); }
-void VKAPI_CALL requirements(VkDevice,VkImage,VkMemoryRequirements *r) { *r={4096,256,2}; }
+bool nv12Prepare=false;
+VkMemoryRequirements nv12Memory{8192,256,2};
+VkSubresourceLayout nv12Planes[2]{{0,4096,256,0,0},{4096,2048,256,0,0}};
+void check(bool b) { ++checks; if (!b) { std::cerr << "FAIL image-memory check " << checks << '\n'; std::abort(); } }
+void VKAPI_CALL requirements(VkDevice,VkImage,VkMemoryRequirements *r) { *r=nv12Prepare ? nv12Memory : VkMemoryRequirements{4096,256,2}; }
 VkResult VKAPI_CALL allocate(VkDevice,const VkMemoryAllocateInfo *a,const VkAllocationCallbacks *,VkDeviceMemory *m) {
     ++allocations;
     auto *i=static_cast<const bc250_host_import *>(a->pNext);
@@ -36,6 +39,11 @@ VkResult VKAPI_CALL image_create(VkDevice,const VkImageCreateInfo *info,const Vk
 }
 void VKAPI_CALL image_destroy(VkDevice,VkImage,const VkAllocationCallbacks *) { ++imageDestroys; }
 void VKAPI_CALL image_layout(VkDevice,VkImage,const VkImageSubresource *sub,VkSubresourceLayout *out) {
+    if (nv12Prepare) {
+        check((sub->aspectMask==VK_IMAGE_ASPECT_PLANE_0_BIT || sub->aspectMask==VK_IMAGE_ASPECT_PLANE_1_BIT) &&
+            !sub->mipLevel && !sub->arrayLayer);
+        *out=nv12Planes[sub->aspectMask==VK_IMAGE_ASPECT_PLANE_1_BIT ? 1 : 0]; return;
+    }
     check(sub->aspectMask==VK_IMAGE_ASPECT_COLOR_BIT && !sub->mipLevel && !sub->arrayLayer);
     *out={0,4096,badPitch ? 512u : 256u,0,0};
 }
@@ -339,6 +347,45 @@ int main() {
     importEngine.supported=true; importEngine.wrapResult=E_INVALIDARG;
     check(realDispatch.wrap(realDispatch.engine,&textureDesc,&info,image,&wrapped)==E_INVALIDARG);
     check(!wrapped && importEngine.wraps==2 && importEngine.drops==2);
+    // NV12 preparation measures both components of the same retained image.
+    // No memory import or KMD allocation is allowed while discovering layout.
+    nv12Prepare=true;
+    info.format=VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
+    info.extent={64,16,1}; info.flags=VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT|VK_IMAGE_CREATE_EXTENDED_USAGE_BIT;
+    info.pNext=&formatList;
+    RuntimeImage preparedImage{}; RuntimeImageLayout preparedLayout{};
+    const unsigned memoryBefore=allocations,bindBefore=bindings,allocateBefore=surfaceAllocates;
+    auto prepare=[&]() { return prepare_linear_runtime_image(runtime,device,imageDispatch,info,preparedImage,preparedLayout); };
+    auto refused=[&]() {
+        const unsigned destroyed=imageDestroys;
+        check(prepare()==E_INVALIDARG && !preparedImage.image && !preparedImage.memory && !preparedLayout.planes);
+        check(imageDestroys==destroyed+1 && allocations==memoryBefore && bindings==bindBefore);
+    };
+    check(prepare()==S_OK && preparedLayout.planes==2 && preparedLayout.plane[1].offset==4096 &&
+        preparedLayout.plane[1].rowPitch==256 && preparedLayout.memory.size==8192);
+    check(createdInfo.flags==info.flags && createdInfo.pNext==info.pNext);
+    const unsigned retainedCreates=imageCreates;
+    check(prepare()==E_UNEXPECTED && imageCreates==retainedCreates && preparedImage.image);
+    destroy_runtime_image(device,imageDispatch,preparedImage);
+    // Retain measured padding/offset rather than computing UV as width*height.
+    nv12Planes[1]={6144,2048,256,0,0};
+    check(prepare()==S_OK && preparedLayout.plane[1].offset==6144);
+    destroy_runtime_image(device,imageDispatch,preparedImage);
+    nv12Planes[1]={4096,2048,256,0,0};
+    nv12Planes[1].rowPitch=UINT64_MAX; refused(); nv12Planes[1].rowPitch=256;
+    nv12Planes[1].offset=2048; refused(); nv12Planes[1].offset=4096;
+    nv12Planes[1].offset=UINT64_MAX-31; refused(); nv12Planes[1].offset=4096;
+    nv12Planes[1].size=2047; refused(); nv12Planes[1].size=2048;
+    nv12Planes[1].offset=4097; refused(); nv12Planes[1].offset=4096;
+    nv12Memory.size=6143; refused(); nv12Memory.size=8192;
+    nv12Memory.alignment=3; refused(); nv12Memory.alignment=256;
+    nv12Memory.memoryTypeBits=0; refused(); nv12Memory.memoryTypeBits=2;
+    const unsigned noCreate=imageCreates;
+    info.extent.width=63; check(prepare()==E_INVALIDARG && imageCreates==noCreate); info.extent.width=64;
+    info.flags|=VK_IMAGE_CREATE_DISJOINT_BIT;
+    check(prepare()==E_NOTIMPL && imageCreates==noCreate); info.flags&=~VK_IMAGE_CREATE_DISJOINT_BIT;
+    check(allocations==memoryBefore && bindings==bindBefore && surfaceAllocates==allocateBefore);
+    nv12Prepare=false;
     // This test uses synthetic handles only, never an actual allocation/image.
-    std::cout << "PASS image import and surface lifecycle: pending paging, teardown order, failure retention (mock callbacks)\n";
+    std::cout << "PASS image import and surface lifecycle: " << checks << " checks, pending paging, teardown order, failure retention, NV12 preparation (mock callbacks)\n";
 }
