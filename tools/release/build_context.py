@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import stat
@@ -48,6 +49,7 @@ LIMITS = [
     "Covers the named content roots, helper files, environment and resolved executables; not a hermetic dependency proof.",
     "Does not trace arbitrary recipe file access, registry discovery, network responses or undeclared ambient dependencies.",
     "PATH order is recorded; unrelated PATH directories are not recursively scanned.",
+    "Host OS build and Windows update revision are recorded; arbitrary system runtime DLLs are not inventoried.",
     "Missing optional installations are recorded as absent; unreadable, linked or changing declared inputs make complete false.",
 ]
 
@@ -114,6 +116,20 @@ class Fingerprinter:
         return result
 
 
+def host_identity():
+    result = {"platform": sys.platform, "version": platform.version(), "machine": platform.machine()}
+    if sys.platform == "win32":
+        import winreg
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+                                0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as key:
+                result["build"] = str(winreg.QueryValueEx(key, "CurrentBuildNumber")[0])
+                result["update_revision"] = int(winreg.QueryValueEx(key, "UBR")[0])
+        except OSError as exc:
+            result.update(state="unreadable", error=type(exc).__name__)
+    return result
+
+
 def capture_context(root, repo, tools=None, *, environ=None, executables=None, discover_vs=True):
     """Return a deterministic receipt; all content hashing is memoized only within this call.
 
@@ -142,7 +158,7 @@ def capture_context(root, repo, tools=None, *, environ=None, executables=None, d
                 "shader_tools": record(root / "scratch/glslang/bin"),
                 "ags_headers": record(root / "ref/AGS_SDK-v6.3.0"),
                 "adl_headers": record(root / "ref/display-library__WARN-EULA-in-docs-only-headers-MIT/include"),
-                "ddi_contract": record(root / "ref/ddi-display/d3d10umddi.md")}
+                "ddi_contract": record(root / "ref/ddi-display")}
     helpers = {name: record(repo / name, True) for name in RUNTIME_HELPERS}
     tool_inputs = {name: record(value, True) for name, value in sorted(tools.items())}
     selected_env = {k: env[k] for k in sorted(env) if k in ENVIRONMENT or k.startswith("BC250_TOOL_")}
@@ -191,7 +207,8 @@ def capture_context(root, repo, tools=None, *, environ=None, executables=None, d
         if env.get("PROGRAMFILES(X86)"):
             visual_studio["windows_kits"] = record(Path(env["PROGRAMFILES(X86)"]) / "Windows Kits/10")
 
-    inputs = {"defaults": defaults, "helpers": helpers, "tools": tool_inputs, "environment": selected_env,
+    host = host_identity()
+    inputs = {"host_os": host, "defaults": defaults, "helpers": helpers, "tools": tool_inputs, "environment": selected_env,
               "environment_inputs": environment_inputs, "executables": executable_inputs, "visual_studio": visual_studio}
     bad_states = {"unreadable", "unsupported-link", "unsupported-file-type", "changed-during-read",
                   "incomplete-directory", "probe-failed"}
@@ -203,6 +220,8 @@ def capture_context(root, repo, tools=None, *, environ=None, executables=None, d
 
     complete = sound(inputs) and all(item["state"] in ("file", "directory") for item in required)
     problems = list(fingerprinter.problems)
+    if host.get("state") == "unreadable":
+        problems.append({"path": "Windows CurrentVersion build/update revision", "state": "unreadable"})
     for item in required:
         if item["state"] == "absent":
             problems.append({"path": item["path"], "state": "required-input-absent"})

@@ -185,6 +185,24 @@ function Test-ExactProcess([int]$ProcessId, [long]$StartTicks) {
     }
 }
 
+function Stop-SetWorker($Process, [string]$Id) {
+    if ($Process.HasExited) { return $true }
+    # A failed process-tree stop must not become an unbounded wait or permission to remove live build trees.
+    try {
+        $stopText = @(& taskkill.exe /PID $Process.Id /T /F 2>&1 | ForEach-Object { [string]$_ })
+        $stopCode = $LASTEXITCODE
+        Write-Host "worker stop $Id (PID $($Process.Id)): taskkill exit $stopCode; $($stopText -join ' ')"
+        if (-not $Process.WaitForExit(10000)) {
+            Write-Host "worker stop $Id not confirmed; keep its receipt and work trees for recovery."
+            return $false
+        }
+        return $true
+    } catch {
+        Write-Host "worker stop $Id not confirmed: $($_.Exception.Message)"
+        return $false
+    }
+}
+
 function Assert-NoPreviousWorker([string]$OutputDirectory) {
     $previous = Join-Path $OutputDirectory 'release-report.json'
     if (-not (Test-Path -LiteralPath $previous)) { return }
@@ -732,7 +750,7 @@ if ($KeepFrom) { $planArgs += @('--keep-from', [IO.Path]::GetFullPath($KeepFrom)
 if ($LASTEXITCODE -ne 0) { "build-release-set: the manifest does not plan (see above)"; exit 1 }
 $planData = Read-Json $planFile
 if (-not $planData.reuse_context.complete) {
-    'REUSE UNAVAILABLE: some tool inputs could not be read. Inspect build-context.json, fix the reported paths, then repeat -Plan.'
+    'BUILD REFUSED: some tool inputs could not be read. Inspect build-context.json, fix the reported paths, then repeat -Plan.'
 }
 if ($Rebuild) {
     'BUILD PATH: full rebuild requested. This recompiles every row. Use it for a clean comparison or build diagnosis.'
@@ -740,6 +758,11 @@ if ($Rebuild) {
 } elseif ($Only.Count) {
     'BUILD PATH: manual selection. You must name all changed producers and consumers; a partial set can remain incomplete.'
     'RECOMMENDED: omit -Only to select changed rows and dependent builds automatically, with reasons in plan.json.'
+    foreach ($row in $planData.kept) {
+        if ($row.definition.reuse_context.fingerprint -ne $planData.reuse_context.fingerprint) {
+            "WARNING: manual reuse of $($row.id) retains a different or missing tool context. Omit -Only to rebuild rows whose inputs changed."
+        }
+    }
 } else {
     'BUILD PATH: automatic (recommended). Verified completed rows are reused; changed rows and consumers are built.'
     if (-not $planData.kept.Count -and -not $KeepFrom) {
@@ -776,6 +799,8 @@ if ($AllowUnpushed) { $gateArgs += '--allow-unpushed' }
 $gates = Read-Json $gatesFile
 $gateList = [Collections.Generic.List[object]]::new()
 foreach ($g in $gates.gates) { $gateList.Add($g) }
+$gateList.Add([ordered]@{ name = 'reuse-context'; status = $(if ($planData.reuse_context.complete) { 'PASS' } else { 'FAIL' })
+    lines = @($planData.reuse_context.incomplete_inputs | ForEach-Object { "$($_.state): $($_.path)" }) })
 
 # The size guard: its record when it is young enough, else a new measurement (about a minute on this workspace).
 function Get-SizeMeasure([switch]$Fresh) {
@@ -1010,8 +1035,7 @@ try {
             $timedOut = ([DateTime]::UtcNow - $r.started).TotalSeconds -gt $BuildTimeout
             if (-not $r.process.HasExited -and -not $timedOut) { continue }
             if ($timedOut -and -not $r.process.HasExited) {
-                & taskkill.exe /PID $r.process.Id /T /F 2>&1 | Out-Null
-                $r.process.WaitForExit()
+                if (-not (Stop-SetWorker $r.process $id)) { throw "Cannot confirm worker $id stopped after timeout; outputs and work trees must remain untouched." }
             }
             $running.Remove($id)
             $resultFile = Join-Path $r.build.log_dir 'result.json'
@@ -1110,18 +1134,20 @@ try {
         Start-Sleep -Milliseconds 500
     }
 } finally {
-    # Ctrl+C, a timeout or an error of this script: the builds it started stop with it, and the shared trees go.
-    foreach ($r in $running.Values) {
-        if (-not $r.process.HasExited) { & taskkill.exe /PID $r.process.Id /T /F 2>&1 | Out-Null }
+    # Preserve work trees if a worker could still be using them. The next attempt checks its exact identity.
+    $unstopped = @{}
+    foreach ($id in @($running.Keys)) {
+        if (-not (Stop-SetWorker $running[$id].process $id)) { $unstopped[$id] = $true }
     }
     foreach ($id in @($results.Keys)) {
         if ($results[$id].status -eq 'running') {
-            $results[$id].status = 'interrupted'
-            $results[$id].error = 'scheduler ended before this attempt was harvested; see its preserved log_dir'
+            $results[$id].status = if ($unstopped.ContainsKey($id)) { 'running' } else { 'interrupted' }
+            $results[$id].error = if ($unstopped.ContainsKey($id)) { 'worker termination not confirmed; preserved work trees and log_dir require recovery' }
+                else { 'scheduler ended before this attempt was harvested; see its preserved log_dir' }
         }
     }
     Save-BuildCheckpoint 'interrupted'
-    if (-not $Keep) {
+    if (-not $Keep -and -not $unstopped.Count) {
         try { Remove-Trees $ctx } catch { "trees: $($_.Exception.Message)" }
         if ((Test-Path -LiteralPath $Work) -and -not @(Get-ChildItem -LiteralPath $Work -Force).Count) { Remove-Item -LiteralPath $Work -Force }
     }

@@ -972,6 +972,38 @@ class ReleaseSetRuns(unittest.TestCase):
         self.assertFalse(self.ws.events.exists(), out)
         self.assertTreesGone()
 
+    def test_incomplete_context_refuses_plan_and_build_without_dispatch(self):
+        manifest = self.ws.manifest([self.ws.row('a', sleep=0)])
+        missing = self.ws.root / 'missing-tool.exe'
+        for mode in (('-Plan',), (), ('-Rebuild',)):
+            with self.subTest(mode=mode):
+                code, output = self.ws.run(manifest, '-Tool', f'custom={missing}', *mode)
+                self.assertNotEqual(code, 0, output)
+                self.assertIn('BUILD REFUSED', output)
+                self.assertIn('gate reuse-context: FAIL', output)
+                self.assertIn('missing-tool.exe', output)
+                if '-Plan' not in mode:
+                    report = self.ws.report()
+                    gate = next(g for g in report['gates'] if g['name'] == 'reuse-context')
+                    self.assertEqual(gate['status'], 'FAIL')
+                    self.assertTrue(any('missing-tool.exe' in line for line in gate['lines']))
+                self.assertFalse(self.ws.intervals())
+
+    def test_manual_reuse_warns_about_changed_tool_context_without_upgrading_it(self):
+        manifest = self.ws.manifest([self.ws.row('a', sleep=0), self.ws.row('b', sleep=0)])
+        code, output = self.ws.run(manifest)
+        self.assertEqual(code, 0, output)
+        old = next(b for b in self.ws.report()['builds'] if b['id'] == 'a')['definition']['reuse_context']
+        tools = self.ws.root / 'toolchain'
+        tools.mkdir()
+        (tools / 'compiler.bin').write_bytes(b'changed tools')
+        code, output = self.ws.run(manifest, '-Only', 'b')
+        self.assertEqual(code, 0, output)
+        self.assertIn('WARNING: manual reuse of a retains a different or missing tool context', output)
+        kept = next(b for b in self.ws.report()['builds'] if b['id'] == 'a')
+        self.assertTrue(kept['kept'])
+        self.assertEqual(kept['definition']['reuse_context'], old)
+
     def test_plan_builds_nothing(self):
         rows = [self.ws.row("a"), self.ws.row("b", extra=["-Payload", "{payload:payload/a.bin}"])]
         code, out = self.ws.run(self.ws.manifest(rows), "-Plan")

@@ -42,7 +42,8 @@ class ContextTests(unittest.TestCase):
     def test_default_recipe_sdks_and_shader_tools_are_content_inputs(self):
         for name in ('scratch/glslang/bin/glslangValidator.exe', 'ref/AGS_SDK-v6.3.0/amd_ags.h',
                      'ref/display-library__WARN-EULA-in-docs-only-headers-MIT/include/adl.h',
-                     'ref/ddi-display/d3d10umddi.md'):
+                     'ref/ddi-display/d3d10umddi.md', 'ref/ddi-display/d3dkmddi.md',
+                     'ref/ddi-display/d3dkmthk.md'):
             with self.subTest(name=name):
                 self.write(self.root / name, b'first')
                 first = self.capture()
@@ -55,6 +56,16 @@ class ContextTests(unittest.TestCase):
         self.tool.write_bytes(b"compiler-B")
         os.utime(self.tool, ns=(timestamp, timestamp))
         self.assertNotEqual(first["fingerprint"], self.capture()["fingerprint"])
+
+    def test_host_update_revision_invalidates_reuse_and_unreadable_identity_refuses_it(self):
+        with patch.object(context, 'host_identity', return_value={'build': '26200', 'update_revision': 1}):
+            first = self.capture()
+        with patch.object(context, 'host_identity', return_value={'build': '26200', 'update_revision': 2}):
+            self.assertNotEqual(first['fingerprint'], self.capture()['fingerprint'])
+        with patch.object(context, 'host_identity', return_value={'state': 'unreadable'}):
+            failed = self.capture()
+            self.assertFalse(failed['complete'])
+            self.assertTrue(any('CurrentVersion' in p['path'] for p in failed['incomplete_inputs']))
 
     def test_tree_rename_changes_identity(self):
         first = self.capture()

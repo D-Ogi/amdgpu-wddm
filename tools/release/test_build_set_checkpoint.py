@@ -47,11 +47,16 @@ class Checkpoints(unittest.TestCase):
         self.stop()
         remove_tree(self.tmp)
 
-    def start(self, manifest):
+    def start(self, manifest, fail_stop=False):
         self.ws.write(manifest)
         self.log = open(Path(self.tmp) / "scheduler.log", "wb")
+        entry = TOOL
+        if fail_stop:
+            entry = self.ws.root / 'refuse-stop.ps1'
+            entry.write_text("function taskkill.exe { $global:LASTEXITCODE = 5; 'fixture stop denied' }\n"
+                             f"& '{TOOL}' @args -BuildTimeout 3\nexit $LASTEXITCODE\n")
         self.process = subprocess.Popen([
-            "pwsh", "-NoProfile", "-File", str(TOOL), "-Manifest", str(self.ws.manifest_path),
+            "pwsh", "-NoProfile", "-File", str(entry), "-Manifest", str(self.ws.manifest_path),
             "-Out", str(self.ws.out), "-Root", str(self.ws.root), "-Work", str(self.ws.work),
             "-SizeGuard", str(self.ws.guard_dir / "size-guard.py"), "-MaxParallel", "1"],
             stdout=self.log, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW,
@@ -154,6 +159,36 @@ class Checkpoints(unittest.TestCase):
         self.assertTrue((log_dir / "worker.json").is_file())
         self.assertFalse((log_dir / "result.json").exists())
         self.assertEqual(sentinel.read_bytes(), b"must remain")
+
+    def test_failed_timeout_stop_preserves_worker_receipt_and_live_shared_tree(self):
+        manifest = self.ws.manifest([self.ws.row('a', sleep=90)])
+        self.start(manifest, fail_stop=True)
+        report = self.wait_for(lambda r: r['builds'][0]['status'] == 'running' and
+                               (self.ws.events / 'a.start').is_file())
+        row = report['builds'][0]
+        worker = json.loads(Path(row['log_dir'], 'worker.json').read_text())
+        self.orphans.append(worker)
+        plan = json.loads((self.ws.out / 'plan.json').read_text(encoding='utf-8-sig'))
+        trees = [Path(t['path']) for t in plan['shared_trees']]
+        self.assertTrue(trees)
+        before = {str(t): (t / 'stub.ps1').read_bytes() for t in trees}
+        self.process.wait(timeout=45)
+        self.log.close()
+        self.log = None
+        self.assertNotEqual(self.process.returncode, 0)
+        log = (Path(self.tmp) / 'scheduler.log').read_text(errors='replace')
+        self.assertIn('taskkill exit 5', log)
+        self.assertIn('not confirmed', log)
+        after = self.ws.report()['builds'][0]
+        self.assertEqual(after['status'], 'running')
+        self.assertEqual(after['log_dir'], row['log_dir'])
+        for tree in trees:
+            self.assertEqual((tree / 'stub.ps1').read_bytes(), before[str(tree)])
+        code, output = self.ws.run(manifest, '-Plan', timeout=30)
+        self.assertNotEqual(code, 0, output)
+        self.assertIn('Previous worker for a is still running', output)
+        self.stop_worker(worker)
+        self.orphans.clear()
 
     def test_missing_worker_receipt_requires_new_guard_schema(self):
         # Invoke the real startup guard without a build or tool-context scan.
