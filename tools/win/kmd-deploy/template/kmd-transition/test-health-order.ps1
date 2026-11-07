@@ -5,7 +5,10 @@ $o=@{umd_registration=@('cpu');icd_registration=@('icd');parameters=@{EnableGpuP
 function Must-Reject([scriptblock]$Action){$failed=$false;try{& $Action|Out-Null}catch{$failed=$true};if(!$failed){throw 'False acceptance'}}
 Assert-KmdCpuBaseline $saved $o -AllowUnconfirmed
 Must-Reject {Assert-KmdCpuBaseline $saved $o}
-$r=Wait-KmdCpuBaseline $saved -Read {$o} -Deadline ([Diagnostics.Stopwatch]::GetTimestamp()+[Diagnostics.Stopwatch]::Frequency) -IntervalMs 1 -AllowUnconfirmed
+# This case checks two-sample admission, not elapsed time. A one-second test budget can expire after the first
+# sample when the full host gate deschedules this process. Deadline rejection is covered by test-readiness.ps1
+# and test-health-wait.ps1; the production deadlines are unchanged.
+$r=Wait-KmdCpuBaseline $saved -Read {$o} -Deadline ([Diagnostics.Stopwatch]::GetTimestamp()+[Diagnostics.Stopwatch]::Frequency*30) -IntervalMs 1 -AllowUnconfirmed
 if($r.attempts -ne 2){throw 'Unconfirmed but ready DWM was not admitted'}
 $before=Get-KmdReadyHealth 'health abi=1 version=0x000700AE flags=7 generation=123 epoch=5 completed=1 age_ms=15000 ready_ms=60000' '0x000700AE'
 $after=Get-KmdReadyHealth 'health abi=1 version=0x000700AE flags=15 generation=123 epoch=5 completed=2 age_ms=0 ready_ms=60001' '0x000700AE'
