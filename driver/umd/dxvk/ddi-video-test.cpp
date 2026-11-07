@@ -195,6 +195,21 @@ void test_video_ddi() {
     CHECK(video_processor_format_support(DXGI_FORMAT_R16G16B16A16_FLOAT)==0 && video_processor_format_support(DXGI_FORMAT_UNKNOWN)==0);
     CHECK(format_bits_correct(real_bits));
     CHECK(!format_bits_correct(bits_with_decoder)); // negative control: a decoder bit
+    // The resource bit is separate from the processor bits and codec profiles.
+    // Each missing prerequisite must refuse it; unrelated bits cannot admit it.
+    for(UINT mask=0;mask<8;mask++) {
+        const UINT engine=((mask&1)?UINT(D3D11_FORMAT_SUPPORT_TEXTURE2D):0u)|
+            ((mask&2)?UINT(D3D11_FORMAT_SUPPORT_CPU_LOCKABLE):0u)|
+            ((mask&4)?UINT(D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT):0u)|
+            D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT;
+        for(auto f:{DXGI_FORMAT_NV12,DXGI_FORMAT_P010,DXGI_FORMAT_YUY2})
+            CHECK(video_upload_resource_support(f,engine)==
+                (mask==7 ? UINT(D3D11_1DDI_FORMAT_SUPPORT_DECODER_OUTPUT):0u));
+    }
+    for(auto f:{DXGI_FORMAT_UNKNOWN,DXGI_FORMAT_AYUV,DXGI_FORMAT_P016,
+                DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_R8G8B8A8_UNORM,
+                DXGI_FORMAT_R10G10B10A2_UNORM})
+        CHECK(video_upload_resource_support(f,~0u)==0);
     // Directional cache: successful input/output/neither/both queries and a
     // failed query that left plausible bits must all retain their real meaning.
     for(UINT direction:{0u,1u,2u,3u}) {

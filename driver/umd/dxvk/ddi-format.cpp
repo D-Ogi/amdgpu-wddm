@@ -66,7 +66,8 @@ UINT convert_format_support(UINT s,UINT s2) {
     if (s2&D3D11_FORMAT_SUPPORT2_UAV_TYPED_STORE) result|=D3D11_1DDI_FORMAT_SUPPORT_UAV_WRITES;
     if (s2&D3D11_FORMAT_SUPPORT2_OUTPUT_MERGER_LOGIC_OP) result|=D3D11_1DDI_FORMAT_SUPPORT_OUTPUT_MERGER_LOGIC_OP;
     // The video processor bits come from the processor's own table (ddi-video-caps.h), in format(): the engine's
-    // bits are not that table. The decoder, capture and overlay bits stay 0: no such path exists. Later DDI-version
+    // bits are not that table. BIND_DECODER upload storage is admitted separately;
+    // capture and overlay stay 0. Later DDI-version
     // bits must not leak through a D3D11.1 capability query.
     return result;
 }
@@ -86,7 +87,7 @@ void APIENTRY format(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT *out) {
         hr=classify_format_support2_result(hr,extra.OutFormatSupport2);
         if (FAILED(hr)) { report_ddi_error(owner,hr,DdiErrorClass::check_fail_or_invalid_arg); return; }
         *out=constrain_format_support(value,convert_format_support(support,extra.OutFormatSupport2))|
-             video_format_support_bits_masked(value,support);
+             video_format_support_bits_masked(value,support)|video_upload_resource_support(value,support);
     },DdiErrorClass::check_fail_or_invalid_arg);
 }
 void APIENTRY samples(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT count,UINT *out) {

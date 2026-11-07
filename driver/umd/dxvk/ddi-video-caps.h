@@ -74,6 +74,18 @@ constexpr UINT video_format_support_bits_masked(DXGI_FORMAT format,UINT engine) 
     if(engine&D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT) bits|=D3D11_1DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT;
     return bits & video_format_support_bits(format,true);
 }
+// DECODER_OUTPUT admits a resource with BIND_DECODER; it does not enumerate a
+// codec profile. Software video upload also uses that bind flag with DYNAMIC
+// and Map(WRITE_DISCARD). The runtime checks this bit before CreateResource.
+// Limit it to the YUV storage paths with a CPU map and a processor input view.
+// GetVideoDecoderProfileCount remains zero: no hardware decoder is claimed.
+constexpr UINT video_upload_resource_support(DXGI_FORMAT format,UINT engine) {
+    const auto *row=video_format_row(format);
+    constexpr UINT required=D3D11_FORMAT_SUPPORT_TEXTURE2D |
+        D3D11_FORMAT_SUPPORT_CPU_LOCKABLE | D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT;
+    return row && row->ycbcr && (engine & required)==required
+        ? UINT(D3D11_1DDI_FORMAT_SUPPORT_DECODER_OUTPUT) : 0u;
+}
 // A colour space of ColorSpace1, as the engine's legacy colour-space word (D3D11_VIDEO_PROCESSOR_COLOR_SPACE) states
 // it. The legacy word has no primaries and no transfer function: the engine converts the matrix and the range only
 // and never linearizes. So an admitted space is one whose primaries are BT.709 (BT.601 matrices with 709 primaries
