@@ -52,10 +52,21 @@ and writes `plan.json`. It does not compile the components. Resolve missing tool
 source revisions and disk-budget failures before starting the build.
 
 Inspect `build-context.json` if the plan reports changed or unreadable tools.
-The tool reads content hashes of the portable tool directories, detected build
-tools, relevant environment inputs and build helpers. These checks take time but
-can avoid recompilation. This inventory does not trace every possible file access
-of a recipe. Keep tools unchanged while a build runs.
+The tool selects portable tools, SDK packages and reference inputs from the
+checked-in `tools/release/build-context-inputs.json` declarations. These are bound
+to audited recipe revisions and helper trees. Other portable installations are
+not scanned. Selected inputs, detected build tools, environment paths and build
+helpers are checked by content. An unreadable required input stops the command
+before planning or preflight. An unknown recipe revision needs a declaration
+review; a new source revision can use an existing declaration only when the recipe
+and its recorded helpers have identical Git object IDs. The default command needs
+no extra switches. Keep tools unchanged while a build runs.
+
+This inventory does not trace every possible file access of a recipe. When a
+recipe adds an implicit input, update its declaration with the code. Workspace
+files passed through row `inputs` remain separately tracked. Overrides that move
+a recipe's workspace through `-Root`, `-QualityWorkspace` or a derived `-Kits`
+location require an input review before use.
 
 An older result without this context record needs a new build. A changed recipe
 commit also requires a build because its helper dependencies can change outside

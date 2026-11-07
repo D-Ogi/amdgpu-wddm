@@ -107,6 +107,7 @@ param(
     [Parameter(ParameterSetName = 'Set')][string]$Version = '',
     [Parameter(ParameterSetName = 'Set')][string]$Work,
     [Parameter(ParameterSetName = 'Set')][string[]]$Tool,
+    [Parameter(ParameterSetName = 'Set')][string]$ContextInputs = (Join-Path $PSScriptRoot 'build-context-inputs.json'),
     [Parameter(ParameterSetName = 'Set')][string]$PackageCache,
     [Parameter(ParameterSetName = 'Set')][string]$SizeGuard,
     # A size guard record younger than this many seconds is used as it is; an older one is measured again.
@@ -734,11 +735,15 @@ $rowsFile = Join-Path $Out 'release-sources.rows.json'
 
 "$(Get-Utc) build-release-set: $Manifest"
 $contextFile = Join-Path $Out 'build-context.json'
-$contextArgs = @('-B', (Join-Path $PSScriptRoot 'build_context.py'), '--root', $Root, '--repo', $repo, '--write', $contextFile)
+$contextArgs = @('-B', (Join-Path $PSScriptRoot 'build_context.py'), '--root', $Root, '--repo', $repo, '--manifest', $Manifest, '--declarations', $ContextInputs, '--write', $contextFile)
 foreach ($t in @($Tool | ForEach-Object { $_ -split ',' } | Where-Object { $_ })) { $contextArgs += @('--tool', $t) }
 'Checking build tool content and environment for safe reuse. This reads tool files without starting a build.'
 & $python @contextArgs
 if ($LASTEXITCODE -ne 0) { throw 'Build context could not be captured. See the error above and repeat the command after fixing it.' }
+$capturedContext=Read-Json $contextFile
+if (-not $capturedContext.complete) {
+    throw 'BUILD REFUSED before planning or preflight: required input identity is incomplete. See build-context.json incomplete_inputs. Fix or audit the named input, then repeat the same command.'
+}
 $planArgs = @($buildReleaseSet, 'plan', '--manifest', $Manifest, '--root', $Root, '--repo', $repo, '--out', $Out, '--work', $Work,
     '--max-parallel', $MaxParallel, '--jobs', $Jobs, '--write', $planFile, '--context', $contextFile)
 if ($Sources) { $planArgs += @('--sources', [IO.Path]::GetFullPath($Sources)) }
@@ -750,7 +755,7 @@ if ($KeepFrom) { $planArgs += @('--keep-from', [IO.Path]::GetFullPath($KeepFrom)
 if ($LASTEXITCODE -ne 0) { "build-release-set: the manifest does not plan (see above)"; exit 1 }
 $planData = Read-Json $planFile
 if (-not $planData.reuse_context.complete) {
-    'BUILD REFUSED: some tool inputs could not be read. Inspect build-context.json, fix the reported paths, then repeat -Plan.'
+    throw 'BUILD REFUSED: planner context is incomplete. Inspect build-context.json, fix the reported paths, then repeat -Plan.'
 }
 if ($Rebuild) {
     'BUILD PATH: full rebuild requested. This recompiles every row. Use it for a clean comparison or build diagnosis.'

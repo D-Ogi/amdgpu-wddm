@@ -6,6 +6,7 @@ their environment/executable paths and disable discovery; they never scan real
 tool installations.
 """
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -18,7 +19,7 @@ import subprocess
 import sys
 
 
-SCHEMA = 1
+SCHEMA = 2
 RUNTIME_HELPERS = (
     "tools/release/build_release_set.py", "tools/release/build-release-set.ps1",
     "tools/release/BuildTree.psm1", "tools/release/provenance.py",
@@ -130,7 +131,181 @@ def host_identity():
     return result
 
 
-def capture_context(root, repo, tools=None, *, environ=None, executables=None, discover_vs=True):
+def discover_reference_closure(base, declaration, witnesses):
+    """Read literal C includes and local generator imports without executing them.
+
+    All C branches are included. External/generated names must be audited in the
+    declaration; unknown names or macro includes refuse the context. Directory
+    guards detect include-search changes during this capture, not reuse identity.
+    """
+    base=Path(os.path.abspath(base))
+    selected=set()
+    def inside(path):
+        path=Path(os.path.abspath(path))
+        if not path.is_relative_to(base): raise ValueError('reference include escapes '+str(base))
+        return path
+    def guard(directory):
+        directory=inside(directory)
+        if directory != base:guard(directory.parent)
+        try:
+            info=directory.lstat()
+            if stat.S_ISLNK(info.st_mode) or getattr(info,'st_file_attributes',0)&0x400:
+                raise ValueError('linked reference directory '+str(directory))
+            stamp=(info.st_mtime_ns,info.st_ino)
+        except FileNotFoundError:stamp=None
+        witnesses.setdefault(str(directory),{'directory_guard':stamp})
+    def exists(path):
+        path=inside(path);guard(path.parent)
+        try:info=path.lstat()
+        except FileNotFoundError:return False
+        if stat.S_ISLNK(info.st_mode) or getattr(info,'st_file_attributes',0)&0x400:
+            raise ValueError('linked required reference input '+str(path))
+        return stat.S_ISREG(info.st_mode)
+    def read(path):
+        path=inside(path)
+        if not exists(path):raise ValueError('missing required reference input '+str(path))
+        data=path.read_bytes();selected.add(str(path))
+        witnesses[str(path)]={'sha256':hashlib.sha256(data).hexdigest().upper()}
+        return data.decode('utf-8')
+    includes=[inside(base/p) for p in declaration['include_dirs']]
+    todo=[inside(base/p) for p in declaration['sources']]
+    visited=set()
+    while todo:
+        path=todo.pop()
+        if path in visited:continue
+        visited.add(path)
+        text=re.sub(r'/\*.*?\*/','',read(path),flags=re.S)
+        for directive in re.findall(r'^\s*#\s*include\s+(.+)',text,re.M):
+            match=re.match(r'[<"]([^>"]+)[>"]',directive)
+            if not match:raise ValueError('macro include needs audit: '+str(path)+': '+directive)
+            name=match[1]
+            candidates=[inside(path.parent/name),*[inside(p/name) for p in includes]]
+            found=next((p for p in candidates if exists(p)),None)
+            if found is not None:todo.append(found)
+            elif name not in declaration['external_or_generated']:
+                raise ValueError('unresolved reference include needs audit: '+name)
+    todo=[inside(base/p) for p in declaration.get('generators',[])]
+    visited=set()
+    while todo:
+        path=todo.pop()
+        if path in visited:continue
+        visited.add(path)
+        tree=ast.parse(read(path),filename=str(path))
+        names=[]
+        for node in ast.walk(tree):
+            if isinstance(node,ast.Import):names.extend(a.name for a in node.names)
+            elif isinstance(node,ast.ImportFrom):
+                if node.level:raise ValueError('relative generator import needs audit: '+str(path))
+                if node.module:names.append(node.module)
+        for name in names:
+            candidate=inside(path.parent/(name.replace('.','/')+'.py'))
+            if exists(candidate):todo.append(candidate)
+            elif name not in declaration['external_python']:
+                raise ValueError('generator import needs audit: '+name)
+    for path in declaration.get('data',[]):read(base/path)
+    return selected
+
+
+def select_recipe_inputs(manifest, root, tools, env, declarations, repo=None, witnesses=None):
+    """Resolve audited defaults for the exact recipe revisions; unknowns fail closed.
+
+    Declarations are maintained with recipes, not flags a build caller must invent.
+    A declaration covers implicit workspace inputs. Explicit {root}/{tool} paths
+    are added independently, so an argument override cannot disappear from identity.
+    """
+    selected, problems, used_tools = {}, [], set()
+    witnesses={} if witnesses is None else witnesses
+    closure_cache={}
+    rules = {(r['recipe'], r['commit']): r for r in declarations.get('recipes', [])}
+    binding_cache={}
+    def resolve(value):
+        def tool(match):
+            name=match[1].lower(); used_tools.add(name)
+            value=tools.get(name) or env.get('BC250_TOOL_'+name.upper())
+            if not value and name=='kits': value=str(Path(root)/'toolchain/nuget')
+            if not value: value=shutil.which(name,path=env.get('PATH',''))
+            if not value: raise ValueError('unresolved tool '+name)
+            return value
+        value=re.sub(r'\{tool:([^}]+)\}',tool,str(value)).replace('{root}',str(root))
+        if '{' in value or '}' in value: raise ValueError('unresolved input '+value)
+        return str(Path(value).absolute())
+    for row in manifest.get('rows',[]):
+        commit=row.get('recipe_commit') or (row['commit'] if row['repo']==manifest['recipe_repository'] else manifest['recipe_commit'])
+        if not re.fullmatch(r'[0-9a-fA-F]{40}',commit):
+            problems.append({'path':str(commit),'state':'invalid-recipe-revision'});continue
+        rule=rules.get((row['recipe'],commit))
+        if rule is None and repo is not None:
+            # A new source commit may reuse the audit only when the recipe and
+            # its declared helper trees are byte-identical to an audited revision.
+            for candidate in declarations.get('recipes',[]):
+                if candidate['recipe'] != row['recipe'] or not candidate.get('bindings'): continue
+                paths=tuple(sorted(candidate['bindings']))
+                key=(commit,paths)
+                if key not in binding_cache:
+                    done=subprocess.run(['git','-C',str(repo),'rev-parse',*[commit+':'+p for p in paths]],capture_output=True,text=True,timeout=15)
+                    values=done.stdout.splitlines()
+                    binding_cache[key]=dict(zip(paths,values)) if done.returncode==0 and len(values)==len(paths) else None
+                if binding_cache[key]==candidate['bindings']:
+                    rule=candidate;break
+        if not rule:
+            problems.append({'path':row['recipe']+'@'+commit,'state':'recipe-inputs-not-audited'})
+            continue
+        args=row.get('args',[])
+        options={str(args[i]).lower():args[i+1] for i in range(len(args)-1) if str(args[i]).startswith('-') and not str(args[i+1]).startswith('-')}
+        for name in ('-root','-qualityworkspace'):
+            if name in options and resolve(options[name]) != str(Path(root).absolute()):
+                problems.append({'path':row['id']+': '+name,'state':'workspace-override-needs-input-audit'})
+        for name in ('-python','-ninja','-vsinstall'):
+            if name in options:
+                raw=options[name]
+                if name!='-vsinstall' and not Path(raw).is_absolute() and '{' not in raw:
+                    raw=shutil.which(raw,path=env.get('PATH','')) or raw
+                path=resolve(raw)
+                if name=='-vsinstall':
+                    selected[str(Path(path)/'VC')]=True;selected[str(Path(path)/'MSBuild')]=True
+                else:selected[path]=True
+        if rule.get('workspace_from_kits'):
+            raw=options.get('-kits','{root}/toolchain/nuget')
+            if Path(resolve(raw)).parent.parent != Path(root).absolute():
+                problems.append({'path':row['id']+': -Kits','state':'kits-derived-workspace-needs-input-audit'})
+        for item in rule.get('inputs',[]):
+            try:
+                raw=options.get('-'+item.get('parameter','').lower(),item['path'])
+                path=resolve(raw)
+                if item.get('override_append') and '-'+item.get('parameter','').lower() in options:
+                    path=str(Path(path)/item['override_append'])
+                # A compiler bin override also consumes adjacent builtin headers/libs.
+                for _ in range(item.get('parent',0)): path=str(Path(path).parent)
+                required=item.get('required',True)
+                paths=[str(Path(path)/suffix) for suffix in item['children']] if item.get('children') else [path]
+                for path in paths:selected[path]=selected.get(path,False) or required
+            except ValueError as exc:
+                problems.append({'path':row['id']+': '+str(exc),'state':'unresolved-recipe-input'})
+        for closure in rule.get('reference_closures',[]):
+            try:
+                key=canonical(closure)
+                if key not in closure_cache:
+                    closure_cache[key]=discover_reference_closure(resolve(closure['path']),closure,witnesses)
+                for path in closure_cache[key]:selected[path]=True
+            except (ValueError,OSError,SyntaxError) as exc:
+                problems.append({'path':row['id']+': '+str(exc),'state':'unresolved-reference-closure'})
+        for raw in args:
+            # Root alone is workspace location, not a request to hash the whole workspace.
+            if str(raw).replace('\\','/').startswith(('{root}/toolchain/','{root}/ref/','{tool:')):
+                try:
+                    path=resolve(raw); selected[path]=True
+                    # A declared directory bundle may intentionally select only
+                    # consumed SDK packages beneath the argument's base path.
+                    for item in rule.get('inputs',[]):
+                        if item.get('children') and raw==options.get('-'+item.get('parameter','').lower()):
+                            selected.pop(path,None);break
+                except ValueError as exc:
+                    problems.append({'path':row['id']+': '+str(exc),'state':'unresolved-recipe-input'})
+    return selected, problems, used_tools
+
+
+def capture_context(root, repo, tools=None, *, environ=None, executables=None, discover_vs=True,
+                    manifest=None, declarations=None):
     """Return a deterministic receipt; all content hashing is memoized only within this call.
 
     `executables`, when supplied, completely replaces executable discovery. An
@@ -140,6 +315,18 @@ def capture_context(root, repo, tools=None, *, environ=None, executables=None, d
     root, repo = Path(root).absolute(), Path(repo).absolute()
     env = {k.upper(): str(v) for k, v in (os.environ if environ is None else environ).items()}
     tools = {k.lower(): str(v) for k, v in (tools or {}).items()}
+    scope=None
+    witnesses={}
+    if manifest is not None:
+        if declarations is None:
+            declarations=json.loads((repo/'tools/release/build-context-inputs.json').read_text(encoding='utf-8'))
+        selected, missing, used_tools=select_recipe_inputs(manifest,root,tools,env,declarations,repo,witnesses)
+        scope={'kind':'audited-recipes','declaration_schema':declarations.get('schema'),
+               'paths':dict(sorted(selected.items()))}
+        if missing:
+            body={'schema':SCHEMA,'complete':False,'inputs':{'scope':scope},'incomplete_inputs':missing,
+                  'limits':LIMITS+['Add a reviewed declaration for the named recipe revision before planning.']}
+            return dict(body,fingerprint=hashlib.sha256(canonical(body)).hexdigest().upper())
     fingerprinter = Fingerprinter()
     required = []
 
@@ -154,22 +341,28 @@ def capture_context(root, repo, tools=None, *, environ=None, executables=None, d
             required.append(item)
         return item
 
-    defaults = {"toolchain": record(root / "toolchain"), "python_modules": record(root / "scratch/py"),
+    defaults = ({name:record(name,required) for name,required in scope['paths'].items()} if scope is not None else
+                {"toolchain": record(root / "toolchain"), "python_modules": record(root / "scratch/py"),
                 "shader_tools": record(root / "scratch/glslang/bin"),
                 "ags_headers": record(root / "ref/AGS_SDK-v6.3.0"),
                 "adl_headers": record(root / "ref/display-library__WARN-EULA-in-docs-only-headers-MIT/include"),
-                "ddi_contract": record(root / "ref/ddi-display")}
+                "ddi_contract": record(root / "ref/ddi-display")})
     helpers = {name: record(repo / name, True) for name in RUNTIME_HELPERS}
-    tool_inputs = {name: record(value, True) for name, value in sorted(tools.items())}
-    selected_env = {k: env[k] for k in sorted(env) if k in ENVIRONMENT or k.startswith("BC250_TOOL_")}
+    def record_tool(name,value):
+        members=[p for p in scope['paths'] if Path(p).is_relative_to(expanded(value))] if scope is not None and name=='kits' and name in used_tools else []
+        return ({'path':str(expanded(value)),'state':'selected-bundle','members':[record(p,True) for p in members]}
+                if members else record(value,True))
+    tool_inputs = {name:record_tool(name,value) for name,value in sorted(tools.items())}
+    selected_env = {k: env[k] for k in sorted(env) if k in ENVIRONMENT or
+                    (k.startswith("BC250_TOOL_") and (scope is None or k[11:].lower() in used_tools))}
     environment_inputs = {}
     for name in PATH_ENVIRONMENT:
         if env.get(name):
             # Windows build paths use semicolons; POSIX fixture paths use the native separator.
             environment_inputs[name] = [record(v, True) for v in env[name].split(os.pathsep) if v.strip()]
     for name in sorted(env):
-        if name.startswith("BC250_TOOL_") and env[name]:
-            environment_inputs[name] = [record(env[name], True)]
+        if name.startswith("BC250_TOOL_") and env[name] and (scope is None or name[11:].lower() in used_tools):
+            environment_inputs[name] = [record_tool(name[11:].lower(), env[name])]
 
     if executables is None:
         resolved = {name: shutil.which(name, path=env.get("PATH", "")) for name in EXECUTABLES}
@@ -210,6 +403,7 @@ def capture_context(root, repo, tools=None, *, environ=None, executables=None, d
     host = host_identity()
     inputs = {"host_os": host, "defaults": defaults, "helpers": helpers, "tools": tool_inputs, "environment": selected_env,
               "environment_inputs": environment_inputs, "executables": executable_inputs, "visual_studio": visual_studio}
+    if scope is not None: inputs['scope']=scope
     bad_states = {"unreadable", "unsupported-link", "unsupported-file-type", "changed-during-read",
                   "incomplete-directory", "probe-failed"}
 
@@ -220,6 +414,17 @@ def capture_context(root, repo, tools=None, *, environ=None, executables=None, d
 
     complete = sound(inputs) and all(item["state"] in ("file", "directory") for item in required)
     problems = list(fingerprinter.problems)
+    for path,witness in witnesses.items():
+        if 'sha256' in witness:
+            changed=record(path,True).get('sha256') != witness['sha256']
+        else:
+            try:
+                info=Path(path).lstat();stamp=(info.st_mtime_ns,info.st_ino)
+            except FileNotFoundError:stamp=None
+            except OSError:stamp='unreadable'
+            changed=stamp != witness['directory_guard']
+        if changed:
+            complete=False;problems.append({'path':path,'state':'reference-changed-during-capture'})
     if host.get("state") == "unreadable":
         problems.append({"path": "Windows CurrentVersion build/update revision", "state": "unreadable"})
     for item in required:
@@ -240,6 +445,8 @@ def main():
     parser.add_argument("--repo", required=True)
     parser.add_argument("--tool", action="append", default=[])
     parser.add_argument("--write", required=True)
+    parser.add_argument("--manifest")
+    parser.add_argument("--declarations")
     args = parser.parse_args()
     tools = {}
     for item in args.tool:
@@ -247,7 +454,9 @@ def main():
         if not separator or not name or not path:
             parser.error("--tool needs name=path")
         tools[name] = path
-    receipt = capture_context(args.root, args.repo, tools)
+    manifest=json.loads(Path(args.manifest).read_text(encoding='utf-8')) if args.manifest else None
+    declarations=json.loads(Path(args.declarations).read_text(encoding='utf-8')) if args.declarations else None
+    receipt = capture_context(args.root, args.repo, tools, manifest=manifest, declarations=declarations)
     dest = Path(args.write)
     dest.parent.mkdir(parents=True, exist_ok=True)
     # The receipt is captured before planning and is never used if this command fails.

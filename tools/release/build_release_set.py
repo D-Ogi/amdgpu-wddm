@@ -416,7 +416,10 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
     if errors:
         return None, errors
     root, out, work = Path(root).resolve(), Path(out).resolve(), Path(work).resolve()
-    reuse_context = reuse_context if reuse_context is not None else build_context.capture_context(root, repo)
+    reuse_context = reuse_context if reuse_context is not None else build_context.capture_context(root, repo, manifest=manifest)
+    if not reuse_context.get('complete'):
+        details='; '.join(f"{p.get('state')}: {p.get('path')}" for p in reuse_context.get('incomplete_inputs',[]))
+        return None, ['build input context is incomplete; fix or audit required inputs before planning: '+details]
     context_key = {k: reuse_context.get(k) for k in ('schema', 'fingerprint', 'complete')}
     if not out.is_relative_to(root):
         return None, [f"--out {out} is not under BC250_ROOT {root}: a release-sources.json row names its source "

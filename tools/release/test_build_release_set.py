@@ -190,8 +190,16 @@ class Workspace:
 
     def run(self, manifest, *extra, timeout=600):
         self.write(manifest)
+        declarations=self.root/'context-inputs.json'
+        recipes=[]
+        for row in manifest['rows']:
+            commit=row.get('recipe_commit') or (row['commit'] if row['repo']==manifest['recipe_repository'] else manifest['recipe_commit'])
+            recipes.append({'recipe':row['recipe'],'commit':commit,'inputs':[
+                {'path':'{root}/toolchain','required':False}, {'path':'{root}/scratch/py','required':False}]})
+        declarations.write_text(json.dumps({'schema':1,'recipes':recipes}),encoding='utf-8')
         r = subprocess.run(["pwsh", "-NoProfile", "-File", str(TOOL), "-Manifest", str(self.manifest_path),
                             "-Out", str(self.out), "-Root", str(self.root), "-Work", str(self.work),
+                            "-ContextInputs",str(declarations),
                             "-SizeGuard", str(self.guard_dir / "size-guard.py"), *extra],
                            capture_output=True, text=True, timeout=timeout, env=self.child_environment())
         return r.returncode, r.stdout + r.stderr
@@ -980,13 +988,13 @@ class ReleaseSetRuns(unittest.TestCase):
                 code, output = self.ws.run(manifest, '-Tool', f'custom={missing}', *mode)
                 self.assertNotEqual(code, 0, output)
                 self.assertIn('BUILD REFUSED', output)
-                self.assertIn('gate reuse-context: FAIL', output)
+                self.assertIn('before planning or preflight', output)
                 self.assertIn('missing-tool.exe', output)
-                if '-Plan' not in mode:
-                    report = self.ws.report()
-                    gate = next(g for g in report['gates'] if g['name'] == 'reuse-context')
-                    self.assertEqual(gate['status'], 'FAIL')
-                    self.assertTrue(any('missing-tool.exe' in line for line in gate['lines']))
+                self.assertFalse((self.ws.out/'plan.json').exists())
+                self.assertFalse((self.ws.out/'recipe-params.json').exists())
+                self.assertFalse((self.ws.out/'release-report.json').exists())
+                receipt=json.loads((self.ws.out/'build-context.json').read_text())
+                self.assertFalse(receipt['complete'])
                 self.assertFalse(self.ws.intervals())
 
     def test_manual_reuse_warns_about_changed_tool_context_without_upgrading_it(self):
