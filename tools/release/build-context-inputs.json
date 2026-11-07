@@ -1055,6 +1055,40 @@
     },
     {
       "recipe": "tools/build/build-umd-dxvk.ps1",
+      "commit": "091ef3c31349f7a2b8c1d343694a1e0f27b2cf6f",
+      "bindings": {
+        "tools/build/build-umd-dxvk.ps1": "7b38f8fe3591df51f56b5beb5146892f008db712",
+        "tools/build": "af4d22f296f4ac8ea8865da7b7d303fda9bbe8f0",
+        "tools/quality": "b62b88c17631dfcba8102bc108153f168c7a0287",
+        "tools/release/installer": "efa98d90159ca8071078f069e2a27df495efd696",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/ref/ddi-display",
+          "required": true
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
+      "recipe": "tools/build/build-umd-dxvk.ps1",
       "commit": "174881cf2918f332c44a85d058d3dc920bad368c",
       "bindings": {
         "tools/build/build-umd-dxvk.ps1": "3a6306c5d106b42e17cc48ba990d7f8d7d25e1c5",
