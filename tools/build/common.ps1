@@ -38,15 +38,91 @@ function Find-VsInstall([string]$VsInstall) {
         if (-not (Test-Path -LiteralPath (Join-Path $VsInstall 'VC\Auxiliary\Build\vcvars64.bat'))) {
             throw "-VsInstall $VsInstall has no VC\Auxiliary\Build\vcvars64.bat"
         }
-        return $VsInstall
+        return [IO.Path]::GetFullPath($VsInstall)
     }
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (-not (Test-Path -LiteralPath $vswhere)) {
         throw "vswhere.exe not found at ${vswhere}. Install Visual Studio 2022 or its Build Tools with the C++ workload, or pass -VsInstall"
     }
     $found = @(& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
-    if (-not $found.Count -or -not $found[0]) { throw 'vswhere found no Visual Studio instance with the x64 C++ tools' }
-    return $found[0]
+    if ($LASTEXITCODE -ne 0 -or $found.Count -ne 1 -or -not $found[0]) { throw 'vswhere found no single Visual Studio instance with the x64 C++ tools' }
+    return [IO.Path]::GetFullPath($found[0])
+}
+
+function Get-UniqueEnvironmentPaths([string]$Value, [string[]]$Without = @()) {
+    $seen = @{}
+    $paths = foreach ($entry in ($Value -split ';')) {
+        $entry = $entry.Trim().Trim('"')
+        if (-not $entry) { continue }
+        if ([IO.Path]::IsPathRooted($entry)) { $entry = [IO.Path]::GetFullPath($entry) }
+        $key = $entry.TrimEnd('\', '/')
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
+        $owned = $false
+        foreach ($prefix in $Without) {
+            if ($key.Equals($prefix, [StringComparison]::OrdinalIgnoreCase) -or
+                $key.StartsWith($prefix + '\', [StringComparison]::OrdinalIgnoreCase)) { $owned = $true; break }
+        }
+        if (-not $owned) { $entry }
+    }
+    return ($paths -join ';')
+}
+
+# Check the compiler selected by PATH and the headers/libraries it needs. A stale target variable or a stray
+# cl.exe is not a developer environment. Recipes still choose their compiler explicitly; this prepares VS tools.
+function Get-VsDevEnvironmentRefusal([string]$Install, [ValidateSet('x64', 'x86')][string]$Arch = 'x64') {
+    if ($env:VSCMD_ARG_TGT_ARCH -ne $Arch -or $env:VSCMD_ARG_HOST_ARCH -ne 'x64' -or -not $env:VSCMD_VER) { return "missing or mismatched VS host/target markers (wanted x64/$Arch)" }
+    if (-not $env:VSINSTALLDIR -or $env:VSINSTALLDIR.TrimEnd('\') -ine $Install.TrimEnd('\')) { return "VSINSTALLDIR does not name the selected installation $Install" }
+    $versionFile = Join-Path $Install 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
+    if (-not (Test-Path -LiteralPath $versionFile)) { return "missing VS tool-version file $versionFile" }
+    $version = ([IO.File]::ReadAllText($versionFile)).Trim()
+    $vc = Join-Path $Install "VC\Tools\MSVC\$version"
+    if (-not $env:VCToolsInstallDir -or $env:VCToolsInstallDir.TrimEnd('\') -ine $vc) { return "VCToolsInstallDir does not name the selected tools $vc" }
+    foreach ($name in 'cl.exe', 'link.exe') {
+        $command = Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $command -or $command.Source -ine (Join-Path $vc "bin\Hostx64\$Arch\$name")) { return "$name does not resolve to the selected Hostx64/$Arch tools" }
+    }
+    if (-not $env:WindowsSdkDir -or -not $env:WindowsSDKVersion) { return 'Windows SDK directory or version is missing' }
+    $sdkVersion = $env:WindowsSDKVersion.TrimEnd('\')
+    $includes = @($env:INCLUDE -split ';' | ForEach-Object { $_.Trim().Trim('"').TrimEnd('\') })
+    $libs = @($env:LIB -split ';' | ForEach-Object { $_.Trim().Trim('"').TrimEnd('\') })
+    foreach ($header in @(@((Join-Path $vc 'include'), 'vcruntime.h'),
+            @((Join-Path $env:WindowsSdkDir "Include\$sdkVersion\shared"), 'sdkddkver.h'),
+            @((Join-Path $env:WindowsSdkDir "Include\$sdkVersion\um"), 'Windows.h'),
+            @((Join-Path $env:WindowsSdkDir "Include\$sdkVersion\ucrt"), 'stdio.h'))) {
+        if ($includes -inotcontains $header[0] -or -not (Test-Path -LiteralPath (Join-Path $header[0] $header[1]))) { return "INCLUDE lacks usable $($header[0]) ($($header[1]))" }
+    }
+    foreach ($lib in @(@((Join-Path $vc "lib\$Arch"), 'vcruntime.lib'),
+            @((Join-Path $env:WindowsSdkDir "Lib\$sdkVersion\um\$Arch"), 'kernel32.lib'),
+            @((Join-Path $env:WindowsSdkDir "Lib\$sdkVersion\ucrt\$Arch"), 'ucrt.lib'))) {
+        if ($libs -inotcontains $lib[0] -or -not (Test-Path -LiteralPath (Join-Path $lib[0] $lib[1]))) { return "LIB lacks usable $($lib[0]) ($($lib[1]))" }
+    }
+    $otherArch = if ($Arch -eq 'x64') { 'x86' } else { 'x64' }
+    foreach ($entry in $libs) {
+        if (($entry.StartsWith($vc + '\', [StringComparison]::OrdinalIgnoreCase) -or
+             $entry.StartsWith($env:WindowsSdkDir.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) -and
+            $entry -match "\\$otherArch$") { return "LIB still contains opposite-architecture path $entry" }
+    }
+    return $null
+}
+
+function Test-VsDevEnvironment([string]$Install, [ValidateSet('x64', 'x86')][string]$Arch = 'x64') {
+    return $null -eq (Get-VsDevEnvironmentRefusal $Install $Arch)
+}
+
+function Set-VsArchitecturePolicy([string]$Arch) {
+    $policy = '/external:W1 /we4229 /we4440'
+    $flags = [string]$env:_CL_
+    if ($env:BC250_VS_X86_POLICY -eq '1' -and $flags.EndsWith($policy, [StringComparison]::Ordinal)) {
+        $flags = $flags.Substring(0, $flags.Length - $policy.Length).TrimEnd()
+    }
+    $env:BC250_VS_X86_POLICY = $null
+    if ($Arch -eq 'x86' -and -not $flags.EndsWith($policy, [StringComparison]::Ordinal)) {
+        $flags = (@($flags, $policy) | Where-Object { $_ }) -join ' '
+        $env:BC250_VS_X86_POLICY = '1'
+    }
+    if ($flags.Length -gt 1024) { throw 'x86 compiler policy exceeds the MSVC _CL_ limit' }
+    $env:_CL_ = if ($flags) { $flags } else { $null }
 }
 
 # The recorded builds ran from a cmd script that called vcvars64.bat first. This is the same thing for a
@@ -56,6 +132,13 @@ function Find-VsInstall([string]$VsInstall) {
 function Import-VsDevEnvironment([string]$VsInstall, [string]$TempDir, [ValidateSet('x64', 'x86')][string]$Arch = 'x64') {
     $install = Find-VsInstall $VsInstall
     $vcvars = Join-Path $install ('VC\Auxiliary\Build\{0}' -f @{ x64 = 'vcvars64.bat'; x86 = 'vcvarsamd64_x86.bat' }[$Arch])
+    $saved = Save-ProcessEnvironment
+    $multipath = @('PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'EXTERNAL_INCLUDE')
+    $vsVariables = '^(VSCMD_|__VSCMD_|__VCVARSALL_|VS\d+COMNTOOLS$|VSINSTALLDIR$|VCINSTALLDIR$|VCTOOLS|WINDOWSSDK|WINDOWSLIBPATH$|UNIVERSALCRTSDKDIR$|UCRTVERSION$|NETFXSDKDIR$|FRAMEWORK(DIR|VERSION)|VISUALSTUDIOVERSION$|DEVENVDIR$)'
+    $probe = $null
+    try {
+    foreach ($name in $multipath) { [Environment]::SetEnvironmentVariable($name, (Get-UniqueEnvironmentPaths ([Environment]::GetEnvironmentVariable($name))), 'Process') }
+    if (Test-VsDevEnvironment $install $Arch) { Set-VsArchitecturePolicy $Arch; return $install }
     New-Item -ItemType Directory -Force $TempDir | Out-Null
     $probe = Join-Path $TempDir ('vsenv-{0}.cmd' -f [Guid]::NewGuid().ToString('N'))
     Set-Content -LiteralPath $probe -Encoding ascii -Value @(
@@ -64,28 +147,50 @@ function Import-VsDevEnvironment([string]$VsInstall, [string]$TempDir, [Validate
         "call `"$vcvars`" >nul",
         'if errorlevel 1 exit /b 1',
         'set')
-    try {
-        $lines = @(& cmd.exe /d /c $probe)
-        if ($LASTEXITCODE -ne 0) { throw "$(Split-Path -Leaf $vcvars) failed ($LASTEXITCODE): $vcvars" }
-    } finally {
-        Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+    # Run once from a clean child environment. Remove known VS contributions while preserving caller tools
+    # (LLVM, portable utilities and custom include/library paths). Do not re-expand an inherited long PATH in cmd.
+    $owned = [Collections.Generic.List[string]]::new()
+    $owned.Add($install.TrimEnd('\'))
+    if ($env:VSINSTALLDIR -and (Test-Path -LiteralPath (Join-Path $env:VSINSTALLDIR 'VC\Auxiliary\Build\vcvars64.bat'))) {
+        $owned.Add($env:VSINSTALLDIR.TrimEnd('\'))
     }
+    if ($env:WindowsSdkDir -and (Test-Path -LiteralPath (Join-Path $env:WindowsSdkDir 'Include')) -and
+        (Test-Path -LiteralPath (Join-Path $env:WindowsSdkDir 'Lib'))) { $owned.Add($env:WindowsSdkDir.TrimEnd('\')) }
+    foreach ($sdkRoot in 'Windows Kits', 'Microsoft SDKs\Windows') {
+        $path = Join-Path ${env:ProgramFiles(x86)} $sdkRoot
+        if (Test-Path -LiteralPath $path) { $owned.Add($path) }
+    }
+    foreach ($framework in 'Framework', 'Framework64') { $owned.Add((Join-Path $env:SystemRoot "Microsoft.NET\$framework")) }
+    $psi = [Diagnostics.ProcessStartInfo]::new((Join-Path $env:SystemRoot 'System32\cmd.exe'))
+    $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+    foreach ($argument in @('/d', '/c', $probe)) { $psi.ArgumentList.Add($argument) }
+    foreach ($name in @($psi.Environment.Keys)) { if ($name -match $vsVariables) { [void]$psi.Environment.Remove($name) } }
+    foreach ($name in $multipath) { $psi.Environment[$name] = Get-UniqueEnvironmentPaths ([Environment]::GetEnvironmentVariable($name)) $owned.ToArray() }
+    $installer = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer'
+    if (Test-Path -LiteralPath (Join-Path $installer 'vswhere.exe')) { $psi.Environment['PATH'] = Get-UniqueEnvironmentPaths "$installer;$($psi.Environment['PATH'])" }
+    $p = [Diagnostics.Process]::Start($psi)
+    $stdout = $p.StandardOutput.ReadToEndAsync(); $stderr = $p.StandardError.ReadToEndAsync()
+    if (-not $p.WaitForExit(120000)) { $p.Kill($true); $p.WaitForExit(); throw 'Visual Studio initialization exceeded 120 seconds.' }
+    $lines = $stdout.Result -split "`r?`n"
+    if ($p.ExitCode -ne 0) { throw "$(Split-Path -Leaf $vcvars) failed ($($p.ExitCode)); PATH length $($psi.Environment['PATH'].Length). $($stderr.Result.Trim())" }
+    # Remove stale VS variables too: copying only variables printed by `set` would retain values the new shell removed.
+    foreach ($name in @([Environment]::GetEnvironmentVariables('Process').Keys)) { if ($name -match $vsVariables) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') } }
     foreach ($line in $lines) {
         $eq = $line.IndexOf('=')
         if ($eq -gt 0) { [Environment]::SetEnvironmentVariable($line.Substring(0, $eq), $line.Substring($eq + 1), 'Process') }
     }
-    if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) { throw "cl.exe is not on PATH after $vcvars" }
-    if ($env:VSCMD_ARG_TGT_ARCH -ne $Arch) { throw "$vcvars set VSCMD_ARG_TGT_ARCH=$($env:VSCMD_ARG_TGT_ARCH), wanted $Arch" }
+    foreach ($name in $multipath) { [Environment]::SetEnvironmentVariable($name, (Get-UniqueEnvironmentPaths ([Environment]::GetEnvironmentVariable($name))), 'Process') }
+    $refusal = Get-VsDevEnvironmentRefusal $install $Arch
+    if ($refusal) { throw "$vcvars did not produce a coherent $Arch compiler, header and library environment: $refusal" }
     # A calling-convention modifier on the wrong declarator can silently become cdecl
     # on x86. /WX alone is not a gate when a dependency selects /W0 or /WX-.
     # _CL_ is appended after command-line flags and also reaches nested builds.
     # External level 0 suppresses even /we; level 1 admits these two diagnostics.
-    if ($Arch -eq 'x86') {
-        $policy = (@($env:_CL_, '/external:W1 /we4229 /we4440') | Where-Object { $_ }) -join ' '
-        if ($policy.Length -gt 1024) { throw 'x86 compiler policy exceeds the MSVC _CL_ limit' }
-        $env:_CL_ = $policy
-    }
+    Set-VsArchitecturePolicy $Arch
     return $install
+    } catch { Restore-ProcessEnvironment $saved; throw }
+    finally { if ($probe) { Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue } }
 }
 
 # Runs a native program with exact arguments and returns its exit code, stdout and stderr, without the

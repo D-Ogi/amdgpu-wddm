@@ -1,4 +1,5 @@
 @echo off
+setlocal
 rem Fast local gates only: no lab, CTS, benchmark or soak test.
 set "BC250_WORKSPACE=%~1"
 if not defined BC250_WORKSPACE set "BC250_WORKSPACE=%BC250_ROOT%"
@@ -11,12 +12,7 @@ set "BC250_QUALITY_KITS=%~5"
 if not defined BC250_QUALITY_KITS set "BC250_QUALITY_KITS=%BC250_WORKSPACE%\toolchain\nuget"
 set "BC250_QUALITY_REPO=%~3"
 if defined BC250_QUALITY_REPO set "BC250_QUALITY_REPO=%BC250_QUALITY_REPO%\."
-for /f "usebackq delims=" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath`) do set "BC250_VS=%%I"
-if not defined BC250_VS exit /b 2
-call "%BC250_VS%\VC\Auxiliary\Build\vcvars64.bat"
-if errorlevel 1 exit /b 1
 set "TEMP=%BC250_WORKSPACE%\scratch\tmp"
 set "TMP=%TEMP%"
-set "INCLUDE=%BC250_QUALITY_KITS%\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um;%BC250_QUALITY_KITS%\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\shared;%INCLUDE%"
 pwsh -NoProfile -File "%~dp0quick.ps1" -Workspace "%BC250_WORKSPACE%\." -Out "%BC250_QUALITY_OUT%\." -RepoRoot "%BC250_QUALITY_REPO%" -Profile "%BC250_QUALITY_PROFILE%" -Kits "%BC250_QUALITY_KITS%\."
 exit /b %errorlevel%

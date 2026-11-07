@@ -29,26 +29,19 @@ function Get-QualityInputValues {
     return $v
 }
 
-# Does this process already have the x64 developer environment? $ClPath is the resolved cl.exe or ''.
-function Test-QualityDevEnvironment([string]$ClPath, [string]$TargetArch) {
-    return [bool]$ClPath -and $TargetArch -eq 'x64'
-}
-
 # Imports the x64 developer environment into this process when it is not there. Returns what it did, for the run's
 # log. common.ps1 is dot-sourced inside this function, so its Set-StrictMode stays in this function's scope.
-function Initialize-QualityDevEnvironment([Parameter(Mandatory)][string]$Repo, [Parameter(Mandatory)][string]$TempDir) {
-    $cl = Get-Command cl.exe -ErrorAction SilentlyContinue
-    if (Test-QualityDevEnvironment $(if ($cl) { $cl.Source } else { '' }) $env:VSCMD_ARG_TGT_ARCH) {
-        return "developer environment: kept ($($cl.Source))"
-    }
+function Initialize-QualityDevEnvironment([Parameter(Mandatory)][string]$Repo, [Parameter(Mandatory)][string]$TempDir, [string]$Kits = '') {
     . (Join-Path $Repo 'tools\build\common.ps1')
-    # vcvars64.bat calls vswhere.exe by name and prints "'vswhere.exe' is not recognized" when the installer directory
-    # is not on PATH, as in a developer prompt it is. That line is noise, but it reads like an error.
-    $installer = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer'
-    if ((Test-Path -LiteralPath (Join-Path $installer 'vswhere.exe')) -and -not (Get-Command vswhere.exe -ErrorAction SilentlyContinue)) {
-        $env:PATH = "$installer;$env:PATH"
+    $install = Find-VsInstall ''
+    $kept = Test-VsDevEnvironment $install x64
+    $null = Import-VsDevEnvironment -VsInstall $install -TempDir $TempDir -Arch x64
+    if ($Kits) {
+        # These were formerly expanded by quick.cmd. Keep the chosen WDK first without cmd's line-size limit.
+        $front = foreach ($part in 'um', 'shared') { Join-Path $Kits "microsoft.windows.wdk.x64\c\Include\10.0.26100.0\$part" }
+        $env:INCLUDE = Get-UniqueEnvironmentPaths ((@($front) + @($env:INCLUDE)) -join ';')
     }
-    $install = Import-VsDevEnvironment -TempDir $TempDir -Arch x64
+    if ($kept) { return "developer environment: kept ($((Get-Command cl.exe).Source))" }
     return "developer environment: imported x64 from $install ($((Get-Command cl.exe).Source))"
 }
 

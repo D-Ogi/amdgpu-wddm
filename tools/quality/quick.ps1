@@ -34,7 +34,7 @@ $umdBuild=$env:BC250_UMD_BUILD
 # Three host gates compile a fixture with cl.exe out of the environment. In a shell that is not a developer shell
 # there is no cl.exe, and they died on a FileNotFoundError that named no input. The run therefore imports the x64
 # developer environment itself when it is not there, and keeps TEMP on the workspace drive.
-Write-Host (Initialize-QualityDevEnvironment -Repo $repo -TempDir (Join-Path $Out 'vsenv'))
+Write-Host (Initialize-QualityDevEnvironment -Repo $repo -TempDir (Join-Path $Out 'vsenv') -Kits $Kits)
 Write-Host (Set-QualityTemp -Workspace $Workspace)
 $clExe=if($c=Get-Command cl.exe -ErrorAction SilentlyContinue){$c.Source}else{'cl.exe (the MSVC compiler is not in this environment)'}
 $clock=[Diagnostics.Stopwatch]::StartNew()
