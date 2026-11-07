@@ -5,7 +5,7 @@
 // public D3D11 video API, so the same binary is the positive control on any other GPU (the development PC) and the
 // check of our driver on the lab. No window, no swap chain; the run takes a few seconds.
 //
-//   vpblt.exe --out <file.json> [--adapter <index>] [--debug] [--mutant matrix|chroma] [--simulate-removal <case>]
+//   vpblt.exe --out <file.json> [--adapter <index>] [--debug] [--mutant matrix|chroma|pair] [--simulate-removal <case>]
 //
 // --debug turns the D3D11 debug layer on and prints its messages (host diagnosis; the lab has no debug layer).
 // --mutant replaces the reference with a wrong one (601 and 709 exchanged, or the studio chroma range unexpanded as
@@ -110,7 +110,7 @@ YccCodes encode_ycc(const Rgb &c, Space s, int bits) {
 // --mutant (negative control of the probe itself): a wrong reference that a correct processor must fail against.
 // "matrix" decodes with 601 and 709 exchanged; "chroma" leaves the studio chroma range unexpanded (DXVK before
 // BD-223 V6).
-enum class Mutant { None, Matrix, Chroma };
+enum class Mutant { None, Matrix, Chroma, Pair };
 Mutant g_mutant = Mutant::None;
 
 Rgb decode_ycc(const YccCodes &c, Space s, int bits) {
@@ -168,6 +168,7 @@ struct Case {
     // The upload of a software-decoded frame as Chromium does it (UploadVideoImage): an NV12 texture with
     // USAGE_DYNAMIC, BIND_DECODER and CPU write, filled through Map(WRITE_DISCARD), then an input view on it.
     bool dynamicUpload = false;
+    bool pairPattern = false;
 };
 
 const Case kCases[] = {
@@ -188,6 +189,12 @@ const Case kCases[] = {
     // The NV12 swap chain of a browser overlay: NV12 in and NV12 out, both YCbCr studio G22 left P709.
     {"nv12-709s-nv12-709s-cs1", Kind::Nv12, {true, true}, false, Kind::Nv12, {true, true}, false, true},
     {"nv12dyn-709s-nv12-709s-cs1", Kind::Nv12, {true, true}, false, Kind::Nv12, {true, true}, false, true, true},
+    {"yuy2pairs-709s-bgra", Kind::Yuy2, {true,true}, false, Kind::Bgra, {true,true}, false, false, false, true},
+    {"yuy2pairs-601s-bgra", Kind::Yuy2, {false,true}, false, Kind::Bgra, {true,true}, false, false, false, true},
+    {"yuy2pairsdyn-709s-bgra", Kind::Yuy2, {true,true}, false, Kind::Bgra, {true,true}, false, false, true, true},
+    {"bgrapairs-yuy2-709s", Kind::Bgra, {true,true}, false, Kind::Yuy2, {true,true}, false, false, false, true},
+    {"yuy2pairs-yuy2-709s", Kind::Yuy2, {true,true}, false, Kind::Yuy2, {true,true}, false, false, false, true},
+    {"bgra-p010-709s", Kind::Bgra, {true,true}, false, Kind::P010, {true,true}, false, false},
 };
 
 bool is_ycc(Kind k) { return k != Kind::Bgra; }
@@ -204,6 +211,15 @@ D3D11_VIDEO_PROCESSOR_COLOR_SPACE legacy_space(bool ycc, Space s, bool rgbStudio
     c.YCbCr_Matrix = s.bt709 ? 1 : 0;
     c.Nominal_Range = s.studio ? D3D11_VIDEO_PROCESSOR_NOMINAL_RANGE_16_235 : D3D11_VIDEO_PROCESSOR_NOMINAL_RANGE_0_255;
     return c;
+}
+
+YccCodes pair_codes(UINT bar, UINT parity) {
+    return {double(parity ? 130 + bar * 3 : 90 + bar * 4), double(110 + bar * 4), double(150 - bar * 4)};
+}
+
+Rgb pair_rgb(UINT bar, UINT parity) {
+    double luma = parity ? 0.80 - bar * 0.04 : 0.10 + bar * 0.06;
+    return {luma, luma, luma};
 }
 
 // The initial data of the input texture: Y plane then the CbCr plane for NV12/P010 (same pitch), packed for YUY2.
@@ -242,13 +258,15 @@ std::vector<uint8_t> make_input(const Case &c, UINT &pitch) {
         break;
     }
     case Kind::Yuy2: {
-        pitch = kWidth * 2;
+        pitch = kWidth * 2 + (c.pairPattern ? 64 : 0);
         data.assign(size_t(pitch) * kHeight, 0);
         for (UINT y = 0; y < kHeight; ++y)
             for (UINT x = 0; x < kWidth; x += 2) {
                 const auto v = encode_ycc(kBarColours[x / kBarWidth], c.inSpace, 8);
                 uint8_t *p = &data[size_t(y) * pitch + size_t(x) * 2];
-                p[0] = uint8_t(v.y); p[1] = uint8_t(v.cb); p[2] = uint8_t(v.y); p[3] = uint8_t(v.cr);
+                const auto even = c.pairPattern ? pair_codes(x / kBarWidth, 0) : v;
+                const auto odd = c.pairPattern ? pair_codes(x / kBarWidth, 1) : v;
+                p[0] = uint8_t(even.y); p[1] = uint8_t(even.cb); p[2] = uint8_t(odd.y); p[3] = uint8_t(even.cr);
             }
         break;
     }
@@ -257,7 +275,7 @@ std::vector<uint8_t> make_input(const Case &c, UINT &pitch) {
         data.assign(size_t(pitch) * kHeight, 0);
         for (UINT y = 0; y < kHeight; ++y)
             for (UINT x = 0; x < kWidth; ++x) {
-                const Rgb &col = kBarColours[x / kBarWidth];
+                const Rgb col = c.pairPattern ? pair_rgb(x / kBarWidth, x & 1) : kBarColours[x / kBarWidth];
                 uint8_t *p = &data[size_t(y) * pitch + size_t(x) * 4];
                 p[0] = uint8_t(std::round(rgb_code(col.b, c.inRgbStudio)));
                 p[1] = uint8_t(std::round(rgb_code(col.g, c.inRgbStudio)));
@@ -272,15 +290,20 @@ std::vector<uint8_t> make_input(const Case &c, UINT &pitch) {
 
 // The colour each bar's input codes stand for: the stored input decoded exactly, so the input quantization is not
 // counted as an error of the processor.
-Rgb input_colour(const Case &c, UINT bar) {
+Rgb input_colour(const Case &c, UINT bar, UINT parity) {
+    // A wrong pair interpretation must fail the alternating-luma cases even
+    // when the uniform bars and their shared chroma still look correct.
+    if (g_mutant == Mutant::Pair && c.pairPattern) parity ^= 1;
     if (c.in == Kind::Bgra) {
-        const Rgb &col = kBarColours[bar];
+        const Rgb col = c.pairPattern ? pair_rgb(bar, parity) : kBarColours[bar];
         auto back = [&](double v) {
             const double code = std::round(rgb_code(v, c.inRgbStudio));
             return c.inRgbStudio ? (code - 16.0) / 219.0 : code / 255.0;
         };
         return {back(col.r), back(col.g), back(col.b)};
     }
+    if (c.in == Kind::Yuy2 && c.pairPattern)
+        return decode_ycc(pair_codes(bar, parity), c.inSpace, 8);
     const int bits = c.in == Kind::P010 ? 10 : 8;
     return decode_ycc(encode_ycc(kBarColours[bar], c.inSpace, bits), c.inSpace, bits);
 }
@@ -292,6 +315,91 @@ struct Result {
 };
 
 std::string hr_text(HRESULT hr) { char b[16]; std::snprintf(b, sizeof(b), "%08lX", static_cast<unsigned long>(hr)); return b; }
+
+// Independent byte-level reference: every copy/update must preserve the D3D11
+// logical dimensions and exact Y0/U/Y1/V layout, including non-tight CPU pitch.
+std::string check_yuy2_storage(ID3D11Device *device, ID3D11DeviceContext *context,
+                              const std::vector<uint8_t> &initial, UINT pitch) {
+    D3D11_TEXTURE2D_DESC desc = {};
+    desc.Width=kWidth; desc.Height=kHeight; desc.MipLevels=1; desc.ArraySize=1;
+    desc.Format=DXGI_FORMAT_YUY2; desc.SampleDesc.Count=1; desc.Usage=D3D11_USAGE_DEFAULT;
+    D3D11_SUBRESOURCE_DATA data = {initial.data(),pitch,0};
+    Ref<ID3D11Texture2D> a,b,readback;
+    auto error = [](const char *step,HRESULT hr) { return std::string("storage ")+step+" hr="+hr_text(hr); };
+    HRESULT hr=device->CreateTexture2D(&desc,&data,a.put());
+    if (FAILED(hr)) return error("create A",hr);
+    hr=device->CreateTexture2D(&desc,nullptr,b.put());
+    if (FAILED(hr)) return error("create B",hr);
+    D3D11_TEXTURE2D_DESC gotDesc={}; a->GetDesc(&gotDesc);
+    if (gotDesc.Width!=kWidth || gotDesc.Height!=kHeight || gotDesc.Format!=DXGI_FORMAT_YUY2)
+        return "storage logical descriptor changed";
+    auto stageDesc=desc;
+    stageDesc.Usage=D3D11_USAGE_STAGING; stageDesc.CPUAccessFlags=D3D11_CPU_ACCESS_READ|D3D11_CPU_ACCESS_WRITE;
+    hr=device->CreateTexture2D(&stageDesc,nullptr,readback.put());
+    if (FAILED(hr)) return error("create staging",hr);
+    std::vector<uint8_t> expected(size_t(kWidth)*2*kHeight);
+    for (UINT y=0;y<kHeight;y++) std::memcpy(expected.data()+size_t(y)*kWidth*2,initial.data()+size_t(y)*pitch,kWidth*2);
+    auto check=[&](ID3D11Texture2D *texture,const char *step)->std::string {
+        context->CopyResource(readback.p,texture);
+        D3D11_MAPPED_SUBRESOURCE map={};
+        HRESULT mh=context->Map(readback.p,0,D3D11_MAP_READ,0,&map);
+        if(FAILED(mh)) return error(step,mh);
+        std::string why;
+        for(UINT y=0;y<kHeight && why.empty();y++) {
+            const auto *row=static_cast<const uint8_t *>(map.pData)+size_t(y)*map.RowPitch;
+            for(UINT x=0;x<kWidth*2;x++) if(row[x]!=expected[size_t(y)*kWidth*2+x]) {
+                why=std::string("storage ")+step+" row="+std::to_string(y)+" byte="+std::to_string(x)+
+                    " got="+std::to_string(row[x])+" expected="+std::to_string(expected[size_t(y)*kWidth*2+x]);
+                break;
+            }
+        }
+        context->Unmap(readback.p,0); return why;
+    };
+    auto why=check(a.p,"initial padded pitch"); if(!why.empty()) return why;
+    context->CopyResource(b.p,a.p);
+    why=check(b.p,"CopyResource"); if(!why.empty()) return why;
+    // An update at x=2 is one packed pair from the image origin. Padding is
+    // deliberately much larger than the copied eight active bytes per row.
+    uint8_t patch[64]={};
+    for(UINT y=0;y<2;y++) for(UINT x=0;x<8;x++) patch[y*32+x]=uint8_t(17+y*29+x*7);
+    D3D11_BOX box={2,1,0,6,3,1};
+    context->UpdateSubresource(a.p,0,&box,patch,32,64);
+    for(UINT y=0;y<2;y++) std::memcpy(expected.data()+size_t(y+1)*kWidth*2+4,patch+y*32,8);
+    why=check(a.p,"UpdateSubresource pair offset"); if(!why.empty()) return why;
+    // Preserve B's original bytes except for the moved pair region.
+    for(UINT y=0;y<kHeight;y++) std::memcpy(expected.data()+size_t(y)*kWidth*2,initial.data()+size_t(y)*pitch,kWidth*2);
+    context->CopySubresourceRegion(b.p,0,8,3,0,a.p,0,&box);
+    for(UINT y=0;y<2;y++) std::memcpy(expected.data()+size_t(y+3)*kWidth*2+16,patch+y*32,8);
+    why=check(b.p,"CopySubresourceRegion image to image"); if(!why.empty()) return why;
+    // The current staging buffer contains B. Copy its moved region into A,
+    // exercising the staging-buffer-to-image path independently of Update.
+    box={8,3,0,12,5,1};
+    context->CopySubresourceRegion(a.p,0,14,5,0,readback.p,0,&box);
+    for(UINT y=0;y<kHeight;y++) std::memcpy(expected.data()+size_t(y)*kWidth*2,initial.data()+size_t(y)*pitch,kWidth*2);
+    for(UINT y=0;y<2;y++) {
+        std::memcpy(expected.data()+size_t(y+1)*kWidth*2+4,patch+y*32,8);
+        std::memcpy(expected.data()+size_t(y+5)*kWidth*2+28,patch+y*32,8);
+    }
+    why=check(a.p,"CopySubresourceRegion staging to image"); if(!why.empty()) return why;
+    // The public views use pair-sized RGBA and a readable/writable R32 UAV.
+    desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
+    Ref<ID3D11Texture2D> views;
+    hr=device->CreateTexture2D(&desc,&data,views.put());
+    if(FAILED(hr)) return error("view texture",hr);
+    for(auto format:{DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_R8G8B8A8_UINT}) {
+        D3D11_SHADER_RESOURCE_VIEW_DESC srv={}; srv.Format=format;
+        srv.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2D; srv.Texture2D.MipLevels=1;
+        Ref<ID3D11ShaderResourceView> view;
+        hr=device->CreateShaderResourceView(views.p,&srv,view.put());
+        if(FAILED(hr)) return error("RGBA SRV",hr);
+    }
+    D3D11_UNORDERED_ACCESS_VIEW_DESC uav={}; uav.Format=DXGI_FORMAT_R32_UINT;
+    uav.ViewDimension=D3D11_UAV_DIMENSION_TEXTURE2D;
+    Ref<ID3D11UnorderedAccessView> view;
+    hr=device->CreateUnorderedAccessView(views.p,&uav,view.put());
+    if(FAILED(hr)) return error("R32 UAV",hr);
+    return {};
+}
 
 constexpr double kTolerance = 2.0;   // 8-bit codes
 
@@ -346,12 +454,19 @@ Result run_case(ID3D11Device *device, ID3D11DeviceContext *context, ID3D11VideoD
         if (FAILED(hr)) return fail("Map(in, WRITE_DISCARD)", hr);
         // NV12 as mapped: kHeight rows of Y, then kHeight / 2 rows of CbCr, each at RowPitch.
         auto *dst = static_cast<uint8_t *>(wm.pData);
-        for (UINT row = 0; row < kHeight * 3 / 2; ++row)
-            std::memcpy(dst + size_t(row) * wm.RowPitch, initial.data() + size_t(row) * pitch, pitch);
+        UINT rows = (c.in == Kind::Nv12 || c.in == Kind::P010) ? kHeight * 3 / 2 : kHeight;
+        UINT rowBytes = kWidth * (c.in == Kind::Nv12 ? 1 : c.in == Kind::Bgra ? 4 : 2);
+        for (UINT row = 0; row < rows; ++row)
+            std::memcpy(dst + size_t(row) * wm.RowPitch, initial.data() + size_t(row) * pitch, rowBytes);
         context->Unmap(inTex.p, 0);
     } else {
         hr = device->CreateTexture2D(&td, &sd, inTex.put());
         if (FAILED(hr)) return fail("CreateTexture2D(in)", hr);
+    }
+    if (c.in == Kind::Yuy2 && c.pairPattern && !c.dynamicUpload) {
+        std::string why = check_yuy2_storage(device, context, initial, pitch);
+        if (!why.empty()) { r.status="ERROR"; r.detail=why; return r; }
+        std::printf("YUY2-STORAGE PASS %s initial/copy/update/staging/pitch/views\n", c.name);
     }
     D3D11_TEXTURE2D_DESC od = td;
     od.Format = dxgi_of(c.out);
@@ -409,9 +524,10 @@ Result run_case(ID3D11Device *device, ID3D11DeviceContext *context, ID3D11VideoD
     const auto *base = static_cast<const uint8_t *>(m.pData);
     r.status = "PASS";
     const UINT sy = kHeight / 2;
-    for (UINT bar = 0; bar < kBars; ++bar) {
-        const UINT sx = bar * kBarWidth + kBarWidth / 2;
-        const Rgb col = input_colour(c, bar);
+    for (UINT sample = 0; sample < kBars * 2; ++sample) {
+        const UINT bar = sample / 2, parity = sample & 1;
+        const UINT sx = bar * kBarWidth + kBarWidth / 2 + parity;
+        const Rgb col = input_colour(c, bar, parity);
         double want[3], got[3];
         const char *ch[3];
         if (c.out == Kind::Bgra) {
@@ -425,12 +541,29 @@ Result run_case(ID3D11Device *device, ID3D11DeviceContext *context, ID3D11VideoD
             want[0] = c.outSpace.studio ? 16.0 + 219.0 * y : 255.0 * y;
             want[1] = 128.0 + (c.outSpace.studio ? 224.0 : 255.0) * cb;
             want[2] = 128.0 + (c.outSpace.studio ? 224.0 : 255.0) * cr;
-            const uint8_t *uv = base + size_t(kHeight + sy / 2) * m.RowPitch + size_t(sx & ~1u);
-            got[0] = base[size_t(sy) * m.RowPitch + sx]; got[1] = uv[0]; got[2] = uv[1];
+            if (c.out == Kind::Yuy2) {
+                const uint8_t *pair = base + size_t(sy) * m.RowPitch + size_t(sx & ~1u) * 2;
+                got[0] = pair[parity ? 2 : 0]; got[1] = pair[1]; got[2] = pair[3];
+                // Chroma is shared by the pair, independent of its two lumas.
+                const auto other = input_colour(c, bar, parity ^ 1u);
+                double oy, ocb, ocr;
+                to_ycbcr({clampd(other.r,0,1),clampd(other.g,0,1),clampd(other.b,0,1)}, c.outSpace.bt709, oy, ocb, ocr);
+                want[1] = 128.0 + (c.outSpace.studio ? 224.0 : 255.0) * 0.5 * (cb + ocb);
+                want[2] = 128.0 + (c.outSpace.studio ? 224.0 : 255.0) * 0.5 * (cr + ocr);
+            } else if (c.out == Kind::P010) {
+                const uint8_t *yp = base + size_t(sy) * m.RowPitch + size_t(sx) * 2;
+                const uint8_t *uv = base + size_t(kHeight + sy / 2) * m.RowPitch + size_t(sx & ~1u) * 2;
+                uint16_t yw,uw,vw;
+                std::memcpy(&yw,yp,2); std::memcpy(&uw,uv,2); std::memcpy(&vw,uv+2,2);
+                got[0]=double(yw)/256.0; got[1]=double(uw)/256.0; got[2]=double(vw)/256.0;
+            } else {
+                const uint8_t *uv = base + size_t(kHeight + sy / 2) * m.RowPitch + size_t(sx & ~1u);
+                got[0] = base[size_t(sy) * m.RowPitch + sx]; got[1] = uv[0]; got[2] = uv[1];
+            }
             ch[0] = "Y"; ch[1] = "Cb"; ch[2] = "Cr";
         }
         char line[160];
-        std::snprintf(line, sizeof(line), "bar%u %s=%.0f/%.1f %s=%.0f/%.1f %s=%.0f/%.1f", bar, ch[0], got[0], want[0],
+        std::snprintf(line, sizeof(line), "sample%u %s=%.0f/%.1f %s=%.0f/%.1f %s=%.0f/%.1f", sample, ch[0], got[0], want[0],
                       ch[1], got[1], want[1], ch[2], got[2], want[2]);
         r.samples.emplace_back(line);
         for (int i = 0; i < 3; ++i) {
@@ -439,7 +572,7 @@ Result run_case(ID3D11Device *device, ID3D11DeviceContext *context, ID3D11VideoD
             if (e > kTolerance && r.status == "PASS") {
                 r.status = "FAIL";
                 char d[96];
-                std::snprintf(d, sizeof(d), "%s/bar%u/%s got %.0f want %.1f", c.name, bar, ch[i], got[i], want[i]);
+                std::snprintf(d, sizeof(d), "%s/sample%u/%s got %.0f want %.1f", c.name, sample, ch[i], got[i], want[i]);
                 r.detail = d;
             }
         }
@@ -463,12 +596,13 @@ int main(int argc, char **argv) {
     std::string simulateRemoval;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
-        if (a == "--help") { std::printf("vpblt.exe --out <file.json> [--adapter <index>] [--debug] [--mutant matrix|chroma] [--simulate-removal <case>]\n"); return 0; }
+        if (a == "--help") { std::printf("vpblt.exe --out <file.json> [--adapter <index>] [--debug] [--mutant matrix|chroma|pair] [--simulate-removal <case>]\n"); return 0; }
         if (a == "--debug") { debugLayer = true; continue; }
         if (a == "--mutant" && i + 1 < argc) {
             const std::string m = argv[++i];
             if (m == "matrix") g_mutant = Mutant::Matrix;
             else if (m == "chroma") g_mutant = Mutant::Chroma;
+            else if (m == "pair") g_mutant = Mutant::Pair;
             else { std::fprintf(stderr, "vpblt: unknown mutant %s\n", m.c_str()); return 2; }
             continue;
         }
@@ -598,7 +732,7 @@ int main(int argc, char **argv) {
     if (fopen_s(&f, out.c_str(), "wb") == 0 && f) {
         std::fprintf(f, "{\n  \"tool\": \"vpblt\",\n  \"bits\": %u,\n  \"adapter\": \"%s\",\n  \"adapter_name\": \"%s\",\n  \"mutant\": \"%s\",\n", bits,
                      vendor.c_str(), json_text(adapterName).c_str(),
-                     g_mutant == Mutant::Matrix ? "matrix" : (g_mutant == Mutant::Chroma ? "chroma" : "none"));
+                     g_mutant == Mutant::Matrix ? "matrix" : (g_mutant == Mutant::Chroma ? "chroma" : (g_mutant == Mutant::Pair ? "pair" : "none")));
         std::fprintf(f, "  \"setup\": \"%s\",\n  \"interfaces\": {%s},\n  \"tolerance_codes\": %.1f,\n  \"cases\": [\n",
                      json_text(setup).c_str(), interfaces.c_str(), kTolerance);
         for (size_t i = 0; i < results.size(); ++i) {

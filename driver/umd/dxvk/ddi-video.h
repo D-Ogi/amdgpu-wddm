@@ -8,7 +8,7 @@
 // The video processor is the engine's (DXVK ID3D11VideoDevice and ID3D11VideoContext). Each DDI object holds the
 // engine COM object of the same kind; a view is made from the engine resource of the DDI resource
 // (DdiResource::object). The caps, the formats and the colour spaces are this shell's own answers
-// (ddi-video-caps.h), not the engine's: the engine's enumerator answers are stubs.
+// (ddi-video-caps.h) intersected with the engine's actual directional format support.
 //
 // There is no decoder: this GPU's VCN block is not driven by this driver. The decoder answers say so: no profile,
 // no config, no content protection, and a create that the runtime should never send fails with a status its page
@@ -19,6 +19,7 @@
 namespace bc250::umd {
 struct DdiVideoProcessorEnum {
     ID3D11VideoProcessorEnumerator *object=nullptr;
+    VideoFormatSupport formats{};
 };
 struct DdiVideoProcessor {
     ID3D11VideoProcessor *object=nullptr;

@@ -298,7 +298,7 @@ SIZE_T APIENTRY enum_size(D3D10DDI_HDEVICE,const D3D11_1DDIARG_CREATEVIDEOPROCES
 HRESULT APIENTRY enum_create(D3D10DDI_HDEVICE h,const D3D11_1DDIARG_CREATEVIDEOPROCESSORENUM *args,
     D3D11_1DDI_HVIDEOPROCESSORENUM handle,D3D11_1DDI_HRTVIDEOPROCESSORENUM) {
     auto *s=static_cast<DdiVideoProcessorEnum *>(handle.pDrvPrivate);
-    if (s) s->object=nullptr;
+    if (s) { s->object=nullptr; s->formats={}; }
     return video_entry(h,"CreateVideoProcessorEnum",E_OUTOFMEMORY,[&](DeviceOwner &owner,ID3D11DeviceContext4 &) -> HRESULT {
         if (!s || !args || !video_content_admitted(args->Desc)) return E_OUTOFMEMORY;
         VideoDevice video(owner);
@@ -308,6 +308,7 @@ HRESULT APIENTRY enum_create(D3D10DDI_HDEVICE h,const D3D11_1DDIARG_CREATEVIDEOP
         const HRESULT hr=video.p->CreateVideoProcessorEnumerator(&desc,&object);
         if (FAILED(hr) || !object) { if (object) object->Release(); return E_OUTOFMEMORY; }
         s->object=object;
+        s->formats.fill([&](DXGI_FORMAT format,UINT *support) { return object->CheckVideoProcessorFormat(format,support); });
         return S_OK;
     });
 }
@@ -317,9 +318,10 @@ void APIENTRY enum_destroy(D3D10DDI_HDEVICE h,D3D11_1DDI_HVIDEOPROCESSORENUM han
         if (s && s->object) { s->object->Release(); s->object=nullptr; }
     });
 }
-// The capability answers come from ddi-video-caps.h and need no engine: they hold after a device loss too.
-void APIENTRY check_processor_format(D3D10DDI_HDEVICE,D3D11_1DDI_HVIDEOPROCESSORENUM,DXGI_FORMAT format,UINT *support) {
-    if (support) *support=video_processor_format_support(format);
+// Format answers are cached at enumerator creation and survive device loss.
+void APIENTRY check_processor_format(D3D10DDI_HDEVICE,D3D11_1DDI_HVIDEOPROCESSORENUM handle,DXGI_FORMAT format,UINT *support) {
+    const auto *s=static_cast<const DdiVideoProcessorEnum *>(handle.pDrvPrivate);
+    if (support) *support=s ? s->formats.get(format) : 0;
 }
 void APIENTRY processor_caps(D3D10DDI_HDEVICE,D3D11_1DDI_HVIDEOPROCESSORENUM,D3D11_1DDI_VIDEO_PROCESSOR_CAPS *caps) {
     if (caps) *caps=video_processor_caps();
@@ -337,10 +339,13 @@ void APIENTRY filter_range(D3D10DDI_HDEVICE,D3D11_1DDI_HVIDEOPROCESSORENUM,D3D11
     // range with no steps.
     if (range) *range=D3D11_1DDI_VIDEO_PROCESSOR_FILTER_RANGE{0,0,0,1.0f};
 }
-void APIENTRY check_format_conversion(D3D10DDI_HDEVICE,D3D11_1DDI_HVIDEOPROCESSORENUM,
+void APIENTRY check_format_conversion(D3D10DDI_HDEVICE,D3D11_1DDI_HVIDEOPROCESSORENUM handle,
     D3DWDDM2_0DDI_CHECK_VIDEO_PROCESSOR_FORMAT_CONVERSION *c) {
     if (!c) return;
-    c->Supported=video_conversion_supported(c->InputFormat,static_cast<DXGI_COLOR_SPACE_TYPE>(c->InputColorSpace),
+    const auto *s=static_cast<const DdiVideoProcessorEnum *>(handle.pDrvPrivate);
+    c->Supported=s && (s->formats.get(c->InputFormat)&D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT) &&
+        (s->formats.get(c->OutputFormat)&D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT) &&
+        video_conversion_supported(c->InputFormat,static_cast<DXGI_COLOR_SPACE_TYPE>(c->InputColorSpace),
         c->OutputFormat,static_cast<DXGI_COLOR_SPACE_TYPE>(c->OutputColorSpace)) ? TRUE : FALSE;
 }
 SIZE_T APIENTRY processor_size(D3D10DDI_HDEVICE,const D3D11_1DDIARG_CREATEVIDEOPROCESSOR *) { return sizeof(DdiVideoProcessor); }

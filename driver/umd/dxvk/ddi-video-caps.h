@@ -9,6 +9,7 @@
 // colour space. It has no deinterlacing, no frame rate conversion, no filters, no stereo, no rotation and no HDR
 // tone mapping, so the caps below claim none of them.
 #include <d3d10umddi.h>
+#include <d3d11.h>
 #include <dxgicommon.h>
 #include <dxgiformat.h>
 namespace bc250::umd {
@@ -19,12 +20,13 @@ struct VideoFormatRow {
     bool ycbcr;   // the data is YCbCr (the colour space must be a YCbCr one)
 };
 // NV12 out is the YUV swap chain of a browser (DXGI_SWAP_CHAIN_FLAG_YUV_VIDEO): the engine writes Y and CbCr into
-// the two planes. P010 and YUY2 are read only: no plane and no swap chain of this driver uses them as an output.
+// the two planes. P010 uses 16-bit plane views; YUY2 uses an RGBA8 packed-pair image.
+// This table is a policy ceiling, intersected with the engine's directional query.
 // AYUV, Y210, Y410 and P016 are not in the table: no host or lab check of them exists.
 inline constexpr VideoFormatRow kVideoFormats[]={
     {DXGI_FORMAT_NV12,true,true,true},
-    {DXGI_FORMAT_P010,true,false,true},
-    {DXGI_FORMAT_YUY2,true,false,true},
+    {DXGI_FORMAT_P010,true,true,true},
+    {DXGI_FORMAT_YUY2,true,true,true},
     {DXGI_FORMAT_B8G8R8A8_UNORM,true,true,false},
     {DXGI_FORMAT_R8G8B8A8_UNORM,true,true,false},
     {DXGI_FORMAT_R10G10B10A2_UNORM,true,true,false},
@@ -47,6 +49,30 @@ constexpr UINT video_format_support_bits(DXGI_FORMAT format,bool engineSupportsF
     if (!row) return 0;
     return (row->input ? UINT(D3D11_1DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT) : 0u) |
            (row->output ? UINT(D3D11_1DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT) : 0u);
+}
+// Format capabilities belong to the exact engine/device pair. Cache the
+// enumerator's query while creation succeeds, so read-only DDI queries retain
+// the measured directions after device loss without calling the lost engine.
+struct VideoFormatSupport {
+    UINT values[sizeof(kVideoFormats)/sizeof(kVideoFormats[0])]{};
+    template<typename Query> void fill(Query query) {
+        for (unsigned i=0;i<sizeof(values)/sizeof(values[0]);i++) {
+            UINT support=0;
+            values[i]=SUCCEEDED(query(kVideoFormats[i].format,&support))
+                ? support & video_processor_format_support(kVideoFormats[i].format) : 0;
+        }
+    }
+    UINT get(DXGI_FORMAT format) const {
+        for (unsigned i=0;i<sizeof(values)/sizeof(values[0]);i++)
+            if(kVideoFormats[i].format==format) return values[i];
+        return 0;
+    }
+};
+constexpr UINT video_format_support_bits_masked(DXGI_FORMAT format,UINT engine) {
+    UINT bits=0;
+    if(engine&D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT) bits|=D3D11_1DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT;
+    if(engine&D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT) bits|=D3D11_1DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT;
+    return bits & video_format_support_bits(format,true);
 }
 // A colour space of ColorSpace1, as the engine's legacy colour-space word (D3D11_VIDEO_PROCESSOR_COLOR_SPACE) states
 // it. The legacy word has no primaries and no transfer function: the engine converts the matrix and the range only

@@ -73,7 +73,7 @@ VideoColorSpace admits_pq(DXGI_COLOR_SPACE_TYPE s) {
 // The CheckFormatSupport bits of the processor: the two processor bits only, never a decoder or encoder bit.
 bool format_bits_correct(UINT (*bits)(DXGI_FORMAT,bool)) {
     constexpr UINT in=D3D11_1DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT,out=D3D11_1DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT;
-    if (bits(DXGI_FORMAT_NV12,true)!=(in|out) || bits(DXGI_FORMAT_P010,true)!=in || bits(DXGI_FORMAT_YUY2,true)!=in) return false;
+    if (bits(DXGI_FORMAT_NV12,true)!=(in|out) || bits(DXGI_FORMAT_P010,true)!=(in|out) || bits(DXGI_FORMAT_YUY2,true)!=(in|out)) return false;
     if (bits(DXGI_FORMAT_B8G8R8A8_UNORM,true)!=(in|out) || bits(DXGI_FORMAT_R10G10B10A2_UNORM,true)!=(in|out)) return false;
     if (bits(DXGI_FORMAT_NV12,false) || bits(DXGI_FORMAT_R16G16B16A16_FLOAT,true) || bits(DXGI_FORMAT_AYUV,true) ||
         bits(DXGI_FORMAT_UNKNOWN,true)) return false;
@@ -190,11 +190,28 @@ void test_video_ddi() {
     CHECK(notesBefore==8 && video_subobject_notes_left()==0);
     // 3. The formats of the processor and their CheckFormatSupport bits.
     CHECK(video_processor_format_support(DXGI_FORMAT_NV12)==(D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT|D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT));
-    CHECK(video_processor_format_support(DXGI_FORMAT_P010)==D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT);
-    CHECK(video_processor_format_support(DXGI_FORMAT_YUY2)==D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT);
+    CHECK(video_processor_format_support(DXGI_FORMAT_P010)==(D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT|D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT));
+    CHECK(video_processor_format_support(DXGI_FORMAT_YUY2)==(D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT|D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT));
     CHECK(video_processor_format_support(DXGI_FORMAT_R16G16B16A16_FLOAT)==0 && video_processor_format_support(DXGI_FORMAT_UNKNOWN)==0);
     CHECK(format_bits_correct(real_bits));
     CHECK(!format_bits_correct(bits_with_decoder)); // negative control: a decoder bit
+    // Directional cache: successful input/output/neither/both queries and a
+    // failed query that left plausible bits must all retain their real meaning.
+    for(UINT direction:{0u,1u,2u,3u}) {
+        VideoFormatSupport queried;
+        queried.fill([&](DXGI_FORMAT,UINT *s){*s=direction;return S_OK;});
+        CHECK(queried.get(DXGI_FORMAT_YUY2)==direction);
+        CHECK(queried.get(DXGI_FORMAT_P010)==direction);
+        CHECK(queried.get(DXGI_FORMAT_AYUV)==0);
+        UINT engine=((direction&1)?UINT(D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT):0u)|
+            ((direction&2)?UINT(D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT):0u);
+        CHECK(video_format_support_bits_masked(DXGI_FORMAT_YUY2,engine)==
+            (((direction&1)?UINT(D3D11_1DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT):0u)|
+             ((direction&2)?UINT(D3D11_1DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT):0u)));
+    }
+    VideoFormatSupport failedQuery;
+    failedQuery.fill([](DXGI_FORMAT,UINT *s){*s=3;return E_FAIL;});
+    CHECK(failedQuery.get(DXGI_FORMAT_YUY2)==0);
     // 4. The colour spaces.
     CHECK(spaces_correct(video_color_space));
     CHECK(!spaces_correct(swapped_matrix)); // negative control: 601 and 709 exchanged
@@ -209,8 +226,8 @@ void test_video_ddi() {
         DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709)); // an RGB space on YCbCr data
     CHECK(!video_conversion_supported(DXGI_FORMAT_P010,DXGI_COLOR_SPACE_YCBCR_STUDIO_G2084_LEFT_P2020,
         DXGI_FORMAT_R10G10B10A2_UNORM,DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020)); // HDR10: no tone mapping
-    CHECK(!video_conversion_supported(DXGI_FORMAT_NV12,DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709,
-        DXGI_FORMAT_P010,DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709)); // P010 is not an output
+    CHECK(video_conversion_supported(DXGI_FORMAT_NV12,DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709,
+        DXGI_FORMAT_P010,DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709));
     // 5. Caps, rates, content.
     const auto caps=video_processor_caps();
     CHECK(caps.MaxInputStreams==1 && caps.MaxStreamStates==1 && caps.RateConversionCapsCount==1);
@@ -257,7 +274,7 @@ void test_video_ddi() {
         CHECK(plan_video_output_view(out,DXGI_FORMAT_B8G8R8A8_UNORM,od) && od.ViewDimension==D3D11_VPOV_DIMENSION_TEXTURE2DARRAY &&
             od.Texture2DArray.FirstArraySlice==1 && od.Texture2DArray.ArraySize==1);
         out.FirstArraySlice=0;
-        CHECK(!plan_video_output_view(out,DXGI_FORMAT_P010,od) && !plan_video_output_view(out,DXGI_FORMAT_YUY2,od));
+        CHECK(plan_video_output_view(out,DXGI_FORMAT_P010,od) && plan_video_output_view(out,DXGI_FORMAT_YUY2,od));
         out.ArraySize=2;
         CHECK(!plan_video_output_view(out,DXGI_FORMAT_NV12,od));
     }
@@ -285,7 +302,15 @@ void test_video_ddi() {
         D3DWDDM2_0DDI_CHECK_VIDEO_PROCESSOR_FORMAT_CONVERSION c{DXGI_FORMAT_NV12,D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709,
             DXGI_FORMAT_B8G8R8A8_UNORM,D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,FALSE};
         table.pfnCheckVideoProcessorFormatConversion(none,{},&c);
+        CHECK(!c.Supported); // no live or cached enumerator, no fabricated support
+        DdiVideoProcessorEnum known{};
+        known.formats.fill([](DXGI_FORMAT,UINT *s){*s=3;return S_OK;});
+        D3D11_1DDI_HVIDEOPROCESSORENUM knownHandle{&known};
+        table.pfnCheckVideoProcessorFormatConversion(none,knownHandle,&c);
         CHECK(c.Supported);
+        known.formats.fill([](DXGI_FORMAT,UINT *s){*s=1;return S_OK;});
+        table.pfnCheckVideoProcessorFormatConversion(none,knownHandle,&c);
+        CHECK(!c.Supported); // input-only cannot serve the output direction
         D3D11_1DDI_VIDEO_PROCESSOR_CAPS answered{};
         table.pfnGetVideoProcessorCaps(none,{},&answered);
         CHECK(std::memcmp(&answered,&caps,sizeof(caps))==0);
@@ -356,7 +381,10 @@ void test_video_ddi() {
         CHECK(reported==1 && lastReported==D3DDDIERR_DEVICEREMOVED);
         table.pfnVideoProcessorSetOutputColorSpace1(h,ph,D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709);
         CHECK(reported==2 && lastReported==D3DDDIERR_DEVICEREMOVED);
-        UINT support=0;
+        UINT support=7;
+        table.pfnCheckVideoProcessorFormat(h,eh,DXGI_FORMAT_NV12,&support);
+        CHECK(support==0); // the failed CreateEnum cleared all cached directions
+        e.formats.fill([](DXGI_FORMAT,UINT *s){*s=3;return S_OK;});
         table.pfnCheckVideoProcessorFormat(h,eh,DXGI_FORMAT_NV12,&support);
         CHECK(support==(D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT|D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT));
         D3D11_1DDI_VIDEO_PROCESSOR_RATE_CONVERSION_CAPS rc{7,7,7,7,7};

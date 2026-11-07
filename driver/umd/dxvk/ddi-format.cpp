@@ -86,7 +86,7 @@ void APIENTRY format(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT *out) {
         hr=classify_format_support2_result(hr,extra.OutFormatSupport2);
         if (FAILED(hr)) { report_ddi_error(owner,hr,DdiErrorClass::check_fail_or_invalid_arg); return; }
         *out=constrain_format_support(value,convert_format_support(support,extra.OutFormatSupport2))|
-             video_format_support_bits(value,support!=0);
+             video_format_support_bits_masked(value,support);
     },DdiErrorClass::check_fail_or_invalid_arg);
 }
 void APIENTRY samples(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT count,UINT *out) {
