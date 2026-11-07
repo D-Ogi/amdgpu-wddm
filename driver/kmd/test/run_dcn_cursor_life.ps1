@@ -19,7 +19,8 @@ param(
     [string]$KitVersion = '10.0.26100.0',
     [ValidateSet('', 'all', 'no-unlock-on-failure', 'spare-same-surface', 'no-latch-wait', 'stop-not-sticky',
                  'caps-ignore-link', 'ttu-unchecked', 'shape-stored-not-shown', 'gone-does-nothing',
-                 'shape-refused-in-gap', 'stop-skips-off-write')][string]$Mutation = ''
+                 'shape-refused-in-gap', 'stop-skips-off-write', 'plane-dpc-skipped', 'plane-snapshot-ignored',
+                 'plane-map-disabled')][string]$Mutation = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,6 +32,13 @@ $sdklib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
 
 # Each control: the exact text of one rule in dcn_cursor.c, what replaces it, and the rule it breaks.
 $mutations = [ordered]@{
+    'plane-dpc-skipped' = @{ find = '(void)CursorBatchOnPlane(Device, c, FALSE, c->Current, &plane);'
+        with = '(void)plane;'
+        why = 'a changed plane leaves a stationary pointer in its old source coordinates' }
+    'plane-snapshot-ignored' = @{ find = 'return stable;'; with = 'return TRUE;'
+        why = 'the plane-change DPC writes identity coordinates while the scaled shape is being published' }
+    'plane-map-disabled' = @{ find = 'Plane->Map = 1;'; with = 'Plane->Map = 0;'
+        why = 'the stored output position is not mapped into the new plane viewport' }
     'no-unlock-on-failure' = @{ find = 'unlock = CursorLock(Device, FALSE);'
         with = 'unlock = NT_SUCCESS(status) ? CursorLock(Device, FALSE) : STATUS_SUCCESS;'
         why = 'a failed write in a batch leaves the cursor update lock set' }

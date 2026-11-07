@@ -150,6 +150,13 @@ no allocation and no log line, and it always returns `STATUS_SUCCESS`: a registe
 (`BatchFailures`). `DcnCursorPipeGone` takes `Lock` only, so a mode change never waits for a shape. The VRAM draw runs
 under `ShapeLock` only.
 
+A scaled-plane flip can run at DIRQL, where taking `Lock` could deadlock against an interrupted pointer callback.
+After publishing a changed plane shape, `DcnFlipSourceAddressShaped` sets the cursor's `PlaneDirty` flag and queues
+the existing device DPC. `DcnCursorPlaneDpc` takes only `Lock` at DISPATCH_LEVEL and maps the stored position into a
+stable snapshot of the new plane. This also handles restoration to the desktop when the mouse has not moved.
+An incomplete snapshot leaves the flag set for the writer's queued DPC or the next VUPDATE DPC. A stopped cursor
+or a pipe gap performs no register writes. No new worker or allocation is involved.
+
 ## The setting
 
 `EnableHardwarePointer` is a REG_DWORD in the Parameters key of the driver service
@@ -174,7 +181,8 @@ component that pins the catalog must be built again. A later catalog entry can r
 | `dcn-cursor` | `dcn_cursor_test.c` on the production header. It checks the verdicts and the three formats (monochrome with an odd width and a padded pitch, with an inverting pixel). It checks the hot spot rule and the placement: negative clamp, edges, the 8-bit hot spot and the destination offset. It checks a scaled plane with a viewport origin, and the rotated image against `Bc250RotationMapPixel`. |
 | `dcn-cursor-controls` | 12 mutations of the header. Each one must fail the test. |
 | `dcn-cursor-life` | `dcn_cursor_life_test.c` on the production `dcn_cursor.c`, with a model of the registers, the locks and the clock. It checks the prepare and the caps. It checks a shape before any pipe, on a ready pipe and in the gap of a mode change. It checks the two surfaces and the latch wait, and the cursor TTU with its range checks. After a failed register write, the update lock is released and the next batch writes the enable again. It also checks the stop, the quiet off and the release. The model checks the lock order, the IRQL, and that every cursor register write is under `Lock` and inside the update lock. |
-| `dcn-cursor-life-controls` | 10 mutations of `dcn_cursor.c`. Each one must fail the test. |
+| `dcn-cursor-life-controls` | 13 mutations of `dcn_cursor.c`. Each one must fail the test, including lost plane refresh, an unstable snapshot accepted as identity, and omitted coordinate mapping. |
+| `dcn-flip`, `dcn-flip-cursor-plane`, `vsync-vector` | The actual flip body requests cursor remapping after the even surface publication, including restoration to identity. Dropping that request fails the negative control. The actual device DPC calls the cursor handler. |
 | `connector-link`, `power-coordinator` | The cursor goes off on a refused suspend, a refused disable, the release, and first in `PowerAdapterDown`. |
 | `dcn-write-sites` | Each cursor write names a register on the write list. |
 | `dml201` | `dml201_cursor_plane_test.c`: the scaled-plane plan with the cursor and without it gives the same validity, clocks, VSTARTUP and VUPDATE offset. |
@@ -189,5 +197,6 @@ These points have no evidence on this disk. Lab trials of the pointer decide the
 3. The position: top left (setting 1) or hot spot (setting 5). An arrow at a known `SetCursorPos` point shows it.
 4. The rotated frame: the driver assumes that X and Y are logical (desktop) coordinates on a rotated path.
 5. The software fallback after a refused shape: no DDI page states that dxgkrnl then draws the pointer.
-6. A flip that changes the overlay plane shape does not place the cursor again until the next position call.
+6. The plane-change DPC remaps a stationary pointer in host tests. Physical placement and latch timing across entry
+   into scaled scanout and return to the desktop still need a camera witness on the candidate KMD.
 7. FP16 and HDR planes: the scale 0x3C00 is right for an SDR plane only.

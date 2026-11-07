@@ -53,6 +53,7 @@ typedef struct _DCN_CURSOR {
     ULONGLONG SwitchTime;               // KeQueryInterruptTime of the last change of surface
     LONG X, Y;
     BC250_CURSOR_PLACE Place;           // the last placement written
+    volatile LONG PlaneDirty;          // geometry changed at DIRQL; the device DPC remaps the stored position
     // Counters, for the stop line and the lab.
     volatile LONG Shapes, ShapeRefusals, Positions, Batches, BatchFailures, LatchWaits, LatchTimeouts, PipeReadies,
         PipeGones, TtuWrites, Logged;
@@ -148,7 +149,7 @@ static NTSTATUS CursorPosition(_In_ const BC250_DEVICE* Device, _In_ const BC250
 // multiplane overlay plane (dcn.c DcnPlaneShape, published under DcnSurfaceSequence) maps the source into the
 // plane; the source-mode scaler of modeset.c needs no map (the cursor scales with the plane it is drawn on), only
 // its ratio for the destination offset.
-static void CursorPlaneNow(_In_ const BC250_DEVICE* Device, _In_ const DCN_CURSOR* c, _Out_ BC250_CURSOR_PLANE* Plane)
+static BOOLEAN CursorPlaneNow(_In_ const BC250_DEVICE* Device, _In_ const DCN_CURSOR* c, _Out_ BC250_CURSOR_PLANE* Plane)
 {
     BC250_SCALER_PLAN shape;
     BOOLEAN scaled = FALSE, stable = FALSE;
@@ -185,6 +186,9 @@ static void CursorPlaneNow(_In_ const BC250_DEVICE* Device, _In_ const DCN_CURSO
         Plane->DstNumerator = Device->Modeset.Plan.Recout.Width;
         Plane->DstDenominator = Device->Modeset.Plan.Viewport.Width;
     }
+    // Existing pointer callbacks retain their source-mode fallback; the plane-change DPC requires this snapshot
+    // to be stable and otherwise keeps its dirty flag, without writing an identity placement during a scaled flip.
+    return stable;
 }
 
 static ULONG CursorAngle(_In_ const BC250_DEVICE* Device)
@@ -194,24 +198,27 @@ static ULONG CursorAngle(_In_ const BC250_DEVICE* Device)
 }
 
 // The placement of the image on the registers at the last position, with the hot spot rule of the setting.
-static void CursorPlaceNow(_In_ const BC250_DEVICE* Device, _In_ const DCN_CURSOR* c, _Out_ BC250_CURSOR_PLACE* Place)
+static void CursorPlaceNow(_In_ const BC250_DEVICE* Device, _In_ const DCN_CURSOR* c,
+    _In_opt_ const BC250_CURSOR_PLANE* Snapshot, _Out_ BC250_CURSOR_PLACE* Place)
 {
     BC250_CURSOR_PLANE plane;
     int x, y;
     Bc250CursorTopLeft(c->Setting, (int)c->X, (int)c->Y, c->XHot, c->YHot, &x, &y);
-    CursorPlaneNow(Device, c, &plane);
+    if (Snapshot) plane = *Snapshot;
+    else (void)CursorPlaneNow(Device, c, &plane);
     Bc250CursorPlace(&plane, c->ImageAngle, c->ImageWidth, c->ImageHeight, &c->Image,
         c->Ready && c->ImageValid && c->Visible && !c->Stopped, x, y, Place);
 }
 
 // One batch inside the cursor lock: the attributes of Surface when Attributes is TRUE, and the position. The lock is
 // released on every path, so a failed write never leaves the cursor's updates held.
-static NTSTATUS CursorBatch(_In_ const BC250_DEVICE* Device, _Inout_ DCN_CURSOR* c, BOOLEAN Attributes, ULONG Surface)
+static NTSTATUS CursorBatchOnPlane(_In_ const BC250_DEVICE* Device, _Inout_ DCN_CURSOR* c, BOOLEAN Attributes,
+    ULONG Surface, _In_opt_ const BC250_CURSOR_PLANE* Snapshot)
 {
     BC250_CURSOR_PLACE place;
     NTSTATUS status, unlock;
 
-    CursorPlaceNow(Device, c, &place);
+    CursorPlaceNow(Device, c, Snapshot, &place);
     status = CursorLock(Device, TRUE);
     if (NT_SUCCESS(status) && Attributes) status = CursorAttributes(Device, c, Surface, &c->Image);
     if (NT_SUCCESS(status)) status = CursorPosition(Device, &place);
@@ -227,6 +234,11 @@ static NTSTATUS CursorBatch(_In_ const BC250_DEVICE* Device, _Inout_ DCN_CURSOR*
     c->Place = place;
     c->Enabled = place.Enable != 0;
     return STATUS_SUCCESS;
+}
+
+static NTSTATUS CursorBatch(_In_ const BC250_DEVICE* Device, _Inout_ DCN_CURSOR* c, BOOLEAN Attributes, ULONG Surface)
+{
+    return CursorBatchOnPlane(Device, c, Attributes, Surface, NULL);
 }
 
 // The cursor off in its own batch. Lock held.
@@ -537,6 +549,36 @@ void DcnCursorRefresh(_Inout_ BC250_DEVICE* Device)
     KeReleaseSpinLock(&c->Lock, irql);
     if (redraw) (void)CursorShow(Device, c, NULL, NULL);
     ExReleaseFastMutex(&c->ShapeLock);
+}
+
+// A plane flip can run at DIRQL while it has interrupted a cursor callback holding Lock. It must not take Lock,
+// ShapeLock, or program cursor registers there. Publish the need after DcnSurfaceSequence becomes even and use the
+// existing device DPC. StopDevice drains that DPC before ConnectorBufferRelease frees the cursor (pnp.c/IhStop).
+void DcnCursorPlaneChanged(_Inout_ BC250_DEVICE* Device)
+{
+    DCN_CURSOR* c = CursorOf(Device);
+    if (!c) return;
+    InterlockedExchange(&c->PlaneDirty, 1);
+    if (Device->Dxgk.DxgkCbQueueDpc != NULL) Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
+}
+
+// The stored pointer position must follow a changed plane even if the mouse has not moved. No shape conversion or
+// allocation: the cursor image is still the same, only its placement changes. Consume before taking Lock so a
+// concurrent shape publication can set PlaneDirty again. A snapshot crossing a writer leaves it set; the writer's
+// queued DPC (or the next VUPDATE device DPC) retries, without spinning here or acquiring the interrupt lock.
+void DcnCursorPlaneDpc(_Inout_ BC250_DEVICE* Device)
+{
+    DCN_CURSOR* c = CursorOf(Device);
+    BC250_CURSOR_PLANE plane;
+    KIRQL irql;
+    if (!c || KeGetCurrentIrql() > DISPATCH_LEVEL) return;
+    if (InterlockedExchange(&c->PlaneDirty, 0) == 0) return;
+    KeAcquireSpinLock(&c->Lock, &irql);
+    if (!c->Stopped && c->Ready && c->ImageValid) {
+        if (CursorPlaneNow(Device, c, &plane)) (void)CursorBatchOnPlane(Device, c, FALSE, c->Current, &plane);
+        else InterlockedExchange(&c->PlaneDirty, 1);
+    }
+    KeReleaseSpinLock(&c->Lock, irql);
 }
 
 // ---- the DDIs ---------------------------------------------------------------------------------------------------------

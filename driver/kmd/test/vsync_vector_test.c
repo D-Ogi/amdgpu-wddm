@@ -45,6 +45,8 @@ static void WddmGpuFence(BC250_DEVICE*d){(void)d;}
 static void WddmGpuFencePaging(BC250_DEVICE*d){(void)d;}
 static void WddmGpuFenceCompute(BC250_DEVICE*d){(void)d;}
 static void WddmDcnVsync(BC250_DEVICE*d){if(InterlockedExchange(&d->DcnVsyncAcked,0))reports++;}
+static unsigned cursor_dpcs;
+static void DcnCursorPlaneDpc(BC250_DEVICE*d){(void)d;cursor_dpcs++;}
 static void WddmDpc(BC250_DEVICE*d){(void)d;}
 /* BD-170 r6: E5's notification runs in every DPC and returns at once unless E5 queued it (wddm.c). */
 static void WddmFlipFaultDpc(BC250_DEVICE*d){(void)d;fault_dpcs++;}
@@ -56,9 +58,9 @@ static void reset(void){memset(&dev,0,sizeof(dev));dev.Mmio=&dev;dev.VidPnFlipEn
 int main(void){
  reset();synchronized=1;CHECK(!DcnVsyncInterrupt(&dev));synchronized=0;
  event_pending=vector_pending=1;Bc250DpcRoutine(&dev);CHECK(acks==1&&reports==1&&dev.DcnVsyncDpcAcked==1&&!event_pending);
- CHECK(connector_calls==1 && connector_device==&dev && fault_dpcs==1);
+ CHECK(connector_calls==1 && connector_device==&dev && fault_dpcs==1 && cursor_dpcs==1);
  Bc250DpcRoutine(&dev);CHECK(acks==1&&reports==1);
- CHECK(connector_calls==2 && connector_device==&dev && fault_dpcs==2);
+ CHECK(connector_calls==2 && connector_device==&dev && fault_dpcs==2 && cursor_dpcs==2);
  reset();event_pending=vector_pending=1;synchronized=1;CHECK(DcnVsyncInterrupt(&dev));synchronized=0;Bc250DpcRoutine(&dev);CHECK(acks==1&&reports==1&&dev.DcnVsyncDpcAcked==0);
  reset();event_pending=vector_pending=1;dev.DcnVsyncArmed=0;Bc250DpcRoutine(&dev);CHECK(acks==0&&reports==0);
  reset();event_pending=vector_pending=1;fail_sync=1;Bc250DpcRoutine(&dev);CHECK(acks==0&&reports==0&&dev.DcnVsyncDpcSyncFailures==1);

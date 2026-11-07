@@ -72,6 +72,7 @@ typedef struct _BC250_DEVICE {
     BC250_SCALER_PLAN DcnPlaneShape;
     ULONG Rotation;
     struct { BOOLEAN PipeChanged; BC250_SCALER_PLAN Plan; } Modeset;
+    struct { void (*DxgkCbQueueDpc)(void*); void* DeviceHandle; } Dxgk;
 } BC250_DEVICE;
 
 static unsigned checks, failures;
@@ -80,6 +81,7 @@ static unsigned checks, failures;
 /* ---- the model ---------------------------------------------------------------------------------------------- */
 static ULONG regs[0x40000 / 4];
 static unsigned writes, failAt, quiet, connectorEnabled, delays, maps, unmaps, logs;
+static unsigned planeDpcs;
 static ULONG settingModel, fullTable;
 static int level, spinHeld, mutexHeld;
 static ULONGLONG nowTime;
@@ -124,6 +126,7 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE* d, ULONG offset, ULONG value,
 }
 static void Latch(void) { pending = 0; }
 static LONG InterlockedIncrement(volatile LONG* p) { return ++*p; }
+static LONG InterlockedExchange(volatile LONG* p, LONG value) { LONG old = *p; *p = value; return old; }
 static LONG InterlockedCompareExchange(volatile LONG* p, LONG x, LONG c) { LONG o = *p; if (o == c) *p = x; return o; }
 static void KeInitializeSpinLock(KSPIN_LOCK* l) { l->Held = 0; }
 static void KeAcquireSpinLock(KSPIN_LOCK* l, KIRQL* old)
@@ -160,6 +163,7 @@ void DcnCursorRelease(BC250_DEVICE* Device);
 static BC250_DEVICE device;
 static unsigned char pixels[BC250_CURSOR_RAW_MAX_BYTES];
 static int mmioToken;
+static void QueuePlaneDpc(void* handle) { (void)handle; ++planeDpcs; }
 
 static void Fresh(ULONG setting)
 {
@@ -170,6 +174,7 @@ static void Fresh(ULONG setting)
     device.Mmio = &mmioToken; device.FullWddm = device.DcnWriteEnabled = device.VidPnFlipEnabled = 1;
     device.RuntimeFramebuffer = &mmioToken; device.DisplayReservationEnd = 0x01234567ull;
     device.VramLength = 8ull << 30; device.VramPhysical.QuadPart = VRAM_BASE; device.Rotation = BC250_VPPR_IDENTITY;
+    device.Dxgk.DxgkCbQueueDpc = QueuePlaneDpc; planeDpcs = 0;
     settingModel = setting; fullTable = 1; connectorEnabled = 1;
     writes = failAt = quiet = delays = maps = unmaps = 0; pending = 0; level = 0; spinHeld = mutexHeld = 0; nowTime = 1000000;
 }
@@ -314,6 +319,47 @@ static void PipeGap(void)
 
 /* The inherited pipe: the cursor writes the plan's two cursor TTU words, with the cursor off, and refuses values that
  * do not fit their fields (the pipe is then not ready, and the caps stay off on a fresh start). */
+static void ScaledStationary(void)
+{
+    unsigned before;
+    LONG positions;
+    DCN_CURSOR* c;
+    Fresh(1); (void)DcnCursorPrepare(&device); Ready(); Move(600, 400, 1);
+    CHECK(SetShape(BC250_POINTER_COLOR, 32, 32, 0, 0) == STATUS_SUCCESS);
+    c = CursorOf(&device); positions = c->Positions; Latch();
+    device.DcnPlaneScaled = TRUE;
+    device.DcnPlaneShape.Scaling = BC250_SCALING_PLANE;
+    device.DcnPlaneShape.Viewport.Width = 1280; device.DcnPlaneShape.Viewport.Height = 720;
+    device.DcnPlaneShape.Recout.Width = 1920; device.DcnPlaneShape.Recout.Height = 1080;
+    device.DcnSurfaceSequence = 2;
+    before = writes; level = 3; DcnCursorPlaneChanged(&device);
+    CHECK(writes == before && planeDpcs == 1 && c->PlaneDirty == 1 && !spinHeld && !mutexHeld);
+    DcnCursorPlaneDpc(&device); CHECK(writes == before && c->PlaneDirty == 1);
+    level = DISPATCH_LEVEL; DcnCursorPlaneDpc(&device);
+    CHECK(c->Place.X == 400 && c->Place.Y == 266 && c->Positions == positions && Enable() == 1);
+    CHECK(c->PlaneDirty == 0 && !mutexHeld && Unlocked());
+    before = writes; DcnCursorPlaneDpc(&device); CHECK(writes == before);
+    /* An incomplete publication must not be treated as an identity plane. */
+    device.DcnSurfaceSequence = 3; DcnCursorPlaneChanged(&device); DcnCursorPlaneDpc(&device);
+    CHECK(writes == before && c->PlaneDirty == 1 && c->Place.X == 400);
+    device.DcnPlaneShape.Viewport.X = 100; device.DcnPlaneShape.Viewport.Y = 50;
+    device.DcnSurfaceSequence = 4; DcnCursorPlaneDpc(&device);
+    CHECK(c->Place.X == 500 && c->Place.Y == 316 && c->PlaneDirty == 0);
+    /* Leaving independent flip restores the stationary pointer, without a position DDI. */
+    device.DcnPlaneScaled = FALSE; device.DcnSurfaceSequence = 6;
+    DcnCursorPlaneChanged(&device); DcnCursorPlaneDpc(&device);
+    CHECK(c->Place.X == 600 && c->Place.Y == 400 && c->Positions == positions);
+    level = 0; DcnCursorPipeGone(&device); before = writes;
+    DcnCursorPlaneChanged(&device); level = DISPATCH_LEVEL; DcnCursorPlaneDpc(&device);
+    CHECK(writes == before && Enable() == 0);
+    level = 0; Ready(); Move(700, 500, 1); CHECK(c->Place.X == 700 && c->Place.Y == 500);
+    DcnCursorStop(&device); before = writes;
+    DcnCursorPlaneChanged(&device); level = DISPATCH_LEVEL; DcnCursorPlaneDpc(&device);
+    CHECK(writes == before && Enable() == 0 && c->PlaneDirty == 0);
+    level = 0; DcnCursorRelease(&device); before = planeDpcs;
+    DcnCursorPlaneChanged(&device); DcnCursorPlaneDpc(&device); CHECK(planeDpcs == before);
+}
+
 static void Ttu(void)
 {
     BC250_CURSOR_PIPE p;
@@ -381,6 +427,7 @@ int main(void)
     ShapeAndPosition();
     TwoSurfaces();
     PipeGap();
+    ScaledStationary();
     Ttu();
     FailedWrite();
     Stop();

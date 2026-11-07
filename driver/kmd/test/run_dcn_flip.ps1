@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\dcn-flip",[string]$Source='',[ValidateSet('','PendingOnly','AddressOnly','BoundAtStart','OverrunUncounted','PollAfterStall','PendingArmIgnored','SourceAddressLogs','BridgeProofIgnored','BridgeExtentIgnored','BridgeCurrentUnsafe','BridgeRetirePostStall','BridgeRetirePostDeadline','BridgeRetireAtDirql','BridgeRetireOneFrame','BridgeAdoptIgnored')][string]$Mutation='')
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\dcn-flip",[string]$Source='',[ValidateSet('','PendingOnly','AddressOnly','BoundAtStart','OverrunUncounted','PollAfterStall','PendingArmIgnored','SourceAddressLogs','BridgeProofIgnored','BridgeExtentIgnored','BridgeCurrentUnsafe','BridgeRetirePostStall','BridgeRetirePostDeadline','BridgeRetireAtDirql','BridgeRetireOneFrame','BridgeAdoptIgnored','CursorPlaneLost')][string]$Mutation='')
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 if(-not $Source){$Source="$repo\driver\kmd\dcn.c"}
@@ -44,7 +44,7 @@ if($Mutation) {
          BridgeRetirePostDeadline=@($z,'if (elapsed < 0) break;')
          BridgeRetireAtDirql=@($i,'if (KeGetCurrentIrql() < PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;')
          BridgeRetireOneFrame=@($f,'#define BC250_DCN_WRITER_RETIRE_US 50u')
-         BridgeAdoptIgnored=@($t,'if (Device != NULL || !Device->RuntimeFramebuffer')}[$Mutation]
+         BridgeAdoptIgnored=@($t,'if (Device != NULL || !Device->RuntimeFramebuffer'); CursorPlaneLost=@('if (cursorPlaneChanged) DcnCursorPlaneChanged(Device);','if (cursorPlaneChanged) (void)DcnCursorPlaneChanged;')}[$Mutation]
     $anchors=if($Mutation -eq 'OverrunUncounted'){2}else{1}
     if(([regex]::Matches($text,[regex]::Escape($m[0]))).Count -ne $anchors){throw "$Mutation mutation anchor changed"}
     [IO.File]::WriteAllText($path,$text.Replace($m[0],$m[1]))
