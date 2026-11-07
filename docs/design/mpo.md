@@ -223,8 +223,10 @@ With the same lab bit, SetAddress3 passes an approved scaler plan to `WddmFlipEn
 the approval again inside the programming section. A full-size compositor flip restores the 1:1 plane. A request with
 no allocation keeps the current shape. If the scaled request has no approval, SetAddress3 uses the existing full-size
 transaction and counts `MPO3 scaled flips ... unapproved`. That transaction still refuses an allocation whose size
-cannot cover the source mode. The counter is not evidence that such a fallback was displayed. These steps remain in
-the lab flavour until the scaled-plane hardware checks pass.
+cannot cover the source mode. The counter is not evidence that such a fallback was displayed. The MPO3 implementation
+is compiled and host-tested in both flavours, but `WddmScaledPlaneStart` returns 0 for every release input until the
+scaled-plane hardware checks pass. Release caps still report no scaling. The lab-only registry reader and raw
+diagnostic escapes remain separate from the shared implementation.
 
 | `DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES2` | Request | Present stage |
 | --- | --- | --- |

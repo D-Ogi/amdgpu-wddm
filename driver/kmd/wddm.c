@@ -482,11 +482,13 @@ static __inline ULONG WddmRecordKind(unsigned long Version)
     return Version <= BC250_WDDM_RECORD_V3 ? (ULONG)Version : BC250_WDDM_RECORD_OTHER;
 }
 
+// BD-223: the shared plane-0 path is compiled in both flavours. WddmScaledPlaneStart keeps release exposure off
+// until the scaled-plane hardware acceptance gates pass.
+#define BC250_WDDM_SCALED_PLANE_CHECK 0x1ul
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-223 (lab flavour): the bits of LabScaledPlane. CHECK offers the multiplane-overlay caps and answers
 // CheckMultiPlaneOverlaySupport2; MPO_VSYNC reports a VSync as DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY;
 // TWO_PLANES says MaxOverlayPlanes 2 in place of 1 (a lab question: Check still refuses a second plane).
-#define BC250_WDDM_SCALED_PLANE_CHECK 0x1ul
 #define BC250_WDDM_SCALED_PLANE_MPO_VSYNC 0x2ul
 #define BC250_WDDM_SCALED_PLANE_TWO_PLANES 0x4ul
 // BD-223: asks the two caps DDIs for the stretch caps of the contract header (StretchRGB and the two filters, 16.0
@@ -522,6 +524,18 @@ static unsigned int WddmMpoFlags(ULONG ScaledPlane, ULONG Level)
     return flags;
 }
 #endif
+
+static ULONG WddmScaledPlaneStart(ULONG Raw, BOOLEAN Handshake)
+{
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    return WddmScaledPlaneLatch(Raw, Handshake);
+#else
+    // No release registry setting enables an unmeasured path. This changes only after the Part S lab gates.
+    UNREFERENCED_PARAMETER(Raw);
+    UNREFERENCED_PARAMETER(Handshake);
+    return 0;
+#endif
+}
 
 typedef struct _BC250_WDDM {
     BC250_DEVICE* Device;
@@ -1107,21 +1121,20 @@ typedef struct _BC250_WDDM {
     volatile LONG64 GdiRenderDmaAppend, GdiRenderDmaSmall, GdiRenderDmaUnknown;
     volatile LONG64 GdiRenderDmaFull, GdiRenderDmaLost, GdiRenderDmaSubmitted;
     volatile LONG64 GdiRenderDmaRaced, GdiRenderDwordsCommitted;
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-    // BD-223 (lab flavour), docs/design/scaled-flip.md: plane 0 of the multiplane-overlay DDIs, with its own size.
-    // ScaledPlane is LabScaledPlane (read at DriverEntry, latched at WddmStart, absent = 0) while the DirectFlip handshake is on for
-    // this start, else 0: BC250_WDDM_SCALED_PLANE_* bits.
+    // BD-223: shared plane-0 implementation, with its own size. WddmScaledPlaneStart admits a lab selector with
+    // the DirectFlip handshake and keeps release at 0 until hardware acceptance.
     ULONG ScaledPlane;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     volatile LONG PlaneChecks[BC250_PLANE_VERDICTS];   // CheckMultiPlaneOverlaySupport2 answers, by verdict
     volatile LONG PlaneChecksOff;                       // Check calls with bit 0 off: answered "not supported"
     volatile LONG PlaneSets, PlaneSetsScaled, PlaneSetsRefused, PlaneSetsUnapproved;
     volatile LONG PlaneNotes;                           // the log budget of both DDIs
     // The planes that DML approved, with their display plans, are dcn.c's (DcnPlaneCheck, DcnPlaneApproved).
+#endif
     // Check3's scaled planes (WddmMpo3CheckScaled): the scaled-plane rule's answers by its verdict, and the approvals.
     volatile LONG Mpo3PlaneChecks[BC250_PLANE_VERDICTS];
     volatile LONG Mpo3ChecksScaled;
     volatile LONG Mpo3SetsScaled, Mpo3SetsUnapproved;
-#endif
     // BD-307: plane 0 of the WDDM 2.1 MPO3 DDIs, both flavours. Mpo3 is written inside L only (WddmFlipLocked,
     // WddmMpo3KeepLocked, WddmMpo3Notify). The counters: Check answers by verdict, flips handed to the transaction,
     // requests with no new surface (a disabled plane, or none), refusals before the transaction, flips the transaction
@@ -3890,6 +3903,10 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         for (v = 0; v < BC250_PLANE_VERDICTS; v++)
             if (Wddm->PlaneChecks[v])
                 GuardLog("wddm summary: plane check %s %ld", Bc250PlaneVerdictText(v), Wddm->PlaneChecks[v]);
+    }
+#endif
+    {
+        ULONG v;
         // Check3's scaled planes: the approvals, the refusals of the scaled-plane rule, and its verdicts.
         GuardLog("wddm summary: MPO3 scaled checks ok %ld scaled-rule %ld", Wddm->Mpo3ChecksScaled,
                  Wddm->Mpo3Checks[BC250_MPO3_SCALED_RULE]);
@@ -3899,7 +3916,6 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
             if (Wddm->Mpo3PlaneChecks[v])
                 GuardLog("wddm summary: MPO3 plane check %s %ld", Bc250PlaneVerdictText(v), Wddm->Mpo3PlaneChecks[v]);
     }
-#endif
     // Cumulative counters are not bounded by the detailed-log budget. Read
     // closure after quiescence; individual atomic reads are not one snapshot.
     GuardLog("wddm: CDD interop%u GPU Present gate%u identity probe%u",
@@ -4527,20 +4543,23 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
             GuardLog("wddm: plane formats %s", Device->DcnPlaneFormats ? "on" :
                      formats ? "off (firmware format not decoded)" : "off (EnableScanoutPlaneFormats 0)");
         }
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         // BD-223: LabScaledPlane, read once at DriverEntry (guard.c), absent = 0. The plane needs the flip path and the
         // scan-out rule, so it follows the DirectFlip handshake: a closed handshake closes it too. The line gives the
         // stored value (WddmScaledPlaneLatch, masked) and the raw selector, so an unknown bit shows as the difference.
         {
-            const ULONG raw = GuardLabScaledPlane();
-            wddm->ScaledPlane = WddmScaledPlaneLatch(raw, wddm->DirectFlipHandshake ? TRUE : FALSE);
+            ULONG raw = 0;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+            raw = GuardLabScaledPlane();
+#endif
+            wddm->ScaledPlane = WddmScaledPlaneStart(raw, wddm->DirectFlipHandshake ? TRUE : FALSE);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
             GuardLog("wddm: scaled plane 0x%lX (LabScaledPlane 0x%lX, handshake %u)", wddm->ScaledPlane, raw,
                      (ULONG)(wddm->DirectFlipHandshake ? 1 : 0));
             if ((wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) &&
                 !(WddmMpoFlags(wddm->ScaledPlane, Device->WddmLevel) & BC250_SCANOUT_CAPS_MPO_PLANE1))
                 GuardLog("wddm: scaled plane bit 2 clamped at level 0x%lX: 1 plane, the count of the caps DDI", Device->WddmLevel);
-        }
 #endif
+        }
     }
     // C50, read once for this start: absent = ON. The DDI text asks for the pairing (d3dkmddi.md:2392) and the
     // hop it removes is pure latency, so the finished behaviour rides the release, which is the project's release
@@ -12355,8 +12374,7 @@ static NTSTATUS Bc250WddmGetPostCompositionCaps(_In_ const HANDLE hAdapter,
     return STATUS_SUCCESS;
 }
 
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-// ---- BD-223 (lab flavour): the request of a scaled plane 0, for both MPO families -------------------------------------
+// ---- BD-223: the request of a scaled plane 0, for both MPO families --------------------------------------------------
 //
 // The attributes that dcn_plane.c decides on, from the "2" family (ATTRIBUTES2: Check2, SetAddress2) or the "3" family
 // (ATTRIBUTES3: Check3, SetAddress3). ATTRIBUTES3 has no frame format and no stereo fields: its plane is progressive
@@ -12492,8 +12510,6 @@ static unsigned WddmMpo3CheckScaled(_In_ BC250_DEVICE* Device, _In_ const BC250_
     if (verdict == BC250_PLANE_OK) return BC250_MPO3_OK;
     return verdict == BC250_PLANE_SCANOUT ? BC250_MPO3_SCANOUT : BC250_MPO3_SCALED_RULE;
 }
-#endif
-
 static DXGKDDI_CHECKMULTIPLANEOVERLAYSUPPORT3 Bc250WddmCheckMultiPlaneOverlaySupport3;
 static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport3(_In_ const HANDLE hAdapter,
                                                         _Inout_ DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3* pCheck)
@@ -12505,7 +12521,7 @@ static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport3(_In_ const HANDLE hAdapt
     BC250_SCANOUT_CANDIDATE candidate;
     BC250_MPO3_PLANE plane;
     unsigned verdict = BC250_MPO3_COUNT;
-    unsigned scaled = 0;                // 1: the scaled-plane rule decided the plane (lab flavour)
+    unsigned scaled = 0;                // 1: the scaled-plane rule decided the plane
     int scanout = BC250_SCANOUT_NO_ALLOCATION;
     LONG note;
     UINT i;
@@ -12526,7 +12542,6 @@ static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport3(_In_ const HANDLE hAdapt
         p = pCheck->ppPlanes[0];
         WddmMpo3PlaneOf(device, pCheck->PlaneCount, p->VidPnSourceId, p->LayerIndex, &p->PlaneAttributes, post, &plane);
         verdict = Bc250Mpo3PlaneVerdict(&plane);
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         // BD-223: with the lab bit, the rule without the geometry test names the refusal of a plane 0 of another
         // geometry (rotation, flags, blend, colour space, post-composition), and a plane that passes it goes to the
         // scaled-plane rule, which takes the scan-out rule at the allocation's own size.
@@ -12539,16 +12554,13 @@ static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport3(_In_ const HANDLE hAdapt
             verdict = WddmMpo3CheckScaled(device, wddm, pCheck->PlaneCount, p, note, &scanout, &planeVerdict);
             if (planeVerdict < BC250_PLANE_VERDICTS) InterlockedIncrement(&wddm->Mpo3PlaneChecks[planeVerdict]);
         }
-#endif
         // The scan-out rule after the geometry, and the gate last: a refused count or rectangle says more.
         if (verdict == BC250_MPO3_OK && !scaled) {
             scanout = WddmMpo3Admit(device, wddm, p->hAllocation, &candidate);
             if (scanout != BC250_SCANOUT_ADMIT_OK) verdict = BC250_MPO3_SCANOUT;
         }
         if (verdict == BC250_MPO3_OK && !device->VidPnFlipEnabled) verdict = BC250_MPO3_GATE;
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         if (scaled && verdict == BC250_MPO3_OK) InterlockedIncrement(&wddm->Mpo3ChecksScaled);
-#endif
     }
     InterlockedIncrement(&wddm->Mpo3Checks[verdict]);
     pCheck->Supported = verdict == BC250_MPO3_OK ? TRUE : FALSE;
@@ -12592,9 +12604,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
     DXGKARG_SETVIDPNSOURCEADDRESS flip;
     BC250_MPO3_PLANE facts;
     const BC250_SCALER_PLAN* requestedShape = NULL;
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     BC250_SCALER_PLAN shape;
-#endif
     unsigned verdict;
     NTSTATUS status;
     UINT i;
@@ -12635,7 +12645,6 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
     WddmMpo3PlaneOf(device, 1, 0, 0, &plane->PlaneAttributes, pSet->pPostComposition, &facts);
     verdict = Bc250Mpo3PlaneVerdict(&facts);
     data = plane->ppContextData[0];
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     if (verdict == BC250_MPO3_GEOMETRY && data->hAllocation != NULL &&
         (wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK)) {
         BC250_WDDM_PLANE_ATTRS attrs;
@@ -12661,7 +12670,6 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
         }
         if (verdict != BC250_MPO3_OK) InterlockedIncrement(&wddm->Mpo3SetsUnapproved);
     }
-#endif
     InterlockedIncrement(&wddm->Mpo3FlipVerdicts[verdict]);
     if (verdict != BC250_MPO3_OK && InterlockedCompareExchange(&wddm->Mpo3FlipOddTaken, 1, 0) == 0)
         wddm->Mpo3FlipOdd = facts;

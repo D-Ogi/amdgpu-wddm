@@ -32,7 +32,7 @@ param(
                  'shape-not-a-change', 'null-drops-shape', 'shape-without-allocation',
                  'mpo3-report-off', 'mpo3-report-type', 'mpo3-legacy-kept', 'mpo3-refused-tracked', 'mpo3-not-converted',
                  'mpo3-keep-unlocked', 'mpo3-immediate-lost', 'mpo3-extra-layer-shown', 'mpo3-check-scanout-skipped',
-                 'mpo3-check-gate-skipped', 'mpo3-busy-passed',
+                 'mpo3-check-gate-skipped', 'mpo3-busy-passed', 'scaled-release-enabled',
                  'witness-before-decision', 'witness-changes-answer', 'witness-stale-compared',
                  'witness-lost-uncounted', 'scaled-plane-mask-dropped', 'planes-clamp-dropped',
                  'mpo3-scaled-route-off', 'mpo3-scaled-dml-skipped', 'mpo3-scaled-scanout-skipped',
@@ -198,6 +198,9 @@ $mutations = [ordered]@{
     'mpo3-check-gate-skipped' = @{ find = 'if (verdict == BC250_MPO3_OK && !device->VidPnFlipEnabled) verdict = BC250_MPO3_GATE;'
         with = 'if (((void)device, 0)) verdict = BC250_MPO3_GATE;'
         why = 'Check approves a plane with the flip gate closed' }
+    'scaled-release-enabled' = @{ find = "    UNREFERENCED_PARAMETER(Raw);`n    UNREFERENCED_PARAMETER(Handshake);`n    return 0;"
+        with = '    return Handshake ? Raw : 0;'
+        why = 'the release start admits a raw selector before hardware acceptance' }
 }
 
 # The lab flavour's controls (-Lab): the witnesses read after the shipping decision and never change it.
@@ -217,7 +220,9 @@ $labMutations = [ordered]@{
     'planes-clamp-dropped' = @{ find = '(ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) && Level < BC250_WDDM_MPO_CAPS_DDI_LEVEL'
         with = '(ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) && (Level || 1)'
         why = 'DRIVERCAPS says 2 planes at level 2.2 or later, where the caps DDI says 1' }
-    # BD-223 Part S1: Check3's scaled plane 0.
+}
+# BD-223: both flavours compile and test the same Check3 and SetAddress3 implementation.
+$planeMutations = [ordered]@{
     'mpo3-scaled-route-off' = @{ find = 'scaled = verdict == BC250_MPO3_OK ? 1u : 0u;'; with = 'scaled = ((void)verdict, 0u);'
         why = 'with the lab bit, a scaled plane 0 never reaches the scaled-plane rule' }
     'mpo3-scaled-dml-skipped' = @{ find = 'if (verdict == BC250_PLANE_OK && !plan.Identity) { verdict = WddmPlaneDml(Device, &r, &plan, &dml); dmlRan = TRUE; }'
@@ -237,21 +242,20 @@ $labMutations = [ordered]@{
         why = 'an unapproved shape, pitch or stale mode reaches the plane' }
     'mpo3-scaled-selector-skipped' = @{ find = "data->hAllocation != NULL &&`n        (wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK))"
         with = "data->hAllocation != NULL &&`n        ((wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK) || 1))"
-        why = 'the lab-only path takes a scaled flip with its selector off' }
+        why = 'the scaled path takes a flip with its selector off' }
     'mpo3-scaled-presentid-lost' = @{ find = 'status = WddmFlipEntry(hAdapter, &flip, requestedShape, TRUE, plane->PresentId);'
         with = 'status = WddmFlipEntry(hAdapter, &flip, requestedShape, TRUE, 0);'
         why = 'the scaled flip reports another PresentId instead of the one Windows queued' }
 }
-$flavour = @()
-# The lab flavour links the scaled-plane rule of Check3 (BD-223 Part S1) as it is: dcn_plane.c with the scaler plan
-# and its tables, the set of run_dcn_plane_state.ps1.
-[string[]]$labSources = @()
+$flavour = @('-Wno-multichar', "/I$repo\driver\kmd\test", "/I$repo\driver\shim\dml201")
+# Both flavours link the actual scaled-plane rule and scaler tables.
+[string[]]$planeSources = @("$repo\driver\kmd\dcn_plane.c", "$repo\driver\kmd\dcn_scale.c", "$repo\driver\shim\bc250_scaler_buffer.c",
+                          "$repo\driver\shim\bc250_scaler_filter.c", "$repo\driver\kmd\display_io.c", "$repo\driver\kmd\edid.c")
 if ($Lab) {
-    $flavour = @('/DAMDGPU_WDDM_LAB_FLAVOUR=1', '-Wno-multichar', "/I$repo\driver\kmd\test", "/I$repo\driver\shim\dml201")
+    $flavour += '/DAMDGPU_WDDM_LAB_FLAVOUR=1'
     $mutations = $labMutations
-    $labSources = @("$repo\driver\kmd\dcn_plane.c", "$repo\driver\kmd\dcn_scale.c", "$repo\driver\shim\bc250_scaler_buffer.c",
-                    "$repo\driver\shim\bc250_scaler_filter.c", "$repo\driver\kmd\display_io.c", "$repo\driver\kmd\edid.c")
 }
+foreach ($name in $planeMutations.Keys) { $mutations[$name] = $planeMutations[$name] }
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
@@ -279,7 +283,7 @@ function Invoke-VidPnFlip([string]$Dir, [string]$Actual) {
     if ($Mutation) { $mutationWarnings = @('-Wno-tautological-negation-compare') }
     & $cl @('/nologo', '/TC', '/W4', '/WX', '/wd4201', '/O2', '/MT', '-fuse-ld=lld') @mutationWarnings @flavour @("/I$repo\driver\kmd", "/I$repo\driver\contract", "/I$repo\third_party\linux-amdgpu",
         "/I$($msvc.FullName)\include", "/I$sdk\Include\10.0.26100.0\ucrt", "/Fo$obj\", "/Fe$Dir\vidpn_flip_test.exe", $Actual,
-        "$repo\driver\kmd\dcn_translate.c") @labSources @('/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$libs\ucrt\x64",
+        "$repo\driver\kmd\dcn_translate.c") @planeSources @('/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$libs\ucrt\x64",
         "/LIBPATH:$libs\um\x64") | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Host build failed ($Dir)" }
     $output = & "$Dir\vidpn_flip_test.exe"

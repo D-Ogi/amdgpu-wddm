@@ -18,10 +18,9 @@
 #include "flip_state.h"
 #include "dcn_scale.h"   /* BD-223: BC250_SCALER_PLAN, the shape of a multiplane-overlay plane 0 */
 #include "mpo3_track.h"  /* BD-307: plane 0 of the MPO3 DDIs */
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-#include "dcn_plane.h"   /* BD-223 Part S: the scaled-plane rule of Check3, linked from dcn_plane.c (-Lab) */
-#endif
+#include "dcn_plane.h"   /* BD-223 Part S: the shared scaled-plane rule of Check3, linked from dcn_plane.c */
 #include "bc250_scanout_caps.h"  /* BD-223: the stretch and shrink limits the caps DDI answers */
+#define UNREFERENCED_PARAMETER(x) ((void)(x))
 typedef int32_t NTSTATUS;
 typedef long LONG;
 typedef unsigned long ULONG;
@@ -344,11 +343,9 @@ typedef struct {
     volatile LONG Mpo3FlipOddTaken;
     BC250_MPO3_PLANE Mpo3FlipOdd;
     ULONG ScaledPlane;              /* BD-223: LabScaledPlane, which the caps DDI reads for its lab bit */
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     volatile LONG Mpo3PlaneChecks[BC250_PLANE_VERDICTS];   /* BD-223 Part S: Check3's scaled planes by verdict */
     volatile LONG Mpo3ChecksScaled;
     volatile LONG Mpo3SetsScaled, Mpo3SetsUnapproved;
-#endif
 } BC250_WDDM;
 /* BD-170: bc250kmd.h's immediate-flip record, for the summary's copy of it (WddmImmediateRecordCopy). */
 #define BC250_DCN_IMMEDIATE_RECORDS 8u
@@ -571,7 +568,6 @@ static BOOLEAN DcnPlaneShapeIs(const BC250_DEVICE *d,const BC250_SCALER_PLAN *sh
 {(void)d;CHECK(in_lock);return shape?(shape_on && memcmp(shape,&shape_now,sizeof(*shape))==0):!shape_on;}
 static BOOLEAN DcnPlaneShapeCurrent(const BC250_DEVICE *d,BC250_SCALER_PLAN *shape)
 {(void)d;CHECK(in_lock);*shape=shape_now;return shape_on;}
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 /* BD-223 Part S: dcn.c's side of Check3's scaled plane. The pitch rule of a full-size flip is the inherited mode's;
  * the plane formats are open; DML answers dml_verdict, at PASSIVE_LEVEL outside L only, and keeps the last plan. */
 typedef struct {
@@ -599,7 +595,6 @@ static BOOLEAN DcnPlaneApproved(BC250_DEVICE *d,const BC250_SCALER_PLAN *shape,U
     return dml_approved && dml_stamp==mode_stamp && pitch==dml_pitch &&
         memcmp(shape,&dml_plan.Scaler,sizeof(*shape))==0;
 }
-#endif
 static NTSTATUS DcnFlipSourceAddress(BC250_DEVICE *d,ULONGLONG address,ULONG pitch,ULONG format,ULONGLONG bytes,
     BOOLEAN immediate,ULONGLONG *out,BOOLEAN *wrote)
 {
@@ -2677,8 +2672,7 @@ static void MpoCaps(void)
     d.Wddm=NULL;
     CHECK(Bc250WddmGetPostCompositionCaps(&d,&p)==STATUS_DEVICE_NOT_READY);
 }
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-/* BD-223 Part S1, PASSIVE_LEVEL: with LabScaledPlane bit 0, Check3 gives a plane 0 of another geometry to the
+/* BD-223 Part S1, PASSIVE_LEVEL: with the internal CHECK bit, Check3 gives a plane 0 of another geometry to the
  * scaled-plane rule of dcn_plane.c (linked, not modelled) and the DML step (modelled), and keeps every other refusal. */
 static void Mpo3ScaledChecks(void)
 {
@@ -2846,6 +2840,22 @@ static void Mpo3ScaledFlips(int level)
     CHECK(Flip3(&d,&set)==STATUS_SUCCESS && shape_on && hardware==written+1 && dml_calls==calls);
     displayed=0x20000;Vblank(&d);CHECK(mpo_id==903);
 }
+/* The implementation is shared, but only the lab start admits a selector until hardware acceptance. A hostile or
+ * stale raw value cannot turn the release path on, even when the DirectFlip handshake is present. */
+static void ScaledPlaneStart(void)
+{
+    static const ULONG raw[]={0u,1u,9u,15u,31u,~0ul};
+    unsigned i;
+    for(i=0;i<sizeof(raw)/sizeof(raw[0]);i++) {
+        CHECK(WddmScaledPlaneStart(raw[i],FALSE)==0);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        CHECK(WddmScaledPlaneStart(raw[i],TRUE)==WddmScaledPlaneLatch(raw[i],TRUE));
+#else
+        CHECK(WddmScaledPlaneStart(raw[i],TRUE)==0);
+#endif
+    }
+}
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 /* BD-223 (T004): the step of WddmStart that stores ScaledPlane from the raw LabScaledPlane value (WddmScaledPlaneLatch,
  * extracted from wddm.c). An unknown bit goes, and nothing is stored without bit 0 or without the handshake. */
 static void ScaledPlaneLatch(void)
@@ -2902,15 +2912,14 @@ int main(void)
         Exclusive(level);
         PlaneShapeFlips(level);
         Mpo3Flips(level);
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         Mpo3ScaledFlips(level);
-#endif
     }
     Plane3InputFlagBits();
     Mpo3Checks();
     MpoCaps();
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     Mpo3ScaledChecks();
+    ScaledPlaneStart();
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     ScaledPlaneLatch();
     MpoPlanesClamp();
 #endif
