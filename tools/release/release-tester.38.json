@@ -425,7 +425,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "dxvk",
-      "commit": "87f730aa6de3f11dab8a14095d2aa71ce4f94cbb",
+      "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -498,6 +498,22 @@
           "cwd": "{out}/src/ddi",
           "summary": "^(?:ok|PASS) ",
           "pass": "^PASSED: 0 failure"
+        },
+        {
+          "name": "video-csc",
+          "run": "{out}/src/ddi/amdgpu_wddm_dxvk_video_csc_test.exe",
+          "args": [],
+          "cwd": "{out}/src/ddi",
+          "summary": "^(?:ok|PASS|FAIL)",
+          "pass": "^PASSED: 0 failure\\(s\\)\\r?$"
+        },
+        {
+          "name": "video-format",
+          "run": "{out}/src/ddi/amdgpu_wddm_dxvk_video_format_test.exe",
+          "args": [],
+          "cwd": "{out}/src/ddi",
+          "summary": "^(?:PASS|FAIL|DIRECTIONAL-FORMAT)",
+          "pass": "^DIRECTIONAL-FORMAT PASS 23 checks 0 failures\\r?$"
         }
       ],
       "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
@@ -508,7 +524,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "dxvk",
-      "commit": "87f730aa6de3f11dab8a14095d2aa71ce4f94cbb",
+      "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -581,6 +597,22 @@
           "cwd": "{out}/src/ddi",
           "summary": "^(?:ok|PASS) ",
           "pass": "^PASSED: 0 failure"
+        },
+        {
+          "name": "video-csc",
+          "run": "{out}/src/ddi/amdgpu_wddm_dxvk_video_csc_test.exe",
+          "args": [],
+          "cwd": "{out}/src/ddi",
+          "summary": "^(?:ok|PASS|FAIL)",
+          "pass": "^PASSED: 0 failure\\(s\\)\\r?$"
+        },
+        {
+          "name": "video-format",
+          "run": "{out}/src/ddi/amdgpu_wddm_dxvk_video_format_test.exe",
+          "args": [],
+          "cwd": "{out}/src/ddi",
+          "summary": "^(?:PASS|FAIL|DIRECTIONAL-FORMAT)",
+          "pass": "^DIRECTIONAL-FORMAT PASS 23 checks 0 failures\\r?$"
         }
       ],
       "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
@@ -591,7 +623,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "dxvk",
-      "commit": "87f730aa6de3f11dab8a14095d2aa71ce4f94cbb",
+      "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -665,6 +697,22 @@
           "cwd": "{out}/src/ddi",
           "summary": "^(?:ok|PASS) ",
           "pass": "^PASSED: 0 failure"
+        },
+        {
+          "name": "video-csc",
+          "run": "{out}/src/ddi/amdgpu_wddm_dxvk_video_csc_test.exe",
+          "args": [],
+          "cwd": "{out}/src/ddi",
+          "summary": "^(?:ok|PASS|FAIL)",
+          "pass": "^PASSED: 0 failure\\(s\\)\\r?$"
+        },
+        {
+          "name": "video-format",
+          "run": "{out}/src/ddi/amdgpu_wddm_dxvk_video_format_test.exe",
+          "args": [],
+          "cwd": "{out}/src/ddi",
+          "summary": "^(?:PASS|FAIL|DIRECTIONAL-FORMAT)",
+          "pass": "^DIRECTIONAL-FORMAT PASS 23 checks 0 failures\\r?$"
         }
       ],
       "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
@@ -675,7 +723,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "dxvk",
-      "commit": "87f730aa6de3f11dab8a14095d2aa71ce4f94cbb",
+      "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -749,6 +797,22 @@
           "cwd": "{out}/src/ddi",
           "summary": "^(?:ok|PASS) ",
           "pass": "^PASSED: 0 failure"
+        },
+        {
+          "name": "video-csc",
+          "run": "{out}/src/ddi/amdgpu_wddm_dxvk_video_csc_test.exe",
+          "args": [],
+          "cwd": "{out}/src/ddi",
+          "summary": "^(?:ok|PASS|FAIL)",
+          "pass": "^PASSED: 0 failure\\(s\\)\\r?$"
+        },
+        {
+          "name": "video-format",
+          "run": "{out}/src/ddi/amdgpu_wddm_dxvk_video_format_test.exe",
+          "args": [],
+          "cwd": "{out}/src/ddi",
+          "summary": "^(?:PASS|FAIL|DIRECTIONAL-FORMAT)",
+          "pass": "^DIRECTIONAL-FORMAT PASS 23 checks 0 failures\\r?$"
         }
       ],
       "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
@@ -759,7 +823,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "4e3867f978c2289e08949fc826dfaef399cc5195",
+      "commit": "091ef3c31349f7a2b8c1d343694a1e0f27b2cf6f",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -783,7 +847,7 @@
       "inputs": {
         "dxvk": {
           "repo": "dxvk",
-          "commit": "87f730aa6de3f11dab8a14095d2aa71ce4f94cbb"
+          "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6"
         }
       },
       "compiler": "clang-cl",
@@ -803,7 +867,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "4e3867f978c2289e08949fc826dfaef399cc5195",
+      "commit": "091ef3c31349f7a2b8c1d343694a1e0f27b2cf6f",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -827,7 +891,7 @@
       "inputs": {
         "dxvk": {
           "repo": "dxvk",
-          "commit": "87f730aa6de3f11dab8a14095d2aa71ce4f94cbb"
+          "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6"
         }
       },
       "compiler": "clang-cl",
@@ -847,7 +911,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "4e3867f978c2289e08949fc826dfaef399cc5195",
+      "commit": "091ef3c31349f7a2b8c1d343694a1e0f27b2cf6f",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -871,7 +935,7 @@
       "inputs": {
         "dxvk": {
           "repo": "dxvk",
-          "commit": "87f730aa6de3f11dab8a14095d2aa71ce4f94cbb"
+          "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6"
         }
       },
       "compiler": "clang-cl",
@@ -891,7 +955,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "4e3867f978c2289e08949fc826dfaef399cc5195",
+      "commit": "091ef3c31349f7a2b8c1d343694a1e0f27b2cf6f",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -915,7 +979,7 @@
       "inputs": {
         "dxvk": {
           "repo": "dxvk",
-          "commit": "87f730aa6de3f11dab8a14095d2aa71ce4f94cbb"
+          "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6"
         }
       },
       "compiler": "clang-cl",
