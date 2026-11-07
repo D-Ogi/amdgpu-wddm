@@ -45,6 +45,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import provenance  # noqa: E402
+import build_context  # noqa: E402
 sys.path.insert(0, str(HERE.parent / "state"))
 import check_history  # noqa: E402
 
@@ -409,12 +410,14 @@ def import_kept(plan):
 
 
 def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None, version=None, max_parallel=3,
-              jobs=0, logical=None, keep_from=None):
+              jobs=0, logical=None, keep_from=None, rebuild=False, reuse_context=None):
     manifest = load_json(manifest_path)
     errors = check_manifest(manifest)
     if errors:
         return None, errors
     root, out, work = Path(root).resolve(), Path(out).resolve(), Path(work).resolve()
+    reuse_context = reuse_context if reuse_context is not None else build_context.capture_context(root, repo)
+    context_key = {k: reuse_context.get(k) for k in ('schema', 'fingerprint', 'complete')}
     if not out.is_relative_to(root):
         return None, [f"--out {out} is not under BC250_ROOT {root}: a release-sources.json row names its source "
                       f"relative to that root"]
@@ -471,7 +474,10 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
     # --keep-from without --only: the run builds only the rows that changed since that earlier release set. A row
     # whose earlier build stands for it (the same rule as below) is imported, every other row is built, and so is
     # every row that takes a payload of a row that is built (its inputs change with that build).
-    auto = bool(keep_from) and not patterns
+    if rebuild and (patterns or keep_from):
+        return None, ['--rebuild cannot be combined with --only or --keep-from; omit these options for automatic '
+                      'reuse, or use --rebuild alone for a clean comparison']
+    auto = not rebuild and not patterns
     if patterns:
         selected = {rid for rid in by_id if any(fnmatch.fnmatchcase(rid, p) for p in patterns)}
         for p in patterns:
@@ -501,9 +507,16 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         # A build that asks for more slots than the run has takes all of them, and so runs alone.
         r["slots"] = min(r.get("slots", 1), max_parallel)
         r["jobs"] = r["slots"] * jobs_per_slot
+        r['tree'] = r.get('tree', 'worktree')
+        r['reuse_context'] = context_key
+        r['base'] = r.get('base') or table[r['repo']].get('base')
+        r['recipe_base'] = table[recipe_repo].get('base')
         # The version a build stamps, for a row whose arguments name it: an artifact of an earlier run that was
         # stamped for another release is not this row's build.
         r["version"] = version if any("{version}" in a for a in r["args"]) else None
+        r["external_payload_sha256"] = {
+            p: sha256_file(v['file']) if Path(v['file']).is_file() else None
+            for p, v in payload_from[rid].items() if 'file' in v}
         return r
 
     own = previous_builds(out)
@@ -521,6 +534,7 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
                 except ValueError:
                     pass                                         # a path outside that -Out stays as it is
     recipe_tree = recipe_checkout(root, table, recipe_repo)
+    reusable = {}
 
     def stands_for(entry, rid, imported=False):
         """(definition, None) when the earlier build is the build of the row now, else (None, reason). A build whose
@@ -529,6 +543,39 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         imports (`imported`) and that differs also in the release version stands for the row when the row can take
         the new version by a new stamp (restamp_refusal); import_kept then writes that stamp into the copy."""
         old, new = entry.get("definition") or {}, define(rid)
+        if auto:
+            if not context_key['complete'] or old.get('reuse_context') != context_key:
+                return None, 'build tools or environment changed, are incomplete, or have no recorded content identity'
+            expected = sorted((o['path'], o.get('flavour', new['flavour']), o['file']) for o in new['outputs'])
+            actual = sorted((o.get('path', ''), o.get('flavour', ''), o.get('file', ''))
+                            for o in entry.get('outputs', []))
+            if actual != expected:
+                return None, 'the earlier receipt does not cover every declared output'
+            if old.get('tests') != new.get('tests'):
+                return None, 'the host test definition changed'
+            for field in ('arch', 'tree', 'keep'):
+                if old.get(field) != new.get(field):
+                    return None, f'the {field} definition changed'
+            for path, digest in entry_artifacts(entry):
+                if not Path(path).is_file() or sha256_file(path) != digest:
+                    return None, 'an earlier artifact is missing or changed'
+            external = new['external_payload_sha256']
+            if None in external.values() or old.get('external_payload_sha256', {}) != external:
+                return None, 'external payload bytes changed or were not recorded'
+            # The consumer must name the bytes it actually read, including when a producer was rebuilt in an
+            # earlier partial/manual run. Matching source commits alone do not establish that relationship.
+            consumed = {}
+            for path, source in payload_from[rid].items():
+                if 'file' in source:
+                    consumed[path] = external[path]
+                else:
+                    parent = reusable.get(source['row'])
+                    hit = next((o for o in (parent or {}).get('outputs', []) if o['path'] == path), None)
+                    if hit:
+                        consumed[path] = hit['sha256']
+            if len(consumed) == len(payload_from[rid]):
+                if old.get('consumed_payload_sha256', {}) != consumed:
+                    return None, 'consumed payload bytes changed or were not recorded'
         restamp = None
         if imported and old.get("version") and new.get("version") and old["version"] != new["version"]:
             if build_key(dict(old, version=new["version"], recipe_commit=new["recipe_commit"])) != build_key(new):
@@ -542,6 +589,8 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         if build_key(old) == build_key(new):
             definition = dict(new)
         elif old.get("recipe_commit") and build_key(dict(old, recipe_commit=new["recipe_commit"])) == build_key(new):
+            if auto:
+                return None, 'the recipe commit changed; helper dependencies require a new build'
             why = recipe_difference(recipe_tree, old["recipe_commit"], new["recipe_commit"], new["recipe"])
             if why:
                 return None, f"the recipe commit moved and {why}"
@@ -556,6 +605,16 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         # stay those of the earlier run, so that the row gives the command line that made the artifact.
         if old.get("jobs"):
             definition["jobs"] = old["jobs"]
+        # Manual selection must not upgrade a legacy or different environment to today's identity without a build.
+        definition['reuse_context'] = old.get('reuse_context')
+        if not auto:
+            for field in ('tests', 'arch', 'tree', 'keep', 'external_payload_sha256'):
+                if field in old:
+                    definition[field] = old[field]
+                else:
+                    definition.pop(field, None)
+        if 'consumed_payload_sha256' in old:
+            definition['consumed_payload_sha256'] = old['consumed_payload_sha256']
         return definition, None
 
     changed = {}
@@ -583,6 +642,8 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
                                 f"it takes a payload of {', '.join(moved)}, which takes a new version stamp")
             elif definition.get("restamp"):
                 restamped.add(rid)
+            else:
+                reusable[rid] = entry
 
     kept, refused = [], {}
     for rid in order:
@@ -656,7 +717,8 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         builds.append(r)
     if errors:
         return None, errors
-    recipes = sorted({(recipe_repo, b["recipe_commit"], b["recipe"]) for b in builds})
+    recipes = sorted({(recipe_repo, b["recipe_commit"], b["recipe"])
+                      for b in builds + [k['definition'] for k in kept]})
     # The earlier ok builds of the rows that this run builds again. Their artifacts stay until the build of the row
     # starts, so a run that ends before that (a failed gate, a build that did not start) reports them as they were,
     # and the next run in this directory still finds them (BD-244).
@@ -668,7 +730,9 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         "sources": str(Path(sources_path).resolve()) if sources_path else None,
         "recipe_repository": recipe_repo, "recipe_commit": manifest["recipe_commit"], "repositories": table,
         "max_parallel": max_parallel, "logical_processors": logical, "jobs_per_slot": jobs_per_slot,
-        "only": patterns, "changed": changed, "builds": builds, "kept": kept, "carried": carried,
+        "only": patterns, "incremental": auto, "rebuild": bool(rebuild), "changed": changed,
+        "reuse_context": reuse_context,
+        "builds": builds, "kept": kept, "carried": carried,
         "keep_from": str(Path(keep_from).resolve()) if keep_from else None, "shared_trees": list(shared.values()),
         "recipes": [{"repo": a, "commit": b, "recipe": c} for a, b, c in recipes],
         "rows_in_manifest": [r["id"] for r in rows],
@@ -790,10 +854,15 @@ def compiler_findings(build, params):
 STATE_WORKER_RECIPE = "driver/state/installer-build.ps1"
 
 
+def admitted_rows(plan):
+    """Apply current policy to every output admitted to the set, including reused builds."""
+    return plan['builds'] + [k['definition'] for k in plan.get('kept', [])]
+
+
 def state_worker_commits(plan):
     """(repo, commit) -> row ids, for the rows that build the installer state worker."""
     out = {}
-    for b in plan["builds"]:
+    for b in admitted_rows(plan):
         if b["recipe"] == STATE_WORKER_RECIPE:
             out.setdefault((b["repo"], b["commit"]), []).append(b["id"])
     return out
@@ -813,7 +882,7 @@ def run_gates(plan, recipe_params, allow_unpushed=False):
         if tree:
             whole.add((repo, commit))
 
-    for b in plan["builds"]:
+    for b in admitted_rows(plan):
         name(f"{b['id']} build", b["repo"], b["commit"])
         name(f"{b['id']} recipe", recipe_repo, b["recipe_commit"])
         for n, spec in (b.get("inputs") or {}).items():
@@ -863,7 +932,7 @@ def run_gates(plan, recipe_params, allow_unpushed=False):
                   "unpushed": unpushed})
     # Attribution: every commit from the base to the commit, for each build and recipe commit.
     ranges = {}
-    for b in plan["builds"]:
+    for b in admitted_rows(plan):
         ranges.setdefault((b["repo"], b.get("base"), b["commit"]), []).append(b["id"])
         ranges.setdefault((recipe_repo, b.get("recipe_base"), b["recipe_commit"]), []).append(f"{b['id']} recipe")
     att_lines, hits, published, failed, left_out = [], [], [], False, []
@@ -936,12 +1005,12 @@ def run_gates(plan, recipe_params, allow_unpushed=False):
                   "hits": hits, "published_owner_attributions": published, "upstream_left_out": left_out})
     # The compiler of each row.
     comp = []
-    for b in plan["builds"]:
+    for b in admitted_rows(plan):
         key = f"{b['recipe_commit']}:{b['recipe']}"
         entry = recipe_params.get(key) or {}
         comp += compiler_findings(b, entry.get("params"))
     gates.append({"name": "compiler", "status": "FAIL" if comp else "PASS",
-                  "lines": comp or [f"{len(plan['builds'])} rows name an allowed compiler on the command line"]})
+                  "lines": comp or [f"{len(admitted_rows(plan))} rows name an allowed compiler on the command line"]})
     # The state worker of each row reads the removal record of an earlier release only when driver/state/history at
     # the row's commit holds that release's catalog (BD-262, tools/state/check_history.py): every earlier tester tag.
     hist, hist_failed = [], False
@@ -1316,6 +1385,8 @@ def main():
     p.add_argument("--work", required=True)
     p.add_argument("--sources")
     p.add_argument("--only", default="")
+    p.add_argument("--rebuild", action="store_true", help="force every row; default reuses verified outputs")
+    p.add_argument("--context", help="content receipt captured by build_context.py for this invocation")
     p.add_argument("--version")
     p.add_argument("--max-parallel", type=int, default=3)
     p.add_argument("--jobs", type=int, default=0)
@@ -1366,7 +1437,8 @@ def main():
     if args.command == "plan":
         only = [x.strip() for x in args.only.split(",") if x.strip()]
         plan, errors = make_plan(args.manifest, args.root, args.repo, args.out, args.work, args.sources, only,
-                                 args.version, args.max_parallel, args.jobs, args.logical, args.keep_from)
+                                 args.version, args.max_parallel, args.jobs, args.logical, args.keep_from, args.rebuild,
+                                 load_json(args.context) if args.context else None)
         for e in errors:
             print(f"FAIL {e}")
         if errors:

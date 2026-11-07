@@ -73,7 +73,9 @@
 #    the byte check and removes the worktrees.
 #
 # -Plan prints the gates, the builds with their expanded command lines, outputs, tests and disk budget, and builds
-# nothing. -Only rebuilds the rows it names (ids or wildcards); a row it does not name keeps the artifact of the last
+# nothing. The default reuses verified rows in -Out and selects changed rows and their consumers. Repeat the same
+# command after a failure. -Rebuild explicitly selects all rows. See docs/build-playbook.md for the procedure.
+# -Only rebuilds the rows it names (ids or wildcards); a row it does not name keeps the artifact of the last
 # run in -Out, when that run built it from the same manifest row, and the rows cover both. A row whose manifest entry
 # differs only in its recipe commit keeps its artifact when the recipe's directory is the same at both commits (git
 # diff); its rows keep the commit that built it. A run that ends before a build starts (a failed gate, a build that
@@ -95,6 +97,8 @@ param(
     # A release-sources.json for the {payload:} inputs that no row of this release set builds.
     [Parameter(ParameterSetName = 'Set')][string]$Sources,
     [Parameter(ParameterSetName = 'Set')][string[]]$Only,
+    # Automatic reuse is the default. Force all rows only for a clean comparison or build diagnosis.
+    [Parameter(ParameterSetName = 'Set')][switch]$Rebuild,
     [Parameter(ParameterSetName = 'Set')][switch]$Plan,
     [Parameter(ParameterSetName = 'Set')][switch]$AllowUnpushed,
     [Parameter(ParameterSetName = 'Set')][ValidateRange(1, 64)][int]$MaxParallel = 3,
@@ -155,10 +159,58 @@ function Get-Utc { [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ') }
 
 function Write-Json([string]$Path, $Data) {
     New-Item -ItemType Directory -Force (Split-Path $Path) | Out-Null
-    [IO.File]::WriteAllText($Path, ($Data | ConvertTo-Json -Depth 40) + "`n")
+    # A killed scheduler must leave either the preceding receipt or this complete one.
+    $part = "$Path.$PID.$([Guid]::NewGuid().ToString('N')).part"
+    try {
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($Data | ConvertTo-Json -Depth 40) + "`n")
+        $stream = [IO.File]::Open($part, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
+        [IO.File]::Move($part, $Path, $true)
+    } finally {
+        if ([IO.File]::Exists($part)) { [IO.File]::Delete($part) }
+    }
 }
 
 function Read-Json([string]$Path) { Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json -AsHashtable }
+
+function Test-ExactProcess([int]$ProcessId, [long]$StartTicks) {
+    if ($ProcessId -le 0 -or $StartTicks -le 0) { throw 'Invalid process identity in the build receipt.' }
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    if (-not $process) { return $false }
+    try { return $process.StartTime.ToUniversalTime().Ticks -eq $StartTicks }
+    catch {
+        # The process can exit between lookup and reading its creation time.
+        if (-not (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)) { return $false }
+        throw "Cannot verify process $ProcessId creation time; refusing to reuse the output directory."
+    }
+}
+
+function Assert-NoPreviousWorker([string]$OutputDirectory) {
+    $previous = Join-Path $OutputDirectory 'release-report.json'
+    if (-not (Test-Path -LiteralPath $previous)) { return }
+    $receipt = Read-Json $previous
+    $prefix = [IO.Path]::GetFullPath($OutputDirectory).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    foreach ($row in @($receipt.builds)) {
+        if ($row.status -notin 'running', 'interrupted') { continue }
+        if (-not $row.log_dir) { throw "Previous row $($row.id) has no attempt log path; inspect its receipt before retrying." }
+        $logPath = [IO.Path]::GetFullPath([string]$row.log_dir)
+        if (-not $logPath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Previous row $($row.id) has a log path outside this output directory; inspect its receipt before retrying."
+        }
+        $workerFile = Join-Path $logPath 'worker.json'
+        # A worker that has not registered yet must check that its parent is still alive before doing any work.
+        if (-not (Test-Path -LiteralPath $workerFile)) {
+            if ($receipt.worker_guard_schema -ne 1) {
+                throw "Previous row $($row.id) has a legacy running receipt without worker identity. Inspect and stop any workers of that old attempt before repairing its receipt; automatic retry cannot prove that its outputs are idle."
+            }
+            continue
+        }
+        $worker = Read-Json $workerFile
+        if (Test-ExactProcess $worker.pid $worker.start_ticks) {
+            throw "Previous worker for $($row.id) is still running (PID $($worker.pid), receipt $workerFile). Wait for it to finish or stop that exact worker and its child processes, then repeat the command. The plan and outputs have not been replaced."
+        }
+    }
+}
 
 # The bytes of every file under a directory, links not followed. A file that goes during the walk counts as gone.
 function Get-TreeBytes([string]$Dir) {
@@ -249,6 +301,15 @@ function Invoke-SetJob([string]$SpecPath) {
     $b = $spec.build
     $d = $b.dirs
     $logDir = $spec.log_dir
+    # Register before checking the parent. After parent-only death, a retry either sees this live worker or the
+    # late worker observes its dead parent and refuses before touching worktrees, artifacts or recipe inputs.
+    $self = Get-Process -Id $PID
+    Write-Json (Join-Path $logDir 'worker.json') ([ordered]@{ pid = $PID
+            start_ticks = $self.StartTime.ToUniversalTime().Ticks
+            parent_pid = $spec.parent_pid; parent_start_ticks = $spec.parent_start_ticks })
+    if (-not (Test-ExactProcess $spec.parent_pid $spec.parent_start_ticks)) {
+        throw 'The scheduler that created this job is no longer running; this worker refuses to start.'
+    }
     $result = [ordered]@{ id = $b.id; status = 'failed'; error = $null; exit_code = $null; started_utc = (Get-Utc)
         seconds = 0; build_seconds = 0; tests = @(); outputs = @(); records = @(); shared_clean = $null; command = $null }
     $ctx = New-BuildContext -Sources $spec.manifest -Root $spec.root -Repo $spec.repo -Tools $spec.tools -SourceOf $spec.payload -Lock $spec.lock
@@ -318,6 +379,11 @@ function Invoke-SetJob([string]$SpecPath) {
         $result.records = $collected.records
         Get-Content -LiteralPath (Join-Path $logDir 'collect.log')
         if ($code -ne 0) { throw "collect: $(@($collected.errors) -join '; ')" }
+        foreach ($path in $spec.payload.Keys) {
+            if ((Get-FileHash -LiteralPath $spec.payload[$path] -Algorithm SHA256).Hash -ne $b.consumed_payload_sha256[$path]) {
+                throw "payload $path changed while the build ran; repeat the command after its producer finishes"
+            }
+        }
         $result.status = 'ok'
     } catch {
         $result.error = $_.Exception.Message
@@ -402,6 +468,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Repack') {
 }
 
 if ($PSCmdlet.ParameterSetName -eq 'Package') {
+    'Packaging is for a candidate after component checks. For a code iteration use the default set build. For notes-only changes to an existing gated package use -RepackNotes.'
     # 5. Packages. The input is the -Out of a release set run (-From) whose rows are registered: this tree's
     # tools\release\release-sources.json holds every row of <From>\release-sources.rows.json with the same source and
     # SHA-256, and the tree is clean and pushed, so the package is built from a commit that names its bytes. Then, for
@@ -638,20 +705,48 @@ foreach ($t in @($Tool | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
     $tools[$k.ToLowerInvariant()] = $v
 }
 New-Item -ItemType Directory -Force $Out | Out-Null
+# A second planner must not replace plan.json underneath the scheduler that owns this output directory.
+try { $setLease = [IO.File]::Open((Join-Path $Out 'set.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) }
+catch { throw "Output directory is busy: $Out. Wait for its current build, then repeat the same command. Do not delete its outputs." }
+Assert-NoPreviousWorker $Out
+$schedulerStartTicks = (Get-Process -Id $PID).StartTime.ToUniversalTime().Ticks
 $planFile = Join-Path $Out 'plan.json'
 $reportFile = Join-Path $Out 'release-report.json'
 $rowsFile = Join-Path $Out 'release-sources.rows.json'
 
 "$(Get-Utc) build-release-set: $Manifest"
+$contextFile = Join-Path $Out 'build-context.json'
+$contextArgs = @('-B', (Join-Path $PSScriptRoot 'build_context.py'), '--root', $Root, '--repo', $repo, '--write', $contextFile)
+foreach ($t in @($Tool | ForEach-Object { $_ -split ',' } | Where-Object { $_ })) { $contextArgs += @('--tool', $t) }
+'Checking build tool content and environment for safe reuse. This reads tool files without starting a build.'
+& $python @contextArgs
+if ($LASTEXITCODE -ne 0) { throw 'Build context could not be captured. See the error above and repeat the command after fixing it.' }
 $planArgs = @($buildReleaseSet, 'plan', '--manifest', $Manifest, '--root', $Root, '--repo', $repo, '--out', $Out, '--work', $Work,
-    '--max-parallel', $MaxParallel, '--jobs', $Jobs, '--write', $planFile)
+    '--max-parallel', $MaxParallel, '--jobs', $Jobs, '--write', $planFile, '--context', $contextFile)
 if ($Sources) { $planArgs += @('--sources', [IO.Path]::GetFullPath($Sources)) }
 if ($Only.Count) { $planArgs += @('--only', ($Only -join ',')) }
+if ($Rebuild) { $planArgs += '--rebuild' }
 if ($Version) { $planArgs += @('--version', $Version) }
 if ($KeepFrom) { $planArgs += @('--keep-from', [IO.Path]::GetFullPath($KeepFrom)) }
 & $python @planArgs
 if ($LASTEXITCODE -ne 0) { "build-release-set: the manifest does not plan (see above)"; exit 1 }
 $planData = Read-Json $planFile
+if (-not $planData.reuse_context.complete) {
+    'REUSE UNAVAILABLE: some tool inputs could not be read. Inspect build-context.json, fix the reported paths, then repeat -Plan.'
+}
+if ($Rebuild) {
+    'BUILD PATH: full rebuild requested. This recompiles every row. Use it for a clean comparison or build diagnosis.'
+    'RECOMMENDED: omit -Rebuild and keep the same -Out to verify and reuse completed rows automatically.'
+} elseif ($Only.Count) {
+    'BUILD PATH: manual selection. You must name all changed producers and consumers; a partial set can remain incomplete.'
+    'RECOMMENDED: omit -Only to select changed rows and dependent builds automatically, with reasons in plan.json.'
+} else {
+    'BUILD PATH: automatic (recommended). Verified completed rows are reused; changed rows and consumers are built.'
+    if (-not $planData.kept.Count -and -not $KeepFrom) {
+        'No reusable rows found. For a new output directory, use -KeepFrom <previous-set> to check earlier artifacts before building.'
+    }
+}
+'BUILD GUIDE: docs/build-playbook.md. After a failure, fix its cause and repeat the same command and -Out; keep logs and receipts.'
 $lock = 'Local\bc250-build-release-set-' + [BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($Work.ToLowerInvariant()))).Replace('-', '').Substring(0, 12)
 $ctx = New-BuildContext -Sources $Manifest -Root $Root -Repo $repo -Tools $tools -Lock $lock
 
@@ -719,7 +814,8 @@ $gateList.Add([ordered]@{ name = 'host'; status = $(if ($foreign.Count) { 'WARN'
 # The KMD recipe runs the fast quality gates (tools\quality\quick.ps1), which read the user-mode driver tree of the
 # release from BC250_UMD_SOURCE and BC250_UMD_BUILD. Without them the KMD build fails minutes into the run and stops
 # every other build (tester.37, 2026-11-04), so the gate refuses the set before the first build.
-$kmdRows = @($planData.builds | Where-Object { $_.recipe -eq 'driver/kmd/build.ps1' -or $_.recipe -eq 'driver\kmd\build.ps1' })
+$admittedRows = @($planData.builds) + @($planData.kept | ForEach-Object { $_.definition })
+$kmdRows = @($admittedRows | Where-Object { $_.recipe -eq 'driver/kmd/build.ps1' -or $_.recipe -eq 'driver\kmd\build.ps1' })
 if ($kmdRows.Count) {
     $umdLines = [Collections.Generic.List[string]]::new()
     foreach ($n in 'BC250_UMD_SOURCE', 'BC250_UMD_BUILD') {
@@ -806,11 +902,12 @@ foreach ($b in $planData.builds) {
 }
 foreach ($s in $planData.shared_trees) { "  shared tree $($s.repo) $($s.commit.Substring(0, 8)) at $($s.path), read by $($s.rows -join ', ')" }
 
-$report = [ordered]@{ tool = 'build-release-set'; schema = 1; release = $planData.release; version = $planData.version; manifest = $Manifest
+$report = [ordered]@{ tool = 'build-release-set'; schema = 1; worker_guard_schema = 1; release = $planData.release; version = $planData.version; manifest = $Manifest
     manifest_sha256 = $planData.manifest_sha256; root = $Root; out = $Out; work = $Work; only = $Only; plan = [bool]$Plan
     started_utc = $started.ToString('yyyy-MM-ddTHH:mm:ssZ'); finished_utc = $null; seconds = 0; status = $null
     host = [ordered]@{ logical_processors = $planData.logical_processors; max_parallel = $MaxParallel; jobs_per_slot = $planData.jobs_per_slot }
-    gates = $gateList; disk = [ordered]@{ measurements = $measures; peak_used_estimate = [long]0 }; builds = @(); rows = $null }
+    gates = $gateList; reuse_context = $planData.reuse_context
+    disk = [ordered]@{ measurements = $measures; peak_used_estimate = [long]0 }; builds = @(); rows = $null }
 if ($Plan) {
     "build-release-set: -Plan, nothing built; gates $(if ($gatesPass) { 'PASS' } else { 'FAIL' })"
     exit $(if ($gatesPass) { 0 } else { 1 })
@@ -873,7 +970,15 @@ function Update-Measure {
     "$(Get-Utc) size guard: counted $(Format-GB $measure.counted), free $(Format-GB $measure.free)"
 }
 
+function Save-BuildCheckpoint([string]$Status = 'running') {
+    $report.builds = @(Get-ReportBuilds $results)
+    $report.status = $Status
+    $report.checkpoint_utc = Get-Utc
+    Write-Json $reportFile $report
+}
+
 try {
+    Save-BuildCheckpoint
     # Registrations of trees under -Work whose folder is gone (a -Keep run whose Work folder was deleted, a killed
     # job): git worktree add refuses their paths. Only those of this -Work go, never those of another lane (BD-264).
     # A tree comes from the checkout that New-Tree picks (Get-Checkout -Tree, BD-285); an input of listed paths is an
@@ -911,6 +1016,11 @@ try {
             $running.Remove($id)
             $resultFile = Join-Path $r.build.log_dir 'result.json'
             $res = if (Test-Path -LiteralPath $resultFile) { Read-Json $resultFile } else { [ordered]@{ id = $id; status = 'failed'; error = 'the job wrote no result (see job.log)'; outputs = @() } }
+            $r.process.WaitForExit()
+            if ($r.process.ExitCode -ne 0) {
+                $res.status = 'failed'
+                $res.error = "$($res.error); worker exit $($r.process.ExitCode) (see job.log)"
+            }
             if ($timedOut) { $res.status = 'failed'; $res.error = "stopped after -BuildTimeout $BuildTimeout s" }
             $res.peak_bytes = [math]::Max($r.peak, [long]0)
             $res.slots = $r.build.slots
@@ -921,6 +1031,7 @@ try {
             $res.definition = $r.build
             $results[$id] = $res
             $state[$id] = $res.status
+            Save-BuildCheckpoint
             $art = Get-TreeBytes $r.build.artifact
             $sinceMeasure += $art - $r.at_measure
             "$(Get-Utc) end $id`: $($res.status) after $([int]([DateTime]::UtcNow - $r.started).TotalSeconds) s, peak $(Format-GB $res.peak_bytes)$(if ($res.error) { ": $($res.error)" })"
@@ -960,14 +1071,26 @@ try {
                 }
             }
             $ctx.SourceOf = Get-PayloadMap $b $results
-            $logDir = $b.log_dir
-            if (Test-Path -LiteralPath $logDir) { Remove-Item -LiteralPath $logDir -Recurse -Force }
+            $b.consumed_payload_sha256 = @{}
+            foreach ($path in $ctx.SourceOf.Keys) {
+                $b.consumed_payload_sha256[$path] = (Get-FileHash -LiteralPath $ctx.SourceOf[$path] -Algorithm SHA256).Hash
+            }
+            # Keep failed/interrupted attempts and their job/result receipts. Never overwrite a prior log.
+            $logDir = "$($b.log_dir)-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffffffZ'))-$([Guid]::NewGuid().ToString('N'))"
+            $b.log_dir = $logDir
+            # Revoke the old ok receipt durably BEFORE removing even one old output. A crash from here on leaves
+            # this row non-reusable, while successful siblings remain reusable in the same checkpoint.
+            $results[$b.id] = [ordered]@{ id = $b.id; status = 'running'; started_utc = Get-Utc
+                definition = $b; log_dir = $logDir; outputs = @() }
+            $state[$b.id] = 'running'
+            Save-BuildCheckpoint
             New-Item -ItemType Directory -Force $logDir | Out-Null
             if (Test-Path -LiteralPath $b.artifact) { Remove-Item -LiteralPath $b.artifact -Recurse -Force }
             $jobFile = Join-Path $logDir 'job.json'
             Write-Json $jobFile ([ordered]@{ build = $b; manifest = $Manifest; root = $Root; repo = $repo; lock = $lock; tools = $tools
                     payload = $ctx.SourceOf; version = $planData.version; package_cache = $PackageCache; python = $python
-                    build_release_set = $buildReleaseSet; recipe_repository = $planData.recipe_repository; keep = [bool]$Keep; log_dir = $logDir })
+                    build_release_set = $buildReleaseSet; recipe_repository = $planData.recipe_repository; keep = [bool]$Keep; log_dir = $logDir
+                    parent_pid = $PID; parent_start_ticks = $schedulerStartTicks })
             $argLine = "-NoProfile -File `"$PSCommandPath`" -Job `"$jobFile`""
             $p = Start-Process -FilePath $shell -ArgumentList $argLine -NoNewWindow -PassThru `
                 -RedirectStandardOutput (Join-Path $logDir 'job.log') -RedirectStandardError (Join-Path $logDir 'job-error.log')
@@ -991,6 +1114,13 @@ try {
     foreach ($r in $running.Values) {
         if (-not $r.process.HasExited) { & taskkill.exe /PID $r.process.Id /T /F 2>&1 | Out-Null }
     }
+    foreach ($id in @($results.Keys)) {
+        if ($results[$id].status -eq 'running') {
+            $results[$id].status = 'interrupted'
+            $results[$id].error = 'scheduler ended before this attempt was harvested; see its preserved log_dir'
+        }
+    }
+    Save-BuildCheckpoint 'interrupted'
     if (-not $Keep) {
         try { Remove-Trees $ctx } catch { "trees: $($_.Exception.Message)" }
         if ((Test-Path -LiteralPath $Work) -and -not @(Get-ChildItem -LiteralPath $Work -Force).Count) { Remove-Item -LiteralPath $Work -Force }

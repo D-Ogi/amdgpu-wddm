@@ -221,7 +221,7 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # Its deadline is 1200 s in gate-inputs.json (BD-316). 42 tests: 494 s in a quick Full of 2026-11-05 19:07Z, and two
  # stops at the old 600 s in the full uncached gates of build-release.ps1 the same evening (19:50Z and 20:46Z),
  # with the suite not finished. 1200 s is 2.4x the quick Full run.
- Check 'release-build-set' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-build-set").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_build_release_set.py' }
+ Check 'release-build-set' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-build-set").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_build*.py' }
  # BD-204: a fix marker on one RADV WDDM line and not on the other (marker_guard.py lines, winsys-lines.json). The
  # controls run on throwaway repositories; the gate reads the Mesa lines that release-sources.json pins, in the
  # workspace's Mesa checkout, and build-release.ps1 runs it again on the package's own sources.

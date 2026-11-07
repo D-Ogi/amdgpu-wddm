@@ -24,6 +24,7 @@ import tempfile
 import unittest
 
 import build_release_set
+import build_context
 from test_provenance import git, remove_tree
 from test_symbols import msf_pdb_bytes, pe_bytes
 
@@ -177,14 +178,22 @@ class Workspace:
 
     def plan(self, manifest, **kw):
         self.write(manifest)
+        kw.setdefault('reuse_context', build_context.capture_context(self.root, HERE.parents[1], environ={},
+                                                                     executables={}, discover_vs=False))
         return build_release_set.make_plan(self.manifest_path, self.root, HERE.parents[1], self.out, self.work, **kw)
+
+    def child_environment(self):
+        # These recipes write tiny text files. No VS/SDK scan or user tool configuration belongs to this fixture.
+        excluded = set(build_context.ENVIRONMENT) - {'PATH', 'PATHEXT'}
+        excluded.add('PROGRAMFILES(X86)')
+        return {k: v for k, v in os.environ.items() if k.upper() not in excluded and not k.upper().startswith('BC250_TOOL_')}
 
     def run(self, manifest, *extra, timeout=600):
         self.write(manifest)
         r = subprocess.run(["pwsh", "-NoProfile", "-File", str(TOOL), "-Manifest", str(self.manifest_path),
                             "-Out", str(self.out), "-Root", str(self.root), "-Work", str(self.work),
                             "-SizeGuard", str(self.guard_dir / "size-guard.py"), *extra],
-                           capture_output=True, text=True, timeout=timeout)
+                           capture_output=True, text=True, timeout=timeout, env=self.child_environment())
         return r.returncode, r.stdout + r.stderr
 
     def intervals(self):
@@ -238,6 +247,151 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
     def test_the_example_manifest_is_valid(self):
         manifest = build_release_set.load_json(HERE / "release-tester.32.json")
         self.assertEqual(build_release_set.check_manifest(manifest), [])
+
+    def seed_success(self, manifest, **options):
+        """Seed explicit byte receipts for planner tests; no compiler is needed."""
+        plan, errors = self.ws.plan(manifest, **options)
+        self.assertEqual(errors, [])
+        entries, digests = [], {}
+        for b in plan['builds']:
+            outputs = []
+            for o in b['outputs']:
+                path = Path(b['artifact']) / Path(o['file']).name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(('fixture ' + b['id'] + o['path']).encode())
+                digest = build_release_set.sha256_file(path)
+                outputs.append(dict(o, artifact=str(path), flavour=o.get('flavour', b['flavour']), sha256=digest))
+                digests[o['path']] = digest
+            b['consumed_payload_sha256'] = {
+                p: build_release_set.sha256_file(v['file']) if 'file' in v else digests[p]
+                for p, v in b['payload_from'].items()}
+            entries.append(dict(id=b['id'], status='ok', definition=b, outputs=outputs))
+        build_release_set.write_json(self.ws.out / build_release_set.REPORT, {'builds': entries})
+        return entries
+
+    def test_default_reuses_unchanged_rows_and_rebuild_is_explicit(self):
+        m = self.ws.manifest([self.ws.row('a'), self.ws.row('b', extra=['-Payload', '{payload:payload/a.bin}'])])
+        self.seed_success(m)
+        plan, errors = self.ws.plan(m)
+        self.assertEqual(errors, [])
+        self.assertEqual(plan['builds'], [])
+        self.assertEqual(len(plan['kept']), 2)
+        plan, errors = self.ws.plan(m, rebuild=True)
+        self.assertEqual(errors, [])
+        self.assertEqual([b['id'] for b in plan['builds']], ['a', 'b'])
+        self.assertEqual(plan['kept'], [])
+        for options in ({'only': ['a']}, {'keep_from': self.ws.out}):
+            plan, errors = self.ws.plan(m, rebuild=True, **options)
+            self.assertIsNone(plan)
+            self.assertIn('cannot be combined', errors[0])
+
+    def test_default_repairs_bad_artifact_and_consumers_but_keeps_unrelated_row(self):
+        m = self.ws.manifest([self.ws.row('a'), self.ws.row('b', extra=['-Payload', '{payload:payload/a.bin}']),
+                              self.ws.row('c')])
+        entries = self.seed_success(m)
+        path = Path(entries[0]['outputs'][0]['artifact'])
+        for missing in (False, True):
+            if missing:
+                path.unlink()
+            else:
+                path.write_bytes(b'corrupt')
+            plan, errors = self.ws.plan(m)
+            self.assertEqual(errors, [])
+            self.assertEqual([b['id'] for b in plan['builds']], ['a', 'b'])
+            self.assertEqual([b['id'] for b in plan['kept']], ['c'])
+
+    def test_default_checks_consumed_bytes_even_when_producer_receipt_is_valid(self):
+        m = self.ws.manifest([self.ws.row('a'), self.ws.row('b', extra=['-Payload', '{payload:payload/a.bin}'])])
+        entries = self.seed_success(m)
+        o = entries[0]['outputs'][0]
+        Path(o['artifact']).write_bytes(b'new producer from a separate partial build')
+        o['sha256'] = build_release_set.sha256_file(o['artifact'])
+        build_release_set.write_json(self.ws.out / build_release_set.REPORT, {'builds': entries})
+        plan, errors = self.ws.plan(m)
+        self.assertEqual(errors, [])
+        self.assertEqual([b['id'] for b in plan['builds']], ['b'])
+        self.assertIn('consumed payload', plan['changed']['b'])
+
+    def test_default_requires_complete_outputs_and_test_identity(self):
+        m = self.ws.manifest([self.ws.row('a', outputs=[{'file': 'a.bin', 'path': 'payload/a.bin'},
+                                                       {'file': 'b.bin', 'path': 'payload/b.bin'}])])
+        entries = self.seed_success(m)
+        entries[0]['outputs'].pop()
+        build_release_set.write_json(self.ws.out / build_release_set.REPORT, {'builds': entries})
+        plan, errors = self.ws.plan(m)
+        self.assertEqual(errors, [])
+        self.assertIn('every declared output', plan['changed']['a'])
+        self.seed_success(m)
+        m['rows'][0]['tests'] = [{'name': 'new-check', 'run': '{recipe}/hosttest.ps1', 'args': []}]
+        plan, errors = self.ws.plan(m)
+        self.assertEqual(errors, [])
+        self.assertIn('host test', plan['changed']['a'])
+
+    def test_external_payload_identity_survives_repeated_reuse_and_detects_change(self):
+        source = self.ws.root / 'external.bin'
+        source.write_bytes(b'external first')
+        sources = self.ws.root / 'sources.json'
+        build_release_set.write_json(sources, {'files': [
+            {'path': 'payload/ext.bin', 'flavour': 'release', 'source': 'external.bin'}]})
+        m = self.ws.manifest([self.ws.row('a', extra=['-Payload', '{payload:payload/ext.bin}'])])
+        self.seed_success(m, sources_path=sources)
+        for _ in range(2):
+            plan, errors = self.ws.plan(m, sources_path=sources)
+            self.assertEqual(errors, [])
+            self.assertEqual(plan['builds'], [])
+            build_release_set.write_json(self.ws.out / build_release_set.REPORT, {'builds': plan['kept']})
+        source.write_bytes(b'external second')
+        plan, errors = self.ws.plan(m, sources_path=sources)
+        self.assertEqual(errors, [])
+        self.assertEqual([b['id'] for b in plan['builds']], ['a'])
+        self.assertIn('external payload', plan['changed']['a'])
+
+    def test_failed_and_running_rows_are_retried_while_successes_remain(self):
+        m = self.ws.manifest([self.ws.row('a'), self.ws.row('b'), self.ws.row('c')])
+        entries = self.seed_success(m)
+        entries[1]['status'], entries[2]['status'] = 'failed', 'running'
+        build_release_set.write_json(self.ws.out / build_release_set.REPORT, {'builds': entries})
+        plan, errors = self.ws.plan(m)
+        self.assertEqual(errors, [])
+        self.assertEqual([b['id'] for b in plan['builds']], ['b', 'c'])
+        self.assertEqual([b['id'] for b in plan['kept']], ['a'])
+
+    def test_tool_bytes_change_or_missing_context_refuses_automatic_reuse(self):
+        m = self.ws.manifest([self.ws.row('a')])
+        tools = self.ws.root / 'toolchain'
+        tools.mkdir()
+        compiler = tools / 'compiler.bin'
+        compiler.write_bytes(b'compiler one')
+        entries = self.seed_success(m)
+        compiler.write_bytes(b'compiler two')
+        plan, errors = self.ws.plan(m)
+        self.assertEqual(errors, [])
+        self.assertIn('build tools', plan['changed']['a'])
+        compiler.write_bytes(b'compiler one')
+        del entries[0]['definition']['reuse_context']
+        build_release_set.write_json(self.ws.out / build_release_set.REPORT, {'builds': entries})
+        plan, errors = self.ws.plan(m)
+        self.assertEqual(errors, [])
+        self.assertIn('no recorded content identity', plan['changed']['a'])
+
+    def test_default_tree_and_reused_rows_still_run_current_policy_gates(self):
+        head = self.ws.commit('not published yet')
+        row = self.ws.row('a', commit=head)
+        del row['tree']
+        m = self.ws.manifest([row], recipe_commit=head)
+        self.seed_success(m)
+        plan, errors = self.ws.plan(m)
+        self.assertEqual(errors, [])
+        self.assertEqual(plan['builds'], [])
+        self.assertEqual(plan['kept'][0]['definition']['tree'], 'worktree')
+        params = {f'{head}:stub.ps1': {'params': PARAMS}}
+        result = build_release_set.run_gates(plan, params)
+        gates = {g['name']: g for g in result['gates']}
+        self.assertEqual(gates['published']['status'], 'FAIL')
+        self.assertEqual(gates['compiler']['status'], 'PASS')
+        # Compiler checks must also execute when no row needs compilation.
+        result = build_release_set.run_gates(plan, {})
+        self.assertEqual(next(g for g in result['gates'] if g['name'] == 'compiler')['status'], 'FAIL')
 
     def test_the_schema_refuses_an_unknown_field_and_a_missing_compiler(self):
         row = self.ws.row("a")
@@ -850,7 +1004,7 @@ class ReleaseSetRuns(unittest.TestCase):
         status = {b["id"]: b["status"] for b in report["builds"]}
         self.assertEqual(status, {"a": "ok", "bad": "failed", "c": "not-started"}, out)
         self.assertEqual(report["status"], "failed")
-        log = self.ws.out / "logs" / "bad" / "build.log"
+        log = Path(next(b for b in report['builds'] if b['id'] == 'bad')['log_dir']) / 'build.log'
         self.assertIn("recipe bad fails on purpose", log.read_text(encoding="utf-8-sig", errors="replace"))
         self.assertIn("see " + str(log), next(b for b in report["builds"] if b["id"] == "bad")["error"])
         self.assertTrue((self.ws.out / "artifacts" / "release" / "a" / "a.bin").is_file())
@@ -885,7 +1039,8 @@ class ReleaseSetRuns(unittest.TestCase):
         git(self.ws.repo, "worktree", "add", "--detach", str(other), "HEAD")
         shutil.rmtree(self.ws.work)
         shutil.rmtree(other)
-        code, out = self.ws.run(manifest)
+        # Exercise worktree creation explicitly. The default correctly needs no tree for already built rows.
+        code, out = self.ws.run(manifest, '-Rebuild')
         self.assertEqual(code, 0, out)
         self.assertIn("removed the registration of " + str(self.ws.work / "b" / "s"), out)
         listed = git(self.ws.repo, "worktree", "list", "--porcelain").replace("\\", "/")
@@ -983,8 +1138,12 @@ class ReleaseSetRuns(unittest.TestCase):
         self.assertIn("is gone or changed", out)
         self.assertFalse(self.ws.events.exists(), out)
         code, out = self.ws.run(manifest, "-KeepFrom", str(round1))
-        self.assertEqual(code, 1, out)
-        self.assertIn("is gone or changed", out)
+        self.assertEqual(code, 0, out)
+        self.assertIn('an earlier artifact is missing or changed', out)
+        self.assertEqual({b['id']: bool(b.get('kept')) for b in self.ws.report()['builds']}, {'a': False, 'b': False})
+        rebuilt = next(b for b in self.ws.report()['builds'] if b['id'] == 'a')
+        self.assertEqual(rebuilt['outputs'][0]['sha256'], a['outputs'][0]['sha256'])
+        self.assertEqual((round1 / 'artifacts/release/a/a.bin').read_text(), 'not the build')
         self.assertTreesGone()
 
     def test_keep_from_without_only_builds_only_the_changed_rows(self):

@@ -4,6 +4,10 @@ How to build every binary this project deploys from this repository plus public 
 builds from this repository alone; LLVM and the Mesa components build from pinned upstream commits plus this
 project's patches. The executable half of this page is [`tools/build/`](../tools/build/README.md).
 
+For a complete release set, follow the [build playbook](build-playbook.md). It covers
+the default incremental build, retries, importing earlier results and an explicit
+full rebuild.
+
 ## Scope
 
 A fresh Windows x64 development machine needs Visual Studio 2022 or its Build Tools, the WDK and SDK as

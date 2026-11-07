@@ -86,6 +86,12 @@ those properties.
 
 ## Commands
 
+For component sets, follow [the build playbook](docs/build-playbook.md). Use the default
+automatic selection and keep the same output directory when retrying. Inspect `-Plan`
+before compilation. Use `-KeepFrom` when an earlier set can supply unchanged results.
+Reserve `-Rebuild` for a deliberate clean comparison or a build diagnosis. Read the
+tool's guidance before choosing manual selection or a full rebuild.
+
 ```
 python tools/regcalc/regcalc.py lookup <mmNAME...>
 python tools/regcalc/regcalc.py reverse <byte_offset...>
