@@ -39,6 +39,16 @@ class ContextTests(unittest.TestCase):
         os.utime(self.tool, (1_700_000_000, 1_700_000_000))
         self.assertEqual(self.capture(), first)
 
+    def test_default_recipe_sdks_and_shader_tools_are_content_inputs(self):
+        for name in ('scratch/glslang/bin/glslangValidator.exe', 'ref/AGS_SDK-v6.3.0/amd_ags.h',
+                     'ref/display-library__WARN-EULA-in-docs-only-headers-MIT/include/adl.h',
+                     'ref/ddi-display/d3d10umddi.md'):
+            with self.subTest(name=name):
+                self.write(self.root / name, b'first')
+                first = self.capture()
+                self.write(self.root / name, b'other')
+                self.assertNotEqual(self.capture()['fingerprint'], first['fingerprint'])
+
     def test_same_size_same_mtime_content_replacement_changes_identity(self):
         first = self.capture()
         timestamp = self.tool.stat().st_mtime_ns

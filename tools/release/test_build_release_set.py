@@ -393,6 +393,24 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
         result = build_release_set.run_gates(plan, {})
         self.assertEqual(next(g for g in result['gates'] if g['name'] == 'compiler')['status'], 'FAIL')
 
+    def test_workspace_input_bytes_invalidate_reuse_and_missing_input_fails_plan(self):
+        source = self.ws.root / 'headers/api.h'
+        source.parent.mkdir()
+        source.write_bytes(b'header first')
+        m = self.ws.manifest([self.ws.row('a', inputs={'header': {'workspace': 'headers/api.h'}})])
+        self.seed_success(m)
+        plan, errors = self.ws.plan(m)
+        self.assertEqual(errors, [])
+        self.assertEqual(plan['builds'], [])
+        source.write_bytes(b'header other')
+        plan, errors = self.ws.plan(m)
+        self.assertEqual(errors, [])
+        self.assertIn('workspace input content', plan['changed']['a'])
+        source.unlink()
+        plan, errors = self.ws.plan(m)
+        self.assertIsNone(plan)
+        self.assertIn('workspace input header is absent', errors[0])
+
     def test_the_schema_refuses_an_unknown_field_and_a_missing_compiler(self):
         row = self.ws.row("a")
         row["colour"] = "red"

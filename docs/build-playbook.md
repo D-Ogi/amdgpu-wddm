@@ -35,6 +35,10 @@ The manifest pins source and recipe revisions, arguments, outputs and host tests
 the relevant pins when changing code. Editing a checkout alone does not change a
 manifest's pinned source.
 
+Declare external workspace files and directories in each row's `inputs` with the
+`workspace` field. The planner checks their content before reuse and refuses missing
+inputs. Do not hide new dependencies behind a recipe's default path.
+
 ## 2. Review the plan
 
 ```powershell

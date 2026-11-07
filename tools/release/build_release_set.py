@@ -428,6 +428,22 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
     version = version or manifest["version"]
     rows = manifest["rows"]
     by_id = {r["id"]: r for r in rows}
+    input_reader = build_context.Fingerprinter()
+    workspace_inputs = {}
+    for row in rows:
+        captured = workspace_inputs[row['id']] = {}
+        for name, spec in (row.get('inputs') or {}).items():
+            if not spec.get('workspace'):
+                continue
+            path = (root / spec['workspace']).absolute()
+            if not path.resolve().is_relative_to(root):
+                errors.append(f"row {row['id']}: workspace input {name} is outside --root")
+                continue
+            captured[name] = input_reader.capture(path)
+            if captured[name]['state'] not in ('file', 'directory'):
+                errors.append(f"row {row['id']}: workspace input {name} is {captured[name]['state']}: {path}")
+    if errors:
+        return None, errors
     producer = {}
     for r in rows:
         for o in r["outputs"]:
@@ -509,6 +525,7 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         r["jobs"] = r["slots"] * jobs_per_slot
         r['tree'] = r.get('tree', 'worktree')
         r['reuse_context'] = context_key
+        r['workspace_inputs'] = workspace_inputs[rid]
         r['base'] = r.get('base') or table[r['repo']].get('base')
         r['recipe_base'] = table[recipe_repo].get('base')
         # The version a build stamps, for a row whose arguments name it: an artifact of an earlier run that was
@@ -546,6 +563,8 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         if auto:
             if not context_key['complete'] or old.get('reuse_context') != context_key:
                 return None, 'build tools or environment changed, are incomplete, or have no recorded content identity'
+            if old.get('workspace_inputs', {}) != new['workspace_inputs']:
+                return None, 'workspace input content changed or was not recorded'
             expected = sorted((o['path'], o.get('flavour', new['flavour']), o['file']) for o in new['outputs'])
             actual = sorted((o.get('path', ''), o.get('flavour', ''), o.get('file', ''))
                             for o in entry.get('outputs', []))
@@ -608,7 +627,7 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         # Manual selection must not upgrade a legacy or different environment to today's identity without a build.
         definition['reuse_context'] = old.get('reuse_context')
         if not auto:
-            for field in ('tests', 'arch', 'tree', 'keep', 'external_payload_sha256'):
+            for field in ('tests', 'arch', 'tree', 'keep', 'external_payload_sha256', 'workspace_inputs'):
                 if field in old:
                     definition[field] = old[field]
                 else:

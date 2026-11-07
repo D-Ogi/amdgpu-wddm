@@ -138,7 +138,11 @@ def capture_context(root, repo, tools=None, *, environ=None, executables=None, d
             required.append(item)
         return item
 
-    defaults = {"toolchain": record(root / "toolchain"), "python_modules": record(root / "scratch/py")}
+    defaults = {"toolchain": record(root / "toolchain"), "python_modules": record(root / "scratch/py"),
+                "shader_tools": record(root / "scratch/glslang/bin"),
+                "ags_headers": record(root / "ref/AGS_SDK-v6.3.0"),
+                "adl_headers": record(root / "ref/display-library__WARN-EULA-in-docs-only-headers-MIT/include"),
+                "ddi_contract": record(root / "ref/ddi-display/d3d10umddi.md")}
     helpers = {name: record(repo / name, True) for name in RUNTIME_HELPERS}
     tool_inputs = {name: record(value, True) for name, value in sorted(tools.items())}
     selected_env = {k: env[k] for k in sorted(env) if k in ENVIRONMENT or k.startswith("BC250_TOOL_")}
