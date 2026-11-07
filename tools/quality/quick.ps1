@@ -536,6 +536,8 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # BD-223: the scaler, MPC, surface and colour helpers, the DC types and the latch probe are gates of their own. Inside
  # modeset they made it run past its 180 s deadline.
  Check 'scaler-geometry' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scaler_geometry.ps1" -Root $Workspace -Out "$Out\scaler-geometry" }
+ Check 'overlay-group' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group" }
+ Check 'overlay-group-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group-controls" -Mutation all }
  Check 'dc-types' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dc_types.ps1" -Root $Workspace -Out "$Out\dc-types" }
  Check 'latch-probe' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_latch_probe.ps1" -Root $Workspace -Out "$Out\latch-probe" -Mutations }
  Check 'atom-display' {

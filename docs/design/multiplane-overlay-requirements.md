@@ -285,6 +285,36 @@ the independently latched live MPO update path required above.
 
 ## AMD implementation reference
 
+### Combined RGB and NV12 preparation
+
+`Bc250OverlayPrepare` combines the existing layout, geometry, CNVC, MPC and
+group-DML preparations for one RGB pipe 0 and one NV12 pipe 1. This is private
+CPU preparation, with no DDI caller, hardware writes or capability change.
+The caller supplies actual allocation bounds, each component's offset and byte
+pitch, source/destination/clip rectangles, explicit color range and output timing.
+It owns the floating-point state and DML workspace at PASSIVE_LEVEL.
+
+Input array order does not determine the pipe. RGB remains on pipe 0, where
+the current cursor owner resides, and NV12 remains on pipe 1. Windows defines
+LayerIndex zero as topmost (`DXGK_MULTIPLANE_OVERLAY_PLANE3`); the MPC plan uses
+the opposite z-order convention. Both layer indices must appear exactly once.
+The output has no pointers into temporary inputs or workspace, and every
+refusal clears the whole result. One failed plane cannot publish a partial group.
+
+The initial subset is opaque, linear RGB8 plus NV12, with no rotation, mirror,
+stereo, interlace, compression or post-composition transform. It reuses the
+existing NV12 alignment and disjoint component-range checks, the shared scaling
+limits and the imported scaler's even-origin restriction. P010 remains refused.
+The chroma byte pitch is converted to UV sample units only at the DML boundary.
+Independent UV padding and either component placement order remain explicit.
+
+This does not resolve the open hardware requirements below. In particular,
+preparing the reference chroma geometry does not establish DXGI chroma siting;
+preparing CSC fields does not prove downstream normalization or bank ownership.
+The owner still needs Y0 power/latch/image witnesses, clocks and timing admission,
+atomic commit/recovery, allocation lifetime and per-layer PresentId retirement
+before connecting this preparation to Check3/SetAddress3 or raising caps.
+
 PROVENANCE: Linux amdgpu DC, MIT, revision
 `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
 
