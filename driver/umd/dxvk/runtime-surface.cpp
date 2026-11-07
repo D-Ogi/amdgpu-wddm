@@ -2,20 +2,48 @@
 #include "runtime-surface.h"
 #include "runtime-surface-format.h"
 #include "diagnostics.h"
+#include <cstring>
 namespace bc250::umd {
+namespace {
+HRESULT planar_record(const RuntimeImageLayout &layout,BC250_WDDM_NV12_PRIVATE &out) {
+    if (layout.planes!=2 || layout.format!=VK_FORMAT_G8_B8R8_2PLANE_420_UNORM ||
+        layout.memory.alignment>UINT32_MAX || layout.plane[0].rowPitch>UINT32_MAX ||
+        layout.plane[1].rowPitch>UINT32_MAX) return E_INVALIDARG;
+    BC250_WDDM_NV12_PRIVATE n{};
+    n.Surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,BC250_WDDM_NV12_VERSION,layout.width,layout.height,
+        ULONG(layout.plane[0].rowPitch),BC250_NV12_D3DDDI_FORMAT,layout.memory.size};
+    n.ChromaPitch=ULONG(layout.plane[1].rowPitch); n.Layout=BC250_WDDM_NV12_LINEAR;
+    n.SurfaceOffset=layout.plane[0].offset; n.ChromaOffset=layout.plane[1].offset; n.Alignment=ULONG(layout.memory.alignment);
+    if (!Bc250Nv12PrivateValid(&n,sizeof(n))) return E_INVALIDARG;
+    out=n; return S_OK;
+}
+bool preparation_valid(const RuntimeSurfacePreparation *p) { return p && p->device && p->vk && p->engine; }
+}
 HRESULT begin_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &queue,
-    const RuntimeSurfaceRequest &request,const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface &out) {
+    const RuntimeSurfaceRequest &request,const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface &out,
+    const RuntimeSurfacePreparation *prepare) {
     if (out.phase!=SurfacePhase::empty || out.owner) return E_UNEXPECTED;
+    const bool planar=desc.Format==DXGI_FORMAT_NV12;
     if (!runtime.domain.entered() || !queue.queue || !queue.sync || !queue.cpu ||
         desc.Width!=request.surface.Width || desc.Height!=request.surface.Height ||
         desc.MipLevels!=1 || desc.ArraySize!=1 || desc.SampleDesc.Count!=1 || desc.SampleDesc.Quality ||
-        !runtime_surface_format(request.surface.Format,desc.Format)) return E_INVALIDARG;
+        !(planar ? request.surface.Format==BC250_NV12_D3DDDI_FORMAT && preparation_valid(prepare) :
+          runtime_surface_format(request.surface.Format,desc.Format)!=nullptr)) return E_INVALIDARG;
     out.owner=&runtime; out.queue=queue; out.desc=desc;
     out.primary=request.primary; out.vidpn_source=request.vidpn_source;
     out.scanout=(request.texture.Access&BC250_SURFACE_RESOURCE_SCANOUT)!=0;
-    out.pitch=request.surface.Pitch; out.bytes=request.surface.Size;
     out.phase=SurfacePhase::failed;
-    HRESULT hr=allocate_runtime_surface(runtime,request,out.allocation);
+    RuntimeSurfaceRequest actual=request;
+    HRESULT hr=S_OK;
+    if (planar) {
+        hr=prepare_runtime_nv12(runtime,prepare->device,*prepare->vk,*prepare->engine,desc,out.texture);
+        if (FAILED(hr)) return hr;
+        hr=planar_record(out.texture.preparedLayout,actual.nv12);
+        if (FAILED(hr)) return hr;
+        actual.surface=actual.nv12.Surface; out.nv12=actual.nv12;
+    }
+    out.pitch=actual.surface.Pitch; out.bytes=actual.surface.Size;
+    hr=allocate_runtime_surface(runtime,actual,out.allocation);
     if (FAILED(hr)) {
         surface_diagnostic("allocate",hr,request.surface.Format,request.surface.Width,request.surface.Height,
             request.surface.Pitch,request.surface.Size,(request.primary ? 1ull : 0ull)<<32|request.vidpn_source);
@@ -32,14 +60,30 @@ HRESULT begin_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &q
 }
 HRESULT adopt_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &queue,
     RuntimeSurfaceAllocation &allocation,const BC250_WDDM_ALLOCATION_PRIVATE &metadata,
-    const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface &out) {
+    const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface &out,const BC250_WDDM_NV12_PRIVATE *nv12,
+    const RuntimeSurfacePreparation *prepare) {
     if (out.phase!=SurfacePhase::empty || out.owner) return E_UNEXPECTED;
     const auto *row=runtime_surface_format(metadata.Format,desc.Format);
+    const bool planar=desc.Format==DXGI_FORMAT_NV12;
     if (!runtime.domain.entered() || !runtime.hDevice || !queue.queue || !queue.sync || !queue.cpu ||
-        !allocation.allocation || !allocation.runtime_resource || !row || !runtime_surface_geometry(metadata,row->bytes_per_pixel) ||
+        !allocation.allocation || !allocation.runtime_resource ||
+        !(planar ? nv12 && Bc250Nv12PrivateValid(nv12,sizeof(*nv12)) && preparation_valid(prepare) &&
+                    !std::memcmp(&nv12->Surface,&metadata,sizeof(metadata)) :
+                  row && runtime_surface_geometry(metadata,row->bytes_per_pixel)) ||
         desc.Width!=metadata.Width || desc.Height!=metadata.Height || desc.MipLevels!=1 || desc.ArraySize!=1 ||
         desc.SampleDesc.Count!=1 || desc.SampleDesc.Quality)
         return E_INVALIDARG;
+    if (planar) {
+        RuntimeTexture prepared{}; BC250_WDDM_NV12_PRIVATE measured{};
+        HRESULT hr=prepare_runtime_nv12(runtime,prepare->device,*prepare->vk,*prepare->engine,desc,prepared);
+        if (FAILED(hr)) return hr;
+        hr=planar_record(prepared.preparedLayout,measured);
+        if (FAILED(hr) || std::memcmp(&measured,nv12,sizeof(measured))) {
+            destroy_runtime_image(prepare->device,*prepare->vk,prepared.image);
+            return E_INVALIDARG;
+        }
+        out.texture=prepared; out.nv12=*nv12;
+    }
     out.owner=&runtime; out.queue=queue; out.desc=desc;
     out.pitch=metadata.Pitch; out.bytes=metadata.Size;
     out.allocation=allocation; allocation={};
@@ -61,8 +105,10 @@ HRESULT finish_runtime_surface(VkDevice device,const RuntimeImageDispatch &vk,
     imported.sType=BC250_HOST_IMPORT_STYPE; imported.identity=surface.owner->host_identity();
     imported.allocation=surface.allocation.allocation; imported.va=surface.mapping.address;
     imported.size=surface.bytes;
-    hr=create_runtime_texture(*surface.owner,device,vk,engine,properties,surface.desc,
-        imported,surface.pitch,surface.texture);
+    hr=surface.nv12.Surface.Version==BC250_WDDM_NV12_VERSION
+        ? bind_runtime_nv12(*surface.owner,device,vk,engine,properties,surface.desc,imported,surface.texture)
+        : create_runtime_texture(*surface.owner,device,vk,engine,properties,surface.desc,
+            imported,surface.pitch,surface.texture);
     if (FAILED(hr)) {
         surface_diagnostic("texture",hr,UINT(surface.desc.Format),surface.desc.Width,surface.desc.Height,
             surface.pitch,surface.bytes,surface.desc.BindFlags);
@@ -92,6 +138,7 @@ HRESULT close_runtime_surface(HostBridge &bridge,VkDevice device,const RuntimeIm
     }
     surface.mapping={};
     surface.owner=nullptr; surface.queue={}; surface.desc={}; surface.pitch=0; surface.bytes=0;
+    surface.nv12={}; surface.texture.preparedInfo={}; surface.texture.preparedLayout={};
     surface.phase=SurfacePhase::empty;
     return S_OK;
 }

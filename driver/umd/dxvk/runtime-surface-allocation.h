@@ -10,6 +10,7 @@ struct RuntimeSurfaceAllocation {
 };
 struct RuntimeSurfaceRequest {
     BC250_WDDM_ALLOCATION_PRIVATE surface{};
+    BC250_WDDM_NV12_PRIVATE nv12{}; // LB7A v2, filled from the retained Vulkan image before AllocateCb
     BC250_SURFACE_RESOURCE_PRIVATE texture{}; // Zero means legacy E26R v2.
     HANDLE runtime_resource=nullptr;
     UINT vidpn_source=0;

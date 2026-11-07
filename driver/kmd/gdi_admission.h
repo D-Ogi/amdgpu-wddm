@@ -132,6 +132,9 @@ static __inline int Bc250Lb7aAdmit(const void* Data, unsigned int Bytes, int Sha
     *Type = 0;
     if (!s || Bytes < sizeof(*s) || s->Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || !s->Size ||
         !WddmGdiPrivate(s, Bytes, Type)) return BC250_LB7A_UNREAD;
+    if (s->Version==BC250_WDDM_NV12_VERSION)
+        return Bc250Nv12PrivateValid(Data,Bytes) && WddmGdiAllocationPolicy(0,SharedCpu,CachedCpu,Policy)
+            ? BC250_LB7A_ADMITTED : BC250_LB7A_REFUSED;
     // A standard type the policy puts in the aperture (type 2) needs the segment; legacy type 0 keeps its rule.
     if (!WddmSurfaceAdmitted(s, *Type) || !WddmGdiAllocationPolicy(*Type, SharedCpu, CachedCpu, Policy) ||
         (*Type && Policy->Aperture && !ApertureOffered)) return BC250_LB7A_REFUSED;

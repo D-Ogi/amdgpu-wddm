@@ -177,15 +177,20 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
     // borderless swap chain is RGB10A2 with a primary descriptor; refusing it removed the device at
     // startup (339-342).
     const auto *row=runtime_surface_format(d.Format);
-    if (!row || (input.pPrimaryDesc && row->dxgi==AMDGPU_WDDM_DXGI_A8_UNORM)) return E_NOTIMPL;
+    const bool planar=d.Format==DXGI_FORMAT_NV12;
+    if ((!row && !planar) || (input.pPrimaryDesc && row && row->dxgi==AMDGPU_WDDM_DXGI_A8_UNORM)) return E_NOTIMPL;
+    if (planar && ((!d.Width || !d.Height) || ((d.Width|d.Height)&1u) || d.Width>16383u || d.Height>16383u)) return E_INVALIDARG;
     RuntimeSurfaceRequest r{};
     r.runtime_resource=runtimeHandle; r.primary=input.pPrimaryDesc!=nullptr;
     r.displayable=(input.MiscFlags&D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE)!=0;
     r.shared=(input.MiscFlags&D3D10_DDI_RESOURCE_MISC_SHARED)!=0;
     if (input.pPrimaryDesc) r.vidpn_source=input.pPrimaryDesc->VidPnSourceId;
-    const UINT pitch=runtime_surface_pitch(d.Width,row->bytes_per_pixel);
+    const UINT pitch=planar ? 0u : runtime_surface_pitch(d.Width,row->bytes_per_pixel);
     const UINT64 bytes=(UINT64(pitch)*((d.Height+3)&~3u)+4095)&~UINT64(4095);
-    r.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,d.Width,d.Height,pitch,row->d3dddi,bytes};
+    r.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,planar ? BC250_WDDM_NV12_VERSION : 1ul,d.Width,d.Height,pitch,
+        planar ? BC250_NV12_D3DDDI_FORMAT : row->d3dddi,bytes};
+    // NV12 is a pending description, not an allocation. begin_surface queries
+    // both planes of its retained image before filling the exact LB7A v2 record.
     D3D11_TEXTURE2D_DESC1 result{d.Width,d.Height,d.MipLevels,d.ArraySize,d.Format,d.SampleDesc,
         d.Usage,d.BindFlags,d.CPUAccessFlags,d.MiscFlags,D3D11_TEXTURE_LAYOUT_UNDEFINED};
     r.texture={BC250_SURFACE_RESOURCE_MAGIC,BC250_SURFACE_RESOURCE_TEXTURE_VERSION,UINT(r.shared),r.primary ? 1u : 0u,
@@ -197,7 +202,7 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
     // rule checks that equality instead of assuming it. Only the record's SCANOUT bit is added, which moves
     // the allocation to the local segment; every other answer keeps the composed primary.
     // C71: the mode the descriptor names, which the runtime sets after this create (scanout-primary.h).
-    if (r.primary || r.displayable) {
+    if (!planar && (r.primary || r.displayable)) {
         const UINT mode_width=input.pPrimaryDesc ? input.pPrimaryDesc->ModeDesc.Width : 0;
         const UINT mode_height=input.pPrimaryDesc ? input.pPrimaryDesc->ModeDesc.Height : 0;
         // BD-223 step R3: a displayable buffer with no descriptor is decided too, while the trailer opens it; an
@@ -254,10 +259,28 @@ static HRESULT decode_bare_allocation(const D3DDDI_OPENALLOCATIONINFO2 &a,BC250_
     return S_OK;
 }
 HRESULT decode_open_resource(const D3D10DDIARG_OPENRESOURCE &input,BC250_WDDM_ALLOCATION_PRIVATE &metadata,
-    D3D11_TEXTURE2D_DESC1 &desc) {
+    D3D11_TEXTURE2D_DESC1 &desc,BC250_WDDM_NV12_PRIVATE *nv12) {
+    if (nv12) *nv12={};
     if (input.NumAllocations!=1 || !input.pOpenAllocationInfo2) return E_NOTIMPL;
     const auto &a=input.pOpenAllocationInfo2[0];
     if (!a.hAllocation) return E_INVALIDARG;
+    if (a.PrivateDriverDataSize==sizeof(BC250_WDDM_NV12_PRIVATE)) {
+        BC250_WDDM_NV12_PRIVATE n{}; BC250_SURFACE_RESOURCE_PRIVATE r{};
+        if (!nv12 || !a.pPrivateDriverData || !input.pPrivateDriverData || input.PrivateDriverDataSize!=sizeof(r))
+            return E_INVALIDARG;
+        std::memcpy(&n,a.pPrivateDriverData,sizeof(n)); std::memcpy(&r,input.pPrivateDriverData,sizeof(r));
+        int shared=0,cached=0;
+        if (!Bc250Nv12PrivateValid(&n,sizeof(n)) || r.Magic!=BC250_SURFACE_RESOURCE_MAGIC ||
+            r.Version!=BC250_SURFACE_RESOURCE_TEXTURE_VERSION || !Bc250SurfaceResourcePolicy(&r,sizeof(r),&shared,&cached) ||
+            r.Width!=n.Surface.Width || r.Height!=n.Surface.Height || r.Format!=DXGI_FORMAT_NV12 ||
+            r.MipLevels!=1 || r.ArraySize!=1 || r.SampleCount!=1 || r.SampleQuality || r.Usage!=D3D11_USAGE_DEFAULT ||
+            r.CpuAccessFlags || r.TextureLayout!=D3D11_TEXTURE_LAYOUT_UNDEFINED ||
+            (r.BindFlags&~BC250_SHARED_BIND_MASK) || (r.MiscFlags&~BC250_SHARED_MISC_MASK) ||
+            (r.Access&(BC250_SURFACE_RESOURCE_CPU_READ|BC250_SURFACE_RESOURCE_SCANOUT))) return E_INVALIDARG;
+        metadata=n.Surface; *nv12=n;
+        desc={r.Width,r.Height,1,1,DXGI_FORMAT_NV12,{1,0},D3D11_USAGE_DEFAULT,r.BindFlags,0,r.MiscFlags,D3D11_TEXTURE_LAYOUT_UNDEFINED};
+        return S_OK;
+    }
     if (!input.PrivateDriverDataSize) return decode_bare_allocation(a,metadata,desc);
     BC250_SHARED_SURFACE_ADMIT admit{};
     admit.RequireShared=0;
@@ -420,8 +443,8 @@ void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         if (!s || !args || !runtimeHandle.handle) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
-        BC250_WDDM_ALLOCATION_PRIVATE metadata{}; D3D11_TEXTURE2D_DESC1 desc{};
-        HRESULT hr=decode_open_resource(*args,metadata,desc);
+        BC250_WDDM_ALLOCATION_PRIVATE metadata{}; BC250_WDDM_NV12_PRIVATE nv12{}; D3D11_TEXTURE2D_DESC1 desc{};
+        HRESULT hr=decode_open_resource(*args,metadata,desc,&nv12);
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
         // BD-253, lab flavour: each OpenResource of this device that succeeds, at most 32 lines per process for opens
         // with a resource record and 16 for opens without one (window redirection surfaces; Chromium's texture pool
@@ -452,7 +475,7 @@ void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
         }
         RuntimeSurfaceAllocation allocation{reinterpret_cast<HANDLE>(runtimeHandle.handle),args->pOpenAllocationInfo2[0].hAllocation,args->hKMResource.handle};
         RuntimeSurface *surface=nullptr;
-        hr=owner.adopt_surface(allocation,metadata,desc,surface);
+        hr=owner.adopt_surface(allocation,metadata,desc,surface,nv12.Surface.Version ? &nv12 : nullptr);
         if (FAILED(hr)) open_refused_note(*args,owner.runtime().hDevice,"adopt",hr);
         if (SUCCEEDED(hr)) {
             hr=owner.wait_surface(*surface);

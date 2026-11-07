@@ -14,7 +14,14 @@ struct RuntimeTexture {
     RuntimeImage image{};
     ID3D11Texture2D *texture=nullptr;
     bool retained=false; // Final Release found an unexpected surviving owner.
+    VkImageCreateInfo preparedInfo{}; // pNext belongs to engine device until its final Release (engine ABI)
+    RuntimeImageLayout preparedLayout{};
 };
+HRESULT prepare_runtime_nv12(RuntimeDevice &,VkDevice,const RuntimeImageDispatch &,
+    const TextureImportDispatch &,const D3D11_TEXTURE2D_DESC1 &,RuntimeTexture &);
+HRESULT bind_runtime_nv12(RuntimeDevice &,VkDevice,const RuntimeImageDispatch &,
+    const TextureImportDispatch &,const VkPhysicalDeviceMemoryProperties &,
+    const D3D11_TEXTURE2D_DESC1 &,const bc250_host_import &,RuntimeTexture &);
 HRESULT create_runtime_texture(RuntimeDevice &,VkDevice,const RuntimeImageDispatch &,
     const TextureImportDispatch &,const VkPhysicalDeviceMemoryProperties &,
     const D3D11_TEXTURE2D_DESC1 &,const bc250_host_import &,VkDeviceSize pitch,RuntimeTexture &);

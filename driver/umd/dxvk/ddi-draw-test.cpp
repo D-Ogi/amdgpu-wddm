@@ -1360,6 +1360,33 @@ int main() {
     openAllocation.hAllocation=31; openAllocation.pPrivateDriverData=&request.surface; openAllocation.PrivateDriverDataSize=sizeof(request.surface);
     openArgs.pPrivateDriverData=&request.texture; openArgs.PrivateDriverDataSize=sizeof(request.texture);
     BC250_WDDM_ALLOCATION_PRIVATE decodedSurface{}; D3D11_TEXTURE2D_DESC1 decodedDesc{};
+    {
+        auto nvDesc=runtimeDesc; auto nvMip=runtimeMip;
+        nvMip.TexelWidth=64; nvMip.TexelHeight=16; nvDesc.pMipInfoList=&nvMip;
+        nvDesc.pPrimaryDesc=nullptr; nvDesc.Format=DXGI_FORMAT_NV12;
+        RuntimeSurfaceRequest nvRequest{}; D3D11_TEXTURE2D_DESC1 nvTexture{};
+        if (convert_runtime_resource(nvDesc,&rotateIdentity[0],nvRequest,nvTexture)!=S_OK ||
+            nvRequest.surface.Version!=BC250_WDDM_NV12_VERSION || nvRequest.surface.Pitch || nvRequest.surface.Size ||
+            nvRequest.scanout || nvTexture.Format!=DXGI_FORMAT_NV12) fail(__LINE__);
+        BC250_WDDM_NV12_PRIVATE wire{{BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,2,64,16,256,BC250_NV12_D3DDDI_FORMAT,8192},
+            256,BC250_WDDM_NV12_LINEAR,0,6144,256,0},decoded{};
+        auto nvAllocation=openAllocation; nvAllocation.pPrivateDriverData=&wire; nvAllocation.PrivateDriverDataSize=sizeof(wire);
+        auto nvOpen=openArgs; nvOpen.pOpenAllocationInfo2=&nvAllocation; nvOpen.pPrivateDriverData=&nvRequest.texture;
+        if (decode_open_resource(nvOpen,decodedSurface,decodedDesc,&decoded)!=S_OK ||
+            decoded.ChromaOffset!=6144 || decoded.ChromaPitch!=256 || decodedDesc.Format!=DXGI_FORMAT_NV12) fail(__LINE__);
+        nvAllocation.PrivateDriverDataSize=32;
+        if (decode_open_resource(nvOpen,decodedSurface,decodedDesc,&decoded)!=E_INVALIDARG) fail(__LINE__);
+        nvAllocation.PrivateDriverDataSize=sizeof(wire); wire.ChromaOffset=2048;
+        if (decode_open_resource(nvOpen,decodedSurface,decodedDesc,&decoded)!=E_INVALIDARG) fail(__LINE__);
+        wire.ChromaOffset=6144; wire.Surface.Version=1;
+        if (decode_open_resource(nvOpen,decodedSurface,decodedDesc,&decoded)!=E_INVALIDARG) fail(__LINE__);
+        wire.Surface.Version=2; nvRequest.texture.Format=DXGI_FORMAT_R8_UNORM;
+        if (decode_open_resource(nvOpen,decodedSurface,decodedDesc,&decoded)!=E_INVALIDARG) fail(__LINE__);
+        nvRequest.texture.Format=DXGI_FORMAT_NV12; nvRequest.texture.CpuAccessFlags=D3D11_CPU_ACCESS_READ;
+        if (decode_open_resource(nvOpen,decodedSurface,decodedDesc,&decoded)!=E_INVALIDARG) fail(__LINE__);
+        nvMip.TexelHeight=17;
+        if (convert_runtime_resource(nvDesc,&rotateIdentity[0],nvRequest,nvTexture)!=E_INVALIDARG) fail(__LINE__);
+    }
     for (auto format:sharedFormats) {
         runtimeDesc.Format=format;
         if (convert_runtime_resource(runtimeDesc,&rotateIdentity[0],request,importedDesc)!=S_OK ||

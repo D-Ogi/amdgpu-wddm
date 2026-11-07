@@ -3,6 +3,7 @@
 #include "dcn_translate.h"
 #include "surface_format.h"
 #include "surface_resource_private.h"
+#include "../contract/bc250_nv12_layout.h"
 
 // Windows ABI: 32-bit unsigned long, 64-bit unsigned long long.
 #define BC250_WDDM_ALLOCATION_PRIVATE_MAGIC 0x4137424Cul    // "LB7A"
@@ -15,6 +16,31 @@ typedef struct _BC250_WDDM_ALLOCATION_PRIVATE {
     unsigned long Format;                       // D3DDDIFORMAT
     unsigned long long Size;
 } BC250_WDDM_ALLOCATION_PRIVATE;
+
+// LB7A v2 is exactly one linear NV12 allocation. The v1 RGB prefix is unchanged
+// in size but Version prevents an older reader from treating Y as a complete
+// image. Offsets and pitches come from the image retained by its producer.
+typedef struct _BC250_WDDM_NV12_PRIVATE {
+    BC250_WDDM_ALLOCATION_PRIVATE Surface;
+    unsigned long ChromaPitch, Layout;
+    unsigned long long SurfaceOffset, ChromaOffset;
+    unsigned long Alignment, Reserved;
+} BC250_WDDM_NV12_PRIVATE;
+#define BC250_WDDM_NV12_VERSION 2ul
+#define BC250_WDDM_NV12_LINEAR 1ul
+static __inline int Bc250Nv12PrivateValid(const void* Data, unsigned int Bytes)
+{
+    const BC250_WDDM_NV12_PRIVATE* n=(const BC250_WDDM_NV12_PRIVATE*)Data;
+    BC250_NV12_STORAGE storage;
+    if (!n || Bytes!=sizeof(*n) || n->Surface.Magic!=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC ||
+        n->Surface.Version!=BC250_WDDM_NV12_VERSION || n->Surface.Format!=BC250_NV12_D3DDDI_FORMAT ||
+        n->Layout!=BC250_WDDM_NV12_LINEAR || n->Reserved || !n->Alignment ||
+        (n->Alignment&(n->Alignment-1)) || n->Alignment>0x200000ul || n->Surface.Size>~0ull-4095ull) return 0;
+    storage.Width=n->Surface.Width; storage.Height=n->Surface.Height;
+    storage.PitchBytes=n->Surface.Pitch; storage.ChromaPitchBytes=n->ChromaPitch;
+    storage.AllocationBytes=n->Surface.Size; storage.SurfaceOffset=n->SurfaceOffset; storage.ChromaOffset=n->ChromaOffset;
+    return Bc250Nv12StorageValid(&storage);
+}
 
 // Optional standard-GDI trailer. Keep the 32-byte LB7A v1 prefix unchanged:
 // deployed UMD OpenResource accepts >=32 bytes and consumes only that prefix.
@@ -160,6 +186,7 @@ static __inline int WddmGdiPrivate(const void* Data, unsigned int Bytes, unsigne
     if (!Type) return 0;
     *Type=0;
     if (!Data) return 0;
+    if (Bc250Nv12PrivateValid(Data,Bytes)) return 1;
     if (Bytes==sizeof(BC250_WDDM_ALLOCATION_PRIVATE)) return 1;
     if (Bytes!=sizeof(*gdi) || gdi->Magic!=BC250_GDI_PRIVATE_MAGIC ||
         gdi->Surface.Version!=1 || !gdi->Type || gdi->Type>8 ||

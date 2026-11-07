@@ -291,6 +291,9 @@ C_ASSERT(sizeof(DXGK_GDIARG_COLORFILL) <= sizeof(DXGK_GDIARG_STRETCHBLT));
 C_ASSERT(sizeof(DXGK_GDIARG_COLORFILL) <= sizeof(DXGK_GDIARG_TRANSPARENTBLT));
 C_ASSERT(sizeof(DXGK_GDIARG_COLORFILL) <= sizeof(DXGK_GDIARG_CLEARTYPEBLEND));
 C_ASSERT(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
+C_ASSERT(sizeof(BC250_WDDM_NV12_PRIVATE)==64);
+// NV12 is a FOURCC in D3DDDIFORMAT, not a named enum member in WDK 26100.
+C_ASSERT(BC250_NV12_D3DDDI_FORMAT==('N' | ('V' << 8) | ('1' << 16) | ('2' << 24)));
 C_ASSERT(sizeof(BC250_GDI_PRIVATE)==48);
 
 // E26: Present constructs a packet; SubmitCommandVirtual executes it after
@@ -320,6 +323,7 @@ typedef struct _BC250_WDDM_OBJECT {
                                         // (WddmBackingAllocationLocked); nothing clears it when the allocation goes
     UINT AllocationListSize;            // contexts: what CreateContext answered, i.e. how long a list dxgkrnl keeps for it
     BC250_WDDM_ALLOCATION_PRIVATE Allocation;
+    BC250_WDDM_NV12_PRIVATE Nv12;       // valid only for an admitted LB7A v2, immutable until object removal
     ULONG GdiType;                      // retained standard-surface contract, zero for legacy LB7A
     // M8: a context or allocation that arrived as a contract blob (umd_blob.c), not the GDI one above.
     // ExAllocatePool2 zeroes these, so a GDI object stays "not UMD" without a store. UmdRequestedVa is
@@ -6556,6 +6560,8 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     object = WddmNewObject(device, BC250_WDDM_MAGIC_ALLOCATION);
     if (object == NULL) return BC250_CREATE_STEP_NO_MEMORY;
     object->Allocation = *private;
+    if (private->Version==BC250_WDDM_NV12_VERSION)
+        object->Nv12=*(const BC250_WDDM_NV12_PRIVATE*)private;
     object->GdiType=gdiType;
     // M15.14: a type-0 surface whose resource record carries the scan-out intent. Its own LB7A blob is
     // the description, so nothing is copied; the flag says the creator meant this surface to reach the
@@ -6571,6 +6577,7 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     // any other base, and that refusal arrives after the OS has taken SharedPrimaryTransition, which it
     // does not fall back from. Nothing else moves - 64 bytes for every other allocation, as before.
     info->Alignment = Bc250ScanoutCreateAlignment(object->ScanoutRequested ? 1 : 0);
+    if (object->Nv12.Alignment>info->Alignment) info->Alignment=object->Nv12.Alignment;
     info->HintedBank.Value = 0;
     info->MaximumRenamingListLength = 0;
     info->pAllocationUsageHint = NULL;
@@ -6871,6 +6878,8 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
                 opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
                 if (opened != NULL) {
                     opened->Allocation = *private;
+                    if (private->Version==BC250_WDDM_NV12_VERSION)
+                        opened->Nv12=*(const BC250_WDDM_NV12_PRIVATE*)private;
                     opened->GdiType=gdiType;
                     opens[slot]++;
                 }

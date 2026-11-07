@@ -22,7 +22,7 @@ VkResult VKAPI_CALL allocate(VkDevice,const VkMemoryAllocateInfo *a,const VkAllo
     auto *i=static_cast<const bc250_host_import *>(a->pNext);
     auto *d=static_cast<const VkMemoryDedicatedAllocateInfo *>(i->pNext);
     check(i->identity==hostIdentity && i->allocation==31 && i->va==65536 && i->size==8192 && d->image);
-    check(d->sType==VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO && a->allocationSize==4096 && a->memoryTypeIndex==1);
+    check(d->sType==VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO && a->allocationSize==(nv12Prepare ? nv12Memory.size : 4096) && a->memoryTypeIndex==1);
     if (allocationResult==VK_SUCCESS) *m=memory; return allocationResult;
 }
 VkResult VKAPI_CALL bind(VkDevice,VkImage,VkDeviceMemory m,VkDeviceSize offset) { ++bindings; check(m==memory && !offset); return bindResult; }
@@ -74,9 +74,17 @@ UINT64 surfaceFence=0;
 RuntimeSurface *closingSurface=nullptr;
 unsigned surfaceAllocates=0,surfaceUnmaps=0,surfaceDeallocates=0;
 bool failSurfaceDeallocate=false,failSurfaceResident=false;
+bool failSurfaceAllocate=false;
 HRESULT lostSurfaceDeallocate=S_OK;
 HRESULT APIENTRY surface_allocate(HANDLE h,D3DDDICB_ALLOCATE *a) {
     check(h==&identity); ++surfaceAllocates;
+    if (nv12Prepare) {
+        const auto *n=static_cast<const BC250_WDDM_NV12_PRIVATE *>(a->pAllocationInfo2[0].pPrivateDriverData);
+        check(Bc250Nv12PrivateValid(n,a->pAllocationInfo2[0].PrivateDriverDataSize));
+        check(n->SurfaceOffset==nv12Planes[0].offset && n->ChromaOffset==nv12Planes[1].offset &&
+            n->ChromaPitch==nv12Planes[1].rowPitch && n->Surface.Size==nv12Memory.size);
+    }
+    if (failSurfaceAllocate) return E_OUTOFMEMORY;
     a->pAllocationInfo2[0].hAllocation=31; return S_OK;
 }
 HRESULT APIENTRY surface_deallocate(HANDLE,const D3DDDICB_DEALLOCATE2 *a) {
@@ -410,6 +418,42 @@ int main() {
     info.flags|=VK_IMAGE_CREATE_DISJOINT_BIT;
     check(prepare()==E_NOTIMPL && imageCreates==noCreate); info.flags&=~VK_IMAGE_CREATE_DISJOINT_BIT;
     check(allocations==memoryBefore && bindings==bindBefore && surfaceAllocates==allocateBefore);
+    // Actual producer -> AllocateCb -> pending paging -> import -> teardown.
+    // The record uses a padded UV offset different from Y pitch*height.
+    nv12Planes[1].offset=6144; describedFormat=VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
+    textureDesc={64,16,1,1,DXGI_FORMAT_NV12,{1,0},D3D11_USAGE_DEFAULT,0,0,0,D3D11_TEXTURE_LAYOUT_UNDEFINED};
+    RuntimeSurfaceRequest planarRequest{};
+    planarRequest.runtime_resource=&identity;
+    planarRequest.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,BC250_WDDM_NV12_VERSION,64,16,0,BC250_NV12_D3DDDI_FORMAT,0};
+    planarRequest.texture={BC250_SURFACE_RESOURCE_MAGIC,BC250_SURFACE_RESOURCE_TEXTURE_VERSION,0,0,
+        64,16,1,1,DXGI_FORMAT_NV12,1,0,D3D11_USAGE_DEFAULT,0,0,0,D3D11_TEXTURE_LAYOUT_UNDEFINED};
+    RuntimeSurface planarSurface; closingSurface=&planarSurface;
+    const RuntimeSurfacePreparation preparation{device,&imageDispatch,&textureDispatch};
+    auto planarBegin=[&]() { return begin_runtime_surface(runtime,queue,planarRequest,textureDesc,planarSurface,&preparation); };
+    auto planarFinish=[&]() { return finish_runtime_surface(device,imageDispatch,textureDispatch,properties,planarSurface); };
+    auto planarClose=[&]() { return close_runtime_surface(bridge,device,imageDispatch,textureDispatch,planarSurface); };
+    surfaceFence=0;
+    check(planarBegin()==S_FALSE && planarSurface.texture.image.image && !planarSurface.texture.image.memory &&
+        planarSurface.nv12.ChromaOffset==6144 && planarSurface.nv12.Surface.Size==8192);
+    const unsigned preparedCreates=imageCreates;
+    check(planarFinish()==S_FALSE && imageCreates==preparedCreates);
+    surfaceFence=9; check(planarFinish()==S_OK && imageCreates==preparedCreates && planarSurface.texture.texture);
+    const auto wire=planarSurface.nv12;
+    check(planarClose()==S_OK && !planarSurface.texture.image.image && !planarSurface.owner);
+    failSurfaceAllocate=true;
+    check(planarBegin()==E_OUTOFMEMORY && planarSurface.texture.image.image && !planarSurface.allocation.allocation);
+    check(planarClose()==S_OK && !planarSurface.texture.image.image); failSurfaceAllocate=false;
+    // An opener must use the exported layout exactly and must not consume an
+    // allocation when its newly prepared image cannot match that record.
+    RuntimeSurfaceAllocation nvOpened{&identity,31,77};
+    auto badWire=wire; badWire.ChromaOffset=5120;
+    check(adopt_runtime_surface(runtime,queue,nvOpened,badWire.Surface,textureDesc,planarSurface,&badWire,&preparation)==E_INVALIDARG &&
+        nvOpened.allocation==31 && !planarSurface.owner && !planarSurface.texture.image.image);
+    check(adopt_runtime_surface(runtime,queue,nvOpened,wire.Surface,textureDesc,planarSurface,&wire,&preparation)==S_FALSE &&
+        !nvOpened.allocation && planarSurface.nv12.ChromaOffset==6144);
+    const unsigned openedCreates=imageCreates;
+    check(planarFinish()==S_OK && imageCreates==openedCreates);
+    check(planarClose()==S_OK);
     nv12Prepare=false;
     // This test uses synthetic handles only, never an actual allocation/image.
     std::cout << "PASS image import and surface lifecycle: " << checks << " checks, pending paging, teardown order, failure retention, NV12 preparation (mock callbacks)\n";

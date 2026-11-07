@@ -2,6 +2,42 @@
 #include "runtime-texture.h"
 #include "runtime-surface-format.h"
 namespace bc250::umd {
+HRESULT prepare_runtime_nv12(RuntimeDevice &runtime,VkDevice device,const RuntimeImageDispatch &vk,
+    const TextureImportDispatch &engine,const D3D11_TEXTURE2D_DESC1 &desc,RuntimeTexture &out) {
+    if (out.image.image || out.image.memory || out.texture || out.retained) return E_UNEXPECTED;
+    if (!runtime.domain.entered() || !engine.engine || !engine.describe || !engine.wrap || !engine.wait || !engine.release ||
+        desc.Format!=DXGI_FORMAT_NV12 || desc.Usage!=D3D11_USAGE_DEFAULT || desc.CPUAccessFlags ||
+        desc.MipLevels!=1 || desc.ArraySize!=1 || desc.SampleDesc.Count!=1 || desc.SampleDesc.Quality) return E_INVALIDARG;
+    VkImageCreateInfo info{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    HRESULT hr=engine.describe(engine.engine,&desc,&info);
+    if (FAILED(hr)) return hr;
+    if (info.format!=VK_FORMAT_G8_B8R8_2PLANE_420_UNORM || info.extent.width!=desc.Width || info.extent.height!=desc.Height)
+        return E_INVALIDARG;
+    info.tiling=VK_IMAGE_TILING_LINEAR;
+    hr=prepare_linear_runtime_image(runtime,device,vk,info,out.image,out.preparedLayout);
+    if (SUCCEEDED(hr)) out.preparedInfo=info;
+    return hr;
+}
+HRESULT bind_runtime_nv12(RuntimeDevice &runtime,VkDevice device,const RuntimeImageDispatch &vk,
+    const TextureImportDispatch &engine,const VkPhysicalDeviceMemoryProperties &properties,
+    const D3D11_TEXTURE2D_DESC1 &desc,const bc250_host_import &allocation,RuntimeTexture &out) {
+    if (!out.image.image || out.image.memory || out.texture || out.retained || out.preparedLayout.planes!=2 ||
+        out.preparedInfo.format!=VK_FORMAT_G8_B8R8_2PLANE_420_UNORM || desc.Format!=DXGI_FORMAT_NV12 ||
+        out.preparedLayout.width!=desc.Width || out.preparedLayout.height!=desc.Height ||
+        out.preparedLayout.memory.size>allocation.size) return E_INVALIDARG;
+    HRESULT hr=import_runtime_image_memory(runtime,device,out.image.image,vk.memory,properties,allocation,out.image.memory);
+    if (FAILED(hr)) return hr;
+    hr=engine.wrap(engine.engine,&desc,&out.preparedInfo,out.image.image,&out.texture);
+    if (FAILED(hr) || !out.texture) {
+        if (out.texture) {
+            const ULONG refs=engine.release(out.texture); out.texture=nullptr;
+            if (refs) { out.retained=true; return FAILED(hr) ? hr : E_UNEXPECTED; }
+        }
+        destroy_runtime_image(device,vk,out.image);
+        return FAILED(hr) ? hr : E_FAIL;
+    }
+    return S_OK;
+}
 TextureImportDispatch texture_import_dispatch(IBc250DxvkDevice &engine) {
     return {&engine,
         [](void *e,const D3D11_TEXTURE2D_DESC1 *d,VkImageCreateInfo *i) { return static_cast<IBc250DxvkDevice *>(e)->GetImageCreateInfo(d,i); },
