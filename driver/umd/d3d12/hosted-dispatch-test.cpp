@@ -32,8 +32,13 @@ static HRESULT APIENTRY allocate(D3D12DDI_HRTDEVICE device,D3D12DDICB_ALLOCATE_0
  assert(a->pAllocationInfo->PrivateDriverDataSize==4 && a->pAllocationInfo->pPrivateDriverData);
  ++allocations;a->pAllocationInfo->hAllocation=77;return S_OK;
 }
+// BD-200: the flags of the last deallocate. A destroy with flags 0 gives NONE, one with AssumeNotInUse gives
+// ASSUME_NOT_IN_USE alone (never SYNCHRONOUS_DESTROY).
+static unsigned last_deallocate_flags=~0u;
 static HRESULT APIENTRY deallocate(D3D12DDI_HRTDEVICE device,const D3D12DDICB_DEALLOCATE_0022* a){
- assert(device.handle==device_handle && !a->hResource && a->NumAllocations==1 && a->HandleList[0]==77 && !a->Flags);
+ assert(device.handle==device_handle && !a->hResource && a->NumAllocations==1 && a->HandleList[0]==77);
+ assert(a->Flags==D3D12DDI_DEALLOCATE_FLAGS_0022_NONE || a->Flags==D3D12DDI_DEALLOCATE_FLAGS_0022_ASSUME_NOT_IN_USE);
+ last_deallocate_flags=unsigned(a->Flags);
  ++deallocations;return fail_destroy?E_FAIL:S_OK;
 }
 static HRESULT APIENTRY paging_create(HANDLE device,D3DDDICB_CREATEPAGINGQUEUE* a){assert(device==device_handle);a->hPagingQueue=9;a->hSyncObject=10;a->FenceValueCPUVirtualAddress=&fence;return S_OK;}
@@ -261,8 +266,12 @@ int main(){
  destroy.hContext=context.hContext;wrapper.arguments=&destroy;assert(call(BC250_HOST_DESTROY_QUEUE_CONTEXT,&wrapper)==0);
  D3DKMT_DESTROYALLOCATION2 release{};release.AllocationCount=1;release.phAllocationList=&info.hAllocation;
  D3DKMT_FREEGPUVIRTUALADDRESS free{};free.BaseAddress=mapping.VirtualAddress;free.Size=4096;
- // The flags, the resource and the count stay refused whatever the mapping is (BD-201 keeps them).
+ // Every flag but AssumeNotInUse, the resource and the count stay refused whatever the mapping is (BD-201
+ // keeps them; BD-200 admits AssumeNotInUse alone, proved after the flags-0 destroys below).
+ release.Flags.SynchronousDestroy=1;assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && !deallocations);
  release.Flags.AssumeNotInUse=1;assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && !deallocations);
+ release.Flags.Value=0;release.Flags.SystemUseOnly=1;assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && !deallocations);
+ release.Flags.Value=0;release.Flags.Reserved=1;assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && !deallocations);
  release.Flags.Value=0;release.AllocationCount=2;assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && !deallocations);
  release.AllocationCount=1;release.hResource=5;assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && !deallocations);
  release.hResource=0;
@@ -298,6 +307,18 @@ int main(){
  assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)<0 && frees==freed+2);
  assert(bridge.lost_va_ranges()==2 && bridge.lost_va_bytes()==8192);
  assert(call(BC250_HOST_DestroyAllocation2,&release)==0 && deallocations==3 && !evictions);
+ assert(last_deallocate_flags==D3D12DDI_DEALLOCATE_FLAGS_0022_NONE);
+ // BD-200: a destroy with AssumeNotInUse (the ICD held the BO until its values retired) reaches the runtime as
+ // ASSUME_NOT_IN_USE alone; with another bit next to it, it is still refused and the record stays.
+ info.hAllocation=0;assert(call(BC250_HOST_CreateAllocation2,&create)==0 && info.hAllocation==77);
+ assert(call(BC250_HOST_MapGpuVirtualAddress,&mapping)==0x103 && mapping.VirtualAddress==UINT64_C(0x400000000));
+ release.Flags.AssumeNotInUse=1;release.Flags.SynchronousDestroy=1;
+ assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && deallocations==3);
+ release.Flags.SynchronousDestroy=0;
+ assert(call(BC250_HOST_DestroyAllocation2,&release)==0 && deallocations==4 && !evictions && frees==freed+2);
+ assert(last_deallocate_flags==D3D12DDI_DEALLOCATE_FLAGS_0022_ASSUME_NOT_IN_USE);
+ assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && deallocations==4);
+ release.Flags.Value=0;
  // BD-201 R4: no hosted shell answers BC250_HOST_GetDeviceState yet, although worker_admits lists the
  // opcode. This pins the rule of the class comment, that an unsupported operation gets a refusal and never
  // a fabricated success, and it marks the gap: a device-state answer is what a loss test that does not read

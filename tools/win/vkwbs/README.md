@@ -15,6 +15,14 @@ the defect or the fix.
 
 ## Build
 
+The shaders of cases 4 and 4b are GLSL files in `shaders\`. `gen-spirv.ps1` compiles them with glslangValidator,
+checks each module with spirv-val and writes `vk_wbs_spirv.h`. The header is in the repository, so a build needs
+no shader compiler. After a change of a shader, run `gen-spirv.ps1` again and commit the header with the shader.
+
+```
+pwsh tools\win\vkwbs\gen-spirv.ps1
+```
+
 ```
 pwsh tools\win\vkwbs\build.ps1 -Kits <BC250_ROOT>\toolchain\nuget
 pwsh tools\win\vkwbs\build.ps1 -Kits <BC250_ROOT>\toolchain\nuget -Arch x64
@@ -46,12 +54,22 @@ names the ICD file that ran. A kit compares this line with the file it expects.
 | 1 | A GPU signal of value 1, then a CPU wait for value 1. |
 | 2 | `vkQueueSubmit` with wait(1) and signal(2), host signal(1), CPU wait for value 2. |
 | 3 | The same as case 2 through `vkQueueSubmit2`. SKIP when the device has no `vkQueueSubmit2`. |
+| 4 | A new device. Submit A, a vertex draw, waits for host value 1. Submit B, the first tessellation draw of the queue, waits for A. `vkQueueSubmit(B)` runs on a worker thread with a 5 s bound. Then the host signals value 1 and waits 5 s for value 3. SKIP when the device has no `tessellationShader`. |
+| 4b | The same as case 4, with compute dispatches: submit B needs scratch memory. |
+
+Submit B of case 4 needs the tessellation rings, and submit B of case 4b needs a larger scratch buffer. Thus the
+queue must replace its preamble while submit A, which uses the old preamble, waits for the host. An ICD that
+frees the old preamble objects only when A completes blocks in `vkQueueSubmit(B)` until the host signal. That
+is the BD-200 defect, and the case gives TIMEOUT. A result of both cases shows that the cause is the preamble
+replacement, not tessellation. If submit B does not return 5 s after the host signal, the program writes
+`PROBE HANG case-4` (or `case-4b`) and ends with exit 3, because it cannot destroy a device while a thread is
+in `vkQueueSubmit`.
 
 | Exit | Last line | Meaning |
 |---|---|---|
-| 0 | `PROBE PASS 3/3` | All cases pass. |
+| 0 | `PROBE PASS 5/5` | All cases pass (a SKIP counts as a pass). |
 | 1 | `PROBE FAIL <n> failure(s)` | A wait returned an error or a wrong counter value. |
 | 2 | `PROBE FAIL ...` | Test error or missing function. This is not a driver result. |
-| 3 | `PROBE HANG ...` | A case wait timed out (10 s) or the watchdog of a case fired (20 s). |
+| 3 | `PROBE HANG ...` | A case wait timed out (10 s), submit B of case 4 or 4b blocked (5 s), or a watchdog fired (20 s). |
 
-A pass takes approximately 2 s. The longest run is approximately 25 s, when one case stops on its watchdog.
+A pass takes approximately 3 s. The longest run is approximately 30 s, when one case stops on its watchdog.

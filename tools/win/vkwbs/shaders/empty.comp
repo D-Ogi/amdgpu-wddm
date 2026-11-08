@@ -1,0 +1,4 @@
+#version 450
+// vkwbs case 4b, submit A: a dispatch without scratch memory.
+layout(local_size_x = 64) in;
+void main() { }
