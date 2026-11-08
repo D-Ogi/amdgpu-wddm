@@ -43,7 +43,15 @@ try {
     Case 'no DefaultsV2 CatalogId' (Service 'x4' $null) $a 5 'no installed shared-state package'
     Case 'schema 1' (Service 'x5' $a 1) $a 5 'Schema is 1, not 2'
     Case 'no service key' (Join-Path $base 'absent') $a 5 'REFUSED: DefaultsV2 has no CatalogId'
-    Case 'expected not an id' (Service 'u1' $a) 'b9c5c1b8' 2 'ERROR: -Expected is not 64 hex digits'
+    Case 'expected not an id' (Service 'u1' $a) 'b9c5c1b8' 2 'ERROR: the expected catalog is not 64 hex digits'
+    # swap-sys.ps1 is sent alone by target.py ps, so it holds a copy of the check: the two copies must be the same.
+    $n++
+    $re = '(?s)# >>> state catalog check \(kmd-swap\).*?# <<< state catalog check \(kmd-swap\)'
+    $mine = [regex]::Matches((Get-Content -LiteralPath $script -Raw), $re)
+    $copy = [regex]::Matches((Get-Content -LiteralPath (Join-Path $PSScriptRoot 'swap-sys.ps1') -Raw), $re)
+    if ($mine.Count -ne 1 -or $copy.Count -ne 1 -or ($mine[0].Value -replace "`r", '') -ne ($copy[0].Value -replace "`r", '')) {
+        $fail++; "FAIL the catalog check block of swap-sys.ps1 is not the block of catalog-precheck.ps1 ($($mine.Count), $($copy.Count) blocks)"
+    } else { 'ok   swap-sys.ps1 holds the same catalog check block' }
 } finally {
     Remove-Item -Path $base -Recurse -Force -ErrorAction SilentlyContinue
 }

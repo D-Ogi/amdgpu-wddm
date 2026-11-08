@@ -36,7 +36,7 @@ That would skip the migration of the user's settings, and the restore of the old
 | `tools/state/kmd_swap_catalog.py pin <sys> --catalog <id> --repo <root>` | host | Exit 0 when the image compiles the pinned id. A kit freeze runs it. |
 | `tools/state/kmd_swap_catalog.py delta --installed <id> --candidate <id> --repo <root>` | host | Names the settings that differ between two catalogs, for the refusal text. |
 | `catalog-precheck.ps1 -Expected <id>` | lab | Read only. Exit 0 when DefaultsV2 and the active StateV2 generation have the catalog `<id>`, 5 when not. |
-| `swap-sys.ps1 -New <sys> -Sha <sha256> -Catalog <id>` | lab | The image swap. It runs `catalog-precheck.ps1` before any change and refuses a swap without `-Catalog`. |
+| `swap-sys.ps1 -New <sys> -Sha <sha256> -Catalog <id>` | lab | The image swap. It runs the same check before any change and refuses a swap without `-Catalog`. `target.py ps` sends one file, so it holds a copy of the check block. The host test fails when the copies differ. |
 | `test-catalog-precheck.ps1`, `test-swap-sys.ps1` | host | The host tests, in the `kmd-swap-catalog` gate of `tools/quality/quick.ps1`. |
 
 ## Use in a kit

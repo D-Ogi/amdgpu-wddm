@@ -14,8 +14,8 @@
 # after this arm's own swap needs no -AcceptKeep (until 2026-10-14 ~15:00Z it refused, a03 of BD-170).
 #
 # A swap needs -Catalog, the state catalog that the new image compiles (the kit pins it at its freeze with
-# tools/state/kmd_swap_catalog.py pin). catalog-precheck.ps1 next to this file compares it with the installed one
-# before any change, because a KMD of another catalog fails DriverEntry with 0xC0000365 (A1 s3 of BD-223,
+# tools/state/kmd_swap_catalog.py pin). The check below (a copy of the block of catalog-precheck.ps1, because
+# target.py ps sends one file) compares it with the installed one before any change, because a KMD of another catalog fails DriverEntry with 0xC0000365 (A1 s3 of BD-223,
 # 2026-11-07). A restore needs no -Catalog: it puts back the image of the installed package.
 # Host control: test-swap-sys.ps1 next to this file (catalog refusal), and the kit host tests for the rest.
 param(
@@ -30,12 +30,53 @@ param(
     [string]$ServiceKey = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd'
 )
 $ErrorActionPreference = 'Stop'
+# >>> state catalog check (kmd-swap)
+function Test-StateCatalog([string]$Expected, [int]$Schema, [string]$ServiceKey) {
+    # Returns 0 (match), 5 (refused) or 2 (usage or read error), and writes its lines to the output.
+    function Value([string]$Key, [string]$Name) {
+        if (-not (Test-Path -LiteralPath $Key)) { return $null }
+        $p = Get-ItemProperty -LiteralPath $Key -Name $Name -ErrorAction SilentlyContinue
+        if ($null -eq $p) { return $null }
+        return $p.$Name
+    }
+    $want = "$Expected".Trim().ToLowerInvariant()
+    if ($want -notmatch '^[0-9a-f]{64}$') { Write-Output "ERROR: the expected catalog is not 64 hex digits: '$Expected'"; return 2 }
+    try {
+        $defaults = Join-Path $ServiceKey 'Parameters\DefaultsV2'
+        $dSchema = Value $defaults 'Schema'
+        $dCatalog = Value $defaults 'CatalogId'
+        $state = Join-Path $ServiceKey 'SharedState\StateV2'
+        $active = Value $state 'Active'
+        $gCatalog = $null
+        if ($active) { $gCatalog = Value (Join-Path $state "Generations\$active") 'CatalogId' }
+    } catch { Write-Output "ERROR: registry read failed: $($_.Exception.Message)"; return 2 }
+    Write-Output "expected   $want schema $Schema"
+    Write-Output "DefaultsV2 $dCatalog schema $dSchema"
+    if ($active) { Write-Output "StateV2    $gCatalog generation $active" } else { Write-Output 'StateV2    no active generation' }
+    $why = @()
+    if ($null -eq $dCatalog) { $why += 'DefaultsV2 has no CatalogId (no installed shared-state package)' }
+    elseif ("$dCatalog".ToLowerInvariant() -ne $want) { $why += "DefaultsV2 CatalogId is $dCatalog" }
+    if ($null -eq $dSchema -or [int]$dSchema -ne $Schema) { $why += "DefaultsV2 Schema is $dSchema, not $Schema" }
+    if ($active) {
+        if ($null -eq $gCatalog) { $why += "the active generation $active has no CatalogId" }
+        elseif ("$gCatalog".ToLowerInvariant() -ne $want) {
+            $why += "the active generation $active has the catalog $gCatalog (a package install whose first start did not run, or a damaged store)"
+        }
+    }
+    if ($why.Count) {
+        foreach ($w in $why) { Write-Output "REFUSED: $w" }
+        Write-Output 'REFUSED: a KMD-only swap of this candidate cannot start here. Build it on the installed catalog, or install a package of it.'
+        return 5
+    }
+    Write-Output "CATALOG MATCH $want"
+    return 0
+}
+# <<< state catalog check (kmd-swap)
 if (-not $Restore) {
     if (-not $Catalog) { "REFUSED: -Catalog is required for a swap (the state catalog that the new image compiles)"; exit 2 }
-    $precheck = Join-Path $PSScriptRoot 'catalog-precheck.ps1'
-    if (-not (Test-Path -LiteralPath $precheck)) { "REFUSED: catalog-precheck.ps1 is not next to swap-sys.ps1"; exit 2 }
-    & $precheck -Expected $Catalog -ServiceKey $ServiceKey
-    $code = $LASTEXITCODE
+    $lines = @(Test-StateCatalog -Expected $Catalog -Schema 2 -ServiceKey $ServiceKey)
+    $code = [int]$lines[-1]
+    if ($lines.Count -gt 1) { $lines[0..($lines.Count - 2)] }
     if ($code -ne 0) { "REFUSED: catalog check exit $code; nothing changed"; exit 5 }
 }
 function Sha([string]$p) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash }
