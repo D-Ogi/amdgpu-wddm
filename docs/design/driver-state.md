@@ -107,6 +107,15 @@ First initialization consumes a durable authorization before it creates them.
 A missing file after that point cannot silently become a new original backup.
 Unknown or incomplete board provenance disables board writes.
 
+## Swap of the KMD image only
+
+A lab kit can copy a candidate KMD image over the installed one. The INF, the defaults and the store stay as they are.
+The candidate must compile the catalog of the installed package.
+Driver entry refuses another `DefaultsV2` catalog, and the KMD refuses an active generation of another catalog without a handoff.
+A release KMD keeps both refusals. There is no rule that lets a KMD start on a catalog that it does not compile.
+For a candidate of another catalog, build it on the installed catalog or install a package of it.
+The kit helpers in `tools/win/kmd-swap` check this before any change on the lab (A1 s3 of BD-223).
+
 ## Explicit legacy rollback
 
 `install.cmd -RollbackPackage <folder>` uses the new installer to restore a compatible old package.
