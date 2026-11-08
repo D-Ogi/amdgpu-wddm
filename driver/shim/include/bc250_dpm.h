@@ -554,6 +554,16 @@ struct bc250_dpm_governor {
 	int		rate_mc[BC250_DPM_RATE_TICKS];
 	unsigned int	rate_at_ms[BC250_DPM_RATE_TICKS];
 	unsigned int	rate_head, rate_count;
+	/* BD-329, the sustained raise. bc250_dpm_sustain_config sets sustain_hold_ms; bc250_dpm_init leaves it 0 (off), so a
+	 * caller that does not configure it keeps the single-tick rule alone. */
+	unsigned int	sustain_hold_ms;	/* the window the mean busy share is taken over; 0: off */
+	unsigned int	sustain_level;		/* the level the window measures at; a change starts the window again */
+	unsigned int	sustain_ms;		/* the window so far, saturating */
+	unsigned int	sustain_acc;		/* busy permille x ms over the window, saturating */
+	unsigned int	sustain_raises;		/* steps in which the rule chose a raise */
+	int		sustain_used;		/* the last step's want came from the rule */
+	unsigned int	sustain_refusals;	/* steps in which the hold ran out and the raise would have landed at or
+						 * under the lowering threshold, so no raise happened */
 };
 
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level);
@@ -594,6 +604,34 @@ void bc250_dpm_subfloor_refused(struct bc250_dpm_governor *g);
  * again, and the refusal does not count toward the SMU give-up limit. Returns the new ceiling level. A level at or
  * under BC250_DPM_TOP_LEVEL changes nothing. */
 unsigned int bc250_dpm_oc_refused(struct bc250_dpm_governor *g, unsigned int level);
+
+/* ---- the sustained raise (BD-329) ------------------------------------------------------------- */
+
+/* The load rule above raises on one tick at or above up_permille (900) and lowers on the average under down_permille
+ * (650). Between the two nothing moves the clock. A load whose ticks stay at 800 to 899 permille therefore holds any
+ * level, the lab floor included, and each raise needs a tick in which the engine was busy for 23 of its 25 samples.
+ *
+ * BD-329: in 2 of 3 Quake II RTX timedemo runs that were the first GPU load after a boot, the clock stayed at 1000 to
+ * 1300 MHz for the whole 10 s demo (58 and 61 fps), where every other run reached 1800 or 1900 MHz (70 to 72 fps).
+ * Three raises in 10 s means few ticks at 900 permille. The first runs after a boot read 67 to 68 C at 2 s, so above
+ * 70 C the thermal ramp also cut each raise to one level; the first run that did ramp read 67.5 C, so the temperature
+ * alone does not decide it. The BD-329 trace (bc250kmd_cli dpm trace) measures the busy share of such a run; this rule
+ * is the fix for the case where that share sits in the band.
+ *
+ * The rule: the governor takes the mean busy share over a window of sustain_hold_ms at one clock. When a window ends
+ * with that mean at or above target_permille, the load asks for raise_level() of the mean, which is at least one
+ * level. A change of the clock starts the window again, so the mean is always the load at the clock it would be raised
+ * from. A window and not the average avg_permille: a frame loop gives ticks that swing by 100 permille and more around
+ * their mean, so the average dips under the target often and a hold on it rarely runs out (the BD-329 plant in
+ * dpm_test.c stopped 1500 MHz with a mean of 818 that way). The same tick's limits then apply as for any raise: the
+ * ceiling, the thermal cap, the warm zone, the high-clock zone and the thermal ramp. The raise is refused when it would
+ * land at or under the lowering threshold (down_permille x the new clock >= the mean x the current clock): a load that
+ * scales with the clock then cannot chase the lowering rule, for any tune. With the defaults the lowest landing of a
+ * one-level raise is 800 x 1000 / 1100 = 727 permille, above 650. The compute set, when it governs, gives the rule its
+ * own target (300 permille), with the same guard. */
+/* hold_ms 0 turns the rule off. Any other value must be SUSTAIN_MIN_MS..SUSTAIN_MAX_MS; a refused value turns the rule
+ * off and returns 0. Not a run-time operation: the KMD calls it once per governing start with BC250_DPM_SUSTAIN_MS. */
+int bc250_dpm_sustain_config(struct bc250_dpm_governor *g, unsigned int hold_ms);
 
 /* ---- the idle state (0.7.207) ----------------------------------------------------------------- */
 

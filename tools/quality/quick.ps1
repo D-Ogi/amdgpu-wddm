@@ -434,6 +434,9 @@ Check 'escape-admission' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_es
 Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_escape_admission.ps1" -Root $Workspace -Out "$Out\escape-admission-admit-fence" -Mutation admit-fence }
  Check 'ih-consume' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ih_consume.ps1" -Root $Workspace -Out "$Out\ih-consume" }
  Check 'dpm' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_dpm.ps1" -Out "$Out\dpm" -Kits "$Kits" }
+ # BD-329: the sustained raise and its landing guard, each with a negative control.
+ Check 'dpm-no-sustain' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_dpm.ps1" -Out "$Out\dpm-no-sustain" -Kits "$Kits" -NoSustain -ExpectFailure }
+ Check 'dpm-no-sustain-guard' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_dpm.ps1" -Out "$Out\dpm-no-sustain-guard" -Kits "$Kits" -NoSustainGuard -ExpectFailure }
  Check 'cpu' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_cpu.ps1" -Out "$Out\cpu" -Kits "$Kits" }
  Check 'clock-policy' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_clock.ps1" -Root $Workspace -Out "$Out\clock-policy" }
  Check 'oc-tiers' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_oc.ps1" -Root $Workspace -Out "$Out\oc-tiers" }

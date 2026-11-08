@@ -201,6 +201,18 @@ it with the plug ready, and set `EnableSmuMetrics` 0 if the SMU stops answering.
   threshold ((650 + 1) x 1100/1000 = 716.1 <= 900, invariant 1 below), and a raise never lands below the down
   threshold (the lowest landing is 739.2 permille, invariant 2), so the two cannot chase each other; the host test
   sweeps every constant demand from 100 to 2400 MHz and asserts no oscillation.
+- Sustained (BD-329): the governor also takes the mean busy share over a 250 ms window at one clock. When a window ends
+  with the mean at the target (800 permille) or more, the load asks for the lowest level at which that mean would fill
+  80 %, at least one level. A change of the clock starts the window again. The raise is refused when it would land at
+  or under the down threshold (down x new clock >= mean x current clock), so it cannot chase the lowering for any tune.
+  With the defaults the lowest landing is 800 x 1000 / 1100 = 727 permille. Without the rule, a load whose ticks stay
+  at 800 to 899 permille held any level, the lab floor included, because each raise needed one tick at 900. Every
+  limit of a raise still applies (ceiling, thermal cap, warm zone, high-clock zone, thermal ramp). The window is
+  `BC250_DPM_SUSTAIN_MS` of `bc250_board_envelope.h`, with no registry value: a new value would change the state
+  catalog, and a KMD on another catalog does not load over an installed package. The transition line says
+  `load sustained` for a raise the rule chose, and `dpm: <what> sustained raises N refused R` follows the telemetry block
+  once N or R is not 0. `test_sustain_bd329`, `test_sustain_guard` and `test_sustain_no_oscillation` in `dpm_test.c`
+  cover it, and `run_dpm.ps1 -NoSustain` and `-NoSustainGuard` are the negative controls.
 - These four numbers are the defaults of every start; "Runtime tuning" below changes them, and adds a floor, until the
   next start.
 - The three load thresholds have a second set, the compute set (400 / 300 / 200 permille), in force while the GPU has
@@ -1121,6 +1133,14 @@ that the machine does not survive costs the curve and not the machine, and the d
   idle) and counters, then the busy
   source (grbm or submit), the submit share and the SDMA0 share (0.7.177).
   It uses `BC250_ESCAPE_RUN_DPM` with NoAdapterSynchronization only: a software snapshot, no adapter idle.
+- `bc250kmd_cli dpm trace SECONDS [MS]` (BD-329): the same snapshot as CSV, one row per MS (default 50 ms) for SECONDS,
+  with one held adapter for the whole run. Columns: time, governor ticks, clock, target, want, cap, ceiling, SMU
+  readback, busy and average busy, busy source, submit and SDMA shares, temperature, throttle, the idle, compute,
+  stable and paused flags, the raise, lowering, thermal and error counters, and the package power when the table is
+  fresh. The driver publishes once per 25 ms tick, so 50 ms reads every other tick and the counters cover the ticks
+  between. Read only, through the release escape, so it runs against any driver from 0.7.175 on.
+  `tools/win/bc250kmd_cli/dpm_trace_summary.py` reads the file: the load window, the time to each clock, the busy
+  share while the clock was low, the throttle reasons, and with `--reach MHZ --within S` a `BD329-RAMP PASS|FAIL` line.
 - From 0.7.207 the header also carries one `idle:` line: the idle point in force (or `off`), the hold and the
   admitted share, the entries, the exits, the refusals and the time at the point. `RUN_DPM` is ABI 2 (192 bytes) for
   these fields and `BC250_DPM_FLAG_IDLE` says the clock is at the idle point now. The driver still answers the
