@@ -1,0 +1,13 @@
+#version 450
+// vkwbs case 4b, submit B: a dispatch that needs scratch memory. A 1024-entry private array with an index that
+// comes from the buffer cannot stay in registers, so the compiler puts it in scratch and the queue must grow its
+// scratch buffer (a preamble replacement, as the first tessellation draw of case 4 makes for the rings).
+layout(local_size_x = 64) in;
+layout(std430, binding = 0) buffer Data { uint v[]; } data;
+void main() {
+    uint lid = gl_LocalInvocationIndex;
+    uint a[1024];
+    for (uint i = 0u; i < 1024u; i++) a[i] = data.v[(i + lid) & 63u] ^ i;
+    barrier();
+    data.v[lid] = a[data.v[lid] & 1023u];
+}
