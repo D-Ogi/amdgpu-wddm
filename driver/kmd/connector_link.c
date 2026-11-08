@@ -17,6 +17,7 @@
 #include "../shim/bc250_dp_phy.h"
 #include "../shim/bc250_dp_stream.h"
 #include "../shim/dpcd_constants.inc"
+#include "dcn_overlay.h"
 
 // BD-139: the EDID parser keeps exactly the timings the fastest DP route can carry.
 C_ASSERT(BC250_TARGET_MAX_PIXEL_KHZ==BC250_DP_MAX_PIXEL_KHZ);
@@ -1235,6 +1236,51 @@ NTSTATUS ConnectorLinkPlaneDml(BC250_DEVICE* Device,const BC250_LINK_PLANE* Plan
     status=STATUS_SUCCESS;
 done:
     ConnectorOperationRelease(Device);return status;
+}
+
+NTSTATUS ConnectorLinkOverlayCheck(BC250_DEVICE* Device,
+    const BC250_OVERLAY_DESCRIPTION* Description,BC250_LINK_OVERLAY_CHECK* Out)
+{
+    CONNECTOR_LINK* c;BC250_DML201_INPUT input={0};XSTATE_SAVE state;
+    BC250_OVERLAY_PLAN* plan;const BC250_TARGET_TIMING* t;
+    NTSTATUS status=STATUS_DEVICE_NOT_READY;
+    if (!Device || !Description || !Out || KeGetCurrentIrql()!=PASSIVE_LEVEL) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Out,sizeof(*Out));Out->Result=BC250_OVERLAY_ARGUMENT;
+    plan=ExAllocatePool2(POOL_FLAG_NON_PAGED,sizeof(*plan),LINK_WORK_TAG);
+    if (!plan) return STATUS_INSUFFICIENT_RESOURCES;
+    ConnectorOperationAcquire(Device);c=Device->ConnectorLink;
+    if (!c || !c->Active || c->Suspended || !c->Current.Valid ||
+        !ConnectorGenerationCurrent(Device,c->Generation) || !c->DmlWorkspace) goto done;
+    t=&c->Current.Timing;
+    input.HActive=t->HActive;input.HTotal=t->HActive+t->HBlank;
+    input.HFrontPorch=t->HSyncOffset;input.HSyncWidth=t->HSyncWidth;
+    input.VActive=t->VActive;input.VTotal=t->VActive+t->VBlank;
+    input.VFrontPorch=t->VSyncOffset;input.VSyncWidth=t->VSyncWidth;input.PixelClockKhz=t->PixelClockKhz;
+    input.Output=c->Current.Protocol==BC250_LINK_DP?BC250_DML201_DP:BC250_DML201_HDMI;
+    input.DpLanes=c->Current.Lanes;input.CursorWidth=c->Current.CursorWidth;input.AudioSampleRateKhz=192;
+    input.DchubRefClockKhz=c->Current.Clocks.DchubRefClockKhz;input.DentistVcoKhz=c->Current.Clocks.DentistVcoKhz;
+    Out->Generation=c->Generation;
+    Out->BudgetDispKhz=c->Current.Inherited?c->Current.Clocks.DispClockKhz:c->Current.Dml.DispClockKhz;
+    Out->BudgetDppKhz=c->Current.Inherited?c->Current.Clocks.DppClockKhz:c->Current.Dml.DppClockKhz;
+    status=KeSaveExtendedProcessorState(XSTATE_MASK_LEGACY,&state);
+    if (!NT_SUCCESS(status)) goto done;
+    Out->Result=Bc250OverlayDescribe(Description,
+        Bc250DcnCapsForPci(c->Firmware.Identity.VendorId,c->Firmware.Identity.DeviceId),
+        &input,c->DmlWorkspace,Bc250Dml201WorkspaceSize(),plan);
+    KeRestoreExtendedProcessorState(&state);
+    Out->Described=plan->Described;
+    Out->DispClockKhz=plan->Dml.Plane[0].DispClockKhz;
+    Out->DppClockKhz=plan->Dml.Plane[0].DppClockKhz>plan->Dml.Plane[1].DppClockKhz ?
+        plan->Dml.Plane[0].DppClockKhz:plan->Dml.Plane[1].DppClockKhz;
+    Out->WithinCurrentBudget=Out->Described && Out->BudgetDispKhz && Out->BudgetDppKhz &&
+        Out->DispClockKhz<=Out->BudgetDispKhz && Out->DppClockKhz<=Out->BudgetDppKhz;
+    // The operation lock keeps Current stable; HPD can still advance its
+    // generation at interrupt level while DML runs. Never publish that result.
+    if (!ConnectorGenerationCurrent(Device,c->Generation)) {
+        RtlZeroMemory(Out,sizeof(*Out));Out->Result=BC250_OVERLAY_TOPOLOGY;status=STATUS_RETRY;
+    } else status=STATUS_SUCCESS;
+done:
+    ConnectorOperationRelease(Device);ExFreePoolWithTag(plan,LINK_WORK_TAG);return status;
 }
 
 BOOLEAN ConnectorLinkNeedsPowerOn(BC250_DEVICE* Device,BOOLEAN* Active,BOOLEAN* Connected)

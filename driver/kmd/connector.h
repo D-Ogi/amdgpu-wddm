@@ -107,6 +107,15 @@ typedef struct _BC250_LINK_PLANE_DML {
 struct BC250_DML201_PLAN;
 NTSTATUS ConnectorLinkPlaneDml(struct _BC250_DEVICE* Device, const BC250_LINK_PLANE* Plane,
     BC250_LINK_PLANE_DML* Out, struct BC250_DML201_PLAN* Plan);
+struct BC250_OVERLAY_DESCRIPTION;
+typedef struct _BC250_LINK_OVERLAY_CHECK {
+    ULONG Result, Described, Generation, DispClockKhz, DppClockKhz;
+    ULONG BudgetDispKhz, BudgetDppKhz, WithinCurrentBudget;
+} BC250_LINK_OVERLAY_CHECK;
+// CPU-only Check3 preflight against one locked current mode. Does not reserve
+// pipe 1, raise its clock or establish hardware ownership; no MMIO writes.
+NTSTATUS ConnectorLinkOverlayCheck(struct _BC250_DEVICE* Device,
+    const struct BC250_OVERLAY_DESCRIPTION* Description, BC250_LINK_OVERLAY_CHECK* Out);
 // PASSIVE, Connector.Operation not held. TRUE when a connected sink is published
 // and its link is off and not suspended: a power-on CommitVidPn must program it
 // (BD-195). *Active and *Connected are for the caller's log.
