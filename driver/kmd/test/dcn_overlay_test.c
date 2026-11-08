@@ -10,7 +10,7 @@ static unsigned checks, failures;
 static BC250_OVERLAY_REQUEST Request(void)
 {
     BC250_OVERLAY_REQUEST r = {0};
-    r.Count=2; r.McBase=0x10000000000ull; r.VramPhysical=0x300000000ull; r.VramLength=0x10000000ull;
+    r.Count=2; r.Caps=&Bc250DcnCaps201; r.McBase=0x10000000000ull; r.VramPhysical=0x300000000ull; r.VramLength=0x10000000ull;
     r.Timing=(BC250_DML201_INPUT){1920,2080,48,32,1200,1235,3,6,154000,0,BC250_DML201_DP,4,256,0,48000,3000000,0,0,0,0,0,0};
     r.Plane[0]=(BC250_OVERLAY_INPUT){1,BC250_LINEAR_BGRA8,BC250_INPUT_RGB_FULL,BC250_SCALER_FILTER_AMD,0,
         1920,1200,7680,0,r.McBase+0x1000000,0x1000000,0,0,
@@ -117,6 +117,81 @@ int main(void)
     BAD(Plane[1].Clip.Left,2000,BC250_OVERLAY_GEOMETRY);
     BAD(Plane[1].Filter,~0u,BC250_OVERLAY_GEOMETRY);
     BAD(Timing.PixelClockKhz,0,BC250_OVERLAY_DML);
+    // Check3 description: storage metadata only. No MC address takes part; success
+    // is Described, never Ready, and the physical plans stay zero.
+    {
+        BC250_OVERLAY_DESCRIPTION d={0}, dbad; BC250_OVERLAY_PLAN zero; unsigned status;
+        memset(&zero,0,sizeof(zero));
+        d.Count=2; d.Plane[0]=r.Plane[0]; d.Plane[1]=r.Plane[1];
+        d.Plane[0].AllocationMcAddress=0; d.Plane[1].AllocationMcAddress=0;
+        memset(q,0xa5,sizeof(*q));
+        CHECK(Bc250OverlayDescribe(&d,&Bc250DcnCaps201,&r.Timing,w,bytes,q)==BC250_OVERLAY_OK);
+        CHECK(q->Described==1 && q->Ready==0);
+        CHECK(!memcmp(&q->Rgb,&zero.Rgb,sizeof(q->Rgb)) && !memcmp(&q->Nv12,&zero.Nv12,sizeof(q->Nv12)));
+        CHECK(!memcmp(q->Geometry,p->Geometry,sizeof(p->Geometry)) && !memcmp(&q->Dml,&p->Dml,sizeof(p->Dml)));
+        CHECK(q->LayerByPipe[0]==1 && q->LayerByPipe[1]==0 && q->Mpc.Ready);
+        // A stale or fabricated MC address does not change the description.
+        dbad=d; dbad.Plane[1].AllocationMcAddress=~0ull;
+        CHECK(Bc250OverlayDescribe(&dbad,&Bc250DcnCaps201,&r.Timing,w,bytes,q)==BC250_OVERLAY_OK && !q->Ready);
+        CHECK(!memcmp(&q->Dml,&p->Dml,sizeof(p->Dml)));
+        // The prepared (resident) path still sets both flags.
+        CHECK(p->Ready==1 && p->Described==1);
+#define DBAD(field,value,reason) do {dbad=d;dbad.field=(value);memset(q,0xa5,sizeof(*q));\
+        status=Bc250OverlayDescribe(&dbad,&Bc250DcnCaps201,&r.Timing,w,bytes,q);CHECK(status==(reason));\
+        CHECK(!memcmp(q,&zero,sizeof(zero)));} while(0)
+        DBAD(Plane[1].ChromaOffset,4096,BC250_OVERLAY_LAYOUT);
+        DBAD(Plane[1].AllocationBytes,0x100001,BC250_OVERLAY_LAYOUT);
+        DBAD(Plane[1].ChromaPitchBytes,1024,BC250_OVERLAY_LAYOUT);
+        DBAD(Plane[0].PitchBytes,7600,BC250_OVERLAY_LAYOUT);
+        DBAD(Plane[0].PitchBytes,7680+256*300,BC250_OVERLAY_LAYOUT);
+        DBAD(Plane[0].AllocationBytes,7680ull*1199,BC250_OVERLAY_LAYOUT);
+        DBAD(Plane[0].SurfaceOffset,16,BC250_OVERLAY_LAYOUT);
+        DBAD(Plane[0].ChromaPitchBytes,256,BC250_OVERLAY_LAYOUT);
+        DBAD(Plane[0].Width,0,BC250_OVERLAY_LAYOUT);
+        DBAD(Count,1,BC250_OVERLAY_TOPOLOGY);
+        DBAD(Plane[1].Format,BC250_LINEAR_RGBA8,BC250_OVERLAY_TOPOLOGY);
+        DBAD(Plane[1].Color,BC250_INPUT_RGB_FULL,BC250_OVERLAY_COLOR);
+        memset(q,0xa5,sizeof(*q));
+        CHECK(Bc250OverlayDescribe(NULL,&Bc250DcnCaps201,&r.Timing,w,bytes,q)==BC250_OVERLAY_ARGUMENT && !memcmp(q,&zero,sizeof(zero)));
+        memset(q,0xa5,sizeof(*q));
+        CHECK(Bc250OverlayDescribe(&d,&Bc250DcnCaps201,NULL,w,bytes,q)==BC250_OVERLAY_ARGUMENT && !memcmp(q,&zero,sizeof(zero)));
+        CHECK(Bc250OverlayDescribe(&d,&Bc250DcnCaps201,&r.Timing,w,bytes,NULL)==BC250_OVERLAY_ARGUMENT);
+#undef DBAD
+        CHECK(Bc250OverlayDescribe(&d,NULL,&r.Timing,w,bytes,q)==BC250_OVERLAY_ARGUMENT && !memcmp(q,&zero,sizeof(zero)));
+    }
+    // The display IP row decides limits; no board literal does (Part Y).
+    {
+        BC250_DCN_CAPS row=Bc250DcnCaps201; BC250_DCN_PLANE_ANSWER a;
+        CHECK(Bc250DcnCapsForPci(0x1002,0x13FE)==&Bc250DcnCaps201 && Bc250DcnCapsForPci(0x1002,0x13DB)==&Bc250DcnCaps201);
+        CHECK(Bc250DcnCapsForPci(0x1002,0x15BF)==NULL && Bc250DcnCapsForPci(0x1022,0x13FE)==NULL);
+        CHECK(Bc250DcnCaps201.Version==BC250_DCN_2_01 && Bc250DcnCaps201.Pipes==4 && Bc250DcnCaps201.Nv12==BC250_DCN_NV12_WITNESS);
+        a=Bc250DcnPlaneAnswer(&Bc250DcnCaps201,0); CHECK(a.Planes==1 && a.RgbPlanes==1 && a.YuvPlanes==0);
+        a=Bc250DcnPlaneAnswer(&Bc250DcnCaps201,1); CHECK(a.Planes==2 && a.RgbPlanes==2 && a.YuvPlanes==0);
+        a=Bc250DcnPlaneAnswer(NULL,1); CHECK(a.Planes==1 && a.RgbPlanes==1 && a.YuvPlanes==0);
+        row.Nv12=BC250_DCN_NV12_PROVEN; a=Bc250DcnPlaneAnswer(&row,1); CHECK(a.Planes==2 && a.YuvPlanes==1);
+        row=Bc250DcnCaps201; row.Pipes=1; a=Bc250DcnPlaneAnswer(&row,1); CHECK(a.Planes==1 && a.YuvPlanes==0);
+        bad=r; bad.Caps=NULL; Refused(&bad,w,bytes,q,BC250_OVERLAY_ARGUMENT);
+        row=Bc250DcnCaps201; row.Pipes=1; bad=r; bad.Caps=&row; Refused(&bad,w,bytes,q,BC250_OVERLAY_TOPOLOGY);
+        row=Bc250DcnCaps201; row.MaxSlavePlanes=0; bad=r; bad.Caps=&row; Refused(&bad,w,bytes,q,BC250_OVERLAY_TOPOLOGY);
+        row=Bc250DcnCaps201; row.Nv12=BC250_DCN_NV12_NONE; bad=r; bad.Caps=&row; Refused(&bad,w,bytes,q,BC250_OVERLAY_FORMAT);
+        row=Bc250DcnCaps201; row.MaxSlaveYuvPlanes=0; bad=r; bad.Caps=&row; Refused(&bad,w,bytes,q,BC250_OVERLAY_FORMAT);
+        row=Bc250DcnCaps201; row.MaxSurfaceWidth=1919; bad=r; bad.Caps=&row; Refused(&bad,w,bytes,q,BC250_OVERLAY_LAYOUT);
+        // NV12 1280x720 scaled to 1920x1080: 1.5x up. A 1.4x upscale row refuses it.
+        row=Bc250DcnCaps201; row.MaxUpscaleNv12=1400; bad=r; bad.Caps=&row; Refused(&bad,w,bytes,q,BC250_OVERLAY_GEOMETRY);
+        row=Bc250DcnCaps201; row.MaxUpscaleArgb=1400; bad=r; bad.Caps=&row;
+        CHECK(Bc250OverlayPrepare(&bad,w,bytes,q)==BC250_OVERLAY_OK);
+        row=Bc250DcnCaps201; row.MinSurfaceDimension=800; bad=r; bad.Caps=&row; Refused(&bad,w,bytes,q,BC250_OVERLAY_GEOMETRY);
+        // 1280 source columns shrunk to 1200 exceed a 1000-column downscale source width.
+        row=Bc250DcnCaps201; row.MaxDownscaleSourceWidth=1000; bad=r; bad.Caps=&row;
+        bad.Plane[1].Destination=(BC250_OVERLAY_RECT){0,60,1200,1140}; Refused(&bad,w,bytes,q,BC250_OVERLAY_GEOMETRY);
+        row=Bc250DcnCaps201; row.PitchAlignBytes=512; bad=r; bad.Caps=&row;
+        {
+            BC250_OVERLAY_DESCRIPTION d2={0}; d2.Count=2; d2.Plane[0]=r.Plane[0]; d2.Plane[1]=r.Plane[1];
+            d2.Plane[0].PitchBytes=7936; d2.Plane[0].AllocationMcAddress=d2.Plane[1].AllocationMcAddress=0;
+            CHECK(Bc250OverlayDescribe(&d2,&Bc250DcnCaps201,&r.Timing,w,bytes,q)==BC250_OVERLAY_OK);
+            CHECK(Bc250OverlayDescribe(&d2,&row,&r.Timing,w,bytes,q)==BC250_OVERLAY_LAYOUT);
+        }
+    }
     free(w);free(q);free(p);
     printf("overlay group: %u checks, %u failures\n",checks,failures);
     return failures?1:0;

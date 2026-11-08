@@ -3,29 +3,21 @@
 #include "dcn_geometry.h"
 #include "dcn_cnvc_color.h"
 #include "dcn_mpc.h"
+#include "dcn_overlay_input.h"
+#include "dcn_caps.h"
 #include "../shim/bc250_dml201.h"
 
-typedef struct BC250_OVERLAY_RECT { int Left, Top, Right, Bottom; } BC250_OVERLAY_RECT;
-typedef struct BC250_OVERLAY_INPUT {
-    unsigned LayerIndex, Format, Color, Filter;
-    // Format: BGRA8/RGBA8/BGRX8 or BC250_CNVC_NV12. All other formats refuse.
-    // Flags are exclusions, not permission bits. The caller normalizes WDDM
-    // rotation/mirror/alpha/interlace/stereo/DCC/tiling and unknown flags here.
-    unsigned UnsupportedFlags;
-    unsigned Width, Height, PitchBytes, ChromaPitchBytes;
-    unsigned long long AllocationMcAddress, AllocationBytes, SurfaceOffset, ChromaOffset;
-    BC250_OVERLAY_RECT Source, Destination, Clip;
-} BC250_OVERLAY_INPUT;
 
 typedef struct BC250_OVERLAY_REQUEST {
     unsigned Count, SourceId, PostCompositionChanged;
+    const BC250_DCN_CAPS* Caps;   // the display IP row (dcn_caps.h); NULL refuses
     unsigned long long McBase, VramPhysical, VramLength;
     BC250_DML201_INPUT Timing;
     BC250_OVERLAY_INPUT Plane[2]; // Array order is not layer order or pipe order.
 } BC250_OVERLAY_REQUEST;
 
 typedef struct BC250_OVERLAY_PLAN {
-    unsigned Ready, LayerByPipe[2];
+    unsigned Ready, Described, LayerByPipe[2];
     BC250_SURFACE_LAYOUT Rgb;
     BC250_NV12_LAYOUT Nv12;
     BC250_DCN_GEOMETRY Geometry[2];
@@ -52,7 +44,18 @@ enum BC250_OVERLAY_RESULT {
 // This joins existing preparation contracts; it is NOT Check3 admission. It
 // does not establish chroma siting for a DXGI color space, CM normalization,
 // power/clock readiness, coefficient/CSC bank ownership, latch or retirement.
-// No MMIO, DDI or caps change. AMD DCN201 still advertises NV12 false. A live
+// No MMIO, DDI or caps change. Plane count, surface and pitch limits, the
+// downscale source width and NV12 come from Request->Caps (dcn_caps.h); a row
+// whose Nv12 is NONE refuses the NV12 pipe. AMD DCN201 still advertises NV12 false. A live
 // owner needs the Y0 witnesses and an atomic recovery/retirement implementation.
 unsigned Bc250OverlayPrepare(const BC250_OVERLAY_REQUEST* Request,
     void* Workspace, size_t WorkspaceBytes, BC250_OVERLAY_PLAN* Plan);
+
+// Check3 has storage metadata, not resident MC addresses. Validate its relative
+// spans and prepare geometry/color/group DML without fabricating an address.
+// Success sets Described, never Ready; Rgb/Nv12 physical plans stay zero.
+// The connector supplies current timing under its operation lock and owns FPU.
+// Caps is the row of the detected display IP; without one nothing is described.
+unsigned Bc250OverlayDescribe(const BC250_OVERLAY_DESCRIPTION* Description,
+    const BC250_DCN_CAPS* Caps, const BC250_DML201_INPUT* Timing, void* Workspace, size_t WorkspaceBytes,
+    BC250_OVERLAY_PLAN* Plan);

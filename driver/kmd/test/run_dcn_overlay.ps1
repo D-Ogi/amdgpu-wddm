@@ -1,5 +1,5 @@
 param([Parameter(Mandatory=$true)][string]$Root, [Parameter(Mandatory=$true)][string]$Out,
-      [ValidateSet('', 'layer-order', 'chroma-bytes', 'skip-layout', 'skip-color', 'skip-dml', 'all')][string]$Mutation='')
+      [ValidateSet('', 'layer-order', 'chroma-bytes', 'skip-layout', 'skip-color', 'skip-dml', 'describe-ready', 'describe-nv12-storage', 'describe-rgb-span', 'caps-nv12', 'caps-nv12-scale', 'caps-pipes', 'caps-src-width', 'all')][string]$Mutation='')
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path "$PSScriptRoot\..\..\..").Path
 $cc=Join-Path $Root 'toolchain\llvm-23.1.4-win64\bin\clang-cl.exe'
@@ -16,6 +16,13 @@ $mutations=@{
  'chroma-bytes'=@('pipe ? p->ChromaPitchBytes / 2u : 0u', 'pipe ? p->ChromaPitchBytes : 0u')
  'skip-layout'=@('if (!Bc250Nv12LayoutPrepare(&layout,&Plan->Nv12)) goto refused;', '(void)Bc250Nv12LayoutPrepare(&layout,&Plan->Nv12);')
  'skip-color'=@('if (!Bc250CnvcPrepare(&color,&Plan->Color[pipe])) goto refused;', '(void)Bc250CnvcPrepare(&color,&Plan->Color[pipe]);')
+ 'describe-ready'=@('Plan->Ready = Resident ? 1u : 0u;', 'Plan->Ready = 1u;')
+ 'describe-nv12-storage'=@('if (!Bc250Nv12StorageValid(&storage)) goto refused;', '(void)Bc250Nv12StorageValid(&storage);')
+ 'describe-rgb-span'=@('span>p->AllocationBytes-p->SurfaceOffset) goto refused;', 'span>~0ull) goto refused;')
+ 'caps-nv12'=@('if (pipe && (caps->Nv12 == BC250_DCN_NV12_NONE || !caps->MaxSlaveYuvPlanes)) goto refused;', '')
+ 'caps-nv12-scale'=@('unsigned up = Nv12 ? Caps->MaxUpscaleNv12 : Caps->MaxUpscaleArgb;', 'unsigned up = Caps->MaxUpscaleArgb; (void)Nv12;')
+ 'caps-pipes'=@('if (caps->Pipes < 2u || caps->MaxSlavePlanes < 1u) goto refused;', '')
+ 'caps-src-width'=@('> (long long)caps->MaxDownscaleSourceWidth &&', '> 3840 &&')
  'skip-dml'=@('if (Bc250Dml201PlanGroup(&in.Timing,dml,2,Workspace,WorkspaceBytes,&Plan->Dml) != BC250_DML201_OK) goto refused;', '(void)Bc250Dml201PlanGroup(&in.Timing,dml,2,Workspace,WorkspaceBytes,&Plan->Dml);')
 }
 $names=if($Mutation -eq 'all'){@($mutations.Keys)}elseif($Mutation){@($Mutation)}else{@('tree')}
