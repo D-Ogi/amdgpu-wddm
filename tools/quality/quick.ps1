@@ -331,6 +331,9 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # lines). Until now they ran only inside test-dryrun.ps1, which needs a built package. -WorkRoot keeps the files
  # under Out: without it the test writes beside tools\release. Nothing in the registry, no driver, no restart.
  Check 'installer-engine-units' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-engine-units.ps1" -WorkRoot "$Out\installer-engine-units" }
+ # BD-296: the production removal block and the packaged dry-run assertion must agree before packaging.
+ # The source-only test uses memory-only removal functions; it never invokes the uninstaller or registry.
+ Check 'installer-uninstall-policy' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-uninstall-policy.ps1" }
  # BD-191: the legacy top-level copies under Parameters (the plan over driver/state/catalog.json and the raw selectors
  # of guard.c, the archive on a scratch key under HKCU that it removes again, the start-screen answer through a
  # memory-only state client, and the order of the steps in install.ps1).
