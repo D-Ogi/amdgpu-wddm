@@ -3169,6 +3169,13 @@ static const char *const g_DpmThrottle[] = { "none", "thermal-soft", "thermal-ha
 // one refused ABI 2 (0.7.207).
 static unsigned long g_DpmAbi = BC250_DPM_ABI_3;
 
+// `dpm trace` (BD-329) holds one adapter for its whole run: while g_DpmHeld points at that handle, DpmQuery sends on
+// it, opens it when it is 0, closes it and sets it to 0 after a failed send (a PnP restart leaves it stale), and prints
+// nothing. DpmQuery records the last NTSTATUS in g_DpmStatus. Every other caller leaves g_DpmHeld NULL. DpmQuery stays
+// the one request builder of the CLI command (test_escape_flags.py).
+static D3DKMT_HANDLE *g_DpmHeld;
+static NTSTATUS g_DpmStatus;
+
 static int DpmQuery(BC250_ESCAPE_DPM_EX *x, unsigned long op, unsigned long long generation)
 {
     BC250_ESCAPE_DPM *d = &x->Dpm;
@@ -3183,13 +3190,25 @@ static int DpmQuery(BC250_ESCAPE_DPM_EX *x, unsigned long op, unsigned long long
         d->AbiVersion = g_DpmAbi;
         d->Op = op;
         d->ExpectedGeneration = generation;
-        if (SendEscapeFlags(BC250_DEFAULT_HWID, d, size, 1, &status)) return 1;
+        if (g_DpmHeld != NULL) {
+            if (*g_DpmHeld == 0 && OpenAdapterById(BC250_DEFAULT_HWID, g_DpmHeld, &status)) {
+                *g_DpmHeld = 0;
+                g_DpmStatus = status;
+                return 1;
+            }
+            status = EscapeOn(*g_DpmHeld, d, size, 1);
+        } else if (SendEscapeFlags(BC250_DEFAULT_HWID, d, size, 1, &status)) return 1;
         if (status != (NTSTATUS)0xC000000Dl || g_DpmAbi == BC250_DPM_ABI_1) break;
         // STATUS_INVALID_PARAMETER for 248 bytes: a driver before 0.7.215, which takes ABI 2 and ABI 1. For 192
         // bytes: a driver before 0.7.207, which takes ABI 1 alone.
         g_DpmAbi = g_DpmAbi == BC250_DPM_ABI_3 ? BC250_DPM_ABI : BC250_DPM_ABI_1;
     }
-    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM)", status); return 1; }
+    g_DpmStatus = status;
+    if (!NT_SUCCESS(status)) {
+        if (g_DpmHeld != NULL) { CloseAdapterHandle(*g_DpmHeld); *g_DpmHeld = 0; return 1; }
+        PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM)", status);
+        return 1;
+    }
     return 0;
 }
 
@@ -4029,16 +4048,83 @@ static int Cpu(int argc, WCHAR **argv)
     return 2;
 }
 
+// "dpm trace SECONDS [MS]" (BD-329): the governor's snapshot as CSV, one row per MS (default 50, at least 10), for
+// SECONDS (at most 3600). One process and one held adapter for the whole run, as `journal follow`, so a sample costs
+// one software escape (RUN_DPM is answered with NoAdapterSynchronization alone) and no walk of the display device
+// interfaces. The driver publishes the snapshot once per governor tick (25 ms), so 50 ms reads every other tick; the
+// ticks column says which, and raises/lowers count every tick between two rows. Read only: the same escape the release
+// CLI's `dpm` already sends, so it runs against any driver from 0.7.175 on and needs no lab flavour.
+static int DpmTrace(int argc, WCHAR **argv)
+{
+    BC250_ESCAPE_DPM_EX x;
+    const BC250_ESCAPE_DPM *d = &x.Dpm;
+    D3DKMT_HANDLE adapter = 0;
+    LARGE_INTEGER freq, start, now;
+    SYSTEMTIME utc;
+    NTSTATUS status = 0;
+    unsigned long seconds, interval = 50, rows = 0, failed = 0;
+    unsigned long long dueMs = 0, elapsedMs;
+    if (argc < 4 || argc > 5) { fprintf(stderr, "usage: bc250kmd_cli dpm trace SECONDS [MS]\n"); return 2; }
+    seconds = wcstoul(argv[3], NULL, 0);
+    if (argc == 5) interval = wcstoul(argv[4], NULL, 0);
+    if (seconds == 0 || seconds > 3600 || interval < 10 || interval > 60000) {
+        fprintf(stderr, "dpm trace: SECONDS 1..3600, MS 10..60000\n");
+        return 2;
+    }
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&start);
+    GetSystemTime(&utc);
+    printf("# dpm trace: start %04u-%02u-%02uT%02u:%02u:%02u.%03uZ, %lu s, every %lu ms\n", utc.wYear, utc.wMonth, utc.wDay,
+           utc.wHour, utc.wMinute, utc.wSecond, utc.wMilliseconds, seconds, interval);
+    printf("t_ms,ticks,uptime_ms,mode,mhz,target_mhz,want_mhz,cap_mhz,max_mhz,smu_mhz,smu_vid,busy_pm,avg_pm,src,"
+           "submit_pm,sdma_pm,temp_mc,temp_ok,throttle,idle,compute,stable,paused,raises,lowers,thermal,errors,power_mw\n");
+    for (;;) {
+        QueryPerformanceCounter(&now);
+        elapsedMs = (unsigned long long)(now.QuadPart - start.QuadPart) * 1000ull / (unsigned long long)freq.QuadPart;
+        if (elapsedMs >= (unsigned long long)seconds * 1000ull) break;
+        if (elapsedMs < dueMs) { Sleep((DWORD)(dueMs - elapsedMs)); continue; }
+        // The next row is due one interval after this one was due, so the rows do not drift by the time each takes.
+        dueMs += interval;
+        if (dueMs <= elapsedMs) dueMs = elapsedMs + interval;
+        g_DpmHeld = &adapter;
+        if (DpmQuery(&x, BC250_DPM_OP_READ, 0) || d->Status != BC250_ESCAPE_STATUS_DONE) {
+            status = g_DpmStatus;
+            if (!failed++) printf("# t=%llu ms read failed, NTSTATUS 0x%08lX status %lu: retrying each row\n", elapsedMs,
+                                  (unsigned long)status, d->Status);
+            continue;
+        }
+        if (failed) { printf("# t=%llu ms read back after %lu failed rows\n", elapsedMs, failed); failed = 0; }
+        printf("%llu,%llu,%llu,%s,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%s,%lu,%lu,%ld,%d,%s,%d,%d,%d,%d,%lu,%lu,%lu,%lu,",
+               elapsedMs, d->Ticks, d->UptimeMs, d->Mode == 1 ? "dpm" : "fixed", d->CurrentMHz, d->TargetMHz, d->WantMHz,
+               d->CapMHz, d->MaxMHz, d->ObservedMHz, d->ObservedVid, d->BusyPermille, d->BusyAvgPermille,
+               (d->Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d->SubmitBusyPermille, d->SdmaBusyPermille,
+               d->TemperatureMc, (d->Flags & BC250_DPM_FLAG_TEMPERATURE) ? 1 : 0,
+               d->Throttle < ARRAYSIZE(g_DpmThrottle) ? g_DpmThrottle[d->Throttle] : "?",
+               (d->Flags & BC250_DPM_FLAG_IDLE) ? 1 : 0, (d->Flags & BC250_DPM_FLAG_COMPUTE) ? 1 : 0,
+               (d->Flags & BC250_DPM_FLAG_STABLE) ? 1 : 0, (d->Flags & BC250_DPM_FLAG_PAUSED) ? 1 : 0,
+               d->Raises, d->Lowers, d->ThermalEvents, d->Errors);
+        if (d->AbiVersion == BC250_DPM_ABI_3 && (d->Flags & BC250_DPM_FLAG_POWER)) printf("%lu\n", x.Metrics.SocketPowerMw);
+        else printf("\n");
+        fflush(stdout);         // a sampler killed at its bound keeps every row it printed
+        rows++;
+    }
+    g_DpmHeld = NULL;
+    if (adapter != 0) CloseAdapterHandle(adapter);
+    printf("# dpm trace: %lu rows%s\n", rows, failed ? ", the last rows failed" : "");
+    return rows ? 0 : 1;
+}
+
 static int Dpm(int argc, WCHAR **argv)
 {
     BC250_ESCAPE_DPM_EX x;
     const BC250_ESCAPE_DPM *d = &x.Dpm;
     BC250_ESCAPE_DPM_TUNE t;
     unsigned long count = 1, interval = 1000, i;
+    if (argc >= 3 && !_wcsicmp(argv[2], L"trace")) return DpmTrace(argc, argv);
     if (argc >= 3 && !_wcsicmp(argv[2], L"tune")) return DpmTune(argc, argv);
     if (argc >= 3 && !_wcsicmp(argv[2], L"floor")) return DpmFloor(argc, argv);
     if (argc >= 3 && !_wcsicmp(argv[2], L"curve")) return DpmCurve(argc, argv);
-    if (argc > 4) { fprintf(stderr, "usage: bc250kmd_cli dpm [count [interval ms]] | confirm | tune ... | floor ... "
+    if (argc > 4) { fprintf(stderr, "usage: bc250kmd_cli dpm [count [interval ms]] | trace SECONDS [MS] | confirm | tune ... | floor ... "
                                     "| curve ...\n"); return 2; }
     if (argc >= 3 && !_wcsicmp(argv[2], L"confirm")) {
         if (DpmQuery(&x, BC250_DPM_OP_READ, 0)) return 1;
@@ -4555,6 +4641,7 @@ int wmain(int argc, wchar_t **argv)
 #endif
                         "       bc250kmd_cli log [from] | log summary [from | only]   (only: the summary's own lines, for a poller)\n"
                         "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
+                        "       bc250kmd_cli dpm trace SECONDS [MS]   (the governor as CSV, default every 50 ms, BD-329)\n"
                         "       bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | reset] | dpm floor <MHz|off>\n"
                         "       bc250kmd_cli fan [count [interval ms]]    (the board's hardware monitor, docs/design/fan.md)\n"
                         "       bc250kmd_cli fan auto [store] | fan curve [standard|quiet|performance] [store]\n"
