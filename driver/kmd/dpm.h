@@ -36,6 +36,8 @@ typedef struct _BC250_DPM_SNAP {
     // BD-281, driver log only: this start's rate rule and high-clock zone thresholds (0: the rule is off by setting)
     // and Gov's counters. The log summary names the rules from these after the ring overwrote the start lines.
     ULONG RateMcPerS, RateFromMc, HighMc, HighMHz, RateSteps, RateLevels, HighSteps, HighHolds;
+    // BD-329, driver log only: the sustained raise's hold of this start (0: off) and Gov's counters.
+    ULONG SustainMs, SustainRaises, SustainRefusals;
     // 0.7.207, the idle state. IdleMHz is the point in force, 0 when the state is off for this start
     // (bc250_dpm_idle_mhz: DpmIdleMHz 0, a refused setting, or a point the firmware refused).
     ULONG IdleMHz, IdleHoldMs, IdleBusyPermille;
