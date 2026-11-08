@@ -58,7 +58,7 @@ to audited recipe revisions and helper trees. Other portable installations are
 not scanned. Selected inputs, detected build tools, environment paths and build
 helpers are checked by content. An unreadable required input stops the command
 before planning or preflight. An unknown recipe revision needs a declaration
-review; a new source revision can use an existing declaration only when the recipe
+review. A new source revision can use an existing declaration only when the recipe
 and its recorded helpers have identical Git object IDs. The default command needs
 no extra switches. Keep tools unchanged while a build runs.
 
