@@ -206,7 +206,6 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         // Nothing of a partial answer is used: every reader of Post sees zeros, and none of them divides by them.
         RtlZeroMemory(&device->Post, sizeof(device->Post));
         GuardLog("post display: none (status 0x%08X); the start continues without an inherited display", status);
-        status = STATUS_SUCCESS;
     }
     else
         GuardLog("post display %ux%u pitch %u format %u target %u", device->Post.Width, device->Post.Height,
