@@ -2,8 +2,11 @@
 #include "runtime-bridge.h"
 #include "ddi-error-policy.h"
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <iostream>
+#include <string>
 #include <thread>
 using namespace bc250::umd;
 static void require(bool ok) { if (!ok) std::abort(); }
@@ -335,8 +338,60 @@ static void test_worker_scope() {
     report_host_scope_calls(bridge);
     std::cout << "worker scope: PASS\n";
 }
+// BD-327: the lab flavour writes one line for each of the first 16 admitted worker calls of the process; the release
+// flavour writes none. test_worker_scope admitted 8 calls before this test, so 20 more pass the budget of 16.
+static std::string g_log_path;
+static HRESULT APIENTRY note_allocate(HANDLE runtime, D3DDDICB_ALLOCATE *a) {
+    require(runtime==&context && a->NumAllocations==1); a->hKMResource=93; a->pAllocationInfo2[0].hAllocation=39;
+    return S_OK;
+}
+static void test_worker_admit_note() {
+    RuntimeDevice device; device.hDevice=&context;
+    device.KTCallbacks.pfnAllocateCb=note_allocate;
+    HostBridge bridge{}; bridge.device=&device;
+    std::thread worker([&] {
+        EngineWorkerGate::bind(&device.workers);
+        for (int i=0;i<20;++i) {
+            D3DDDI_ALLOCATIONINFO2 info{};
+            D3DKMT_CREATEALLOCATION internal{}; internal.NumAllocations=1; internal.pAllocationInfo2=&info;
+            internal.PrivateDriverDataSize=4; internal.Flags.CreateResource=1; internal.Flags.NonSecure=1;
+            require(host_dispatch(&bridge,BC250_HOST_CreateAllocation2,&internal)==0);
+        }
+        EngineWorkerGate::bind(nullptr);
+    });
+    worker.join();
+    require(bridge.worker_calls==20);
+    device.workers.revoke();
+    char runtime[32]; std::snprintf(runtime,sizeof(runtime),"runtime=%p ",static_cast<void *>(&context));
+    unsigned lines=0, ours=0;
+    std::ifstream log(g_log_path);
+    for (std::string line; std::getline(log,line);) {
+        // The map and residency calls of test_worker_scope are admitted with E_PENDING (hr=8000000A).
+        if (line.rfind("BC250 BD-327: worker host op ",0)!=0 || line.find(" admitted: hr=")==std::string::npos)
+            continue;
+        ++lines;
+        if (line.find(runtime)!=std::string::npos) {
+            ++ours;
+            require(line.find("BC250 BD-327: worker host op 16 admitted: hr=00000000 ")==0);
+        }
+        require(line.find(" identity=")!=std::string::npos && line.find(" thread=")!=std::string::npos);
+    }
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    // 8 lines of test_worker_scope's device, 8 of this one, then the budget is spent.
+    require(lines==16 && ours==8);
+#else
+    require(lines==0 && ours==0);
+#endif
+    std::cout << "worker admit note: PASS (" << lines << " lines)\n";
+}
 int main() {
+    // The log sink reads AMDGPU_WDDM_LOG once, at the first line of the process: set it before any test prints.
+    char temp[MAX_PATH]; require(GetTempPathA(MAX_PATH,temp)!=0);
+    g_log_path=std::string(temp)+"runtime-bridge-test-"+std::to_string(GetCurrentProcessId())+".log";
+    DeleteFileA(g_log_path.c_str());
+    require(SetEnvironmentVariableA("AMDGPU_WDDM_LOG",("file:"+g_log_path).c_str()));
     test_worker_scope();
+    test_worker_admit_note();
     test_present_bridge();
     test_runtime_present();
     RuntimeDevice device;

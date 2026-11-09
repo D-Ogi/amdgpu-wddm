@@ -558,6 +558,15 @@ static int32_t Bc250WorkerDispatch(HostBridge &s, uint32_t operation, void *argu
    const HRESULT hr=Bc250HostOperation(&s,operation,argument);
    gate.leave();
    std::atomic_ref<unsigned>(s.worker_calls).fetch_add(1,std::memory_order_relaxed);
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+   // The positive witness of BD-327: the host scope line comes only at DestroyDevice, and a game can end with its
+   // device alive (RotTR, kit-bd327-diag5 arm G), so the first admitted calls of the process also get a line of
+   // their own. kit-bd327-diag6 counts these lines by runtime.
+   static std::atomic_uint admitted{16};
+   device_life_note(admitted,"BC250 BD-327: worker host op %u admitted: hr=%08X runtime=%p identity=%p thread=%lu\n",
+      operation,static_cast<unsigned>(hr),s.device->hDevice,s.device->host_identity(),
+      (unsigned long)GetCurrentThreadId());
+#endif
    if (Bc250DeviceLostResult(hr)) return (int32_t)0xc00002b6;
    if (hr==E_PENDING && (operation==BC250_HOST_MapGpuVirtualAddress || operation==BC250_HOST_MakeResident)) return 0x103;
    return SUCCEEDED(hr) ? 0 : hr==E_NOTIMPL ? (int32_t)0xc00000bb :

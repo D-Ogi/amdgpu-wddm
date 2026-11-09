@@ -85,8 +85,12 @@ inline void APIENTRY engine_diagnostic(void *shell,UINT32 level,const char *mess
         // the errors and warnings below: 256 at the start, then 16 in each minute.
         if(!amdgpu_wddm_log::enabled())return;
         // BD-327: the engine's shader stats line of a device (one at each final Release) is never skipped by the
-        // minute limit, and it names the device: shell is the RuntimeDevice of the device (DeviceOwner::initialize),
-        // the device= of its BD-327 line. A bound of its own, 4096 lines in a process.
+        // minute limit. shell is the Shell of the log sink that the engine used. An engine whose LogShaderStats sends
+        // the line with Logger::logToSink uses the sink of the closing device: shell is then its RuntimeDevice
+        // (DeviceOwner::initialize), the device= of its BD-327 line. An older engine sends the line through the
+        // oldest live sink of the process (DXVK Logger, m_sinks.front()): with more than one device alive, shell is the
+        // oldest live device, not the closing one. The translation counts in the line are the process's. A bound of
+        // its own, 4096 lines in a process.
         static constexpr char kStats[]="amdgpu_wddm_dxvk: Shader stats:";
         if(!std::strncmp(message,kStats,sizeof(kStats)-1)){
             static std::atomic_uint stats{4096};
