@@ -31,11 +31,15 @@ void AmdIdentityProcessCreate(_Out_ BC250_AMD_IDENTITY_PROCESS* Process, _In_rea
     UINT Chars);
 
 // QueryAdapterInfo UMDRIVERPRIVATE with BC250_AMD_IDENTITY_BYTES: the reply for the process (NULL: no process
-// handle, the answer is OFF). Copies no cache and touches no hardware. PASSIVE_LEVEL.
-NTSTATUS AmdIdentityQuery(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process, _Out_writes_bytes_(Bytes) void* Out, UINT Bytes);
+// handle, the answer is OFF) on the part whose row is Capability (NULL: a part this driver does not know, the reply
+// is all zeros). Copies no cache and touches no hardware. PASSIVE_LEVEL.
+NTSTATUS AmdIdentityQuery(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process,
+    _In_opt_ const BC250_GPU_CAPABILITY* Capability, _Out_writes_bytes_(Bytes) void* Out, UINT Bytes);
 
-// Bc250Escape, BC250_ESCAPE_SET_PROCESS_POLICY: the shell's value for the process (NULL: no process handle, refused).
-void AmdIdentityEscape(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process, _Inout_ struct _BC250_ESCAPE_PROCESS_POLICY* Data);
+// Bc250Escape, BC250_ESCAPE_SET_PROCESS_POLICY: the shell's value for the process (NULL: no process handle, refused),
+// answered on the part whose row is Capability (NULL: no claim).
+void AmdIdentityEscape(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process,
+    _In_opt_ const BC250_GPU_CAPABILITY* Capability, _Inout_ struct _BC250_ESCAPE_PROCESS_POLICY* Data);
 
 // wddm.c: the identity record of a KMD process handle, or NULL when the handle is NULL or is not a process of ours.
 BC250_AMD_IDENTITY_PROCESS* WddmProcessIdentity(_In_opt_ HANDLE KmdProcess);

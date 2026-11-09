@@ -6,27 +6,33 @@
 // AMD's FidelityFX upscaler DLL (amd_fidelityfx_upscaler_dx12.dll 4.x) asks type 0 with exactly 608 bytes and reads
 // the family at 0x30 and the external revision at 0x34. Its RDNA 2 INT8 provider accepts family 0x8F with revision
 // 0x28-0x4F (Navi 21-24). The BC-250 is family 0x8F with revision 0x84, which no FSR 4 provider accepts. A process
-// that is ON gets revision 0x32, the first Navi 22 value (40 CUs, GFX10.3); a process that is OFF gets 0x84.
+// that is ON gets the revision of the part's FSR 4 claim (gpu_capabilities.h; 0x32, the first Navi 22 value, for the
+// BC-250); a process that is OFF gets the part's own revision (0x84).
 //
 // Precedence, first match wins:
-//   1. the image is in the anti-cheat list            OFF  (the shell's value cannot change it)
-//   2. the D3D12 shell sent FsrUpgrade                that value
-//   3. no image name is known                          OFF  (the list cannot be checked)
-//   4. otherwise                                       ON
-// A query without a process handle is OFF before any of them.
+//   1. no process handle                               OFF  (the list cannot be checked)
+//   2. the image is in the anti-cheat list             OFF  (the shell's value cannot change it)
+//   3. the D3D12 shell sent FsrUpgrade 1               ON, only with a claim (else NO_CLAIM: OFF)
+//   4. the D3D12 shell sent FsrUpgrade 0               OFF
+//   5. no image name is known                          OFF  (the list cannot be checked)
+//   6. otherwise                                       ON, only with a claim (else NO_CLAIM: OFF)
+// The claim comes from the part's row in gpu_capabilities.h. A part without a row has no claim: its answer is an
+// all-zero block, which the DLL's own rule (family at 0x30 not 0) reads as "no provider", the same as a refusal.
 #pragma once
+#include "gpu_capabilities.h"
 
-#define BC250_AMD_IDENTITY_FAMILY_NV 0x8Fu      // FAMILY_NV (addrlib amdgpu_asic_addr.h)
-#define BC250_AMD_IDENTITY_EREV_OWN 0x84u       // the BC-250 (AMDGPU_GFX1013_RANGE 0x82-0x85)
-#define BC250_AMD_IDENTITY_EREV_NAVI22 0x32u    // the first value of AMDGPU_NAVI22_RANGE (0x32-0x3B)
+#define BC250_AMD_IDENTITY_FAMILY_NV 0x8Fu      // FAMILY_NV (addrlib amdgpu_asic_addr.h); the BC-250 row
+#define BC250_AMD_IDENTITY_EREV_OWN 0x84u       // the BC-250 (AMDGPU_GFX1013_RANGE 0x82-0x85); its row
+#define BC250_AMD_IDENTITY_EREV_NAVI22 0x32u    // the first value of AMDGPU_NAVI22_RANGE (0x32-0x3B); its claim
 
 enum bc250_amd_identity_source {
-    BC250_AMD_IDENTITY_SOURCE_DEFAULT = 0,      // a known name, not listed, no value from the shell: ON
+    BC250_AMD_IDENTITY_SOURCE_DEFAULT = 0,      // a known name, not listed, no value from the shell: ON with a claim
     BC250_AMD_IDENTITY_SOURCE_LIST = 1,         // the image is in the anti-cheat list: OFF
     BC250_AMD_IDENTITY_SOURCE_SHELL = 2,        // the D3D12 shell sent FsrUpgrade 0 or 1
     BC250_AMD_IDENTITY_SOURCE_NO_NAME = 3,      // no image name: OFF
     BC250_AMD_IDENTITY_SOURCE_NO_PROCESS = 4,   // the query had no process handle: OFF
-    BC250_AMD_IDENTITY_SOURCE_COUNT = 5
+    BC250_AMD_IDENTITY_SOURCE_NO_CLAIM = 5,     // the part's row has no FSR 4 claim: OFF whatever the shell sent
+    BC250_AMD_IDENTITY_SOURCE_COUNT = 6
 };
 
 // The facts of one image name.
@@ -55,12 +61,15 @@ int Bc250AmdIdentityShellWord(unsigned int fsr_identity, unsigned int image_flag
 unsigned int Bc250AmdIdentityNameFlags(const unsigned short* name, unsigned int chars);
 
 // 1 (ON) or 0 (OFF), and the source of the answer in *source (enum bc250_amd_identity_source).
-// name_flags: the NAME_* bits of every name known for the process; shell: BC250_AMD_IDENTITY_SHELL_*.
-int Bc250AmdIdentityDecide(int has_process, unsigned int name_flags, unsigned int shell, unsigned int* source);
+// name_flags: the NAME_* bits of every name known for the process; shell: BC250_AMD_IDENTITY_SHELL_*;
+// claim: 1 when the part's row gives an FSR 4 claim (gpu_capabilities.h), 0 otherwise.
+int Bc250AmdIdentityDecide(int has_process, unsigned int name_flags, unsigned int shell, int claim,
+                           unsigned int* source);
 
 // The 608-byte reply: zeros, the family at 0x30 and the revision at 0x34, both little-endian 32-bit words.
-// bytes must be BC250_AMD_IDENTITY_BYTES; another size gives 0 and writes nothing.
-int Bc250AmdIdentityFill(void* out, unsigned int bytes, int on);
+// bytes must be BC250_AMD_IDENTITY_BYTES; another size gives 0 and writes nothing. capability: the part's row, or
+// NULL for a part this driver does not know, whose reply is all zeros (family 0: the DLL ignores the block).
+int Bc250AmdIdentityFill(void* out, unsigned int bytes, int on, const BC250_GPU_CAPABILITY* capability);
 
 // The name of a source, for the log.
 const char* Bc250AmdIdentitySourceName(unsigned int source);

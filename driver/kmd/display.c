@@ -801,7 +801,8 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     // The shell's FSR 4 identity value for the calling process: software state of our process object (amd_identity.c).
     if (command == BC250_ESCAPE_SET_PROCESS_POLICY) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_PROCESS_POLICY)) return STATUS_INVALID_PARAMETER;
-        AmdIdentityEscape(WddmProcessIdentity(Escape->hKmdProcessHandle), (BC250_ESCAPE_PROCESS_POLICY*)data);
+        AmdIdentityEscape(WddmProcessIdentity(Escape->hKmdProcessHandle),
+            device->GpuCapabilityValid ? &device->GpuCapability : NULL, (BC250_ESCAPE_PROCESS_POLICY*)data);
         return STATUS_SUCCESS;
     }
     // BD-296 part (b): the compositor of the desktop decision, from the router in dwm.exe. Software state of the

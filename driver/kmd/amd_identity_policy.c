@@ -65,18 +65,24 @@ unsigned int Bc250AmdIdentityNameFlags(const unsigned short* name, unsigned int 
     return flags;
 }
 
-int Bc250AmdIdentityDecide(int has_process, unsigned int name_flags, unsigned int shell, unsigned int* source)
+int Bc250AmdIdentityDecide(int has_process, unsigned int name_flags, unsigned int shell, int claim,
+                           unsigned int* source)
 {
     unsigned int s;
     int on;
     if (!has_process) { s = BC250_AMD_IDENTITY_SOURCE_NO_PROCESS; on = 0; }
     else if (name_flags & BC250_AMD_IDENTITY_NAME_LISTED) { s = BC250_AMD_IDENTITY_SOURCE_LIST; on = 0; }
-    else if (shell == BC250_AMD_IDENTITY_SHELL_ON || shell == BC250_AMD_IDENTITY_SHELL_OFF) {
-        s = BC250_AMD_IDENTITY_SOURCE_SHELL;
-        on = shell == BC250_AMD_IDENTITY_SHELL_ON;
+    else if (shell == BC250_AMD_IDENTITY_SHELL_ON) {
+        // The setting says what the person wants; the part's row says whether the claim exists.
+        s = claim ? BC250_AMD_IDENTITY_SOURCE_SHELL : BC250_AMD_IDENTITY_SOURCE_NO_CLAIM;
+        on = claim ? 1 : 0;
     }
+    else if (shell == BC250_AMD_IDENTITY_SHELL_OFF) { s = BC250_AMD_IDENTITY_SOURCE_SHELL; on = 0; }
     else if (!(name_flags & BC250_AMD_IDENTITY_NAME_KNOWN)) { s = BC250_AMD_IDENTITY_SOURCE_NO_NAME; on = 0; }
-    else { s = BC250_AMD_IDENTITY_SOURCE_DEFAULT; on = 1; }
+    else {
+        s = claim ? BC250_AMD_IDENTITY_SOURCE_DEFAULT : BC250_AMD_IDENTITY_SOURCE_NO_CLAIM;
+        on = claim ? 1 : 0;
+    }
     if (source) *source = s;
     return on;
 }
@@ -98,14 +104,19 @@ static void Put32(unsigned char* p, unsigned int v)
     p[0] = (unsigned char)v; p[1] = (unsigned char)(v >> 8); p[2] = (unsigned char)(v >> 16); p[3] = (unsigned char)(v >> 24);
 }
 
-int Bc250AmdIdentityFill(void* out, unsigned int bytes, int on)
+int Bc250AmdIdentityFill(void* out, unsigned int bytes, int on, const BC250_GPU_CAPABILITY* capability)
 {
     unsigned char* p = (unsigned char*)out;
     unsigned int i;
     if (!out || !Bc250AmdIdentityExtent(bytes)) return 0;
     for (i = 0; i < bytes; i++) p[i] = 0;
-    Put32(p + BC250_AMD_IDENTITY_FAMILY_OFFSET, BC250_AMD_IDENTITY_FAMILY_NV);
-    Put32(p + BC250_AMD_IDENTITY_EREV_OFFSET, on ? BC250_AMD_IDENTITY_EREV_NAVI22 : BC250_AMD_IDENTITY_EREV_OWN);
+    // A part without a row gives an all-zero block, which the DLL's own rule (family at 0x30 is not 0) reads as no
+    // provider, as it reads a refused query. Another part's family must never be written here.
+    if (!capability || !capability->Family) return 1;
+    Put32(p + BC250_AMD_IDENTITY_FAMILY_OFFSET, capability->Family);
+    Put32(p + BC250_AMD_IDENTITY_EREV_OFFSET,
+          (on && capability->Fsr4Claim != BC250_FSR4_CLAIM_NONE) ? capability->RevisionClaim
+                                                                 : capability->RevisionOwn);
     return 1;
 }
 
@@ -117,6 +128,7 @@ const char* Bc250AmdIdentitySourceName(unsigned int source)
     case BC250_AMD_IDENTITY_SOURCE_SHELL: return "shell";
     case BC250_AMD_IDENTITY_SOURCE_NO_NAME: return "no-name";
     case BC250_AMD_IDENTITY_SOURCE_NO_PROCESS: return "no-process";
+    case BC250_AMD_IDENTITY_SOURCE_NO_CLAIM: return "no-claim";
     default: return "?";
     }
 }
