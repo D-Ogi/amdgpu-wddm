@@ -37,7 +37,9 @@ param(
                  'witness-lost-uncounted', 'scaled-plane-mask-dropped', 'planes-clamp-dropped',
                  'mpo3-scaled-route-off', 'mpo3-scaled-dml-skipped', 'mpo3-scaled-scanout-skipped',
                  'mpo3-scaled-rule-unnamed', 'mpo3-scaled-shape-lost', 'mpo3-scaled-approval-skipped',
-                 'mpo3-scaled-selector-skipped', 'mpo3-scaled-presentid-lost')][string]$Mutation = '',
+                 'mpo3-scaled-selector-skipped', 'mpo3-scaled-presentid-lost',
+                 'group-colour-swapped', 'group-umd-nv12', 'group-flags-ignored', 'group-rgb-colour-ignored',
+                 'group-post-ignored', 'group-source-ignored')][string]$Mutation = '',
     [switch]$Lab
 )
 
@@ -220,7 +222,25 @@ $labMutations = [ordered]@{
     'planes-clamp-dropped' = @{ find = '(ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) && Level < BC250_WDDM_MPO_CAPS_DDI_LEVEL'
         with = '(ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) && (Level || 1)'
         why = 'DRIVERCAPS says 2 planes at level 2.2 or later, where the caps DDI says 1' }
-}
+    # BD-223 Part Y: the translation of the two planes of a Check3 call (WddmMpo3GroupDescribe, lab flavour).
+    'group-colour-swapped' = @{ find = 'case D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P601: out->Color = BC250_INPUT_601_LIMITED; break;'
+        with = 'case D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P601: out->Color = BC250_INPUT_601_FULL; break;'
+        why = 'a studio-range 601 plane is described as full range' }
+    'group-umd-nv12' = @{ find = 'if (s->Format == BC250_NV12_D3DDDI_FORMAT && !Storage[i].UmdAlloc &&'
+        with = 'if (s->Format == BC250_NV12_D3DDDI_FORMAT && ((void)Storage[i].UmdAlloc, 1) &&'
+        why = 'a UMD allocation is described as an NV12 plane' }
+    'group-flags-ignored' = @{ find = 'out->UnsupportedFlags = a->Flags.Value || a->Blend.Value ||'
+        with = 'out->UnsupportedFlags = ((void)a->Flags.Value, 0) || a->Blend.Value ||'
+        why = 'a mirrored plane reaches the planner without its exclusion' }
+    'group-rgb-colour-ignored' = @{ find = 'if ((UINT)a->ColorSpaceType != D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709) {'
+        with = 'if (((void)a->ColorSpaceType, 0)) {'
+        why = 'an RGB plane with a YCbCr colour space is described as full-range RGB' }
+    'group-post-ignored' = @{ find = 'Description->PostCompositionChanged |= facts.PostPresent && (facts.PostFlags ||'
+        with = 'Description->PostCompositionChanged |= 0 && facts.PostPresent && (facts.PostFlags ||'
+        why = 'a mirrored post-composition is not reported to the planner' }
+    'group-source-ignored' = @{ find = 'if (p->VidPnSourceId != 0) { RtlZeroMemory(Description, sizeof(*Description)); return STATUS_INVALID_PARAMETER; }'
+        with = 'if (((void)p->VidPnSourceId, 0)) { RtlZeroMemory(Description, sizeof(*Description)); return STATUS_INVALID_PARAMETER; }'
+        why = 'a plane of another source is described' }}
 # BD-223: both flavours compile and test the same Check3 and SetAddress3 implementation.
 $planeMutations = [ordered]@{
     'mpo3-scaled-route-off' = @{ find = 'scaled = verdict == BC250_MPO3_OK ? 1u : 0u;'; with = 'scaled = ((void)verdict, 0u);'

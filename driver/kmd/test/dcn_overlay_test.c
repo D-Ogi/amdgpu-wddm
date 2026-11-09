@@ -161,15 +161,10 @@ int main(void)
     }
     // The display IP row decides limits; no board literal does (Part Y).
     {
-        BC250_DCN_CAPS row=Bc250DcnCaps201; BC250_DCN_PLANE_ANSWER a;
+        BC250_DCN_CAPS row=Bc250DcnCaps201;
         CHECK(Bc250DcnCapsForPci(0x1002,0x13FE)==&Bc250DcnCaps201 && Bc250DcnCapsForPci(0x1002,0x13DB)==&Bc250DcnCaps201);
         CHECK(Bc250DcnCapsForPci(0x1002,0x15BF)==NULL && Bc250DcnCapsForPci(0x1022,0x13FE)==NULL);
         CHECK(Bc250DcnCaps201.Version==BC250_DCN_2_01 && Bc250DcnCaps201.Pipes==4 && Bc250DcnCaps201.Nv12==BC250_DCN_NV12_WITNESS);
-        a=Bc250DcnPlaneAnswer(&Bc250DcnCaps201,0); CHECK(a.Planes==1 && a.RgbPlanes==1 && a.YuvPlanes==0);
-        a=Bc250DcnPlaneAnswer(&Bc250DcnCaps201,1); CHECK(a.Planes==2 && a.RgbPlanes==2 && a.YuvPlanes==0);
-        a=Bc250DcnPlaneAnswer(NULL,1); CHECK(a.Planes==1 && a.RgbPlanes==1 && a.YuvPlanes==0);
-        row.Nv12=BC250_DCN_NV12_PROVEN; a=Bc250DcnPlaneAnswer(&row,1); CHECK(a.Planes==2 && a.YuvPlanes==1);
-        row=Bc250DcnCaps201; row.Pipes=1; a=Bc250DcnPlaneAnswer(&row,1); CHECK(a.Planes==1 && a.YuvPlanes==0);
         bad=r; bad.Caps=NULL; Refused(&bad,w,bytes,q,BC250_OVERLAY_ARGUMENT);
         row=Bc250DcnCaps201; row.Pipes=1; bad=r; bad.Caps=&row; Refused(&bad,w,bytes,q,BC250_OVERLAY_TOPOLOGY);
         row=Bc250DcnCaps201; row.MaxSlavePlanes=0; bad=r; bad.Caps=&row; Refused(&bad,w,bytes,q,BC250_OVERLAY_TOPOLOGY);

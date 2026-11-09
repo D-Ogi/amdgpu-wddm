@@ -1278,7 +1278,11 @@ NTSTATUS ConnectorLinkOverlayCheck(BC250_DEVICE* Device,
     // generation at interrupt level while DML runs. Never publish that result.
     if (!ConnectorGenerationCurrent(Device,c->Generation)) {
         RtlZeroMemory(Out,sizeof(*Out));Out->Result=BC250_OVERLAY_TOPOLOGY;status=STATUS_RETRY;
-    } else status=STATUS_SUCCESS;
+    } else {
+        // The answer of the planner is the status too: a caller that reads only the NTSTATUS never takes a refused
+        // description for an admitted one.
+        status=Out->Result==BC250_OVERLAY_OK ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
+    }
 done:
     ConnectorOperationRelease(Device);ExFreePoolWithTag(plan,LINK_WORK_TAG);return status;
 }

@@ -20,6 +20,8 @@
 #include "mpo3_track.h"  /* BD-307: plane 0 of the MPO3 DDIs */
 #include "dcn_plane.h"   /* BD-223 Part S: the shared scaled-plane rule of Check3, linked from dcn_plane.c */
 #include "dcn_overlay_input.h"  /* BD-223 Part Y: the answer of the two-plane Check3 preflight */
+#include "dcn_cnvc_color.h"      /* BD-223 Part Y: the planner formats and colour inputs of the group description */
+#include "wddm_mpo_storage.h"    /* BD-223 Part Y: the storage snapshot that the group description reads */
 #include "bc250_scanout_caps.h"  /* BD-223: the stretch and shrink limits the caps DDI answers */
 #define UNREFERENCED_PARAMETER(x) ((void)(x))
 typedef int32_t NTSTATUS;
@@ -149,6 +151,11 @@ typedef struct { LONG left, top, right, bottom; } RECT;
 typedef int BOOL;
 #define D3DDDI_ROTATION_IDENTITY 1u
 #define D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 0u
+/* The left-sited YCbCr colour spaces of D3DDDI_COLOR_SPACE_TYPE (shared/d3dukmdt.h 10.0.26100). */
+#define D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P601 6u
+#define D3DDDI_COLOR_SPACE_YCBCR_FULL_G22_LEFT_P601 7u
+#define D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709 8u
+#define D3DDDI_COLOR_SPACE_YCBCR_FULL_G22_LEFT_P709 9u
 /* DXGK_MULTIPLANE_OVERLAY_FLAGS (shared/d3dkmddi.h 295-311 below WDDM 3.0): the two mirror bits, then reserved. */
 typedef struct { union { struct { UINT VerticalFlip:1; UINT HorizontalFlip:1; UINT Reserved:30; }; UINT Value; }; } DXGK_MULTIPLANE_OVERLAY_FLAGS;
 #define DXGK_MULTIPLANE_OVERLAY_STRETCH_QUALITY_BILINEAR 1u
@@ -766,6 +773,7 @@ static void StartHealthCompleted(BC250_DEVICE *d,ULONG sequence)
     if(sequence && sequence!=healthSequence){healthSequence=sequence;healthCompletions++;}
 }
 /* ACTUAL_SOURCE */
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 /* BD-223 Part Y: the WDDM side of the two-plane preflight (wddm_mpo_group.inc) is outside the extracted block; this
  * model counts the calls. Its answer only goes to the log: Check3 must refuse two planes whatever it says. */
 static unsigned groupChecks;
@@ -777,6 +785,7 @@ static NTSTATUS WddmMpo3CheckGroup(BC250_DEVICE* Device, BC250_WDDM* Wddm,
     ++groupChecks;memset(Out,0,sizeof(*Out));Out->Described=1;Out->WithinCurrentBudget=1;
     return STATUS_SUCCESS;
 }
+#endif
 /* A started adapter on the inherited 1366x768 mode, its desktop primary at 0x1000, the flip gate open, CRTC_VSYNC on,
  * the OTG running and the plane drained; every stub reset. level 1: the flip DDI arrives above DISPATCH_LEVEL. */
 static void Setup(BC250_DEVICE *d,BC250_WDDM *w,int level)
@@ -2583,11 +2592,17 @@ static void Mpo3Checks(void)
     c.PlaneCount=2;
     {
         const unsigned before=logs;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         const unsigned groups=groupChecks;
+#endif
         CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && !c.Supported);
-        /* BD-223: the second plane has a line of its own (layer, format, colour space); Part Y: one preflight, two
-         * lines, and a described group within budget is still refused. */
+        /* BD-223: the second plane has a line of its own (layer, format, colour space). Part Y, lab flavour: one
+         * preflight and two lines, and a described group within budget is still refused. */
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         CHECK(logs==before+7 && groupChecks==groups+1);
+#else
+        CHECK(logs==before+5);
+#endif
     }
     CHECK(w.Mpo3Checks[BC250_MPO3_COUNT]==1 && c.ReturnInfo.FailingPlane==1);
     c.PlaneCount=0;
@@ -2907,6 +2922,104 @@ static void MpoPlanesClamp(void)
         CHECK(bc250_scanout_mpo_planes(WddmMpoFlags(cases[i].Plane,cases[i].Level))==cases[i].Planes);
 }
 #endif
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+/* BD-223 Part Y, lab flavour: WddmMpo3GroupDescribe, the translation of two WDDM planes and their storage snapshots
+ * into the planner's description. Every format and colour space that it takes, and every refusal. */
+static void GroupStorage(BC250_MPO_STORAGE *s,ULONG format)
+{
+    memset(s,0,sizeof(*s));
+    s->Surface=(BC250_WDDM_ALLOCATION_PRIVATE){BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,1366,768,5632,format,5632ull*768};
+}
+static void GroupNv12(BC250_MPO_STORAGE *s)
+{
+    memset(s,0,sizeof(*s));
+    s->Nv12.Surface=(BC250_WDDM_ALLOCATION_PRIVATE){BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,BC250_WDDM_NV12_VERSION,1280,720,
+        1280,BC250_NV12_D3DDDI_FORMAT,1382400};
+    s->Nv12.ChromaPitch=1280;s->Nv12.Layout=BC250_WDDM_NV12_LINEAR;s->Nv12.ChromaOffset=921600;s->Nv12.Alignment=256;
+    s->Surface=s->Nv12.Surface;
+}
+static void Mpo3GroupDescribe(void)
+{
+    static const struct { UINT space; unsigned color; } spaces[]={
+        {D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P601,BC250_INPUT_601_LIMITED},
+        {D3DDDI_COLOR_SPACE_YCBCR_FULL_G22_LEFT_P601,BC250_INPUT_601_FULL},
+        {D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709,BC250_INPUT_709_LIMITED},
+        {D3DDDI_COLOR_SPACE_YCBCR_FULL_G22_LEFT_P709,BC250_INPUT_709_FULL}};
+    static const struct { ULONG format; unsigned planner; } rgb[]={
+        {D3DDDIFMT_A8R8G8B8,BC250_LINEAR_BGRA8},{D3DDDIFMT_X8R8G8B8,BC250_LINEAR_BGRX8},{D3DDDIFMT_A8B8G8R8,BC250_LINEAR_RGBA8}};
+    BC250_WDDM w;BC250_DEVICE d;
+    DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3 c;
+    DXGK_MULTIPLANE_OVERLAY_PLANE_WITH_SOURCE2 p,q,*pp[2];
+    DXGK_MULTIPLANE_OVERLAY_POST_COMPOSITION post;
+    BC250_MPO_STORAGE s[2];
+    BC250_OVERLAY_DESCRIPTION g;
+    unsigned i;
+
+    Setup(&d,&w,0);
+    memset(&c,0,sizeof(c));memset(&p,0,sizeof(p));memset(&q,0,sizeof(q));memset(&post,0,sizeof(post));
+    pp[0]=&p;pp[1]=&q;c.PlaneCount=2;c.ppPlanes=pp;
+    Mpo3Attributes(&p.PlaneAttributes);p.PlaneAttributes.StretchQuality=DXGK_MULTIPLANE_OVERLAY_STRETCH_QUALITY_BILINEAR;
+    q=p;q.LayerIndex=1;q.PlaneAttributes.ColorSpaceType=D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709;
+    q.PlaneAttributes.StretchQuality=DXGK_MULTIPLANE_OVERLAY_STRETCH_QUALITY_HIGH;
+    q.PlaneAttributes.SrcRect.right=1280;q.PlaneAttributes.SrcRect.bottom=720;
+    GroupStorage(&s[0],D3DDDIFMT_A8R8G8B8);GroupNv12(&s[1]);
+    /* The RGB plane 0 and the NV12 plane of the YUV overlay: every field the planner reads. */
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_SUCCESS && g.Count==2 && !g.PostCompositionChanged);
+    CHECK(g.Plane[0].Format==BC250_LINEAR_BGRA8 && g.Plane[0].Color==BC250_INPUT_RGB_FULL && g.Plane[0].LayerIndex==0 &&
+          g.Plane[0].Filter==BC250_OVERLAY_FILTER_AMD && !g.Plane[0].UnsupportedFlags && g.Plane[0].Width==1366 &&
+          g.Plane[0].PitchBytes==5632 && g.Plane[0].AllocationBytes==5632ull*768 && !g.Plane[0].ChromaPitchBytes &&
+          g.Plane[0].Destination.Right==1366 && g.Plane[0].Clip.Bottom==768);
+    CHECK(g.Plane[1].Format==BC250_CNVC_NV12 && g.Plane[1].Color==BC250_INPUT_709_LIMITED && g.Plane[1].LayerIndex==1 &&
+          !g.Plane[1].UnsupportedFlags && g.Plane[1].Width==1280 && g.Plane[1].Height==720 && g.Plane[1].PitchBytes==1280 &&
+          g.Plane[1].ChromaPitchBytes==1280 && g.Plane[1].ChromaOffset==921600 && g.Plane[1].SurfaceOffset==0 &&
+          g.Plane[1].Source.Right==1280 && g.Plane[1].Source.Bottom==720);
+    for (i=0;i<sizeof(spaces)/sizeof(spaces[0]);i++) {
+        q.PlaneAttributes.ColorSpaceType=spaces[i].space;
+        CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_SUCCESS && g.Plane[1].Color==spaces[i].color);
+    }
+    for (i=0;i<sizeof(rgb)/sizeof(rgb[0]);i++) {
+        GroupStorage(&s[0],rgb[i].format);
+        CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_SUCCESS && g.Plane[0].Format==rgb[i].planner);
+    }
+    /* Refusals: the description is all zero after each. */
+    q.PlaneAttributes.ColorSpaceType=D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_NOT_SUPPORTED && !g.Count && !g.Plane[0].Format);
+    q.PlaneAttributes.ColorSpaceType=D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709;
+    p.PlaneAttributes.ColorSpaceType=D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_NOT_SUPPORTED && !g.Count);
+    p.PlaneAttributes.ColorSpaceType=D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+    GroupStorage(&s[0],D3DDDIFMT_A2B10G10R10);
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_NOT_SUPPORTED && !g.Count);
+    GroupStorage(&s[0],D3DDDIFMT_A8R8G8B8);
+    /* NV12 is taken only from a KMD allocation with the v2 record: a UMD one or a v1 record is no planar plane. */
+    s[1].UmdAlloc=1;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_NOT_SUPPORTED && !g.Count);
+    s[1].UmdAlloc=0;s[1].Nv12.Surface.Version=1;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_NOT_SUPPORTED && !g.Count);
+    GroupNv12(&s[1]);
+    q.VidPnSourceId=1;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_INVALID_PARAMETER && !g.Count);
+    q.VidPnSourceId=0;c.PlaneCount=1;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_INVALID_PARAMETER && !g.Count);
+    c.PlaneCount=2;
+    /* A WDDM attribute that the planner refuses is an exclusion, not a status. */
+    q.PlaneAttributes.Flags.VerticalFlip=1;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_SUCCESS && g.Plane[1].UnsupportedFlags && !g.Plane[0].UnsupportedFlags);
+    q.PlaneAttributes.Flags.Value=0;q.PlaneAttributes.Blend.AlphaBlend=1;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_SUCCESS && g.Plane[1].UnsupportedFlags);
+    q.PlaneAttributes.Blend.Value=0;q.PlaneAttributes.Rotation=D3DDDI_ROTATION_IDENTITY+1u;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_SUCCESS && g.Plane[1].UnsupportedFlags);
+    q.PlaneAttributes.Rotation=D3DDDI_ROTATION_IDENTITY;q.PlaneAttributes.StretchQuality=0;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_SUCCESS && g.Plane[1].UnsupportedFlags);
+    q.PlaneAttributes.StretchQuality=DXGK_MULTIPLANE_OVERLAY_STRETCH_QUALITY_HIGH;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,NULL,s,&g)==STATUS_SUCCESS && !g.Plane[1].UnsupportedFlags);
+    /* A post-composition of the whole mode is no change; a mirrored one is. */
+    post.Rotation=D3DDDI_ROTATION_IDENTITY;post.SrcRect=post.DstRect=p.PlaneAttributes.DstRect;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,&post,s,&g)==STATUS_SUCCESS && !g.PostCompositionChanged);
+    post.Flags.Value=2;
+    CHECK(WddmMpo3GroupDescribe(&d,&c,&post,s,&g)==STATUS_SUCCESS && g.PostCompositionChanged);
+}
+#endif
 int main(void)
 {
     int level;
@@ -2930,6 +3043,9 @@ int main(void)
     }
     Plane3InputFlagBits();
     Mpo3Checks();
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    Mpo3GroupDescribe();
+#endif
     MpoCaps();
     Mpo3ScaledChecks();
     ScaledPlaneStart();

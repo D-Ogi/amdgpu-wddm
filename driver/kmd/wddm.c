@@ -6824,7 +6824,9 @@ static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
 }
 
 #include "wddm_allocation_identity.inc"
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)   // its only caller is the lab-only two-plane Check3 preflight (BD-223 Part Y)
 #include "wddm_mpo_storage.inc"
+#endif
 
 static DXGKDDI_OPENALLOCATIONINFO Bc250WddmOpenAllocation;
 static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DXGKARG_OPENALLOCATION* pOpenAllocation)
@@ -12523,11 +12525,74 @@ static unsigned WddmMpo3CheckScaled(_In_ BC250_DEVICE* Device, _In_ const BC250_
     if (verdict == BC250_PLANE_OK) return BC250_MPO3_OK;
     return verdict == BC250_PLANE_SCANOUT ? BC250_MPO3_SCANOUT : BC250_MPO3_SCALED_RULE;
 }
-// BD-223 Part Y: the WDDM side of the two-plane Check3 preflight, in wddm_mpo_group.inc (after this block, so that
-// the flip test, which extracts this block, links its own model of it).
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)   // BD-223 Part Y: the two-plane preflight runs in the lab flavour only (Check3 below)
+// BD-223 Part Y: two WDDM planes of a Check3 call and their storage snapshots (WddmSnapshotMpoStorage) as one
+// integer-only overlay description for the connector's planner. It takes no lock, allocates nothing and touches no
+// hardware, so the flip test compiles this code itself. STATUS_INVALID_PARAMETER for a malformed call,
+// STATUS_NOT_SUPPORTED for a plane that the planner cannot take (format, colour space). A WDDM attribute that the
+// planner refuses (flags, blend, rotation, stretch quality) goes into UnsupportedFlags, which the planner refuses.
+static NTSTATUS WddmMpo3GroupDescribe(_In_ BC250_DEVICE* Device, _In_ const DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3* Check,
+    _In_opt_ const DXGK_MULTIPLANE_OVERLAY_POST_COMPOSITION* Post, _In_reads_(2) const BC250_MPO_STORAGE* Storage,
+    _Out_ BC250_OVERLAY_DESCRIPTION* Description)
+{
+    UINT i;
+    RtlZeroMemory(Description, sizeof(*Description));
+    if (Check->PlaneCount != 2 || !Check->ppPlanes || !Check->ppPlanes[0] || !Check->ppPlanes[1])
+        return STATUS_INVALID_PARAMETER;
+    Description->Count = 2;
+    for (i = 0; i < 2; i++) {
+        const DXGK_MULTIPLANE_OVERLAY_PLANE_WITH_SOURCE2* p = Check->ppPlanes[i];
+        const DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES3* a = &p->PlaneAttributes;
+        const BC250_WDDM_ALLOCATION_PRIVATE* s = &Storage[i].Surface;
+        BC250_OVERLAY_INPUT* out = &Description->Plane[i];
+        BC250_MPO3_PLANE facts;
+        if (p->VidPnSourceId != 0) { RtlZeroMemory(Description, sizeof(*Description)); return STATUS_INVALID_PARAMETER; }
+        WddmMpo3PlaneOf(Device, 1, 0, 0, a, Post, &facts);
+        Description->PostCompositionChanged |= facts.PostPresent && (facts.PostFlags ||
+            facts.PostRotation != BC250_MPO3_ROTATION_IDENTITY ||
+            !Bc250Mpo3WholeMode(&facts.PostSrc, facts.ModeWidth, facts.ModeHeight) ||
+            !Bc250Mpo3WholeMode(&facts.PostDst, facts.ModeWidth, facts.ModeHeight));
+        out->LayerIndex = p->LayerIndex;
+        out->UnsupportedFlags = a->Flags.Value || a->Blend.Value || a->Rotation != D3DDDI_ROTATION_IDENTITY ||
+            (a->StretchQuality != DXGK_MULTIPLANE_OVERLAY_STRETCH_QUALITY_BILINEAR &&
+             a->StretchQuality != DXGK_MULTIPLANE_OVERLAY_STRETCH_QUALITY_HIGH);
+        out->Filter = BC250_OVERLAY_FILTER_AMD;
+        out->Width = s->Width; out->Height = s->Height; out->PitchBytes = s->Pitch; out->AllocationBytes = s->Size;
+        // NV12 only from a KMD-created allocation with the LB7A v2 record of its two planes (wddm_mpo_storage.inc).
+        if (s->Format == BC250_NV12_D3DDDI_FORMAT && !Storage[i].UmdAlloc &&
+            Storage[i].Nv12.Surface.Version == BC250_WDDM_NV12_VERSION) {
+            out->Format = BC250_CNVC_NV12; out->ChromaPitchBytes = Storage[i].Nv12.ChromaPitch;
+            out->SurfaceOffset = Storage[i].Nv12.SurfaceOffset; out->ChromaOffset = Storage[i].Nv12.ChromaOffset;
+            // Left-sited 601/709, studio or full range. The CSC plan is no proof of the chroma siting or the latch.
+            switch ((UINT)a->ColorSpaceType) {
+            case D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P601: out->Color = BC250_INPUT_601_LIMITED; break;
+            case D3DDDI_COLOR_SPACE_YCBCR_FULL_G22_LEFT_P601: out->Color = BC250_INPUT_601_FULL; break;
+            case D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709: out->Color = BC250_INPUT_709_LIMITED; break;
+            case D3DDDI_COLOR_SPACE_YCBCR_FULL_G22_LEFT_P709: out->Color = BC250_INPUT_709_FULL; break;
+            default: RtlZeroMemory(Description, sizeof(*Description)); return STATUS_NOT_SUPPORTED;
+            }
+        } else {
+            if (s->Format == D3DDDIFMT_A8R8G8B8) out->Format = BC250_LINEAR_BGRA8;
+            else if (s->Format == D3DDDIFMT_X8R8G8B8) out->Format = BC250_LINEAR_BGRX8;
+            else if (s->Format == D3DDDIFMT_A8B8G8R8) out->Format = BC250_LINEAR_RGBA8;
+            else { RtlZeroMemory(Description, sizeof(*Description)); return STATUS_NOT_SUPPORTED; }
+            if ((UINT)a->ColorSpaceType != D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709) {
+                RtlZeroMemory(Description, sizeof(*Description)); return STATUS_NOT_SUPPORTED;
+            }
+            out->Color = BC250_INPUT_RGB_FULL;
+        }
+        out->Source = (BC250_OVERLAY_RECT){a->SrcRect.left, a->SrcRect.top, a->SrcRect.right, a->SrcRect.bottom};
+        out->Destination = (BC250_OVERLAY_RECT){a->DstRect.left, a->DstRect.top, a->DstRect.right, a->DstRect.bottom};
+        out->Clip = (BC250_OVERLAY_RECT){a->ClipRect.left, a->ClipRect.top, a->ClipRect.right, a->ClipRect.bottom};
+    }
+    return STATUS_SUCCESS;
+}
+// The I/O half (storage snapshot under the object index lock, then the connector's CPU-only preflight) is in
+// wddm_mpo_group.inc, below this block: the flip test, which extracts this block, links its own model of it.
 static NTSTATUS WddmMpo3CheckGroup(BC250_DEVICE* Device, BC250_WDDM* Wddm,
     const DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3* Check, const DXGK_MULTIPLANE_OVERLAY_POST_COMPOSITION* Post,
     BC250_LINK_OVERLAY_CHECK* Out);
+#endif
 
 static DXGKDDI_CHECKMULTIPLANEOVERLAYSUPPORT3 Bc250WddmCheckMultiPlaneOverlaySupport3;
 static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport3(_In_ const HANDLE hAdapter,
@@ -12557,16 +12622,21 @@ static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport3(_In_ const HANDLE hAdapt
             post = &pCheck->ppPostComposition[i]->PostComposition;
             break;
         }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // BD-223 Part Y, lab flavour only: the preflight answer goes to the log and never to Supported, so the release
+    // flavour does not pay for it (allocation, FPU save, DML under the connector lock) until it becomes the admission.
     if (pCheck->PlaneCount==2) {
         BC250_LINK_OVERLAY_CHECK group;
         NTSTATUS groupStatus=WddmMpo3CheckGroup(device,wddm,pCheck,post,&group);
         if (note<=BC250_WDDM_MPO3_LOG_CALLS) {
             GuardLog("wddm: MPO3 group %ld status %x result %lu described %lu gen %lu budget %lu",note,
-                (ULONG)groupStatus,group.Result,group.Described,group.Generation,group.WithinCurrentBudget);
-            GuardLog("wddm: MPO3 group %ld disp %lu/%lu dpp %lu/%lu owner pending",note,
-                group.DispClockKhz,group.BudgetDispKhz,group.DppClockKhz,group.BudgetDppKhz);
+                (ULONG)groupStatus,(ULONG)group.Result,(ULONG)group.Described,(ULONG)group.Generation,
+                (ULONG)group.WithinCurrentBudget);
+            GuardLog("wddm: MPO3 group %ld disp %lu/%lu dpp %lu/%lu admission pending",note,
+                (ULONG)group.DispClockKhz,(ULONG)group.BudgetDispKhz,(ULONG)group.DppClockKhz,(ULONG)group.BudgetDppKhz);
         }
     }
+#endif
     if (pCheck->PlaneCount != 0 && pCheck->ppPlanes != NULL && pCheck->ppPlanes[0] != NULL) {
         p = pCheck->ppPlanes[0];
         WddmMpo3PlaneOf(device, pCheck->PlaneCount, p->VidPnSourceId, p->LayerIndex, &p->PlaneAttributes, post, &plane);
@@ -12744,9 +12814,10 @@ static NTSTATUS Bc250WddmPostMultiPlaneOverlayPresent(_In_ const HANDLE hAdapter
     return STATUS_SUCCESS;
 }
 
-#include "wddm_mpo_group.inc"   // WddmMpo3CheckGroup (BD-223 Part Y)
-
 // ---- interrupts ---------------------------------------------------------------------------------------------------
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+#include "wddm_mpo_group.inc"   // WddmMpo3CheckGroup (BD-223 Part Y), outside the block that the flip test extracts
+#endif
 
 static DXGKDDI_CONTROLINTERRUPT Bc250WddmControlInterrupt;
 static NTSTATUS Bc250WddmControlInterrupt(_In_ const HANDLE hAdapter, _In_ const DXGK_INTERRUPT_TYPE InterruptType,

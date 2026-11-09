@@ -65,21 +65,3 @@ static inline const BC250_DCN_CAPS* Bc250DcnCapsForPci(unsigned VendorId, unsign
         return 0;
     }
 }
-
-// The overlay planes that the release caps may answer for this row: the
-// primary plus the slave planes, never more than the pipes, and a YUV slave
-// plane only after a passed NV12 witness. Proven is 0 until the hardware
-// witnesses (A1, Y0) pass: then the answer is one RGB plane.
-typedef struct BC250_DCN_PLANE_ANSWER { unsigned Planes, RgbPlanes, YuvPlanes; } BC250_DCN_PLANE_ANSWER;
-static inline BC250_DCN_PLANE_ANSWER Bc250DcnPlaneAnswer(const BC250_DCN_CAPS* Caps, unsigned Proven)
-{
-    BC250_DCN_PLANE_ANSWER a = {1u, 1u, 0u};
-    unsigned slaves;
-    if (!Caps || !Proven || Caps->Pipes < 2u) return a;
-    slaves = Caps->MaxSlavePlanes < Caps->Pipes - 1u ? Caps->MaxSlavePlanes : Caps->Pipes - 1u;
-    a.Planes = 1u + slaves;
-    a.RgbPlanes = 1u + (Caps->MaxSlaveRgbPlanes < slaves ? Caps->MaxSlaveRgbPlanes : slaves);
-    if (Caps->Nv12 == BC250_DCN_NV12_PROVEN)
-        a.YuvPlanes = Caps->MaxSlaveYuvPlanes < slaves ? Caps->MaxSlaveYuvPlanes : slaves;
-    return a;
-}

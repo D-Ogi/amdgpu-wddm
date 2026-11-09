@@ -7,8 +7,8 @@
 #include "../shim/bc250_scaler_filter.h"
 
 // The boundary names the filter without the shim header (dcn_overlay_input.h); the planner passes it on as is.
-_Static_assert(BC250_OVERLAY_FILTER_AMD == BC250_SCALER_FILTER_AMD, "overlay filter AMD");
-_Static_assert(BC250_OVERLAY_FILTER_LINEAR == BC250_SCALER_FILTER_LINEAR, "overlay filter linear");
+_Static_assert((int)BC250_OVERLAY_FILTER_AMD == (int)BC250_SCALER_FILTER_AMD, "overlay filter AMD");
+_Static_assert((int)BC250_OVERLAY_FILTER_LINEAR == (int)BC250_SCALER_FILTER_LINEAR, "overlay filter linear");
 
 static int OverlayAxis(const BC250_DCN_CAPS* Caps, int Nv12, unsigned Limit,
     BC250_SCALER_AXIS_INPUT* Axis, unsigned Surface, unsigned Active,
