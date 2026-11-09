@@ -494,6 +494,7 @@ typedef struct {
     ULONG Pitch;
     LONGLONG ProgramEndQpc;
     BOOLEAN Retired;
+    BOOLEAN NoApplicationSource;
 } BC250_DCN_WRITER_BRIDGE;
 static LONG InterlockedCompareExchange(volatile LONG *p,LONG value,LONG compare){LONG old=*p;if(old==compare)*p=value;return old;}
 static LONG InterlockedExchange(volatile LONG *p,LONG value){LONG old=*p;*p=value;return old;}

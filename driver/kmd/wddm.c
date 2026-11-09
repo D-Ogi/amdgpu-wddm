@@ -11350,6 +11350,11 @@ BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, ULONG Kind, _Out
                 WddmWriterRefused(wddm, &w, BC250_WRITER_REFUSED_RETIRE, w.Status);
                 return FALSE;
             }
+            // BD-195: the lab line that says a link writer went on without a bridge write (DcnWriterBridge). Link
+            // writers are rare (a plug, a commit, a power transition), so every one is logged.
+            if (w.Bridge.NoApplicationSource)
+                GuardLog("wddm: writer kind %lu bridge without a write: link changed, no runtime mode applied",
+                         w.Kind);
             *Generation = w.Generation;
             return TRUE;
         }

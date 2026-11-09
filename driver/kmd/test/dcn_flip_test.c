@@ -927,11 +927,36 @@ static void WriterBridgeAfterDetach(void)
     CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS);
     CHECK(!wrote && bridge.Retired && bridge.Physical==0x202000 && bridge.Pitch==256 && model.writes==0);
     CHECK(BridgeRetire(&d,&bridge)==STATUS_SUCCESS && model.retire_stalls==0);
-    // Adopted, but the plane still names another surface: no programming while the link is off (RuntimePostValid 0).
+    // Adopted, but the plane still names another surface while the link is off (RuntimePostValid 0): the tester.38 rc1
+    // lab state after a resume from hibernation with another monitor, and after a failed commit. 0.7.216.106 answered
+    // STATUS_NOT_SUPPORTED here (the present rule), so every link writer was refused: `writer kind 5 refused at bridge
+    // answer 3 status C00000BB wrote 0`, `connector: disable generation N status 80000011`. No application allocation
+    // can be the source in this state, so the writer goes on without a write, marked as such, and its Retire is
+    // immediate. No programming while the link is off.
     BridgeDevice(&d);memset(&d.RuntimePost,0,sizeof(d.RuntimePost));
     DcnLinkSurfaceAdopt(&d);d.RuntimeDisplayChanged=1;
-    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_NOT_SUPPORTED);
-    CHECK(!wrote && model.writes==0);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS);
+    CHECK(!wrote && model.writes==0 && bridge.Retired && bridge.NoApplicationSource);
+    CHECK(bridge.Physical==0x202000 && bridge.Pitch==256 && model.latched==0x203000);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_SUCCESS && model.retire_stalls==0 && model.retire_samples==0);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS && !wrote && model.writes==0);
+    // The same plane with an applied runtime mode (RuntimePostValid 1) is an application's: the bridge programs.
+    BridgeDevice(&d);memset(&d.RuntimePost,0,sizeof(d.RuntimePost));
+    DcnLinkSurfaceAdopt(&d);d.RuntimeDisplayChanged=1;d.RuntimePostValid=1;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS);
+    CHECK(wrote && !bridge.Retired && !bridge.NoApplicationSource && model.latched==0x202000);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_SUCCESS);
+    // And without a link change (the inherited or committed source mode) the bridge programs too.
+    BridgeDevice(&d);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS && wrote && !bridge.NoApplicationSource);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_SUCCESS);
+    // The state checks before it stay first: a superseded writer and a short reserved buffer still refuse.
+    BridgeDevice(&d);memset(&d.RuntimePost,0,sizeof(d.RuntimePost));
+    DcnLinkSurfaceAdopt(&d);d.RuntimeDisplayChanged=1;model.generation=5;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_DEVICE_BUSY && !wrote && !bridge.NoApplicationSource);
+    BridgeDevice(&d);memset(&d.RuntimePost,0,sizeof(d.RuntimePost));
+    DcnLinkSurfaceAdopt(&d);d.RuntimeDisplayChanged=1;d.RuntimeFramebufferLength=4095;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_INVALID_PARAMETER && !wrote && model.writes==0);
     // An applied runtime mode is never replaced, and without a reserved buffer nothing is adopted.
     BridgeDevice(&d);d.RuntimeDisplayChanged=1;d.RuntimePost.Pitch=512;d.RuntimePost.PhysicAddress.QuadPart=0x204000;
     DcnLinkSurfaceAdopt(&d);

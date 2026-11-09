@@ -181,6 +181,7 @@ int main(void)
     d.Wddm=&w;d.Mmio=&model;d.Framebuffer=fb;d.FramebufferLength=sizeof(fb);d.DcnWriteEnabled=TRUE;d.VidPnFlipEnabled=TRUE;d.SourceVisible=TRUE;
     d.Dxgk.DxgkCbSynchronizeExecution=MockSync;d.Dxgk.DxgkCbQueueDpc=MockQueue;
     model.sync=other|ALL_CLEAR;
+    color_model.otg0=OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK;   // a running OTG unless a case says otherwise (BD-195)
     CHECK(DcnVsyncEnable(&d,TRUE)==STATUS_SUCCESS);
     CHECK(d.DcnVsyncArmed==1 && model.sync_calls==1 && (model.sync&other)==other);
     CHECK(model.sync&OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_INT_EN_MASK);
@@ -401,6 +402,33 @@ int main(void)
         CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_DEVICE_BUSY && !touched && model.writes==writes);
         color_model.lock_after_edge=0;color_model.frame=OTG0_OTG_STATUS_FRAME_COUNT__OTG_FRAME_COUNT_MASK-1;
         CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_SUCCESS && touched); // counter wrap
+    }
+    // BD-195 (tester.38 rc1): the link disable's hide (DcnSetVisibility FALSE) with the OTG stopped by a commit whose
+    // Apply failed after OTG_DISABLE. No frame counts and the blank state never latches. Before the fix this was
+    // STATUS_IO_TIMEOUT after the whole 100 ms budget, on every later commit (`phase 1 step 5 status C00000B5`).
+    {
+        memset(&color_model,0,sizeof(color_model));color_model.freeze_frame=1;color_model.black=0x12345678u;
+        d.Mmio=&model;d.DcnWriteEnabled=TRUE;d.StartVisibilityPending=0;d.DcnBlanked=FALSE;
+        model.hold_blank=0;color_model.refuse_blank=1;   // CURRENT_BLANK_STATE never changes on a stopped OTG
+        model.blank=0x40000000u;model.dbuf=0x80000000u|OTG0_OTG_DOUBLE_BUFFER_CONTROL__OTG_BLANK_DATA_DOUBLE_BUFFER_EN_MASK;
+        model.stalls=0;writes=model.writes;
+        CHECK(DcnSetVisibility(&d,FALSE)==STATUS_SUCCESS);
+        CHECK(model.stalls==0 && d.DcnBlanked && model.writes==writes+2);
+        CHECK((model.blank&OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK) && (model.blank&0x40000000u));
+        CHECK(model.dbuf==0x80000000u && color_model.black==0x12345678u);
+        // A failed read of OTG_CONTROL writes nothing.
+        writes=model.writes;TestReadFail=1;
+        CHECK(DcnSetVisibility(&d,FALSE)==STATUS_DEVICE_NOT_READY && model.writes==writes);
+        TestReadFail=0;
+        // The OTG running again: the hide takes the witnessed black colour and waits for the blank, as before.
+        color_model.otg0=OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK;color_model.freeze_frame=0;color_model.refuse_blank=0;
+        model.blank=0;model.stalls=0;
+        CHECK(DcnSetVisibility(&d,FALSE)==STATUS_SUCCESS && model.stalls>0 && color_model.black==0u);
+        // A running OTG whose frame counter is frozen still times out: only a stopped OTG skips the wait.
+        color_model.freeze_frame=1;model.stalls=0;
+        CHECK(DcnSetVisibility(&d,FALSE)==STATUS_IO_TIMEOUT);
+        CHECK(model.stalls==BC250_DCN_VISIBILITY_POLL_MAX_US/BC250_DCNFLIP_POLL_STEP_US);
+        color_model.freeze_frame=0;
     }
     printf("display visibility/sync: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }
