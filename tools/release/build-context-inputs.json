@@ -77,6 +77,43 @@
       "workspace_from_kits": false
     },
     {
+      "recipe": "compute/hip/build-rocm-payload.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "compute/hip/build-rocm-payload.ps1": "01f117c4326e67ea3c2313d2decce0074e7fd421",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004",
+        "compute/hip": "d904a04f886f0190f15b8625dbd7e2258e20b6a8"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/toolchain/llvm-amdgpu-22.1.8/mingw64/bin",
+          "required": true,
+          "parameter": "ClangBin",
+          "parent": 1
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
       "recipe": "compute/hip/build-runtime.ps1",
       "commit": "174881cf2918f332c44a85d058d3dc920bad368c",
       "bindings": {
@@ -123,6 +160,43 @@
         "tools/release/installer": "de41f1ad47479534cf5f320c8b0dc47a6c6567da",
         "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004",
         "compute/hip": "790454865dc799923bb5c05225ae9655b71725e0"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/toolchain/llvm-amdgpu-22.1.8/mingw64/bin",
+          "required": true,
+          "parameter": "ClangBin",
+          "parent": 1
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
+      "recipe": "compute/hip/build-runtime.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "compute/hip/build-runtime.ps1": "b2efe7908e58880036c26249a06f443655ba2ff5",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004",
+        "compute/hip": "d904a04f886f0190f15b8625dbd7e2258e20b6a8"
       },
       "inputs": [
         {
@@ -553,6 +627,207 @@
       ]
     },
     {
+      "recipe": "driver/kmd/build.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "driver/kmd/build.ps1": "e07ee4f0f07cfe59709b6b2123f01c5f3556c7f2",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004",
+        "driver": "6a9ea2bed1760a556aafede71c868c94f5fc0816",
+        "tools/win": "3e348eb08acaf6db2d2441b0765b7f87b730859e",
+        "tools/state": "1103e68399f420f05829c5d106959ffd8741d40d",
+        "tools/hwinfo": "12d9e4823476e36422e8a6f976bb0ef17c48e11f",
+        "tools/docs": "d5485f5009c5af2ca77fda2f9202fc1ac207bbb6",
+        "tools/release/release-sources.json": "e54014682a5ef0fc94fb735b719525eb71b0d363"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/scratch/py",
+          "required": true,
+          "parameter": "PythonPath"
+        },
+        {
+          "path": "{root}/ref/AGS_SDK-v6.3.0",
+          "required": true,
+          "parameter": "AgsSdk"
+        },
+        {
+          "path": "{root}/ref/display-library__WARN-EULA-in-docs-only-headers-MIT/include",
+          "required": true,
+          "parameter": "AdlSdk"
+        },
+        {
+          "path": "{root}/ref/ddi-display",
+          "required": true
+        },
+        {
+          "path": "{root}/ref/linux-src/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c",
+          "required": true
+        },
+        {
+          "path": "{root}/ref/linux-src/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c",
+          "required": true
+        },
+        {
+          "path": "{root}/ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_ce.bin",
+          "required": true,
+          "parameter": "FirmwareDir",
+          "override_append": "cyan_skillfish2_ce.bin"
+        },
+        {
+          "path": "{root}/ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_me.bin",
+          "required": true,
+          "parameter": "FirmwareDir",
+          "override_append": "cyan_skillfish2_me.bin"
+        },
+        {
+          "path": "{root}/ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_mec.bin",
+          "required": true,
+          "parameter": "FirmwareDir",
+          "override_append": "cyan_skillfish2_mec.bin"
+        },
+        {
+          "path": "{root}/ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_mec2.bin",
+          "required": true,
+          "parameter": "FirmwareDir",
+          "override_append": "cyan_skillfish2_mec2.bin"
+        },
+        {
+          "path": "{root}/ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_pfp.bin",
+          "required": true,
+          "parameter": "FirmwareDir",
+          "override_append": "cyan_skillfish2_pfp.bin"
+        },
+        {
+          "path": "{root}/ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_rlc.bin",
+          "required": true,
+          "parameter": "FirmwareDir",
+          "override_append": "cyan_skillfish2_rlc.bin"
+        },
+        {
+          "path": "{root}/ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_sdma.bin",
+          "required": true,
+          "parameter": "FirmwareDir",
+          "override_append": "cyan_skillfish2_sdma.bin"
+        },
+        {
+          "path": "{root}/ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_sdma1.bin",
+          "required": true,
+          "parameter": "FirmwareDir",
+          "override_append": "cyan_skillfish2_sdma1.bin"
+        }
+      ],
+      "workspace_from_kits": true,
+      "reference_closures": [
+        {
+          "path": "{root}/ref/mesa",
+          "include_dirs": [
+            "src/amd/common",
+            "src/amd",
+            "src",
+            "include"
+          ],
+          "sources": [
+            "src/amd/common/ac_gpu_info.c",
+            "src/amd/common/amd_family.c",
+            "src/amd/common/ac_gpu_info.h",
+            "src/amd/common/ac_linux_drm.h",
+            "src/amd/common/amd_family.h"
+          ],
+          "external_or_generated": [
+            "OS.h",
+            "amdgfxregs.h",
+            "amdgpu.h",
+            "asm/ioctl.h",
+            "assert.h",
+            "atomic.h",
+            "crtdefs.h",
+            "ctype.h",
+            "endian.h",
+            "float.h",
+            "intrin.h",
+            "inttypes.h",
+            "limits.h",
+            "linux/types.h",
+            "machine/endian.h",
+            "math.h",
+            "popcntintrin.h",
+            "signal.h",
+            "stdalign.h",
+            "stdarg.h",
+            "stdbool.h",
+            "stddef.h",
+            "stdint.h",
+            "stdio.h",
+            "stdlib.h",
+            "string.h",
+            "sys/ioccom.h",
+            "sys/ioctl.h",
+            "sys/isa_defs.h",
+            "sys/param.h",
+            "sys/types.h",
+            "type_traits",
+            "unistd.h",
+            "util/format/u_format_gen.h",
+            "xf86drm.h"
+          ],
+          "generators": [
+            "src/amd/registers/makeregheader.py",
+            "src/util/format/u_format_table.py"
+          ],
+          "external_python": [
+            "argparse",
+            "collections",
+            "itertools",
+            "json",
+            "re",
+            "sys",
+            "contextlib",
+            "os",
+            "copy",
+            "yaml"
+          ],
+          "data": [
+            "src/amd/registers/gfx6.json",
+            "src/amd/registers/gfx7.json",
+            "src/amd/registers/gfx8.json",
+            "src/amd/registers/gfx81.json",
+            "src/amd/registers/gfx9.json",
+            "src/amd/registers/gfx940.json",
+            "src/amd/registers/gfx10.json",
+            "src/amd/registers/gfx103.json",
+            "src/amd/registers/gfx11.json",
+            "src/amd/registers/gfx115.json",
+            "src/amd/registers/gfx12.json",
+            "src/amd/registers/pkt3.json",
+            "src/amd/registers/gfx10-rsrc.json",
+            "src/amd/registers/gfx11-rsrc.json",
+            "src/amd/registers/gfx12-rsrc.json",
+            "src/amd/registers/registers-manually-defined.json",
+            "src/util/format/u_format.yaml"
+          ]
+        }
+      ]
+    },
+    {
       "recipe": "driver/state/installer-build.ps1",
       "commit": "174881cf2918f332c44a85d058d3dc920bad368c",
       "bindings": {
@@ -595,6 +870,38 @@
         "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004",
         "driver/state": "d11313e11da4e9185e80ac4da9a20a08d94c44a4",
         "tools/state": "fa6b940ce2d200d1bd06116366c232657c55169e"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        }
+      ],
+      "workspace_from_kits": true
+    },
+    {
+      "recipe": "driver/state/installer-build.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "driver/state/installer-build.ps1": "96cba4fb3f2a2e9be5ad9afcb0b02d1bba2ffb1c",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004",
+        "driver/state": "d11313e11da4e9185e80ac4da9a20a08d94c44a4",
+        "tools/state": "1103e68399f420f05829c5d106959ffd8741d40d"
       },
       "inputs": [
         {
@@ -679,6 +986,37 @@
       "workspace_from_kits": false
     },
     {
+      "recipe": "driver/umd/mft-h264/build.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "driver/umd/mft-h264/build.ps1": "8010f6b38dfd97b96fe418b0aacc8b88bba64242",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004",
+        "driver/umd/mft-h264": "64509a299532656586fab971138b34f1d2f5a00e"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
       "recipe": "tools/build/build-dxvk.ps1",
       "commit": "174881cf2918f332c44a85d058d3dc920bad368c",
       "bindings": {
@@ -726,6 +1064,46 @@
         "tools/build": "3eafe229589f825919a85932fe080875a56b0687",
         "tools/quality": "bd8e426ba08fa17b25bd3f5354b068e9d5b01538",
         "tools/release/installer": "64a6459720e3c9f06e88acb1d358deda967fa1ce",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/scratch/py",
+          "required": true,
+          "parameter": "PythonPath"
+        },
+        {
+          "path": "{root}/scratch/glslang/bin",
+          "required": true,
+          "parameter": "Glslang"
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
+      "recipe": "tools/build/build-dxvk.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "tools/build/build-dxvk.ps1": "88c231cc330edbc66e5e245f928f07d14967a747",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
         "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
       },
       "inputs": [
@@ -894,6 +1272,51 @@
       "workspace_from_kits": false
     },
     {
+      "recipe": "tools/build/build-mesa.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "tools/build/build-mesa.ps1": "fcef6f36552975e60a4782d2a67a7169dacc52e7",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/scratch/py",
+          "required": true,
+          "parameter": "PythonPath"
+        },
+        {
+          "path": "{root}/scratch/glslang/bin",
+          "required": true,
+          "parameter": "Glslang"
+        },
+        {
+          "path": "{root}/toolchain/winflexbison-2.5.25",
+          "required": true,
+          "parameter": "FlexBison"
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
       "recipe": "tools/build/build-umd-adl.ps1",
       "commit": "174881cf2918f332c44a85d058d3dc920bad368c",
       "bindings": {
@@ -941,6 +1364,46 @@
         "tools/build": "e66f1ca5c35cab3bd54c83f805a5802c41f0337a",
         "tools/quality": "30b1334440d3b22969b9b828176a1fd1d90425d0",
         "tools/release/installer": "de41f1ad47479534cf5f320c8b0dc47a6c6567da",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/ref/AGS_SDK-v6.3.0",
+          "required": true,
+          "parameter": "AgsSdk"
+        },
+        {
+          "path": "{root}/ref/display-library__WARN-EULA-in-docs-only-headers-MIT/include",
+          "required": true,
+          "parameter": "AdlSdk"
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
+      "recipe": "tools/build/build-umd-adl.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "tools/build/build-umd-adl.ps1": "24adcee24183d947ba7184fd5da8a68342a1d774",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
         "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
       },
       "inputs": [
@@ -1094,6 +1557,86 @@
       "workspace_from_kits": false
     },
     {
+      "recipe": "tools/build/build-umd-d3d12.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "tools/build/build-umd-d3d12.ps1": "4cefc2024aae53772355f8939ae4420122fcb9d8",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/toolchain/nuget/microsoft.windows.wdk.x64/c/Include/10.0.26100.0/um",
+          "required": true,
+          "parameter": "DdiInclude"
+        },
+        {
+          "path": "{root}/toolchain/nuget/microsoft.direct3d.d3d12.1.619.6/build/native/include",
+          "required": true,
+          "parameter": "ApiInclude"
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
+      "recipe": "tools/build/build-umd-d3d12.ps1",
+      "commit": "da345167da691ef47ed5e5aca05d4f5e962be940",
+      "bindings": {
+        "tools/build/build-umd-d3d12.ps1": "4cefc2024aae53772355f8939ae4420122fcb9d8",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "870605421bba7c0f48c11cf27b0186cbe9144331",
+        "tools/release/installer": "efa98d90159ca8071078f069e2a27df495efd696",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/toolchain/nuget/microsoft.windows.wdk.x64/c/Include/10.0.26100.0/um",
+          "required": true,
+          "parameter": "DdiInclude"
+        },
+        {
+          "path": "{root}/toolchain/nuget/microsoft.direct3d.d3d12.1.619.6/build/native/include",
+          "required": true,
+          "parameter": "ApiInclude"
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "commit": "091ef3c31349f7a2b8c1d343694a1e0f27b2cf6f",
       "bindings": {
@@ -1196,6 +1739,40 @@
       "workspace_from_kits": false
     },
     {
+      "recipe": "tools/build/build-umd-dxvk.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "tools/build/build-umd-dxvk.ps1": "7b38f8fe3591df51f56b5beb5146892f008db712",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/ref/ddi-display",
+          "required": true
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
       "recipe": "tools/build/build-umd-router.ps1",
       "commit": "174881cf2918f332c44a85d058d3dc920bad368c",
       "bindings": {
@@ -1233,6 +1810,36 @@
         "tools/build": "f0c9c901491a25cd35f38ecf213fb5576c421732",
         "tools/quality": "0745db43290c41857d929c1936b38948d5cddcae",
         "tools/release/installer": "efa98d90159ca8071078f069e2a27df495efd696",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
+      "recipe": "tools/build/build-umd-router.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "tools/build/build-umd-router.ps1": "d631f4cc13493c648e707a1e2bf7b3744aaed918",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
         "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
       },
       "inputs": [
@@ -1348,6 +1955,52 @@
       "workspace_from_kits": false
     },
     {
+      "recipe": "tools/build/build-vkd3d.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "tools/build/build-vkd3d.ps1": "7212311f5a8b7284e2dbf9593afad99854c5985a",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/scratch/py",
+          "required": true,
+          "parameter": "PythonPath"
+        },
+        {
+          "path": "{root}/scratch/glslang/bin",
+          "required": true,
+          "parameter": "Glslang"
+        },
+        {
+          "path": "{root}/toolchain/mingw-w64-tools-14.0.0.r532/ucrt64/bin/widl.exe",
+          "required": true,
+          "parameter": "Widl",
+          "parent": 1
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "commit": "174881cf2918f332c44a85d058d3dc920bad368c",
       "bindings": {
@@ -1416,6 +2069,40 @@
       "workspace_from_kits": true
     },
     {
+      "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "tools/win/amdgpu_wddm_control/build.ps1": "cb850855be6a2446351f706b83200cf3680af213",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004",
+        "driver/kmd/test": "a718bb23bc754dd1be961ffde57770674c58a2be",
+        "driver/state": "d11313e11da4e9185e80ac4da9a20a08d94c44a4",
+        "tools/win/bc250kmd_cli": "ab38bf940fc11e804c9ac0c564f4afe03461e70e",
+        "tools/win/amdgpu_wddm_control": "bd3f864ac9ed86062c6926e3efa2c2df7a48ef53"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        }
+      ],
+      "workspace_from_kits": true
+    },
+    {
       "recipe": "tools/win/d3d11bench/build.ps1",
       "commit": "174881cf2918f332c44a85d058d3dc920bad368c",
       "bindings": {
@@ -1476,6 +2163,36 @@
       "workspace_from_kits": false
     },
     {
+      "recipe": "tools/win/d3d11bench/build.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "tools/win/d3d11bench/build.ps1": "cea726568cf75c57d6c5772118f2dba53485e920",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
       "recipe": "tools/win/d3d12caps/build.ps1",
       "commit": "174881cf2918f332c44a85d058d3dc920bad368c",
       "bindings": {
@@ -1513,6 +2230,36 @@
         "tools/build": "e66f1ca5c35cab3bd54c83f805a5802c41f0337a",
         "tools/quality": "30b1334440d3b22969b9b828176a1fd1d90425d0",
         "tools/release/installer": "de41f1ad47479534cf5f320c8b0dc47a6c6567da",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
+      "recipe": "tools/win/d3d12caps/build.ps1",
+      "commit": "f664c88080be491518512be71dfb3d29d5a6eec0",
+      "bindings": {
+        "tools/win/d3d12caps/build.ps1": "464b9891d0992d03372411ff9921f9508d8b8fda",
+        "tools/build": "59cef8ac7621afda568da51784973616c1ea1f9a",
+        "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
         "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
       },
       "inputs": [
