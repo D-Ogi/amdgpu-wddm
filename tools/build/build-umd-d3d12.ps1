@@ -127,6 +127,11 @@ try {
   if($LASTEXITCODE){throw 'FSR identity test build failed'}
   & .\fsr-identity-test.exe
   if($LASTEXITCODE){throw 'FSR identity tests failed'}
+  # BD-332: the module line and the fault line of process-witness.h, and that arming without a recording is inert.
+  & $compilerExe @dllFlags /Fe:process-witness-test.exe "$repo\driver\umd\d3d12\process-witness-test.cpp"
+  if($LASTEXITCODE){throw 'Process witness test build failed'}
+  & .\process-witness-test.exe
+  if($LASTEXITCODE){throw 'Process witness tests failed'}
   # Built only: the probe asks the BC-250's adapter key and belongs on the target.
   & cl.exe @flags /Fe:instance-policy-probe.exe "$repo\driver\umd\d3d12\instance-policy-probe.cpp" /link dxgi.lib
   if($LASTEXITCODE){throw 'Instance policy probe build failed'}

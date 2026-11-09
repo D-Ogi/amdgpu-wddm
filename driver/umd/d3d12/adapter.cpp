@@ -20,6 +20,7 @@
 #include "stdio-log.h"
 #include "../recent-launch/recent-launch.h"
 #include "fsr-identity.h"
+#include "process-witness.h"
 namespace {
 using native12::Adapter;
 using native12::Device;
@@ -166,6 +167,10 @@ HRESULT APIENTRY create_device(D3D12DDI_HADAPTER h,const D3D12DDIARG_CREATEDEVIC
     if(FAILED(hr)){device->~Device();trace("CreateDevice-engine-failed",static_cast<unsigned>(hr));return hr;}
     ++adapter->devices;
     send_fsr_setting(*adapter,settings);
+    // BD-332: what else is in this process (an upscaling file, a proxy for a system DLL) and a witness for a fault
+    // that would end it. Both write only while the game log records (process-witness.h).
+    amdgpu_wddm_witness::log_modules();
+    amdgpu_wddm_witness::arm();
     // The outer device exists: note the launch once per process, off this thread (recent-launch.h).
     amdgpu_wddm::recent_launch::note_outer_device(amdgpu_wddm::recent_launch::ApiD3D12);
     return S_OK;
