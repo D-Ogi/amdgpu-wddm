@@ -1297,6 +1297,55 @@ int main() {
     if (convert_resource(windowDesc,privateTexture)!=E_NOTIMPL ||
         convert_runtime_resource(windowDesc,&rotateIdentity[0],windowRequest,windowTexture)!=S_OK ||
         windowRequest.primary || windowRequest.shared || !windowRequest.displayable) fail(__LINE__);
+    // BD-333: the buffer of an NV12 or YUY2 composition swap chain (CreateSwapChainForCompositionSurfaceHandle with
+    // DXGI_SWAP_CHAIN_FLAG_YUV_VIDEO), exactly as the lab log of 2026-11-07 01:41Z recorded it: TEXTURE2D 1920x1080,
+    // bind RENDER_TARGET|PRESENT (A0), misc SHARED|DISPLAYABLE_SURFACE (20002), no primary. The shell cannot make it
+    // and reported 887B0002, which the runtime made device removal (887A0005). It is not a primary, so the refusal
+    // must be E_OUTOFMEMORY: the one call fails and the device stays.
+    {
+        D3D10DDI_MIPINFO chainMip{}; chainMip.TexelWidth=1920; chainMip.TexelHeight=1080; chainMip.TexelDepth=1;
+        D3D11DDIARG_CREATERESOURCE chain{}; chain.pMipInfoList=&chainMip; chain.MipLevels=chain.ArraySize=1;
+        chain.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D; chain.SampleDesc.Count=1; chain.Usage=D3D10_DDI_USAGE_DEFAULT;
+        chain.BindFlags=D3D10_DDI_BIND_RENDER_TARGET|D3D10_DDI_BIND_PRESENT;
+        chain.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED|D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE;
+        if (chain.BindFlags!=0xA0u || chain.MiscFlags!=0x20002u) fail(__LINE__);
+        for (const DXGI_FORMAT yuv:{DXGI_FORMAT_NV12,DXGI_FORMAT_YUY2}) {
+            chain.Format=yuv;
+            RuntimeSurfaceRequest chainRequest{}; D3D11_TEXTURE2D_DESC1 chainTexture{};
+            const HRESULT hr=convert_runtime_resource(chain,&rotateIdentity[0],chainRequest,chainTexture);
+            if (SUCCEEDED(hr)) continue;   // admitted: the refusal is then a begin_surface failure, the same rule below
+            if (create_refusal(chain,hr)!=E_OUTOFMEMORY) fail(__LINE__);
+        }
+        // Whatever step fails (conversion, begin_surface, wait), the same request reports the same status.
+        chain.Format=DXGI_FORMAT_NV12;
+        for (const HRESULT step:{E_NOTIMPL,E_INVALIDARG,E_FAIL,DXGI_DDI_ERR_UNSUPPORTED,DXGI_ERROR_UNSUPPORTED})
+            if (create_refusal(chain,step)!=E_OUTOFMEMORY) fail(__LINE__);
+        if (create_refusal(chain,DXGI_ERROR_DEVICE_REMOVED)!=D3DDDIERR_DEVICEREMOVED ||
+            create_refusal(chain,E_OUTOFMEMORY)!=E_OUTOFMEMORY) fail(__LINE__);
+        // The same buffer as a primary (pPrimaryDesc set, PRESENT bound) keeps DXGI_DDI_ERR_UNSUPPORTED: the runtime
+        // then makes it in another way, which is the Ascent's RGB10A2 case.
+        DXGI_DDI_PRIMARY_DESC chainPrimary{}; chain.pPrimaryDesc=&chainPrimary;
+        if (create_refusal(chain,E_NOTIMPL)!=DXGI_DDI_ERR_UNSUPPORTED) fail(__LINE__);
+        // pPrimaryDesc without PRESENT is no primary in the sense of the BltDXGI remarks.
+        chain.BindFlags=D3D10_DDI_BIND_RENDER_TARGET;
+        if (create_refusal(chain,E_NOTIMPL)!=E_OUTOFMEMORY) fail(__LINE__);
+    }
+    // BD-330: a private YUY2 texture that the descriptor conversion admits and the engine then refuses with
+    // E_INVALIDARG (VK_FORMAT_G8B8G8R8_422_UNORM mutable image). The shell reported DXGI_DDI_ERR_UNSUPPORTED and the
+    // runtime removed the device. Now the refusal is E_OUTOFMEMORY.
+    {
+        D3D10DDI_MIPINFO yuyMip{}; yuyMip.TexelWidth=640; yuyMip.TexelHeight=480; yuyMip.TexelDepth=1;
+        D3D11DDIARG_CREATERESOURCE yuy{}; yuy.pMipInfoList=&yuyMip; yuy.MipLevels=yuy.ArraySize=1;
+        yuy.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D; yuy.SampleDesc.Count=1; yuy.Usage=D3D10_DDI_USAGE_DEFAULT;
+        yuy.Format=DXGI_FORMAT_YUY2; yuy.BindFlags=D3D10_DDI_BIND_SHADER_RESOURCE;
+        ResourceDescription yuyOut;
+        if (convert_resource(yuy,yuyOut)!=S_OK || yuyOut.texture2d.Format!=DXGI_FORMAT_YUY2) fail(__LINE__);
+        if (create_refusal(yuy,E_INVALIDARG)!=E_OUTOFMEMORY) fail(__LINE__);
+        // A refusal by the descriptor conversion itself (a capture bind) is the same status.
+        yuy.BindFlags=D3D11_DDI_BIND_CAPTURE|D3D10_DDI_BIND_SHADER_RESOURCE;
+        const HRESULT refused=convert_resource(yuy,yuyOut);
+        if (refused!=DXGI_DDI_ERR_UNSUPPORTED || create_refusal(yuy,refused)!=E_OUTOFMEMORY) fail(__LINE__);
+    }
     runtimeDesc.SampleDesc.Count=4;
     if (convert_runtime_resource(runtimeDesc,&rotateIdentity[0],request,importedDesc)!=E_NOTIMPL) fail(__LINE__);
     runtimeDesc.SampleDesc.Count=1; runtimeDesc.Format=DXGI_FORMAT_R16_FLOAT;

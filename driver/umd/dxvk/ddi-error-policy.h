@@ -21,8 +21,8 @@ enum class DdiErrorClass {
     removed_only,
     // AllowOutOfMemory. Every Create* entry except CreateResource and CreateQuery.
     out_of_memory,
-    // CreateResource and the DXGI resource entries: + DXGI_DDI_ERR_UNSUPPORTED for a request the
-    // driver cannot serve. The runtime fails the caller instead of removing the device.
+    // CreateResource: + DXGI_DDI_ERR_UNSUPPORTED, which is a per-call failure for a primary only.
+    // The request narrows this set: ddi_create_resource_status below gives the one status to report.
     unsupported,
     // CreateQuery: + DXGI_DDI_ERR_NONEXCLUSIVE, because counters are exclusive.
     non_exclusive,
@@ -108,6 +108,21 @@ constexpr HRESULT ddi_class_status(DdiErrorClass policy,HRESULT raw) {
     const HRESULT mapped=ddi_device_status(raw);
     if (ddi_status_allowed(policy,mapped)) return mapped;
     return ddi_class_internal_failure(policy);
+}
+// The status of a CreateResource that this driver does not complete (BD-330, BD-333). The request decides it, not the
+// failed step. PFND3D11DDI_CREATERESOURCE (windows-driver-docs-ddi 7515063, remarks) allows E_OUTOFMEMORY and
+// D3DDDIERR_DEVICEREMOVED, and DXGI_DDI_ERR_UNSUPPORTED as the remarks of DXGI_DDI_BASE_FUNCTIONS (BltDXGI) define it:
+// for a primary only, a create with pPrimaryDesc set and D3D10_DDI_BIND_PRESENT. The runtime answers that status with
+// a non-primary chain and a rotating blt. "The Direct3D runtime determines that any other errors are critical": on any
+// other resource DXGI_DDI_ERR_UNSUPPORTED removes the device. The lab saw this twice. A YUY2 texture (BD-330) and the
+// buffer of an NV12 or YUY2 composition swap chain (BD-333, primary=0) were each reported as 887B0002 and each ended
+// as 887A0005. So a request that this driver cannot serve is E_OUTOFMEMORY on every resource that is not a primary:
+// that is the only per-call failure the page gives, and OpenResource uses it in the same way (unopenable_resource).
+// A lost device stays device removal.
+constexpr HRESULT ddi_create_resource_status(HRESULT raw,bool presentPrimary) {
+    const HRESULT status=ddi_device_status(raw);
+    if (status==D3DDDIERR_DEVICEREMOVED || status==E_OUTOFMEMORY) return status;
+    return presentPrimary ? DXGI_DDI_ERR_UNSUPPORTED : E_OUTOFMEMORY;
 }
 // BD-283: whether a reported status is a failure, or an ordinary answer that the entry's page names. A Map with
 // D3D10_DDI_MAP_FLAG_DONOTWAIT on a resource the GPU still uses, and a GetData of a query that has not finished,
