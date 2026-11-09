@@ -113,7 +113,8 @@ static void Boundaries(void)
 #undef BAD
 }
 // The address-free admission: the contract integrity plus the DCN201 field limits. A 64-byte padded layout
-// that the contract admits for another GPU is not a DCN201 scan-out layout. void Storage(void)
+// that the contract admits for another GPU is not a DCN201 scan-out layout.
+static void Storage(void)
 {
     BC250_NV12_STORAGE s = {64,16,256,256,8192,0,4096};
     CHECK(Bc250Nv12StorageIntegrity(&s) && Bc250Nv12StorageScanout(&s));
@@ -129,7 +130,8 @@ static void Boundaries(void)
     s.ChromaOffset = 16384ull * 16;
     CHECK(Bc250Nv12StorageIntegrity(&s) && !Bc250Nv12StorageScanout(&s));
     CHECK(!Bc250Nv12StorageScanout(NULL));
-} main(void)
+}
+int main(void)
 {
     Cases(); Boundaries(); Storage();
     printf("NV12 surface layout: %u checks, %u failures\n",checks,failures);

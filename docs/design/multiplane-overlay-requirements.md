@@ -296,7 +296,7 @@ It owns the floating-point state and DML workspace at PASSIVE_LEVEL.
 
 Input array order does not determine the pipe. RGB remains on pipe 0, where
 the current cursor plane resides, and NV12 remains on pipe 1. Windows defines
-LayerIndex zero as topmost (`DXGK_MULTIPLANE_OVERLAY_PLANE3`); the MPC plan uses
+LayerIndex zero as topmost (`DXGK_MULTIPLANE_OVERLAY_PLANE3`). The MPC plan uses
 the opposite z-order convention. Both layer indices must appear exactly once.
 The output has no pointers into temporary inputs or workspace, and every
 refusal clears the whole result. One failed plane cannot publish a partial group.
@@ -309,8 +309,8 @@ The chroma byte pitch is converted to UV sample units only at the DML boundary.
 Independent UV padding and either component placement order remain explicit.
 
 This does not resolve the open hardware requirements below. In particular,
-preparing the reference chroma geometry does not establish DXGI chroma siting;
-preparing CSC fields does not prove downstream normalization or bank assignment.
+preparing the reference chroma geometry does not establish DXGI chroma siting.
+Preparing CSC fields does not prove downstream normalization or bank assignment.
 The live path still needs Y0 power/latch/image witnesses, clocks and timing admission,
 atomic commit/recovery, allocation lifetime and per-layer PresentId retirement
 before connecting this preparation to Check3/SetAddress3 or raising caps.

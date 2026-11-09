@@ -111,20 +111,23 @@ int Bc250SurfaceLayoutPrepare(const BC250_SURFACE_LAYOUT_REQUEST* Request,
     return 1;
 }
 
-// The DCN201 extent and pitch field limits of linear NV12, shared by both NV12 entry points. int Nv12Fields(unsigned Width, unsigned Height, unsigned PitchBytes, unsigned ChromaPitchBytes)
+// The DCN201 extent and pitch field limits of linear NV12, shared by both NV12 entry points.
+static int Nv12Fields(unsigned Width, unsigned Height, unsigned PitchBytes, unsigned ChromaPitchBytes)
 {
     if (!Width || Width > 16383 || !Height || Height > 16383 || (Width & 1) || (Height & 1) ||
         !PitchBytes || !ChromaPitchBytes || (PitchBytes & 255) || (ChromaPitchBytes & 255)) return 0;
     return PitchBytes - 1 <= Bc250DispGet(MASK_PITCH,MASK_PITCH) &&
         ChromaPitchBytes / 2 - 1 <= Bc250DispGet(MASK_PITCH_C,MASK_PITCH_C);
 }
- Bc250Nv12StorageScanout(const BC250_NV12_STORAGE* Storage)
+
+int Bc250Nv12StorageScanout(const BC250_NV12_STORAGE* Storage)
 {
     return Bc250Nv12StorageIntegrity(Storage) &&
         Nv12Fields(Storage->Width,Storage->Height,Storage->PitchBytes,Storage->ChromaPitchBytes) &&
         !(Storage->SurfaceOffset & 255ull) && !(Storage->ChromaOffset & 255ull);
 }
- Bc250Nv12LayoutPrepare(const BC250_NV12_LAYOUT_REQUEST* Request,
+
+int Bc250Nv12LayoutPrepare(const BC250_NV12_LAYOUT_REQUEST* Request,
                           BC250_NV12_LAYOUT* Plan)
 {
     BC250_NV12_LAYOUT_REQUEST in = {0};

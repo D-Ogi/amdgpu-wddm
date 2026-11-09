@@ -59,4 +59,5 @@ int Bc250Nv12LayoutPrepare(const BC250_NV12_LAYOUT_REQUEST* Request,
 
 // The address-free half of Bc250Nv12LayoutPrepare for a record that is not resident yet: the contract
 // integrity (Bc250Nv12StorageIntegrity), the DCN201 extent and pitch field limits, 256-byte component
-// pitches and 256-byte component offsets. No address, segment or capability check. Bc250Nv12StorageScanout(const BC250_NV12_STORAGE* Storage);
+// pitches and 256-byte component offsets. No address, segment or capability check.
+int Bc250Nv12StorageScanout(const BC250_NV12_STORAGE* Storage);
