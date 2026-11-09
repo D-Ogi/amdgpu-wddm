@@ -1,7 +1,10 @@
 # Stage 2 of the hang recovery: KIQ queue resets for node 2 and node 0
 
 Status: IMPLEMENTED. Node 2 (compute) runs it in both flavours. Lab trial Q2 measured it (M959, section 11).
-Node 0 (GFX) runs it only with the lab selector, and no trial has measured that half yet. Stage S2 of
+Since tester.38, node 0 (GFX) also runs it in both flavours (`BC250_QRESET_GFX_DEFAULT` 1, section 12). The
+Windows proof of that half (lab rows Q3, Q4 and Q6) is outstanding. Its evidence today is amdgpu under Linux (M944)
+and the host model. `LabQueueReset` 1 no longer has an effect, and `LabQueueReset` 2 keeps stage 2 out of
+`ResetEngine`. Stage S2 of
 [the TDR recovery plan](tdr-recovery-plan.md#52-stages). The section "Stage 2" of [hang-recovery.md](hang-recovery.md)
 points here.
 
