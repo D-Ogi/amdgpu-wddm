@@ -680,8 +680,8 @@ Five properties hold by construction:
 Stage 2 is the KIQ queue reset of [queue-reset.md](queue-reset.md). It runs after a stage-1 kill loop that did not
 drain. It does not bring the KIQ up again and it does not reset the GPU, so M44, M53 and M55 do not apply to it
 (queue-reset.md section 3). Node 2 takes it in both flavours since M959: three of three compute hangs that
-stage 1 could not drain ended in a reported engine reset. Node 0 takes it only with the lab selector
-`LabQueueReset` 1 until a GFX trial has measured it. A CP-only `GRBM_SOFT_RESET` is still not a candidate.
+stage 1 could not drain ended in a reported engine reset. Node 0 takes it in both flavours since tester.38
+(BD-180 point 3, queue-reset.md section 4). The lab trial Q3 measures it. A CP-only `GRBM_SOFT_RESET` is still not a candidate.
 
 ## Limits
 

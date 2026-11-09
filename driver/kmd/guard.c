@@ -479,7 +479,9 @@ BOOLEAN GuardLabPowerDownFault(ULONG Step)
 // of LabScaledPlane above. LabQueueReset (REG_DWORD, Parameters, read only at DriverEntry): 1 lets ResetEngine reset
 // the queue of node 0 (GFX) through the KIQ when the stage-1 wave kill did not drain. Any other value, absent or
 // not a REG_DWORD is 0, which keeps node 0 at stage 1 only. Node 2 takes stage 2 in both flavours without the
-// selector since the lab Q2 trials of 2026-11-04 (hang_recovery.h, Bc250QueueResetWanted).
+// selector since the lab Q2 trials of 2026-11-04 (hang_recovery.h, Bc250QueueResetWanted). Since tester.38 node 0
+// does too (BC250_QRESET_GFX_DEFAULT 1, BD-180 point 3): the selector then has no effect, and it stays only so that
+// one constant can bring the lab-only rule back if the lab Q3 trial refutes the node-0 reset.
 static ULONG g_LabQueueReset = 0;
 
 void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject)
@@ -499,9 +501,58 @@ void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject)
         GuardLog("lab: queue reset selector absent, 0 (the default)");
         return;
     }
-    g_LabQueueReset = (NT_SUCCESS(status) && value == 1) ? 1 : 0;
+    // 2 (lab row Q6): ResetEngine runs no stage 2 on any node, so a hang that stage 1 does not drain goes on to
+    // ResetFromTimeout and its queue resets (queue-reset.md section 13).
+    g_LabQueueReset = (NT_SUCCESS(status) && (value == 1 || value == BC250_LAB_QRESET_ENGINE_OFF)) ? value : 0;
     GuardLog("lab: queue reset selector read (value 0x%lX, 0x%08X): stage 2 %s", value, status,
+             g_LabQueueReset == BC250_LAB_QRESET_ENGINE_OFF ? "off in ResetEngine (row Q6)" :
              g_LabQueueReset ? "on" : "off");
+}
+
+// Lab rows Q3, Q5 and Q6 of docs/design/queue-reset.md, lab flavour only. LabGfxHang (node 0) and LabPagingHang
+// (node 1) (REG_DWORD, Parameters, read only at DriverEntry) are each a delay in seconds, 5 to 600. The first
+// submission of that node at least that long after the read waits on a fence slot that nothing writes: a CP
+// WAIT_REG_MEM before a GFX job (gfx.c SubmitIbLocked), an SDMA POLL_REGMEM in a paging job (GfxSubmitPagingAccess).
+// The node stops, and the OS timeout runs ResetEngine and, if that fails, ResetFromTimeout. Each fires once per
+// DriverEntry read. A disable and enable of the device or a boot runs DriverEntry again, so the lab script deletes
+// the value after the start that read it: a bug check in the trial then cannot repeat at the next boot. Absent, not a
+// REG_DWORD or outside 5-600 is 0 (no hang).
+static volatile LONG g_LabHangArmed[2] = { 0, 0 };
+static LONGLONG g_LabHangAt[2] = { 0, 0 };       // interrupt time, 100 ns units
+
+static void LabReadHang(HANDLE Key, ULONG Node, PCWSTR Name)
+{
+    ULONG value = 0;
+    NTSTATUS status = ParameterDword(Key, Name, &value);
+    if (status == STATUS_OBJECT_NAME_NOT_FOUND) return;     // the default: no line
+    if (NT_SUCCESS(status) && value >= 5 && value <= 600) {
+        g_LabHangAt[Node] = (LONGLONG)KeQueryInterruptTime() + (LONGLONG)value * 10000000LL;
+        InterlockedExchange(&g_LabHangArmed[Node], 1);
+    }
+    GuardLog("lab: node %lu hang selector read (read only; value %lu, 0x%08X): %s", Node, value, status,
+             g_LabHangArmed[Node] ? "one submission after the delay stops the node" : "not used");
+}
+
+void GuardLabReadEngineHang(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("lab: hang selectors: Parameters key not opened for reading (0x%08X), no hang", status);
+        return;
+    }
+    LabReadHang(key, 0, L"LabGfxHang");
+    LabReadHang(key, 1, L"LabPagingHang");
+    ZwClose(key);
+}
+
+BOOLEAN GuardLabTakeEngineHang(ULONG Node)
+{
+    if (Node > 1 || g_LabHangArmed[Node] == 0) return FALSE;
+    if ((LONGLONG)KeQueryInterruptTime() < g_LabHangAt[Node]) return FALSE;
+    return InterlockedCompareExchange(&g_LabHangArmed[Node], 0, 1) == 1;
 }
 // BD-295 lab arm, lab flavour only: LabCpuRevertFault (REG_DWORD, Parameters, read only at DriverEntry) is the bit
 // mask of cpu.h (BC250_CPU_LAB_FAULT_*). Bit 1: the next revert that CpuStop runs reports a refusal and sends

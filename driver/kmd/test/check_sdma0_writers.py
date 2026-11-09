@@ -17,15 +17,21 @@ path (bc250_ring.c, gfx.c GFX_BOUNDARY_NOTE). This check holds that property in 
    - GfxPowerRetainedLocked: writes SDMA0 (the ring tests of the stages) only on resume, when PowerSuspended has kept
      the paging path from admitting a submission since the suspend, and after GfxAccessClose has drained access.
    - GfxSubmitPaging: the paging path, one submission at a time (PagingSubmitInFlight until its fence retires).
-3. The admission decision of Bc250Escape is the pinned statement ADMISSION (the FullWddm test, the refused status and
+   - WddmAdapterQueueResets: the queue resets of DxgkDdiResetFromTimeout (queue-reset.md section 13). Its one
+     caller, WddmAdapterReset, closes node 1 (GfxPagingSubmitClose) before the call, so no paging submission runs
+     beside it. GfxPagingQueueReset writes the ring (one ring test) only after bc250_sdma_reset_retained_instance
+     has restarted it empty.
+3.The admission decision of Bc250Escape is the pinned statement ADMISSION (the FullWddm test, the refused status and
    the STATUS_DEVICE_BUSY return), once, at the top level of the function body, and no raw writer call comes before it.
    escape-admission tests the table that WddmDiagnosticAllowed reads; this check holds the decision that uses it.
 4. The orders those arguments need, in the source text:
    - Bc250Escape calls no raw writer before the FullWddm admission check;
    - SdmaIbStartupControl refuses a published adapter before its first SdmaCopyEscape call;
    - GfxPowerRetainedLocked closes access before it runs a stage, and refuses a resume that is not suspended;
-   - GfxSubmitPagingAccess claims PagingSubmitInFlight before it takes Sdma0RingLock.
-5. No preprocessor line names a function of this graph (a macro could add a path that the scan does not see).
+   - GfxSubmitPagingAccess claims PagingSubmitInFlight before it takes Sdma0RingLock;
+   - GfxPagingQueueReset restarts SDMA0 before it takes Sdma0RingLock for the ring test;
+   - WddmAdapterReset closes node 1 before it runs the queue resets.
+5.No preprocessor line names a function of this graph (a macro could add a path that the scan does not see).
 6. Fail closed outside the parsed functions: a ring write or an Sdma0RingLock acquisition that is in no parsed
    definition (for example a function that is not written at column 0) is a finding, and so is a name of the graph
    outside a parsed definition unless the statement only declares that function.
@@ -42,11 +48,12 @@ import sys
 
 from check_dcn_write_sites import strip_comments
 
-WRITERS = {'GfxFenceEscape', 'GfxSubmitPagingAccess', 'SdmaCopyEscape', 'SdmaPteStartupControl',
-           'SdmaVaStartupControl', 'StageSdma'}
+WRITERS = {'GfxFenceEscape', 'GfxPagingQueueReset', 'GfxSubmitPagingAccess', 'SdmaCopyEscape',
+           'SdmaPteStartupControl', 'SdmaVaStartupControl', 'StageSdma'}
 # Functions that write the ring under the lock that their caller holds: called only by a writer.
 HELPERS = {'GfxSdmaBoundaryLocked', 'PagingWriteRing'}
-BOUNDARY = {'Bc250Escape', 'GpuStartupInitialize', 'GfxPowerRetainedLocked', 'GfxSubmitPaging'}
+BOUNDARY = {'Bc250Escape', 'GpuStartupInitialize', 'GfxPowerRetainedLocked', 'GfxSubmitPaging',
+            'WddmAdapterQueueResets'}
 EDGES = {
     ('Bc250Escape', 'GfxEscape'), ('Bc250Escape', 'GfxFenceEscape'), ('Bc250Escape', 'SdmaCopyEscape'),
     ('GfxEscape', 'GfxExecute'), ('GfxExecute', 'RunEngineStage'), ('GfxExecute', 'g_Stages'),
@@ -55,6 +62,7 @@ EDGES = {
     ('GpuStartupInitialize', 'GfxInitializeHardware'), ('RunEngineStage', 'g_Stages'),
     ('SdmaIbStartupControl', 'SdmaCopyEscape'), ('SdmaIbStartupControl', 'SdmaVaStartupControl'),
     ('SdmaVaStartupControl', 'SdmaPteStartupControl'), ('g_Stages', 'StageSdma'),
+    ('WddmAdapterQueueResets', 'GfxPagingQueueReset'),
 }
 RAW_CALLS = ('GfxEscape(', 'GfxFenceEscape(', 'SdmaCopyEscape(')
 # Bc250Escape's admission decision, comments removed and white space collapsed (display.c).
@@ -66,6 +74,8 @@ ORDERS = [
     ('GfxPowerRetainedLocked', 'if (Resume && !Gfx->PowerSuspended) return', ('GfxAccessClose(',)),
     ('GfxPowerRetainedLocked', 'GfxAccessClose(Device);', ('RunEngineStage(',)),
     ('GfxSubmitPagingAccess', 'InterlockedCompareExchange(&gfx->PagingSubmitInFlight, 1, 0)', ('Sdma0RingLock',)),
+    ('GfxPagingQueueReset', 'bc250_sdma_reset_retained_instance(', ('Sdma0RingLock', 'bc250_sdma_ring_test_submit(')),
+    ('WddmAdapterReset', 'GfxPagingSubmitClose(Device);', ('WddmAdapterQueueResets(',)),
 ]
 
 IDENT = re.compile(r'[A-Za-z_]\w*')

@@ -848,9 +848,19 @@ int bc250_sdma_reset_retained_instance(struct amdgpu_device *adev, u32 instance,
  receipt->previous_wptr=ring->wptr;
  receipt->stage=BC250_SDMA_RESET_STOP;
  result=bc250_gfx_rlc_safe_enter(adev,&requested);
- if (!result) result=bc250_sdma_quiesce_instance(adev,instance);
+ if (result) {
+  bc250_gfx_rlc_safe_exit(adev,requested);
+  return result;
+ }
+ /* amdgpu_sdma_reset_engine() (amdgpu_sdma.c) ignores the return of stop_kernel_queue and goes on
+  * to the soft reset: an engine that a hang holds is the case the reset exists for, and such an
+  * engine may neither freeze nor read idle (sdma_v5_0_stop_queue's -ETIMEDOUT). M943 measured
+  * that order on SDMA0 of unit A. Until 2026-11-08 this helper returned here instead, so it could
+  * only reset an engine that was already idle. The stop result is kept in the receipt, and the
+  * second quiescence after the pulse, below, still has to pass before any memory changes. */
+ receipt->stop_result=bc250_sdma_quiesce_instance(adev,instance);
  bc250_gfx_rlc_safe_exit(adev,requested);
- if (result) return result;
+ if (receipt->stop_result!=0 && receipt->stop_result!=BC250_ETIME) return receipt->stop_result;
  receipt->stage=BC250_SDMA_RESET_PULSE;
  result=bc250_sdma_soft_reset_instance(adev,instance);
  if (result) return result;
@@ -1184,6 +1194,28 @@ int bc250_sdma_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned 
 	return 0;
 }
 
+/* The memory form of the SDMA wait in sdma_v5_0_ring_emit_pipeline_sync(): POLL_REGMEM with MEM_POLL 1, function
+ * "equal", the same retry count 0xfff and interval 4. Upstream passes the ring's own fence address and sequence;
+ * here the caller names both, so that a lab arm can make SDMA0 wait for a value that nobody writes (the paging hang
+ * of docs/design/queue-reset.md row Q5). Writes into a ring the caller has already reserved space in. */
+int bc250_sdma_emit_mem_wait(struct amdgpu_ring *ring, u64 addr, u32 ref, u32 mask)
+{
+	if (ring == NULL || ring->funcs == NULL || ring->ring == NULL ||
+	    ring->funcs->type != AMDGPU_RING_TYPE_SDMA || (addr & 0x3u) != 0 || addr == 0)
+		return BC250_EINVAL;
+	amdgpu_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_POLL_REGMEM) |
+				SDMA_PKT_POLL_REGMEM_HEADER_HDP_FLUSH(0) |
+				SDMA_PKT_POLL_REGMEM_HEADER_FUNC(3) | /* equal */
+				SDMA_PKT_POLL_REGMEM_HEADER_MEM_POLL(1));
+	amdgpu_ring_write(ring, lower_32_bits(addr));
+	amdgpu_ring_write(ring, upper_32_bits(addr));
+	amdgpu_ring_write(ring, ref);
+	amdgpu_ring_write(ring, mask);
+	amdgpu_ring_write(ring, SDMA_PKT_POLL_REGMEM_DW5_RETRY_COUNT(0xfff) |
+				SDMA_PKT_POLL_REGMEM_DW5_INTERVAL(4)); /* retry count, poll interval */
+	return 0;
+}
+
 /* [shim] alloc, emit and commit together, the same shape as bc250_gfx_signal_fence(). */
 int bc250_sdma_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags)
 {
@@ -1402,6 +1434,18 @@ u64 bc250_sdma_fence_read(struct amdgpu_device *adev, unsigned int slot)
 	if (adev == NULL || adev->sdma.fence_mem.cpu == NULL || slot >= BC250_SDMA_FENCE_SLOTS)
 		return 0;
 	return *(volatile u64 *)((char *)adev->sdma.fence_mem.cpu + (size_t)slot * 8u);
+}
+
+/* The CPU write of a fence slot, the SDMA twin of bc250_gfx_fence_write(). For a queue reset only:
+ * the ring restarts empty, so no packet will ever write the sequences that it held, and the slot
+ * takes the newest one (amdgpu_fence_driver_force_completion() in amdgpu_sdma_reset_engine() does
+ * the same for the fences of the reset ring). */
+int bc250_sdma_fence_write(struct amdgpu_device *adev, unsigned int slot, u64 value)
+{
+	if (adev == NULL || adev->sdma.fence_mem.cpu == NULL || slot >= BC250_SDMA_FENCE_SLOTS)
+		return BC250_EINVAL;
+	*(volatile u64 *)((char *)adev->sdma.fence_mem.cpu + (size_t)slot * 8u) = value;
+	return 0;
 }
 
 /* sdma_v5_0.c:1012 sdma_v5_0_ring_test_ring(). One WRITE_LINEAR of a single dword into a slot the

@@ -27,6 +27,7 @@
 #include "paging_private.h"
 #include "paging_ddi_status.h"   // BD-235: the statuses that BuildPagingBuffer may give to the OS
 #include "paging_drain.h"
+#include "power_drain.h"         // BD-188: the bounded wait of the retained way down and its busy reasons
 #include "table_budget.h"        // BD-028 stage B: the 64 MiB cap on the table segment
 #include "object_index.h"
 #include "ring_gap.h"            // C48/C49: the node's own idle-gap accounting, the same object the ETW analysis used
@@ -600,7 +601,10 @@ typedef struct _BC250_WDDM {
     // recovery (kill the hung job's VMID waves, wait for the fence). Start-latched like EnablePagingNode.
     BOOLEAN HangRecoveryMode;
     BOOLEAN HangRecoveryWaves;          // independent start-latched diagnostic capture; absent = on
-    volatile LONG SoftRecoveries;       // ResetEngine soft recoveries that drained the ring (reported as aborted)
+    // The per-queue resets this device has (queue_reset_caps.h, BC250_QRESET_CAP_*), from its PCI id at WDDM start.
+    // 0 for a device the table does not know: stage 2 and the queue resets of ResetFromTimeout do not run there.
+    ULONG QueueResetCaps;
+    volatile LONG SoftRecoveries;      // ResetEngine soft recoveries that drained the ring (reported as aborted)
     // TDR recovery S1 (docs/design/tdr-recovery-s1.md, adapter_reset.h). AdapterRecovery is BC250_ADAPTER_RECOVERY_*,
     // start-latched from AdapterRecoveryMode. AdapterResetWindow is 1 from a successful DxgkDdiResetFromTimeout to
     // its DxgkDdiRestartFromTimeout; written under Lock, read without it by the window diagnostics. What dxgkrnl
@@ -4625,6 +4629,18 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
              wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_OFF ? "fails every time, as before" :
              wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_IDLE ? "succeeds only on idle engines" :
              "kills hung waves, then succeeds only on idle engines");
+    // The queue resets by IP version (queue_reset_caps.h), keyed by the PCI id as cumode.c reads it: configuration
+    // dword 0, device in the high half, vendor in the low half. A failed read gives 0, so no queue reset runs. The
+    // SDMA firmware version is not known here, so only the measured SDMA entry of the table can give that capability.
+    {
+        ULONG pci = 0, bytes = 0;
+        NTSTATUS read = Device->Dxgk.DxgkCbReadDeviceSpace(Device->Dxgk.DeviceHandle, DXGK_WHICHSPACE_CONFIG, &pci,
+                                                           0, sizeof(pci), &bytes);
+        if (!NT_SUCCESS(read) || bytes != sizeof(pci)) pci = 0;
+        wddm->QueueResetCaps = Bc250QueueResetCaps(pci & 0xFFFFu, pci >> 16, BC250_SDMA_FW_UNKNOWN);
+        GuardLog("wddm: queue resets for PCI %04lX:%04lX: caps 0x%lX (1 compute, 2 gfx, 4 SDMA)", pci & 0xFFFFu,
+                 pci >> 16, wddm->QueueResetCaps);
+    }
     KeInitializeDpc(&wddm->PagingSubmitDpc, WddmPagingSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->PagingSubmitTimer);
     KeInitializeDpc(&wddm->PagingDrainDpc, WddmPagingDrainDpcRoutine, Device);
@@ -4729,19 +4745,30 @@ Failed:
 // must stop/join IH and hardware consumers separately before powering down.
 // SetPowerState is Level Three: OS work is already idle. Never fake retirement
 // or destroy live OS objects to make that invariant appear true.
-static BOOLEAN WddmPowerIdleLocked(const BC250_WDDM* Wddm)
+static ULONG WddmPowerBusyLocked(const BC250_WDDM* Wddm)
 {
     UINT node;
-    if (Wddm->HwPending || Wddm->DeferredValid || Wddm->ComputeHwPending || Wddm->ComputeDeferredValid ||
-        Wddm->PagingHwPending ||
-        Wddm->PagingHead || Wddm->PagingTail ||
-        Wddm->ReportActive || Wddm->ReportAgain) return FALSE;
+    ULONG busy=0;
+    if (Wddm->HwPending) busy|=BC250_POWER_BUSY_GFX_HW;
+    if (Wddm->DeferredValid) busy|=BC250_POWER_BUSY_GFX_DEFERRED;
+    if (Wddm->ComputeHwPending) busy|=BC250_POWER_BUSY_COMPUTE_HW;
+    if (Wddm->ComputeDeferredValid) busy|=BC250_POWER_BUSY_COMPUTE_DEFER;
+    if (Wddm->PagingHwPending) busy|=BC250_POWER_BUSY_PAGING_HW;
+    if (Wddm->PagingHead || Wddm->PagingTail) busy|=BC250_POWER_BUSY_PAGING_QUEUED;
+    if (Wddm->ReportActive || Wddm->ReportAgain) busy|=BC250_POWER_BUSY_REPORT;
     for (node=0;node<BC250_WDDM_NODE_COUNT_MAX;node++) {
-        if (Wddm->ActiveSubmissions[node] || Wddm->CompletionPending[node] ||
-            Wddm->PreemptionPending[node] || Wddm->RefusalPending[node] ||
-            Wddm->RejectedPending[node] || Wddm->WatchdogFaulted[node]) return FALSE;
+        if (Wddm->ActiveSubmissions[node]) busy|=BC250_POWER_BUSY_SUBMISSIONS;
+        if (Wddm->CompletionPending[node]) busy|=BC250_POWER_BUSY_COMPLETION;
+        if (Wddm->PreemptionPending[node]) busy|=BC250_POWER_BUSY_PREEMPTION;
+        if (Wddm->RefusalPending[node] || Wddm->RejectedPending[node]) busy|=BC250_POWER_BUSY_REFUSAL;
+        if (Wddm->WatchdogFaulted[node]) busy|=BC250_POWER_BUSY_WATCHDOG;
     }
-    return TRUE;
+    return busy;
+}
+
+static BOOLEAN WddmPowerIdleLocked(const BC250_WDDM* Wddm)
+{
+    return WddmPowerBusyLocked(Wddm)==0;
 }
 
 NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device)
@@ -4749,20 +4776,40 @@ NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device)
     BC250_WDDM* wddm=(BC250_WDDM*)Device->Wddm;
     KIRQL irql;
     NTSTATUS status=STATUS_SUCCESS;
+    ULONG busy, waited=0, first=0, rounds=0;
+    ULONGLONG start;
+    LARGE_INTEGER step;
     if (KeGetCurrentIrql()!=PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;
     if (!wddm) return STATUS_DEVICE_NOT_READY;
-    // Give already queued completion notifications their normal publication path.
-    // This does not poll hardware, clear pending work or manufacture completion.
-    KeFlushQueuedDpcs();
-    KeAcquireSpinLock(&wddm->Lock,&irql);
-    if (wddm->RetainedPowerPause) {
+    // BD-188: SetPowerState is Level Three and the OS has idled its work, but the last completions can still be on
+    // their way (the interrupt, the DPC, the OS report). Wait for them on their normal path, a bounded time
+    // (power_drain.h). Each round flushes the queued DPCs. Nothing here polls hardware, clears pending work or
+    // makes up a completion; work that does not complete in the bound refuses the way down as before.
+    step.QuadPart=-10000;                       // 1 ms, relative; the timer resolution can make a step longer
+    start=KeQueryInterruptTime();               // so the bound is elapsed time, not a count of steps
+    for (;;) {
+        KeFlushQueuedDpcs();
+        KeAcquireSpinLock(&wddm->Lock,&irql);
+        if (wddm->RetainedPowerPause) {
+            KeReleaseSpinLock(&wddm->Lock,irql);
+            return STATUS_SUCCESS;
+        }
+        busy=WddmPowerBusyLocked(wddm) | (wddm->Stopping ? BC250_POWER_BUSY_STOPPING : 0u);
+        if (busy==0) break;                     // keeps the lock: the pause below starts from this idle state
         KeReleaseSpinLock(&wddm->Lock,irql);
-        return STATUS_SUCCESS;
+        if (rounds==0) first=busy;
+        waited=(ULONG)((KeQueryInterruptTime()-start)/10000u);
+        if (!Bc250PowerDrainWorthWaiting(busy) || waited>=BC250_WDDM_SUSPEND_DRAIN_MS) {
+            GuardLog("wddm: retained way down refused after %lu ms, %lu rounds: busy 0x%04lX (first 0x%04lX)",
+                     waited,rounds,busy,first);
+            return STATUS_DEVICE_BUSY;
+        }
+        KeDelayExecutionThread(KernelMode,FALSE,&step);
+        rounds++;
     }
-    if (wddm->Stopping || !WddmPowerIdleLocked(wddm)) {
-        KeReleaseSpinLock(&wddm->Lock,irql);
-        return STATUS_DEVICE_BUSY;
-    }
+    if (rounds!=0)
+        GuardLog("wddm: retained way down waited %lu ms, %lu rounds, for busy 0x%04lX to complete",
+                 (ULONG)((KeQueryInterruptTime()-start)/10000u),rounds,first);
     wddm->Stopping=TRUE;
     if (Device->DcnVsyncArmed) status=DcnVsyncEnable(Device,FALSE);
     if (!NT_SUCCESS(status)) {
@@ -8615,11 +8662,12 @@ static NTSTATUS Bc250WddmPreemptCommand(_In_ const HANDLE hAdapter, _In_ const D
 //   - For an adapter-wide reset, the last completed fence of every node advances to the last submitted fence
 //     (tdr-changes-in-windows-8.md).
 //
-// This part has no adapter reset that is measured to work (facts M53, M351), so S1 resets no hardware. It returns
-// success only when it proves that no engine of this driver has work: every ring's newest sequence retired, and
-// three register samples about 1 ms apart with GRBM, CP, CPC and SDMA0 idle (adapter_reset.h). Mode 2 first runs
-// the bounded wave kill of hang-recovery.md stage 1 on the IB nodes. When the proof fails, the call returns the old
-// failure, so a hang never ends worse than before S1.
+// This part has no adapter reset that is measured to work (facts M53, M351), so S1 resets no whole engine block. It
+// returns success only when it proves that no engine of this driver has work: every ring's newest sequence retired,
+// and three register samples about 1 ms apart with GRBM, CP, CPC and SDMA0 idle (adapter_reset.h). Mode 2 first runs
+// the bounded wave kill of hang-recovery.md stage 1 on the IB nodes and, since tester.38, the per-queue reset of each
+// ring that the kill did not retire (WddmAdapterQueueResets: KIQ for nodes 0 and 2, SDMA0 for node 1). When the
+// proof fails, the call returns the old failure, so a hang never ends worse than before S1.
 //
 // The render nodes (0 and 2) stay closed from the success to RestartFromTimeout, so that no render work reaches
 // the hardware in the cleanup. The paging node (1) opens again at the end of the success, because the cleanup is
@@ -8670,6 +8718,60 @@ static ULONG WddmAdapterKill(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* W
     return kills;
 }
 
+// Mode 2, after the kills: the queue reset of each ring that still did not retire (adapter_reset.h,
+// Bc250AdapterQueueResetPlan; queue-reset.md section 13). Lock not held, PASSIVE_LEVEL, every node closed. The
+// verdicts are logged only: the witnesses of step 5 decide, and a reset that failed leaves its ring unretired, so
+// the refusal follows as before. Returns the plan that ran (BC250_ADAPTER_QRESET_*), for the record.
+static ULONG WddmAdapterQueueResets(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, UINT NodeCount,
+                                    _Inout_ ULONG* Micros)
+{
+    const BC250_GFX_COMPLETION* head;
+    BC250_ADAPTER_RINGS rings;
+    BOOLEAN sdmaRingInUse = FALSE;
+    ULONG gfxVmid = 0, computeVmid = 0, plan, verdict, step, micros;
+    int gfxKnown, computeKnown = 0;
+    KIRQL irql;
+
+    GfxRingsRetired(Device, &rings, &sdmaRingInUse);
+    // The VMID of the head job, as WddmAdapterKill reads it: CP_VMID_RESET and the wave proof name it.
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    head = Bc250GfxQueueHead(WddmRingQueue(Wddm, BC250_WDDM_NODE_3D));
+    gfxKnown = head != NULL && head->Node == BC250_WDDM_NODE_3D && Bc250KillVmidValid(head->Vmid);
+    if (gfxKnown) gfxVmid = head->Vmid;
+    if (NodeCount > BC250_WDDM_NODE_COMPUTE) {
+        head = Bc250GfxQueueHead(WddmRingQueue(Wddm, BC250_WDDM_NODE_COMPUTE));
+        computeKnown = head != NULL && head->Node == BC250_WDDM_NODE_COMPUTE && Bc250KillVmidValid(head->Vmid);
+        if (computeKnown) computeVmid = head->Vmid;
+    }
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+    plan = Bc250AdapterQueueResetPlan(Wddm->AdapterRecovery, Wddm->QueueResetCaps, GuardLabQueueReset(), NodeCount,
+                                      &rings, gfxKnown, computeKnown);
+    if (plan == 0) return 0;
+    GuardLog("wddm: adapter reset: queue reset plan 0x%lX (1 gfx, 2 SDMA0, 4 compute), rings %d%d%d", plan,
+             rings.GfxRetired, rings.ComputeRetired, rings.PagingRetired);
+    if (plan & BC250_ADAPTER_QRESET_GFX) {
+        verdict = GfxQueueReset(Device, gfxVmid, FALSE, &step, &micros);
+        *Micros += micros;
+        GuardLog("wddm: adapter reset: gfx queue reset of vmid %lu: verdict %lu step %lu, %lu us", gfxVmid, verdict,
+                 step, micros);
+    }
+    if (plan & BC250_ADAPTER_QRESET_COMPUTE) {
+        verdict = GfxQueueReset(Device, computeVmid, TRUE, &step, &micros);
+        *Micros += micros;
+        GuardLog("wddm: adapter reset: compute queue reset of vmid %lu: verdict %lu step %lu, %lu us", computeVmid,
+                 verdict, step, micros);
+    }
+    if (plan & BC250_ADAPTER_QRESET_SDMA) {
+        verdict = GfxPagingQueueReset(Device, &step, &micros);
+        *Micros += micros;
+        GuardLog("wddm: adapter reset: SDMA0 queue reset: verdict %lu step 0x%lX, %lu us", verdict, step, micros);
+        // The packet that the hardware had retires now through the normal drain (the fence slot holds its
+        // sequence), so that the commit sees no packet in flight. Node 1 is closed: the drain dispatches nothing.
+        if (verdict == BC250_HANG_VERDICT_QUEUE_RESET) WddmGpuFencePaging(Device);
+    }
+    return plan;
+}
+
 // The S1 attempt. TRUE: every node is committed and ResetFromTimeout returns success. FALSE: nothing advanced; the
 // caller takes the old failure path. PASSIVE_LEVEL (the DDI's level).
 static BOOLEAN WddmAdapterReset(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm)
@@ -8683,8 +8785,9 @@ static BOOLEAN WddmAdapterReset(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM
     BOOLEAN computeNode = nodeCount > BC250_WDDM_NODE_COMPUTE;
     UINT n, fence[BC250_WDDM_NODE_COUNT_MAX] = { 0 };
     int known[BC250_WDDM_NODE_COUNT_MAX] = { 0 };
-    ULONG busy = 0, kills = 0, killMicros = 0, micros, seq = 0;
+    ULONG busy = 0, kills = 0, killMicros = 0, micros, seq = 0, qresetPlan = 0, pagingReleased = 0;
     const BC250_GFX_COMPLETION* job;
+    const BC250_PAGING_JOB* pagingJob;
     LARGE_INTEGER delay;
     KIRQL irql;
     unsigned i;
@@ -8736,9 +8839,12 @@ static BOOLEAN WddmAdapterReset(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM
     }
 
     // 4. Mode 2: the bounded wave kill of hang-recovery.md stage 1, on each IB node that still has a job.
+    //    Then the queue reset of each ring that the kills did not retire (BD-180 point 3, BD-188), before the
+    //    witnesses, so that the witnesses judge the result.
     if (Wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_KILL) {
         kills += WddmAdapterKill(Device, Wddm, BC250_WDDM_NODE_3D, &killMicros);
         if (computeNode) kills += WddmAdapterKill(Device, Wddm, BC250_WDDM_NODE_COMPUTE, &killMicros);
+        qresetPlan = WddmAdapterQueueResets(Device, Wddm, nodeCount, &killMicros);
     }
 
     // 5. The witnesses: the rings from their fence memory, then three register samples about 1 ms apart.
@@ -8763,12 +8869,16 @@ static BOOLEAN WddmAdapterReset(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM
              samples[BC250_ADAPTER_SAMPLES - 1].Value[BC250_ADAPTER_REG_SDMA0_WPTR], (ULONG)sdmaRingInUse,
              rings.GfxRetired, rings.ComputeRetired, rings.PagingRetired);
 
-    // 6. The commit, in one critical section. Nothing that ran is lost: the rings retired, so every job on the
-    //    queues ran, and its completion is covered by the fence advance. A paging job still queued did not run;
-    //    the commit cannot know what VidMm expects of it, so it refuses.
+    // 6. The commit, in one critical section. The rings retired, by themselves or by a queue reset, and the fence
+    //    advance covers every job on the queues. A paging job still queued did not run: since tester.38 it is
+    //    released with the rest (Bc250AdapterPagingQueueRelease: the adapter-reset contract advances its fence and
+    //    VidMm purges what it was to move). Until then it refused the reset, which was BD-188's 0x116. A packet that
+    //    the hardware still has is a refusal, as before.
     KeAcquireSpinLock(&Wddm->Lock, &irql);
     if (busy == 0 && Wddm->Stopping) busy |= BC250_ADAPTER_BUSY_STOPPING;
-    if (busy == 0 && (Wddm->PagingHead != NULL || Wddm->PagingHwPending)) busy |= BC250_ADAPTER_BUSY_PAGING_QUEUED;
+    if (busy == 0 && (Wddm->PagingHead != NULL || Wddm->PagingHwPending) &&
+        !Bc250AdapterPagingQueueRelease(rings.PagingRetired, Wddm->PagingHwPending))
+        busy |= BC250_ADAPTER_BUSY_PAGING_QUEUED;
     if (busy != 0) {
         Bc250AdapterResetAbortAll(Wddm->Recovery, nodeCount);
         KeReleaseSpinLock(&Wddm->Lock, irql);
@@ -8783,6 +8893,10 @@ static BOOLEAN WddmAdapterReset(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM
         HipJournalReset(job->HipJournalId, FALSE);
         Bc250GfxQueuePop(&Wddm->ComputePending);
     }
+    // The queued paging jobs: our borrowed links only, as for a preemption (WddmReleasePreemptedPagingLocked). The
+    // fence advance below covers them; no completion is reported for them on their own.
+    for (pagingJob = Wddm->PagingHead; pagingJob != NULL; pagingJob = pagingJob->Next) pagingReleased++;
+    WddmReleasePreemptedPagingLocked(Wddm);
     for (n = 0; n < nodeCount; n++) {
         known[n] = Bc250AdapterResetFence(Wddm->LastSubmittedValid[n] != 0, (unsigned)Wddm->LastSubmittedFence[n],
                                           Wddm->LastReportedValid[n] != 0, (unsigned)Wddm->LastReportedFence[n],
@@ -8827,6 +8941,8 @@ static BOOLEAN WddmAdapterReset(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM
         GuardLog("wddm: adapter reset: node %u last completed fence advanced to %u (known %d)", n, fence[n], known[n]);
     GuardLog("wddm: adapter reset: paging node %s for the cleanup, render nodes closed until RestartFromTimeout",
              pagingOpen ? "open" : "NOT reopened");
+    GuardLog("wddm: adapter reset: queue reset plan 0x%lX ran, %lu queued paging job(s) released by the fence advance",
+             qresetPlan, pagingReleased);
     return TRUE;
 
 refuse:
@@ -8840,6 +8956,7 @@ refuse:
     GuardRecordHangRecoveryPath(BC250_HANG_PATH_ADAPTER, BC250_HANG_VERDICT_ADAPTER_BUSY, busy, 0, kills, micros, FALSE);
     GuardLog("wddm: ResetFromTimeout: S1 refused, busy 0x%04lX after %lu us (%lu kill(s)); the old failure follows",
              busy, micros, kills);
+    if (qresetPlan != 0) GuardLog("wddm: ResetFromTimeout: refused after queue reset plan 0x%lX", qresetPlan);
     return FALSE;
 }
 
@@ -9111,13 +9228,17 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             // recovered verdict means the end-of-pipe behind the killed waves fired and the ring drained to idle.
             verdict = node == BC250_WDDM_NODE_COMPUTE ? GfxComputeSoftRecover(device, vmid, &seq, &kills, &micros) :
                       GfxSoftRecover(device, vmid, &seq, &kills, &micros);
-            // Stage 2 (docs/design/queue-reset.md), node 2 in both flavours, node 0 with the lab selector
-            // LabQueueReset 1 only (Bc250QueueResetWanted): the kills did not drain the ring, which is a CP-side stall that SQ_CMD cannot end (A7: a MEC wait with no wave; 3DMark: a CP
+            // Stage 2 (docs/design/queue-reset.md), node 2 and, since tester.38, node 0 in both flavours, where the
+            // device has the queue reset (Bc250QueueResetWanted, QueueResetCaps): the kills did not drain the ring,
+            // which is a CP-side stall that SQ_CMD cannot end (A7: a MEC wait with no wave; 3DMark: a CP
             // stalled on a no-retry fault). The KIQ takes the queue off its HQD and maps it again on a clean ring.
             // The verdict replaces stage 1's: the record counts one outcome per attempt, so no stage-1 outcome is
             // written first. A failed stage 2 leaves the gates closed and the path is today's refusal. Its record
-            // carries the failed step in LastSeq (hang_recovery.h).
-            if (Bc250QueueResetWanted(GuardLabQueueReset(), wddm->HangRecoveryMode, node, verdict, 1))
+            // carries the failed step in LastSeq (hang_recovery.h). LabQueueReset 2 (lab flavour only, row Q6) keeps
+            // stage 2 out of ResetEngine, so that the same hang reaches the queue resets of ResetFromTimeout.
+            if (GuardLabQueueReset() != BC250_LAB_QRESET_ENGINE_OFF &&
+                Bc250QueueResetWanted(wddm->QueueResetCaps, GuardLabQueueReset(), wddm->HangRecoveryMode, node,
+                                      verdict, 1))
             {
                 ULONG step = 0, resetMicros = 0;
                 GuardLog("wddm: ResetEngine node %u: stage 1 did not drain seq %lu, stage 2 queue reset of VMID %lu",

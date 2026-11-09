@@ -1898,6 +1898,35 @@ static void bc250_gfx_vm_reg_wait(struct amdgpu_ring *ring, u32 reg, u32 value, 
 	amdgpu_ring_write(ring, 0x20);
 }
 
+/* gfx_v10_0_ring_emit_pipeline_sync() on a caller-named address and value: gfx_v10_0_wait_reg_mem(ring,
+ * usepfp, 1, 0, lower_32_bits(addr), upper_32_bits(addr), ref, mask, 4), engine PFP on the gfx ring and ME
+ * elsewhere, memory space, function equal, poll interval 4. Upstream polls the ring's own fence; here a lab arm
+ * makes the CP wait for a value that nobody writes (the GFX hang of docs/design/queue-reset.md rows Q3 and Q6, the
+ * Windows form of the M939 job). [shim] alloc, emit and commit together; no fence. */
+int bc250_gfx_submit_mem_wait(struct amdgpu_ring *ring, u64 addr, u32 ref, u32 mask)
+{
+	int usepfp;
+	int r;
+
+	if (ring == NULL || ring->funcs == NULL || ring->ring == NULL || (addr & 0x3u) != 0 || addr == 0 ||
+	    (ring->funcs->type != AMDGPU_RING_TYPE_GFX && ring->funcs->type != AMDGPU_RING_TYPE_COMPUTE))
+		return BC250_EINVAL;
+	usepfp = (ring->funcs->type == AMDGPU_RING_TYPE_GFX);
+	r = amdgpu_ring_alloc(ring, 7);
+	if (r)
+		return r;
+	amdgpu_ring_write(ring, PACKET3(PACKET3_WAIT_REG_MEM, 5));
+	amdgpu_ring_write(ring, WAIT_REG_MEM_MEM_SPACE(1) | WAIT_REG_MEM_OPERATION(0) |
+				WAIT_REG_MEM_FUNCTION(3) | WAIT_REG_MEM_ENGINE(usepfp)); /* equal */
+	amdgpu_ring_write(ring, lower_32_bits(addr));
+	amdgpu_ring_write(ring, upper_32_bits(addr));
+	amdgpu_ring_write(ring, ref);
+	amdgpu_ring_write(ring, mask);
+	amdgpu_ring_write(ring, 4); /* poll interval */
+	amdgpu_ring_commit(ring);
+	return 0;
+}
+
 /* ---------------------------------------------------------------------------------------------
  * Per-queue resets: stage 2 of the hang recovery (docs/design/queue-reset.md)
  *

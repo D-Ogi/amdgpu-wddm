@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\kmd-queue-reset",[switch]$AnyVmidPasses,[switch]$StageBeforeKill)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\kmd-queue-reset",[switch]$AnyVmidPasses,[switch]$StageBeforeKill,[switch]$NoMeasuredSdma,[switch]$SdmaArgsUnconfirmed,[switch]$GfxLabOnly)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -7,6 +7,9 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 # the build, so that a negative control changes the copy and never the tree. Each control must fail by a check:
 #   -AnyVmidPasses    the wave proof ignores the VMID of a wave, so a wave of the hung VMID passes.
 #   -StageBeforeKill  wddm.c calls stage 2 before the stage-1 kill loop (the source check below).
+#   -NoMeasuredSdma   queue_reset_caps.h drops the measured capability (M943), so the BC-250 has no SDMA reset.
+#   -SdmaArgsUnconfirmed  a failed argument check of the SDMA reset marks the engine unconfirmed.
+#   -GfxLabOnly       node 0 goes back to the lab selector only (the pre-tester.38 rule).
 $header=Get-Content "$repo\driver\kmd\queue_reset.h" -Raw
 if($AnyVmidPasses){
     $live='            return BC250_QRESET_STEP_WAVES;' + "`n" + '    return 0;'
@@ -15,6 +18,24 @@ if($AnyVmidPasses){
     $header=$header.Replace($live,'            ;' + $(if($header.Contains("`r`n")){"`r`n"}else{"`n"}) + '    return 0;')
 }
 [IO.File]::WriteAllText((Join-Path $Out 'queue_reset.h'),$header)
+function Set-Mutant([string]$Name,[string]$Live,[string]$Dead){
+    $text=Get-Content "$repo\driver\kmd\$Name" -Raw
+    if($Live){
+        if(!$text.Contains($Live)){throw "negative control: '$Live' moved in $Name"}
+        $text=$text.Replace($Live,$Dead)
+    }
+    [IO.File]::WriteAllText((Join-Path $Out $Name),$text)
+}
+# queue_reset_test.c includes queue_reset_caps.h and hang_recovery.h itself, before any header of the tree can
+# include them from driver\kmd, so these copies are the ones compiled.
+Set-Mutant 'queue_reset_caps.h' $(if($NoMeasuredSdma){' | ip.MeasuredCaps)'}else{''}) ')'
+if($SdmaArgsUnconfirmed){
+    $live='return Step > BC250_SDMA_QRESET_STEP_BASE && Step != BC250_SDMA_QRESET_STEP_ARGS &&'
+    if(!$header.Contains($live)){throw 'negative control: the SDMA unconfirmed rule moved'}
+    $header=$header.Replace($live,'return Step >= BC250_SDMA_QRESET_STEP_BASE && Step != BC250_SDMA_QRESET_STEP_ARGS &&')
+    [IO.File]::WriteAllText((Join-Path $Out 'queue_reset.h'),$header)
+}
+Set-Mutant 'hang_recovery.h' $(if($GfxLabOnly){'#define BC250_QRESET_GFX_DEFAULT 1u'}else{''}) '#define BC250_QRESET_GFX_DEFAULT 0u'
 
 # The source check: wddm.c's ResetEngine runs stage 2 only after the stage-1 kill loop has returned its verdict, and
 # before the recovered test that opens the gates. A stage 2 ahead of the kill would reset a queue that a wave kill
@@ -25,12 +46,12 @@ if($StageBeforeKill){
     $kill='            verdict = node == BC250_WDDM_NODE_COMPUTE ? GfxComputeSoftRecover('
     $at0=$wddm.IndexOf($kill)
     if($at0 -lt 0){throw 'negative control: the kill call moved'}
-    $wddm=$wddm.Insert($at0,'            if (Bc250QueueResetWanted(0, 0, 0, 0, 0)) { }' + "`n")
+    $wddm=$wddm.Insert($at0,'            if (Bc250QueueResetWanted(0, 0, 0, 0, 0, 0)) { }' + "`n")
 }
 $at=$wddm.IndexOf('NTSTATUS APIENTRY Bc250WddmResetEngine(')
 if($at -lt 0){$at=$wddm.IndexOf('Bc250WddmResetEngine(')}
 if($at -lt 0){Write-Output 'FAIL source check: Bc250WddmResetEngine is not in wddm.c';Write-Output 'test-end: source checks exit 1';exit 1}
-$steps=@('GfxComputeSoftRecover(device, vmid, &seq, &kills, &micros)','Bc250QueueResetWanted(GuardLabQueueReset(), wddm->HangRecoveryMode, node, verdict, 1)','verdict = GfxQueueReset(device, vmid,','if (Bc250HangVerdictRecovered(verdict))')
+$steps=@('GfxComputeSoftRecover(device, vmid, &seq, &kills, &micros)','Bc250QueueResetWanted(wddm->QueueResetCaps, GuardLabQueueReset(), wddm->HangRecoveryMode, node,','verdict = GfxQueueReset(device, vmid,','if (Bc250HangVerdictRecovered(verdict))')
 $pos=$at
 foreach($s in $steps){
     $i=$wddm.IndexOf($s,$pos)

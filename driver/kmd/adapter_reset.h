@@ -217,4 +217,52 @@ static __inline void Bc250AdapterRestartNode(BC250_HANG_NODE_STATE* state)
     state->ResetActive = 0;
 }
 
+/* ---- Queue resets inside ResetFromTimeout (docs/design/queue-reset.md section 4, BD-188, BD-180 point 3) --------
+ *
+ * Until tester.38 the adapter path ran only the stage-1 wave kill, then the witnesses. A ring that the kill could
+ * not drain (a CP-side wait, a CP stalled on a fault) and any paging packet that SDMA0 did not finish ended in the
+ * refusal, so 0x116. Now, in mode 2 (KILL) and after the kills, each ring that still has an unretired sequence gets
+ * the queue reset of its engine when the device has it (queue_reset_caps.h):
+ *   node 0  GFX queue, gfx_v10_0_reset_kgq    needs the VMID of the hung job (CP_VMID_RESET names it)
+ *   node 2  compute queue, gfx_v10_0_reset_kcq needs the VMID of the hung job (the wave proof names it)
+ *   node 1  SDMA0, sdma_v5_0_reset_queue       no VMID: the paging ring runs in the system domain
+ * The witnesses then decide as before: a reset that passed leaves its ring retired (the fence slot takes the
+ * ring's newest sequence) and the engine idle. A reset that failed leaves the ring unretired, so the old refusal
+ * follows. No reset runs in mode 0 or 1, and none on a ring that retired by itself. */
+#define BC250_ADAPTER_QRESET_GFX     0x1u
+#define BC250_ADAPTER_QRESET_SDMA    0x2u
+#define BC250_ADAPTER_QRESET_COMPUTE 0x4u
+
+static __inline unsigned Bc250AdapterQueueResetPlan(unsigned adapterRecovery, unsigned caps,
+                                                    unsigned long labQueueReset, unsigned nodeCount,
+                                                    const BC250_ADAPTER_RINGS* rings, int gfxVmidKnown,
+                                                    int computeVmidKnown)
+{
+    unsigned plan = 0;
+
+    if (adapterRecovery != BC250_ADAPTER_RECOVERY_KILL || rings == 0) return 0;
+    if (!rings->GfxRetired && gfxVmidKnown && Bc250QueueResetNodeAllowed(caps, labQueueReset, 0u))
+        plan |= BC250_ADAPTER_QRESET_GFX;
+    if (nodeCount > 1u && !rings->PagingRetired && (caps & BC250_QRESET_CAP_SDMA) != 0)
+        plan |= BC250_ADAPTER_QRESET_SDMA;
+    if (nodeCount > 2u && !rings->ComputeRetired && computeVmidKnown &&
+        Bc250QueueResetNodeAllowed(caps, labQueueReset, 2u))
+        plan |= BC250_ADAPTER_QRESET_COMPUTE;
+    return plan;
+}
+
+/* The paging queue at the commit of a proven reset. Until tester.38 a paging job that was queued and never ran
+ * refused the reset (BUSY_PAGING_QUEUED: "VidMm may still need it"). The contract says otherwise: an adapter-wide
+ * reset advances the last completed fence of every node to the last submitted one (tdr-changes-in-windows-8.md),
+ * and VidMm then "purges all allocations from video memory" (timeout-detection-and-recovery.md), so the queued
+ * transfers are covered by the same fence advance as the packet that hung, and no later report may name them. The
+ * queue is released (its links only; the payload is the OS's) when the witnesses prove the engines idle. The packet
+ * that the hardware had (WDDM's PagingHwPending) must have retired first, by itself or by the SDMA queue reset that
+ * wrote its fence slot, and through the paging drain, which completes it as any other packet: a packet still in
+ * flight on SDMA0 is a refusal, because then nothing proved that SDMA0 stopped. 1 = release, 0 = refuse. */
+static __inline int Bc250AdapterPagingQueueRelease(int pagingRingRetired, int hwPacketPending)
+{
+    return pagingRingRetired != 0 && hwPacketPending == 0;
+}
+
 #endif /* BC250_ADAPTER_RESET_H */

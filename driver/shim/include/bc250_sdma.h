@@ -89,6 +89,8 @@ struct bc250_sdma_reset_receipt {
  u64 previous_wptr; /* software dwords, diagnostic only; never adopted/replayed */
  u64 rptr;          /* final hardware bytes */
  u64 wptr;
+ int stop_result;   /* the first quiescence: 0, or BC250_ETIME when the engine neither froze nor read
+                     * idle (the hang case; the pulse follows as in amdgpu_sdma_reset_engine) */
 };
 /* Caller excludes CPU submitters/readers for this instance and retains ring,
  * WB, fences, firmware and translation throughout, including on failure.
@@ -142,6 +144,12 @@ unsigned int bc250_sdma_fence_size(const struct amdgpu_ring *ring, unsigned int 
  * single dword if the ring is wrong or the address is not 4-byte aligned. */
 int bc250_sdma_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags);
 
+/* The memory poll of sdma_v5_0_ring_emit_pipeline_sync() on a caller-named address and value: BC250_SDMA_MEM_WAIT_DW
+ * dwords into space the caller reserved, no commit. BC250_EINVAL without a write for a wrong ring or an address that
+ * is 0 or not 4-byte aligned. */
+#define BC250_SDMA_MEM_WAIT_DW	6u
+int bc250_sdma_emit_mem_wait(struct amdgpu_ring *ring, u64 addr, u32 ref, u32 mask);
+
 /* [shim] the alloc, the emit and the commit together, which is what a caller actually wants. On a
  * refusal from the emitter the reservation is undone and the ring is left as it was. */
 int bc250_sdma_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags);
@@ -172,6 +180,7 @@ void bc250_sdma_fence_page_free(struct amdgpu_device *adev);
  * is not allocated or the slot is out of range. */
 u64 bc250_sdma_fence_addr(struct amdgpu_device *adev, unsigned int slot);
 u64 bc250_sdma_fence_read(struct amdgpu_device *adev, unsigned int slot);
+int bc250_sdma_fence_write(struct amdgpu_device *adev, unsigned int slot, u64 value);
 
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 /* BD-235 lab experiment, lab flavour only: the byte pointer the paging ring (SDMA0 GFX queue) starts at on its

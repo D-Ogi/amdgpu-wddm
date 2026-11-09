@@ -305,15 +305,29 @@ static void reg_force(u32 index, u32 value)
 	g_forced_count++;
 }
 
+/* The engine model of the reset cases (section 7 below, bc250_sdma_reset_retained_instance). Off
+ * for every other case. When on: SDMA0_FREEZE reads FROZEN once FREEZE is set, unless engine 0 is
+ * hung; STATUS1 reads all idle bits unless engine 0 is hung; a GRBM_SOFT_RESET write that sets
+ * SOFT_RESET_SDMA0 counts a pulse and, unless the case says the hang survives it, ends the hang. */
+static int g_reset_model, g_sdma0_hung, g_hang_survives_pulse;
+static unsigned int g_sdma0_pulses, g_sdma1_pulses;
+static u32 g_freeze_index, g_status1_index, g_grbm_reset_index;
+
 unsigned int bc250_shim_rreg(struct amdgpu_device *adev, unsigned int dword_index)
 {
 	unsigned int i;
+	u32 v;
 
 	(void)adev;
 	for (i = 0; i < g_forced_count; i++)
 		if (g_forced_index[i] == dword_index)
 			return g_forced_value[i];
-	return reg_get(dword_index);
+	v = reg_get(dword_index);
+	if (g_reset_model && dword_index == g_freeze_index && (v & SDMA0_FREEZE__FREEZE_MASK) && !g_sdma0_hung)
+		v |= SDMA0_FREEZE__FROZEN_MASK;
+	if (g_reset_model && dword_index == g_status1_index)
+		v = g_sdma0_hung ? 0u : 0x3FFu;
+	return v;
 }
 
 void bc250_shim_wreg(struct amdgpu_device *adev, unsigned int dword_index, unsigned int value)
@@ -321,6 +335,15 @@ void bc250_shim_wreg(struct amdgpu_device *adev, unsigned int dword_index, unsig
 	struct reg_cell *c = reg_cell(dword_index);
 
 	(void)adev;
+	if (g_reset_model && dword_index == g_grbm_reset_index) {
+		if (value & GRBM_SOFT_RESET__SOFT_RESET_SDMA0_MASK) {
+			g_sdma0_pulses++;
+			if (!g_hang_survives_pulse)
+				g_sdma0_hung = 0;
+		}
+		if (value & GRBM_SOFT_RESET__SOFT_RESET_SDMA1_MASK)
+			g_sdma1_pulses++;
+	}
 	c->index = dword_index;
 	c->value = value;
 	c->used = 1;
@@ -349,10 +372,22 @@ void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsi
  * that call it take. No case here reaches them; every call is counted and the verdict fails on one,
  * so a case that does reach them has to model the scope here rather than pass a silent stub. */
 static unsigned int g_rlc_safe_calls;
+/* The reset cases model the scope: entries and exits are counted on their own, a requested scope is
+ * reported back, and one entry (1-based) can be refused, as an RLC that never acknowledges would. */
+static unsigned int g_scope_entries, g_scope_exits, g_scope_refuse_at, g_scope_open;
 
 int bc250_gfx_rlc_safe_enter(struct amdgpu_device *adev, bool *requested)
 {
 	(void)adev;
+	if (g_reset_model) {
+		g_scope_entries++;
+		if (requested)
+			*requested = g_scope_entries != g_scope_refuse_at;
+		if (g_scope_entries == g_scope_refuse_at)
+			return BC250_ETIME;
+		g_scope_open++;
+		return 0;
+	}
 	g_rlc_safe_calls++;
 	if (requested)
 		*requested = false;
@@ -362,6 +397,12 @@ int bc250_gfx_rlc_safe_enter(struct amdgpu_device *adev, bool *requested)
 void bc250_gfx_rlc_safe_exit(struct amdgpu_device *adev, bool requested)
 {
 	(void)adev;
+	if (g_reset_model) {
+		g_scope_exits++;
+		if (requested && g_scope_open)
+			g_scope_open--;
+		return;
+	}
 	(void)requested;
 	g_rlc_safe_calls++;
 }
@@ -965,6 +1006,135 @@ static void case_teardown_leaves_ring_usable(struct amdgpu_device *adev)
 	check(g_double_free == 0 && g_unknown_free == 0, "no double free, no stray free");
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * 7. The queue reset of one engine (bc250_sdma_reset_retained_instance), which ResetFromTimeout
+ *    runs on SDMA0 when a paging packet did not retire (docs/design/queue-reset.md section 13).
+ *    amdgpu_sdma_reset_engine() goes on to the soft reset when the stop times out: an engine that a
+ *    hang holds does not freeze. Until 2026-11-08 this helper returned at that point, so the case it
+ *    exists for never reached the pulse. The negative control of run_sdma_faults.ps1 puts that
+ *    early return back and must fail here.
+ * ------------------------------------------------------------------------------------------- */
+
+#define RESET_POISON 0xDEADBEEFu
+
+static void reset_case_begin(const char *title, struct amdgpu_device *adev, int hung, int survives,
+			     unsigned int refuse_at)
+{
+	struct amdgpu_ring *ring;
+	u32 i;
+
+	case_begin(title, adev);
+	check(bc250_sdma_setup(adev) == 0, "setup");
+	check(bc250_sdma_hw_init(adev) == 0, "bring-up");
+	/* SOC15_REG_OFFSET(GC, 0, mmGRBM_SOFT_RESET), written out: soc15_common.h is not included here. */
+	g_grbm_reset_index = (u32)(adev->reg_offset[GC_HWIP][0][mmGRBM_SOFT_RESET_BASE_IDX] + mmGRBM_SOFT_RESET);
+	g_freeze_index = sdma_reg(adev, 0, mmSDMA0_FREEZE);
+	g_status1_index = sdma_reg(adev, 0, mmSDMA0_STATUS1_REG);
+	/* The state a hang leaves: a ring full of old packets and non-zero pointers everywhere. */
+	ring = &adev->sdma.instance[0].ring;
+	for (i = 0; i < ring->ring_size / 4u; i++)
+		ring->ring[i] = RESET_POISON;
+	ring->wptr = 0x40;
+	*(volatile u64 *)ring->wptr_cpu_addr = 0x100;
+	*(volatile u64 *)((char *)adev->sdma.wb_mem.cpu) = 0x80;	/* engine 0's read pointer slot */
+	g_reset_model = 1;
+	g_sdma0_hung = hung;
+	g_hang_survives_pulse = survives;
+	g_sdma0_pulses = g_sdma1_pulses = 0;
+	g_scope_entries = g_scope_exits = g_scope_open = 0;
+	g_scope_refuse_at = refuse_at;
+}
+
+static void reset_case_end(struct amdgpu_device *adev)
+{
+	g_reset_model = 0;
+	(void)bc250_sdma_hw_fini(adev);
+	bc250_sdma_teardown(adev);
+	check(live_objects() == 0, "the teardown gives everything back");
+}
+
+static int ring_holds(struct amdgpu_ring *ring, u32 value)
+{
+	u32 i;
+
+	for (i = 0; i < ring->ring_size / 4u; i++)
+		if (ring->ring[i] != value)
+			return 0;
+	return 1;
+}
+
+static void case_reset_hung_engine(struct amdgpu_device *adev)
+{
+	struct bc250_sdma_reset_receipt receipt;
+	struct amdgpu_ring *ring;
+	int r;
+
+	reset_case_begin("7a. queue reset of a hung engine 0: stop times out, the pulse ends the hang", adev,
+			 1, 0, 0);
+	ring = &adev->sdma.instance[0].ring;
+	r = bc250_sdma_reset_retained_instance(adev, 0, &receipt);
+	note("rc %d, stage %u, stop %d, pulses %u/%u, scopes %u/%u\n", r, receipt.stage,
+	     receipt.stop_result, g_sdma0_pulses, g_sdma1_pulses, g_scope_entries, g_scope_exits);
+	check(r == 0, "the reset returns 0");
+	check(receipt.stop_result == BC250_ETIME, "the first stop timed out, as a hung engine does");
+	check(receipt.stage == BC250_SDMA_RESET_PROGRAMMED, "every stage ran");
+	check(g_sdma0_pulses == 1 && g_sdma1_pulses == 0, "one pulse of SDMA0, none of SDMA1");
+	check(g_scope_entries == 2 && g_scope_exits == 2 && g_scope_open == 0,
+	      "two safe-mode scopes, both closed");
+	check(ring->wptr == 0 && *(volatile u64 *)ring->wptr_cpu_addr == 0 &&
+	      *(volatile u64 *)adev->sdma.wb_mem.cpu == 0, "software pointers and write-back slots at 0");
+	check(ring->ring[0] != RESET_POISON && ring_holds(ring, ring->ring[0]), "the old packets are gone");
+	check(!engine_halted(adev, 0) && engine_rb_enabled(adev, 0) && engine_ib_enabled(adev, 0),
+	      "engine 0 runs again");
+	check(!engine_halted(adev, 1) && engine_rb_enabled(adev, 1), "engine 1 was not touched");
+	reset_case_end(adev);
+}
+
+static void case_reset_idle_engine(struct amdgpu_device *adev)
+{
+	struct bc250_sdma_reset_receipt receipt;
+	int r;
+
+	reset_case_begin("7b. queue reset of an idle engine 0: the stop freezes it", adev, 0, 0, 0);
+	r = bc250_sdma_reset_retained_instance(adev, 0, &receipt);
+	check(r == 0 && receipt.stop_result == 0 && receipt.stage == BC250_SDMA_RESET_PROGRAMMED,
+	      "the reset returns 0 with a clean stop");
+	check(g_sdma0_pulses == 1 && g_scope_entries == 2 && g_scope_exits == 2, "one pulse, two scopes");
+	reset_case_end(adev);
+}
+
+static void case_reset_hang_survives(struct amdgpu_device *adev)
+{
+	struct bc250_sdma_reset_receipt receipt;
+	struct amdgpu_ring *ring;
+	int r;
+
+	reset_case_begin("7c. a hang the pulse does not end: refused before memory changes", adev, 1, 1, 0);
+	ring = &adev->sdma.instance[0].ring;
+	r = bc250_sdma_reset_retained_instance(adev, 0, &receipt);
+	check(r == BC250_ETIME, "the second stop times out and is the result");
+	check(receipt.stop_result == BC250_ETIME && receipt.stage == BC250_SDMA_RESET_CLEAR,
+	      "the receipt names the clear stage");
+	check(g_sdma0_pulses == 1 && g_scope_exits == g_scope_entries && g_scope_open == 0,
+	      "one pulse, every scope closed");
+	check(ring_holds(ring, RESET_POISON) && ring->wptr == 0x40, "the ring and its pointers are untouched");
+	reset_case_end(adev);
+}
+
+static void case_reset_scope_refused(struct amdgpu_device *adev)
+{
+	struct bc250_sdma_reset_receipt receipt;
+	int r;
+
+	reset_case_begin("7d. the RLC refuses the first safe-mode scope: no register of the engine changes", adev,
+			 1, 0, 1);
+	r = bc250_sdma_reset_retained_instance(adev, 0, &receipt);
+	check(r == BC250_ETIME && receipt.stage == BC250_SDMA_RESET_STOP && receipt.stop_result == 0,
+	      "refused at the stop stage, no stop ran");
+	check(g_sdma0_pulses == 0 && g_scope_exits == 1, "no pulse; the refused scope is closed again");
+	reset_case_end(adev);
+}
+
 /* ------------------------------------------------------------------------------------------- */
 
 int main(int argc, char **argv)
@@ -997,6 +1167,11 @@ int main(int argc, char **argv)
 	case_second_engine_fails(&adev);
 	case_fini_after_failed_setup(&adev);
 	case_teardown_leaves_ring_usable(&adev);
+
+	case_reset_hung_engine(&adev);
+	case_reset_idle_engine(&adev);
+	case_reset_hang_survives(&adev);
+	case_reset_scope_refused(&adev);
 
 	fault_alloc_reset();
 	check(g_rlc_safe_calls == 0, "no case entered the RLC safe-mode scope this suite does not model");

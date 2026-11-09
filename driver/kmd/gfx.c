@@ -119,12 +119,24 @@ static const struct { const char* Name; BC250_GFX_STAGE_FUNCTION Run; } g_Stages
 // compute_ring[1]. Its fence slot is the one after node 0's submission slot, on the same gfx fence page.
 #define BC250_COMPUTE_RING_INDEX 1u
 #define BC250_COMPUTE_FENCE_SLOT 11u
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// Lab rows Q3 and Q6 (queue-reset.md): the gfx fence slot that the LabGfxHang wait polls. The CPU writes 0 into it
+// first, and nothing writes the value the wait needs.
+#define BC250_GFX_LAB_HANG_SLOT 12u
+#define BC250_GFX_LAB_HANG_VALUE 0x51u
+#endif
 
 // ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node.
 // Its own fence slot on the SDMA fence page (BC250_SDMA_FENCE_SLOTS = 16, bc250_sdma.h): 0/1 are the ring
 // tests', 2/3 are SdmaCopyEscape's and GfxFenceEscape's SDMA arm's - one past what the escapes use.
 #define BC250_PAGING_FENCE_SLOT 4u
 #define BC250_PAGING_MARKER_SLOT 5u // private CPU-reset marker; never the OS completion fence
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// Lab row Q5 (queue-reset.md): the slot that the LabPagingHang poll waits on. The CPU writes 0 into it before the
+// poll and nothing writes the value the poll waits for, so SDMA0 stays at the poll until a reset.
+#define BC250_PAGING_LAB_HANG_SLOT 6u
+#define BC250_PAGING_LAB_HANG_VALUE 0x51u
+#endif
 #define BC250_PAGING_POLL_US 500000ul       // node 1's own watchdog budget, same shape as BC250_SUBMIT_POLL_US
 // OS command-buffer capacity; live-ring reservation further limits each batch.
 #define BC250_GFX_PAGING_BUFFER_BYTES 0x10000ul
@@ -1469,6 +1481,117 @@ ULONG GfxQueueReset(_Inout_ BC250_DEVICE* Device, ULONG Vmid, BOOLEAN Compute, _
     return BC250_HANG_VERDICT_QUEUE_RESET;
 }
 
+// The node-1 half of the queue reset (queue-reset.md section 13), for DxgkDdiResetFromTimeout. Until tester.38 a
+// paging job that did not retire ended every adapter reset with a refusal and the system with 0x116 (BD-188).
+//
+// The sequence is amdgpu's sdma_v5_0_reset_queue through the shim (bc250_sdma_reset_retained_instance): stop the
+// instance, pulse its GRBM soft reset, check that it is halted and frozen, clear the ring and its write-back slots,
+// and restart it with sdma_v5_0_gfx_resume_instance. Deviations from Linux, each with its reason:
+//   - amdgpu declares the SDMA queue reset for 5.0.0, 5.0.2 and 5.0.5 only. This part is 5.0.1. The capability comes
+//     from queue_reset_caps.h, where M943 (the same sequence on SDMA0 of unit A) is the evidence.
+//   - amdgpu then runs its ring test (amdgpu_ring_test_helper) and lets the scheduler re-submit the jobs it did not
+//     cancel. This driver runs the same ring test, but re-submits nothing: the adapter-reset contract of WDDM
+//     ("the last completed fence on all nodes advances to the last submitted fence") makes the paging fence slot
+//     take PagingSubmitSeq instead, and VidMm purges what the lost jobs were to move.
+//   - amdgpu uses its scheduler's lock. Here node 1 is closed (GfxPagingSubmitClose) before this runs, GartLock holds
+//     every other register sequence off, and Sdma0RingLock is taken around the ring-test push, as for every direct
+//     writer of the live SDMA0 ring (paging-node.md section 4).
+// SDMA1 is not touched: it carries no WDDM node.
+ULONG GfxPagingQueueReset(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Step, _Out_ ULONG* Micros)
+{
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev = NULL;
+    struct bc250_sdma_reset_receipt receipt;
+    BOOLEAN gartEnabled = FALSE;
+    void* previousBackend;
+    NTSTATUS status, fault;
+    ULONG faultOffset, pagingSeq = 0;
+    ULONGLONG start;
+    int r, ringTest = 0;
+
+    *Step = BC250_SDMA_QRESET_STEP_ARGS;
+    *Micros = 0;
+    RtlZeroMemory(&receipt, sizeof(receipt));
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL)
+    {
+        GuardLog("gfx: paging queue reset refused at IRQL %u; nothing changed", (ULONG)KeGetCurrentIrql());
+        return BC250_HANG_VERDICT_QUEUE_RESET_FAILED;
+    }
+
+    ExAcquireFastMutex(&Device->GartLock);
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx == NULL || Device->GpuMem == NULL) status = STATUS_DEVICE_NOT_READY;
+    else status = GartDevice(Device, &adev, &gartEnabled);
+    if (NT_SUCCESS(status) && !gartEnabled) status = STATUS_INVALID_DEVICE_STATE;
+    // The paging ring is a pointer into this adev (gfx->PagingRing's comment). Another adev, or none, means that
+    // node 1 never ran on this device start, and there is nothing to reset.
+    if (NT_SUCCESS(status) && (!gfx->PagingReady || gfx->PagingDevicePtr != adev ||
+                               gfx->PagingRing != &adev->sdma.instance[0].ring))
+        status = STATUS_INVALID_DEVICE_STATE;
+    if (!NT_SUCCESS(status))
+    {
+        ExReleaseFastMutex(&Device->GartLock);
+        GuardLog("gfx: paging queue reset found no paging ring (0x%08lX); nothing changed", (ULONG)status);
+        return BC250_HANG_VERDICT_QUEUE_RESET_FAILED;
+    }
+    pagingSeq = gfx->PagingSubmitSeq;
+
+    start = KeQueryInterruptTime();
+    previousBackend = adev->backend;
+    adev->backend = &gfx->Sequence;
+    SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
+    r = bc250_sdma_reset_retained_instance(adev, 0, &receipt);
+    // amdgpu_ring_test_helper of sdma_v5_0_gfx_resume_instance: one fence write through the restored ring. StageSdma
+    // runs the same test at bring-up; it is the only proof that the engine executes again (facts M59: a restore
+    // with rc 0 left both engines dead in E15). Not after a refused register: a faulted sequence executes nothing.
+    if (r == 0 && NT_SUCCESS(gfx->Sequence.Fault))
+    {
+        volatile u32* slotCpu = NULL;
+        KIRQL irql;
+
+        KeAcquireSpinLock(&gfx->Sdma0RingLock, &irql);
+        ringTest = bc250_sdma_ring_test_submit(gfx->PagingRing, &slotCpu);
+        KeReleaseSpinLock(&gfx->Sdma0RingLock, irql);
+        if (ringTest == 0) ringTest = bc250_sdma_ring_test_wait(adev, slotCpu);
+    }
+    fault = gfx->Sequence.Fault;
+    faultOffset = gfx->Sequence.FaultOffset;
+    // The WDDM adapter-reset contract: the paging fence slot takes the newest sequence written to the ring, so
+    // GfxRingsRetired reads node 1 as retired and GfxPagingReopenAfterReset can open it again. Only after a proven
+    // reset: a failed one leaves the slot as the engine wrote it, which is what the S1 witnesses read next.
+    if (r == 0 && ringTest == 0 && NT_SUCCESS(fault))
+        (void)bc250_sdma_fence_write(adev, BC250_PAGING_FENCE_SLOT, (u64)pagingSeq);
+    adev->backend = previousBackend;
+
+    if (!NT_SUCCESS(fault)) *Step = BC250_SDMA_QRESET_STEP_SEQUENCE;
+    else if (r != 0) *Step = BC250_SDMA_QRESET_STEP_BASE + receipt.stage;
+    else if (ringTest != 0) *Step = BC250_SDMA_QRESET_STEP_RING_TEST;
+    else *Step = BC250_SDMA_QRESET_STEP_DONE;
+    // Section 7: an engine that the reset touched and did not prove is not trusted by the next stop either.
+    if (Bc250SdmaQueueResetUnconfirmed(*Step)) Device->GpuStopUnconfirmed = TRUE;
+    ExReleaseFastMutex(&Device->GartLock);
+    *Micros = (ULONG)((KeQueryInterruptTime() - start) / 10ull);
+
+    GuardLog("gfx: paging queue reset: stage %lu stop %d rc %d ring test %d, %lu us", receipt.stage,
+             receipt.stop_result, r, ringTest, *Micros);
+    GuardLog("gfx: paging queue reset: old wptr 0x%llX, rptr 0x%llX wptr 0x%llX", (ULONGLONG)receipt.previous_wptr,
+             (ULONGLONG)receipt.rptr, (ULONGLONG)receipt.wptr);
+    if (!NT_SUCCESS(fault))
+    {
+        GuardLog("gfx: paging queue reset stopped: register 0x%05lX refused (0x%08lX) at stage %lu; node 1 stays "
+                 "closed", faultOffset, (ULONG)fault, receipt.stage);
+        return BC250_HANG_VERDICT_QUEUE_RESET_FAILED;
+    }
+    if (*Step != BC250_SDMA_QRESET_STEP_DONE)
+    {
+        GuardLog("gfx: paging queue reset failed at step 0x%lX; node 1 stays closed", *Step);
+        return BC250_HANG_VERDICT_QUEUE_RESET_FAILED;
+    }
+    GuardLog("gfx: paging queue reset: SDMA0 restarted, paging seq %lu retired by the reset; awaiting commit",
+             pagingSeq);
+    return BC250_HANG_VERDICT_QUEUE_RESET;
+}
+
 // Wave observation never uses the live submission sequence: a refused debug read
 // must not poison later GPU work. The only writes select registers, not wave state.
 // A counted reader gate protects the watchdog's lockless samples against bank
@@ -2026,6 +2149,20 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
         // count of skip events would understate it by up to a factor of two, which is exactly the kind of quiet
         // number BD-070 taught us not to publish.
         else InterlockedExchangeAdd(&Gfx->HotSubmitLinesSkipped, (Identity != NULL) ? 2 : 1);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        // Lab rows Q3 and Q6 (queue-reset.md): one WDDM job of node 0 after the LabGfxHang delay waits behind a CP
+        // WAIT_REG_MEM on a fence slot that nothing writes, so its fence never arrives and the OS timeout starts the
+        // recovery. The wait is committed on its own in front of the job; a job that is then refused leaves the
+        // wait on the ring, which stops the next job the same way.
+        if (Identity != NULL && GuardLabTakeEngineHang(0))
+        {
+            u64 hangAddr = bc250_gfx_fence_addr(Adev, BC250_GFX_LAB_HANG_SLOT);
+            int hang = (hangAddr != 0 && bc250_gfx_fence_write(Adev, BC250_GFX_LAB_HANG_SLOT, 0) == 0) ?
+                       bc250_gfx_submit_mem_wait(ring, hangAddr, BC250_GFX_LAB_HANG_VALUE, 0xFFFFFFFFu) : -1;
+            GuardLog("gfx: lab gfx hang: seq %lu waits on gfx fence slot %u for 0x%X, which nothing writes (rows Q3, Q6), "
+                     "result %d", seq, BC250_GFX_LAB_HANG_SLOT, BC250_GFX_LAB_HANG_VALUE, hang);
+        }
+#endif
         // The VMID goes into the IB packet's control word (PACKET3_INDIRECT_BUFFER__VMID, bc250_gfx_emit_ib): the
         // CP fetches the IB, and the job makes every access, through this VMID's page tables.
         if (Gfx->RingVmFlushGate)
@@ -4852,7 +4989,8 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
     u64 fenceAddr, wptrBytes;
     GFX_BOUNDARY_NOTE boundary;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-    u64 labBefore;
+    u64 labBefore, labHangAddr = 0;
+    BOOLEAN labHang = FALSE;
 #endif
     int result;
 
@@ -4880,11 +5018,25 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
     seq = (ULONG)InterlockedIncrement(&gfx->FenceSeq);
     if (seq == 0) seq = (ULONG)InterlockedIncrement(&gfx->FenceSeq);
 
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // Lab row Q5: one paging job that SDMA0 cannot finish. The poll goes before the job's own fence, so the OS fence
+    // of this job never arrives and the OS timeout of node 1 starts the recovery.
+    labHangAddr = bc250_sdma_fence_addr(gfx->PagingDevicePtr, BC250_PAGING_LAB_HANG_SLOT);
+    if (labHangAddr != 0 && GuardLabTakeEngineHang(1))
+    {
+        labHang = TRUE;
+        *(volatile u32*)((char*)gfx->PagingDevicePtr->sdma.fence_mem.cpu + BC250_PAGING_LAB_HANG_SLOT*8u) = 0;
+        KeMemoryBarrier();
+    }
+#endif
     KeAcquireSpinLock(&gfx->Sdma0RingLock, &irql);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     labBefore = (u64)ring->wptr << 2;         // where this submission starts, under the lock, before any padding
 #endif
     count = dwords + bc250_sdma_fence_size(ring, AMDGPU_FENCE_FLAG_INT);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    if (labHang) count += BC250_SDMA_MEM_WAIT_DW;
+#endif
     GfxSdmaBoundaryLocked(Device, ring, count, &boundary);
     result = amdgpu_ring_alloc(ring, count);
     if (result == 0)
@@ -4896,6 +5048,10 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
         KeMemoryBarrier();
         if (!PagingPrivateVisitMixed(PrivateData,PrivateBytes,Start,ByteCount,VirtualAddress,PagingWriteRing,ring))
             result = -1;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        else if (labHang && bc250_sdma_emit_mem_wait(ring, labHangAddr, BC250_PAGING_LAB_HANG_VALUE, 0xFFFFFFFFu) != 0)
+            result = -1;
+#endif
         else result = bc250_sdma_emit_fence(ring, fenceAddr, seq, AMDGPU_FENCE_FLAG_INT);
     }
     if (result != 0)
@@ -4922,6 +5078,9 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
     GfxLogBoundary(&boundary, seq);
     GfxLogPagingSubmit(gfx, dwords, Start, seq);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    if (labHang)
+        GuardLog("gfx: lab paging hang: seq %lu waits on SDMA fence slot %u for 0x%X, which nothing writes (row Q5)",
+                 seq, BC250_PAGING_LAB_HANG_SLOT, BC250_PAGING_LAB_HANG_VALUE);
     // BD-235: one receipt at the first paging submission whose 64-bit byte write pointer crosses bit 31, one at
     // bit 32, with this submission as the pending one. Read after the doorbell: the engine may already be at it.
     // Only paging submissions are measured. Under FullWddm no escape writes SDMA0 (display.c admission, gate

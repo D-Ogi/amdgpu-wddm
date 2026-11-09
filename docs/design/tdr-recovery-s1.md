@@ -6,7 +6,7 @@ Status: implemented, not measured on the lab. This page is stage S1 of the
 
 Before S1, `DxgkDdiResetFromTimeout` failed every time, so every adapter-wide reset ended in bug check
 0x116. S1 lets the call succeed in one case: no engine of this driver has work. In every other case the
-call fails as before. S1 resets no hardware.
+call fails as before. S1 resets no whole engine block. Since tester.38, mode 2 first resets the queue of each ring that the wave kill did not retire. Then it reads the witnesses ([queue-reset.md](queue-reset.md) section 13).
 
 ## Sources
 
