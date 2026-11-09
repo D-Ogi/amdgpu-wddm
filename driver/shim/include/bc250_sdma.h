@@ -174,6 +174,7 @@ void bc250_sdma_fence_page_free(struct amdgpu_device *adev);
  * is not allocated or the slot is out of range. */
 u64 bc250_sdma_fence_addr(struct amdgpu_device *adev, unsigned int slot);
 u64 bc250_sdma_fence_read(struct amdgpu_device *adev, unsigned int slot);
+int bc250_sdma_fence_write(struct amdgpu_device *adev, unsigned int slot, u64 value);
 
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 /* BD-235 lab experiment, lab flavour only: the byte pointer the paging ring (SDMA0 GFX queue) starts at on its

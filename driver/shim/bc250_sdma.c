@@ -1414,6 +1414,18 @@ u64 bc250_sdma_fence_read(struct amdgpu_device *adev, unsigned int slot)
 	return *(volatile u64 *)((char *)adev->sdma.fence_mem.cpu + (size_t)slot * 8u);
 }
 
+/* The CPU write of a fence slot, the SDMA twin of bc250_gfx_fence_write(). For a queue reset only:
+ * the ring restarts empty, so no packet will ever write the sequences that it held, and the slot
+ * takes the newest one (amdgpu_fence_driver_force_completion() in amdgpu_sdma_reset_engine() does
+ * the same for the fences of the reset ring). */
+int bc250_sdma_fence_write(struct amdgpu_device *adev, unsigned int slot, u64 value)
+{
+	if (adev == NULL || adev->sdma.fence_mem.cpu == NULL || slot >= BC250_SDMA_FENCE_SLOTS)
+		return BC250_EINVAL;
+	*(volatile u64 *)((char *)adev->sdma.fence_mem.cpu + (size_t)slot * 8u) = value;
+	return 0;
+}
+
 /* sdma_v5_0.c:1012 sdma_v5_0_ring_test_ring(). One WRITE_LINEAR of a single dword into a slot the
  * driver can read, then poll it. The value the engine has to overwrite is put there first, so a
  * slot that already held the answer cannot pass the test.

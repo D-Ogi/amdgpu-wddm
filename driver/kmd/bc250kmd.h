@@ -749,7 +749,9 @@ BOOLEAN GuardLabGdiEngineOnly(void);
 // BD-223: the LabScaledPlane bits read at DriverEntry in the lab flavour; 0 in the release flavour. Any IRQL.
 ULONG GuardLabScaledPlane(void);
 // Stage 2 of the hang recovery: 1 when the lab flavour read LabQueueReset 1 at DriverEntry; 0 in the release
-// flavour. Any IRQL.
+// flavour. Any IRQL. BC250_LAB_QRESET_ENGINE_OFF (LabQueueReset 2, lab flavour, queue-reset.md row Q6): ResetEngine
+// runs no stage 2 on any node, so the hang goes on to ResetFromTimeout.
+#define BC250_LAB_QRESET_ENGINE_OFF 2u
 void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject);
 ULONG GuardLabQueueReset(void);
 // BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
@@ -1272,6 +1274,11 @@ ULONG GfxComputeSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULON
 // BC250_HANG_VERDICT_QUEUE_RESET, or BC250_HANG_VERDICT_QUEUE_RESET_FAILED with *Step set. Opens no gate.
 ULONG GfxQueueReset(_Inout_ BC250_DEVICE* Device, ULONG Vmid, BOOLEAN Compute, _Out_ ULONG* Step,
                     _Out_ ULONG* Micros);
+// The node-1 half (queue-reset.md section 13): reset the SDMA0 queue that carries the paging ring, with amdgpu's
+// sdma_v5_0 stop, soft reset and restore (bc250_sdma_reset_retained_instance), prove it with one ring test, and
+// advance the paging fence slot to PagingSubmitSeq. PASSIVE_LEVEL, from DxgkDdiResetFromTimeout with node 1 closed.
+// Same return values as GfxQueueReset; *Step is a BC250_SDMA_QRESET_STEP_* value (queue_reset.h). Opens no gate.
+ULONG GfxPagingQueueReset(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Step, _Out_ ULONG* Micros);
 BOOLEAN GfxComputeFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value);
 BOOLEAN GfxComputeReopenAfterAbort(_Inout_ BC250_DEVICE* Device);
 BOOLEAN GfxComputeNodeGate(_In_ const BC250_DEVICE* Device);

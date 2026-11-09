@@ -207,6 +207,43 @@ int main(void)
     CHECK(r.attempts == r.recovered + r.notDrained + r.refused + 1 && r.lastVerdict == 0);
     CHECK(BC250_HANG_PATH_ENGINE != BC250_HANG_PATH_ADAPTER);
 
+    /* The queue resets inside ResetFromTimeout (BD-180 point 3, BD-188). The BC-250's capabilities, all three. */
+    {
+        const unsigned all = BC250_QRESET_CAP_COMPUTE | BC250_QRESET_CAP_GFX | BC250_QRESET_CAP_SDMA;
+        const unsigned every = BC250_ADAPTER_QRESET_GFX | BC250_ADAPTER_QRESET_SDMA | BC250_ADAPTER_QRESET_COMPUTE;
+        BC250_ADAPTER_RINGS hung = { 0, 0, 0 }, idle = { 1, 1, 1 }, pagingOnly = { 1, 1, 0 };
+
+        CHECK(Bc250QueueResetCaps(0x1002u, 0x13FEu, BC250_SDMA_FW_UNKNOWN) == all);
+        CHECK(Bc250AdapterQueueResetPlan(BC250_ADAPTER_RECOVERY_KILL, all, 0, NODES, &hung, 1, 1) == every);
+        /* Mode 0 and mode 1 reset nothing: mode 1 is "succeed only on idle engines". */
+        CHECK(Bc250AdapterQueueResetPlan(BC250_ADAPTER_RECOVERY_IDLE, all, 1, NODES, &hung, 1, 1) == 0);
+        CHECK(Bc250AdapterQueueResetPlan(BC250_ADAPTER_RECOVERY_OFF, all, 1, NODES, &hung, 1, 1) == 0);
+        /* A ring that retired by itself gets no reset. */
+        CHECK(Bc250AdapterQueueResetPlan(BC250_ADAPTER_RECOVERY_KILL, all, 0, NODES, &idle, 1, 1) == 0);
+        CHECK(Bc250AdapterQueueResetPlan(BC250_ADAPTER_RECOVERY_KILL, all, 0, NODES, &pagingOnly, 1, 1) ==
+              BC250_ADAPTER_QRESET_SDMA);
+        /* No VMID of a head job: the KIQ resets have nothing to name. SDMA0 needs none. */
+        CHECK(Bc250AdapterQueueResetPlan(BC250_ADAPTER_RECOVERY_KILL, all, 0, NODES, &hung, 0, 0) ==
+              BC250_ADAPTER_QRESET_SDMA);
+        /* The nodes the adapter has: one node (no paging node) resets the GFX queue only. */
+        CHECK(Bc250AdapterQueueResetPlan(BC250_ADAPTER_RECOVERY_KILL, all, 0, 1u, &hung, 1, 1) ==
+              BC250_ADAPTER_QRESET_GFX);
+        CHECK(Bc250AdapterQueueResetPlan(BC250_ADAPTER_RECOVERY_KILL, all, 0, 2u, &hung, 1, 1) ==
+              (BC250_ADAPTER_QRESET_GFX | BC250_ADAPTER_QRESET_SDMA));
+        /* A device without the capability: nothing, and an unknown device has none (queue_reset_caps.h). */
+        CHECK(Bc250AdapterQueueResetPlan(BC250_ADAPTER_RECOVERY_KILL, 0, 1, NODES, &hung, 1, 1) == 0);
+        CHECK(Bc250AdapterQueueResetPlan(BC250_ADAPTER_RECOVERY_KILL, BC250_QRESET_CAP_COMPUTE | BC250_QRESET_CAP_GFX,
+                                         0, NODES, &hung, 1, 1) ==
+              (BC250_ADAPTER_QRESET_GFX | BC250_ADAPTER_QRESET_COMPUTE));
+        CHECK(Bc250AdapterQueueResetPlan(BC250_ADAPTER_RECOVERY_KILL, all, 0, NODES, 0, 1, 1) == 0);
+
+        /* The paging queue at the commit: released only when the ring retired and no packet is on the hardware. */
+        CHECK(Bc250AdapterPagingQueueRelease(1, 0));
+        CHECK(!Bc250AdapterPagingQueueRelease(0, 0));
+        CHECK(!Bc250AdapterPagingQueueRelease(1, 1));
+        CHECK(!Bc250AdapterPagingQueueRelease(0, 1));
+    }
+
     printf("PASS: adapter recovery switch, idle witnesses per sample and register (SDMA0 pointers only with the paging "
            "ring in use, all-ones busy), read-list admission of every witness, all-or-nothing begin, fence advance, "
            "commit and restart, window outcome, and the adapter path's record counters\n");

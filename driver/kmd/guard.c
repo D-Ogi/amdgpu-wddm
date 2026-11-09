@@ -479,7 +479,9 @@ BOOLEAN GuardLabPowerDownFault(ULONG Step)
 // of LabScaledPlane above. LabQueueReset (REG_DWORD, Parameters, read only at DriverEntry): 1 lets ResetEngine reset
 // the queue of node 0 (GFX) through the KIQ when the stage-1 wave kill did not drain. Any other value, absent or
 // not a REG_DWORD is 0, which keeps node 0 at stage 1 only. Node 2 takes stage 2 in both flavours without the
-// selector since the lab Q2 trials of 2026-11-04 (hang_recovery.h, Bc250QueueResetWanted).
+// selector since the lab Q2 trials of 2026-11-04 (hang_recovery.h, Bc250QueueResetWanted). Since tester.38 node 0
+// does too (BC250_QRESET_GFX_DEFAULT 1, BD-180 point 3): the selector then has no effect, and it stays only so that
+// one constant can bring the lab-only rule back if the lab Q3 trial refutes the node-0 reset.
 static ULONG g_LabQueueReset = 0;
 
 void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject)
@@ -499,8 +501,11 @@ void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject)
         GuardLog("lab: queue reset selector absent, 0 (the default)");
         return;
     }
-    g_LabQueueReset = (NT_SUCCESS(status) && value == 1) ? 1 : 0;
+    // 2 (lab row Q6): ResetEngine runs no stage 2 on any node, so a hang that stage 1 does not drain goes on to
+    // ResetFromTimeout and its queue resets (queue-reset.md section 13).
+    g_LabQueueReset = (NT_SUCCESS(status) && (value == 1 || value == BC250_LAB_QRESET_ENGINE_OFF)) ? value : 0;
     GuardLog("lab: queue reset selector read (value 0x%lX, 0x%08X): stage 2 %s", value, status,
+             g_LabQueueReset == BC250_LAB_QRESET_ENGINE_OFF ? "off in ResetEngine (row Q6)" :
              g_LabQueueReset ? "on" : "off");
 }
 // BD-295 lab arm, lab flavour only: LabCpuRevertFault (REG_DWORD, Parameters, read only at DriverEntry) is the bit

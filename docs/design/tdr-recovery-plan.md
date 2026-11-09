@@ -178,7 +178,7 @@ The open 0x116 cases fall into three classes:
   The gfx10.1 field header in `ref/linux-src` defines `SOFT_RESET_CPC`, `SOFT_RESET_CPF` and
   `SOFT_RESET_CPG` for `GRBM_SOFT_RESET`. The comment is wrong for this part. This page does not change
   the code.
-- `bc250_sdma_reset_retained_instance` (`driver/shim/bc250_sdma.c:818`) has no caller.
+- `bc250_sdma_reset_retained_instance` (`driver/shim/bc250_sdma.c`) had no caller until tester.38. Now `GfxPagingQueueReset` calls it from `ResetFromTimeout` ([queue-reset.md](queue-reset.md) section 13).
 - The KMD maps the GFX queue through the KIQ at bring-up (`driver/shim/bc250_gfx.c:1380-1466`). No
   file in `driver/kmd` uses the KIQ after bring-up.
 

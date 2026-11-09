@@ -75,20 +75,22 @@ The lab trials of section 8 measure those two.
 ## 4. Where it runs
 
 - In `ResetEngine` (wddm.c), when the stage-1 kill loop returns `NOT_DRAINED` and `HangRecoveryMode` is not 0:
-  for node 2 in both flavours, and for node 0 only in the lab flavour with `LabQueueReset` 1
-  (`Bc250QueueResetWanted`).
+  for node 2 and node 0 in both flavours, when the device has that queue reset (`Bc250QueueResetWanted`,
+  section 12). Until tester.38 node 0 needed the lab selector `LabQueueReset` 1. Since 2026-11-08,
+  BD-180 point 3 closes in tester.38, so `BC250_QRESET_GFX_DEFAULT` is 1. If the lab trial Q3 refutes the
+  node-0 reset, that one constant brings the lab-only rule back.
   dxgkrnl calls `ResetEngine` at PASSIVE_LEVEL in first-level synchronization, so no other DDI of the adapter runs.
-- In `ResetFromTimeout`, before the S1 witnesses, for each of node 0 and node 2 whose ring has an unretired
-  sequence and whose stage-1 record of this TDR says `NOT_DRAINED`. S1 then reads its witnesses again and keeps
-  its rule: success only when they prove idle.
+- In `ResetFromTimeout` (since tester.38, section 13), in `AdapterRecoveryMode` 2, after the S1 wave kills and
+  before the S1 witnesses: the queue reset of each ring that still has an unretired sequence (nodes 0 and 2 through
+  the KIQ, node 1 through SDMA0). S1 then reads its witnesses and keeps its rule: success only when they prove idle.
 - The selector of node 0 is `LabQueueReset` (REG_DWORD under Parameters, read at DriverEntry, lab flavour only,
   the pattern of `LabScaledPlane`), not a value 2 of `HangRecoveryMode`. A new allowed value of a catalog setting
   changes the catalog identity, and a KMD of another catalog fails to begin over the installed package. Node 2
   needs no new setting: it follows `HangRecoveryMode`, which the catalog already has. `HangRecoveryMode` 0 turns
   stage 2 off for both nodes.
-- The first code runs stage 2 in `ResetEngine` only. The `ResetFromTimeout` half is the next step, after Q2 and Q3
-  show the `ResetEngine` half on the lab.
-- Node 1 (paging, SDMA) is out of scope. That is stage S3.
+- Node 1 (paging, SDMA) has no reset in `ResetEngine`: dxgkrnl follows an engine reset that affects a paging packet
+  with an adapter-wide reset (tdr-changes-in-windows-8.md, step 9), so `ResetEngine` refuses node 1 and
+  `ResetFromTimeout` resets SDMA0 (section 13).
 
 ## 5. Order of operations
 
@@ -217,8 +219,11 @@ other tests do.
 | GartLock, the gfx sequence, the wave proof, the VMID (`GfxQueueReset`) | `driver/kmd/gfx.c` |
 | The pure decisions (`Bc250QueueResetWanted`, `Bc250QueueResetWaveProof`, `Bc250VmidForget`) | `driver/kmd/hang_recovery.h`, `queue_reset.h`, `vmid_pool.h` |
 | The call after stage 1, the verdicts `QUEUE_RESET` (11) and `QUEUE_RESET_FAILED` (12) | `driver/kmd/wddm.c`, `hang_recovery.h` |
-| The selector `LabQueueReset` | `driver/kmd/guard.c`, `entry.c` |
-| Host checks, with negative controls | `driver/shim/test/queue_reset.c`, `driver/kmd/test/queue_reset_test.c` |
+| The selector `LabQueueReset` (no effect while `BC250_QRESET_GFX_DEFAULT` is 1) | `driver/kmd/guard.c`, `entry.c` |
+| The capability table by IP version (section 12) | `driver/kmd/queue_reset_caps.h` |
+| The queue resets of `ResetFromTimeout` (section 13) | `driver/kmd/wddm.c` (`WddmAdapterQueueResets`), `adapter_reset.h` |
+| The SDMA0 queue reset (`GfxPagingQueueReset`, `bc250_sdma_reset_retained_instance`) | `driver/kmd/gfx.c`, `driver/shim/bc250_sdma.c` |
+| Host checks, with negative controls | `driver/shim/test/queue_reset.c`, `driver/shim/test/sdma_faults.c` (cases 7a to 7d), `driver/kmd/test/queue_reset_test.c`, `driver/kmd/test/adapter_reset_test.c` |
 
 `CP_GFX_HQD_ACTIVE` and `CP_GFX_HQD_WPTR` are on the Gfx table of `gen_regs.py` as read-only witnesses. A failed
 stage 2 writes `QUEUE_RESET_FAILED` with the failed step in `LastSeq`: the steps of `enum bc250_qreset_step`, 9 for
@@ -236,7 +241,7 @@ the wave proof, 10 for a register that the gfx sequence refused.
   resubmits. To be checked by the fence counters of Q2 to Q4.
 - Node 0: a Windows client that makes a GFX CP-side wait (Q3) does not exist yet. The 3DMark fault of Q4 was fixed
   with the residency hold of tester.36, so it does not hang node 0 any more.
-- The `ResetFromTimeout` half of section 4 is not implemented.
+- The `ResetFromTimeout` half of section 4 is implemented (section 13). It is not measured on the lab yet.
 
 ## 11. Lab results (2026-11-04)
 
@@ -251,3 +256,69 @@ Evidence: [2026-11-04-queue-reset-q2](../../evidence/windows/2026-11-04-queue-re
 
 The HQD witness shows the select of the right HQD (`CP_HQD_PQ_BASE` equals the ring base shifted by 8) and a CP
 inside an indirect buffer (IB read pointer `0x56`).
+
+## 12. Which device has which queue reset
+
+The driver is to serve other AMD GPUs later, so the reset path does not assume the BC-250. `queue_reset_caps.h`
+keeps two masks per IP version and runs only their intersection:
+
+- What amdgpu declares (`AMDGPU_RESET_TYPE_PER_QUEUE` in the `sw_init` of each IP block, ref/linux-src 7d0a66e4b).
+  GC 10.x: compute and GFX queues (gfx_v10_0.c:4955-4961). SDMA 5.0: 5.0.0, 5.0.2 and 5.0.5 with SDMA firmware 35 or
+  newer (sdma_v5_0.c:1425-1433). SDMA 5.2: 5.2.0 to 5.2.4 with firmware 76 or newer, 5.2.5 with 34 or newer.
+- What this driver implements. The shim has the KIQ resets of gfx_v10_0 for GC 10.1 and 10.3 and the SDMA register
+  sequence of sdma_v5_0. SDMA 5.2 has another register layout that is not imported, so a 5.2 part has no SDMA
+  queue reset until it is.
+
+The device is found by its PCI id (configuration dword 0, as cumode.c reads it) in a table of known parts with their
+IP versions. A device that is not in the table has no queue reset: `ResetEngine` and `ResetFromTimeout` then
+behave as before tester.38. The WDDM initialization logs the result (`queue resets for PCI 1002:13FE: caps 0x7`).
+
+One deviation from amdgpu, with its evidence: SDMA 5.0.1 (the BC-250) is not in amdgpu's list. Fact M943 measured
+`sdma_v5_0_reset_queue` on SDMA0 of unit A (stop, soft reset and restore in 1.2 ms, later copies passed). The
+capability is therefore a measured entry of the BC-250 row, not a rule for SDMA 5.0.1. The SDMA firmware version is
+not read today (`BC250_SDMA_FW_UNKNOWN`), so no firmware-gated entry of another part passes until it is.
+
+## 13. The queue resets of ResetFromTimeout (BD-180 point 3, BD-188)
+
+Before tester.38, `ResetFromTimeout` ran the S1 wave kill and then the witnesses. A ring that the kill could not
+drain (a CP-side wait, a CP stalled on a fault) and a paging packet that SDMA0 did not finish ended in the refusal,
+then bugcheck 0x116. On 2026-10-19 (BD-188) that was the chain: `ResetEngine` refused twice, then
+`ResetFromTimeout` logged "GPU memory access not proven stopped".
+
+The order inside `WddmAdapterReset` is now:
+
+1. Close every node, retire what arrived late, begin the reset on every node (unchanged).
+2. Mode 2: the stage-1 wave kill on nodes 0 and 2 (unchanged).
+3. Mode 2: `WddmAdapterQueueResets`. For each ring whose newest sequence did not retire, and only where the device
+   has that reset (`Bc250AdapterQueueResetPlan`):
+   - node 0: `GfxQueueReset` of the GFX queue for the VMID of the head job (5.2).
+   - node 2: `GfxQueueReset` of the compute queue for the VMID of the head job (5.1, with the fallback of 5.3).
+   - node 1: `GfxPagingQueueReset`. It runs `bc250_sdma_reset_retained_instance` on SDMA0 (stop, GRBM soft reset
+     of SDMA0, check that it is stopped and frozen, clear the ring and its write-back slots, restart with
+     `sdma_v5_0_gfx_resume_instance`), then one ring test, as `amdgpu_ring_test_helper` does after a restart.
+     After both pass, the paging fence slot takes `PagingSubmitSeq`, and the paging drain completes the packet that
+     the hardware had. SDMA1 is not touched: it carries no WDDM node.
+4. The witnesses (unchanged): every ring retired, three register samples with GRBM, CP, CPC and SDMA0 idle. A queue
+   reset that failed leaves its ring unretired, so the old refusal follows. A failed SDMA0 reset after its first
+   register write sets `GpuStopUnconfirmed` (section 7).
+5. The commit. A paging job that was queued and never ran no longer refuses the reset
+   (`Bc250AdapterPagingQueueRelease`). The adapter-reset contract advances the last completed fence of every node to
+   the last submitted one, and VidMm then purges all allocations from VRAM
+   (timeout-detection-and-recovery.md), so the queued transfers are covered. Only the queue links are released. The
+   payload belongs to the OS. A packet that is still on SDMA0 is a refusal, as before.
+
+Deviations from amdgpu, each named in the code:
+
+- `bc250_sdma_reset_retained_instance` went on to the pulse only for an engine that froze. `amdgpu_sdma_reset_engine`
+  ignores the result of `stop_kernel_queue` and resets the engine anyway, because a hung engine does not freeze.
+  The helper now follows amdgpu and keeps the stop result in the receipt (`stop_result`). The second quiescence
+  after the pulse must still pass before any memory changes.
+- amdgpu re-submits the jobs that the reset did not cancel. This driver re-submits nothing: the WDDM contract
+  advances the fences instead.
+- amdgpu serializes with its scheduler. Here every node is closed, `GartLock` holds off every other register
+  sequence, and `Sdma0RingLock` covers the ring-test push.
+
+Host checks: `queue_reset_test.c` (the caps table and its firmware gates, the node rules, the SDMA steps that leave
+the engine unconfirmed), `adapter_reset_test.c` (the plan, the paging release), `sdma_faults.c` cases 7a to 7d (a
+hung engine reaches the pulse, a hang that survives it changes no memory, and a refused safe-mode scope changes no
+register). Each has negative controls in `tools/quality/quick.ps1`. The lab trials are Q3, Q5 and Q6 of section 8.

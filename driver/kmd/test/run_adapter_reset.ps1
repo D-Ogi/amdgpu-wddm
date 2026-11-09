@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\adapter-reset",[switch]$LastSampleOnly,[switch]$IgnoreSdmaIdle,[switch]$PartialBegin,[switch]$CompleteNonEmptyWindow,[switch]$ReorderWitnessTable,[switch]$CommitBeforeWitness)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\adapter-reset",[switch]$LastSampleOnly,[switch]$IgnoreSdmaIdle,[switch]$PartialBegin,[switch]$CompleteNonEmptyWindow,[switch]$ReorderWitnessTable,[switch]$CommitBeforeWitness,[switch]$PlanIgnoresMode,[switch]$PlanResetsRetired,[switch]$ReleaseInFlight,[switch]$QueueResetAfterWitness,[switch]$ReleaseBeforeBusyCheck)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -12,6 +12,11 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 #   -CompleteNonEmptyWindow  the restart completes a window packet that has commands, which never ran.
 #   -ReorderWitnessTable     wddm.c's register table swaps two entries (the source check below).
 #   -CommitBeforeWitness     wddm.c opens the window before it computes the witnesses (the source check below).
+#   -PlanIgnoresMode         the queue resets of ResetFromTimeout also run in mode 1 (idle only) and mode 0.
+#   -PlanResetsRetired       the SDMA0 queue reset also runs when the paging ring retired by itself.
+#   -ReleaseInFlight         the commit releases the paging queue while a packet is still on SDMA0.
+#   -QueueResetAfterWitness  wddm.c runs the queue resets after the witnesses (the source check below).
+#   -ReleaseBeforeBusyCheck  wddm.c releases the paging queue before the busy refusal (the source check below).
 $header=Get-Content "$repo\driver\kmd\adapter_reset.h" -Raw
 if($LastSampleOnly){
     $live='    for (i = 0; i < count; i++) busy |= Bc250AdapterSampleBusy(&samples[i], sdmaRingInUse);'
@@ -32,6 +37,21 @@ if($CompleteNonEmptyWindow){
     $live='    if (nonEmpty != 0) return BC250_ADAPTER_WINDOW_CLOSE;'
     if(!$header.Contains($live)){throw 'negative control: the window close moved'}
     $header=$header.Replace($live,'    if (nonEmpty != 0) return BC250_ADAPTER_WINDOW_COMPLETE;')
+}
+if($PlanIgnoresMode){
+    $live='    if (adapterRecovery != BC250_ADAPTER_RECOVERY_KILL || rings == 0) return 0;'
+    if(!$header.Contains($live)){throw 'negative control: the mode test of the plan moved'}
+    $header=$header.Replace($live,'    if (rings == 0) return 0;' + "`n" + '    (void)adapterRecovery;')
+}
+if($PlanResetsRetired){
+    $live='    if (nodeCount > 1u && !rings->PagingRetired && (caps & BC250_QRESET_CAP_SDMA) != 0)'
+    if(!$header.Contains($live)){throw 'negative control: the SDMA0 plan moved'}
+    $header=$header.Replace($live,'    if (nodeCount > 1u && (caps & BC250_QRESET_CAP_SDMA) != 0)')
+}
+if($ReleaseInFlight){
+    $live='    return pagingRingRetired != 0 && hwPacketPending == 0;'
+    if(!$header.Contains($live)){throw 'negative control: the paging release moved'}
+    $header=$header.Replace($live,'    (void)hwPacketPending;' + "`n" + '    return pagingRingRetired != 0;')
 }
 [IO.File]::WriteAllText((Join-Path $Out 'adapter_reset.h'),$header)
 
@@ -66,11 +86,23 @@ if($CommitBeforeWitness){
     $wddm=$wddm.Replace($live,'')
     $wddm=$wddm.Replace('    GfxRingsRetired(Device, &rings, &sdmaRingInUse);',$live + "`n" + '    GfxRingsRetired(Device, &rings, &sdmaRingInUse);')
 }
+if($QueueResetAfterWitness){
+    $live='        qresetPlan = WddmAdapterQueueResets(Device, Wddm, nodeCount, &killMicros);'
+    if(!$wddm.Contains($live)){throw 'negative control: the queue reset call moved'}
+    $wddm=$wddm.Replace($live,'')
+    $wddm=$wddm.Replace('    busy = Bc250AdapterBusyReasons(',$live + "`n" + '    busy = Bc250AdapterBusyReasons(')
+}
+if($ReleaseBeforeBusyCheck){
+    $live='    WddmReleasePreemptedPagingLocked(Wddm);'
+    if(!$wddm.Contains($live)){throw 'negative control: the paging release moved'}
+    $wddm=$wddm.Replace($live,'')
+    $wddm=$wddm.Replace('    if (busy == 0 && Wddm->Stopping) busy |= BC250_ADAPTER_BUSY_STOPPING;',$live + "`n" + '    if (busy == 0 && Wddm->Stopping) busy |= BC250_ADAPTER_BUSY_STOPPING;')
+}
 $at=$wddm.IndexOf('static BOOLEAN WddmAdapterReset(')
 if($at -lt 0){Write-Output 'FAIL source check: WddmAdapterReset is not in wddm.c';Write-Output 'test-end: source checks exit 1';exit 1}
 $end=$wddm.IndexOf("`n}",$at)
 $body=$wddm.Substring($at,$end-$at)
-$steps=@('Bc250AdapterResetBeginAll(','GfxRingsRetired(Device, &rings, &sdmaRingInUse);','busy = Bc250AdapterBusyReasons(','if (busy != 0) {','InterlockedExchange(&Wddm->AdapterResetWindow, 1);','return TRUE;')
+$steps=@('Bc250AdapterResetBeginAll(','WddmAdapterKill(Device, Wddm, BC250_WDDM_NODE_3D','qresetPlan = WddmAdapterQueueResets(','GfxRingsRetired(Device, &rings, &sdmaRingInUse);','busy = Bc250AdapterBusyReasons(','Bc250AdapterPagingQueueRelease(rings.PagingRetired, Wddm->PagingHwPending)','if (busy != 0) {','WddmReleasePreemptedPagingLocked(Wddm);','InterlockedExchange(&Wddm->AdapterResetWindow, 1);','return TRUE;')
 $pos=0
 foreach($s in $steps){
     $i=$body.IndexOf($s,$pos)

@@ -11,6 +11,7 @@
  * kill guard must agree with: 0 is the GART/system domain and 2 is SDMA paging's, so neither may ever be the
  * target of a wave kill. Naming them here instead would be a second copy of those constants. */
 #include "vmid_pool.h"
+#include "queue_reset_caps.h"
 
 /* Attempt a soft recovery only with the switch on and only for a node that runs IBs at a VMID: the 3D node
  * (ordinal 0) and the compute node (ordinal 2, docs/design/compute-node.md). The paging node (ordinal 1) is never
@@ -88,8 +89,8 @@ static __inline int Bc250KillVmidValid(unsigned vmid)
                                                    BC250_ADAPTER_BUSY_* mask, not a hardware sequence */
 #define BC250_HANG_VERDICT_QUEUE_RESET     11u  /* stage 2 (docs/design/queue-reset.md): stage 1 did not drain, the
                                                  * KIQ reset the queue, a ring test passed, no wave of the VMID is
-                                                 * left: reset reported, node open. Node 2 in both
-                                                 * flavours, node 0 with LabQueueReset 1 (lab). */
+                                                 * left: reset reported, node open. Nodes 0 and 2
+                                                 * in both flavours since tester.38 (Bc250QueueResetWanted). */
 #define BC250_HANG_VERDICT_QUEUE_RESET_FAILED 12u /* stage 2 failed: refused as before (0x116). LastSeq is the failed
                                                  * step, enum bc250_qreset_step of bc250_gfx.h, or 9 for the wave
                                                  * proof and 10 for a register refused by the gfx sequence. */
@@ -275,16 +276,35 @@ static __inline int Bc250HangVerdictRecovered(unsigned verdict)
            verdict == BC250_HANG_VERDICT_ABORT_REPORTED || verdict == BC250_HANG_VERDICT_QUEUE_RESET;
 }
 
-/* Stage 2 (docs/design/queue-reset.md): only after a stage-1 kill loop that did not drain, and never with
- * HangRecoveryMode 0. Node 2 (compute) in both flavours: the lab Q2 trials of 2026-11-04 recovered 3 of 3 hangs
- * that stage 1 could not drain (section 11). Node 0 (GFX) only with the lab selector (0 in the release flavour)
- * until a GFX trial has measured it. Node 1 (paging, SDMA) is stage S3. */
-static __inline int Bc250QueueResetWanted(unsigned long labQueueReset, int hangRecoveryMode, unsigned nodeOrdinal,
-                                          unsigned stage1Verdict, int killLoopRan)
+/* Stage 2 (docs/design/queue-reset.md): only after a stage-1 kill loop that did not drain, never with
+ * HangRecoveryMode 0, and only for a queue whose reset the device has (queue_reset_caps.h, BC250_QRESET_CAP_*).
+ * Node 2 (compute) in both flavours: the lab Q2 trials of 2026-11-04 recovered 3 of 3 hangs that stage 1 could
+ * not drain (section 11). Node 0 (GFX) in both flavours since tester.38 (BD-180 point 3, decided on
+ * 2026-11-08: the KIQ reset closes in tester.38): BC250_QRESET_GFX_DEFAULT. Its evidence is M944 (amdgpu's
+ * gfx_v10_0_reset_kgq on unit A under Linux) and lab trial Q3 (section 8); a failed GFX reset ends where every
+ * refusal ends (0x116), so the default changes no path that worked. When Q3 fails, this constant goes to 0 and the
+ * lab selector LabQueueReset 1 keeps the GFX half for the lab flavour, as before. Node 1 (paging, SDMA) is never
+ * reset here: dxgkrnl answers an engine reset that touched a paging packet with an adapter reset
+ * (tdr-changes-in-windows-8.md step 9), so its reset is ResetFromTimeout's (Bc250AdapterQueueResetPlan). */
+#define BC250_QRESET_GFX_DEFAULT 1u
+
+static __inline int Bc250QueueResetNodeAllowed(unsigned caps, unsigned long labQueueReset, unsigned nodeOrdinal)
+{
+    if (nodeOrdinal == 2u) return (caps & BC250_QRESET_CAP_COMPUTE) != 0;
+#if BC250_QRESET_GFX_DEFAULT
+    (void)labQueueReset;
+    if (nodeOrdinal == 0u) return (caps & BC250_QRESET_CAP_GFX) != 0;
+#else
+    if (nodeOrdinal == 0u) return (caps & BC250_QRESET_CAP_GFX) != 0 && labQueueReset == 1u;
+#endif
+    return 0;
+}
+
+static __inline int Bc250QueueResetWanted(unsigned caps, unsigned long labQueueReset, int hangRecoveryMode,
+                                          unsigned nodeOrdinal, unsigned stage1Verdict, int killLoopRan)
 {
     if (hangRecoveryMode == 0 || !killLoopRan || stage1Verdict != BC250_HANG_VERDICT_NOT_DRAINED) return 0;
-    if (nodeOrdinal == 2u) return 1;
-    return nodeOrdinal == 0u && labQueueReset == 1u;
+    return Bc250QueueResetNodeAllowed(caps, labQueueReset, nodeOrdinal);
 }
 
 /* Which counters of the record one write adds 1 to. Every attempt counts one Attempt in its first write (the

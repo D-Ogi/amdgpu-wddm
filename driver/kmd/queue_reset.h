@@ -38,4 +38,24 @@ static __inline int Bc250QueueResetKiqStep(unsigned Step)
     return Step == 2u /* UNMAP */ || Step == 4u /* VMID_RESET */ || Step == 6u /* MAP */;
 }
 
+/* The SDMA0 queue reset of DxgkDdiResetFromTimeout (queue-reset.md section 13, node 1). Its steps go into the same
+ * hang record field as the KIQ steps above, in their own range so that a log line cannot mix them up:
+ * 0x10 + enum bc250_sdma_reset_stage of bc250_sdma.h for a failure inside bc250_sdma_reset_retained_instance, then
+ * the KMD's own steps. */
+#define BC250_SDMA_QRESET_STEP_BASE      0x10u
+#define BC250_SDMA_QRESET_STEP_RING_TEST 0x17u /* the restored ring did not execute one fence write */
+#define BC250_SDMA_QRESET_STEP_SEQUENCE  0x18u /* the gfx sequence refused a register: the shim's steps are not proven */
+#define BC250_SDMA_QRESET_STEP_ARGS      0x19u /* no paging ring on this adapter, or a wrong IRQL: nothing changed */
+#define BC250_SDMA_QRESET_STEP_DONE      0x1Fu
+
+/* 1 when a failed SDMA queue reset may have left the engine in a state that nothing proves stopped. Stage 0 (NONE)
+ * is the shim's argument check, before any register access. Every later stage has touched the engine: STOP has
+ * written FREEZE and HALT, PULSE and later have reset it. A failed ring test leaves an engine that runs but did not
+ * answer. The caller then sets GpuStopUnconfirmed (section 7), so that the next stop does not trust it either. */
+static __inline int Bc250SdmaQueueResetUnconfirmed(unsigned Step)
+{
+    return Step > BC250_SDMA_QRESET_STEP_BASE && Step != BC250_SDMA_QRESET_STEP_ARGS &&
+           Step != BC250_SDMA_QRESET_STEP_DONE;
+}
+
 #endif

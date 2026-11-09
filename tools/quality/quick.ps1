@@ -837,9 +837,17 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='adapter-reset-complete-window';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-CompleteNonEmptyWindow');Fails=$true}
   @{n='adapter-reset-witness-order';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-ReorderWitnessTable');Fails=$true;Step='source checks'}
   @{n='adapter-reset-commit-first';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-CommitBeforeWitness');Fails=$true;Step='source checks'}
+  @{n='adapter-reset-plan-any-mode';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-PlanIgnoresMode');Fails=$true}
+  @{n='adapter-reset-plan-retired-ring';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-PlanResetsRetired');Fails=$true}
+  @{n='adapter-reset-release-in-flight';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-ReleaseInFlight');Fails=$true}
+  @{n='adapter-reset-qreset-after-witness';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-QueueResetAfterWitness');Fails=$true;Step='source checks'}
+  @{n='adapter-reset-release-first';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-ReleaseBeforeBusyCheck');Fails=$true;Step='source checks'}
   @{n='kmd-queue-reset';s='driver\kmd\test\run_queue_reset.ps1';a=@('-Root',$Workspace)}
   @{n='kmd-queue-reset-any-vmid';s='driver\kmd\test\run_queue_reset.ps1';a=@('-Root',$Workspace,'-AnyVmidPasses');Fails=$true}
   @{n='kmd-queue-reset-stage-first';s='driver\kmd\test\run_queue_reset.ps1';a=@('-Root',$Workspace,'-StageBeforeKill');Fails=$true;Step='source checks'}
+  @{n='kmd-queue-reset-no-measured-sdma';s='driver\kmd\test\run_queue_reset.ps1';a=@('-Root',$Workspace,'-NoMeasuredSdma');Fails=$true}
+  @{n='kmd-queue-reset-sdma-args-unconfirmed';s='driver\kmd\test\run_queue_reset.ps1';a=@('-Root',$Workspace,'-SdmaArgsUnconfirmed');Fails=$true}
+  @{n='kmd-queue-reset-gfx-lab-only';s='driver\kmd\test\run_queue_reset.ps1';a=@('-Root',$Workspace,'-GfxLabOnly');Fails=$true}
   @{n='submit-watchdog-CountUnchangedAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountUnchangedAsActivity');Fails=$true}
   @{n='submit-watchdog-CountPrimeAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountPrimeAsActivity');Fails=$true}
   @{n='submit-watchdog-CountGapAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountGapAsActivity');Fails=$true}
@@ -909,6 +917,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='sdma-copy-vmid-zero';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$Kits,'-ForceIbVmidZero');Fails=$true}
   @{n='sdma-copy-no-vm-flush';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$Kits,'-OmitVmFlush');Fails=$true}
   @{n='sdma-faults';s='driver\shim\test\run_sdma_faults.ps1';a=@('-Kits',$Kits)}
+  @{n='sdma-faults-early-stop-return';s='driver\shim\test\run_sdma_faults.ps1';a=@('-Kits',$Kits,'-EarlyStopReturn');Fails=$true}
   @{n='smu-mailbox';s='driver\shim\test\run_smu.ps1';a=@('-Root',$Workspace)}
   @{n='board-sequence';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace)}
   @{n='board-sequence-changed-point';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace,'-Mutation','gpu-point');Fails=$true;Step='compiled policy values'}
@@ -921,7 +930,6 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='hwmon';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits)}
   @{n='hwmon-board-port';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','board-port');Fails=$true}
   # The case fan's load feed-forward (rule 10 of driver\shim\include\bc250_fan.h): the first negative controls of
-  @{n='sdma-faults-early-stop-return';s='driver\shim\test\run_sdma_faults.ps1';a=@('-Kits',$Kits,'-EarlyStopReturn');Fails=$true}
   # the fan suite, because this is the rule that writes 255 to the chip by itself. Each -Mutation changes one line
   # of a copy of the file under test and the suite must then fail by a check.
   @{n='hwmon-no-boost-raise';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','no-boost-raise');Fails=$true}
