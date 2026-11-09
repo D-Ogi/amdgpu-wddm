@@ -734,14 +734,16 @@ int bc250_dpm_rate_mc_per_s(const struct bc250_dpm_governor *g, int *available);
  * or more took 9.5 s to 1700 MHz, one level per 1.5-2 s, for 56 fps against 70.7 fps from a 64 C start.
  *
  * The lane: while both BD-281 rules are on, the raw reading is under the lower of BC250_DPM_RAMP_FAST_MAX_MC (78 C)
- * and rate_from_mc, and the lead reading is under the high-clock zone's band, a raise from under high_level goes to
- * what the load asks for, up to high_level, with no ramp interval. A raise above high_level keeps the ramp. Every other
+ * and rate_from_mc, and the lead reading is under the high-clock zone's band, a raise from under the lane's top goes to
+ * what the load asks for, up to that top, with no ramp interval. The top is the lower of high_level and
+ * BC250_DPM_RAMP_FAST_TOP_MHZ (1800 MHz, the clock the analysis below measured): a DpmThermalHighZoneMHz above 1800
+ * moves the zone and not the lane. A raise from the top up keeps the ramp. Every other
  * limit of the tick stays first: the ceiling, the thermal cap, the warm zone and the high-clock band. With either
  * BD-281 rule off (DpmThermalRate 0, DpmThermalHighZoneMc 0, DpmThermalZone 0) the lane is off and the ramp is exactly
  * 0.7.203's.
  *
  * The tradeoff: a jump under 78 C is not seen in the reading before it is done. The bound is that the jump stops at
- * high_level, not at 2000 MHz, that it starts 2 C under the readings from which the rate rule and the high-clock zone
+ * 1800 MHz at most, not at 2000 MHz, that it starts 2 C under the readings from which the rate rule and the high-clock zone
  * act on its rise, and the closed-loop result: on the session 367 plant of dpm_test.c (16 C fast rise at full power,
  * steady state 86 C at 1400 MHz) a lane start peaks at most 1.2 C above the same start with the ramp, and no start
  * from 50 to 83 C puts the hot spot at 87 C or stops the lab runner (test_burst_regression). A lane up to 80 C gave
