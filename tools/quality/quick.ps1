@@ -787,6 +787,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='psp-retained-false-success';s='driver\kmd\test\run_psp_retained.ps1';a=@('-Root',$Workspace,'-PowerSuccessRefusal');Fails=$true}
   @{n='retained-gtt';s='driver\kmd\test\run_retained_gtt.ps1';a=@('-Root',$Workspace)}
   @{n='retained-power';s='driver\kmd\test\run_retained_power.ps1';a=@('-Root',$Workspace)}
+  @{n='cold-scanout';s='driver\kmd\test\run_cold_scanout.ps1';a=@('-Root',$Workspace)}
   @{n='power-coordinator';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace)}
   # BD-188: the pre-fix way down (a failed display step skips the save of the engines) and the pre-fix D0 (a refused
   # POST answer keeps the engines suspended on the connector path), one control each.
@@ -798,6 +799,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='power-coordinator-witness-ignored';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-WitnessIgnored');Fails=$true}
   @{n='power-coordinator-failed-restore-active';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-FailedRestoreActive');Fails=$true}
   @{n='power-coordinator-lost-before-witness';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-LostBeforeWitness');Fails=$true}
+  @{n='power-coordinator-no-firmware-hold';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-NoFirmwareHold');Fails=$true}
   @{n='power-loss';s='driver\kmd\test\run_power_loss.ps1';a=@('-Root',$Workspace)}
   # ResetEngine without the power-lost refusal, a fence advance in the resume of the forced pause (condition c), an IH
   # called quiet with open interrupt admission, and the display repair after an unsaved way down.

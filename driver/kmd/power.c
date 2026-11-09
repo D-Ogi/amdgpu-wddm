@@ -55,6 +55,32 @@ static BOOLEAN PowerDownStepFailed(NTSTATUS Status, ULONG Step, ULONG* Failed, N
     return TRUE;
 }
 
+// BD-341: a D0 of a start without a firmware display. The firmware can light a pipe while the GPU is in D3, for
+// example at a resume from hibernation or a fast startup with the monitor now on. That pipe scans out of the bottom of
+// VRAM, and this start gave that memory above its reserve to the connector buffer and VidMm (VramFramebufferExtent).
+// So the pipe goes black at once, with the same blank as an inherited start (DcnBeginStartVisibility: OTG0 black data,
+// sync kept), before an engine resumes. This start cannot take the pipe over: its geometry would change under the OS
+// handles, and a stop and start of the adapter is not a request that a WDDM miniport can make (dxgkrnl owns the PnP
+// IRPs and has no DDI for IRP_MN_QUERY_PNP_DEVICE_STATE). The next start of the adapter finds the pipe and keeps it.
+// docs/design/wddm-startup.md, "Start without a firmware display", and docs/design/cold-modeset.md.
+static void PowerHoldFirmwarePipe(BC250_DEVICE* Device, NTSTATUS Status, const DXGK_DISPLAY_INFORMATION* Post)
+{
+    BOOLEAN touched=FALSE;
+    NTSTATUS blank;
+    if (Bc250DisplayStartClassify(Status, Post->Width, Post->Height, Post->Pitch,
+            (ULONGLONG)Post->PhysicAddress.QuadPart) != BC250_DISPLAY_START_INHERITED) {
+        GuardLog("power: D0 without a firmware display; POST answer 0x%08X %ux%u, nothing to restore",
+                 (ULONG)Status, Post->Width, Post->Height);
+        return;
+    }
+    blank=DcnBeginStartVisibility(Device,&touched);
+    InterlockedIncrement(&Device->FirmwarePipesHeld);
+    GuardLog("power: D0 found a firmware display %ux%u pitch %u address %llX on a start without one",
+             Post->Width, Post->Height, Post->Pitch, (ULONGLONG)Post->PhysicAddress.QuadPart);
+    GuardLog("power: firmware display held black 0x%08X written %u; the next adapter start keeps it",
+             (ULONG)blank, (UINT)touched);
+}
+
 static NTSTATUS PowerRestoreDisplay(BC250_DEVICE* Device)
 {
     DXGK_DISPLAY_INFORMATION post;
@@ -87,11 +113,9 @@ static NTSTATUS PowerRestoreDisplay(BC250_DEVICE* Device)
         }
     }
     // BD-341: a start without a firmware display kept no inherited mode, so there is no geometry to compare and no
-    // timing to validate. A display that the firmware lit while the GPU was in D3 is not adopted here: Post stays zero
-    // for the whole start, as the start contract says (docs/design/wddm-startup.md).
+    // timing to validate. Post stays zero for the whole start, as the start contract says (docs/design/wddm-startup.md).
     if (Device->DisplayStart == BC250_DISPLAY_START_NO_POST) {
-        GuardLog("power: D0 without a firmware display; POST answer 0x%08X %ux%u, nothing to restore",
-                 (ULONG)status, post.Width, post.Height);
+        PowerHoldFirmwarePipe(Device, status, &post);
         Device->SourceVisible=FALSE;    // as after every D0: the OS asks for visibility again
         return STATUS_SUCCESS;
     }

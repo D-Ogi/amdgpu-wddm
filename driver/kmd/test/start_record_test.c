@@ -312,6 +312,8 @@ typedef struct {
     LONG RuntimePostValid,RuntimeDisplayChanged;
     BOOLEAN SourceVisible, DcnWriteEnabled, PostDisplayStopAttempted;
     unsigned long DisplayStart;
+    ULONG ColdScanoutBytes;
+    volatile LONG FirmwarePipesHeld;
     LONG StartVisibilityPending;
     NTSTATUS PostDisplayStopStatus;
 } BC250_DEVICE;
@@ -420,7 +422,9 @@ static void Snap(PCWSTR name, PWSTR out, SIZE_T room)
 // BD-341: how often each display step of the inherited path ran, so that a start without a firmware display can show
 // that it ran none of them.
 static unsigned fbMaps, timingCalls, modesetCalls, audioCalls, coldPipeLogs;
-static void ModesetLogColdPipe(BC250_DEVICE* d) { (void)d; coldPipeLogs++; }
+/* The cold pipe read answers amdgpu's firmware scan-out size; this value stands for one. */
+#define COLD_SCANOUT_BYTES 0x7E9000ul
+static ULONG ModesetReadColdPipe(BC250_DEVICE* d) { (void)d; coldPipeLogs++; return COLD_SCANOUT_BYTES; }
 static NTSTATUS DisplayMapFramebuffer(BC250_DEVICE* d)
 {
     (void)d;
@@ -836,6 +840,8 @@ int main(void)
                 CHECK(fbMaps == 0 && admissionCalls == 0 && blankCalls == 0);
                 CHECK(timingCalls == 0 && modesetCalls == 0 && audioCalls == 0);
                 CHECK(coldPipeLogs == (mmio ? 1u : 0u));
+                /* With BAR5 the read gives the size; without it the size is unknown and the VGA allocation is kept. */
+                CHECK(dev.ColdScanoutBytes == (mmio ? COLD_SCANOUT_BYTES : BC250_DISPLAY_START_VGA_ALLOCATION));
                 CHECK(connectorStarts == starts + 1 && readyCalls == 1 && stops == 0);
                 CHECK(outputSources == 1 && outputChildren == 1 && dev.StartVisibilityPending == 1);
                 CHECK(LoggedTimes("post display: none") == 1 && LoggedTimes("start failed") == 0);
@@ -848,6 +854,7 @@ int main(void)
         dev.Started = FALSE; dev.StopDone = TRUE;
         iface.DxgkCbAcquirePostDisplayOwnership = AcquirePost;
         CHECK(Start() == STATUS_SUCCESS && dev.DisplayStart == BC250_DISPLAY_START_INHERITED && dev.Post.Width == 1920);
+        CHECK(dev.ColdScanoutBytes == 0 && dev.FirmwarePipesHeld == 0);
     }
     // A firmware display is unchanged by BD-341: every step of the inherited path runs once, and Post is the answer.
     Reset();

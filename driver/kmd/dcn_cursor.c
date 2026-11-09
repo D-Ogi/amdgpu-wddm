@@ -424,6 +424,14 @@ BOOLEAN DcnCursorCaps(_In_ BC250_DEVICE* Device)
     return caps;
 }
 
+// BD-341: whether the cursor registers are this driver's to write at an exit. A start without a firmware display lit
+// no pipe, so until this start drove a pipe with the cursor (EverReady), the registers keep what the firmware left
+// and an exit writes none of them. A start with an inherited pipe writes the off batch: the next owner reads them.
+static BOOLEAN CursorExitWrites(_In_ const BC250_DEVICE* Device, _In_ const DCN_CURSOR* c)
+{
+    return Device->DisplayStart != BC250_DISPLAY_START_NO_POST || c->EverReady;
+}
+
 // Every exit path: the start's failure, StopDevice, the post-display release, DcnStop. The cursor goes off and
 // nothing programs it again until the next start.
 void DcnCursorStop(_Inout_ BC250_DEVICE* Device)
@@ -436,8 +444,10 @@ void DcnCursorStop(_Inout_ BC250_DEVICE* Device)
     first = !c->Stopped;
     c->Stopped = TRUE;
     c->Ready = FALSE;
-    c->Enabled = TRUE;      // write the off batch even if the last one said off: the next owner reads these registers
-    CursorOffLocked(Device, c);
+    if (CursorExitWrites(Device, c)) {
+        c->Enabled = TRUE;  // write the off batch even if the last one said off: the next owner reads these registers
+        CursorOffLocked(Device, c);
+    }
     KeReleaseSpinLock(&c->Lock, irql);
     if (first) {
         GuardLog("cursor: stop shapes %ld refused %ld positions %ld batches %ld failed %ld", c->Shapes,
@@ -464,7 +474,7 @@ void DcnCursorRelease(_Inout_ BC250_DEVICE* Device)
 void DcnCursorOffQuiet(_Inout_ BC250_DEVICE* Device)
 {
     const DCN_CURSOR* c = CursorOf(Device);
-    if (!c || Device->Mmio == NULL) return;
+    if (!c || Device->Mmio == NULL || !CursorExitWrites(Device, c)) return;
     (void)CursorLock(Device, FALSE);
     (void)CursorUpdate(Device, BC250_REG_DMU_CURSOR0_0_CURSOR_CONTROL, CURSOR0_0_CURSOR_CONTROL__CURSOR_ENABLE_MASK, 0);
     (void)CursorUpdate(Device, BC250_REG_DMU_CNVC_CUR0_CURSOR0_CONTROL, CNVC_CUR0_CURSOR0_CONTROL__CUR0_ENABLE_MASK, 0);

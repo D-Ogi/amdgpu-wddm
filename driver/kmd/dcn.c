@@ -1184,7 +1184,16 @@ NTSTATUS DcnBeginStartVisibility(_Inout_ BC250_DEVICE* Device, _Out_ BOOLEAN* To
 // Only a confirmed OS TRUE ends startup blanking; a flip is not that request.
 NTSTATUS DcnSetSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
 {
-    NTSTATUS status=DcnSetVisibilityCore(Device,Visible,TRUE,NULL);
+    NTSTATUS status;
+    // BD-341: a start without a firmware display has no pipe of its own until a runtime mode exists. The OS request
+    // then has nothing to show or hide, and it touches no register: a pipe that the firmware lit at a D0 stays black
+    // (power.c PowerHoldFirmwarePipe), and a pipe that nobody lit stays as it is.
+    if (Device->DisplayStart == BC250_DISPLAY_START_NO_POST &&
+        !InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) {
+        if (Visible) InterlockedExchange(&Device->StartVisibilityPending,0);
+        return STATUS_SUCCESS;
+    }
+    status=DcnSetVisibilityCore(Device,Visible,TRUE,NULL);
     if (NT_SUCCESS(status) && Visible) InterlockedExchange(&Device->StartVisibilityPending,0);
     return status;
 }

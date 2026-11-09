@@ -161,6 +161,8 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     device->RuntimePostValid=0;
     device->RuntimeDisplayChanged=0;
     device->DisplayStart=BC250_DISPLAY_START_UNKNOWN;  // BD-341: the acquire below sets it, before its first reader
+    device->ColdScanoutBytes=0;
+    device->FirmwarePipesHeld=0;
 
     StartHealthBegin(device,WddmFullTableSelected());
     CuModeBegin(device);
@@ -223,9 +225,11 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     MmioStart(device);      // maps nothing unless the registry gate is open; never fails the start
     if (device->DisplayStart == BC250_DISPLAY_START_NO_POST)
     {
-        // No pipe of the firmware's to hold black: record what the pipe is instead, for the cold mode set. Reads
-        // only, and only through the BAR5 mapping that MmioStart made for this start by its own gate.
-        if (device->Mmio != NULL) ModesetLogColdPipe(device);
+        // No pipe of the firmware's to hold black: record what the pipe is instead, for the cold mode set, and
+        // how much of the bottom of VRAM the firmware can still scan out of (amdgpu's rule), which the memory layout
+        // keeps clear. Reads only, and only through the BAR5 mapping that MmioStart made for this start by its own
+        // gate. With no mapping the answer is unknown, and the VGA allocation is kept clear.
+        device->ColdScanoutBytes = device->Mmio != NULL ? ModesetReadColdPipe(device) : BC250_DISPLAY_START_VGA_ALLOCATION;
     }
     else
     {
@@ -644,13 +648,17 @@ NTSTATUS Bc250QueryChildRelations(_In_ const PVOID MiniportDeviceContext,
                                   _Inout_updates_bytes_(ChildRelationsSize) PDXGK_CHILD_DESCRIPTOR ChildRelations,
                                   _In_ ULONG ChildRelationsSize)
 {
+    ULONG hpd;
     // dxgkrnl sizes the array for NumberOfChildren + 1; the terminating entry stays zeroed.
     if (ChildRelationsSize < 2 * sizeof(DXGK_CHILD_DESCRIPTOR)) return STATUS_BUFFER_TOO_SMALL;
     ChildRelations[0].ChildDeviceType = TypeVideoOutput;
-    // BD-341: the connector owns the answer (ConnectorChildHpdAware). A start without a firmware display reports a
-    // child that can see a monitor arrive, never "always connected" for a display that is not there.
+    // BD-341: the connector owns the answer (ConnectorChildHpd, display_start.h). It is what this start delivers:
+    // interrupts only with HPD armed, and a start without a firmware display reports a polled child, never "always
+    // connected" for a display that is not there.
+    hpd = ConnectorChildHpd((BC250_DEVICE*)MiniportDeviceContext);
     ChildRelations[0].ChildCapabilities.HpdAwareness =
-        ConnectorChildHpdAware((BC250_DEVICE*)MiniportDeviceContext) ? HpdAwarenessInterruptible : HpdAwarenessAlwaysConnected;
+        hpd == BC250_CHILD_HPD_INTERRUPTIBLE ? HpdAwarenessInterruptible :
+        hpd == BC250_CHILD_HPD_POLLED ? HpdAwarenessPolled : HpdAwarenessAlwaysConnected;
     ChildRelations[0].ChildCapabilities.Type.VideoOutput.InterfaceTechnology =
         ConnectorIsEnabled((BC250_DEVICE*)MiniportDeviceContext) ? D3DKMDT_VOT_DISPLAYPORT_EXTERNAL : D3DKMDT_VOT_OTHER;
     ChildRelations[0].ChildCapabilities.Type.VideoOutput.MonitorOrientationAwareness = D3DKMDT_MOA_NONE;
@@ -661,8 +669,8 @@ NTSTATUS Bc250QueryChildRelations(_In_ const PVOID MiniportDeviceContext,
         GuardLog("display: inherited child reported uid %lu hpd %u interface %u",
             ChildRelations[0].ChildUid,(UINT)ChildRelations[0].ChildCapabilities.HpdAwareness,
             (UINT)ChildRelations[0].ChildCapabilities.Type.VideoOutput.InterfaceTechnology);
-    ConnectorChildRecord((BC250_DEVICE*)MiniportDeviceContext, BC250_CHILD_EVENT_RELATIONS,
-        (BOOLEAN)(ChildRelations[0].ChildCapabilities.HpdAwareness == HpdAwarenessInterruptible), -1, STATUS_SUCCESS);
+    ConnectorChildRecord((BC250_DEVICE*)MiniportDeviceContext, BC250_CHILD_EVENT_RELATIONS, FALSE, (LONG)hpd,
+        STATUS_SUCCESS);
     return STATUS_SUCCESS;
 }
 

@@ -56,14 +56,53 @@ The start contract is now:
 | `Device->DisplayStart` (`display_start.h`) | `BC250_DISPLAY_START_INHERITED`. | `BC250_DISPLAY_START_NO_POST`, for the whole start. |
 | Start record | `DisplayStart` 1. | `DisplayStart` 2, also when the start succeeds. |
 | Framebuffer map, boot logo, sample | Done. | No map. The logo and the sample find no framebuffer and log that. |
-| Start blank and final blank | Done on OTG0. | Not done. The driver reads the pipe once and logs it (`display cold:` lines). These are reads only, and only through the BAR5 mapping that the start made by its own gate. |
+| Start blank and final blank | Done on OTG0. | Not done. The driver reads the pipe and `D1VGA_CONTROL` once and logs them (`display cold:` lines). These are reads only, and only through the BAR5 mapping that the start made by its own gate. |
 | Inherited timing, mode list, DP audio | Done. | Not done. `InheritedSignalValid` stays FALSE, and each VidPN path that needs it refuses. |
-| VRAM layout | Above the firmware framebuffer (`VramFramebufferExtent`). | The empty firmware range is at offset 0, the result that Linux `amdgpu_gmc_get_vbios_allocations` gives when no pipe is lit. |
+| VRAM layout | Above the firmware framebuffer (`VramFramebufferExtent`). | Above the range at offset 0 that the firmware can still scan out of, with the size that Linux gives (see below). |
 | Connector | Inherited or programmable route. | No HPD arm and no register write (`connector: start without a firmware display`). |
-| Child reports | As before. | `HpdAwarenessInterruptible`, not connected. |
-| D0 (`PowerRestoreDisplay`) | Compares the new POST answer with `Post`. | Logs the answer. Compares nothing and restores nothing. |
+| Child reports | As before. | `HpdAwarenessPolled`, and every `QueryChildStatus` answer is "not connected" (see below). |
+| OS visibility requests | Reach OTG0. | Touch no register, unless a runtime mode was committed. |
+| D0 (`PowerRestoreDisplay`) | Compares the new POST answer with `Post`. | Compares nothing and restores nothing. A display that the firmware lit in D3 goes black at once (see below). |
 | Stop (`DcnStop`) | Restores the firmware surface and shape. | Restores nothing, unless a runtime mode was committed. |
+| Cursor off at stop, release and bugcheck | Written. | Not written, unless a pipe of this start had the cursor. |
 | PnP release | Hands back the firmware or runtime mode. | `STATUS_NOT_SUPPORTED` with zeros, unless a runtime mode is on screen. |
+
+The VRAM reservation is the one of Linux on this part. `gmc_v10_0_get_vbios_fb_size`
+reads `D1VGA_CONTROL` through the DCN 2.0.0 header. When `D1VGA_MODE_ENABLE` is
+set, the size is `AMDGPU_VBIOS_VGA_ALLOCATION` (9 MiB). Otherwise it is the
+HUBP0 viewport height times the pitch times 4, also when the pipe is off.
+`amdgpu_gmc_get_vbios_allocations` then sets the size to 0 when less than
+8 MiB of VRAM would remain. Thus "no pipe lit" does not mean "0 bytes": an off
+pipe can keep its old HUBP0 values. The start reads the three registers once
+(`ModesetReadColdPipe`) and keeps the result in `ColdScanoutBytes`.
+`VramFramebufferExtent` applies the 8 MiB rule. When the start cannot read the
+registers (no BAR5 mapping or a refused read), it keeps 9 MiB. The connector
+buffer and its zero fill, and the VidMm segment, start above this range.
+
+The child report says what stage A delivers. Nothing is armed, so no
+indication comes, and the child is `HpdAwarenessPolled`: dxgkrnl learns the
+state only from `QueryChildStatus`. Stage A answers "not connected" every
+time, because it cannot light a pipe that the firmware did not light. A
+"connected" answer would let Windows commit a path that stays black. Stage C
+makes the poll answer the HPD sense, and it reports
+`HpdAwarenessInterruptible` only when HPD is armed (`Bc250ChildHpd` in
+`display_start.h`).
+
+The firmware can light a pipe while the GPU is in D3. Examples are a resume
+from hibernation, and a fast startup with the monitor now on. That pipe scans
+out of the bottom of VRAM, and the memory above the reservation of the start
+belongs to the connector buffer and VidMm. When the D0 POST answer has a
+display, `PowerHoldFirmwarePipe` blanks OTG0 at once with the start blank
+(black data, sync kept), before an engine resumes. It logs `power: D0 found a
+firmware display` and counts the event (`firmware pipes held` in the child
+summary). The start does not take the pipe over: that would change the
+geometry under the OS handles. A WDDM miniport cannot ask for a stop and start
+of the adapter. After `IoInvalidateDeviceState`, the PnP manager gives the device stack
+`IRP_MN_QUERY_PNP_DEVICE_STATE`, but dxgkrnl owns the PnP IRPs and has no DDI
+that lets the miniport set `PNP_DEVICE_RESOURCE_REQUIREMENTS_CHANGED`. Thus the
+monitor stays black until the next start of the adapter, which keeps the
+pipe. With fast startup, that is the next restart, not the next shutdown.
+Stage C makes this case normal: it lights the pipe as a runtime mode.
 
 No reader of the POST geometry uses a zero geometry. The readers
 that need a real display are on the inherited path, which this start does not

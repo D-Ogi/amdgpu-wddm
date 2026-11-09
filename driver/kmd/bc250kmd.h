@@ -277,6 +277,11 @@ typedef struct _BC250_DEVICE {
     // all zero, nothing is mapped, no inherited timing exists and the child reports no monitor
     // (docs/design/wddm-startup.md, "Start without a firmware display"). Set by StartDevice, constant until stop.
     ULONG DisplayStart;
+    // BD-341, NO_POST only: the bytes at VRAM offset 0 that the firmware can still scan out of, by amdgpu's rule
+    // (modeset.c ModesetReadColdPipe). VramFramebufferExtent gives them as the firmware range. 0 otherwise.
+    ULONG ColdScanoutBytes;
+    // BD-341, NO_POST only: the D0 transitions that found a pipe lit by the firmware and held it black (power.c).
+    volatile LONG FirmwarePipesHeld;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;
     BOOLEAN InheritedSignalValid;     // immutable from successful start until stop
     BOOLEAN InheritedTmds;            // validated OTG0 TMDS route; DP operations stay off on this start

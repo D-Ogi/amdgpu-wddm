@@ -20,7 +20,7 @@ param(
     [ValidateSet('', 'all', 'no-unlock-on-failure', 'spare-same-surface', 'no-latch-wait', 'stop-not-sticky',
                  'caps-ignore-link', 'ttu-unchecked', 'shape-stored-not-shown', 'gone-does-nothing',
                  'shape-refused-in-gap', 'stop-skips-off-write', 'plane-dpc-skipped', 'plane-snapshot-ignored',
-                 'plane-map-disabled')][string]$Mutation = ''
+                 'plane-map-disabled', 'no-post-exit-writes')][string]$Mutation = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,7 +35,7 @@ $mutations = [ordered]@{
     'plane-dpc-skipped' = @{ find = '(void)CursorBatchOnPlane(Device, c, FALSE, c->Current, &plane);'
         with = '(void)plane;'
         why = 'a changed plane leaves a stationary pointer in its old source coordinates' }
-    'plane-snapshot-ignored' = @{ find = 'return stable;'; with = 'return TRUE;'
+    'plane-snapshot-ignored' = @{ find = 'return stable;'; with = 'return Device->DisplayStart != 0xFFFFFFFFul || c->EverReady;'
         why = 'the plane-change DPC writes identity coordinates while the scaled shape is being published' }
     'plane-map-disabled' = @{ find = 'Plane->Map = 1;'; with = 'Plane->Map = 0;'
         why = 'the stored output position is not mapped into the new plane viewport' }
@@ -64,9 +64,12 @@ $mutations = [ordered]@{
         why = 'the cursor stays on while the pipe changes' }
     'shape-refused-in-gap' = @{ find = 'if (ready || expected) {'; with = 'if (ready) {'
         why = 'a shape that arrives during a mode change is refused and the software pointer stays' }
-    'stop-skips-off-write' = @{ find = 'c->Enabled = TRUE;      // write the off batch'
-        with = 'c->Enabled |= FALSE;      // write the off batch'
+    'stop-skips-off-write' = @{ find = 'c->Enabled = TRUE;  // write the off batch'
+        with = 'c->Enabled |= FALSE;  // write the off batch'
         why = 'the stop trusts the last batch and leaves an enable that the next owner finds' }
+    'no-post-exit-writes' = @{ find = 'return Device->DisplayStart != BC250_DISPLAY_START_NO_POST || c->EverReady;'
+        with = 'return Device->DisplayStart != 0xFFFFFFFFul || c->EverReady;'
+        why = 'BD-341: a start without a firmware display writes cursor registers of a pipe it never drove' }
 }
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath

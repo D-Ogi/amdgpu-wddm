@@ -7,6 +7,8 @@
 typedef int NTSTATUS,BOOLEAN,DEVICE_POWER_STATE,POWER_ACTION;
 typedef long LONG;
 typedef unsigned long ULONG;
+typedef unsigned long long ULONGLONG;
+typedef unsigned int UINT;
 #define TRUE 1
 #define FALSE 0
 #define PASSIVE_LEVEL 0
@@ -29,13 +31,14 @@ typedef unsigned long ULONG;
 typedef struct {int dummy;} BC250_ESCAPE_PSP;
 struct bc250_clock_report {int ready;};
 typedef struct {unsigned Width,Height,Pitch,ColorFormat;struct {long long QuadPart;}PhysicAddress;} DXGK_DISPLAY_INFORMATION;
-typedef struct {int Started,FullWddm;volatile LONG RetainedPowerPhase,RuntimeDisplayChanged;struct {int Enabled;volatile LONG Pending;} Connector;DEVICE_POWER_STATE RetainedDownState;POWER_ACTION RetainedDownAction;ULONG RetainedDownFailed,PowerWitness;BOOLEAN PowerWitnessArmed;int Smu;void*Mmio;int GfxTlbBootstrap,ModeActive,SourceVisible;DXGK_DISPLAY_INFORMATION Post;unsigned long DisplayStart;struct {void*DeviceHandle;NTSTATUS(*DxgkCbAcquirePostDisplayOwnership)(void*,DXGK_DISPLAY_INFORMATION*);}Dxgk;} BC250_DEVICE;
-static unsigned checks,failures;static char trace[128];static unsigned pos;static char failAt;static int postMismatch,allocFail;
+typedef struct {int Started,FullWddm;volatile LONG RetainedPowerPhase,RuntimeDisplayChanged;struct {int Enabled;volatile LONG Pending;} Connector;DEVICE_POWER_STATE RetainedDownState;POWER_ACTION RetainedDownAction;ULONG RetainedDownFailed,PowerWitness;BOOLEAN PowerWitnessArmed;int Smu;void*Mmio;int GfxTlbBootstrap,ModeActive,SourceVisible;DXGK_DISPLAY_INFORMATION Post;unsigned long DisplayStart;volatile LONG FirmwarePipesHeld;struct {void*DeviceHandle;NTSTATUS(*DxgkCbAcquirePostDisplayOwnership)(void*,DXGK_DISPLAY_INFORMATION*);}Dxgk;} BC250_DEVICE;
+static unsigned checks,failures;static char trace[128];static unsigned pos;static char failAt;static int postMismatch,allocFail;static int d0PostSet;static DXGK_DISPLAY_INFORMATION d0Post;
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL %u: %s\n",__LINE__,#x);}}while(0)
 static NTSTATUS note(char c){trace[pos++]=c;trace[pos]=0;return c==failAt?-9:0;}
 static int KeGetCurrentIrql(void){return 0;}
 static LONG InterlockedCompareExchange(volatile LONG*p,LONG x,LONG c){LONG old=*p;if(old==c)*p=x;return old;}
 static LONG InterlockedExchange(volatile LONG*p,LONG x){LONG old=*p;*p=x;return old;}
+static LONG InterlockedIncrement(volatile LONG*p){return ++*p;}
 static void*ExAllocatePool2(int f,size_t n,int t){(void)f;(void)t;return allocFail?NULL:malloc(n);}
 static void ExFreePoolWithTag(void*p,int t){(void)t;free(p);}
 /* A function, not an empty macro: the arguments are evaluated, as in the driver (a parameter used only in a log line is used). */
@@ -65,7 +68,9 @@ static NTSTATUS ModesetValidateInherited(BC250_DEVICE*d){(void)d;return note('v'
 static int GfxStartupResources(BC250_DEVICE*d,int on){CHECK(on&&!d->GfxTlbBootstrap);return 1;}
 static NTSTATUS WddmResumeRetained(BC250_DEVICE*d){CHECK(!d->SourceVisible);return note('w');}
 static void StartHealthResumeReady(BC250_DEVICE*d,int mode){CHECK(!d->SourceVisible&&(mode||d->Connector.Pending));(void)note('h');}
-static NTSTATUS acquire(void*handle,DXGK_DISPLAY_INFORMATION*p){BC250_DEVICE*d=handle;*p=d->Post;p->Width+=(unsigned)postMismatch;return note('d');}
+static NTSTATUS acquire(void*handle,DXGK_DISPLAY_INFORMATION*p){BC250_DEVICE*d=handle;*p=d0PostSet?d0Post:d->Post;p->Width+=(unsigned)postMismatch;return note('d');}
+/* k: the start blank on a pipe that the firmware lit at D0 (BD-341). */
+static NTSTATUS DcnBeginStartVisibility(BC250_DEVICE*d,BOOLEAN*touched){(void)d;*touched=1;return note('k');}
 static BOOLEAN ConnectorIsEnabled(BC250_DEVICE*d){return d->Connector.Enabled;}
 static NTSTATUS ConnectorResumeDisplay(BC250_DEVICE*d)
 {CHECK(d->RetainedPowerPhase==3 && strchr(trace,'d')!=NULL);return note('r');}
@@ -79,7 +84,7 @@ static void ModesetPowerDown(BC250_DEVICE*d){CHECK(d->RetainedPowerPhase==0);(vo
 static void DcnCursorPipeGone(BC250_DEVICE*d){CHECK(d->RetainedPowerPhase==0 && pos==0);(void)note('K');}
 /* ACTUAL_SOURCE */
 static void resetTrace(void){pos=0;trace[0]=0;failAt=0;}
-static void setup(BC250_DEVICE*d){memset(d,0,sizeof(*d));allocFail=0;d->Started=d->FullWddm=d->ModeActive=d->SourceVisible=1;d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;d->Post.PhysicAddress.QuadPart=1234;d->Dxgk.DeviceHandle=d;d->Dxgk.DxgkCbAcquirePostDisplayOwnership=acquire;postMismatch=0;resetTrace();}
+static void setup(BC250_DEVICE*d){memset(d,0,sizeof(*d));allocFail=0;d->Started=d->FullWddm=d->ModeActive=d->SourceVisible=1;d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;d->Post.PhysicAddress.QuadPart=1234;d->Dxgk.DeviceHandle=d;d->Dxgk.DxgkCbAcquirePostDisplayOwnership=acquire;postMismatch=0;d0PostSet=0;memset(&d0Post,0,sizeof(d0Post));resetTrace();}
 int main(void){BC250_DEVICE d;
  setup(&d);CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0&&!pos);
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0&&d.RetainedPowerPhase==2&&d.RetainedDownAction==7);
@@ -102,6 +107,19 @@ int main(void){BC250_DEVICE d;
  CHECK(strchr(trace,'d')&&!strchr(trace,'v')&&!strchr(trace,'b')&&strchr(trace,'t')&&strchr(trace,'h'));
  setup(&d);d.DisplayStart=BC250_DISPLAY_START_NO_POST;memset(&d.Post,0,sizeof(d.Post));CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='d';
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0&&d.RetainedPowerPhase==0&&!strchr(trace,'v')&&!strchr(trace,'b'));
+ CHECK(!strchr(trace,'k')&&d.FirmwarePipesHeld==0);
+ // BD-341: the firmware lit a pipe while the GPU was in D3 (hibernation or fast startup, monitor now on). It scans out
+ // of memory that this start gave away, so it goes black before any engine resumes, the hold is counted, the POST
+ // answer is not adopted (no compare, no validate, Post stays zero) and every engine comes back.
+ setup(&d);d.DisplayStart=BC250_DISPLAY_START_NO_POST;memset(&d.Post,0,sizeof(d.Post));CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();
+ d0PostSet=1;d0Post.Width=1920;d0Post.Height=1080;d0Post.Pitch=7680;d0Post.PhysicAddress.QuadPart=0x8000000000ll;
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0&&d.RetainedPowerPhase==0&&d.FirmwarePipesHeld==1);
+ CHECK(strchr(trace,'k')&&strchr(trace,'k')<strchr(trace,'t')&&strchr(trace,'k')<strchr(trace,'w')&&!strchr(trace,'v')&&!strchr(trace,'b'));
+ CHECK(d.Post.Width==0&&d.Post.PhysicAddress.QuadPart==0&&!d.SourceVisible);
+ // A failed blank is logged; the D0 still succeeds, the count still says that a firmware display was found.
+ setup(&d);d.DisplayStart=BC250_DISPLAY_START_NO_POST;memset(&d.Post,0,sizeof(d.Post));CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();
+ d0PostSet=1;d0Post.Width=1920;d0Post.Height=1080;d0Post.Pitch=7680;d0Post.PhysicAddress.QuadPart=0x8000000000ll;failAt='k';
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0&&d.RetainedPowerPhase==0&&d.FirmwarePipesHeld==1&&strchr(trace,'h'));
  // Runtime geometry bypasses all inherited POST acquisition/scaler paths.
  setup(&d);d.Connector.Enabled=1;d.RuntimeDisplayChanged=1;
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();postMismatch=1;

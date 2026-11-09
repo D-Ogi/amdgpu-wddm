@@ -139,9 +139,9 @@ BOOLEAN ConnectorIsEnabled(BC250_DEVICE* Device)
     return ReadAtomic(&Device->Connector.Enabled) != 0;
 }
 
-BOOLEAN ConnectorChildHpdAware(BC250_DEVICE* Device)
+ULONG ConnectorChildHpd(BC250_DEVICE* Device)
 {
-    return (ConnectorIsEnabled(Device) || Device->DisplayStart == BC250_DISPLAY_START_NO_POST) ? TRUE : FALSE;
+    return Bc250ChildHpd(Device->DisplayStart, ConnectorIsEnabled(Device) ? 1 : 0);
 }
 
 BOOLEAN ConnectorChildConnected(BC250_DEVICE* Device)
@@ -181,9 +181,10 @@ static const char* ChildEventText(ULONG Kind)
 
 static void ChildEventLog(const char* Label, ULONG Index, const BC250_CONNECTOR_CHILD_EVENT* E)
 {
-    GuardLog("connector: child %s %lu %s ms %lu enabled %u connected %u suspended %u gen %lu published %lu sense %ld status %08lX",
-        Label, Index, ChildEventText(E->Kind), E->Ms, (UINT)E->Enabled, (UINT)E->Connected, (UINT)E->Suspended,
-        E->Generation, E->Published, E->Sense, (ULONG)E->Status);
+    GuardLog("connector: child %s %lu %s enabled %u connected %u suspended %u",
+        Label, Index, ChildEventText(E->Kind), (UINT)E->Enabled, (UINT)E->Connected, (UINT)E->Suspended);
+    GuardLog("connector: child %s %lu %lu ms gen %lu published %lu sense %ld status %08lX",
+        Label, Index, E->Ms, E->Generation, E->Published, E->Sense, (ULONG)E->Status);
 }
 
 void ConnectorChildRecord(BC250_DEVICE* Device, ULONG Kind, BOOLEAN Connected, LONG Sense, NTSTATUS Status)
@@ -229,9 +230,12 @@ void ConnectorLogChildSummary(BC250_DEVICE* Device)
     // A live read only while the display block is powered: a retained D3 is not the time to touch DCN.
     if (InterlockedCompareExchange(&Device->RetainedPowerPhase, 0, 0) == BC250_POWER_ACTIVE)
         probe = ConnectorHpdProbe(Device, &sense, &control);
-    GuardLog("connector: child summary display-start %s enabled %u events %ld status %ld disconnected %ld indicate %ld failed %ld",
-        Bc250DisplayStartText(Device->DisplayStart), (UINT)ConnectorIsEnabled(Device), count, ReadAtomic(&c->ChildStatusCalls),
-        ReadAtomic(&c->ChildStatusDisconnected), ReadAtomic(&c->Notifications), ReadAtomic(&c->NotifyFailures));
+    GuardLog("connector: child summary display-start %s enabled %u events %ld firmware pipes held %ld",
+        Bc250DisplayStartText(Device->DisplayStart), (UINT)ConnectorIsEnabled(Device), count,
+        ReadAtomic(&Device->FirmwarePipesHeld));
+    GuardLog("connector: child summary status %ld disconnected %ld indicate %ld failed %ld",
+        ReadAtomic(&c->ChildStatusCalls), ReadAtomic(&c->ChildStatusDisconnected), ReadAtomic(&c->Notifications),
+        ReadAtomic(&c->NotifyFailures));
     GuardLog("connector: child summary hpd sense %d control %08lX status %08lX armed %d irq %ld work %ld refused %ld",
         sense, control, (ULONG)probe, c->Hpd.Armed, ReadAtomic(&c->Interrupts), ReadAtomic(&c->Workers),
         ReadAtomic(&c->Refusals));
@@ -682,7 +686,7 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
         // BD-341: no firmware display, so no inherited pipe to keep, no timing to plan from and nothing on the wire.
         // The connector writes nothing and arms nothing: a sink found now could only be lit by a cold mode set, which
         // this driver does not have yet (docs/design/wddm-startup.md, "Start without a firmware display"). The child
-        // reports a monitor that can arrive and is not there (ConnectorChildHpdAware, ConnectorChildConnected). The
+        // reports a polled child with no monitor (ConnectorChildHpd, ConnectorChildConnected). The
         // HPD line is logged as it is, read only, as the evidence for that later stage.
         int sense=0;
         unsigned long control=0;

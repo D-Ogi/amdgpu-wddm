@@ -54,6 +54,7 @@ typedef struct { LONGLONG QuadPart; } LARGE_INTEGER;
 #include "display_rotation.h"
 #include "dcn_scale.h"
 #include "dcn_cursor_shape.h"
+#include "display_start.h"
 
 typedef struct { UINT Value; } DXGK_POINTERFLAGS;
 typedef struct { ULONG VidPnSourceId; DXGK_POINTERFLAGS Flags; UINT Width, Height, Pitch; const void* pPixels; UINT XHot, YHot; }
@@ -64,6 +65,7 @@ typedef struct { ULONG VidPnSourceId; INT X, Y; DXGK_SETPOINTERPOSITIONFLAGS Fla
 typedef struct _BC250_DEVICE {
     void* Cursor;
     void* Mmio;
+    unsigned long DisplayStart;
     BOOLEAN FullWddm, DcnWriteEnabled, VidPnFlipEnabled, DcnPlaneScaled;
     void* RuntimeFramebuffer;
     ULONGLONG DisplayReservationEnd, VramLength;
@@ -171,6 +173,7 @@ static void Fresh(ULONG setting)
     memset(&device, 0, sizeof(device));
     memset(regs, 0, sizeof(regs));
     memset(vram, 0xAA, sizeof(vram));
+    device.DisplayStart = BC250_DISPLAY_START_INHERITED;
     device.Mmio = &mmioToken; device.FullWddm = device.DcnWriteEnabled = device.VidPnFlipEnabled = 1;
     device.RuntimeFramebuffer = &mmioToken; device.DisplayReservationEnd = 0x01234567ull;
     device.VramLength = 8ull << 30; device.VramPhysical.QuadPart = VRAM_BASE; device.Rotation = BC250_VPPR_IDENTITY;
@@ -420,6 +423,27 @@ static void Stop(void)
     DcnCursorRelease(&device); CHECK(unmaps == 1);
 }
 
+/* BD-341: a start without a firmware display lit no pipe. Until this start drove a pipe with the cursor, the stop, the
+ * release and the quiet off write no cursor register: the firmware's values stay. After a ready pipe, the stop writes
+ * the off batch as on an inherited start. */
+static void NoPostStop(void)
+{
+    unsigned before;
+    Fresh(1); device.DisplayStart = BC250_DISPLAY_START_NO_POST; (void)DcnCursorPrepare(&device);
+    regs[BC250_REG_DMU_CURSOR0_0_CURSOR_CONTROL / 4] |= CURSOR0_0_CURSOR_CONTROL__CURSOR_ENABLE_MASK;  /* as found */
+    before = writes; DcnCursorStop(&device);
+    CHECK(writes == before && Reg(BC250_REG_DMU_CURSOR0_0_CURSOR_CONTROL) == CURSOR0_0_CURSOR_CONTROL__CURSOR_ENABLE_MASK);
+    quiet = 1; level = 15; DcnCursorOffQuiet(&device); level = 0; quiet = 0;
+    CHECK(writes == before);
+    DcnCursorRelease(&device); CHECK(writes == before && !device.Cursor);
+    /* The same start state after a pipe of this start had the cursor: the off batch is written. */
+    Fresh(1); device.DisplayStart = BC250_DISPLAY_START_NO_POST; (void)DcnCursorPrepare(&device); Ready();
+    CHECK(SetShape(BC250_POINTER_COLOR, 32, 32, 0, 0) == STATUS_SUCCESS);
+    Move(5, 5, 1); CHECK(Enable() == 1);
+    before = writes; DcnCursorStop(&device);
+    CHECK(writes > before && Enable() == 0 && Unlocked());
+}
+
 int main(void)
 {
     Prepare();
@@ -431,6 +455,7 @@ int main(void)
     Ttu();
     FailedWrite();
     Stop();
+    NoPostStop();
     if (device.Cursor) DcnCursorRelease(&device);
     printf("dcn cursor life: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;

@@ -15,6 +15,13 @@
 // also on a NO_POST start (the cold-modeset plan), is a runtime mode: RuntimeDisplayChanged and RuntimePost, as after
 // a connector commit on an inherited start. So the cold mode set adds no state here.
 
+// What amdgpu reserves at the bottom of VRAM for the firmware when the VGA engine scans out (amdgpu.h
+// AMDGPU_VBIOS_VGA_ALLOCATION: 8 MiB for the VGA emulator and 1 MiB for its framebuffer). A NO_POST start that cannot
+// read the pipe reserves this much (modeset.c ModesetReadColdPipe, vram.c VramFramebufferExtent).
+#define BC250_DISPLAY_START_VGA_ALLOCATION (9ul * 1024ul * 1024ul)
+// amdgpu_gmc_get_vbios_allocations: no firmware reservation when it would leave less than 8 MiB of VRAM.
+#define BC250_DISPLAY_START_MIN_FREE (8ull * 1024ull * 1024ull)
+
 // The answer of DxgkCbAcquirePostDisplayOwnership as a state. A failure, or a zero in any of the four values that a
 // scan-out needs, is no display: the firmware lit nothing that this driver could keep.
 static __inline unsigned long Bc250DisplayStartClassify(long AcquireStatus, unsigned long Width, unsigned long Height,
@@ -23,6 +30,25 @@ static __inline unsigned long Bc250DisplayStartClassify(long AcquireStatus, unsi
     if (AcquireStatus < 0 || Width == 0 || Height == 0 || Pitch == 0 || Address == 0)
         return BC250_DISPLAY_START_NO_POST;
     return BC250_DISPLAY_START_INHERITED;
+}
+
+// The hot-plug capability that QueryChildRelations reports for the one child, chosen here so that the host tests can
+// check it; pnp.c gives dxgkrnl the DXGK_CHILD_DEVICE_HPD_AWARENESS value of the same name. It says what the start
+// delivers, not what the hardware could do:
+// - INTERRUPTIBLE: the connector is enabled, HPD is armed, and the hotplug worker calls DxgkCbIndicateChildStatus.
+// - POLLED: a start without a firmware display. Nothing is armed, so no indication comes; dxgkrnl learns the state
+//   only from QueryChildStatus. In stage A that answer is "not connected" every time, because this driver cannot
+//   light a pipe that the firmware did not light (docs/design/cold-modeset.md). A later stage that can light one
+//   answers the HPD sense there, and the report stays POLLED until HPD is armed.
+// - ALWAYS_CONNECTED: the static inherited path, which keeps the firmware's display for the whole start.
+#define BC250_CHILD_HPD_ALWAYS_CONNECTED 1ul
+#define BC250_CHILD_HPD_POLLED 2ul
+#define BC250_CHILD_HPD_INTERRUPTIBLE 3ul
+static __inline unsigned long Bc250ChildHpd(unsigned long State, int ConnectorEnabled)
+{
+    if (ConnectorEnabled) return BC250_CHILD_HPD_INTERRUPTIBLE;
+    if (State == BC250_DISPLAY_START_NO_POST) return BC250_CHILD_HPD_POLLED;
+    return BC250_CHILD_HPD_ALWAYS_CONNECTED;
 }
 
 static __inline const char* Bc250DisplayStartText(unsigned long State)

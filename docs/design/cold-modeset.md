@@ -103,6 +103,15 @@ evidence before the port.
    runtime mode (`RuntimeDisplayChanged`, `RuntimePost`). The DCN stop and the
    PnP release already hand back a runtime mode on a `NO_POST` start.
 
+6. A D0 whose POST answer has a display, on a `NO_POST` start, finds a pipe
+   that the firmware lit in D3 (hibernation or fast startup with the monitor
+   now on). Stage A holds it black (`PowerHoldFirmwarePipe`). Stage C lights
+   it as a runtime mode on the reserved buffer, through the same commit as
+   step 5.
+7. The child report becomes `HpdAwarenessInterruptible` when step 1 arms HPD
+   (`Bc250ChildHpd`). Until then it stays `HpdAwarenessPolled`, and the poll
+   answers the HPD sense.
+
 The display-start state does not change in stage C. A mode that the driver
 lights is a runtime mode, as after a connector commit on an inherited start.
 
@@ -113,4 +122,7 @@ lights is a runtime mode, as after a connector commit on an inherited start.
 - Lab: a boot with the monitor in standby, then the monitor wakes. The desktop
   comes up on the monitor. A boot with the monitor on is unchanged. Then a
   PnP restart and a sleep cycle in both cases.
+- Lab: a boot with the monitor in standby, then a shutdown with fast startup
+  (or a hibernation), then a power-on with the monitor on. The desktop comes
+  up on the monitor without a restart.
 - The release gates of the project apply to each change.

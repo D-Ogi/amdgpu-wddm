@@ -5191,7 +5191,7 @@ static BOOLEAN WddmMemoryLayout(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG
     limit=Device->VramLength-BC250_VRAM_TOP_RESERVED;
     // A missing BAR0 identity is not proof that the displayed POST buffer lies
     // outside VRAM. Resolve it through either verified view before admitting VidMm.
-    // BD-341: a start without a firmware display has an empty range at offset 0.
+    // BD-341: a start without a firmware display has the firmware's possible scan-out range at offset 0.
     {
         ULONGLONG bytes;
         if (!VramFramebufferExtent(Device,&fbOffset,&bytes) || fbOffset>limit || bytes>limit-fbOffset) return FALSE;

@@ -11,7 +11,7 @@ struct _BC250_DEVICE;
 // BD-341: what Windows was told about the child, and when. The log ring keeps the first 256 lines of a load and
 // wraps the rest, so the first child events of a start are kept here and printed again by the summary and the stop.
 #define BC250_CONNECTOR_CHILD_EVENTS 8u
-#define BC250_CHILD_EVENT_RELATIONS 1u      // QueryChildRelations: Connected holds the HPD awareness value
+#define BC250_CHILD_EVENT_RELATIONS 1u      // QueryChildRelations: Sense holds the reported BC250_CHILD_HPD_* value
 #define BC250_CHILD_EVENT_STATUS 2u         // QueryChildStatus: the connection answer
 #define BC250_CHILD_EVENT_INDICATE 3u       // DxgkCbIndicateChildStatus: the value and its status
 #define BC250_CHILD_EVENT_WORKER 4u         // the end of one hotplug worker run: Connected is what it publishes
@@ -93,9 +93,9 @@ NTSTATUS ConnectorReplug(struct _BC250_DEVICE* Device, ULONG* Generation, BOOLEA
 BOOLEAN ConnectorIsEnabled(struct _BC250_DEVICE* Device);
 BOOLEAN ConnectorIsConnected(struct _BC250_DEVICE* Device);
 // The child reports of QueryChildRelations and QueryChildStatus. An enabled connector answers from its published
-// sink. A start without a firmware display (BD-341) has a child that can see a monitor arrive and has none now.
-// Otherwise the static inherited path shows the firmware's display, which is always there. PASSIVE.
-BOOLEAN ConnectorChildHpdAware(struct _BC250_DEVICE* Device);
+// sink. A start without a firmware display (BD-341) has a polled child with no monitor
+// (stage A cannot light a pipe). Otherwise the static inherited path shows the firmware's display, always there. PASSIVE.
+ULONG ConnectorChildHpd(struct _BC250_DEVICE* Device);      // BC250_CHILD_HPD_* (display_start.h Bc250ChildHpd)
 BOOLEAN ConnectorChildConnected(struct _BC250_DEVICE* Device);
 // BD-341: keep and log one child event (BC250_CHILD_EVENT_*). Sense is -1 when the caller read none. PASSIVE.
 void ConnectorChildRecord(struct _BC250_DEVICE* Device, ULONG Kind, BOOLEAN Connected, LONG Sense, NTSTATUS Status);

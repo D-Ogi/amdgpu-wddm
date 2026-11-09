@@ -40,6 +40,7 @@ typedef struct {
  BOOLEAN LargePageLayout;
  struct {ULONG Pitch,Height;PHYSICAL_ADDRESS PhysicAddress;} Post;
  unsigned long DisplayStart;          /* BD-341: display_start.h */
+ unsigned long ColdScanoutBytes;      /* BD-341: what the firmware can still scan out of at VRAM offset 0 */
  volatile LONG64 UmaActiveBytes;
 } BC250_DEVICE;
 struct fake_adev {void *dev,*backend;struct {ULONGLONG mc_vram_size,real_vram_size,vram_start;} gmc;};
@@ -169,9 +170,9 @@ int main(void){
   CHECK(!off && !len && !table && !tablelen);
   d.Post.PhysicAddress=d.VramPhysical;CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
   d.Post.Height=0;CHECK(!WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
-  // BD-341: a start without a firmware display. The framebuffer range is empty at offset 0, in both views and
-  // without BAR0, so the segment starts at the bottom of VRAM, or above the display reservation when there is one.
-  // A present display with a zero size stays refused (above).
+  // BD-341: a start without a firmware display. The framebuffer range is at offset 0, in both views and without
+  // BAR0. With nothing that the firmware can scan out of it is empty, so the segment starts at the bottom of VRAM, or
+  // above the display reservation when there is one. A present display with a zero size stays refused (above).
   {
    ULONGLONG fbOffset=1,fbBytes=1;
    int bar;
@@ -185,6 +186,21 @@ int main(void){
     d.DisplayReservationEnd=4096ull*2160*4;
     CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
     CHECK(off==((4096ull*2160*4+65535ull)&~65535ull) && len>0 && table==off+len);
+    // amdgpu's firmware reservation (gmc_v10_0_get_vbios_fb_size): the segment starts above it, 64 KiB rounded.
+    d.DisplayReservationEnd=0;d.ColdScanoutBytes=BC250_DISPLAY_START_VGA_ALLOCATION;
+    CHECK(VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbOffset==0 && fbBytes==BC250_DISPLAY_START_VGA_ALLOCATION);
+    CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen) && off==BC250_DISPLAY_START_VGA_ALLOCATION);
+    d.ColdScanoutBytes=1080ul*1920ul*4ul+4;
+    CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen) && off==((1080ull*1920*4+4+65535ull)&~65535ull));
+    // None when less than 8 MiB of VRAM would remain (amdgpu_gmc_get_vbios_allocations).
+    {
+     ULONGLONG length=d.VramLength;
+     d.VramLength=64ull<<20;d.ColdScanoutBytes=(56ul<<20)+1;
+     CHECK(VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbBytes==0);
+     d.ColdScanoutBytes=56ul<<20;
+     CHECK(VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbBytes==(56ull<<20));
+     d.VramLength=length;d.ColdScanoutBytes=0;
+    }
    }
    // The flag clear with the same zero geometry is a present display of no size: refused, as before BD-341.
    init(&d,gib);CHECK(VramStart(&d)==0);memset(&d.Post,0,sizeof(d.Post));

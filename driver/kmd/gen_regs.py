@@ -303,7 +303,20 @@ EXTRA_HEADERS = {"DMU": "dcn_2_0_1_offset.h", "THM": "thm_10_0_offset.h", "CLK":
                  # BD-056: amdgpu defines the Cyan Skillfish golden TSC registers inside gfx_v10_0.c itself (no
                  # smuio header carries the _Cyan_Skillfish names), so regcalc reads them from the vendored file;
                  # the SMUIO segment bases come from cyan_skillfish_ip_offset.h as for every other IP.
-                 "SMUIO": ROOT / "driver/amdgpu-import/reference/gfx_v10_0.c"}
+                 "SMUIO": ROOT / "driver/amdgpu-import/reference/gfx_v10_0.c",
+                 # BD-341: gmc_v10_0.c reads the VGA block of the display controller through the DCN 2.0.0 header
+                 # (the DCN 2.0.1 header has no VGA block). Same DMU segment bases, other register header.
+                 "DCN200": "dcn_2_0_0_offset.h"}
+# The IP whose segment bases an EXTRA_HEADERS key uses, where the key is not itself an IP of the ip-offset header.
+IP_BASE_OF = {"DCN200": "DMU"}
+# BD-341: amdgpu_gmc_get_vbios_allocations() -> gmc_v10_0_get_vbios_fb_size(): D1VGA_CONTROL.D1VGA_MODE_ENABLE
+# decides between the VGA allocation and the HUBP0 viewport height times the pitch (both of those are on the display
+# read table already). Read only, by a start without a firmware display (modeset.c ModesetReadColdPipe).
+DCN_VGA_READ_REGISTERS = [("DCN200", "mmD1VGA_CONTROL")]
+NAMED += DCN_VGA_READ_REGISTERS
+# Field masks that no source file can take from an included header, emitted as BC250_FIELD_<name>: the header that
+# defines them is not included anywhere (dcn_2_0_0_sh_mask.h would redefine the dcn_2_0_1_sh_mask.h names).
+FIELD_MASKS = [("dcn_2_0_0_sh_mask.h", "D1VGA_CONTROL__D1VGA_MODE_ENABLE_MASK")]
 # M438/E30: 72 pre-amdgpu reads match the live SMN-backed k10temp sensor.
 # This is a read-only addition, not a permission for raw SMU messages.
 EXTRA_READS = [("THM", "mmTHM_TCON_CUR_TMP"), ("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
@@ -547,12 +560,22 @@ def regmap(maps, ip):
         header = next((h for i, h, _ in SPEC if i == ip), None) or EXTRA_HEADERS.get(ip)
         if header is None:
             sys.exit(f"no header known for IP {ip} (neither gen_probes.SPEC nor gen_regs.EXTRA_HEADERS)")
-        maps[ip] = RegMap(ip=ip, reg_header=HDR_DIR / header)
+        maps[ip] = RegMap(ip=IP_BASE_OF.get(ip, ip), reg_header=HDR_DIR / header)
     return maps[ip]
 
 
 def offset(maps, ip, name):
     return regmap(maps, ip).byte_offset(name)
+
+
+def field_mask(header, name):
+    """The value of one field-mask define of a vendored sh_mask header, exactly as the header has it."""
+    pattern = re.compile(r"^#define\s+" + re.escape(name) + r"\s+(0x[0-9A-Fa-f]+)L?\s*$")
+    for line in (HDR_DIR / header).read_text(encoding="utf-8").splitlines():
+        m = pattern.match(line)
+        if m:
+            return int(m.group(1), 16)
+    sys.exit(f"{name}: not found in {header}")
 
 
 def az_index(maps, name):
@@ -589,6 +612,8 @@ def main():
         "AFMT_GENERIC_HDR")] + [f"mmDIG0_AFMT_GENERIC_{n}" for n in range(8)]
     for ip, name in dict.fromkeys(NAMED + EXTRA_READS + audio_pairs + DISPLAY_OTHER_READS + [("DMU", n) for n in DISPLAY_NAMED + hdmi_link]):
         out.append(f"#define BC250_REG_{ip}_{name[2:]} 0x{offset(maps, ip, name):05X}ul")
+    for header, name in FIELD_MASKS:
+        out.append(f"#define BC250_FIELD_{name} 0x{field_mask(header, name):08X}ul")
     # DP audio: the Azalia endpoint's indirect indices (dpaudio.c), by name, from dcn_2_0_1_offset.h's ix defines.
     out += ["", "// Azalia endpoint indirect indices (ixAZF0ENDPOINTn_AZALIA_F0_CODEC_PIN_CONTROL_*, the same for n = 0, 1):",
             "// the value written into AZF0ENDPOINTn_AZALIA_F0_CODEC_ENDPOINT_INDEX, never a BAR5 offset."]
@@ -647,7 +672,8 @@ def main():
     dcn_allow = sorted({off for off, _ in dcn_named})
     if len(dcn_allow) != len(dcn_named):
         sys.exit("DCN_REGISTERS has two names for the same offset: gen_regs.py assumed they are all distinct")
-    dcn_allow = sorted(set(dcn_allow) | {offset(maps, "DMU", name) for name in DCN_PRIVATE_READ_REGISTERS})
+    dcn_allow = sorted(set(dcn_allow) | {offset(maps, "DMU", name) for name in DCN_PRIVATE_READ_REGISTERS}
+                       | {offset(maps, ip, name) for ip, name in DCN_VGA_READ_REGISTERS})
     if dcn_allow[-1] >= BAR5_LENGTH:
         sys.exit(f"dcn: 0x{dcn_allow[-1]:X} is beyond BAR5")
     out += ["// ADR 0011 point 3: the DCN dump's own registers (gen_regs.py's DCN_REGISTERS, tools/regcalc, ip DMU).",

@@ -17,6 +17,7 @@ typedef struct {
     unsigned DcnWriteEnabled,VramEnabled,VramWriteEnabled;
     struct {uint32_t Pitch,Height;} Post;
     unsigned long DisplayStart;     /* BD-341: display_start.h */
+    unsigned long ColdScanoutBytes; /* BD-341: what the firmware can still scan out of at the bottom of VRAM */
 } BC250_DEVICE;
 typedef int BOOLEAN;
 #define TRUE 1
@@ -101,11 +102,28 @@ int main(void)
     CHECK(ConnectorBufferPrepare(&d)==STATUS_INVALID_PARAMETER);CHECK(!maps);empty(&d);
     init(&d);d.VramPhysical.QuadPart=MAXLONGLONG-(LONGLONG)start+1;
     CHECK(ConnectorBufferPrepare(&d)==STATUS_INVALID_PARAMETER);CHECK(!maps);empty(&d);
-    /* BD-341: no firmware display. The buffer starts at the bottom of VRAM; the reservation ends right after it. */
+    /* BD-341: no firmware display. With no firmware scan-out to keep clear, the buffer starts at the bottom of VRAM and
+     * the reservation ends right after it. */
     init(&d);d.DisplayStart=BC250_DISPLAY_START_NO_POST;d.Post.Pitch=0;d.Post.Height=0;
     CHECK(ConnectorBufferPrepare(&d)==STATUS_SUCCESS);CHECK(maps==1&&zeros==1);
     CHECK(mappedPhysical.QuadPart==d.VramPhysical.QuadPart&&d.DisplayReservationEnd==CONNECTOR_BUFFER_BYTES);
     ConnectorBufferRelease(&d);
+    /* The VGA allocation (VGA engine on, or a pipe that could not be read): the buffer and its zero fill start above it. */
+    init(&d);d.DisplayStart=BC250_DISPLAY_START_NO_POST;d.Post.Pitch=0;d.Post.Height=0;
+    d.ColdScanoutBytes=BC250_DISPLAY_START_VGA_ALLOCATION;
+    CHECK(ConnectorBufferPrepare(&d)==STATUS_SUCCESS);CHECK(maps==1&&zeros==1);
+    CHECK(mappedPhysical.QuadPart==d.VramPhysical.QuadPart+(LONGLONG)BC250_DISPLAY_START_VGA_ALLOCATION);
+    CHECK(d.DisplayReservationEnd==BC250_DISPLAY_START_VGA_ALLOCATION+CONNECTOR_BUFFER_BYTES);
+    ConnectorBufferRelease(&d);
+    /* An off pipe whose HUBP0 still holds 1080 lines of 1920: amdgpu keeps them, so does the layout (64 KiB rounded). */
+    init(&d);d.DisplayStart=BC250_DISPLAY_START_NO_POST;d.Post.Pitch=0;d.Post.Height=0;d.ColdScanoutBytes=1080ul*1920ul*4ul;
+    CHECK(ConnectorBufferPrepare(&d)==STATUS_SUCCESS);
+    CHECK(mappedPhysical.QuadPart==d.VramPhysical.QuadPart+(LONGLONG)((1080ull*1920*4+65535)&~65535ull));
+    ConnectorBufferRelease(&d);
+    /* amdgpu reserves nothing when less than 8 MiB would remain. */
+    init(&d);d.DisplayStart=BC250_DISPLAY_START_NO_POST;d.Post.Pitch=0;d.Post.Height=0;
+    d.VramLength=(ULONGLONG)BC250_DISPLAY_START_VGA_ALLOCATION+(8ull<<20)-1;d.ColdScanoutBytes=BC250_DISPLAY_START_VGA_ALLOCATION;
+    ULONGLONG o,b;CHECK(VramFramebufferExtent(&d,&o,&b)&&o==0&&b==0);
     init(&d);d.DisplayStart=BC250_DISPLAY_START_NO_POST;d.Post.Pitch=0;d.Post.Height=0;
     d.VramLength=CONNECTOR_BUFFER_BYTES+BC250_VRAM_TOP_RESERVED-1;
     CHECK(ConnectorBufferPrepare(&d)==STATUS_NO_MEMORY);CHECK(!maps);empty(&d);
