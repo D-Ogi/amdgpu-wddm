@@ -1733,6 +1733,9 @@
     "variable-case": {
       "timeout": 300
     },
+    "function-alias": {
+      "timeout": 300
+    },
     "rocm-attach": {
       "timeout": 600
     },

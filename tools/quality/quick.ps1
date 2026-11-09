@@ -391,6 +391,10 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # planted controls. It declares no inputs: it reads the file list of git and scripts in every directory, which no
  # input group covers, so it runs in every suite.
  Check 'variable-case' { & pwsh -NoProfile -File "$repo\tools\quality\check-variable-case.ps1" -Repo $repo }
+ # No function of tools\ or driver\ has the name of a built-in alias, which PowerShell runs in its place (rc3 B4:
+ # 'function Cli' ran Clear-Item). The fixed list is powershell-builtin-aliases.txt; the planted controls are in
+ # test_check_function_alias.py (quality-controls). Like variable-case it reads the file list of git: no inputs.
+ Check 'function-alias' { & pwsh -NoProfile -File "$repo\tools\quality\check-function-alias.ps1" -Repo $repo }
  # Every read of one of the four lab-only settings in the control application's sources is inside its flavour
  # guard (tools\quality\flavour_sources.py). The build proves the same thing on the built image; this names the
  # file and the line without a compiler. Both gates' planted controls run in quality-controls.
