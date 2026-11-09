@@ -1081,6 +1081,7 @@ static NTSTATUS DcnReadBlackColor(BC250_DEVICE* Device, ULONG* Color, ULONG* Wai
 static NTSTATUS DcnSetVisibilityCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible, BOOLEAN OsRequest, BOOLEAN* Touched)
 {
     ULONG value, waited=0, color, wanted;
+    BOOLEAN stopped=FALSE;
     NTSTATUS status;
     // A mode commit can restore a surface before the OS grants visibility.
     // Keep the startup hold through those internal restore calls. The OS DDI
@@ -1095,7 +1096,21 @@ static NTSTATUS DcnSetVisibilityCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Visib
             STATUS_SUCCESS : STATUS_DEVICE_NOT_READY;
     status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL,&value);
     if (!NT_SUCCESS(status)) return status;
+    // BD-195 (tester.38 rc1): a stopped OTG sends no pixels, so a hide has nothing to wait for. The black colour
+    // witness needs two frame-counter edges and OTG_CURRENT_BLANK_STATE changes only at a frame boundary, so both
+    // ran into the 100 ms budget. A link commit stops the OTG first (Apply's OTG_DISABLE); when a later step of it
+    // failed, every following link disable and commit stopped here at the visibility step with STATUS_IO_TIMEOUT
+    // and never reached Apply again (75 attempts on the lab, `phase 1 step 5 status C00000B5`). Linux blanks only an
+    // enabled timing generator (hwseq201.c dcn201_init_hw, optc1_is_tg_enabled). The request bit is still set, as
+    // 0.7.216.103 did, and its double buffering is cleared, so the OTG starts blank when Apply enables it again; the
+    // black colour stays as programmed, and the next hide on a running OTG checks it again.
     if (!Visible) {
+        ULONG otg=0;
+        status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_CONTROL,&otg);
+        if (!NT_SUCCESS(status)) return status;
+        stopped=(otg&OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK)?FALSE:TRUE;
+    }
+    if (!Visible && !stopped) {
         const ULONG mask=OTG0_OTG_BLACK_COLOR__OTG_BLACK_COLOR_B_CB_MASK |
             OTG0_OTG_BLACK_COLOR__OTG_BLACK_COLOR_G_Y_MASK | OTG0_OTG_BLACK_COLOR__OTG_BLACK_COLOR_R_CR_MASK;
         status=DcnReadBlackColor(Device,&color,&waited);
@@ -1130,6 +1145,7 @@ static NTSTATUS DcnSetVisibilityCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Visib
         status=MmioDcnWriteEx(Device,BC250_REG_DMU_OTG0_OTG_DOUBLE_BUFFER_CONTROL,
             value&~OTG0_OTG_DOUBLE_BUFFER_CONTROL__OTG_BLANK_DATA_DOUBLE_BUFFER_EN_MASK,TRUE);
         if (!NT_SUCCESS(status)) return status;
+        if (stopped) return STATUS_SUCCESS;     // no frame boundary will come: see above
     }
     for (;;)
     {
@@ -2224,6 +2240,23 @@ NTSTATUS DcnWriterBridge(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Gener
     Bridge->ProgramEndQpc = now.QuadPart;
     if (current) {
         Bridge->Retired = TRUE;
+        return STATUS_SUCCESS;
+    }
+    // BD-195 (tester.38 rc1, BD-188 A2): after a link change with no runtime mode applied (RuntimeDisplayChanged 1,
+    // RuntimePostValid 0) the plane can name a surface that is not the reserved buffer: hibernation powered the
+    // display off and the firmware lit the new monitor, or a failed commit left the pipe half programmed. The flip
+    // below refuses in this state (STATUS_NOT_SUPPORTED, the present rule of DcnFlipSourceAddressShaped), so every
+    // link writer was refused before its first step: `writer kind 5 refused at bridge answer 3 status C00000BB`,
+    // then `connector: disable ... status 80000011` on every HPD edge, and no picture until a restart. The bridge
+    // exists to take an application allocation off the plane before a writer changes the pipe. In this state no
+    // application allocation can be the source: each writer that enters it (ConnectorLinkDisable, ConnectorLinkCommit
+    // and its recovery) moved the plane to driver storage under its own Begin first, a present is refused until an
+    // Apply sets RuntimePostValid, and a writer's End programs only through that same refusal. So the writer goes on
+    // without a write, and its link steps blank and replace the plane. Not a proof of the address: the flag says so.
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged, 0, 0) &&
+        !InterlockedCompareExchange(&Device->RuntimePostValid, 0, 0)) {
+        Bridge->Retired = TRUE;
+        Bridge->NoApplicationSource = TRUE;
         return STATUS_SUCCESS;
     }
     offset = physical - (ULONGLONG)Device->VramPhysical.QuadPart;

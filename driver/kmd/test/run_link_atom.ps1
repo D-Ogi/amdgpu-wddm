@@ -50,6 +50,11 @@ try {
             @{Name='dp-tx-enable';Scoped=$true;Args=@($Rom,'0','0','76','270000')},
             @{Name='dp-tx-enable-hbr2';Scoped=$true;Args=@($Rom,'0','0','76','540000')},
             @{Name='dp-tx-enable-hbr3';Scoped=$true;Args=@($Rom,'0','0','76','810000')},
+            # BD-195 (tester.38 rc1): TMDS transmitter enable after a firmware DP link, HDMI 1920x1080 at 174.5 MHz
+            # through a passive adapter. Its four-lane FIFO write (offset 52170) is a value check of the scope itself,
+            # which the old global-list policy below does not change, so the negative control skips it; the mutant
+            # without that value fails here with status 13 at offset 52170.
+            @{Name='hdmi-tx-enable';Scoped=$false;Args=@($Rom,'3','0','76','174500')},
             @{Name='dp-tx-disable-hbr2';Scoped=$false;Args=@($Rom,'0','0','0','540000')},
             @{Name='dp-tx-disable-hbr3';Scoped=$false;Args=@($Rom,'0','0','0','810000')})
         foreach($replay in $replays) {

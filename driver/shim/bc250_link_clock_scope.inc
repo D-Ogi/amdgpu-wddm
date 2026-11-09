@@ -88,12 +88,18 @@ static int scope_write(void* p,uint32_t r,uint32_t value)
     else if (r==CLOCK_DEBUG) allowed=value==0;
     else if (r==CLOCK_TX_DEBUG) allowed=value==0x4000;
     /* RDPCSTX_CNTL: TX_FIFO_RD_START_DELAY 4, one TX_FIFO_LANEn_EN, or
-     * TX_FIFO_EN (0x10000, set by every DP TX ENABLE) - dpcs_2_0_3_sh_mask.h. */
+     * TX_FIFO_EN (0x10000, set by every DP TX ENABLE) - dpcs_2_0_3_sh_mask.h.
+     * BD-195 (tester.38 rc1): a TMDS TX ENABLE (HDMI through a passive DP++
+     * adapter) on the power-up branch sets all four TX_FIFO_LANEn_EN in one
+     * write (0xf000, unit A VBIOS table 77 offset 52170). The old list refused
+     * it unless the lanes were already on, so a hot-plug from DP to the
+     * adapter failed at step 21 with ATOM status 13 on this register on
+     * every mode. Same four bits as the single-lane values above. */
     else if (r==CLOCK_CNTL) allowed=s->HaveCntl &&
         (value==((s->BeforeCntl&0xff0fffffu)|0x00400000u) ||
          value==(s->BeforeCntl|0x1000u) || value==(s->BeforeCntl|0x2000u) ||
          value==(s->BeforeCntl|0x4000u) || value==(s->BeforeCntl|0x8000u) ||
-         value==(s->BeforeCntl|0x10000u));
+         value==(s->BeforeCntl|0xf000u) || value==(s->BeforeCntl|0x10000u));
     else if (r==CLOCK_PSP34) allowed=!s->MailboxSent && s->MailboxReady && value==s->MailboxValue;
     else if (r==CLOCK_PSP33) allowed=!s->MailboxSent && s->MailboxReady &&
         s->MailboxArgument && value==0x00050000;

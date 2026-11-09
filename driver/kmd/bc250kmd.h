@@ -1003,6 +1003,9 @@ typedef struct _BC250_DCN_WRITER_BRIDGE {
     ULONG Pitch;
     LONGLONG ProgramEndQpc;
     BOOLEAN Retired;
+    // BD-195: Retired without a proof of the plane's address, because no runtime mode is applied after a link change
+    // (RuntimeDisplayChanged 1, RuntimePostValid 0): no application allocation can be the source (DcnWriterBridge).
+    BOOLEAN NoApplicationSource;
 } BC250_DCN_WRITER_BRIDGE;
 // WriterActive and its odd Generation already belong to the caller under L. Validate and program the owned
 // bridge only; no frame-length wait inside L. Retired names a stable already-owned surface proved without a write.

@@ -16,8 +16,12 @@
 #define MODEL_RDPCSTX0_RDPCSTX_PHY_CNTL12 0x5e0cu /* mmRDPCSTX0_RDPCSTX_PHY_CNTL12, DWORD */
 #define MODEL_DPCSTX0_DPCSTX_TX_CLOCK_CNTL 0x5de8u /* mmDPCSTX0_DPCSTX_TX_CLOCK_CNTL, DWORD */
 #define MODEL_RDPCSTX0_RDPCSTX_CLOCK_CNTL 0x5df1u /* mmRDPCSTX0_RDPCSTX_CLOCK_CNTL, DWORD */
+#define MODEL_RDPCSTX0_RDPCSTX_CNTL 0x5df0u /* mmRDPCSTX0_RDPCSTX_CNTL, DWORD */
 
 #include "dpcs_2_0_3_sh_mask.h"
+#define MODEL_TX_FIFO_LANES (RDPCSTX0_RDPCSTX_CNTL__RDPCS_TX_FIFO_LANE0_EN_MASK | \
+    RDPCSTX0_RDPCSTX_CNTL__RDPCS_TX_FIFO_LANE1_EN_MASK | RDPCSTX0_RDPCSTX_CNTL__RDPCS_TX_FIFO_LANE2_EN_MASK | \
+    RDPCSTX0_RDPCSTX_CNTL__RDPCS_TX_FIFO_LANE3_EN_MASK)
 
 typedef struct TRACE {
     uint32_t registers[262144];
@@ -129,8 +133,12 @@ int main(int argc,char **argv)
             printf("TX_ON phy0=%x status%u table%u offset%u instructions%u writes%u\n",phy0[s],status,
                 link.Last.Table,link.Last.Offset,link.Last.Instructions,trace->writes-writes);
             if(status)break;
-            /* The power-up branch is long: 46 writes before PLL_UPDATE alone. */
-            if(trace->writes-writes<100){printf("FAIL CHECK power-up branch not taken\n");status=BC250_ATOM_IO;break;}
+            /* The power-up branch is long for DP: 46 writes before PLL_UPDATE alone. */
+            if(mode==0 && trace->writes-writes<100){printf("FAIL CHECK power-up branch not taken\n");status=BC250_ATOM_IO;break;}
+            /* BD-195 (tester.38 rc1): TMDS (HDMI through a passive adapter). Its branch turns on the four TX FIFO
+             * lanes in one write; the seed has them off, as after the TX OFF of a firmware DP link. */
+            if(mode!=0 && (trace->registers[MODEL_RDPCSTX0_RDPCSTX_CNTL]&MODEL_TX_FIFO_LANES)!=MODEL_TX_FIFO_LANES)
+                {printf("FAIL CHECK TMDS lanes not enabled\n");status=BC250_ATOM_IO;break;}
         }
     }
     else if(root==0){

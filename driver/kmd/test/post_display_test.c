@@ -112,6 +112,8 @@ static NTSTATUS ModelRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
         break;
     case BC250_REG_DMU_HUBP0_DCHUBP_CNTL:*out=model.hubp;break;
     case BC250_REG_DMU_OTG0_OTG_DOUBLE_BUFFER_CONTROL:*out=model.dbuf;break;
+    /* BD-195: a hide reads OTG_MASTER_EN first. The firmware's OTG runs in every case here. */
+    case BC250_REG_DMU_OTG0_OTG_CONTROL:*out=OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK;break;
     case BC250_REG_DMU_OTG0_OTG_BLACK_COLOR:*out=model.black;break;
     case BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT:*out=++model.frame;break;
     case BC250_REG_DMU_FMT0_FMT_CONTROL:*out=0;break;
