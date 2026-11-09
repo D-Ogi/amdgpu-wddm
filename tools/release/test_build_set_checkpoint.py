@@ -58,6 +58,7 @@ class Checkpoints(unittest.TestCase):
         self.process = subprocess.Popen([
             "pwsh", "-NoProfile", "-File", str(entry), "-Manifest", str(self.ws.manifest_path),
             "-Out", str(self.ws.out), "-Root", str(self.ws.root), "-Work", str(self.ws.work),
+            "-ContextInputs", str(self.ws.context_inputs(manifest)),
             "-SizeGuard", str(self.ws.guard_dir / "size-guard.py"), "-MaxParallel", "1"],
             stdout=self.log, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW,
             env=self.ws.child_environment())
