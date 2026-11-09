@@ -43,11 +43,11 @@ enum BC250_OVERLAY_RESULT {
 //
 // This joins existing preparation contracts; it is NOT Check3 admission. It
 // does not establish chroma siting for a DXGI color space, CM normalization,
-// power/clock readiness, coefficient/CSC bank ownership, latch or retirement.
+// power/clock readiness, coefficient/CSC bank assignment, latch or retirement.
 // No MMIO, DDI or caps change. Plane count, surface and pitch limits, the
 // downscale source width and NV12 come from Request->Caps (dcn_caps.h); a row
 // whose Nv12 is NONE refuses the NV12 pipe. AMD DCN201 still advertises NV12 false. A live
-// owner needs the Y0 witnesses and an atomic recovery/retirement implementation.
+// path needs the Y0 witnesses and an atomic recovery/retirement implementation.
 unsigned Bc250OverlayPrepare(const BC250_OVERLAY_REQUEST* Request,
     void* Workspace, size_t WorkspaceBytes, BC250_OVERLAY_PLAN* Plan);
 

@@ -295,7 +295,7 @@ pitch, source/destination/clip rectangles, explicit color range and output timin
 It owns the floating-point state and DML workspace at PASSIVE_LEVEL.
 
 Input array order does not determine the pipe. RGB remains on pipe 0, where
-the current cursor owner resides, and NV12 remains on pipe 1. Windows defines
+the current cursor plane resides, and NV12 remains on pipe 1. Windows defines
 LayerIndex zero as topmost (`DXGK_MULTIPLANE_OVERLAY_PLANE3`); the MPC plan uses
 the opposite z-order convention. Both layer indices must appear exactly once.
 The output has no pointers into temporary inputs or workspace, and every
@@ -310,8 +310,8 @@ Independent UV padding and either component placement order remain explicit.
 
 This does not resolve the open hardware requirements below. In particular,
 preparing the reference chroma geometry does not establish DXGI chroma siting;
-preparing CSC fields does not prove downstream normalization or bank ownership.
-The owner still needs Y0 power/latch/image witnesses, clocks and timing admission,
+preparing CSC fields does not prove downstream normalization or bank assignment.
+The live path still needs Y0 power/latch/image witnesses, clocks and timing admission,
 atomic commit/recovery, allocation lifetime and per-layer PresentId retirement
 before connecting this preparation to Check3/SetAddress3 or raising caps.
 

@@ -3,7 +3,7 @@
 // Part Y). The translation of the two WDDM planes (WddmMpo3GroupDescribe) is in that block, where the flip host
 // test compiles it.
 // The two-plane Check3 path consumes owned copies, never an allocation pointer held across connector/FPU work.
-// A successful preflight still does not admit scan-out: clock and pipe transaction ownership and the Y0 hardware
+// A successful preflight still does not admit scan-out: the clock and pipe transaction control and the Y0 hardware
 // witness are pending.
 static NTSTATUS WddmMpo3CheckGroup(BC250_DEVICE* Device, BC250_WDDM* Wddm,
     const DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3* Check,
