@@ -563,6 +563,7 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.SustainMs = g->sustain_hold_ms;
     snap.SustainRaises = g->sustain_raises;
     snap.SustainRefusals = g->sustain_refusals;
+    snap.SustainTargetPermille = g->tune.target_permille;
     // The idle point only while this start governs the clock: a fixed-lab start never configures the state, and
     // a start that gave up after SMU failures no longer steps the governor, so neither may name a point that
     // nothing would apply (0.7.207, review). The flag below follows the same rule.
@@ -698,11 +699,22 @@ static void DpmLogRecallLine(const char* What, const BC250_DPM_SNAP* P)
 // The sustained raise (BD-329) on a line of its own, once it chose a raise or refused one: a start whose load never sat
 // in the band logs what the release before it logged. N counts choices; the limits of the same tick (the ramp, the
 // warm zone, the cap) may still have held the clock, and the `dpm: A -> B MHz` lines show what the hardware took.
+// Which lines a block prints is dpm_sustain_log.h's decision (BD-336), which the host test runs.
 static void DpmLogSustainLine(const char* What, const BC250_DPM_SNAP* P)
 {
-    if (P->SustainRaises == 0 && P->SustainRefusals == 0) return;
+    if (!(Bc250DpmSustainLines(0, P->SustainRaises, P->SustainRefusals) & BC250_DPM_SUSTAIN_LINE_COUNTERS)) return;
     GuardLog("dpm: %s sustained raises %lu refused %lu, hold %lu ms", What, P->SustainRaises, P->SustainRefusals,
              P->SustainMs);
+}
+
+// BD-336: the configuration of the sustained raise in every log summary, also before the first choice. The start line
+// (DpmConfigureSustain) goes out of the ring within seconds of the boot. The words after "sustained raise:" are the
+// start line's own, so one pattern finds either line (run_dpm_sustain_log.ps1 checks that).
+static void DpmLogSustainConfigLine(const char* State, const BC250_DPM_SNAP* P)
+{
+    if (!(Bc250DpmSustainLines(1, P->SustainRaises, P->SustainRefusals) & BC250_DPM_SUSTAIN_LINE_CONFIG)) return;
+    GuardLog("dpm: summary rules: sustained raise: avg at %lu permille for %lu ms raises -> %s",
+             P->SustainTargetPermille, P->SustainMs, State);
 }
 
 // The compute threshold set (BD-127) on two lines of its own, and only once it has something to say: a start whose GPU
@@ -1463,9 +1475,11 @@ static void DpmConfigureBurst(BC250_DPM_STATE* S, BOOLEAN Dpm)
 // PASSIVE_LEVEL, under Lock, before the governor thread exists.
 static void DpmConfigureSustain(BC250_DPM_STATE* S, BOOLEAN Dpm)
 {
-    (void)bc250_dpm_sustain_config(&S->Gov, Dpm ? BC250_DPM_SUSTAIN_MS : 0u);   // no thread yet: no lock for Gov
+    int accepted = bc250_dpm_sustain_config(&S->Gov, Dpm ? BC250_DPM_SUSTAIN_MS : 0u);   // no thread yet: no lock for Gov
+    // BD-336: the word goes into every log summary as well (DpmLogSustainConfigLine).
+    S->SustainState = Bc250DpmSustainState(Dpm, accepted);
     GuardLog("dpm: sustained raise: avg at %lu permille for %lu ms raises -> %s", (ULONG)S->Gov.tune.target_permille,
-             (ULONG)S->Gov.sustain_hold_ms, Dpm ? "on" : "off: this start does not govern the clock");
+             (ULONG)S->Gov.sustain_hold_ms, S->SustainState);
 }
 
 // This start's V/F curve, with the same two-mark guard as DPM itself (docs/design/tuner.md, ADR 0020). A curve
@@ -1697,6 +1711,7 @@ void DpmStart(BC250_DEVICE* Device)
         d->reason = BC250_DPM_REASON_NOT_RUN;
         bc250_dpm_init(&s->Gov, BC250_DPM_FLOOR_LEVEL);
         s->BurstState = "off: the start does not govern";
+        s->SustainState = Bc250DpmSustainState(0, 0);
         DpmInstallCurve(s, NULL);       // the table's own line: nothing here applies a level
         DpmPublish(Device, s, NULL, FALSE);
         DpmUnlock(s);
@@ -1806,6 +1821,7 @@ StateRefused:
     s->JointOn = FALSE;
     bc250_dpm_init(&s->Gov, BC250_DPM_FLOOR_LEVEL);
     s->BurstState = "off: the start does not govern";
+    s->SustainState = Bc250DpmSustainState(0, 0);
     DpmInstallCurve(s, NULL);
     DpmPublish(Device, s, NULL, FALSE);
     GuardLog("dpm: state read refused, fixed floor and no governor worker");
@@ -2023,12 +2039,14 @@ void DpmLogSummary(BC250_DEVICE* Device)
     struct bc250_dpm_tune tune;
     ULONG serial;
     const char* burst;
+    const char* sustain;
     KIRQL irql;
     KeAcquireSpinLock(&s->SnapLock, &irql);
     snap = s->Snap;
     tune = s->Tune;
     serial = s->TuneSerial;
     burst = s->BurstState ? s->BurstState : "not configured";
+    sustain = s->SustainState ? s->SustainState : "not configured";
     KeReleaseSpinLock(&s->SnapLock, irql);
     DpmLogLine("summary", &snap);
     // BD-281: the rules of this start and what they did. The start lines say it once, in the part of the ring that a
@@ -2039,6 +2057,7 @@ void DpmLogSummary(BC250_DEVICE* Device)
              snap.RateFromMc, snap.HighMc, snap.HighMHz);
     GuardLog("dpm: summary rules: rate steps %lu levels %lu, high-zone steps %lu holds %lu", snap.RateSteps,
              snap.RateLevels, snap.HighSteps, snap.HighHolds);
+    DpmLogSustainConfigLine(sustain, &snap);
     DpmLogIdleLine("summary", &snap);
     DpmLogComputeLine("summary", &snap);
     DpmLogRecallLine("summary", &snap);

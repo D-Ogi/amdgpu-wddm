@@ -211,7 +211,10 @@ it with the plug ready, and set `EnableSmuMetrics` 0 if the SMU stops answering.
   `BC250_DPM_SUSTAIN_MS` of `bc250_board_envelope.h`, with no registry value: a new value would change the state
   catalog, and a KMD on another catalog does not load over an installed package. The transition line says
   `load sustained` for a raise the rule chose, and `dpm: <what> sustained raises N refused R` follows the telemetry block
-  once N or R is not 0. `test_sustain_bd329`, `test_sustain_guard` and `test_sustain_no_oscillation` in `dpm_test.c`
+  once N or R is not 0. The log summary also prints `dpm: summary rules: sustained raise: avg at T permille for H ms
+  raises -> on` (or `off:` and the reason) every time, because the start line goes out of the KMD log ring within
+  seconds of the boot (BD-336). `dpm_sustain_log.h` makes that decision, and `run_dpm_sustain_log.ps1` tests it with
+  dpm.c's own formats and two negative controls. `test_sustain_bd329`, `test_sustain_guard` and `test_sustain_no_oscillation` in `dpm_test.c`
   cover it, and `run_dpm.ps1 -NoSustain` and `-NoSustainGuard` are the negative controls.
 - These four numbers are the defaults of every start; "Runtime tuning" below changes them, and adds a floor, until the
   next start.
