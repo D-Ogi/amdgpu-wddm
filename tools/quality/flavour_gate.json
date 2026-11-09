@@ -4112,6 +4112,11 @@
    "name": "AMDGPU_WDDM_GAMELOG",
    "where": "mesa-wddm src/util/u_amdgpu_wddm_stdio.c (triplet and system lines); the D3D12 and D3D11 shells (stdio-log.h of the game log patch)",
    "reason": "Lead decision 1 (BD-167): the marker <pid>;<16 hex digits> with which the first module of a process that records a game log (the GUI 'Record game logs' switch, registry value GameLogUntil) tells the modules loaded later to write into the same file; a module honours AMDGPU_WDDM_LOG only when the marker names its own process. It names no path"
+  },
+  {
+   "name": "AMDGPU_WDDM_CALL_TIMING",
+   "where": "mesa-wddm src/vulkan/runtime/vk_wddm2_call_timing.h and .c (VK_WDDM2_CALL_TIMING_ENV; triplet line, the d3d11 and d3d12 amdgpu_wddm_radv.dll copies)",
+   "reason": "Lead decision (BD-226, tester.38 rc4): a support switch, read once when the WDDM2 dispatch table is built. In the release flavour the D3DKMT call timing is off unless the value is 1, so the table holds the kernel functions and a call costs nothing extra; 1 turns on the 10 ms slow-call lines in the UMD log (at most 20 lines per second), so that a tester can record a stall report. It names no path and turns on no other diagnostic"
   }
  ],
  "out_of_scope": [
