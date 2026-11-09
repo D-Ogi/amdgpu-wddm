@@ -1251,7 +1251,7 @@ notice.failed.title|mt|fb8e175f|El controlador de gráficos no inició
 notice.failed.text|mt|1e13a43f|El controlador de gráficos no inició, así que Windows dibuja la pantalla con su pantalla básica: los juegos no funcionan y todo es más lento.\nNagi Control App muestra qué pasó y qué intentar a continuación.
 notice.open-app|mt|f8a181ac|Abrir Nagi Control App
 notice.close|mt-safe|7d9eb7ac|Cerrar
-notice.working|mt|2a07b127|Volviendo a activar el controlador de gráficos. Esto puede tardar hasta cuatro minutos, y la pantalla puede oscurecerse un momento.
+notice.working|mt|0e2d968e|Volviendo a activar el controlador de gráficos.
 notice.working.seconds|mt-safe|dae58fb2|{0} s
 notice.done|mt|3d647c8d|El controlador de gráficos vuelve a funcionar.
 notice.action-failed|mt|26a5f377|Ahora no se pudo iniciar el controlador de gráficos. Lo siguiente que conviene intentar es reiniciar Windows.
@@ -1263,9 +1263,8 @@ status.driver-refused|mt|0f7cc434|El controlador de gráficos se desactivó por 
 status.driver-refused.next|mt|449a51bf|Vuelva a activar el controlador de gráficos. Si no inicia, reinicie Windows.
 plan.title.enable-driver|mt|3ebf7632|Volver a activar el controlador de gráficos
 plan.line.enable-driver|mt|eb9dd536|El conteo de inicios sin comprobar vuelve a cero, para que el controlador pueda iniciar de nuevo.
-plan.line.enable-driver-confirm|mt|8eda43a1|El dispositivo gráfico vuelve a iniciar y el nuevo inicio se marca como funcional.
-plan.enable-driver.dark|mt|02d9a741|La pantalla puede oscurecerse unos segundos y puede cambiar de tamaño una vez.
-plan.enable-driver.restart|mt|73638369|Si el controlador de gráficos no inicia, esta aplicación lo indica y ofrece reiniciar Windows.
+plan.line.enable-driver-confirm|mt|7a064f1a|El controlador de gráficos se inicia en el próximo reinicio de Windows.
+plan.enable-driver.restart|mt|bb03ecf5|Después, esta aplicación ofrece reiniciar Windows ahora o más tarde.
 plan.refuse.driver-on|mt|7532d61c|El controlador de gráficos ya está funcionando, así que no hay nada que volver a activar.
 plan.refuse.not-guard|mt|040c6a83|El controlador de gráficos no se desactivó por seguridad, así que esto no ayuda aquí. Abra Ayuda para encontrar el siguiente paso.
 search.settings.wallpaper|mt|42350221|Fondo de pantalla de Nagi

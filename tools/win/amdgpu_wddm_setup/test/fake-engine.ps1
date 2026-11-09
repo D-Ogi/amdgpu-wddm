@@ -69,7 +69,7 @@ switch ($Scenario) {
         Ev 'install-action' @{ action = 'install'; boot_id = 1 }
         Ev 'step' @{ description = 'bcdedit'; dry_run = $false }
         Ev 'restart-required' @{ reason_id = 'restart.test-signing'; continuation = 'x' }
-        Result 'restart-required' 0 'result.restart-test-signing' $true @{ restart = [ordered]@{ required = $true; reason_id = 'restart.test-signing'; boot_id = 1; continuation = [ordered]@{ kind = 'continue'; command = 'x' } } }
+        Result 'restart-required' 3010 'result.restart-test-signing' $true @{ restart = [ordered]@{ required = $true; reason_id = 'restart.test-signing'; boot_id = 1; continuation = [ordered]@{ kind = 'continue'; command = 'x' } } }
     }
     'refused' {
         Ev 'check' @{ id = 'gpu.missing'; result = 'fail'; name = 'n'; detail = "no device on $env:COMPUTERNAME" }

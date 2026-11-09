@@ -1250,7 +1250,7 @@ notice.failed.title|mt|fb8e175f|O driver de vídeo não iniciou
 notice.failed.text|mt|1e13a43f|O driver de vídeo não iniciou, então o Windows está desenhando a tela com o vídeo básico: os jogos não rodam e tudo fica mais lento.\nO Nagi Control App mostra o que aconteceu e o que tentar em seguida.
 notice.open-app|mt|f8a181ac|Abrir o Nagi Control App
 notice.close|mt|7d9eb7ac|Fechar
-notice.working|mt|2a07b127|Ligando o driver de vídeo de novo. Isso pode levar até quatro minutos, e a tela pode escurecer por um momento.
+notice.working|mt|0e2d968e|Ligando o driver de vídeo de novo.
 notice.working.seconds|mt-safe|dae58fb2|{0} s
 notice.done|mt|3d647c8d|O driver de vídeo está em execução de novo.
 notice.action-failed|mt|26a5f377|Não foi possível iniciar o driver de vídeo agora. Reiniciar o Windows é a próxima coisa a tentar.
@@ -1262,9 +1262,8 @@ status.driver-refused|mt|0f7cc434|O driver de vídeo foi desligado por seguranç
 status.driver-refused.next|mt|449a51bf|Ligue o driver de vídeo de novo. Se ele não iniciar, reinicie o Windows.
 plan.title.enable-driver|mt|3ebf7632|Ligar o driver de vídeo de novo
 plan.line.enable-driver|mt|eb9dd536|A contagem de inicializações não verificadas volta a zero, para que o driver possa iniciar de novo.
-plan.line.enable-driver-confirm|mt|8eda43a1|O dispositivo gráfico inicia de novo e a nova inicialização é marcada como funcionando.
-plan.enable-driver.dark|mt|02d9a741|A tela pode escurecer por alguns segundos e mudar de tamanho uma vez.
-plan.enable-driver.restart|mt|73638369|Se o driver de vídeo não iniciar, este aplicativo avisa e oferece reiniciar o Windows.
+plan.line.enable-driver-confirm|mt|7a064f1a|O driver de vídeo inicia na próxima reinicialização do Windows.
+plan.enable-driver.restart|mt|bb03ecf5|Depois, este aplicativo oferece reiniciar o Windows agora ou mais tarde.
 plan.refuse.driver-on|mt|7532d61c|O driver de vídeo já está em execução, então não há nada para ligar de novo.
 plan.refuse.not-guard|mt|040c6a83|O driver de vídeo não foi desligado por segurança, então isto não ajuda aqui. Abra a Ajuda para encontrar o próximo passo.
 search.settings.wallpaper|mt|42350221|Papel de parede da Nagi

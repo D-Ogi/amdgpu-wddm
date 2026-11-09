@@ -214,7 +214,9 @@ namespace AmdgpuWddmControl
                 if (code == RecoveryRunner.Done) { Drop(_enable); Result(Strings.T("notice.done"), Theme.Good); return; }
                 if (code == RecoveryRunner.Refused) { Drop(_enable); Result(Strings.T("notice.not-needed"), Theme.Good); return; }
                 if (code == Program.NotElevated) { Result(Strings.T("action.not-elevated"), Theme.Warn); return; }
-                Result(Strings.T(code == RecoveryRunner.RestartNeeded ? "notice.restart-needed" : "notice.action-failed"), Theme.Warn);
+                // The repair's normal end (BD-093): the count is cleared, and the driver starts at the next restart.
+                if (code == RecoveryRunner.RestartNeeded) { Drop(_enable); Result(Strings.T("notice.restart-needed"), Theme.Good); OfferRestart(); return; }
+                Result(Strings.T("notice.action-failed"), Theme.Warn);
                 OfferRestart();
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
@@ -227,12 +229,13 @@ namespace AmdgpuWddmControl
             b.Dispose();
         }
 
-        // Added once, and only after an attempt that did not get the driver running: the person is then one click
-        // from the thing that does work.
+        // Added once, after the repair (its driver starts at the next restart of Windows, BD-093) or after an attempt
+        // that failed: the person is then one click from the thing that does work. Close becomes "Later".
         void OfferRestart()
         {
             if (_restartOffered) return;
             _restartOffered = true;
+            if (_close != null) _close.Text = Strings.T("ui.restart.later");
             var b = Fitted(Ui.Button(Strings.T("ui.restart.now"), (s, e) =>
             {
                 if (WindowsRestart.Request() != null) Result(Strings.T("action.restart-failed"), Theme.Warn);

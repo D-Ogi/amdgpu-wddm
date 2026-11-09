@@ -69,7 +69,7 @@ static partial class UnitTests
         stopped.Apply(Ev(200, "result", "\"outcome\":\"failed\",\"exit_code\":1,\"message_id\":\"result.other\",\"mutated\":false"));
         Equal("Done,Failed,Waiting,Waiting,Waiting,Waiting,Waiting,Waiting", Marks(WorkingView.Of(stopped, "install", false, false, false)), "working: the stage a run stopped in is crossed out");
         var restart = InstallRun("preflight", "test-signing");
-        restart.Apply(Ev(200, "result", "\"outcome\":\"restart-required\",\"exit_code\":0,\"message_id\":\"result.restart-driver\",\"mutated\":true"));
+        restart.Apply(Ev(200, "result", "\"outcome\":\"restart-required\",\"exit_code\":3010,\"message_id\":\"result.restart-driver\",\"mutated\":true"));
         Equal("Done,Done,Waiting,Waiting,Waiting,Waiting,Waiting,Waiting", Marks(WorkingView.Of(restart, "install", false, false, false)), "working: a restart ends the stage it reached as done");
         var none = WorkingView.Of(InstallRun(), "install", false, false, false);
         Check(!none.Progress.HasValue && none.Marks.All(m => m == StageMark.Waiting), "working: no stage yet is the moving band");

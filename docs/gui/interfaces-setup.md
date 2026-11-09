@@ -178,10 +178,10 @@ the exit code alone is never the outcome.
   "started_utc": "...", "ended_utc": "...",
   "boot": { "boot_id": 41, "boot_utc": "..." },
   "action": "install",
-  "outcome": "restart-required", "exit_code": 0,
+  "outcome": "restart-required", "exit_code": 3010,
   "mutated": true, "nothing_changed": false,
   "phase_before": null, "phase_after": "testsigning-pending",
-  "restart": { "required": true, "reason_id": "restart.test-signing", "boot_id": 41,
+  "restart": { "required": true, "reason_id": "restart.test-signing", "boot_id": 41, "started": false,
                "continuation": { "kind": "continue", "exe": "...", "arguments": ["..."], "command": "...", "closure": "..." } },
   "consents_needed": [], "failed_checks": [],
   "message_id": "result.restart-test-signing", "step": null, "detail": "...", "log": "C:\\ProgramData\\...\\install-....log",
@@ -197,7 +197,7 @@ the exit code alone is never the outcome.
 | planned | 0 | result.planned |
 | completed | 0 | result.dry-run-complete, result.dry-run-verify |
 | already | 0 | result.already |
-| restart-required | 0 | result.restart-test-signing, result.restart-driver, result.installed-restart |
+| restart-required | 3010 (restart not started) or 1641 (the engine started it) | result.restart-test-signing, result.restart-driver, result.installed-restart |
 | restart-required | 5 | result.testsigning-not-active, result.testsigning-secureboot |
 | restart-required | 7 | result.restart-still-pending, result.verify-before-restart |
 | verified | 0 | result.verified, result.verified-with-warnings |
@@ -208,6 +208,12 @@ the exit code alone is never the outcome.
 | failed | 5, 6 | result.testsigning-not-active, result.step-failed (`step` names it) |
 | cancelled | 8 | result.cancelled, result.cancelled-after-changes (`stop.by` cancel), result.deadline, result.deadline-after-changes (`stop.by` deadline) |
 | prepared | 0 | result.offline-prepared |
+
+A run that ends at a restart boundary never exits 0 (BD-093). After a driver change Windows must restart: a driver
+that starts in the running session can leave the processor slow until the next restart. The codes are those of
+Windows Installer. The engine gives 1641 when it started the restart itself (the countdown of a console run ended or
+Enter was pressed). It gives 3010 in every other case: a `-Gui` run, "Later", a key during the countdown, `-NoReboot`,
+or a restart that Windows refused. `restart.started` says the same.
 
 `diagnostics` is the path of one text file the engine wrote next to its log, and `null` for every run that
 did not write one. It exists only when verify found a driver that did not start (the

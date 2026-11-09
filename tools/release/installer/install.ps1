@@ -555,7 +555,7 @@ function Request-Restart([string]$Why, [string]$ReasonId) {
     $boot = (Get-BootIdentity).boot_id
     Set-StateValue $state 'restart_boot_id' $boot
     Save-InstallState $state
-    $script:EngineRestart = [ordered]@{ required = $true; reason_id = $ReasonId; boot_id = $boot; continuation = $script:Continuation }
+    $script:EngineRestart = [ordered]@{ required = $true; reason_id = $ReasonId; boot_id = $boot; started = $false; continuation = $script:Continuation }
     Write-EngineEvent 'restart-required' ([ordered]@{ reason_id = $ReasonId; continuation = $script:Continuation })
     Write-Host ''
     Write-Host "A restart is needed: $Why" -ForegroundColor White
@@ -566,6 +566,7 @@ function Request-Restart([string]$Why, [string]$ReasonId) {
     $go = (Wait-RestartCountdown -Seconds $script:RestartCountdownSeconds) -eq 'now'
     if ($go) {
         $failure = Request-PlannedRestart
+        if (-not $failure) { $script:EngineRestart['started'] = $true }   # the exit code says so (Get-EngineExitCode)
         if ($failure) { Write-Warn2 "Windows did not start the restart ($failure): restart the computer yourself; the installer continues after you log on again" }
     } else { Write-Info 'restart later; the installer continues after you log on again' }
 }

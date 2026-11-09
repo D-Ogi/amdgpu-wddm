@@ -86,7 +86,8 @@ static partial class UnitTests
         refused.Interop = null; refused.Health = null; refused.Dpm = null;
         Check(Recovery.GuardRefused(refused), "the support view and the notice agree: this reading is a refused start");
         var p = Recovery.Plan("enable-driver", refused);
-        Check(!p.Refused && p.EnableDriver && !p.Undoable && p.Effect == "at once", "enable-driver: planned, at once, no undo");
+        Check(!p.Refused && p.EnableDriver && !p.Undoable && p.OfferRestart && p.Effect == "at the next restart of Windows",
+            "enable-driver: planned, at the next restart of Windows (BD-093), restart offered, no undo");
         Equal(0, p.Writes.Count, "enable-driver writes no value of the general allow-list");
         Check(!Recovery.Allowed(Recovery.ParametersPath, GuardReset.ValueName), "the count stays outside the allow-list of the actions and of the undo");
         var dialog = PlainPlan.Describe(p);
@@ -156,13 +157,14 @@ static partial class UnitTests
         var noticeSource = File.ReadAllText(Path.Combine(root, @"tools\win\amdgpu_wddm_control\src\NoticeForm.cs"));
         Check(actionsSource.Contains("public const int RestartNeeded = 6;"), "the helper has its own code for a change that needs a restart");
         Check(actionsSource.Contains("if (plan.EnableDriver) return EnableDriver();"), "the helper runs the enable-driver plan through its own step");
-        Check(actionsSource.Contains("/restart-device") && !actionsSource.Contains("pnputil.Kill") && actionsSource.Contains("it is left running"),
-            "the helper restarts the device with pnputil and never kills it");
-        Check(actionsSource.Contains("GuardReset.Run(api)") && actionsSource.Contains("guard count again"),
-            "the helper clears the count before the device and again when the new start stays unconfirmed");
-        Check(actionsSource.Contains("Confirm(EnableConfirmSeconds)"), "the helper confirms the start it got with the existing confirmation");
+        // BD-093: the repair never starts the device in the running session; the driver starts at the next restart.
+        var enableBody = Regex.Match(actionsSource, @"static int EnableDriver\(\)\s*\{(?<b>[\s\S]*?)\n        \}").Groups["b"].Value;
+        Check(enableBody.Length > 0 && enableBody.Contains("GuardReset.Run(api)") && enableBody.Contains("return RestartNeeded;") &&
+            !Regex.IsMatch(enableBody, @"pnputil|restart-device|RestartDevice|StartHealth|Confirm\("),
+            "the helper clears the count and answers RestartNeeded, with no device restart and no wait for a start in this session");
         GuardStoreTests(root, actionsSource, p);
-        Check(noticeSource.Contains("RecoveryRunner.RestartNeeded ? \"notice.restart-needed\""), "the notice turns that code into the restart advice");
+        Check(noticeSource.Contains("if (code == RecoveryRunner.RestartNeeded) { Drop(_enable); Result(Strings.T(\"notice.restart-needed\"), Theme.Good); OfferRestart(); return; }") &&
+            noticeSource.Contains("_close.Text = Strings.T(\"ui.restart.later\")"), "the notice turns that code into the restart advice, with Restart now and Later");
         Check(noticeSource.Contains("\"--action\", \"enable-driver\""), "the notice runs the same action as the Home banner");
 
         // ---- what each caller of the repair does with the helper's answer -------------------------------------
@@ -185,12 +187,8 @@ static partial class UnitTests
         Check(noticeSource.Contains("if (code == RecoveryRunner.Done) { Drop(_enable);"), "the repair's button goes after the repair worked");
         Check(noticeSource.Contains("if (code == RecoveryRunner.Refused) { Drop(_enable); Result(Strings.T(\"notice.not-needed\")"),
             "a refusal reads as 'not needed any more', not as a failure with a restart offer");
-        // The window promises a bound and the helper has to keep it, end to end: the device query, the device
-        // restart, the wait for the driver, then the confirmation.
-        int budget = new[] { @"TimeSpan\.FromSeconds\((\d+)\)", @"DeviceRestartSeconds = (\d+)", @"DeviceBackSeconds = (\d+)", @"EnableConfirmSeconds = (\d+)" }
-            .Sum(rx => int.Parse(Regex.Match(actionsSource, rx).Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
-        Check(budget > 120 && budget <= 240, "the repair's own budget is " + budget + " s, inside the four minutes the window promises");
-        Check(Strings.In("en", "notice.working").Contains("four minutes"), "the window names a bound the helper keeps");
+        // The repair writes one value and waits for nothing, so the window promises no long wait and no dark screen.
+        Check(!Regex.IsMatch(Strings.In("en", "notice.working"), @"minute|dark"), "the window promises no long wait and no dark screen");
         // Case A is on the screen at once; only the case that a driver still inside
         // its own start looks like waits out the poll. And the layout gate of the window covers the text scale of
         // Windows, which is the setting that makes a button's words outgrow its row.
@@ -243,9 +241,9 @@ static partial class UnitTests
             regApiClass.Contains("state.SetDword(name, value)"), "Win32RegApi writes through one batch of the driver state store");
         Check(!Regex.IsMatch(regApiClass, @"\bRegistry\.|RegistryKey|OpenSubKey|CreateSubKey|RegOpenKey|RegSetValue"),
             "Win32RegApi opens no registry key of its own");
-        Equal(2, Regex.Matches(actionsSource, @"new Win32RegApi\(Recovery\.ParametersPath\)\)[^\r\n]*GuardReset\.Run\(api\)").Count,
-            "both resets of enable-driver go through Win32RegApi on the store identifier");
-        Equal(2, Regex.Matches(actionsSource, @"GuardReset\.Run\(").Count, "enable-driver has no other reset of the count");
+        Equal(1, Regex.Matches(actionsSource, @"new Win32RegApi\(Recovery\.ParametersPath\)\)[^\r\n]*GuardReset\.Run\(api\)").Count,
+            "the one reset of enable-driver goes through Win32RegApi on the store identifier");
+        Equal(1, Regex.Matches(actionsSource, @"GuardReset\.Run\(").Count, "enable-driver has no other reset of the count");
         Check(Regex.IsMatch(actionsSource, @"SettingsStore\.ReadDword\(Recovery\.ParametersPath, ""UnconfirmedStarts""\)"),
             "the read-back after the confirmation reads the store through SettingsStore");
         var program = File.ReadAllText(Path.Combine(src, "Program.cs"));

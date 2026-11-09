@@ -266,8 +266,9 @@ namespace AmdgpuWddmSetup
                     v.Kind = ViewKind.Plan;
                     break;
                 case "restart-required":
-                    // exit 0: a boundary reached; 7: the restart has not happened yet; 5: test signing not active
-                    // after the restart (Secure Boot on: a restart does not help).
+                    // exit 3010 (1641 when the engine started the restart): a boundary reached (BD-093); 7: the
+                    // restart has not happened yet; 5: test signing not active after the restart (Secure Boot on: a
+                    // restart does not help). The view follows the outcome and the message, never the code.
                     v.Kind = r.MessageId == "result.testsigning-secureboot" ? ViewKind.Problem : ViewKind.Restart;
                     v.OfferRestart = r.MessageId != "result.testsigning-secureboot" && !r.DryRun;
                     break;
