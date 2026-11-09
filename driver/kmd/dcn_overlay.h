@@ -37,9 +37,11 @@ enum BC250_OVERLAY_RESULT {
 // not to array order. MPC gets the inverse z-order. Both planes are opaque.
 // Uses actual allocation offsets and byte pitches, never an upload-layout guess.
 // PASSIVE only with caller-owned FPU state, private DML workspace and output
-// storage (several KiB; not the kernel stack). Input/output may alias; workspace
-// must not overlap either. Output is cleared on every refusal. No pointers to
-// request, workspace or temporary DML inputs survive the call.
+// storage (several KiB; not the kernel stack). The planner reads its inputs in
+// place: output that overlaps the request (or the description, timing or caps
+// row) is refused with ARGUMENT, and the workspace must not overlap either.
+// Output is cleared on every refusal. No pointers to request, workspace or
+// temporary DML inputs survive the call.
 //
 // This joins existing preparation contracts; it is NOT Check3 admission. It
 // does not establish chroma siting for a DXGI color space, CM normalization,

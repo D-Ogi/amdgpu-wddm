@@ -5,6 +5,8 @@
 #include "dcn_plane.h"
 #include "../contract/bc250_nv12_layout.h"
 #include "../shim/bc250_scaler_filter.h"
+#include <stdint.h>
+#include <string.h>
 
 // The boundary names the filter without the shim header (dcn_overlay_input.h). Translate each name explicitly
 // to the scaler kind: an equal value of two enum types is not a contract. An unknown name is refused.
@@ -38,18 +40,39 @@ static int OverlayAxis(const BC250_DCN_CAPS* Caps, int Nv12, unsigned Limit,
     return 1;
 }
 
-static unsigned OverlayPrepare(const BC250_OVERLAY_REQUEST* Request,
+// The inputs of one preparation, by reference. The planner runs on a kernel thread at PASSIVE level: no copy of the
+// timing, the planes or the plan goes on the stack (each is several hundred bytes to several KiB).
+typedef struct OVERLAY_ARGS {
+    unsigned Count, SourceId, PostCompositionChanged;
+    const BC250_DCN_CAPS* Caps;
+    const BC250_DML201_INPUT* Timing;
+    const BC250_OVERLAY_INPUT* Plane; // [2]
+    unsigned long long McBase, VramPhysical, VramLength;
+} OVERLAY_ARGS;
+
+static int Overlaps(const void* A, size_t ABytes, const void* B, size_t BBytes)
+{
+    uintptr_t a = (uintptr_t)A, b = (uintptr_t)B;
+    return a < b + BBytes && b < a + ABytes;
+}
+
+static unsigned OverlayPrepare(const OVERLAY_ARGS* Args,
     void* Workspace, size_t WorkspaceBytes, BC250_OVERLAY_PLAN* Plan, int Resident)
 {
-    BC250_OVERLAY_REQUEST in = {0};
+    const OVERLAY_ARGS in = *Args;
     BC250_DML201_PLANE_INPUT dml[2] = {0};
     BC250_MPC_REQUEST mpc = {0};
     unsigned result = BC250_OVERLAY_ARGUMENT, pipes = 0, layers = 0;
     const BC250_DCN_CAPS* caps;
-    if (!Plan) return result;
-    if (Request) in = *Request;
-    *Plan = (BC250_OVERLAY_PLAN){0};
-    if (!Request || !Workspace || !in.Caps) return result;
+    // The plan is written while the inputs are read: they must not share storage.
+    if (!Plan || !in.Plane || !in.Timing || Overlaps(Plan,sizeof(*Plan),in.Plane,2u * sizeof(*in.Plane)) ||
+        Overlaps(Plan,sizeof(*Plan),in.Timing,sizeof(*in.Timing)) ||
+        (in.Caps && Overlaps(Plan,sizeof(*Plan),in.Caps,sizeof(*in.Caps)))) {
+        if (Plan) memset(Plan,0,sizeof(*Plan));
+        return result;
+    }
+    memset(Plan,0,sizeof(*Plan));
+    if (!Workspace || !in.Caps) return result;
     caps = in.Caps;
     result = BC250_OVERLAY_TOPOLOGY;
     // This planner owns exactly two pipes: the primary and one slave plane.
@@ -99,9 +122,9 @@ static unsigned OverlayPrepare(const BC250_OVERLAY_REQUEST* Request,
         result = BC250_OVERLAY_COLOR;
         if (!Bc250CnvcPrepare(&color,&Plan->Color[pipe])) goto refused;
         result = BC250_OVERLAY_GEOMETRY;
-        if (!OverlayAxis(caps,(int)pipe,caps->MaxSurfaceWidth,&scaler.Geometry.Horizontal,p->Width,in.Timing.HActive,
+        if (!OverlayAxis(caps,(int)pipe,caps->MaxSurfaceWidth,&scaler.Geometry.Horizontal,p->Width,in.Timing->HActive,
                 p->Source.Left,p->Source.Right,p->Destination.Left,p->Destination.Right,p->Clip.Left,p->Clip.Right) ||
-            !OverlayAxis(caps,(int)pipe,caps->MaxSurfaceHeight,&scaler.Geometry.Vertical,p->Height,in.Timing.VActive,
+            !OverlayAxis(caps,(int)pipe,caps->MaxSurfaceHeight,&scaler.Geometry.Vertical,p->Height,in.Timing->VActive,
                 p->Source.Top,p->Source.Bottom,p->Destination.Top,p->Destination.Bottom,p->Clip.Top,p->Clip.Bottom)) goto refused;
         if ((long long)p->Source.Right - p->Source.Left > (long long)caps->MaxDownscaleSourceWidth &&
             (long long)p->Destination.Right - p->Destination.Left < (long long)p->Source.Right - p->Source.Left) goto refused;
@@ -121,33 +144,47 @@ static unsigned OverlayPrepare(const BC250_OVERLAY_REQUEST* Request,
     result = BC250_OVERLAY_TOPOLOGY;
     if (!Bc250MpcPrepare(&mpc,&Plan->Mpc)) goto refused;
     result = BC250_OVERLAY_DML;
-    if (Bc250Dml201PlanGroup(&in.Timing,dml,2,Workspace,WorkspaceBytes,&Plan->Dml) != BC250_DML201_OK) goto refused;
+    if (Bc250Dml201PlanGroup(in.Timing,dml,2,Workspace,WorkspaceBytes,&Plan->Dml) != BC250_DML201_OK) goto refused;
     Plan->Described = 1;
     Plan->Ready = Resident ? 1u : 0u;
     return BC250_OVERLAY_OK;
 refused:
-    *Plan = (BC250_OVERLAY_PLAN){0};
+    memset(Plan,0,sizeof(*Plan));
     return result;
 }
 
 unsigned Bc250OverlayPrepare(const BC250_OVERLAY_REQUEST* Request,
     void* Workspace, size_t WorkspaceBytes, BC250_OVERLAY_PLAN* Plan)
 {
-    return OverlayPrepare(Request,Workspace,WorkspaceBytes,Plan,1);
+    OVERLAY_ARGS args = {0};
+    if (!Request) {
+        if (Plan) memset(Plan,0,sizeof(*Plan));
+        return BC250_OVERLAY_ARGUMENT;
+    }
+    // The scalar fields are copied here; the plan must not overlap the request at all.
+    if (Plan && Overlaps(Plan,sizeof(*Plan),Request,sizeof(*Request))) {
+        memset(Plan,0,sizeof(*Plan));
+        return BC250_OVERLAY_ARGUMENT;
+    }
+    args.Count = Request->Count; args.SourceId = Request->SourceId;
+    args.PostCompositionChanged = Request->PostCompositionChanged; args.Caps = Request->Caps;
+    args.Timing = &Request->Timing; args.Plane = Request->Plane;
+    args.McBase = Request->McBase; args.VramPhysical = Request->VramPhysical; args.VramLength = Request->VramLength;
+    return OverlayPrepare(&args,Workspace,WorkspaceBytes,Plan,1);
 }
 
 unsigned Bc250OverlayDescribe(const BC250_OVERLAY_DESCRIPTION* Description,
     const BC250_DCN_CAPS* Caps, const BC250_DML201_INPUT* Timing, void* Workspace, size_t WorkspaceBytes,
     BC250_OVERLAY_PLAN* Plan)
 {
-    BC250_OVERLAY_REQUEST request={0};
-    if (!Description || !Timing || !Caps) {
-        if (Plan) *Plan=(BC250_OVERLAY_PLAN){0};
+    OVERLAY_ARGS args = {0};
+    if (!Description || !Timing || !Caps ||
+        (Plan && Overlaps(Plan,sizeof(*Plan),Description,sizeof(*Description)))) {
+        if (Plan) memset(Plan,0,sizeof(*Plan));
         return BC250_OVERLAY_ARGUMENT;
     }
-    request.Count=Description->Count; request.SourceId=Description->SourceId;
-    request.PostCompositionChanged=Description->PostCompositionChanged;
-    request.Timing=*Timing; request.Caps=Caps;
-    request.Plane[0]=Description->Plane[0]; request.Plane[1]=Description->Plane[1];
-    return OverlayPrepare(&request,Workspace,WorkspaceBytes,Plan,0);
+    args.Count = Description->Count; args.SourceId = Description->SourceId;
+    args.PostCompositionChanged = Description->PostCompositionChanged;
+    args.Caps = Caps; args.Timing = Timing; args.Plane = Description->Plane;
+    return OverlayPrepare(&args,Workspace,WorkspaceBytes,Plan,0);
 }

@@ -83,9 +83,15 @@ int main(void)
     bad.Plane[1].Clip=(BC250_OVERLAY_RECT){100,80,1700,1000};
     CHECK(Bc250OverlayPrepare(&bad,w,bytes,q)==BC250_OVERLAY_OK);
     CHECK(q->Geometry[1].Scaler.Geometry.LumaH.RecoutBegin==100 && q->Geometry[1].Scaler.Geometry.LumaH.RecoutSize==1600);
-    // Input and output alias, but the plan contains no retained temporary pointers.
+    // The planner reads its input in place (no stack copy on a kernel thread): an output that overlaps the
+    // request is refused and cleared, and a separate output gives the same plan as before.
     memcpy(q,&r,sizeof(r));
-    CHECK(Bc250OverlayPrepare((BC250_OVERLAY_REQUEST*)q,w,bytes,q)==BC250_OVERLAY_OK);
+    CHECK(Bc250OverlayPrepare((BC250_OVERLAY_REQUEST*)q,w,bytes,q)==BC250_OVERLAY_ARGUMENT);
+    {
+        static const BC250_OVERLAY_PLAN zero;
+        CHECK(!memcmp(q,&zero,sizeof(zero)));
+    }
+    CHECK(Bc250OverlayPrepare(&r,w,bytes,q)==BC250_OVERLAY_OK);
     CHECK(!memcmp(p,q,sizeof(*p)));
 #define BAD(field,value,reason) do {bad=r;bad.field=(value);Refused(&bad,w,bytes,q,reason);} while(0)
     Refused(NULL,w,bytes,q,BC250_OVERLAY_ARGUMENT);
@@ -160,6 +166,13 @@ int main(void)
         memset(q,0xa5,sizeof(*q));
         CHECK(Bc250OverlayDescribe(&d,&Bc250DcnCaps201,NULL,w,bytes,q)==BC250_OVERLAY_ARGUMENT && !memcmp(q,&zero,sizeof(zero)));
         CHECK(Bc250OverlayDescribe(&d,&Bc250DcnCaps201,&r.Timing,w,bytes,NULL)==BC250_OVERLAY_ARGUMENT);
+        // Output over the description or over the timing is refused: the planner reads both in place.
+        memcpy(q,&d,sizeof(d));
+        CHECK(Bc250OverlayDescribe((const BC250_OVERLAY_DESCRIPTION*)q,&Bc250DcnCaps201,&r.Timing,w,bytes,q)==
+            BC250_OVERLAY_ARGUMENT && !memcmp(q,&zero,sizeof(zero)));
+        memcpy(q,&r.Timing,sizeof(r.Timing));
+        CHECK(Bc250OverlayDescribe(&d,&Bc250DcnCaps201,(const BC250_DML201_INPUT*)q,w,bytes,q)==
+            BC250_OVERLAY_ARGUMENT && !memcmp(q,&zero,sizeof(zero)));
 #undef DBAD
         CHECK(Bc250OverlayDescribe(&d,NULL,&r.Timing,w,bytes,q)==BC250_OVERLAY_ARGUMENT && !memcmp(q,&zero,sizeof(zero)));
     }
