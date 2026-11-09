@@ -1253,7 +1253,7 @@ notice.failed.title|src|-|The graphics driver did not start
 notice.failed.text|src|-|The graphics driver did not start, so Windows is drawing the screen with its basic display: games do not run and everything is slower.\nNagi Control App shows what happened and what to try next.
 notice.open-app|src|-|Open Nagi Control App
 notice.close|src|-|Close
-notice.working|src|-|Turning the graphics driver back on. This can take up to four minutes, and the screen can go dark for a moment.
+notice.working|src|-|Turning the graphics driver back on.
 notice.working.seconds|src|-|{0} s
 notice.done|src|-|The graphics driver is running again.
 notice.action-failed|src|-|The graphics driver could not be started now. Restarting Windows is the next thing to try.
@@ -1265,9 +1265,8 @@ status.driver-refused|src|-|The graphics driver was switched off for safety, bec
 status.driver-refused.next|src|-|Turn the graphics driver back on. If it does not start, restart Windows.
 plan.title.enable-driver|src|-|Turn the graphics driver back on
 plan.line.enable-driver|src|-|The count of starts that were not checked goes back to zero, so the driver may start again.
-plan.line.enable-driver-confirm|src|-|The graphics device starts again and the new start is marked as working.
-plan.enable-driver.dark|src|-|The screen can go dark for a few seconds, and it can change its size once.
-plan.enable-driver.restart|src|-|If the graphics driver does not start, this app says so and offers to restart Windows.
+plan.line.enable-driver-confirm|src|-|The graphics driver starts at the next restart of Windows.
+plan.enable-driver.restart|src|-|Then this app offers to restart Windows now or later.
 plan.refuse.driver-on|src|-|The graphics driver is running already, so there is nothing to turn back on.
 plan.refuse.not-guard|src|-|The graphics driver was not switched off for safety, so this does not help here. Open Help to find the next step.
 search.settings.wallpaper|src|-|Nagi wallpaper

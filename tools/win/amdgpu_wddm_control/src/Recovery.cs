@@ -193,8 +193,8 @@ namespace AmdgpuWddmControl
         public readonly List<RegWrite> Writes = new List<RegWrite>();
         public readonly List<string> Notes = new List<string>();
         public bool ConfirmStart, OfferRestart, RestartCompositor, Undoable = true;
-        // enable-driver: clear the driver's count of unconfirmed starts and start the graphics device again
-        // (RecoveryActions.EnableDriver). It writes no value of Writes, because the count is outside the allow-list
+        // enable-driver: clear the driver's count of unconfirmed starts; the driver starts at the next restart of
+        // Windows (RecoveryActions.EnableDriver, BD-093). It writes no value of Writes, because the count is outside the allow-list
         // of the actions and of the undo on purpose (StartNotice.cs, GuardReset).
         public bool EnableDriver;
         // game-log-on: the helper also prepares %ProgramData%\amdgpu-wddm\logs\games (its access list) and prunes
@@ -471,7 +471,7 @@ namespace AmdgpuWddmControl
             // set a repair install reopens, in one action. The single actions above stay as they are.
             ClosureNotice.ActionName,
             // The one click back from Microsoft Basic Display after the driver's guard refused a start: the count of
-            // unconfirmed starts to zero, then the graphics device started again (RecoveryActions.EnableDriver).
+            // unconfirmed starts to zero; the driver starts at the next restart of Windows (RecoveryActions.EnableDriver).
             "enable-driver",
             "cu-mode", "cu-confirm", "game-profile", "game-undo", "game-redo",
             // The tuning page. Only cpu-enable and cpu-disable write a value; the other ten send one escape each.
@@ -1169,8 +1169,8 @@ namespace AmdgpuWddmControl
             if (!s.DriverRunning)
             {
                 if (GuardRefused(s))
-                    // The way back is this app's own action now (enable-driver): the count to 0 and the device
-                    // started again, without a restart of Windows and without the installer. Up to this release
+                    // The way back is this app's own action now (enable-driver): the count to 0, and the driver
+                    // starts at the next restart of Windows (BD-093), without the installer. Up to this release
                     // the only advice here was to run the release installer again, which a person on Microsoft
                     // Basic Display has to find and download first.
                     add("Driver start", "The driver refused to start: " + starts + " starts in a row were not confirmed, so Windows uses Microsoft Basic Display. " + guard +
@@ -1512,15 +1512,17 @@ namespace AmdgpuWddmControl
                     break;
 
                 case "enable-driver":
-                    // The way back from Microsoft Basic Display without a restart of Windows: the count of starts
-                    // that nothing confirmed goes to zero (so the guard lets the next start through), then the
-                    // helper starts the graphics device again and confirms the start it gets. Offered only for the
+                    // The way back from Microsoft Basic Display: the count of starts that nothing confirmed goes to
+                    // zero, so the guard lets the next start through, and the driver starts at the next restart of
+                    // Windows. The graphics device is never started in the running session (BD-093: a driver that
+                    // starts there can leave the processor slow until the next restart). Offered only for the
                     // state it repairs: with the driver running there is nothing to turn on, and a start that
                     // failed for another reason is not a refusal of the guard, so clearing the count would hide
                     // the real reason instead of fixing it.
                     p.Title = "Turn the graphics driver back on";
-                    p.Change = "Sets the count of unconfirmed starts to 0 and starts the graphics device again, without a restart of Windows.";
-                    p.Effect = "at once";
+                    p.Change = "Sets the count of unconfirmed starts to 0. The graphics driver starts at the next restart of Windows.";
+                    p.Effect = "at the next restart of Windows";
+                    p.OfferRestart = true;
                     p.Undoable = false;
                     if (s.DriverRunning)
                     {
@@ -1536,9 +1538,7 @@ namespace AmdgpuWddmControl
                     p.EnableDriver = true;
                     p.Preview.Add(Strings.T("plan.line.enable-driver"));
                     p.Preview.Add(Strings.T("plan.line.enable-driver-confirm"));
-                    p.Notes.Add("The screen can go dark for a few seconds while the graphics device starts, and it can change its size once.");
-                    p.PlainNotes.Add(Strings.T("plan.enable-driver.dark"));
-                    p.Notes.Add("If the device does not start, the helper says so and the window offers a restart of Windows; the count stays at 0 either way.");
+                    p.Notes.Add("The window then offers to restart Windows now or later; the count stays at 0 either way.");
                     p.PlainNotes.Add(Strings.T("plan.enable-driver.restart"));
                     break;
 

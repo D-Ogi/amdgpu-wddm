@@ -1236,7 +1236,7 @@ notice.failed.title|mt|fb8e175f|Sterownik karty graficznej nie uruchomił się
 notice.failed.text|mt|1e13a43f|Sterownik karty graficznej nie uruchomił się, więc Windows rysuje obraz swoim podstawowym sterownikiem ekranu: gry nie działają, a wszystko jest wolniejsze.\nProgram Nagi Control App pokazuje, co się stało i co zrobić dalej.
 notice.open-app|mt|f8a181ac|Otwórz Nagi Control App
 notice.close|mt|7d9eb7ac|Zamknij
-notice.working|mt|2a07b127|Włączam sterownik karty graficznej z powrotem. Może to potrwać do czterech minut, a obraz może na chwilę zgasnąć.
+notice.working|mt|0e2d968e|Włączam sterownik karty graficznej z powrotem.
 notice.working.seconds|mt|dae58fb2|{0} s
 notice.done|mt|3d647c8d|Sterownik karty graficznej znowu działa.
 notice.action-failed|mt|26a5f377|Nie udało się teraz uruchomić sterownika karty graficznej. Następny krok to ponowne uruchomienie systemu Windows.
@@ -1248,9 +1248,8 @@ status.driver-refused|mt|0f7cc434|Sterownik karty graficznej został wyłączony
 status.driver-refused.next|mt|449a51bf|Włącz sterownik karty graficznej z powrotem. Jeśli się nie uruchomi, uruchom ponownie system Windows.
 plan.title.enable-driver|mt|3ebf7632|Włączenie sterownika karty graficznej z powrotem
 plan.line.enable-driver|mt|eb9dd536|Licznik uruchomień bez sprawdzenia wraca do zera, więc sterownik może znowu się uruchomić.
-plan.line.enable-driver-confirm|mt|8eda43a1|Urządzenie graficzne uruchamia się ponownie, a nowe uruchomienie zostaje oznaczone jako działające.
-plan.enable-driver.dark|mt|02d9a741|Obraz może zgasnąć na kilka sekund i raz zmienić rozmiar.
-plan.enable-driver.restart|mt|73638369|Jeśli sterownik karty graficznej się nie uruchomi, program to napisze i zaproponuje ponowne uruchomienie systemu Windows.
+plan.line.enable-driver-confirm|mt|7a064f1a|Sterownik karty graficznej uruchomi się przy następnym ponownym uruchomieniu systemu Windows.
+plan.enable-driver.restart|mt|bb03ecf5|Potem program zaproponuje ponowne uruchomienie systemu Windows teraz lub później.
 plan.refuse.driver-on|mt|7532d61c|Sterownik karty graficznej już działa, więc nie ma czego włączać.
 plan.refuse.not-guard|mt|040c6a83|Sterownik karty graficznej nie został wyłączony na wszelki wypadek, więc to tutaj nie pomoże. Otwórz Pomoc, aby znaleźć następny krok.
 search.settings.wallpaper|mt|42350221|Tapeta Nagi

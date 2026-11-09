@@ -1234,7 +1234,7 @@ notice.failed.title|mt|fb8e175f|グラフィックスドライバーが起動し
 notice.failed.text|mt|1e13a43f|グラフィックスドライバーが起動しなかったため、Windowsは基本ディスプレイで画面を描いています。ゲームは動かず、全体の動作も遅くなります。\nNagi Control Appに、何が起きたかと次に試すことが表示されます。
 notice.open-app|mt|f8a181ac|Nagi Control Appを開く
 notice.close|mt|7d9eb7ac|閉じる
-notice.working|mt|2a07b127|グラフィックスドライバーを元に戻しています。最大で4分ほどかかり、画面が一瞬暗くなることがあります。
+notice.working|mt|0e2d968e|グラフィックスドライバーを元に戻しています。
 notice.working.seconds|mt|dae58fb2|{0}秒
 notice.done|mt|3d647c8d|グラフィックスドライバーが再び動いています。
 notice.action-failed|mt|26a5f377|今はグラフィックスドライバーを起動できませんでした。次はWindowsの再起動を試してください。
@@ -1246,9 +1246,8 @@ status.driver-refused|mt|0f7cc434|直前の起動で確認が完了しなかっ�
 status.driver-refused.next|mt|449a51bf|グラフィックスドライバーを元に戻してください。起動しない場合はWindowsを再起動してください。
 plan.title.enable-driver|mt|3ebf7632|グラフィックスドライバーを元に戻す
 plan.line.enable-driver|mt|eb9dd536|確認されなかった起動の回数が0に戻り、ドライバーは再び起動できるようになります。
-plan.line.enable-driver-confirm|mt|8eda43a1|グラフィックスデバイスを再起動し、新しい起動を正常として記録します。
-plan.enable-driver.dark|mt|02d9a741|画面が数秒暗くなり、大きさが一度変わることがあります。
-plan.enable-driver.restart|mt|73638369|グラフィックスドライバーが起動しない場合は、その旨を表示してWindowsの再起動を提案します。
+plan.line.enable-driver-confirm|mt|7a064f1a|グラフィックスドライバーは次回のWindowsの再起動時に起動します。
+plan.enable-driver.restart|mt|bb03ecf5|その後、Windowsを今すぐ再起動するか後で再起動するかを選べます。
 plan.refuse.driver-on|mt|7532d61c|グラフィックスドライバーはすでに動いているため、戻すものはありません。
 plan.refuse.not-guard|mt|040c6a83|グラフィックスドライバーは安全のために停止されたのではないので、ここでは解決しません。ヘルプを開いて次の手順を確認してください。
 search.settings.wallpaper|mt|42350221|Nagi の壁紙

@@ -846,14 +846,12 @@ static partial class UnitTests
         // BenchmarkRun.cs ends one process: the game it started itself, and only when that game could not be put
         // into the job object that would otherwise have ended it (test/BenchmarkTests.cs decides that exact shape).
         Equal("", string.Join(",", where(@"\b(TerminateProcess|taskkill)\b|\.Kill\(", new[] { "RecoveryActions.cs", "BugReport.cs", "SystemTuningProcess.cs", "BenchmarkRun.cs", "DiagnosticWorker.cs", "StartWindowHost.cs", "RocmAttach.cs" })), "G-SRC: no process kill outside the helper's accepted BD-060 escape, each helper's own timed-out child and the benchmark's own game");
-        // A restart of our own graphics device is neither a disable nor an enable. The one click back from
-        // Microsoft Basic Display after the driver's guard refused a start (RecoveryActions.EnableDriver) runs
-        // pnputil /restart-device for that one device, the way the release installer already restarts the GPU's
-        // audio function. Nothing else in this application may name a PnP tool, and that helper may not disable,
-        // remove or enable any device.
-        Equal("", string.Join(",", where(@"\b(SetupDiCallClassInstaller|DICS_DISABLE|DIF_PROPERTYCHANGE|CM_Disable_DevNode|pnputil|devcon)\b", new[] { "RecoveryActions.cs" })), "G-SRC: no PnP disable or enable");
-        Check(Regex.IsMatch(files["RecoveryActions.cs"], @"/restart-device") && !Regex.IsMatch(files["RecoveryActions.cs"], @"/(remove|disable|enable|delete)-device"),
-            "G-SRC: the helper restarts one device and never disables, removes or enables one");
+        // BD-093 (2026-11-09): nothing in this application starts, stops or restarts a device while Windows
+        // runs. A driver that starts in the running session can leave the processor slow until the next restart, so
+        // the one click back from Microsoft Basic Display (RecoveryActions.EnableDriver) clears the count and leaves
+        // the start to the next restart of Windows. No file may name a PnP tool or a device state change.
+        Equal("", string.Join(",", where(@"\b(SetupDiCallClassInstaller|DICS_DISABLE|DICS_ENABLE|DICS_PROPCHANGE|DIF_PROPERTYCHANGE|CM_Disable_DevNode|CM_Enable_DevNode|CM_Query_And_Remove_SubTree\w*|pnputil|devcon)\b", null)), "G-SRC: no PnP tool and no device state change");
+        Equal("", string.Join(",", where(@"(?i)/(restart|remove|disable|enable|delete)-device|\bRestartDevice\b|(Disable|Enable)-PnpDevice", null)), "G-SRC: no device restart, removal, disable or enable");
         Equal("", string.Join(",", where(@"\b(EWX_FORCE\w*|Restart-Computer|shutdown(\.exe)?\s+/r)\b", null)), "G-SRC: no forced restart");
         Equal("", string.Join(",", where(@"(?i)\b(oauth|access_token|Authorization)\b", null)), "G-SRC: no sign-in or token code");
         foreach (var f in window)

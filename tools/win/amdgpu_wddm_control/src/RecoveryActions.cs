@@ -19,7 +19,7 @@
 // boot is an observed restart.
 //
 // Exit codes: 0 done, 1 failed, 2 usage, 3 refused, 5 needs administrator, 6 the change was made and Windows has to
-// restart to finish it (enable-driver, when the graphics device did not start again by itself). 4 was "fell back to
+// restart to finish it (enable-driver: the driver starts at the next restart, BD-093). 4 was "fell back to
 // the CPU route" of the DWM watchdog, removed with the DWM restart.
 using System;
 using System.Collections.Generic;
@@ -831,9 +831,9 @@ namespace AmdgpuWddmControl
     public static class RecoveryRunner
     {
         public const int Done = 0, Failed = 1, Usage = 2, Refused = 3, NeedsAdministrator = 5;
-        // enable-driver only: the count of unconfirmed starts is cleared, so the next start of Windows works, but
-        // the graphics device did not come back without one. The window turns this into the restart button; any
-        // other caller may treat it as "done, restart to finish".
+        // enable-driver: the count of unconfirmed starts is cleared, so the next start of Windows starts the driver
+        // (BD-093: the device is never started in the running session). The window turns this into "Restart now"
+        // and "Later"; any other caller may treat it as "done, restart to finish".
         public const int RestartNeeded = 6;
 
         sealed class Options
@@ -1766,22 +1766,12 @@ namespace AmdgpuWddmControl
             return false;
         }
 
-        // ---- enable-driver: the way back from Microsoft Basic Display without a restart of Windows -------------
-        // The order matters, and so does what each step leaves behind when the next one fails:
-        //   1. the count of unconfirmed starts to 0, flushed and read back. After this step alone the NEXT start of
-        //      Windows works, so every later failure still leaves the person better off than before.
-        //   2. pnputil /restart-device for this board's graphics device, inside a budget. The process is never
-        //      killed: a kernel PnP transition cannot be taken back, and a pnputil that has not returned is its own
-        //      answer (the installer's Restart-GpuAudioDevice says the same about the audio function).
-        //   3. a bounded wait for the device to come back and for the driver to answer a reading of its own state.
-        //   4. the confirmation of the start that came back, with the same rule every other client applies
-        //      (Confirm, start-confirm-core.ps1). A start that cannot be confirmed inside the budget is not a
-        //      failure of this action: the count goes back to 0 instead, so the next start of Windows is not
-        //      counted against the person either, and the log says which of the two happened.
-        // A device that does not come back is answered with RestartNeeded, not Failed: the one thing that is
-        // certainly fixed is the count, and the one thing that certainly helps now is a restart of Windows.
-        const int DeviceRestartSeconds = 60, DeviceBackSeconds = 45, EnableConfirmSeconds = 95;
-
+        // ---- enable-driver: the way back from Microsoft Basic Display, at the next restart of Windows ----------
+        // The count of unconfirmed starts goes to 0, flushed and read back. The guard then lets the NEXT start of
+        // Windows through, and the driver starts there. Nothing starts the graphics device while Windows runs
+        // (BD-093, 2026-11-09): a driver that starts in the running session can leave the processor slow until
+        // the next restart, so every driver change ends with a restart of Windows. The answer is therefore
+        // RestartNeeded: the window offers "Restart now" and "Later".
         static int EnableDriver()
         {
             GuardResetResult reset;
@@ -1793,110 +1783,13 @@ namespace AmdgpuWddmControl
             }
             Log("guard count in the driver state store (" + GuardReset.StoreLocation + "): " + reset);
             if (!reset.Written) { Log("result: failed: the count of unconfirmed starts could not be cleared. Nothing else was tried."); return Failed; }
-
-            var device = BoardDevice();
-            if (device == null)
-            {
-                Log("result: restart needed: Windows lists no graphics device of this board, so there is none to start; the count is cleared, restart Windows");
-                return RestartNeeded;
-            }
-            Log("device " + device.InstanceId + ": status '" + device.Status + "', problem code " + device.Problem);
-            var restart = RestartDevice(device.InstanceId);
-            Log("pnputil /restart-device: " + restart);
-
-            var clock = Stopwatch.StartNew();
-            string last = "no reading yet";
-            while (clock.Elapsed.TotalSeconds < DeviceBackSeconds)
-            {
-                var health = Kmd.StartHealth();
-                if (health.Value != null)
-                {
-                    Log("the driver answers after " + clock.Elapsed.TotalSeconds.ToString("0.#", CultureInfo.InvariantCulture) + " s: flags " +
-                        health.Value.Flags + ", generation " + health.Value.Generation);
-                    var why = Confirm(EnableConfirmSeconds);
-                    if (why == null) { Log("result: done: the graphics driver runs again and this start is confirmed."); return Done; }
-                    Log("the new start could not be confirmed inside " + EnableConfirmSeconds + " s: " + why);
-                    // The count again, because the start that just ran added one to it.
-                    try { using (var api = new Win32RegApi(Recovery.ParametersPath)) Log("guard count again: " + GuardReset.Run(api)); }
-                    catch (Exception e) { Log("the count could not be cleared again (" + e.Message + "): the next start of Windows counts this one"); }
-                    Log("result: done: the graphics driver runs again. The start is not confirmed; the logon task confirms it, or the control application can.");
-                    return Done;
-                }
-                last = health.Error ?? "no answer";
-                Thread.Sleep(2000);
-            }
-            var after = BoardDevice();
-            Log("the driver gives no answer after " + DeviceBackSeconds + " s (" + last + "); device " +
-                (after == null ? "not listed any more" : "status '" + after.Status + "', problem code " + after.Problem));
-            Log("result: restart needed: the count of unconfirmed starts is cleared, so a restart of Windows starts the driver again");
+            Log("result: restart needed: the count of unconfirmed starts is cleared; the graphics driver starts at the next restart of Windows (no device restart in this session, BD-093)");
             return RestartNeeded;
         }
 
-        // One row of this board's graphics device, as Windows lists it (the same class and filter Inventory.cs and
-        // the setup diagnostics read). Null when Windows lists none, or when the query itself failed: either way
-        // there is no instance to restart, and the caller says so instead of guessing an identifier.
-        sealed class DeviceRow
-        {
-            public string InstanceId, Status, Service;
-            public uint Problem;
-        }
-
-        static DeviceRow BoardDevice()
-        {
-            try
-            {
-                var options = new System.Management.EnumerationOptions { ReturnImmediately = true, Timeout = TimeSpan.FromSeconds(10) };
-                using (var search = new System.Management.ManagementObjectSearcher(new System.Management.ManagementScope(@"root\cimv2"),
-                    new System.Management.ObjectQuery("SELECT DeviceID, Service, Status, ConfigManagerErrorCode FROM Win32_PnPEntity WHERE PNPDeviceID LIKE 'PCI\\\\VEN_1002&DEV_13FE%'"), options))
-                using (var rows = search.Get())
-                    foreach (System.Management.ManagementObject row in rows)
-                        using (row)
-                        {
-                            var id = Convert.ToString(row["DeviceID"], CultureInfo.InvariantCulture);
-                            if (string.IsNullOrEmpty(id)) continue;
-                            return new DeviceRow
-                            {
-                                InstanceId = id,
-                                Service = Convert.ToString(row["Service"], CultureInfo.InvariantCulture),
-                                Status = Convert.ToString(row["Status"], CultureInfo.InvariantCulture),
-                                Problem = row["ConfigManagerErrorCode"] == null ? 0u : Convert.ToUInt32(row["ConfigManagerErrorCode"], CultureInfo.InvariantCulture),
-                            };
-                        }
-            }
-            catch (Exception e) { Log("the graphics device cannot be read (" + e.Message + ")"); }
-            return null;
-        }
-
-        // pnputil /restart-device for one instance, inside DeviceRestartSeconds. The process is NOT killed when the
-        // budget passes: terminating pnputil in the middle of a kernel PnP transition can leave the device in a
-        // state nothing can describe. A timeout is reported as itself.
-        static string RestartDevice(string instanceId)
-        {
-            var info = new ProcessStartInfo("pnputil.exe", "/restart-device \"" + instanceId + "\"")
-            {
-                UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
-            };
-            try
-            {
-                using (var p = Process.Start(info))
-                {
-                    var output = p.StandardOutput.ReadToEndAsync();
-                    var error = p.StandardError.ReadToEndAsync();
-                    if (!p.WaitForExit(DeviceRestartSeconds * 1000))
-                        return "process " + p.Id + " has not returned within " + DeviceRestartSeconds + " s; it is left running, because a kernel device restart cannot be taken back";
-                    string text = (output.Result + " " + error.Result).Replace("\r", " ").Replace("\n", " ").Trim();
-                    if (text.Length > 300) text = text.Substring(0, 300);
-                    return "exit " + p.ExitCode + (text.Length == 0 ? "" : ": " + text);
-                }
-            }
-            catch (Exception e) { return "could not be started (" + e.Message + ")"; }
-        }
-
         // The confirmation with the full rule of start-confirm-core.ps1 (fresh completion included). An idle desktop
-        // may present rarely, so the helper retries the reading for up to `seconds` before it gives up. The default
-        // is the 10 s of the confirm-start action, where the start has been ready for a minute already; the driver's
-        // own milestone needs 60 s of a ready start, so enable-driver, which has just started the device, passes a
-        // budget above that minute.
+        // may present rarely, so the helper retries the reading for up to `seconds` before it gives up. The 10 s
+        // default suits the confirm-start action, where the start has been ready for a minute already.
         static string Confirm(int seconds = 10)
         {
             string why = null;

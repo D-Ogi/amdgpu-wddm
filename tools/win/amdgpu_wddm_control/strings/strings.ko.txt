@@ -1234,7 +1234,7 @@ notice.failed.title|mt|fb8e175f|그래픽 드라이버가 시작되지 않았습
 notice.failed.text|mt|1e13a43f|그래픽 드라이버가 시작되지 않아 Windows가 기본 디스플레이로 화면을 그리고 있습니다. 게임이 실행되지 않고 전체가 느립니다.\nNagi Control App에서 무슨 일이 있었고 다음에 무엇을 할지 알려 줍니다.
 notice.open-app|mt|f8a181ac|Nagi Control App 열기
 notice.close|mt|7d9eb7ac|닫기
-notice.working|mt|2a07b127|그래픽 드라이버를 다시 켜고 있습니다. 최대 4분이 걸릴 수 있고 화면이 잠시 어두워질 수 있습니다.
+notice.working|mt|0e2d968e|그래픽 드라이버를 다시 켜고 있습니다.
 notice.working.seconds|mt|dae58fb2|{0}초
 notice.done|mt|3d647c8d|그래픽 드라이버가 다시 실행됩니다.
 notice.action-failed|mt|26a5f377|지금은 그래픽 드라이버를 시작할 수 없었습니다. 다음으로 Windows를 다시 시작해 보세요.
@@ -1246,9 +1246,8 @@ status.driver-refused|mt|0f7cc434|마지막 시작들이 점검을 끝내지 못
 status.driver-refused.next|mt|449a51bf|그래픽 드라이버를 다시 켜세요. 시작되지 않으면 Windows를 다시 시작하세요.
 plan.title.enable-driver|mt|3ebf7632|그래픽 드라이버 다시 켜기
 plan.line.enable-driver|mt|eb9dd536|점검되지 않은 시작 횟수가 0으로 돌아가므로 드라이버가 다시 시작할 수 있습니다.
-plan.line.enable-driver-confirm|mt|8eda43a1|그래픽 장치를 다시 시작하고 새 시작을 정상으로 표시합니다.
-plan.enable-driver.dark|mt|02d9a741|화면이 몇 초 어두워지고 크기가 한 번 바뀔 수 있습니다.
-plan.enable-driver.restart|mt|73638369|그래픽 드라이버가 시작되지 않으면 그 사실을 알리고 Windows 다시 시작을 제안합니다.
+plan.line.enable-driver-confirm|mt|7a064f1a|그래픽 드라이버는 다음에 Windows를 다시 시작할 때 시작됩니다.
+plan.enable-driver.restart|mt|bb03ecf5|그런 다음 Windows를 지금 또는 나중에 다시 시작하도록 제안합니다.
 plan.refuse.driver-on|mt|7532d61c|그래픽 드라이버가 이미 실행 중이므로 다시 켤 것이 없습니다.
 plan.refuse.not-guard|mt|040c6a83|그래픽 드라이버가 안전을 위해 꺼진 것이 아니므로 여기서는 도움이 되지 않습니다. 도움말을 열어 다음 단계를 확인하세요.
 search.settings.wallpaper|mt|42350221|Nagi 배경 화면

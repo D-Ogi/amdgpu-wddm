@@ -352,12 +352,10 @@ half minute, because a driver still inside its own start looks the same from out
 - The driver did not start for another reason. The notice says so and offers "Open Nagi Control App" and
   "Close".
 
-"Turn the graphics driver back on..." sets the count of unconfirmed starts back to 0 and restarts the graphics
-device in place, without a restart of Windows. The notice counts the seconds while it works: it can take up to
-four minutes, and the screen can go dark for a moment. The notice then waits for the driver and confirms this
-start itself, so the next start of Windows does not count it against you. If the device does not come back, the
-notice says that Windows has to be restarted and offers a button for it. "Close" stays usable the whole time, and
-the repair finishes whether the notice is open or not.
+"Turn the graphics driver back on..." sets the count of unconfirmed starts back to 0. The driver then starts at
+the next restart of Windows, and the notice offers "Restart now" and "Later". The graphics device is not started
+while Windows runs: a driver that starts in the running session can leave the processor slow until the next
+restart [BD-093]. "Close" stays usable the whole time, and the repair finishes whether the notice is open or not.
 
 The home page of Nagi Control App carries the same button while the driver stays switched off, for a person who
 closed the notice, and the Recovery page (Help, with "Show support options" on) explains the state in "Support:
