@@ -47,13 +47,14 @@ static const BC250_GPU_CAPABILITY g_Bc250GpuCapabilities[] = {
     { 0x1002u, 0x13FEu, 0x8Fu, 0x84u, BC250_FSR4_CLAIM_INT8_NAVI2, 0x32u, BC250_DOT_SOFTWARE, 1u, 32u, 64u, 0u, 0u },
 };
 
-/* 1 and the row of one table when (vendor, device) is in it, 0 otherwise. A foreign vendor never matches. The
- * table and its count are arguments so that a test can prove the lookup is generic; the driver passes its own. */
+/* 1 and the row of one table when (vendor, device) is in it, 0 otherwise. The row's own PciVendor decides: a vendor
+ * this table has no row for gets no row, without a constant in this code. The table and its count are arguments so
+ * that a test can prove the lookup is generic; the driver passes its own. */
 static __inline int Bc250GpuCapabilityLookup(const BC250_GPU_CAPABILITY* rows, unsigned count, unsigned vendor,
                                              unsigned device, BC250_GPU_CAPABILITY* out)
 {
     unsigned i;
-    if (vendor != 0x1002u || !rows || !out) return 0;
+    if (!rows || !out) return 0;
     for (i = 0; i < count; i++)
         if (rows[i].PciVendor == (unsigned short)vendor && rows[i].PciDevice == (unsigned short)device) {
             *out = rows[i];

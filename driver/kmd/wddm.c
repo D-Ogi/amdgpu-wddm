@@ -4649,8 +4649,8 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
                  Device->GpuCapabilityValid ? "present" : "absent", pci & 0xFFFFu, pci >> 16,
                  Device->GpuCapabilityValid ? (unsigned long)Device->GpuCapability.Fsr4Claim : 0ul,
                  Device->GpuCapabilityValid ? (unsigned long)Device->GpuCapability.RevisionOwn : 0ul,
-                 (Device->GpuCapabilityValid && Device->GpuCapability.DotClass == BC250_DOT_SOFTWARE)
-                     ? "software" : "hardware");
+                 !Device->GpuCapabilityValid ? "unknown"
+                 : Device->GpuCapability.DotClass == BC250_DOT_SOFTWARE ? "software" : "hardware");
     }
     KeInitializeDpc(&wddm->PagingSubmitDpc, WddmPagingSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->PagingSubmitTimer);

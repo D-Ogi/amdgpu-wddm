@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: MIT
-// Host test of process-witness.h: the text of the module line and the fault line (BD-332). The lines must be exact:
-// a report is read by a person and by a grep, and neither may mistake a module name or an offset. The handler itself
-// is exercised only for safety (arming twice, and a call without a recording does nothing).
+// Host test of process-witness.h: the text of the module line and the fault line, and the handler's contract
+// (BD-332, review findings F1-F6). The lines must be exact: a report is read by a person and by a grep, and neither
+// may mistake a module name or an offset. The handler is called with a synthetic EXCEPTION_POINTERS, so the return
+// value, the re-entrancy guard, the line bound, the repeat suppression and arming/removal are checked without
+// raising anything.
+//
+// The test is built with AMDGPU_WDDM_LAB_FLAVOUR (tools/build/build-umd-d3d12.ps1), because only that flavour of
+// the sink reads AMDGPU_WDDM_LOG directly; the test uses it to open a real log file in the current directory.
 #include "process-witness.h"
+#include <windows.h>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <cwchar>
@@ -12,6 +19,46 @@ int failures = 0;
 #define CHECK(c) do { if (!(c)) { std::printf("FAIL %s (line %d)\n", #c, __LINE__); ++failures; } } while (0)
 
 using amdgpu_wddm_witness::FaultRecord;
+namespace detail = amdgpu_wddm_witness::detail;
+
+__declspec(noinline) void faulting_point() {
+    // Only an address of this image is needed; the function is never entered.
+    volatile unsigned sink = 0;
+    (void)sink;
+}
+
+// The log file of this run, in the current directory.
+char g_log_name[64];
+char g_log_variable[96];
+
+void prepare_log() {
+    _snprintf_s(g_log_name, sizeof(g_log_name), _TRUNCATE, "process-witness-%lu.log", GetCurrentProcessId());
+    DeleteFileA(g_log_name);
+    _snprintf_s(g_log_variable, sizeof(g_log_variable), _TRUNCATE, "file:%s", g_log_name);
+    SetEnvironmentVariableA("AMDGPU_WDDM_LOG", g_log_variable);
+}
+
+int count_fault_lines() {
+    FILE* const f = std::fopen(g_log_name, "rb");
+    if (!f) return -1;
+    char text[8192];
+    const std::size_t n = std::fread(text, 1, sizeof(text) - 1, f);
+    std::fclose(f);
+    text[n] = '\0';
+    int count = 0;
+    for (const char* p = text; (p = std::strstr(p, "fault witness: code")) != nullptr; ++p) ++count;
+    return count;
+}
+
+bool log_contains(const char* needle) {
+    FILE* const f = std::fopen(g_log_name, "rb");
+    if (!f) return false;
+    char text[8192];
+    const std::size_t n = std::fread(text, 1, sizeof(text) - 1, f);
+    std::fclose(f);
+    text[n] = '\0';
+    return std::strstr(text, needle) != nullptr;
+}
 
 void test_file_name() {
     char out[64];
@@ -94,14 +141,11 @@ void test_wide_name() {
     CHECK(amdgpu_wddm_witness::wide_name(nullptr, wide, 32) == 0);
 }
 
-// The counts are passed as values, so that the checks are not constant conditions (C4127 with /W4 /WX).
-void check_counts(unsigned watch, unsigned lines) {
+void test_watch_list() {
+    unsigned watch = amdgpu_wddm_witness::kWatchCount;
+    unsigned lines = amdgpu_wddm_witness::kFaultLines;
     CHECK(watch == 16);
     CHECK(lines == 8);
-}
-
-void test_watch_list() {
-    check_counts(amdgpu_wddm_witness::kWatchCount, amdgpu_wddm_witness::kFaultLines);
     bool fsr4 = false, proxy = false, amdxc = false;
     for (unsigned i = 0; i < amdgpu_wddm_witness::kWatchCount; ++i) {
         if (!std::strcmp(amdgpu_wddm_witness::kWatch[i], "amd_fidelityfx_upscaler_dx12.dll")) fsr4 = true;
@@ -111,23 +155,84 @@ void test_watch_list() {
     CHECK(fsr4 && proxy && amdxc);
 }
 
-void test_arming_is_safe() {
-    // Without a recording the sink is silent and arm() registers nothing; either way both calls are safe and a
-    // second arm does nothing. This is the state of every process the control app did not arm.
+void test_expiry() {
+    CHECK(detail::expired(100, 100));
+    CHECK(detail::expired(100, 101));
+    CHECK(!detail::expired(100, 99));
+    CHECK(!detail::expired(0, 999));   // no bound never expires
+}
+
+// The handler's contract, with a synthetic record whose address lies in this image.
+void test_handler() {
+    EXCEPTION_RECORD record{};
+    record.ExceptionCode = 0xC0000005ul;
+    record.ExceptionAddress = reinterpret_cast<PVOID>(&faulting_point);
+    record.NumberParameters = 2;
+    record.ExceptionInformation[0] = 1;   // write
+    record.ExceptionInformation[1] = 0;
+    EXCEPTION_POINTERS info{&record, nullptr};
+
+    // Not armed: nothing happens, and the search continues.
+    CHECK(!detail::recording().load());
+    CHECK(detail::fault_handler(&info) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(detail::fault_handler(nullptr) == EXCEPTION_CONTINUE_SEARCH);
+
+    // Armed with a real sink: the first fault writes one line with this module.
     amdgpu_wddm_witness::arm();
+    CHECK(detail::recording().load());
+    CHECK(detail::handler_handle().load() != nullptr);
+    CHECK(detail::fault_handler(&info) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_fault_lines() == 1);
+    CHECK(log_contains("fault witness: code c0000005, module process-witness-test.exe"));
+    CHECK(log_contains("info 1 0"));
+
+    // A repeat of the last fault adds no line.
+    CHECK(detail::fault_handler(&info) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_fault_lines() == 1);
+
+    // Distinct faults: eight lines in all, and not one more.
+    for (unsigned i = 1; i < 12; ++i) {
+        record.ExceptionAddress = reinterpret_cast<PVOID>(reinterpret_cast<char*>(&faulting_point) + i);
+        CHECK(detail::fault_handler(&info) == EXCEPTION_CONTINUE_SEARCH);
+    }
+    CHECK(count_fault_lines() == 8);
+
+    // A fault while another line is written is dropped and its search continues.
+    detail::busy().store(true);
+    record.ExceptionAddress = reinterpret_cast<PVOID>(reinterpret_cast<char*>(&faulting_point) + 64);
+    CHECK(detail::fault_handler(&info) == EXCEPTION_CONTINUE_SEARCH);
+    detail::busy().store(false);
+    CHECK(count_fault_lines() == 8);
+
+    // A line whose address is in no module still names the fault.
+    amdgpu_wddm_witness::disarm();
+    CHECK(!detail::recording().load());
+    CHECK(detail::handler_handle().load() == nullptr);
     amdgpu_wddm_witness::arm();
-    amdgpu_wddm_witness::log_modules();
+    CHECK(detail::recording().load());
+    record.ExceptionAddress = reinterpret_cast<PVOID>(static_cast<uintptr_t>(0x1234));
+    CHECK(detail::fault_handler(&info) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_fault_lines() == 9);   // a fresh budget after arm
+    CHECK(log_contains("module -, base 0, rva 0"));
+
+    amdgpu_wddm_witness::disarm();
+    CHECK(!detail::recording().load());
+    // Disarmed: a fault writes nothing (the handler is also unregistered).
+    CHECK(detail::fault_handler(&info) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_fault_lines() == 9);
 }
 
 } // namespace
 
 int main() {
+    prepare_log();
     test_file_name();
     test_module_line();
     test_fault_line();
     test_wide_name();
     test_watch_list();
-    test_arming_is_safe();
+    test_expiry();
+    test_handler();
     std::printf("process-witness: %s (%d failure%s)\n", failures ? "FAIL" : "PASS", failures,
                 failures == 1 ? "" : "s");
     return failures ? 1 : 0;

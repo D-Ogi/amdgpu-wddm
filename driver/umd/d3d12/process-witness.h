@@ -7,13 +7,19 @@
 // follows the control app's recording switch; this header writes through the same sink and is silent when the sink
 // is silent.
 //
+// Life cycle (review findings F1, F6): arm() registers the handler at a device creation, when a log file exists,
+// and keeps the handle. disarm() removes it and clears the latch. The shell calls disarm() when the last outer
+// device is destroyed and from DLL_PROCESS_DETACH, so the handler never outlives the recording or the module.
+// A later device arms again.
+//
 // Bounds and safety:
 //   - the module list is a fixed watch list, asked with GetModuleHandleW and GetModuleFileNameW: no allocation,
 //     no enumeration, at most one line per module that is present;
-//   - the fault witness is armed once per process, only while the sink records, at most kFaultLines lines in all,
-//     and never writes the same fault twice in a row;
-//   - the handler makes no allocation and changes no state of the application: it writes the line and returns
-//     EXCEPTION_CONTINUE_SEARCH, so the process behaves exactly as it would without it;
+//   - the handler is armed only while the sink records, writes at most kFaultLines lines, skips a repeat of the
+//     last fault, and writes nothing once the recording's time bound has passed (a clock read, no syscall);
+//   - it makes no allocation, calls no flush and starts no thread-local initialisation (review findings F3, F4);
+//   - it writes the line and returns EXCEPTION_CONTINUE_SEARCH, so the process behaves exactly as it would without
+//     it;
 //   - it writes a module name, a base and an offset, and the exception code. No memory contents (BD-167).
 #pragma once
 #include <windows.h>
@@ -145,10 +151,30 @@ inline void log_modules() noexcept {
 
 namespace detail {
 
-// Set once by arm(), so that the handler never asks the sink whether it records: that question can open a file.
+// The handler is armed and its line budget is open. Set by arm(), cleared by disarm().
 inline std::atomic<bool>& recording() noexcept {
     static std::atomic<bool> on{false};
     return on;
+}
+
+// One fault writer at a time. A fault that arrives while another line is written is dropped and its search
+// continues. This is a plain atomic and not a thread_local: a thread_local's first use runs the CRT's thread-local
+// initialisation, which can take a lock and allocate, and this code runs inside an exception handler.
+inline std::atomic<bool>& busy() noexcept {
+    static std::atomic<bool> busy{false};
+    return busy;
+}
+
+// The handle that AddVectoredExceptionHandler returned, null when not armed.
+inline std::atomic<PVOID>& handler_handle() noexcept {
+    static std::atomic<PVOID> handle{nullptr};
+    return handle;
+}
+
+// The instant at which the recording ends (FILETIME, 0 = no bound).
+inline std::atomic<unsigned long long>& until() noexcept {
+    static std::atomic<unsigned long long> bound{0};
+    return bound;
 }
 
 inline std::atomic<unsigned>& fault_lines() noexcept {
@@ -157,33 +183,45 @@ inline std::atomic<unsigned>& fault_lines() noexcept {
 }
 
 // The fault written last, so that a probe or a handled exception that repeats adds one line and not eight.
+inline std::atomic<unsigned long>& last_code() noexcept {
+    static std::atomic<unsigned long> code{0};
+    return code;
+}
+inline std::atomic<unsigned long long>& last_address() noexcept {
+    static std::atomic<unsigned long long> address{0};
+    return address;
+}
+
+// 1 when the recording's time bound has passed. A zero bound never expires. Both values are FILETIME units.
+inline bool expired(unsigned long long bound, unsigned long long now) noexcept { return bound != 0 && now >= bound; }
+
 inline bool same_as_last(unsigned long code, unsigned long long address) noexcept {
-    static std::atomic<unsigned long> last_code{0};
-    static std::atomic<unsigned long long> last_address{0};
-    if (last_code.load(std::memory_order_relaxed) == code &&
-        last_address.load(std::memory_order_relaxed) == address)
+    if (last_code().load(std::memory_order_relaxed) == code &&
+        last_address().load(std::memory_order_relaxed) == address)
         return true;
-    last_code.store(code, std::memory_order_relaxed);
-    last_address.store(address, std::memory_order_relaxed);
+    last_code().store(code, std::memory_order_relaxed);
+    last_address().store(address, std::memory_order_relaxed);
     return false;
 }
 
 inline LONG CALLBACK fault_handler(EXCEPTION_POINTERS* info) noexcept {
-    // Re-entrancy: a fault inside this handler must not fault again.
-    static thread_local bool in_handler = false;
-    if (in_handler) return EXCEPTION_CONTINUE_SEARCH;
-    in_handler = true;
-    if (detail::recording().load(std::memory_order_relaxed) && info && info->ExceptionRecord) {
+    // Re-entrancy: one writer at a time. A nested or concurrent fault is dropped and its search continues.
+    if (busy().exchange(true, std::memory_order_acquire)) return EXCEPTION_CONTINUE_SEARCH;
+    if (recording().load(std::memory_order_relaxed) && info && info->ExceptionRecord &&
+        !expired(until().load(std::memory_order_relaxed), amdgpu_wddm_log::detail::now_filetime())) {
         EXCEPTION_RECORD* record = info->ExceptionRecord;
         const unsigned long long address = reinterpret_cast<unsigned long long>(record->ExceptionAddress);
-        if (!same_as_last(record->ExceptionCode, address) &&
-            fault_lines().fetch_add(1, std::memory_order_relaxed) < kFaultLines) {
+        const unsigned lines = fault_lines().load(std::memory_order_relaxed);
+        if (lines < kFaultLines && !same_as_last(record->ExceptionCode, address)) {
+            fault_lines().store(lines + 1, std::memory_order_relaxed);
             FaultRecord f;
             f.code = record->ExceptionCode;
             f.address = address;
             f.thread = GetCurrentThreadId();
             f.parameter_count = record->NumberParameters > 2 ? 2 : record->NumberParameters;
             for (unsigned long i = 0; i < f.parameter_count; ++i) f.parameters[i] = record->ExceptionInformation[i];
+            // The file name lives in this frame until format_fault has copied it into the line.
+            char module_name[128];
             HMODULE module = nullptr;
             if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                                    reinterpret_cast<LPCSTR>(record->ExceptionAddress), &module) &&
@@ -191,36 +229,56 @@ inline LONG CALLBACK fault_handler(EXCEPTION_POINTERS* info) noexcept {
                 f.module_base = reinterpret_cast<unsigned long long>(module);
                 char path[kPathChars];
                 const DWORD n = GetModuleFileNameA(module, path, kPathChars);
-                if (n && n < kPathChars) {
-                    char name[128];
-                    file_name_of(path, name, sizeof(name));
-                    // The name must outlive the format call; a small copy in this frame does.
-                    static thread_local char module_name[128];
-                    std::memcpy(module_name, name, sizeof(name));
+                if (n && n < kPathChars && file_name_of(path, module_name, sizeof(module_name)))
                     f.module = module_name;
-                }
             }
             char line[2048];
             const std::size_t length = format_fault(line, sizeof(line), f);
+            // No flush: the sink opens its file unbuffered and writes with WriteFile, so the line is already with
+            // the operating system, and fflush from inside a handler can wait for a stream lock that the faulting
+            // thread holds (review finding F3).
             if (length) amdgpu_wddm_log::print("%s", line);
-            amdgpu_wddm_log::flush();
         }
     }
-    in_handler = false;
+    busy().store(false, std::memory_order_release);
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
 } // namespace detail
 
-// Arm the fault witness once per process. It does nothing when the process has no log file now: a process that
-// asked for no recording gets no handler, and a sink that has not decided yet never has to open a file from inside
-// the handler (stdio-log.h's late look runs only while no file exists).
+// Arm the fault witness: register the handler once, when the process has a log file now, and open a fresh line
+// budget. A process that asked for no recording gets no handler. A failed registration writes one line and leaves
+// the latch clear, so the next device creation tries again (review finding F6).
 inline void arm() noexcept {
-    if (!amdgpu_wddm_log::stream()) return;
-    static std::atomic<unsigned> armed{0};
-    if (armed.exchange(1, std::memory_order_relaxed)) return;
-    detail::recording().store(true, std::memory_order_relaxed);
-    AddVectoredExceptionHandler(0, &detail::fault_handler);
+    if (detail::recording().load(std::memory_order_relaxed)) return;
+    const amdgpu_wddm_log::detail::Sink* const sink = amdgpu_wddm_log::detail::active();
+    if (!sink || !sink->file) return;
+    // One armer at a time; the loser does not wait and a later call tries again.
+    static std::atomic<bool> arming{false};
+    bool expected = false;
+    if (!arming.compare_exchange_strong(expected, true, std::memory_order_acquire)) return;
+    detail::until().store(sink->until, std::memory_order_relaxed);
+    detail::fault_lines().store(0, std::memory_order_relaxed);
+    detail::last_code().store(0, std::memory_order_relaxed);
+    detail::last_address().store(0, std::memory_order_relaxed);
+    PVOID const handle = AddVectoredExceptionHandler(0, &detail::fault_handler);
+    if (!handle) {
+        amdgpu_wddm_log::print("fault witness: the handler could not be added (%lu)\n", GetLastError());
+        detail::until().store(0, std::memory_order_relaxed);
+    } else {
+        detail::handler_handle().store(handle, std::memory_order_release);
+        detail::recording().store(true, std::memory_order_release);
+    }
+    arming.store(false, std::memory_order_release);
+}
+
+// Remove the handler and close the line budget. Safe to call when not armed, and safe at DLL_PROCESS_DETACH:
+// RemoveVectoredExceptionHandler does not block. A later arm() registers again.
+inline void disarm() noexcept {
+    if (!detail::recording().exchange(false, std::memory_order_acq_rel)) return;
+    PVOID const handle = detail::handler_handle().exchange(nullptr, std::memory_order_acq_rel);
+    detail::until().store(0, std::memory_order_relaxed);
+    if (handle) RemoveVectoredExceptionHandler(handle);
 }
 
 } // namespace amdgpu_wddm_witness

@@ -85,14 +85,6 @@ The dot product class in the same row is the second fact a future IP needs: a pa
 the FSR 4 INT8 shaders through the software lowering (dxil-spirv for DXIL, RADV's NIR lowering for SPIR-V), because
 it has no hardware packed dot product.
 
-The KMD checks the list against two names: dxgkrnl's process name (`DXGKARG_CREATEPROCESS.pProcessName`) and the
-image name that the shell sends. A match on either name is a match. The compare uses only the part after the last
-`\` or `/`, and ignores case for A-Z. The WDK does not say if dxgkrnl's name is a full path, a file name or a
-shortened name (for example the 15 characters of the EPROCESS image file name). With a shortened name,
-`FortniteClient-Win64-Shipping.exe` and `EscapeFromTarkov.exe` do not match. Thus the list must not depend on that
-name alone: the shell sends its full image name at every device creation, also when the setting has no value. The
-lab log of the KMD records the length and the form of dxgkrnl's name, so that the form is measured.
-
 ## The setting
 
 `FsrUpgrade` is a per-application graphics setting (per-app-graphics-settings.md): REG_DWORD 0 or 1, in
