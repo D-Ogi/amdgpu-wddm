@@ -111,7 +111,20 @@ int Bc250SurfaceLayoutPrepare(const BC250_SURFACE_LAYOUT_REQUEST* Request,
     return 1;
 }
 
-int Bc250Nv12LayoutPrepare(const BC250_NV12_LAYOUT_REQUEST* Request,
+// The DCN201 extent and pitch field limits of linear NV12, shared by both NV12 entry points. int Nv12Fields(unsigned Width, unsigned Height, unsigned PitchBytes, unsigned ChromaPitchBytes)
+{
+    if (!Width || Width > 16383 || !Height || Height > 16383 || (Width & 1) || (Height & 1) ||
+        !PitchBytes || !ChromaPitchBytes || (PitchBytes & 255) || (ChromaPitchBytes & 255)) return 0;
+    return PitchBytes - 1 <= Bc250DispGet(MASK_PITCH,MASK_PITCH) &&
+        ChromaPitchBytes / 2 - 1 <= Bc250DispGet(MASK_PITCH_C,MASK_PITCH_C);
+}
+ Bc250Nv12StorageScanout(const BC250_NV12_STORAGE* Storage)
+{
+    return Bc250Nv12StorageIntegrity(Storage) &&
+        Nv12Fields(Storage->Width,Storage->Height,Storage->PitchBytes,Storage->ChromaPitchBytes) &&
+        !(Storage->SurfaceOffset & 255ull) && !(Storage->ChromaOffset & 255ull);
+}
+ Bc250Nv12LayoutPrepare(const BC250_NV12_LAYOUT_REQUEST* Request,
                           BC250_NV12_LAYOUT* Plan)
 {
     BC250_NV12_LAYOUT_REQUEST in = {0};
@@ -127,12 +140,8 @@ int Bc250Nv12LayoutPrepare(const BC250_NV12_LAYOUT_REQUEST* Request,
     if (!Plan) return 0;
     if (Request) in = *Request;
     *Plan = (BC250_NV12_LAYOUT){0};
-    if (!Request || !in.Width || in.Width > 16383 || !in.Height || in.Height > 16383 ||
-        (in.Width & 1) || (in.Height & 1) || !in.PitchBytes || !in.ChromaPitchBytes ||
-        (in.PitchBytes & 255) || (in.ChromaPitchBytes & 255)) return 0;
+    if (!Request || !Nv12Fields(in.Width,in.Height,in.PitchBytes,in.ChromaPitchBytes)) return 0;
     chromaSamples = in.ChromaPitchBytes / 2;
-    if (in.PitchBytes - 1 > Bc250DispGet(MASK_PITCH,MASK_PITCH) ||
-        chromaSamples - 1 > Bc250DispGet(MASK_PITCH_C,MASK_PITCH_C)) return 0;
     // NV12 has Width/2 two-byte UV samples per row: its unpadded byte width
     // equals luma's Width. Use the byte-row helper, not its unsupported bpp=2.
     if (!DcnLinearSurfaceBytes(in.Width,in.Height,in.PitchBytes,1,&bytes) ||

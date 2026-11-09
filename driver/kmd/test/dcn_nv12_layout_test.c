@@ -112,9 +112,26 @@ static void Boundaries(void)
     CHECK(!Bc250Nv12LayoutPrepare(&base,NULL));
 #undef BAD
 }
-int main(void)
+// The address-free admission: the contract integrity plus the DCN201 field limits. A 64-byte padded layout
+// that the contract admits for another GPU is not a DCN201 scan-out layout. void Storage(void)
 {
-    Cases(); Boundaries();
+    BC250_NV12_STORAGE s = {64,16,256,256,8192,0,4096};
+    CHECK(Bc250Nv12StorageIntegrity(&s) && Bc250Nv12StorageScanout(&s));
+    s.PitchBytes = s.ChromaPitchBytes = 192; s.ChromaOffset = 3072;
+    CHECK(Bc250Nv12StorageIntegrity(&s) && !Bc250Nv12StorageScanout(&s));
+    s.PitchBytes = s.ChromaPitchBytes = 256; s.ChromaOffset = 4096 + 128;
+    CHECK(Bc250Nv12StorageIntegrity(&s) && !Bc250Nv12StorageScanout(&s));
+    s.ChromaOffset = 4096; s.SurfaceOffset = 128; s.AllocationBytes = 8192 + 128;
+    CHECK(!Bc250Nv12StorageScanout(&s));
+    s.SurfaceOffset = 0; s.AllocationBytes = 8192; s.ChromaOffset = 2048;
+    CHECK(!Bc250Nv12StorageIntegrity(&s) && !Bc250Nv12StorageScanout(&s));
+    s.ChromaOffset = 4096; s.Width = 16384; s.PitchBytes = s.ChromaPitchBytes = 16384; s.AllocationBytes = 16384ull * 24;
+    s.ChromaOffset = 16384ull * 16;
+    CHECK(Bc250Nv12StorageIntegrity(&s) && !Bc250Nv12StorageScanout(&s));
+    CHECK(!Bc250Nv12StorageScanout(NULL));
+} main(void)
+{
+    Cases(); Boundaries(); Storage();
     printf("NV12 surface layout: %u checks, %u failures\n",checks,failures);
     return failures ? 1 : 0;
 }

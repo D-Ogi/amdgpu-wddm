@@ -39,7 +39,7 @@ static __inline int Bc250Nv12PrivateValid(const void* Data, unsigned int Bytes)
     storage.Width=n->Surface.Width; storage.Height=n->Surface.Height;
     storage.PitchBytes=n->Surface.Pitch; storage.ChromaPitchBytes=n->ChromaPitch;
     storage.AllocationBytes=n->Surface.Size; storage.SurfaceOffset=n->SurfaceOffset; storage.ChromaOffset=n->ChromaOffset;
-    return Bc250Nv12StorageValid(&storage);
+    return Bc250Nv12StorageIntegrity(&storage);
 }
 
 // Optional standard-GDI trailer. Keep the 32-byte LB7A v1 prefix unchanged:

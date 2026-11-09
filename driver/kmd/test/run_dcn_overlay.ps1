@@ -17,7 +17,7 @@ $mutations=@{
  'skip-layout'=@('if (!Bc250Nv12LayoutPrepare(&layout,&Plan->Nv12)) goto refused;', '(void)Bc250Nv12LayoutPrepare(&layout,&Plan->Nv12);')
  'skip-color'=@('if (!Bc250CnvcPrepare(&color,&Plan->Color[pipe])) goto refused;', '(void)Bc250CnvcPrepare(&color,&Plan->Color[pipe]);')
  'describe-ready'=@('Plan->Ready = Resident ? 1u : 0u;', 'Plan->Ready = 1u;')
- 'describe-nv12-storage'=@('if (!Bc250Nv12StorageValid(&storage)) goto refused;', '(void)Bc250Nv12StorageValid(&storage);')
+ 'describe-nv12-storage'=@('if (!Bc250Nv12StorageScanout(&storage)) goto refused;', '(void)Bc250Nv12StorageScanout(&storage);')
  'describe-rgb-span'=@('span>p->AllocationBytes-p->SurfaceOffset) goto refused;', 'span>~0ull) goto refused;')
  'caps-nv12'=@('if (pipe && (caps->Nv12 == BC250_DCN_NV12_NONE || !caps->MaxSlaveYuvPlanes)) goto refused;', '')
  'caps-nv12-scale'=@('unsigned up = Nv12 ? Caps->MaxUpscaleNv12 : Caps->MaxUpscaleArgb;', 'unsigned up = Caps->MaxUpscaleArgb; (void)Nv12;')

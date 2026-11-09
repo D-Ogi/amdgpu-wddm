@@ -69,7 +69,7 @@ static unsigned OverlayPrepare(const BC250_OVERLAY_REQUEST* Request,
             if (pipe) {
                 BC250_NV12_STORAGE storage={p->Width,p->Height,p->PitchBytes,p->ChromaPitchBytes,
                     p->AllocationBytes,p->SurfaceOffset,p->ChromaOffset};
-                if (!Bc250Nv12StorageValid(&storage)) goto refused;
+                if (!Bc250Nv12StorageScanout(&storage)) goto refused;
             } else {
                 unsigned long long span=(unsigned long long)p->PitchBytes*p->Height;
                 if (!p->Width || !p->Height || p->Width>caps->MaxSurfaceWidth || p->Height>caps->MaxSurfaceHeight ||
