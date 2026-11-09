@@ -1959,7 +1959,7 @@ NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
     // BD-341: a start without a firmware display captured no firmware surface and changed no native shape, so there
     // is nothing of the firmware's to put back. A runtime mode, when one was committed, still goes through the
     // restore below: that surface is ours and valid.
-    if (Device->PostDisplayAbsent && !changed) {
+    if (Device->DisplayStart == BC250_DISPLAY_START_NO_POST && !changed) {
         GuardLog("dcnflip: stop: no firmware display to restore");
         return STATUS_SUCCESS;
     }

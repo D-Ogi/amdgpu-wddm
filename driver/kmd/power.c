@@ -89,7 +89,7 @@ static NTSTATUS PowerRestoreDisplay(BC250_DEVICE* Device)
     // BD-341: a start without a firmware display kept no inherited mode, so there is no geometry to compare and no
     // timing to validate. A display that the firmware lit while the GPU was in D3 is not adopted here: Post stays zero
     // for the whole start, as the start contract says (docs/design/wddm-startup.md).
-    if (Device->PostDisplayAbsent) {
+    if (Device->DisplayStart == BC250_DISPLAY_START_NO_POST) {
         GuardLog("power: D0 without a firmware display; POST answer 0x%08X %ux%u, nothing to restore",
                  (ULONG)status, post.Width, post.Height);
         Device->SourceVisible=FALSE;    // as after every D0: the OS asks for visibility again

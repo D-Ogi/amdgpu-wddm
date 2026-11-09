@@ -53,9 +53,10 @@ The start contract is now:
 | Item | Firmware display present | No firmware display |
 |---|---|---|
 | `Device->Post` | The answer of Windows. | All zero. Nothing of a partial answer is kept. |
-| `Device->PostDisplayAbsent` | FALSE. | TRUE, for the whole start. |
+| `Device->DisplayStart` (`display_start.h`) | `BC250_DISPLAY_START_INHERITED`. | `BC250_DISPLAY_START_NO_POST`, for the whole start. |
+| Start record | `DisplayStart` 1. | `DisplayStart` 2, also when the start succeeds. |
 | Framebuffer map, boot logo, sample | Done. | No map. The logo and the sample find no framebuffer and log that. |
-| Start blank and final blank | Done on OTG0. | Not done. The driver reads the pipe once and logs it (`display cold:` lines). |
+| Start blank and final blank | Done on OTG0. | Not done. The driver reads the pipe once and logs it (`display cold:` lines). These are reads only, and only through the BAR5 mapping that the start made by its own gate. |
 | Inherited timing, mode list, DP audio | Done. | Not done. `InheritedSignalValid` stays FALSE, and each VidPN path that needs it refuses. |
 | VRAM layout | Above the firmware framebuffer (`VramFramebufferExtent`). | The empty firmware range is at offset 0, the result that Linux `amdgpu_gmc_get_vbios_allocations` gives when no pipe is lit. |
 | Connector | Inherited or programmable route. | No HPD arm and no register write (`connector: start without a firmware display`). |
@@ -75,14 +76,13 @@ stage A does not give: a desktop on a monitor that arrives later. The driver
 has no cold mode set, because it programs only a pipe that the firmware lit.
 Two more stages are necessary:
 
-- Stage B: the cold DCN state. Port the AMD DCN 2.0.1 init sequence
-  (`dcn201_init_hw`, `init_pipes`) and the plane enable and pipe program
-  sequence through `driver/shim`. The `display cold:` lines of stage A are the
-  lab input for that port.
-- Stage C: the connector without an inherited pipe. Open the link context
-  without `InheritedSupport`, arm HPD at the start, and let a monitor arrival
-  publish a sink and indicate the child. `CommitVidPn` then programs the pipe
-  through stage B.
+- Stage B: the cold DCN state.
+- Stage C: the connector without an inherited pipe.
+
+[The cold-modeset plan](cold-modeset.md) gives the steps, the AMD functions
+to port and the lab evidence that stage B needs. Every part of the driver
+reads the one display-start state, so stages B and C add code paths for
+`BC250_DISPLAY_START_NO_POST` and change no reader of the geometry.
 
 Part 1 of BD-341 (a monitor that is on at the restart, and Windows has no
 monitor) has no proven cause yet. A hotplug worker that disables the link,

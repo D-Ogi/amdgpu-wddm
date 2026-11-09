@@ -160,7 +160,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     device->RuntimeFramebufferLength=0;
     device->RuntimePostValid=0;
     device->RuntimeDisplayChanged=0;
-    device->PostDisplayAbsent=FALSE;    // BD-341: set again by the acquire below, before its first reader
+    device->DisplayStart=BC250_DISPLAY_START_UNKNOWN;  // BD-341: the acquire below sets it, before its first reader
 
     StartHealthBegin(device,WddmFullTableSelected());
     CuModeBegin(device);
@@ -194,9 +194,12 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     GuardLog("post display acquired status 0x%08X %ux%u pitch %u format %u address %llX target %u", status,
              device->Post.Width, device->Post.Height, device->Post.Pitch, (ULONG)device->Post.ColorFormat,
              (ULONGLONG)device->Post.PhysicAddress.QuadPart, device->Post.TargetId);
-    device->PostDisplayAbsent = (BOOLEAN)(!NT_SUCCESS(status) || device->Post.Width == 0 ||
-        device->Post.Height == 0 || device->Post.Pitch == 0 || device->Post.PhysicAddress.QuadPart == 0);
-    if (device->PostDisplayAbsent)
+    // BD-341: the one decision about the display side of this start (display_start.h). Everything below, and every
+    // part of the driver after it, reads DisplayStart and not the geometry.
+    device->DisplayStart = Bc250DisplayStartClassify(status, device->Post.Width, device->Post.Height,
+        device->Post.Pitch, (ULONGLONG)device->Post.PhysicAddress.QuadPart);
+    GuardStartDisplay(device->DisplayStart);
+    if (device->DisplayStart == BC250_DISPLAY_START_NO_POST)
     {
         // Nothing of a partial answer is used: every reader of Post sees zeros, and none of them divides by them.
         RtlZeroMemory(&device->Post, sizeof(device->Post));
@@ -208,7 +211,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
                  device->Post.Pitch, (ULONG)device->Post.ColorFormat, device->Post.TargetId);
     GuardStage(StageStartPostDisplayAcquired);
 
-    if (!device->PostDisplayAbsent)
+    if (device->DisplayStart == BC250_DISPLAY_START_INHERITED)
     {
         GuardStartStep(L"DisplayMapFramebuffer");
         status = DisplayMapFramebuffer(device);
@@ -218,9 +221,10 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
 
     NoteInterruptResource(device);
     MmioStart(device);      // maps nothing unless the registry gate is open; never fails the start
-    if (device->PostDisplayAbsent)
+    if (device->DisplayStart == BC250_DISPLAY_START_NO_POST)
     {
-        // No pipe of the firmware's to hold black: record what the pipe is instead, for the cold mode set. Read only.
+        // No pipe of the firmware's to hold black: record what the pipe is instead, for the cold mode set. Reads
+        // only, and only through the BAR5 mapping that MmioStart made for this start by its own gate.
         if (device->Mmio != NULL) ModesetLogColdPipe(device);
     }
     else
@@ -297,7 +301,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     // A single immutable signal keeps those two contracts exactly consistent.
     // BD-341: without a firmware display there is no signal to capture, no mode list to build from it and no stream
     // to add audio to. InheritedSignalValid stays FALSE, and every VidPN path that needs it refuses by itself.
-    if (!device->PostDisplayAbsent)
+    if (device->DisplayStart == BC250_DISPLAY_START_INHERITED)
     {
         GuardStartStep(L"DisplayPrepareInheritedTiming");
         status=DisplayPrepareInheritedTiming(device);
@@ -332,7 +336,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     if (!NT_SUCCESS(status)) goto failed;
     // Connector setup may replace the pipe. Recheck the final output before publishing a successful start.
     // BD-341: a start without a firmware display lit nothing and blanked nothing, so there is nothing to recheck.
-    if (!device->PostDisplayAbsent)
+    if (device->DisplayStart == BC250_DISPLAY_START_INHERITED)
     {
         GuardStartStep(L"StartDisplayBlankConfirm");
         status=DcnSetVisibility(device,FALSE);
@@ -520,7 +524,8 @@ NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership(_In_ PVOID MiniportDevice
     else if (NT_SUCCESS(status)) status=device->PostDisplayStopStatus;
     // BD-341: a start without a firmware display has no firmware mode to hand back, and without a runtime mode
     // nothing else is on screen. Zeros with success would be a display of 0x0; the next owner gets no display instead.
-    if (NT_SUCCESS(status) && device->PostDisplayAbsent && !device->RuntimePostValid) status=STATUS_NOT_SUPPORTED;
+    if (NT_SUCCESS(status) && device->DisplayStart==BC250_DISPLAY_START_NO_POST && !device->RuntimePostValid)
+        status=STATUS_NOT_SUPPORTED;
     if (NT_SUCCESS(status)) {
         *DisplayInfo = device->RuntimePostValid ? device->RuntimePost : device->Post;
         DisplayInfo->TargetId = BC250_CHILD_UID;
@@ -533,7 +538,7 @@ NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership(_In_ PVOID MiniportDevice
     else GuardLog("post-display release: handed back nothing, status %08lX: %s",(ULONG)status,
                   handoff.Action==BC250_LINK_HANDOFF_NO_SINK?"no display connected":
                   handoff.Action==BC250_LINK_HANDOFF_FAILED?"the target enable failed":
-                  device->PostDisplayAbsent?"the start had no firmware display":
+                  device->DisplayStart==BC250_DISPLAY_START_NO_POST?"the start had no firmware display":
                   "the display restore failed, see stop: display handoff");
     // A second keep of the same stop episode: it appends these lines to the file that the stop above wrote.
     GuardLogKeep();

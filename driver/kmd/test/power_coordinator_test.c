@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "display_start.h"     /* BD-341: the display-start state */
 #include <string.h>
 #include <stdlib.h>
 #include "power_phase.h"
@@ -28,7 +29,7 @@ typedef unsigned long ULONG;
 typedef struct {int dummy;} BC250_ESCAPE_PSP;
 struct bc250_clock_report {int ready;};
 typedef struct {unsigned Width,Height,Pitch,ColorFormat;struct {long long QuadPart;}PhysicAddress;} DXGK_DISPLAY_INFORMATION;
-typedef struct {int Started,FullWddm;volatile LONG RetainedPowerPhase,RuntimeDisplayChanged;struct {int Enabled;volatile LONG Pending;} Connector;DEVICE_POWER_STATE RetainedDownState;POWER_ACTION RetainedDownAction;ULONG RetainedDownFailed,PowerWitness;BOOLEAN PowerWitnessArmed;int Smu;void*Mmio;int GfxTlbBootstrap,ModeActive,SourceVisible;DXGK_DISPLAY_INFORMATION Post;BOOLEAN PostDisplayAbsent;struct {void*DeviceHandle;NTSTATUS(*DxgkCbAcquirePostDisplayOwnership)(void*,DXGK_DISPLAY_INFORMATION*);}Dxgk;} BC250_DEVICE;
+typedef struct {int Started,FullWddm;volatile LONG RetainedPowerPhase,RuntimeDisplayChanged;struct {int Enabled;volatile LONG Pending;} Connector;DEVICE_POWER_STATE RetainedDownState;POWER_ACTION RetainedDownAction;ULONG RetainedDownFailed,PowerWitness;BOOLEAN PowerWitnessArmed;int Smu;void*Mmio;int GfxTlbBootstrap,ModeActive,SourceVisible;DXGK_DISPLAY_INFORMATION Post;unsigned long DisplayStart;struct {void*DeviceHandle;NTSTATUS(*DxgkCbAcquirePostDisplayOwnership)(void*,DXGK_DISPLAY_INFORMATION*);}Dxgk;} BC250_DEVICE;
 static unsigned checks,failures;static char trace[128];static unsigned pos;static char failAt;static int postMismatch,allocFail;
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL %u: %s\n",__LINE__,#x);}}while(0)
 static NTSTATUS note(char c){trace[pos++]=c;trace[pos]=0;return c==failAt?-9:0;}
@@ -96,10 +97,10 @@ int main(void){BC250_DEVICE d;
  CHECK(!strchr(trace,'b')&&!strchr(trace,'t')&&!strchr(trace,'w')&&!strchr(trace,'h'));
  // BD-341: a start without a firmware display has no inherited mode to compare, validate or blank at D0. A changed
  // or failed POST answer is logged only; every engine comes back.
- setup(&d);d.PostDisplayAbsent=1;memset(&d.Post,0,sizeof(d.Post));CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();postMismatch=1;
+ setup(&d);d.DisplayStart=BC250_DISPLAY_START_NO_POST;memset(&d.Post,0,sizeof(d.Post));CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();postMismatch=1;
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0&&d.RetainedPowerPhase==0);
  CHECK(strchr(trace,'d')&&!strchr(trace,'v')&&!strchr(trace,'b')&&strchr(trace,'t')&&strchr(trace,'h'));
- setup(&d);d.PostDisplayAbsent=1;memset(&d.Post,0,sizeof(d.Post));CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='d';
+ setup(&d);d.DisplayStart=BC250_DISPLAY_START_NO_POST;memset(&d.Post,0,sizeof(d.Post));CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='d';
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0&&d.RetainedPowerPhase==0&&!strchr(trace,'v')&&!strchr(trace,'b'));
  // Runtime geometry bypasses all inherited POST acquisition/scaler paths.
  setup(&d);d.Connector.Enabled=1;d.RuntimeDisplayChanged=1;

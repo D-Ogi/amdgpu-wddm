@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "display_start.h"     /* BD-341: the display-start state */
 #include <stddef.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -62,7 +63,7 @@ typedef struct _BC250_DEVICE {
     DXGK_DISPLAY_INFORMATION Post;
     DXGK_DISPLAY_INFORMATION RuntimePost;
     volatile long RuntimePostValid, RuntimeDisplayChanged;
-    BOOLEAN PostDisplayAbsent;      /* BD-341: the start found no firmware display */
+    unsigned long DisplayStart;      /* BD-341: display_start.h */
     void* RuntimeFramebuffer;
     size_t RuntimeFramebufferLength;
     LARGE_INTEGER RuntimeFramebufferPhysical;
@@ -263,13 +264,13 @@ int main(void)
     CHECK(keptThrough==logCount);
     /* BD-341: a start without a firmware display hands back no display, not a display of 0x0. The teardown is the
        same; only the answer differs, and dxgkrnl then calls StopDevice, which finds the teardown done. */
-    init(&d,&w,&o);d.PostDisplayAbsent=TRUE;memset(&d.Post,0,sizeof(d.Post));memset(&info,0xcc,sizeof(info));
+    init(&d,&w,&o);d.DisplayStart=BC250_DISPLAY_START_NO_POST;memset(&d.Post,0,sizeof(d.Post));memset(&info,0xcc,sizeof(info));
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_NOT_SUPPORTED);
     CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress.QuadPart==0);
     CHECK(model.restores==1 && model.unmaps==1 && d.StopDone && d.PostDisplayStopStatus==STATUS_SUCCESS);
     CHECK(logged("post-display release: handed back nothing, status C00000BB: the start had no firmware display"));
     /* With a runtime mode on the reserved buffer, that mode is what the next owner gets. */
-    init(&d,&w,&o);d.PostDisplayAbsent=TRUE;memset(&d.Post,0,sizeof(d.Post));handoffModel.action=BC250_LINK_HANDOFF_ENABLED;
+    init(&d,&w,&o);d.DisplayStart=BC250_DISPLAY_START_NO_POST;memset(&d.Post,0,sizeof(d.Post));handoffModel.action=BC250_LINK_HANDOFF_ENABLED;
     d.RuntimeFramebufferPhysical.QuadPart=0x490000000ll;
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
     CHECK(info.Pitch==7680 && info.PhysicAddress.QuadPart==0x490000000ll);

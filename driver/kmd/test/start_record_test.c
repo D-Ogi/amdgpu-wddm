@@ -14,6 +14,7 @@
 //
 // The mutations of run_start_record.ps1 are the negative controls, one per requirement; each must fail here.
 #include <stdio.h>
+#include "display_start.h"     /* BD-341: the display-start state */
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
@@ -309,7 +310,8 @@ typedef struct {
     LONG RetainedPowerPhase;
     unsigned long long DisplayReservationEnd,RuntimeFramebufferLength;
     LONG RuntimePostValid,RuntimeDisplayChanged;
-    BOOLEAN SourceVisible, DcnWriteEnabled, PostDisplayStopAttempted, PostDisplayAbsent;
+    BOOLEAN SourceVisible, DcnWriteEnabled, PostDisplayStopAttempted;
+    unsigned long DisplayStart;
     LONG StartVisibilityPending;
     NTSTATUS PostDisplayStopStatus;
 } BC250_DEVICE;
@@ -822,11 +824,13 @@ int main(void)
         for (mmio = 0; mmio < 2; mmio++) {
             for (i = 0; i < RTL_NUMBER_OF(answers); i++) {
                 unsigned starts;
+                ULONG shown = 99;
                 Reset(); iface.DxgkCbAcquirePostDisplayOwnership = answers[i]; mmioAvailable = (BOOLEAN)(mmio != 0);
                 starts = connectorStarts;
                 CHECK(Start() == STATUS_SUCCESS);
                 CHECK(RecordIs(L"started", L"-", L"-", 0, StageStartDone));
-                CHECK(dev.PostDisplayAbsent);
+                CHECK(dev.DisplayStart == BC250_DISPLAY_START_NO_POST);
+                CHECK(Dword(L"DisplayStart", &shown) && shown == BC250_DISPLAY_START_NO_POST);
                 CHECK(dev.Post.Width == 0 && dev.Post.Height == 0 && dev.Post.Pitch == 0 &&
                       dev.Post.PhysicAddress.QuadPart == 0 && dev.Post.ColorFormat == 0 && dev.Post.TargetId == 0);
                 CHECK(fbMaps == 0 && admissionCalls == 0 && blankCalls == 0);
@@ -840,19 +844,27 @@ int main(void)
         }
         // A start without a display, after it a start with one: the flag is this start's, not the device's.
         Reset(); iface.DxgkCbAcquirePostDisplayOwnership = AcquirePostEmpty;
-        CHECK(Start() == STATUS_SUCCESS && dev.PostDisplayAbsent);
+        CHECK(Start() == STATUS_SUCCESS && dev.DisplayStart == BC250_DISPLAY_START_NO_POST);
         dev.Started = FALSE; dev.StopDone = TRUE;
         iface.DxgkCbAcquirePostDisplayOwnership = AcquirePost;
-        CHECK(Start() == STATUS_SUCCESS && !dev.PostDisplayAbsent && dev.Post.Width == 1920);
+        CHECK(Start() == STATUS_SUCCESS && dev.DisplayStart == BC250_DISPLAY_START_INHERITED && dev.Post.Width == 1920);
     }
     // A firmware display is unchanged by BD-341: every step of the inherited path runs once, and Post is the answer.
     Reset();
     CHECK(Start() == STATUS_SUCCESS);
-    CHECK(!dev.PostDisplayAbsent && dev.Post.Width == 1920 && dev.Post.Height == 1080 && dev.Post.Pitch == 7680 &&
+    CHECK(dev.DisplayStart == BC250_DISPLAY_START_INHERITED && dev.Post.Width == 1920 && dev.Post.Height == 1080 && dev.Post.Pitch == 7680 &&
           dev.Post.PhysicAddress.QuadPart == 0x10000000);
     CHECK(fbMaps == 1 && admissionCalls == 1 && blankCalls == 2 && coldPipeLogs == 0);
     CHECK(timingCalls == 1 && modesetCalls == 1 && audioCalls == 1);
     CHECK(LoggedTimes("post display: none") == 0 && LoggedTimes("post display 1920x1080 pitch 7680") == 1);
+    {
+        ULONG shown = 99;
+        CHECK(Dword(L"DisplayStart", &shown) && shown == BC250_DISPLAY_START_INHERITED);
+        // A start that fails before the POST answer records no display-start state of an earlier start.
+        dev.Started = FALSE; dev.StopDone = TRUE; iface.DxgkCbGetDeviceInformation = GetDeviceInfoFails;
+        CHECK(Start() == STATUS_ACCESS_DENIED);
+        CHECK(Dword(L"DisplayStart", &shown) && shown == BC250_DISPLAY_START_UNKNOWN);
+    }
     // ---- BD-169: a connector refusal that keeps a display completes the start ---------------------------
     // ConnectorStart programs no output, so its refusal leaves the firmware's own
     // stream on the wire. The case above is the other half: when nothing can be

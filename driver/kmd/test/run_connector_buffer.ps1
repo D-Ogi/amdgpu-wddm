@@ -32,7 +32,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $Out 'connector_buffer_actual.inc'),$body)
     $argsCl = @('/nologo','/TC','/W4','/WX','/O2','/MT',
         "/I$($msvc.FullName)/include", "/I$sdk/Include/$version/ucrt", "/Fo$obj\", "/Fe$Out/connector_buffer_test.exe",
-        "/I$Out", "$PSScriptRoot/connector_buffer_test.c", '/link',
+        "/I$Out", "/I$repo/driver/kmd", "$PSScriptRoot/connector_buffer_test.c", '/link',
         "/LIBPATH:$($msvc.FullName)/lib/x64", "/LIBPATH:$sdklib/ucrt/x64", "/LIBPATH:$sdklib/um/x64")
     & $cl @argsCl
     if ($LASTEXITCODE -ne 0) { throw 'Connector buffer host build failed' }

@@ -1,6 +1,7 @@
 // Executes the actual settingGate, budget and initial PnP admission functions with a
 // registry model that distinguishes cached writes from durable flushes.
 #include <stdio.h>
+#include "display_start.h"     /* BD-341: the display-start state */
 #include <string.h>
 #include <stdarg.h>
 #include <wchar.h>
@@ -29,7 +30,7 @@ typedef const wchar_t* PCWSTR;
 #define StageStartGuardPassed 31u
 #define StageRefusedByGuard 90u
 #define StageStartFailed 91u    /* BD-122: an unconfirmed previous stop fails the start and leaves this stage */
-typedef struct {BOOLEAN InheritedSignalValid,GpuStopUnconfirmed,StopDone,SourceVisible;void* PhysicalDeviceObject;unsigned long long DisplayReservationEnd,RuntimeFramebufferLength;long RuntimePostValid,RuntimeDisplayChanged,StartVisibilityPending;BOOLEAN PostDisplayAbsent;} BC250_DEVICE;
+typedef struct {BOOLEAN InheritedSignalValid,GpuStopUnconfirmed,StopDone,SourceVisible;void* PhysicalDeviceObject;unsigned long long DisplayReservationEnd,RuntimeFramebufferLength;long RuntimePostValid,RuntimeDisplayChanged,StartVisibilityPending;unsigned long DisplayStart;} BC250_DEVICE;
 typedef void* PDXGK_START_INFO;
 typedef void* PDXGKRNL_INTERFACE;
 static ULONG settingGate,cached,durable;

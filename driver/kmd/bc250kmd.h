@@ -79,6 +79,7 @@
 #include "cpu.h"
 #include "interop.h"
 #include "dpaudio.h"
+#include "display_start.h"   // BD-341: the display-start state
 #include "modeset.h"
 #include "connector.h"
 #include "board_memory_service.h"
@@ -271,11 +272,11 @@ typedef struct _BC250_DEVICE {
 
     // The mode the firmware left. M3 offers exactly this one.
     DXGK_DISPLAY_INFORMATION Post;
-    // BD-341: the start found no firmware display. DxgkCbAcquirePostDisplayOwnership failed or gave a zero width,
-    // height, pitch or address, for example a monitor in standby at power-on or a unit with no monitor. Post is then
+    // BD-341: the display-start state of this start (display_start.h, BC250_DISPLAY_START_*). NO_POST: the firmware
+    // handed over no display, for example a monitor in standby at power-on or a unit with no monitor. Post is then
     // all zero, nothing is mapped, no inherited timing exists and the child reports no monitor
     // (docs/design/wddm-startup.md, "Start without a firmware display"). Set by StartDevice, constant until stop.
-    BOOLEAN PostDisplayAbsent;
+    ULONG DisplayStart;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;
     BOOLEAN InheritedSignalValid;     // immutable from successful start until stop
     BOOLEAN InheritedTmds;            // validated OTG0 TMDS route; DP operations stay off on this start
@@ -804,6 +805,8 @@ void GuardRecordStartAttempt(void);
 void GuardRecordStartRefused(NTSTATUS Status);
 void GuardRecordStartFailed(NTSTATUS Status);
 void GuardRecordStartStarted(void);
+// BD-341: the display-start state of this start (display_start.h), written into every start record as DisplayStart.
+void GuardStartDisplay(ULONG State);
 void GuardRecordStopBegin(BC250_DEVICE* Device);
 void GuardRecordStopDone(void);
 // M15.12: one ResetEngine verdict (hang_recovery.h) into the HangRecovery state records, counters and Last*, flushed

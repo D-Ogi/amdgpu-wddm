@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "display_start.h"     /* BD-341: the display-start state */
 #include <string.h>
 #include <wchar.h>
 #include "regs.generated.h"
@@ -38,7 +39,7 @@ typedef struct {
  PHYSICAL_ADDRESS VramPhysical,Bar0Physical;ULONGLONG VramLength,VramMcBase,Bar0Length,DisplayReservationEnd;
  BOOLEAN LargePageLayout;
  struct {ULONG Pitch,Height;PHYSICAL_ADDRESS PhysicAddress;} Post;
- BOOLEAN PostDisplayAbsent;          /* BD-341 */
+ unsigned long DisplayStart;          /* BD-341: display_start.h */
  volatile LONG64 UmaActiveBytes;
 } BC250_DEVICE;
 struct fake_adev {void *dev,*backend;struct {ULONGLONG mc_vram_size,real_vram_size,vram_start;} gmc;};
@@ -176,7 +177,7 @@ int main(void){
    int bar;
    for(bar=0;bar<2;bar++){
     init(&d,gib);missing_bar=bar;CHECK(VramStart(&d)==0 && d.VramEnabled);
-    d.PostDisplayAbsent=TRUE;memset(&d.Post,0,sizeof(d.Post));
+    d.DisplayStart=BC250_DISPLAY_START_NO_POST;memset(&d.Post,0,sizeof(d.Post));
     CHECK(VramFramebufferOffset(&d,&fbOffset) && fbOffset==0);
     CHECK(VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbOffset==0 && fbBytes==0);
     CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));

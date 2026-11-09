@@ -141,13 +141,13 @@ BOOLEAN ConnectorIsEnabled(BC250_DEVICE* Device)
 
 BOOLEAN ConnectorChildHpdAware(BC250_DEVICE* Device)
 {
-    return (ConnectorIsEnabled(Device) || Device->PostDisplayAbsent) ? TRUE : FALSE;
+    return (ConnectorIsEnabled(Device) || Device->DisplayStart == BC250_DISPLAY_START_NO_POST) ? TRUE : FALSE;
 }
 
 BOOLEAN ConnectorChildConnected(BC250_DEVICE* Device)
 {
     if (ConnectorIsEnabled(Device)) return ConnectorIsConnected(Device);
-    return Device->PostDisplayAbsent ? FALSE : TRUE;
+    return (Device->DisplayStart == BC250_DISPLAY_START_NO_POST) ? FALSE : TRUE;
 }
 
 // BD-341: HPD0 as it is, read only. The sense is DC_HPD_SENSE_DELAYED through the shim's own reader, and the control
@@ -229,8 +229,8 @@ void ConnectorLogChildSummary(BC250_DEVICE* Device)
     // A live read only while the display block is powered: a retained D3 is not the time to touch DCN.
     if (InterlockedCompareExchange(&Device->RetainedPowerPhase, 0, 0) == BC250_POWER_ACTIVE)
         probe = ConnectorHpdProbe(Device, &sense, &control);
-    GuardLog("connector: child summary absent %u enabled %u events %ld status %ld disconnected %ld indicate %ld failed %ld",
-        (UINT)Device->PostDisplayAbsent, (UINT)ConnectorIsEnabled(Device), count, ReadAtomic(&c->ChildStatusCalls),
+    GuardLog("connector: child summary display-start %s enabled %u events %ld status %ld disconnected %ld indicate %ld failed %ld",
+        Bc250DisplayStartText(Device->DisplayStart), (UINT)ConnectorIsEnabled(Device), count, ReadAtomic(&c->ChildStatusCalls),
         ReadAtomic(&c->ChildStatusDisconnected), ReadAtomic(&c->Notifications), ReadAtomic(&c->NotifyFailures));
     GuardLog("connector: child summary hpd sense %d control %08lX status %08lX armed %d irq %ld work %ld refused %ld",
         sense, control, (ULONG)probe, c->Hpd.Armed, ReadAtomic(&c->Interrupts), ReadAtomic(&c->Workers),
@@ -678,7 +678,7 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
         c->StartPreserved=1;
         return c->LastStatus=c->StartStatus=STATUS_SUCCESS;
     }
-    if (Device->PostDisplayAbsent) {
+    if (Device->DisplayStart == BC250_DISPLAY_START_NO_POST) {
         // BD-341: no firmware display, so no inherited pipe to keep, no timing to plan from and nothing on the wire.
         // The connector writes nothing and arms nothing: a sink found now could only be lit by a cold mode set, which
         // this driver does not have yet (docs/design/wddm-startup.md, "Start without a firmware display"). The child

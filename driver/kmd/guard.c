@@ -1564,6 +1564,15 @@ void GuardStartFailureMark(void)
 // for the buffer is kept truncated.
 static WCHAR g_StartDetail[320];
 
+// BD-341: the display-start state of this start (display_start.h). Same thread and lifetime as the step names. Every
+// record carries it, a started one too: "started without a firmware display" is a fact that a support file needs.
+static ULONG volatile g_StartDisplay;
+
+void GuardStartDisplay(ULONG State)
+{
+    g_StartDisplay = State;
+}
+
 void GuardStartDetail(_In_z_ _Printf_format_string_ PCWSTR Format, ...)
 {
     va_list args;
@@ -1739,6 +1748,7 @@ static void StartRecordWrite(_In_z_ PCWSTR Result, BOOLEAN Failed, NTSTATUS Reas
     StartRecordKeep(&first, WriteDwordOrClear(key, L"UnconfirmedStarts", starts));
     StartRecordKeep(&first, WriteDwordOrClear(key, L"Version", BC250_KMD_VERSION));
     StartRecordKeep(&first, WriteStringOrClear(key, L"TimeUtc", time));
+    StartRecordKeep(&first, WriteDwordOrClear(key, L"DisplayStart", g_StartDisplay));
     if (Failed && g_StartDetail[0] != L'\0') StartRecordKeep(&first, WriteStringOrClear(key, L"Detail", g_StartDetail));
     else DeleteString(key, L"Detail");
     // The lines belong to the failure they were written for. An attempt or a started device deletes them, and so
@@ -1761,6 +1771,7 @@ void GuardRecordStartAttempt(void)
 {
     GuardStartStep(NULL);
     g_StartDetail[0] = L'\0';
+    g_StartDisplay = BC250_DISPLAY_START_UNKNOWN;
     g_StartLogMark = 0;
     g_StartLogMarked = FALSE;
     StartRecordWrite(L"attempt", FALSE, STATUS_SUCCESS);

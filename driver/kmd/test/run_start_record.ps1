@@ -48,6 +48,7 @@ void GuardRecordStartAttempt(void){}
 void GuardRecordStartRefused(NTSTATUS Status){(void)Status;}
 void GuardRecordStartFailed(NTSTATUS Status){(void)Status;}
 void GuardRecordStartStarted(void){}
+void GuardStartDisplay(ULONG State){(void)State;}
 '@
 } else {
     $code=$source.Substring($first,$last-$first)
