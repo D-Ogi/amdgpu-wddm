@@ -89,6 +89,8 @@ struct bc250_sdma_reset_receipt {
  u64 previous_wptr; /* software dwords, diagnostic only; never adopted/replayed */
  u64 rptr;          /* final hardware bytes */
  u64 wptr;
+ int stop_result;   /* the first quiescence: 0, or BC250_ETIME when the engine neither froze nor read
+                     * idle (the hang case; the pulse follows as in amdgpu_sdma_reset_engine) */
 };
 /* Caller excludes CPU submitters/readers for this instance and retains ring,
  * WB, fences, firmware and translation throughout, including on failure.

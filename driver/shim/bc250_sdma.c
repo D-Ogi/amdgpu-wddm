@@ -848,9 +848,19 @@ int bc250_sdma_reset_retained_instance(struct amdgpu_device *adev, u32 instance,
  receipt->previous_wptr=ring->wptr;
  receipt->stage=BC250_SDMA_RESET_STOP;
  result=bc250_gfx_rlc_safe_enter(adev,&requested);
- if (!result) result=bc250_sdma_quiesce_instance(adev,instance);
+ if (result) {
+  bc250_gfx_rlc_safe_exit(adev,requested);
+  return result;
+ }
+ /* amdgpu_sdma_reset_engine() (amdgpu_sdma.c) ignores the return of stop_kernel_queue and goes on
+  * to the soft reset: an engine that a hang holds is the case the reset exists for, and such an
+  * engine may neither freeze nor read idle (sdma_v5_0_stop_queue's -ETIMEDOUT). M943 measured
+  * that order on SDMA0 of unit A. Until 2026-11-08 this helper returned here instead, so it could
+  * only reset an engine that was already idle. The stop result is kept in the receipt, and the
+  * second quiescence after the pulse, below, still has to pass before any memory changes. */
+ receipt->stop_result=bc250_sdma_quiesce_instance(adev,instance);
  bc250_gfx_rlc_safe_exit(adev,requested);
- if (result) return result;
+ if (receipt->stop_result!=0 && receipt->stop_result!=BC250_ETIME) return receipt->stop_result;
  receipt->stage=BC250_SDMA_RESET_PULSE;
  result=bc250_sdma_soft_reset_instance(adev,instance);
  if (result) return result;

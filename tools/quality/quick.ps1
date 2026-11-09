@@ -921,6 +921,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='hwmon';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits)}
   @{n='hwmon-board-port';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','board-port');Fails=$true}
   # The case fan's load feed-forward (rule 10 of driver\shim\include\bc250_fan.h): the first negative controls of
+  @{n='sdma-faults-early-stop-return';s='driver\shim\test\run_sdma_faults.ps1';a=@('-Kits',$Kits,'-EarlyStopReturn');Fails=$true}
   # the fan suite, because this is the rule that writes 255 to the chip by itself. Each -Mutation changes one line
   # of a copy of the file under test and the suite must then fail by a check.
   @{n='hwmon-no-boost-raise';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','no-boost-raise');Fails=$true}

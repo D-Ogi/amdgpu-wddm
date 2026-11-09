@@ -20,7 +20,10 @@ param(
     [string]$Out = "$Root\scratch\build\sdma-faults",
     [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0',
-    [switch]$Verbose250
+    [switch]$Verbose250,
+    # The negative control: bc250_sdma_reset_retained_instance returns at a stop that timed out, as it did until
+    # 2026-11-08, so a hung engine never reaches the pulse. Cases 7a and 7c must fail.
+    [switch]$EarlyStopReturn
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,7 +56,17 @@ $env:LIB = ''
 # allocator and its own register file, so that an instrumented allocator can never reach the replay.
 #   C4245  as in run_gfx.ps1: AMD's PACKET3()/SDMA packet macros yield a signed int with bit 31 set.
 $packetWarn = @('/wd4245')
-$packetSources = @('bc250_sdma.c', 'bc250_ring.c') | ForEach-Object { Join-Path $shim $_ }
+# bc250_sdma.c is compiled from a copy next to the build, so that the negative control changes the copy and never
+# the tree. Its includes resolve through /I, as from the tree.
+$sdmaCopy = Join-Path $Out 'bc250_sdma.c'
+$sdmaText = Get-Content (Join-Path $shim 'bc250_sdma.c') -Raw
+if ($EarlyStopReturn) {
+    $live = ' if (receipt->stop_result!=0 && receipt->stop_result!=BC250_ETIME) return receipt->stop_result;'
+    if (-not $sdmaText.Contains($live)) { throw 'negative control: the stop result line moved' }
+    $sdmaText = $sdmaText.Replace($live, ' if (receipt->stop_result!=0) return receipt->stop_result;')
+}
+[IO.File]::WriteAllText($sdmaCopy, $sdmaText)
+$packetSources = @($sdmaCopy, (Join-Path $shim 'bc250_ring.c'))
 # shim.c is here for the three amdgpu_sriov_* stubs soc15_common.h's register macros name in the
 # branch this part never takes.
 $plainSources = @('bc250_nbio.c', 'shim.c') | ForEach-Object { Join-Path $shim $_ }
@@ -83,7 +96,9 @@ Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DEBUG', '/MACHINE:X64', 
 Write-Host 'run'
 $argv = @()
 if ($Verbose250) { $argv += '-v' }
-& "$Out\sdma_faults.exe" @argv
+# The test-start and test-end lines of host_native.ps1 mark the step a negative control must fail (BD-237).
+. "$here\..\..\kmd\test\host_native.ps1"
+Invoke-NativeStep "$Out\sdma_faults.exe" $argv
 $code = $LASTEXITCODE
 Write-Host ''
 Write-Host "sdma_faults.exe exit code $code"
