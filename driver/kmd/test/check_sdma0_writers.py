@@ -21,7 +21,7 @@ path (bc250_ring.c, gfx.c GFX_BOUNDARY_NOTE). This check holds that property in 
      caller, WddmAdapterReset, closes node 1 (GfxPagingSubmitClose) before the call, so no paging submission runs
      beside it. GfxPagingQueueReset writes the ring (one ring test) only after bc250_sdma_reset_retained_instance
      has restarted it empty.
-3.The admission decision of Bc250Escape is the pinned statement ADMISSION (the FullWddm test, the refused status and
+3. The admission decision of Bc250Escape is the pinned statement ADMISSION (the FullWddm test, the refused status and
    the STATUS_DEVICE_BUSY return), once, at the top level of the function body, and no raw writer call comes before it.
    escape-admission tests the table that WddmDiagnosticAllowed reads; this check holds the decision that uses it.
 4. The orders those arguments need, in the source text:
@@ -31,7 +31,7 @@ path (bc250_ring.c, gfx.c GFX_BOUNDARY_NOTE). This check holds that property in 
    - GfxSubmitPagingAccess claims PagingSubmitInFlight before it takes Sdma0RingLock;
    - GfxPagingQueueReset restarts SDMA0 before it takes Sdma0RingLock for the ring test;
    - WddmAdapterReset closes node 1 before it runs the queue resets.
-5.No preprocessor line names a function of this graph (a macro could add a path that the scan does not see).
+5. No preprocessor line names a function of this graph (a macro could add a path that the scan does not see).
 6. Fail closed outside the parsed functions: a ring write or an Sdma0RingLock acquisition that is in no parsed
    definition (for example a function that is not written at column 0) is a finding, and so is a name of the graph
    outside a parsed definition unless the statement only declares that function.

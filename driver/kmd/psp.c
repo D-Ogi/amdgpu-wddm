@@ -709,6 +709,31 @@ Done:
     return status;
 }
 
+// BD-188 D-2 (docs/design/power-loss.md section 5): the witness proved a power loss, so the PSP knows no ring and no
+// TMR, and no firmware is loaded. The software takes the state of a successful retained unload, from which
+// PspSetPowerRetained(TRUE) loads the retained images again. Under GartLock, as the unload.
+void PspPowerLost(BC250_DEVICE* Device)
+{
+    BC250_PSP* psp;
+    BOOLEAN suspended=FALSE,loaded=FALSE,ringUp=FALSE,tmrUp=FALSE;
+    if (!Device || KeGetCurrentIrql()!=PASSIVE_LEVEL) return;
+    ExAcquireFastMutex(&Device->GartLock);
+    psp=(BC250_PSP*)Device->Psp;
+    if (psp) {
+        suspended=psp->PowerSuspended;
+        loaded=psp->Loaded;
+        ringUp=psp->RingUp;
+        tmrUp=psp->TmrUp;
+        psp->Loaded=FALSE;
+        psp->RingUp=FALSE;
+        psp->TmrUp=FALSE;
+        psp->PowerSuspended=TRUE;
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+    GuardLog("psp: power lost: suspended %u->1, loaded %u->0, ring %u->0, TMR %u->0",(ULONG)suspended,(ULONG)loaded,
+             (ULONG)ringUp,(ULONG)tmrUp);
+}
+
 // Cached under GartLock. A suspended flag alone is not proof of hardware stop.
 BOOLEAN PspPowerIsSuspended(const BC250_DEVICE* Device)
 {

@@ -788,6 +788,19 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   # POST answer keeps the engines suspended on the connector path), one control each.
   @{n='power-coordinator-old-display-gate';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-OldDisplayGate');Fails=$true}
   @{n='power-coordinator-old-post-gate';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-OldPostGate');Fails=$true}
+  # BD-188 D-2 (docs/design/power-loss.md section 7): a forced way down for D1 without a sleep action, a restore that
+  # ignores the witness, a failed restore that ends ACTIVE, and the power-lost state taken before the witness proves it.
+  @{n='power-coordinator-forced-d1';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-ForcedD1');Fails=$true}
+  @{n='power-coordinator-witness-ignored';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-WitnessIgnored');Fails=$true}
+  @{n='power-coordinator-failed-restore-active';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-FailedRestoreActive');Fails=$true}
+  @{n='power-coordinator-lost-before-witness';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-LostBeforeWitness');Fails=$true}
+  @{n='power-loss';s='driver\kmd\test\run_power_loss.ps1';a=@('-Root',$Workspace)}
+  # ResetEngine without the power-lost refusal, a fence advance in the resume of the forced pause (condition c), an IH
+  # called quiet with open interrupt admission, and the display repair after an unsaved way down.
+  @{n='power-loss-no-rule';s='driver\kmd\test\run_power_loss.ps1';a=@('-Root',$Workspace,'-NoPowerLostRule');Fails=$true;Step='source checks'}
+  @{n='power-loss-fence-at-resume';s='driver\kmd\test\run_power_loss.ps1';a=@('-Root',$Workspace,'-FenceAdvanceAtResume');Fails=$true;Step='source checks'}
+  @{n='power-loss-ih-quiet-always';s='driver\kmd\test\run_power_loss.ps1';a=@('-Root',$Workspace,'-IhQuietAlways');Fails=$true;Step='source checks'}
+  @{n='power-loss-repair-after-unsaved';s='driver\kmd\test\run_power_loss.ps1';a=@('-Root',$Workspace,'-RepairAfterUnsaved');Fails=$true;Step='source checks'}
   @{n='connector-resume';s='driver\kmd\test\run_connector_resume.ps1';a=@('-Root',$Workspace)}
   @{n='connector-resume-refusal-fails-d0';s='driver\kmd\test\run_connector_resume.ps1';a=@('-Root',$Workspace,'-RefusalFailsD0');Fails=$true}
   @{n='vram-geometry';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace)}

@@ -1709,7 +1709,7 @@ static const unsigned long g_MmioPspAllow[BC250_MMIO_PSP_ALLOW_COUNT] = {
 
 // E11: what amdgpu wrote on unit A in this step (E03 trace, 0.0375 to 0.0385 s, 0.2495 to 0.2528 s, 0.5496 to 0.551 s, 1.56 to 1.562 s, names matching
 // ^(GC\.(?!GCVM_|GCMC_)|GC\.GCVM_INVALIDATE_ENG17_(REQ|ACK)$|GC\.GCMC_VM_CACHEABLE_DRAM_ADDRESS_END$|MMHUB\.MMVM_INVALIDATE_ENG17_(REQ|ACK|SEM)$|NBIO\.(RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN|BIF_SDMA[01]_DOORBELL_RANGE|BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_(BASE_LOW|BASE_HIGH|CNTL))$)), plus the registers it only polled. For the kernel command alone.
-#define BC250_MMIO_GFX_ALLOW_COUNT 299
+#define BC250_MMIO_GFX_ALLOW_COUNT 300
 static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x03780ul,   // NBIO.RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN
     0x0384Cul,   // NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_HIGH
@@ -1977,6 +1977,7 @@ static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x0CCF8ul,   // GC.GDS_OA_VMID14
     0x0CCFCul,   // GC.GDS_OA_VMID15
     0x30100ul,   // GC.SCRATCH_REG0
+    0x30104ul,   // GC.SCRATCH_REG1 (not traced: power-loss witness, docs/design/power-loss.md, E07)
     0x30800ul,   // GC.GRBM_GFX_INDEX
     0x30900ul,   // GC.VGT_ESGS_RING_SIZE_UMD
     0x30A04ul,   // GC.PA_SC_LINE_STIPPLE_STATE

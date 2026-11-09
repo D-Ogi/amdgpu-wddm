@@ -39,6 +39,7 @@
 #include "hang_recovery.h"
 #include "queue_reset.h"     // stage 2 of the hang recovery: the wave proof and the step numbers
 #include "adapter_reset.h"   // TDR recovery S1: the ring witnesses of DxgkDdiResetFromTimeout
+#include "power_loss.h"      // BD-188 D-2: the witness ids
 #include "vmid_pool.h"
 #include "bc250_sdma_virtual_ptes.h"
 #include "paging_intervals.h"
@@ -146,6 +147,12 @@ typedef struct _BC250_GFX {
     BOOLEAN PagingCpuBootstrap;     // one-way close before first RUN, under GfxPagingLock
     BOOLEAN SetUp;                  // bc250_gfx_setup and bc250_sdma_setup have allocated
     BOOLEAN PowerSuspended;         // hardware halted, owners retained; under GartLock
+    // BD-188 D-2 (docs/design/power-loss.md), under GartLock: the retained halt failed (it set Failed and
+    // GpuStopUnconfirmed), and GfxPowerLost found jobs in flight that went with the power. Only the witness of a
+    // power loss (GfxPowerLost) uses them: the first lets Failed go, the second lets the restore run with those jobs
+    // in flight, for the adapter reset after D0 to retire.
+    BOOLEAN PowerHaltFailed;
+    BOOLEAN PowerLostWork;
     BOOLEAN Failed;                 // a stage failed on the hardware: only FINI from here
     BOOLEAN FencePage;              // bc250_gfx_fence_page_alloc has allocated
     BOOLEAN SdmaFencePage;          // bc250_sdma_fence_page_alloc has
@@ -5193,9 +5200,11 @@ static NTSTATUS GfxPowerRetainedLocked(BC250_DEVICE* Device, BC250_GFX* Gfx,
         return STATUS_INVALID_DEVICE_STATE;
     if (!Resume && Gfx->PowerSuspended) return STATUS_SUCCESS;
     if (Resume && !Gfx->PowerSuspended) return STATUS_INVALID_DEVICE_STATE;
-    if (Gfx->SubmitInFlight || Gfx->PagingSubmitInFlight) return STATUS_DEVICE_BUSY;
-    for (i=0;i<RTL_NUMBER_OF(Gfx->RingOwes);i++)
-        if (Gfx->RingOwes[i]) return STATUS_DEVICE_BUSY;
+    if (!(Resume && Gfx->PowerLostWork)) {
+        if (Gfx->SubmitInFlight || Gfx->PagingSubmitInFlight) return STATUS_DEVICE_BUSY;
+        for (i=0;i<RTL_NUMBER_OF(Gfx->RingOwes);i++)
+            if (Gfx->RingOwes[i]) return STATUS_DEVICE_BUSY;
+    }
     if (!Resume && (!Device->IhQuiet || Device->GfxTlbBootstrap)) return STATUS_DEVICE_NOT_READY;
     if (Resume && (!PspIsLoaded(Device) || !IhIsActive(Device) || !Device->GfxTlbBootstrap ||
                    !Gfx->FencePage || !Gfx->SdmaFencePage || !Gfx->PagingReady))
@@ -5221,6 +5230,7 @@ static NTSTATUS GfxPowerRetainedLocked(BC250_DEVICE* Device, BC250_GFX* Gfx,
         Gfx->PowerSuspended=quiet;
         if (!quiet) {
             Gfx->Failed=TRUE;
+            Gfx->PowerHaltFailed=TRUE;
             Device->GpuStopUnconfirmed=TRUE;
             return STATUS_IO_DEVICE_ERROR;
         }
@@ -5254,6 +5264,7 @@ static NTSTATUS GfxPowerRetainedLocked(BC250_DEVICE* Device, BC250_GFX* Gfx,
         Device->GpuStopUnconfirmed=TRUE;
         return STATUS_IO_DEVICE_ERROR;
     }
+    Gfx->PowerLostWork=FALSE;   // the jobs stay in flight; only the adapter reset retires them
     GfxAccessOpen(Device);
     return STATUS_SUCCESS;
 }
@@ -5285,6 +5296,108 @@ NTSTATUS GfxSetPowerRetained(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
     return status;
 }
 
+// ---- BD-188 D-2: a way down that the power ended (docs/design/power-loss.md) --------------------------------------
+
+C_ASSERT(BC250_GFX_POWER_WITNESS_SCRATCH_REG1 == BC250_POWER_WITNESS_GC_SCRATCH_REG1);
+
+// The witness register, through a sequence of its own with the GFX table: the shared Gfx->Sequence keeps its fault,
+// which the retained halt and restore read as a precondition.
+static NTSTATUS GfxPowerWitnessAccess(_In_ BC250_DEVICE* Device, ULONG Id, BOOLEAN Write, _Inout_ ULONG* Value)
+{
+    BC250_SEQUENCE sequence;
+    struct amdgpu_device* adev=NULL;
+    BOOLEAN enabled=FALSE;
+    NTSTATUS status;
+    u32 value=Write ? *Value : 0;
+    if (KeGetCurrentIrql()!=PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;
+    RtlZeroMemory(&sequence,sizeof(sequence));
+    sequence.Name="power witness";
+    sequence.Read=MmioGfxRead;
+    sequence.Write=MmioGfxWrite;
+    ExAcquireFastMutex(&Device->GartLock);
+    status=GartDevice(Device,&adev,&enabled);
+    if (NT_SUCCESS(status) && (!Device->Gfx || !Device->MmioGfxEnabled)) status=STATUS_DEVICE_NOT_READY;
+    if (NT_SUCCESS(status)) {
+        void* previous=adev->backend;
+        adev->backend=&sequence;
+        SequenceBegin(&sequence,Device,FALSE,NULL,0);
+        status=bc250_gfx_power_witness(adev,(unsigned)Id,Write ? true : false,&value)!=0 ? STATUS_NOT_SUPPORTED :
+               sequence.Fault;
+        adev->backend=previous;
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+    if (NT_SUCCESS(status) && !Write) *Value=value;
+    return status;
+}
+
+NTSTATUS GfxPowerWitnessWrite(_In_ BC250_DEVICE* Device, ULONG Id, ULONG Value)
+{
+    return GfxPowerWitnessAccess(Device,Id,TRUE,&Value);
+}
+
+NTSTATUS GfxPowerWitnessRead(_In_ BC250_DEVICE* Device, ULONG Id, _Out_ ULONG* Value)
+{
+    *Value=0;
+    return GfxPowerWitnessAccess(Device,Id,FALSE,Value);
+}
+
+// The witness proved a power loss: the engines are at their power-on state, whatever the way down left in software.
+// The halt verdict becomes "suspended"; a Failed that only the retained halt set goes. GpuStopUnconfirmed, which
+// nothing else clears outside a start, goes only when IhPowerLost (which runs first) found interrupt admission
+// closed (IhQuiet): the witness proves the chip state, not that the OS stopped calling the ISR. A
+// fence that a ring still owes can never come: the restore starts every ring empty. Jobs in flight stay in flight
+// for the adapter reset after D0 (PowerLostWork). No fence and no sequence changes here.
+void GfxPowerLost(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_GFX* gfx;
+    ULONG i,owes=0;
+    BOOLEAN suspended=FALSE,failed=FALSE,haltFailed=FALSE,unconfirmed,inFlight=FALSE;
+    KeEnterCriticalRegion();
+    ExAcquirePushLockExclusive(&Device->GfxPagingLock);
+    ExAcquireFastMutex(&Device->GartLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    unconfirmed=Device->GpuStopUnconfirmed;
+    if (gfx) {
+        suspended=gfx->PowerSuspended;
+        failed=gfx->Failed;
+        haltFailed=gfx->PowerHaltFailed;
+        gfx->PowerSuspended=TRUE;
+        if (haltFailed) {
+            gfx->Failed=FALSE;
+            gfx->PowerHaltFailed=FALSE;
+        }
+        for (i=0;i<RTL_NUMBER_OF(gfx->RingOwes);i++) {
+            if (gfx->RingOwes[i]) owes|=1u<<i;
+            gfx->RingOwes[i]=0;
+            gfx->RingOwesSlot[i]=0;
+        }
+        inFlight=gfx->SubmitInFlight!=0 || gfx->PagingSubmitInFlight!=0 || gfx->ComputeInFlight!=0;
+        gfx->PowerLostWork=inFlight;
+    }
+    if (Device->IhQuiet) Device->GpuStopUnconfirmed=FALSE;
+    ExReleaseFastMutex(&Device->GartLock);
+    ExReleasePushLockExclusive(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    // Before: suspended, failed (and whether the halt set it), stop unconfirmed, the rings that owed a fence. After:
+    // suspended, not failed when the halt set it, unconfirmed only with open IH admission, nothing owed; the jobs in
+    // flight stay.
+    GuardLog("gfx: power lost: was suspended %u failed %u (halt %u) unconfirmed %u->%u owed 0x%lX, in flight %u",
+             (ULONG)suspended,(ULONG)failed,(ULONG)haltFailed,(ULONG)unconfirmed,(ULONG)Device->GpuStopUnconfirmed,owes,
+             (ULONG)inFlight);
+}
+
+// WddmResumeRetained after a forced pause: GfxSubmitReady and GfxPagingSubmitReady without their "nothing in flight"
+// term. The jobs in flight are the lost ones, which the adapter reset after D0 retires.
+BOOLEAN GfxSubmitRestoredWithLostWork(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_GFX* gfx;
+    BOOLEAN result;
+    if (GfxAccessAcquire(Device)==NULL) return FALSE;
+    gfx=(const BC250_GFX*)Device->Gfx;
+    result=GfxSubmitArmed(gfx) && gfx->PagingGate && gfx->PagingSubmitFailed==0 && gfx->PagingReady;
+    GfxAccessRelease(Device);
+    return result;
+}
 // ---- start and stop -------------------------------------------------------------------------------------------------------
 
 NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)

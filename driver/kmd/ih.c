@@ -576,6 +576,36 @@ static NTSTATUS IhPowerRetainedLocked(BC250_DEVICE* Device, BC250_IH* Ih,
     return STATUS_SUCCESS;
 }
 
+// BD-188 D-2 (docs/design/power-loss.md section 5): the witness proved a power loss, so the controller is at its
+// power-on state with delivery disabled. Interrupt admission closes if the way down left it open (a refused halt),
+// and the software takes the state of a successful retained halt, from which IhSetPowerRetained(TRUE) restores.
+// The witness proves the chip state only, not that the OS stopped calling the ISR. IhQuiet therefore becomes TRUE
+// only when admission is closed. Otherwise IhCloseInterruptAdmission keeps IhQuiet FALSE and GpuStopUnconfirmed
+// TRUE, GfxPowerLost keeps GpuStopUnconfirmed, and the restore refuses: FAILED, as before D-2.
+void IhPowerLost(BC250_DEVICE* Device)
+{
+    BC250_IH* ih;
+    BOOLEAN suspended=FALSE,enabled=FALSE,quiet,closed=TRUE;
+    LONG active=0;
+    if (!Device || KeGetCurrentIrql()!=PASSIVE_LEVEL) return;
+    ExAcquireFastMutex(&Device->GartLock);
+    ih=(BC250_IH*)Device->Ih;
+    quiet=Device->IhQuiet;
+    if (ih) {
+        suspended=ih->PowerSuspended;
+        enabled=ih->Enabled;
+        active=InterlockedCompareExchange(&ih->Active,0,0);
+        if (active || !suspended) closed=IhCloseInterruptAdmission(Device,ih);
+        InterlockedExchange(&ih->Active,0);
+        ih->Enabled=FALSE;
+        ih->PowerSuspended=TRUE;
+        Device->IhQuiet=closed;
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+    GuardLog("ih: power lost: suspended %u->1, enabled %u->0, active %ld->0 (admission closed %u), quiet %u->%u",
+             (ULONG)suspended,(ULONG)enabled,active,(ULONG)closed,(ULONG)quiet,(ULONG)Device->IhQuiet);
+}
+
 // PASSIVE/Level Three coordinator entry. Before resume the same GART owner and
 // mappings must already be reconstructed; GartInitializeHardware is destructive.
 NTSTATUS IhSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume)

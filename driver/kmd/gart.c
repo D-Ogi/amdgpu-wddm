@@ -387,6 +387,26 @@ static NTSTATUS GartPowerRetainedLocked(BC250_DEVICE* Device, BC250_GART* Gart,
     return STATUS_SUCCESS;
 }
 
+// BD-188 D-2 (docs/design/power-loss.md section 5): the witness proved a power loss, so the GART is disabled in the
+// hardware. The software takes the state of a successful retained disable, from which GartSetPowerRetained(TRUE)
+// rebuilds the tables from the retained backing.
+void GartPowerLost(BC250_DEVICE* Device)
+{
+    BC250_GART* gart;
+    BOOLEAN suspended=FALSE,enabled=FALSE;
+    if (!Device || KeGetCurrentIrql()!=PASSIVE_LEVEL) return;
+    ExAcquireFastMutex(&Device->GartLock);
+    gart=(BC250_GART*)Device->Gart;
+    if (gart) {
+        suspended=gart->PowerSuspended;
+        enabled=gart->Enabled;
+        gart->Enabled=FALSE;
+        gart->PowerSuspended=TRUE;
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+    GuardLog("gart: power lost: suspended %u->1, enabled %u->0",(ULONG)suspended,(ULONG)enabled);
+}
+
 NTSTATUS GartSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume)
 {
     BC250_GART* gart;

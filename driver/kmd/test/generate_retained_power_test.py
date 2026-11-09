@@ -4,5 +4,5 @@ p=argparse.ArgumentParser();p.add_argument('--source',type=Path,required=True);p
 s=a.source.read_text()
 def function(sig):
  start=s.index(sig);return s[start:s.index('\n}\n',start)+3]
-body='\n'.join(function(sig) for sig in ['static ULONG WddmPowerBusyLocked(', 'static BOOLEAN WddmPowerIdleLocked(', 'NTSTATUS WddmSuspendRetained(', 'NTSTATUS WddmResumeRetained('])
+body='\n'.join(function(sig) for sig in ['static ULONG WddmPowerBusyLocked(', 'static void WddmRetainedPauseTail(', 'NTSTATUS WddmSuspendRetained(', 'void WddmPauseForPowerLoss(', 'NTSTATUS WddmResumeRetained('])
 a.out.write_text(Path(__file__).with_name('retained_power_test.c').read_text().replace('/* ACTUAL_SOURCE */',body))

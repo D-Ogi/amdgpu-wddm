@@ -94,6 +94,10 @@ static __inline int Bc250KillVmidValid(unsigned vmid)
 #define BC250_HANG_VERDICT_QUEUE_RESET_FAILED 12u /* stage 2 failed: refused as before (0x116). LastSeq is the failed
                                                  * step, enum bc250_qreset_step of bc250_gfx.h, or 9 for the wave
                                                  * proof and 10 for a register refused by the gfx sequence. */
+#define BC250_HANG_VERDICT_POWER_LOST    13u /* BD-188 D-2: the head job was on its ring when the power went
+                                                 * (power_loss.h Bc250HangPowerLost): refused before any kill, so that
+                                                 * the adapter reset retires it. LastSeq is the newest sequence of
+                                                 * the ring, as for the other refusals. */
 
 /* Which DDI wrote the record: HangRecovery\LastPath of the state store. */
 #define BC250_HANG_PATH_ENGINE   1u     /* DxgkDdiResetEngine, stage 1 of hang-recovery.md */

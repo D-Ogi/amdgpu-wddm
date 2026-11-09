@@ -14,7 +14,7 @@
  * One deviation from amdgpu's list, with its evidence: SDMA 5.0.1 (Cyan Skillfish, the BC-250) is not in
  * sdma_v5_0.c's switch, but M943 measured sdma_v5_0_reset_queue on SDMA0 of unit A (amdgpu 6.18.52, the stock
  * cyan_skillfish2_sdma firmware): stop, soft reset and restore returned 0 in 1.2 ms and later copies passed. The
- * entry is therefore tied to a positively identified device (the PCI table below), not to the IP version alone:
+ * entry is therefore tied to a positively identified device (the PCI table of asic_ip.h), not to the IP version alone:
  * another 5.0.1 part would get it only after its own measurement.
  *
  * The compute fallback (queue-reset.md 5.3, CP_HQD_DEQUEUE_REQUEST after a KIQ unmap that left the HQD active) is
@@ -23,14 +23,7 @@
 #ifndef BC250_QUEUE_RESET_CAPS_H
 #define BC250_QUEUE_RESET_CAPS_H
 
-/* amdgpu's IP_VERSION(maj, min, rev) packing (amdgpu.h). */
-#define BC250_IP_VERSION(maj, min, rev) (((unsigned)(maj) << 16) | ((unsigned)(min) << 8) | (unsigned)(rev))
-#define BC250_IP_MAJOR(v) (((v) >> 16) & 0xFFu)
-#define BC250_IP_MINOR(v) (((v) >> 8) & 0xFFu)
-
-#define BC250_QRESET_CAP_COMPUTE  0x1u /* gfx_v10_0_reset_kcq: KIQ UNMAP_QUEUES RESET_QUEUES, MQD, MAP_QUEUES */
-#define BC250_QRESET_CAP_GFX      0x2u /* gfx_v10_0_reset_kgq: CP_VMID_RESET through the KIQ, MQD, MAP_QUEUES */
-#define BC250_QRESET_CAP_SDMA     0x4u /* sdma_v5_0_reset_queue: stop, GRBM soft reset of the instance, restart */
+#include "asic_ip.h"   /* the device table, the IP version packing and the BC250_QRESET_CAP_* bits */
 
 /* The firmware version is unknown to the caller: no firmware gate can pass. */
 #define BC250_SDMA_FW_UNKNOWN 0u
@@ -71,35 +64,6 @@ static __inline unsigned Bc250QueueResetImplementedCaps(unsigned gc, unsigned sd
         caps |= BC250_QRESET_CAP_COMPUTE | BC250_QRESET_CAP_GFX;
     if (BC250_IP_MAJOR(sdma) == 5u && BC250_IP_MINOR(sdma) == 0u) caps |= BC250_QRESET_CAP_SDMA;
     return caps;
-}
-
-/* The devices whose IP versions this driver knows. amdgpu reads them from the discovery table; this driver binds
- * one device today, and its versions are amdgpu's hard-coded ones (amdgpu_discovery.c:2783-2794, CHIP_CYAN_SKILLFISH
- * with AMD_APU_IS_CYAN_SKILLFISH2). MeasuredCaps are the capabilities that a measurement on that device adds to
- * amdgpu's list (the deviation above). */
-typedef struct _BC250_ASIC_IP {
-    unsigned short PciDevice;
-    unsigned Gc;
-    unsigned Sdma;
-    unsigned MeasuredCaps;
-} BC250_ASIC_IP;
-
-static const BC250_ASIC_IP g_Bc250AsicIp[] = {
-    { 0x13FEu, BC250_IP_VERSION(10, 1, 3), BC250_IP_VERSION(5, 0, 1), BC250_QRESET_CAP_SDMA /* M943 */ },
-};
-
-/* 1 and the versions when the device is in the table, 0 otherwise (the caller then has no per-queue reset). */
-static __inline int Bc250AsicIpLookup(unsigned vendor, unsigned device, BC250_ASIC_IP* out)
-{
-    unsigned i;
-
-    if (vendor != 0x1002u) return 0;
-    for (i = 0; i < sizeof(g_Bc250AsicIp) / sizeof(g_Bc250AsicIp[0]); i++)
-        if (g_Bc250AsicIp[i].PciDevice == device) {
-            *out = g_Bc250AsicIp[i];
-            return 1;
-        }
-    return 0;
 }
 
 /* The queue resets this driver runs on one device: (amdgpu's list, plus what was measured on this device) and
