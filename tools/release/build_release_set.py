@@ -1408,17 +1408,24 @@ def register(rows_doc, sources_path, root, repo, version, configs_out):
 # ---------------------------------------------------------------------------------------------------------------
 
 def ledger_pins(manifest):
-    """BD-326 (b): the row pins of a release manifest in the shape of release-sources.json "files" (built_from with repo,
-    commit and row; no hashes), for `ledger.py check --release-sources`. Before -Register the pins of the release that
-    is being built are only in its manifest, so without them the ledger gate refuses every fork landing in a commit
-    that this release builds. The document is not a release-sources.json for a package."""
+    """BD-326 (b): the pins of a release manifest in the shape of release-sources.json, for `ledger.py check
+    --release-sources`. Before -Register the pins of the release that is being built are only in its manifest, so
+    without them the ledger gate refuses every fork landing in a commit that this release builds.
+
+    "files" carries what make_rows() writes into built_from for each output (repo, commit, the inputs when the row has
+    them) and the row id; no hashes. "repositories" is the manifest's table: ledger.py reads the gitlink pins of
+    submodules (dxbc-spirv in dxvk, dxil-spirv in vkd3d-proton) from its "submodules", so the gate gives the same answer
+    before and after -Register. The document is not a release-sources.json for a package."""
     files = []
     for r in manifest["rows"]:
+        built = {"repo": r["repo"], "commit": r["commit"], "row": r["id"]}
+        if r.get("inputs"):
+            built["inputs"] = copy.deepcopy(r["inputs"])
         for o in r.get("outputs") or []:
             files.append({"path": o["path"], "component": o.get("component", r.get("component")),
-                          "flavour": r["flavour"], "built_from": {"repo": r["repo"], "commit": r["commit"], "row": r["id"]}})
+                          "flavour": o.get("flavour", r["flavour"]), "built_from": dict(built)})
     return {"note": f"row pins of the {manifest['version']} manifest for ledger.py --release-sources; no hashes",
-            "files": files}
+            "repositories": copy.deepcopy(manifest["repositories"]), "files": files}
 
 
 def main():

@@ -353,9 +353,9 @@ if (Test-DriverStoreFirmware $m.firmware) {
 }
 # BD-325: the installer is [ok] with one host, so the test is too. The URLs of both hosts are checked below; a host
 # that did not answer at that second is a warning about the network of this computer, not a fault of the package.
-$fwPre = Get-FirmwarePreflight $r.text
+$fwPre = Get-FirmwarePreflight $r.text (Get-FirmwareHosts $m.firmware)
 Check ($null -ne $fwPre) 'preflight: the GPU firmware line is [ok] (at least one download host reachable)'
-if ($fwPre -and $fwPre.unreachable) { "  WARN preflight: firmware host not reachable from this computer now: $($fwPre.unreachable)" }
+Get-FirmwarePreflightWarning $fwPre
 Check ($r.text -match 'would: get the 9 GPU firmware files from linux-firmware [0-9a-f]{40} into ') 'phase 2 shows the firmware download'
 foreach ($f in @($m.firmware.files)) {
     $u1 = [regex]::Escape("https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/$($f.path)?id=$($m.firmware.commit)")

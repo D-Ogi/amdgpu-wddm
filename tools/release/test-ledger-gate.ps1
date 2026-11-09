@@ -87,4 +87,63 @@ Assert ($text -match "Stop-Package 'the work ledger refuses this release") '-Pac
 Assert ($text -match 'ledger_debt_reason = ') 'the report records the reason'
 
 Remove-Item -LiteralPath $root -Recurse -Force
-Write-Host "PASS: $passed checks (the ledger gate: PASS, FAIL, DEBT, and FAIL when the checker does not finish)"
+
+# 4. BD-326 (b): the plan's pins file (build_release_set.py ledger-pins) holds a fork: landing at a commit that the
+# manifest pins, the row commit and the gitlink of a submodule in it. Two fork clones: vk has dx as the submodule
+# subprojects/dxil-spirv at commit D; the manifest row builds vk at A. Controls: without the pins file both landings
+# are refused, and a pins file without the "repositories" table refuses the submodule landing (the review finding).
+$root = Join-Path ([IO.Path]::GetFullPath($Out)) ('ledger-pins-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+function Invoke-Git([string]$Dir) {
+    & git -C $Dir -c user.name=fixture -c user.email=research@example.com @args
+    if ($LASTEXITCODE) { throw "git $args failed in $Dir" }
+}
+$vk = Join-Path $root 'fork\vk'; $dx = Join-Path $root 'fork\dx'
+foreach ($d in $vk, $dx) {
+    New-Item -ItemType Directory -Force $d | Out-Null
+    Invoke-Git $d init -q; Invoke-Git $d symbolic-ref HEAD refs/heads/main
+}
+foreach ($t in 'one', 'two') { [IO.File]::WriteAllText("$dx\a.txt", $t); Invoke-Git $dx add a.txt; Invoke-Git $dx commit -q -m $t }
+$dxPin = (& git -C $dx rev-parse HEAD).Trim()
+[IO.File]::WriteAllText("$vk\v.txt", 'v'); Invoke-Git $vk add v.txt
+Invoke-Git $vk update-index --add --cacheinfo "160000,$dxPin,subprojects/dxil-spirv"
+Invoke-Git $vk commit -q -m 'the submodule pin'
+$vkPin = (& git -C $vk rev-parse HEAD).Trim()
+New-Item -ItemType Directory -Force (Join-Path $root 'scratch\cleanup-250') | Out-Null
+[IO.File]::WriteAllText((Join-Path $root 'release-sources.json'), '{"files": [{"component": "kmd", "path": "amdgpu_wddm.sys"}]}')
+[IO.File]::WriteAllText((Join-Path $root 'scratch\cleanup-250\size-latest.json'), (ConvertTo-Json @{ epoch = $now.ToUnixTimeSeconds()
+            utc = $now.ToString('yyyy-MM-ddTHH:mm:ssZ'); counted_bytes = 1000; free_bytes = 500000000000 }))
+$day = $now.ToString('yyyy-MM-dd')
+[IO.File]::WriteAllText((Join-Path $root 'LEDGER.json'), (ConvertTo-Json -Depth 6 @{ release_sources = 'release-sources.json'
+            repos = @{ vk = @{ path = 'fork/vk'; release_repo = 'vkd3d-proton' }; dx = @{ path = 'fork/dx'; release_repo = 'dxil-spirv' } }
+            ignore = @(@{ pattern = 'scratch/cleanup-250'; reason = 'the size record of this test' }, @{ pattern = 'fork'; reason = 'the fork clones of this test' })
+            census = @('scratch/cleanup-250', 'fork')
+            entries = @(
+                @{ id = 'vk-fix'; kind = 'fork-branch'; where = "vk:main@$vkPin"; what = 'a fork fix'; state = 'landed'; landed_in = "fork:vk:main@$vkPin"; updated = $day; serves = @('tester.99') },
+                @{ id = 'dx-fix'; kind = 'fork-branch'; where = "dx:main@$dxPin"; what = 'a submodule fix'; state = 'landed'; landed_in = "fork:dx:main@$dxPin"; updated = $day; serves = @('tester.99') }) }))
+$manifest = Join-Path $root 'manifest.json'
+[IO.File]::WriteAllText($manifest, (ConvertTo-Json -Depth 6 @{ version = $version
+            repositories = @{ 'vkd3d-proton' = @{ url = 'fixture'; checkouts = @('fork/vk'); submodules = @{ 'subprojects/dxil-spirv' = 'dxil-spirv' } }
+                'dxil-spirv' = @{ url = 'fixture'; checkouts = @('fork/dx') } }
+            rows = @(@{ id = 'd3d12-x64-rel'; repo = 'vkd3d-proton'; commit = $vkPin; flavour = 'release'; component = 'd3d12'; outputs = @(@{ path = 'x.dll' }) }) }))
+$pins = Join-Path $root 'pins.json'
+$o = @(& $python -I (Join-Path $PSScriptRoot 'build_release_set.py') ledger-pins --manifest $manifest --write $pins 2>&1 | ForEach-Object { [string]$_ })
+Assert ($LASTEXITCODE -eq 0) "ledger-pins writes the pins file: $($o -join ' | ')"
+function Get-PinGate([string[]]$Sources) {
+    $extra = @(foreach ($s in $Sources) { '--release-sources'; $s })
+    $o = @(& $python -I $Ledger --root $root check --release $version @extra 2>&1 | ForEach-Object { [string]$_ })
+    Get-LedgerGate -ExitCode $LASTEXITCODE -Output $o -Version $version
+}
+$g = Get-PinGate @($pins)
+Assert ($g.status -eq 'PASS') "the manifest pins hold both fork landings, the submodule one too, not $($g.status): $($g.lines -join ' | ')"
+$g = Get-PinGate @()
+Assert ($g.status -eq 'FAIL' -and @($g.lines | Where-Object { $_ -like 'ERROR*not-landed*vk-fix*' }).Count -eq 1 -and
+    @($g.lines | Where-Object { $_ -like 'ERROR*not-landed*dx-fix*' }).Count -eq 1) "without the pins file both landings are refused: $($g.lines -join ' | ')"
+$doc = Get-Content -Raw -LiteralPath $pins | ConvertFrom-Json -AsHashtable
+$doc.Remove('repositories')
+$filesOnly = Join-Path $root 'pins-files-only.json'
+[IO.File]::WriteAllText($filesOnly, (ConvertTo-Json -Depth 8 $doc))
+$g = Get-PinGate @($filesOnly)
+Assert ($g.status -eq 'FAIL' -and @($g.lines | Where-Object { $_ -like 'ERROR*dx-fix*' }).Count -eq 1 -and
+    -not @($g.lines | Where-Object { $_ -like 'ERROR*vk-fix*' }).Count) "without the repositories table only the submodule landing is refused: $($g.lines -join ' | ')"
+Remove-Item -LiteralPath $root -Recurse -Force
+Write-Host "PASS: $passed checks (the ledger gate: PASS, FAIL, DEBT, and FAIL when the checker does not finish; a fork landing at a manifest pin and at a submodule pin)"
