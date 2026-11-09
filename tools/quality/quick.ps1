@@ -546,6 +546,8 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # BD-223: the scaler, MPC, surface and colour helpers, the DC types and the latch probe are gates of their own. Inside
  # modeset they made it run past its 180 s deadline.
  Check 'scaler-geometry' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scaler_geometry.ps1" -Root $Workspace -Out "$Out\scaler-geometry" }
+ Check 'overlay-group' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group" }
+ Check 'overlay-group-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group-controls" -Mutation all }
  Check 'dc-types' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dc_types.ps1" -Root $Workspace -Out "$Out\dc-types" }
  Check 'latch-probe' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_latch_probe.ps1" -Root $Workspace -Out "$Out\latch-probe" -Mutations }
  Check 'atom-display' {
@@ -747,6 +749,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='dcn-flip-retire-irql';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetireAtDirql');Fails=$true}
   @{n='dcn-flip-retire-frame';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetireOneFrame');Fails=$true}
   @{n='dcn-flip-bridge-adopt';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeAdoptIgnored');Fails=$true}
+  @{n='dcn-flip-cursor-plane';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','CursorPlaneLost');Fails=$true}
 @{n='dcn-plane-state';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace)}
 @{n='dcn-plane-state-save-every-flip';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','SaveEveryFlip');Fails=$true}
 @{n='dcn-plane-state-stamp';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','StampIgnored');Fails=$true}

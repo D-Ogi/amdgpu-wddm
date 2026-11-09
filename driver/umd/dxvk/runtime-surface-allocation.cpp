@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-surface-allocation.h"
 #include "runtime-surface-format.h"
+#include <cstring>
 namespace bc250::umd {
 // E26R v2 resource-group ABI, consumed by KMD wddm.c resource-private parser.
 struct ResourcePrivate { UINT magic,version,shared,access; };
@@ -14,12 +15,17 @@ HRESULT allocate_runtime_surface(RuntimeDevice &device,const RuntimeSurfaceReque
     // BD-223 step R3: a scan-out surface with no primary descriptor is a displayable one, and its record says
     // DISPLAYABLE in place of PRIMARY (driver/kmd/surface_resource_private.h).
     const bool displayableScanout=request.scanout && !request.primary;
+    const bool nv12=request.surface.Format==BC250_NV12_D3DDDI_FORMAT;
     // The kernel driver's type-0 admission, by the same table: the composed rows and the scan-out
     // rows a primary may have (X8R8G8B8). The row sizes the pixel: 1 byte for A8, 8 for RGBA16F.
     const auto *row=amdgpu_wddm_surface_format_by_d3dddi(request.surface.Format);
-    if (!amdgpu_wddm_surface_admit(row,AMDGPU_WDDM_SURFACE_COMPOSED) &&
+    if (!nv12 && !amdgpu_wddm_surface_admit(row,AMDGPU_WDDM_SURFACE_COMPOSED) &&
         !amdgpu_wddm_surface_admit(row,AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY)) return E_NOTIMPL;
-    if (!runtime_surface_geometry(request.surface,row->bytes_per_pixel)) return E_INVALIDARG;
+    if (nv12) {
+        if (!Bc250Nv12PrivateValid(&request.nv12,sizeof(request.nv12)) ||
+            std::memcmp(&request.surface,&request.nv12.Surface,sizeof(request.surface)) ||
+            request.cpu_read || request.no_cpu_access || request.scanout) return E_INVALIDARG;
+    } else if (!runtime_surface_geometry(request.surface,row->bytes_per_pixel)) return E_INVALIDARG;
     auto texture=request.texture;
     const bool extended=texture.Magic!=0;
     if (request.no_cpu_access && (request.runtime_resource || request.primary || request.shared ||
@@ -35,15 +41,19 @@ HRESULT allocate_runtime_surface(RuntimeDevice &device,const RuntimeSurfaceReque
                          (request.scanout ? BC250_SURFACE_RESOURCE_SCANOUT : 0u)|
                          (displayableScanout ? BC250_SURFACE_RESOURCE_DISPLAYABLE : 0u)) ||
         texture.Width!=request.surface.Width || texture.Height!=request.surface.Height ||
-        !runtime_surface_format(request.surface.Format,DXGI_FORMAT(texture.Format)))) return E_INVALIDARG;
+        !(nv12 ? texture.Format==BC250_NV12_DXGI_FORMAT :
+          runtime_surface_format(request.surface.Format,DXGI_FORMAT(texture.Format))!=nullptr))) return E_INVALIDARG;
+    if (nv12 && !extended) return E_INVALIDARG;
     static_assert(sizeof(texture)==64);
     auto surface=request.surface;
+    auto planar=request.nv12;
     ResourcePrivate group{0x52363245u,2,request.shared ? 1u : 0u,
         (request.primary ? 1u : 0u) | (request.cpu_read ? 2u : 0u)};
     D3DDDI_ALLOCATIONINFO2 info{};
     BC250_SURFACE_GPU_ONLY_RECORD gpuOnly{};
     if (request.no_cpu_access && !Bc250SurfaceGpuOnlyRecordInit(&gpuOnly,0)) return E_INVALIDARG;
     info.pPrivateDriverData=&surface; info.PrivateDriverDataSize=sizeof(surface);
+    if (nv12) { info.pPrivateDriverData=&planar; info.PrivateDriverDataSize=sizeof(planar); }
     info.Flags.Primary=request.primary; info.VidPnSourceId=request.vidpn_source;
     D3DDDICB_ALLOCATE allocate{};
     allocate.hResource=request.runtime_resource;

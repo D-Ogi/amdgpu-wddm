@@ -32,9 +32,14 @@ param(
                  'shape-not-a-change', 'null-drops-shape', 'shape-without-allocation',
                  'mpo3-report-off', 'mpo3-report-type', 'mpo3-legacy-kept', 'mpo3-refused-tracked', 'mpo3-not-converted',
                  'mpo3-keep-unlocked', 'mpo3-immediate-lost', 'mpo3-extra-layer-shown', 'mpo3-check-scanout-skipped',
-                 'mpo3-check-gate-skipped', 'mpo3-busy-passed',
+                 'mpo3-check-gate-skipped', 'mpo3-busy-passed', 'scaled-release-enabled',
                  'witness-before-decision', 'witness-changes-answer', 'witness-stale-compared',
-                 'witness-lost-uncounted', 'scaled-plane-mask-dropped', 'planes-clamp-dropped')][string]$Mutation = '',
+                 'witness-lost-uncounted', 'scaled-plane-mask-dropped', 'planes-clamp-dropped',
+                 'mpo3-scaled-route-off', 'mpo3-scaled-dml-skipped', 'mpo3-scaled-scanout-skipped',
+                 'mpo3-scaled-rule-unnamed', 'mpo3-scaled-shape-lost', 'mpo3-scaled-approval-skipped',
+                 'mpo3-scaled-selector-skipped', 'mpo3-scaled-presentid-lost',
+                 'group-colour-swapped', 'group-umd-nv12', 'group-flags-ignored', 'group-rgb-colour-ignored',
+                 'group-post-ignored', 'group-source-ignored')][string]$Mutation = '',
     [switch]$Lab
 )
 
@@ -192,9 +197,12 @@ $mutations = [ordered]@{
     'mpo3-check-scanout-skipped' = @{ find = 'if (scanout != BC250_SCANOUT_ADMIT_OK) verdict = BC250_MPO3_SCANOUT;'
         with = 'if (((void)scanout, 0)) verdict = BC250_MPO3_SCANOUT;'
         why = 'Check approves an allocation the scan-out rule refuses' }
-    'mpo3-check-gate-skipped' = @{ find = 'else if (!device->VidPnFlipEnabled) verdict = BC250_MPO3_GATE;'
-        with = 'else if (((void)device, 0)) verdict = BC250_MPO3_GATE;'
+    'mpo3-check-gate-skipped' = @{ find = 'if (verdict == BC250_MPO3_OK && !device->VidPnFlipEnabled) verdict = BC250_MPO3_GATE;'
+        with = 'if (((void)device, 0)) verdict = BC250_MPO3_GATE;'
         why = 'Check approves a plane with the flip gate closed' }
+    'scaled-release-enabled' = @{ find = "    UNREFERENCED_PARAMETER(Raw);`n    UNREFERENCED_PARAMETER(Handshake);`n    return 0;"
+        with = '    return Handshake ? Raw : 0;'
+        why = 'the release start admits a raw selector before hardware acceptance' }
 }
 
 # The lab flavour's controls (-Lab): the witnesses read after the shipping decision and never change it.
@@ -214,9 +222,60 @@ $labMutations = [ordered]@{
     'planes-clamp-dropped' = @{ find = '(ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) && Level < BC250_WDDM_MPO_CAPS_DDI_LEVEL'
         with = '(ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) && (Level || 1)'
         why = 'DRIVERCAPS says 2 planes at level 2.2 or later, where the caps DDI says 1' }
+    # BD-223 Part Y: the translation of the two planes of a Check3 call (WddmMpo3GroupDescribe, lab flavour).
+    'group-colour-swapped' = @{ find = 'case D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P601: out->Color = BC250_INPUT_601_LIMITED; break;'
+        with = 'case D3DDDI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P601: out->Color = BC250_INPUT_601_FULL; break;'
+        why = 'a studio-range 601 plane is described as full range' }
+    'group-umd-nv12' = @{ find = 'if (s->Format == BC250_NV12_D3DDDI_FORMAT && !Storage[i].UmdAlloc &&'
+        with = 'if (s->Format == BC250_NV12_D3DDDI_FORMAT && ((void)Storage[i].UmdAlloc, 1) &&'
+        why = 'a UMD allocation is described as an NV12 plane' }
+    'group-flags-ignored' = @{ find = 'out->UnsupportedFlags = a->Flags.Value || a->Blend.Value ||'
+        with = 'out->UnsupportedFlags = ((void)a->Flags.Value, 0) || a->Blend.Value ||'
+        why = 'a mirrored plane reaches the planner without its exclusion' }
+    'group-rgb-colour-ignored' = @{ find = 'if ((UINT)a->ColorSpaceType != D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709) {'
+        with = 'if (((void)a->ColorSpaceType, 0)) {'
+        why = 'an RGB plane with a YCbCr colour space is described as full-range RGB' }
+    'group-post-ignored' = @{ find = 'Description->PostCompositionChanged |= facts.PostPresent && (facts.PostFlags ||'
+        with = 'Description->PostCompositionChanged |= 0 && facts.PostPresent && (facts.PostFlags ||'
+        why = 'a mirrored post-composition is not reported to the planner' }
+    'group-source-ignored' = @{ find = 'if (p->VidPnSourceId != 0) { RtlZeroMemory(Description, sizeof(*Description)); return STATUS_INVALID_PARAMETER; }'
+        with = 'if (((void)p->VidPnSourceId, 0)) { RtlZeroMemory(Description, sizeof(*Description)); return STATUS_INVALID_PARAMETER; }'
+        why = 'a plane of another source is described' }}
+# BD-223: both flavours compile and test the same Check3 and SetAddress3 implementation.
+$planeMutations = [ordered]@{
+    'mpo3-scaled-route-off' = @{ find = 'scaled = verdict == BC250_MPO3_OK ? 1u : 0u;'; with = 'scaled = ((void)verdict, 0u);'
+        why = 'with the lab bit, a scaled plane 0 never reaches the scaled-plane rule' }
+    'mpo3-scaled-dml-skipped' = @{ find = 'if (verdict == BC250_PLANE_OK && !plan.Identity) { verdict = WddmPlaneDml(Device, &r, &plan, &dml); dmlRan = TRUE; }'
+        with = 'if (((void)plan, 0)) { verdict = WddmPlaneDml(Device, &r, &plan, &dml); dmlRan = TRUE; }'
+        why = 'Check3 approves a scaled plane that DML never fitted into the clocks and the global sync' }
+    'mpo3-scaled-scanout-skipped' = @{ find = 'if (verdict == BC250_PLANE_OK && *Scanout != BC250_SCANOUT_ADMIT_OK) verdict = BC250_PLANE_SCANOUT;'
+        with = 'if (((void)*Scanout, 0)) verdict = BC250_PLANE_SCANOUT;'
+        why = 'Check3 approves a scaled plane whose allocation the scan-out rule refuses' }
+    'mpo3-scaled-rule-unnamed' = @{ find = '            verdict = Bc250Mpo3PlaneRule(&plane, 1u);'
+        with = '            verdict = Bc250Mpo3PlaneRule(&plane, 1u) == BC250_MPO3_OK ? BC250_MPO3_OK : BC250_MPO3_GEOMETRY;'
+        why = 'a rotated or blended plane of another geometry is counted as a geometry refusal' }
+    'mpo3-scaled-shape-lost' = @{ find = 'status = WddmFlipEntry(hAdapter, &flip, requestedShape, TRUE, plane->PresentId);'
+        with = 'status = WddmFlipEntry(hAdapter, &flip, ((void)requestedShape, NULL), TRUE, plane->PresentId);'
+        why = 'the approved scaler plan never reaches the flip transaction' }
+    'mpo3-scaled-approval-skipped' = @{ find = 'else if (DcnPlaneApproved(device, &plan.Scaler, r.SurfacePitch)) {'
+        with = 'else if (DcnPlaneApproved(device, &plan.Scaler, r.SurfacePitch) || 1) {'
+        why = 'an unapproved shape, pitch or stale mode reaches the plane' }
+    'mpo3-scaled-selector-skipped' = @{ find = "data->hAllocation != NULL &&`n        (wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK))"
+        with = "data->hAllocation != NULL &&`n        ((wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK) || 1))"
+        why = 'the scaled path takes a flip with its selector off' }
+    'mpo3-scaled-presentid-lost' = @{ find = 'status = WddmFlipEntry(hAdapter, &flip, requestedShape, TRUE, plane->PresentId);'
+        with = 'status = WddmFlipEntry(hAdapter, &flip, requestedShape, TRUE, 0);'
+        why = 'the scaled flip reports another PresentId instead of the one Windows queued' }
 }
-$flavour = @()
-if ($Lab) { $flavour = @('/DAMDGPU_WDDM_LAB_FLAVOUR=1'); $mutations = $labMutations }
+$flavour = @('-Wno-multichar', "/I$repo\driver\kmd\test", "/I$repo\driver\shim\dml201")
+# Both flavours link the actual scaled-plane rule and scaler tables.
+[string[]]$planeSources = @("$repo\driver\kmd\dcn_plane.c", "$repo\driver\kmd\dcn_scale.c", "$repo\driver\shim\bc250_scaler_buffer.c",
+                          "$repo\driver\shim\bc250_scaler_filter.c", "$repo\driver\kmd\display_io.c", "$repo\driver\kmd\edid.c")
+if ($Lab) {
+    $flavour += '/DAMDGPU_WDDM_LAB_FLAVOUR=1'
+    $mutations = $labMutations
+}
+foreach ($name in $planeMutations.Keys) { $mutations[$name] = $planeMutations[$name] }
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
@@ -244,7 +303,7 @@ function Invoke-VidPnFlip([string]$Dir, [string]$Actual) {
     if ($Mutation) { $mutationWarnings = @('-Wno-tautological-negation-compare') }
     & $cl @('/nologo', '/TC', '/W4', '/WX', '/wd4201', '/O2', '/MT', '-fuse-ld=lld') @mutationWarnings @flavour @("/I$repo\driver\kmd", "/I$repo\driver\contract", "/I$repo\third_party\linux-amdgpu",
         "/I$($msvc.FullName)\include", "/I$sdk\Include\10.0.26100.0\ucrt", "/Fo$obj\", "/Fe$Dir\vidpn_flip_test.exe", $Actual,
-        "$repo\driver\kmd\dcn_translate.c", '/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$libs\ucrt\x64",
+        "$repo\driver\kmd\dcn_translate.c") @planeSources @('/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$libs\ucrt\x64",
         "/LIBPATH:$libs\um\x64") | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Host build failed ($Dir)" }
     $output = & "$Dir\vidpn_flip_test.exe"

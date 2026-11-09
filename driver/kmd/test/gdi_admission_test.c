@@ -859,6 +859,21 @@ static void PrivateGpuOnlyPolicy(void)
 
 int main(int argc, char** argv)
 {
+    {
+        BC250_WDDM_NV12_PRIVATE n={{BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,2,64,16,256,BC250_NV12_D3DDDI_FORMAT,8192},
+            256,BC250_WDDM_NV12_LINEAR,0,6144,256,0};
+        BC250_GDI_ALLOCATION_POLICY policy;
+        unsigned long type=99;
+        CHECK(sizeof(n)==64 && Bc250Nv12PrivateValid(&n,sizeof(n)));
+        CHECK(Bc250Lb7aAdmit(&n,sizeof(n),1,0,1,&type,&policy)==BC250_LB7A_ADMITTED && type==0);
+        CHECK(!Bc250Nv12PrivateValid(&n,32));
+        n.Surface.Version=1; CHECK(!Bc250Nv12PrivateValid(&n,sizeof(n))); n.Surface.Version=2;
+        n.ChromaOffset=2048; CHECK(!Bc250Nv12PrivateValid(&n,sizeof(n))); n.ChromaOffset=6144;
+        n.Surface.Size=8191; CHECK(!Bc250Nv12PrivateValid(&n,sizeof(n))); n.Surface.Size=8192;
+        n.Alignment=3; CHECK(!Bc250Nv12PrivateValid(&n,sizeof(n))); n.Alignment=256;
+        n.Layout=2; CHECK(!Bc250Nv12PrivateValid(&n,sizeof(n))); n.Layout=1;
+        n.Reserved=1; CHECK(!Bc250Nv12PrivateValid(&n,sizeof(n)));
+    }
     if (argc == 2 && strcmp(argv[1], "--legacy-shadow-control") == 0) {
         ShadowBacking(1);  // must fail: the pre-BD-135 placement cannot meet the new shadow contract
         return g_failures ? 1 : 0;

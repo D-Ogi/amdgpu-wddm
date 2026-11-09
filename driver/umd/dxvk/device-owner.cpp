@@ -141,16 +141,20 @@ HRESULT DeviceOwner::begin_surface(const RuntimeSurfaceRequest &request,const D3
     // Register before callbacks: allocation failure cannot orphan ownership.
     surfaces_.push_back(std::move(pending));
     out=surfaces_.back().get();
-    return begin_runtime_surface(runtime_,surface_queue_,request,desc,*out);
+    auto importer=texture_import_dispatch(*engine());
+    const RuntimeSurfacePreparation prepare{session_.device(),&surface_vk_,&importer};
+    return begin_runtime_surface(runtime_,surface_queue_,request,desc,*out,&prepare);
 }
 HRESULT DeviceOwner::adopt_surface(RuntimeSurfaceAllocation &allocation,const BC250_WDDM_ALLOCATION_PRIVATE &metadata,
-    const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface *&out) {
+    const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface *&out,const BC250_WDDM_NV12_PRIVATE *nv12) {
     if (out) return E_UNEXPECTED;
     HRESULT hr=prepare_surface_import();
     if (FAILED(hr)) return hr;
     auto pending=std::make_unique<RuntimeSurface>();
     surfaces_.push_back(std::move(pending)); out=surfaces_.back().get();
-    return adopt_runtime_surface(runtime_,surface_queue_,allocation,metadata,desc,*out);
+    auto importer=texture_import_dispatch(*engine());
+    const RuntimeSurfacePreparation prepare{session_.device(),&surface_vk_,&importer};
+    return adopt_runtime_surface(runtime_,surface_queue_,allocation,metadata,desc,*out,nv12,&prepare);
 }
 HRESULT DeviceOwner::finish_surface(RuntimeSurface &surface) {
     if (!runtime_.domain.entered() || closing_ || !owns_surface(surface) || !engine()) return E_INVALIDARG;

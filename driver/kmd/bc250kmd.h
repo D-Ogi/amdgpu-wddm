@@ -1000,6 +1000,8 @@ void DcnCursorOffQuiet(_Inout_ BC250_DEVICE* Device);          // bugcheck and r
 void DcnCursorPipeGone(_Inout_ BC250_DEVICE* Device);          // the pipe is about to change: off, spin lock only
 void DcnCursorPipeReady(_Inout_ BC250_DEVICE* Device, _In_ const BC250_CURSOR_PIPE* Pipe);  // PASSIVE
 void DcnCursorRefresh(_Inout_ BC250_DEVICE* Device);           // rotation or source size changed; PASSIVE
+void DcnCursorPlaneChanged(_Inout_ BC250_DEVICE* Device);      // after a plane geometry publication; any IRQL
+void DcnCursorPlaneDpc(_Inout_ BC250_DEVICE* Device);          // remap the stored pointer position; <= DISPATCH
 NTSTATUS DcnCursorSetShape(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARG_SETPOINTERSHAPE* Arg);
 NTSTATUS DcnCursorSetPosition(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARG_SETPOINTERPOSITION* Arg);
 // BD-170: after an immediate flip, sample P' (SURFACE_FLIP_PENDING clear and PRIMARY_SURFACE_ADDRESS read back as

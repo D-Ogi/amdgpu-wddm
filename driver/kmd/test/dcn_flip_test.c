@@ -346,7 +346,7 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE *d, ULONG reg, ULONG value, BO
    and once per write sequence, with the flip's pitch; DcnPlaneShapeAdmit answers as shape_model.admit says.
    dcn_scale_test.c tests the register writes of the shape itself (Bc250ScalerProgramLocked), dcn201_pipe_test.c
    and optc_test.c those of the plane's requestor and global sync. */
-static struct { unsigned calls, shaped, admits; int admit; NTSTATUS status; const BC250_SCALER_PLAN *last;
+static struct { unsigned calls, shaped, admits, cursor_notifies; int admit; NTSTATUS status; const BC250_SCALER_PLAN *last;
                 ULONG pitch, admit_pitch; } shape_model;
 static NTSTATUS DcnPlaneShapeLocked(BC250_DEVICE *d, const BC250_SCALER_PLAN *shape, ULONG pitch)
 {
@@ -365,6 +365,13 @@ static BOOLEAN DcnPlaneShapeAdmit(BC250_DEVICE *d, const BC250_SCALER_PLAN *shap
     shape_model.admits++;
     shape_model.admit_pitch = pitch;
     return shape_model.admit;
+}
+static BOOLEAN DcnPlaneShapeIs(const BC250_DEVICE *d, const BC250_SCALER_PLAN *shape)
+{ (void)d; return shape_model.last == shape; }
+static void DcnCursorPlaneChanged(BC250_DEVICE *d)
+{
+    CHECK(!(d->DcnSurfaceSequence & 1));
+    shape_model.cursor_notifies++;
 }
 /* ACTUAL_SOURCE */
 /* BD-170: the flip type. Every bit of DCSURF_FLIP_CONTROL is kept, the stereo-sync fields included, and only
@@ -1060,14 +1067,22 @@ static void ShapedSourceAddress(void)
     CHECK(wrote && physical == 0x201000 && model.latched == physical && !model.locked);
     CHECK(shape_model.admits == 1 && shape_model.calls == 1 && shape_model.shaped == 1 && shape_model.last == &shape);
     CHECK(shape_model.admit_pitch == 256 && shape_model.pitch == 256);
+    CHECK(shape_model.cursor_notifies == 1);
     SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
     CHECK(DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 2048, FALSE,
                                &physical, &wrote) == STATUS_INVALID_PARAMETER);
     CHECK(!wrote && model.writes == 0 && shape_model.calls == 0);
+    CHECK(shape_model.cursor_notifies == 0);
     SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
     CHECK(DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 4096, FALSE,
                                &physical, &wrote) == STATUS_SUCCESS);
     CHECK(wrote && shape_model.admits == 0 && shape_model.calls == 1 && shape_model.shaped == 0);
+    CHECK(shape_model.cursor_notifies == 0); /* identity -> identity needs no remap */
+    /* A full-size flip restores a previously scaled plane and queues the stationary cursor remap. */
+    SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.last = &shape;
+    CHECK(DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 4096, FALSE,
+                               &physical, &wrote) == STATUS_SUCCESS);
+    CHECK(wrote && shape_model.cursor_notifies == 1 && shape_model.last == NULL);
     /* The admission refuses: nothing written. */
     SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = FALSE;
     CHECK(DcnFlipSourceAddressShaped(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 2048, FALSE, &shape,

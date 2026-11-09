@@ -22,8 +22,8 @@ def between(first,last):
     return s[start:once(last)]
 body='\n'.join([
     between('typedef struct _BC250_WDDM_NOTIFY {','// The pairing counters'),
-    # The lab bit block with WddmScaledPlaneLatch and WddmMpoFlags (the planes clamp), up to its own #endif.
-    between('#if defined(AMDGPU_WDDM_LAB_FLAVOUR)\n// BD-223 (lab flavour): the bits of LabScaledPlane',
+    # Shared CHECK bit and start policy, plus lab selector helpers and the planes clamp.
+    between('// BD-223: the shared plane-0 path is compiled in both flavours.',
             'typedef struct _BC250_WDDM {'),
     *(function(x) for x in (
         'static BOOLEAN WddmReadCompletedPrimary(',

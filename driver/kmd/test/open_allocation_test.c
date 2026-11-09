@@ -119,6 +119,7 @@ typedef struct _BC250_WDDM_OBJECT {
     ULONG UmdHeap;
     ULONGLONG UmdRequestedVa;
     BC250_WDDM_ALLOCATION_PRIVATE Allocation;
+    BC250_WDDM_NV12_PRIVATE Nv12;
     ULONG GdiType;
     HANDLE OwnerDevice;
     void* BackingAllocation;
@@ -328,6 +329,24 @@ static void Success(void)
     Teardown();
 }
 
+static void Nv12Open(void)
+{
+    static const int kind[]={K_LB7A};
+    BC250_WDDM_NV12_PRIVATE n={{BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,2,64,16,256,BC250_NV12_D3DDDI_FORMAT,8192},
+        256,BC250_WDDM_NV12_LINEAR,0,6144,256,0};
+    DXGKARG_OPENALLOCATION call;
+    BC250_WDDM_OBJECT* opened;
+    Setup(); call=Call(kind,1);
+    g_info[0].pPrivateDriverData=&n; g_info[0].PrivateDriverDataSize=sizeof(n);
+    CHECK(Bc250WddmOpenAllocation(g_parent,&call)==STATUS_SUCCESS);
+    opened=WddmObject(g_info[0].hDeviceSpecificAllocation,BC250_WDDM_MAGIC_OPENED);
+    CHECK(opened && opened->Allocation.Version==2 && !memcmp(&opened->Nv12,&n,sizeof(n)));
+    CloseAll(1);
+    n.ChromaOffset=2048; g_info[0].hDeviceSpecificAllocation=NULL;
+    CHECK(Bc250WddmOpenAllocation(g_parent,&call)==STATUS_INVALID_PARAMETER && !g_info[0].hDeviceSpecificAllocation);
+    Teardown();
+}
+
 // True when every entry of Kinds is a blob the driver admits.
 static int AllAdmitted(const int* Kinds, unsigned Count)
 {
@@ -422,6 +441,7 @@ int main(void)
 
     Blobs();
     Success();
+    Nv12Open();
     NoMemory(five, 5, 0, 0);            // the first allocation of the call
     NoMemory(five, 5, 2, 2);            // a middle one, after an LB7A and a BC2A object
     NoMemory(five, 5, 4, 4);            // the last one, after four objects

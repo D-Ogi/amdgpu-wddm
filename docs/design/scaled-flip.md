@@ -2,8 +2,10 @@
 
 This is BD-223. It is the first part of stage C of [display-modes.md](display-modes.md) and of
 [mpo.md](mpo.md): one plane, plane 0, that is smaller than the source mode and that the display hardware scales.
-The code is in the lab flavour only, behind the switch `LabScaledPlane` (default 0). The release flavour does
-not change.
+The MPO3 request and flip implementation is compiled in both flavours. Activation is still limited to the lab
+switch `LabScaledPlane` (default 0). `WddmScaledPlaneStart` returns 0 for every release input until hardware
+acceptance, so compiling the shared code does not expose scaling or raise release caps. The MPO2 entry points
+remain lab-only.
 
 ## The problem
 

@@ -594,6 +594,7 @@ void Bc250DpcRoutine(_In_ const PVOID MiniportDeviceContext)
     if (IhTakeVsync((BC250_DEVICE*)MiniportDeviceContext))
         DcnVsyncFromVector((BC250_DEVICE*)MiniportDeviceContext);
     WddmDcnVsync((BC250_DEVICE*)MiniportDeviceContext);
+    DcnCursorPlaneDpc((BC250_DEVICE*)MiniportDeviceContext); // a scaled plane can change under a stationary pointer
     // BD-170 r6: E5's notification and drain record, a no-op unless E5 queued this DPC (wddm.c's WddmFlipFault).
     WddmFlipFaultDpc((BC250_DEVICE*)MiniportDeviceContext);
     WddmDpc((BC250_DEVICE*)MiniportDeviceContext);      // returns at once unless the full table is in use

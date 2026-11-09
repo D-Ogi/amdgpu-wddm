@@ -15,6 +15,7 @@ struct RuntimeSurface {
     RuntimeSurfaceAllocation allocation{};
     SurfaceGpuMapping mapping{};
     RuntimeTexture texture{};
+    BC250_WDDM_NV12_PRIVATE nv12{};
     D3D11_TEXTURE2D_DESC1 desc{};
     // What the runtime said about this surface when it was created: a primary is the buffer of a
     // flip-model or fullscreen swap chain, and vidpn_source is the video present source its primary
@@ -31,14 +32,21 @@ struct RuntimeSurface {
     UINT64 bytes=0;
     SurfacePhase phase=SurfacePhase::empty;
 };
+struct RuntimeSurfacePreparation {
+    VkDevice device;
+    const RuntimeImageDispatch *vk;
+    const TextureImportDispatch *engine;
+};
 // S_FALSE: accepted; finish must be polled before publication. No busy wait.
 HRESULT begin_runtime_surface(RuntimeDevice &,const SurfacePagingQueue &,
-    const RuntimeSurfaceRequest &,const D3D11_TEXTURE2D_DESC1 &,RuntimeSurface &);
+    const RuntimeSurfaceRequest &,const D3D11_TEXTURE2D_DESC1 &,RuntimeSurface &,
+    const RuntimeSurfacePreparation *prepare=nullptr);
 // On validation success, consumes allocation even if mapping later fails.
 // Caller retains allocation when validation fails before transfer.
 HRESULT adopt_runtime_surface(RuntimeDevice &,const SurfacePagingQueue &,
     RuntimeSurfaceAllocation &,const BC250_WDDM_ALLOCATION_PRIVATE &,
-    const D3D11_TEXTURE2D_DESC1 &,RuntimeSurface &);
+    const D3D11_TEXTURE2D_DESC1 &,RuntimeSurface &,const BC250_WDDM_NV12_PRIVATE *nv12=nullptr,
+    const RuntimeSurfacePreparation *prepare=nullptr);
 HRESULT finish_runtime_surface(VkDevice,const RuntimeImageDispatch &,
     const TextureImportDispatch &,const VkPhysicalDeviceMemoryProperties &,RuntimeSurface &);
 // Unbind/release views first. Any non-S_OK means retain the surface and device.

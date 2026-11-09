@@ -4,6 +4,7 @@
 #include "../shim/bc250_hpd.h"
 #include "connector_diag.h"
 #include "connector_handoff.h"
+#include "dcn_overlay_input.h"    // BC250_OVERLAY_DESCRIPTION and BC250_LINK_OVERLAY_CHECK of the Check3 preflight
 
 struct _BC250_DEVICE;
 typedef struct _BC250_CONNECTOR_SNAPSHOT {
@@ -107,6 +108,12 @@ typedef struct _BC250_LINK_PLANE_DML {
 struct BC250_DML201_PLAN;
 NTSTATUS ConnectorLinkPlaneDml(struct _BC250_DEVICE* Device, const BC250_LINK_PLANE* Plane,
     BC250_LINK_PLANE_DML* Out, struct BC250_DML201_PLAN* Plan);
+// CPU-only Check3 preflight against one locked current mode. Does not reserve
+// pipe 1, raise its clock or take the hardware; no MMIO writes. STATUS_SUCCESS only
+// when the planner describes the group (Out->Result BC250_OVERLAY_OK), STATUS_NOT_SUPPORTED
+// for a refused description, STATUS_RETRY when the HPD generation moved.
+NTSTATUS ConnectorLinkOverlayCheck(struct _BC250_DEVICE* Device,
+    const struct BC250_OVERLAY_DESCRIPTION* Description, BC250_LINK_OVERLAY_CHECK* Out);
 // PASSIVE, Connector.Operation not held. TRUE when a connected sink is published
 // and its link is off and not suspended: a power-on CommitVidPn must program it
 // (BD-195). *Active and *Connected are for the caller's log.

@@ -1,5 +1,6 @@
 // Project adapter: PolyForm Noncommercial 1.0.0, see LICENSE.md and NOTICE.
 #pragma once
+#include "../contract/bc250_nv12_layout.h"
 
 enum BC250_LINEAR_FORMAT {
     BC250_LINEAR_BGRA8, BC250_LINEAR_RGBA8, BC250_LINEAR_RGB10A2,
@@ -55,3 +56,8 @@ typedef struct BC250_NV12_LAYOUT {
 // only, not the video address sequence, CNVC/CSC, capability or hardware proof.
 int Bc250Nv12LayoutPrepare(const BC250_NV12_LAYOUT_REQUEST* Request,
                           BC250_NV12_LAYOUT* Plan);
+
+// The address-free half of Bc250Nv12LayoutPrepare for a record that is not resident yet: the contract
+// integrity (Bc250Nv12StorageIntegrity), the DCN201 extent and pitch field limits, 256-byte component
+// pitches and 256-byte component offsets. No address, segment or capability check.
+int Bc250Nv12StorageScanout(const BC250_NV12_STORAGE* Storage);

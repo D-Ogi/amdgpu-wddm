@@ -170,7 +170,7 @@ Write-Host ("flavour: {0}" -f ($(if ($Flavour -eq 'lab') { 'LAB (raw diagnostic 
 # Emit the exact per-file commands for targeted static analysis and build auditing.
 # Only these DC adapters require C11 static assertions/compound literals. Keep
 # the legacy compiler/preprocessor mode for existing KMD, shim and import code.
-$c11Names = @('dcn_cnvc_color.c','dcn_coeff.c','dcn_geometry.c','dcn_mpc.c',
+$c11Names = @('dcn_cnvc_color.c','dcn_coeff.c','dcn_geometry.c','dcn_mpc.c','dcn_overlay.c',
     'dcn_surface_layout.c','dcn_surface_write.c','bc250_scaler_buffer.c',
     'bc250_scaler_geometry.c','bc250_scaler_filter.c','bc250_scaler_plan.c')
 $ordinarySources = @($sources)+@($shimSources)

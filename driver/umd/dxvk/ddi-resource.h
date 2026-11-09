@@ -42,6 +42,7 @@ HRESULT create_refusal(const D3D11DDIARG_CREATERESOURCE &desc,HRESULT hr);
 // scanout is the device's scan-out source (scanout-primary.h); nullptr asks for no scan-out primary.
 HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &,HANDLE,RuntimeSurfaceRequest &,D3D11_TEXTURE2D_DESC1 &,
     const ScanoutSource *scanout=nullptr);
-HRESULT decode_open_resource(const D3D10DDIARG_OPENRESOURCE &,BC250_WDDM_ALLOCATION_PRIVATE &,D3D11_TEXTURE2D_DESC1 &);
+HRESULT decode_open_resource(const D3D10DDIARG_OPENRESOURCE &,BC250_WDDM_ALLOCATION_PRIVATE &,D3D11_TEXTURE2D_DESC1 &,
+    BC250_WDDM_NV12_PRIVATE *nv12=nullptr);
 void install_resource_ddi(D3D11_1DDI_DEVICEFUNCS &table);
 }

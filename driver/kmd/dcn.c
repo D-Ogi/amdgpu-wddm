@@ -2038,6 +2038,7 @@ NTSTATUS DcnFlipSourceAddressShaped(_Inout_ BC250_DEVICE* Device, ULONGLONG Card
     BC250_PLANE_REGISTERS registers;
     const BC250_PLANE_REGISTERS* format=NULL;
     ULONG current,width,height;
+    BOOLEAN cursorPlaneChanged;
 
     *Wrote = FALSE;
     if (Device->Mmio == NULL || !Device->VidPnFlipEnabled) return STATUS_DEVICE_NOT_READY;
@@ -2091,6 +2092,7 @@ NTSTATUS DcnFlipSourceAddressShaped(_Inout_ BC250_DEVICE* Device, ULONGLONG Card
     // Quiet = TRUE (review 16 section 24): a real present, potentially once per frame for as long as the
     // desktop is up - MmioDcnWrite's per-write GuardLog was sized for the escape's occasional calls, not this.
     // Only compact counters change here. The caller emits diagnostics after leaving the interrupt section.
+    cursorPlaneChanged = !DcnPlaneShapeIs(Device, Shape);
     InterlockedIncrement(&Device->DcnSurfaceSequence);
     // BD-170 r6: from here on a failure is not proof that nothing was written (an MMIO failure is unknown).
     *Wrote = TRUE;
@@ -2113,6 +2115,9 @@ NTSTATUS DcnFlipSourceAddressShaped(_Inout_ BC250_DEVICE* Device, ULONGLONG Card
     }
     else InterlockedIncrement(&Device->DcnFlipRefused);
     InterlockedIncrement(&Device->DcnSurfaceSequence);
+    // Do not take the cursor's DISPATCH_LEVEL lock inside this DIRQL transaction. Its device DPC remaps the last
+    // pointer coordinates after the complete plane state is visible, including a partial write's recovery state.
+    if (cursorPlaneChanged) DcnCursorPlaneChanged(Device);
     return status;
 }
 

@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: MIT */
 #ifndef BC250_NV12_LAYOUT_H
 #define BC250_NV12_LAYOUT_H
+#define BC250_NV12_D3DDDI_FORMAT 0x3231564eu /* D3DDDIFMT_NV12, checked against WDK by consumers */
+#define BC250_NV12_DXGI_FORMAT 103u
 
 /* Explicit linear, progressive NV12 storage. This is allocation metadata, not
  * an overlay capability. Each byte pitch includes padding; UV contains Width/2
