@@ -23,6 +23,8 @@ typedef struct {long long QuadPart;} LARGE_INTEGER;
 #define STATUS_DEVICE_BUSY -3
 #define NT_SUCCESS(x) ((x)>=0)
 #define BC250_WDDM_NODE_COUNT_MAX 3
+#define BC250_WDDM_NODE_3D 0
+#define BC250_WDDM_NODE_COMPUTE 2
 #define BC250_WDDM_VSYNC_MS 16
 typedef struct {
  int Lock,Stopping,RetainedPowerPause,HwPending,DeferredValid,PagingHwPending;
@@ -33,6 +35,8 @@ typedef struct {
  int ActiveSubmissions[3],CompletionPending[3],PreemptionPending[3];
  int RefusalPending[3],RejectedPending[3],WatchdogFaulted[3];
  int PrimaryNeedsRestore;
+ /* BD-188 D-2: the forced pause's record of lost work (before Objects: it may change, the owners may not). */
+ ULONG PowerLostSeq[3],PowerLostWork;
  int VSyncArmed,VSyncEnabled,VSyncTimer,SubmitTimer,PagingSubmitTimer,PagingDrainTimer;
  int SubmitDpc,PagingSubmitDpc,PagingDrainDpc,VSyncDpc,ReportDpc;
  LARGE_INTEGER VSyncLast,VSyncFrequency;
@@ -75,7 +79,17 @@ static NTSTATUS KeDelayExecutionThread(int mode,int alertable,LARGE_INTEGER*inte
  if(delays>=100000){delayLimitHit=1;observed->HwPending=0;observed->WatchdogFaulted[0]=0;}
  return 0;}
 static void GuardLog(const char*f,...){(void)f;logs++;}
-/* ACTUAL_SOURCE */
+/* BD-188 D-2: the newest job of each ring queue (Seq 0: none), and the restore answer with lost work. */
+typedef struct {ULONG Seq;} BC250_GFX_COMPLETION;
+static BC250_GFX_COMPLETION lostJob[3];
+static int restoredLost=1;
+static unsigned inserts,requeues;
+static int WddmRingPendingLocked(const BC250_WDDM*w,UINT n){CHECK(lockHeld);return n==BC250_WDDM_NODE_COMPUTE?w->ComputeHwPending:w->HwPending;}
+static BC250_GFX_COMPLETION*WddmRingQueue(BC250_WDDM*w,UINT n){(void)w;return &lostJob[n];}
+static BC250_GFX_COMPLETION*Bc250GfxQueueTail(BC250_GFX_COMPLETION*q){return q->Seq?q:NULL;}
+static int GfxSubmitRestoredWithLostWork(BC250_DEVICE*d){(void)d;CHECK(!lockHeld);return restoredLost;}
+static int KeInsertQueueDpc(int*k,void*a,void*b){(void)k;(void)a;(void)b;CHECK(lockHeld&&!observed->Stopping);inserts++;return 1;}
+static void WddmRequeuePagingDrain(BC250_WDDM*w){(void)w;CHECK(!lockHeld&&!observed->Stopping);requeues++;}/* ACTUAL_SOURCE */
 static void setup(BC250_DEVICE*d,BC250_WDDM*w){
  memset(w,0,sizeof(*w));memset(d,0,sizeof(*d));d->Wddm=w;observed=w;
  d->DcnBlanked=1;d->VidPnFlipEnabled=1;d->DcnVsyncArmed=1;
@@ -84,6 +98,7 @@ static void setup(BC250_DEVICE*d,BC250_WDDM*w){
  w->LastReportedFence[0]=123;w->LastReportedFence[1]=456;w->LastCompletedFence=456;
  flushes=cancels=removes=arms=mmio=0;currentIrql=enableStatus=0;gfxReady=pagingReady=1;
  delays=completeAfter=logs=delayLimitHit=0;stepTicks=10000;
+ inserts=requeues=0;restoredLost=1;memset(lostJob,0,sizeof(lostJob));
 }
 static void retained(BC250_WDDM*w,const BC250_WDDM*before){
  size_t off=offsetof(BC250_WDDM,Objects);
@@ -154,6 +169,25 @@ int main(void){
  CHECK(Bc250PowerDrainWorthWaiting(BC250_POWER_BUSY_GFX_HW) && !Bc250PowerDrainWorthWaiting(0) &&
        !Bc250PowerDrainWorthWaiting(BC250_POWER_BUSY_GFX_HW|BC250_POWER_BUSY_WATCHDOG) &&
        !Bc250PowerDrainWorthWaiting(BC250_POWER_BUSY_STOPPING));
+ // BD-188 D-2: the forced pause keeps every pending record and every fence, records the sequence that was on the
+ // ring, and the resume accepts exactly the work that the pause recorded.
+ setup(&d,&w);w.HwPending=1;w.CompletionPending[0]=1;lostJob[0].Seq=77;before=w;
+ WddmPauseForPowerLoss(&d);
+ CHECK(w.Stopping&&w.RetainedPowerPause&&w.HwPending&&w.CompletionPending[0]&&w.PowerLostSeq[0]==77&&w.PowerLostSeq[2]==0);
+ CHECK(w.PowerLostWork==(BC250_POWER_BUSY_GFX_HW|BC250_POWER_BUSY_COMPLETION)&&cancels==5&&removes==6&&!d.DcnVsyncArmed);
+ retained(&w,&before);
+ gfxReady=pagingReady=0;     // the lost job keeps the normal answer false
+ restoredLost=0;CHECK(WddmResumeRetained(&d)==STATUS_DEVICE_NOT_READY&&w.Stopping);restoredLost=1;
+ w.HwPending=0;CHECK(WddmResumeRetained(&d)==STATUS_INVALID_DEVICE_STATE&&w.Stopping);w.HwPending=1;
+ CHECK(WddmResumeRetained(&d)==0&&!w.Stopping&&!w.RetainedPowerPause&&w.PowerLostWork==0&&w.PowerLostSeq[0]==77);
+ CHECK(w.HwPending&&w.CompletionPending[0]&&inserts==1&&!requeues);retained(&w,&before);
+ // A compute job and a queued paging job: both recorded, and the paging drain is armed again at D0.
+ setup(&d,&w);w.ComputeHwPending=1;lostJob[2].Seq=9;w.PagingHead=&d;WddmPauseForPowerLoss(&d);
+ CHECK(w.PowerLostSeq[2]==9&&w.PowerLostSeq[0]==0&&w.PowerLostWork==(BC250_POWER_BUSY_COMPUTE_HW|BC250_POWER_BUSY_PAGING_QUEUED));
+ CHECK(WddmResumeRetained(&d)==0&&requeues==1&&!inserts);
+ // A pause that already ran: the forced form changes nothing.
+ setup(&d,&w);CHECK(WddmSuspendRetained(&d)==0);before=w;cancels=0;WddmPauseForPowerLoss(&d);
+ CHECK(!memcmp(&w,&before,sizeof(w))&&!cancels);
  printf("Retained WDDM power: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }
 

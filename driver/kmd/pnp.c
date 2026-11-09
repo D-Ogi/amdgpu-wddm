@@ -3,6 +3,7 @@
 #include "adapter_owner.h"
 #include "atom_firmware.h"
 #include "hdmi_link.h"
+#include "power_loss.h"
 #include "state_kernel.h"
 
 NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_ PVOID* MiniportDeviceContext)
@@ -245,6 +246,19 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     GpuMemStart(device);    // same rule
     GfxStart(device);       // same rule
     IhStart(device);        // same rule
+    // The PCI id as configuration dword 0 holds it (vendor low, device high), for the per-IP decisions (asic_ip.h):
+    // the queue resets of wddm.c and the power-loss witness of power.c (BD-188 D-2). A failed read gives 0, which
+    // no table row matches, so the device gets no per-IP capability.
+    {
+        ULONG pci = 0, bytes = 0;
+        NTSTATUS read = device->Dxgk.DxgkCbReadDeviceSpace(device->Dxgk.DeviceHandle, DXGK_WHICHSPACE_CONFIG, &pci, 0,
+                                                           sizeof(pci), &bytes);
+        device->PciId = NT_SUCCESS(read) && bytes == sizeof(pci) ? pci : 0;
+        device->PowerWitness = Bc250PowerWitnessOfDevice(device->PciId);
+        device->PowerWitnessArmed = FALSE;
+        GuardLog("start: PCI %04lX:%04lX, power-loss witness %lu", device->PciId & 0xFFFFu, device->PciId >> 16,
+                 device->PowerWitness);
+    }
     // WddmStart and GpuStartupInitialize name their own sub-steps inside this one (GuardStartSubStep).
     GuardStartStep(L"WddmStart");
     status = WddmStart(device);

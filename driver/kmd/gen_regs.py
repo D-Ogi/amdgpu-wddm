@@ -112,7 +112,11 @@ SEQUENCES = [
       ("GC", "mmCP_HQD_IB_BASE_ADDR", "not traced: queue reset witness, read only"),
       ("GC", "mmCP_HQD_IB_BASE_ADDR_HI", "not traced: queue reset witness, read only"),
       ("GC", "mmCP_HQD_IB_RPTR", "not traced: queue reset witness, read only"),
-      ("GC", "mmCP_HQD_DEQUEUE_STATUS", "not traced: queue reset witness, read only")]
+      ("GC", "mmCP_HQD_DEQUEUE_STATUS", "not traced: queue reset witness, read only"),
+      # BD-188 D-2 (docs/design/power-loss.md section 4): the power-loss witness. Written with a pattern as the last act
+      # of a way down whose power goes and read at D0 before any restore. No driver step, ring test or UMD writes it
+      # (the producer check of that section); E07 already used it as a scratch control.
+      ("GC", "mmSCRATCH_REG1", "not traced: power-loss witness, docs/design/power-loss.md, E07")]
      + VMID_PAGE_TABLE_BASE),
     # M6: navi10_ih_irq_init() on unit A, 0.252832 to 0.252845 s: the IH ring's registers, the dummy read address and
     # the bus master bit of the interrupt controller, the IH doorbell range. 19 accesses, nothing else in the window.

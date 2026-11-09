@@ -328,6 +328,11 @@ void bc250_gfx_rlc_safe_exit(struct amdgpu_device *adev, bool requested);
  * PROVENANCE note. */
 void bc250_gfx_soft_recover_vmid(struct amdgpu_device *adev, u32 vmid);
 
+/* BD-188 D-2: read or write the power-loss witness register. The id values are BC250_POWER_WITNESS_* of the KMD's
+ * driver/kmd/power_loss.h (the KMD checks them at compile time). 0, or BC250_EINVAL for an unknown id. */
+#define BC250_GFX_POWER_WITNESS_SCRATCH_REG1 1u
+int bc250_gfx_power_witness(struct amdgpu_device *adev, unsigned id, bool write, u32 *value);
+
 /* Stage 2 of the hang recovery: one queue taken off its HQD by the KIQ and mapped again
  * (gfx_v10_0_reset_kcq / gfx_v10_0_reset_kgq, docs/design/queue-reset.md). The caller holds the
  * lock that serializes KIQ submissions and queue selects (GartLock in the KMD). 0 only when every

@@ -28,6 +28,7 @@
 #include "paging_ddi_status.h"   // BD-235: the statuses that BuildPagingBuffer may give to the OS
 #include "paging_drain.h"
 #include "power_drain.h"         // BD-188: the bounded wait of the retained way down and its busy reasons
+#include "power_loss.h"          // BD-188 D-2: the ResetEngine rule for a job that the power took
 #include "table_budget.h"        // BD-028 stage B: the 64 MiB cap on the table segment
 #include "object_index.h"
 #include "ring_gap.h"            // C48/C49: the node's own idle-gap accounting, the same object the ETW analysis used
@@ -548,6 +549,12 @@ typedef struct _BC250_WDDM {
     KSPIN_LOCK Lock;                    // taken at <= DISPATCH_LEVEL, never held across a call into dxgkrnl
     BOOLEAN Stopping;
     BOOLEAN RetainedPowerPause; // Stopping also closes private work during retained suspend
+    // BD-188 D-2 (docs/design/power-loss.md): per IB node, the newest ring sequence that was on the ring when a forced
+    // pause let the power go (WddmPauseForPowerLoss), 0 for none. ResetEngine refuses a head job at or below it
+    // (Bc250HangPowerLost); the adapter-reset commit clears it. PowerLostWork: the busy mask of that pause, which
+    // WddmResumeRetained accepts in place of idle, and then clears.
+    ULONG PowerLostSeq[BC250_WDDM_NODE_COUNT_MAX];
+    ULONG PowerLostWork;
     LIST_ENTRY Objects;                 // devices, contexts, processes and allocations alive
     LONG ObjectCount;
     // The same objects by address, for membership tests without a scan (object_index.h). Joined and left in the
@@ -4629,18 +4636,13 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
              wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_OFF ? "fails every time, as before" :
              wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_IDLE ? "succeeds only on idle engines" :
              "kills hung waves, then succeeds only on idle engines");
-    // The queue resets by IP version (queue_reset_caps.h), keyed by the PCI id as cumode.c reads it: configuration
-    // dword 0, device in the high half, vendor in the low half. A failed read gives 0, so no queue reset runs. The
-    // SDMA firmware version is not known here, so only the measured SDMA entry of the table can give that capability.
-    {
-        ULONG pci = 0, bytes = 0;
-        NTSTATUS read = Device->Dxgk.DxgkCbReadDeviceSpace(Device->Dxgk.DeviceHandle, DXGK_WHICHSPACE_CONFIG, &pci,
-                                                           0, sizeof(pci), &bytes);
-        if (!NT_SUCCESS(read) || bytes != sizeof(pci)) pci = 0;
-        wddm->QueueResetCaps = Bc250QueueResetCaps(pci & 0xFFFFu, pci >> 16, BC250_SDMA_FW_UNKNOWN);
-        GuardLog("wddm: queue resets for PCI %04lX:%04lX: caps 0x%lX (1 compute, 2 gfx, 4 SDMA)", pci & 0xFFFFu,
-                 pci >> 16, wddm->QueueResetCaps);
-    }
+    // The queue resets by IP version (queue_reset_caps.h), keyed by the PCI id that pnp.c read at start (0 when the read
+    // failed, so no queue reset runs). The SDMA firmware version is not known here, so only the measured SDMA entry of
+    // the table can give that capability.
+    wddm->QueueResetCaps = Bc250QueueResetCaps(BC250_PCI_VENDOR(Device->PciId), BC250_PCI_DEVICE(Device->PciId),
+                                               BC250_SDMA_FW_UNKNOWN);
+    GuardLog("wddm: queue resets for PCI %04lX:%04lX: caps 0x%lX (1 compute, 2 gfx, 4 SDMA)", Device->PciId & 0xFFFFu,
+             Device->PciId >> 16, wddm->QueueResetCaps);
     KeInitializeDpc(&wddm->PagingSubmitDpc, WddmPagingSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->PagingSubmitTimer);
     KeInitializeDpc(&wddm->PagingDrainDpc, WddmPagingDrainDpcRoutine, Device);
@@ -4766,9 +4768,29 @@ static ULONG WddmPowerBusyLocked(const BC250_WDDM* Wddm)
     return busy;
 }
 
-static BOOLEAN WddmPowerIdleLocked(const BC250_WDDM* Wddm)
+// The second half of both pauses, with Lock held and Stopping set: no timer and no DPC of this file runs after it.
+// Releases Lock. Device->Wddm, Objects, aperture, capture owners and all fence values stay.
+static void WddmRetainedPauseTail(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* wddm, KIRQL irql)
 {
-    return WddmPowerBusyLocked(Wddm)==0;
+    wddm->RetainedPowerPause=TRUE;
+    wddm->PrimaryNeedsRestore=TRUE;
+    // M15.14: the plane's format registers may change with its address. Unknown (NONE) makes the next flip
+    // write the format, whatever it is, and keeps the CPU blit off the plane until then (dcn.c).
+    if (Device->DcnPlaneFormats) Device->DcnPlaneFormat=BC250_PLANE_FORMAT_NONE;
+    wddm->VSyncArmed=FALSE;
+    KeCancelTimer(&wddm->VSyncTimer);
+    KeCancelTimer(&wddm->SubmitTimer);
+    KeCancelTimer(&wddm->PagingSubmitTimer);
+    KeCancelTimer(&wddm->PagingDrainTimer);  // the normal pause: no queued paging job; the forced one requeues at D0
+    KeCancelTimer(&wddm->ComputeTimer);
+    KeReleaseSpinLock(&wddm->Lock,irql);
+    KeRemoveQueueDpc(&wddm->SubmitDpc);
+    KeRemoveQueueDpc(&wddm->ComputeDpc);
+    KeRemoveQueueDpc(&wddm->PagingSubmitDpc);
+    KeRemoveQueueDpc(&wddm->PagingDrainDpc);
+    KeRemoveQueueDpc(&wddm->VSyncDpc);
+    KeRemoveQueueDpc(&wddm->ReportDpc);
+    KeFlushQueuedDpcs();
 }
 
 NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device)
@@ -4817,27 +4839,39 @@ NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device)
         KeReleaseSpinLock(&wddm->Lock,irql);
         return status;
     }
-    wddm->RetainedPowerPause=TRUE;
-    wddm->PrimaryNeedsRestore=TRUE;
-    // M15.14: the plane's format registers may change with its address. Unknown (NONE) makes the next flip
-    // write the format, whatever it is, and keeps the CPU blit off the plane until then (dcn.c).
-    if (Device->DcnPlaneFormats) Device->DcnPlaneFormat=BC250_PLANE_FORMAT_NONE;
-    wddm->VSyncArmed=FALSE;
-    KeCancelTimer(&wddm->VSyncTimer);
-    KeCancelTimer(&wddm->SubmitTimer);
-    KeCancelTimer(&wddm->PagingSubmitTimer);
-    KeCancelTimer(&wddm->PagingDrainTimer);  // idle means no queued paging job, so nothing is owed a drain
-    KeCancelTimer(&wddm->ComputeTimer);
-    KeReleaseSpinLock(&wddm->Lock,irql);
-    KeRemoveQueueDpc(&wddm->SubmitDpc);
-    KeRemoveQueueDpc(&wddm->ComputeDpc);
-    KeRemoveQueueDpc(&wddm->PagingSubmitDpc);
-    KeRemoveQueueDpc(&wddm->PagingDrainDpc);
-    KeRemoveQueueDpc(&wddm->VSyncDpc);
-    KeRemoveQueueDpc(&wddm->ReportDpc);
-    KeFlushQueuedDpcs();
-    // Device->Wddm, Objects, aperture, capture owners and all fence values stay.
+    WddmRetainedPauseTail(Device,wddm,irql);
     return STATUS_SUCCESS;
+}
+
+// The forced form of the pause (bc250kmd.h). The same pause as above, from any state: the pending records stay, the
+// jobs on the rings are recorded as lost (PowerLostSeq), and the busy mask is kept for WddmResumeRetained. A refused
+// vsync disable is logged and does not stop the pause: the power goes all the same.
+void WddmPauseForPowerLoss(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_WDDM* wddm=(BC250_WDDM*)Device->Wddm;
+    const BC250_GFX_COMPLETION* tail;
+    NTSTATUS vsync=STATUS_SUCCESS;
+    KIRQL irql;
+    UINT node;
+    if (KeGetCurrentIrql()!=PASSIVE_LEVEL || !wddm) return;
+    KeAcquireSpinLock(&wddm->Lock,&irql);
+    if (wddm->RetainedPowerPause) {
+        KeReleaseSpinLock(&wddm->Lock,irql);
+        return;
+    }
+    wddm->PowerLostWork=WddmPowerBusyLocked(wddm);
+    for (node=0;node<BC250_WDDM_NODE_COUNT_MAX;node++) {
+        wddm->PowerLostSeq[node]=0;
+        if (node!=BC250_WDDM_NODE_3D && node!=BC250_WDDM_NODE_COMPUTE) continue;
+        tail=WddmRingPendingLocked(wddm,node) ? Bc250GfxQueueTail(WddmRingQueue(wddm,node)) : NULL;
+        if (tail!=NULL) wddm->PowerLostSeq[node]=tail->Seq;
+    }
+    wddm->Stopping=TRUE;
+    if (Device->DcnVsyncArmed) vsync=DcnVsyncEnable(Device,FALSE);
+    WddmRetainedPauseTail(Device,wddm,irql);
+    GuardLog("wddm: forced pause for power loss: busy 0x%04lX, lost seq node 0 %lu, node 2 %lu, vsync off 0x%08X",
+             wddm->PowerLostWork,wddm->PowerLostSeq[BC250_WDDM_NODE_3D],wddm->PowerLostSeq[BC250_WDDM_NODE_COMPUTE],
+             (ULONG)vsync);
 }
 
 // Call only after the hardware coordinator restored private backing, engines,
@@ -4849,13 +4883,20 @@ NTSTATUS WddmResumeRetained(_Inout_ BC250_DEVICE* Device)
     LARGE_INTEGER due;
     KIRQL irql;
     NTSTATUS status=STATUS_SUCCESS;
+    ULONG lost;
     if (KeGetCurrentIrql()!=PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;
     if (!wddm) return STATUS_DEVICE_NOT_READY;
+    // BD-188 D-2: after a forced pause the jobs that were on the rings went with the power. The rings restarted
+    // empty, so those jobs keep the normal readiness answer false until the adapter reset after D0 retires them
+    // (docs/design/power-loss.md section 7); only the restored engines are checked then.
+    lost=wddm->PowerLostWork;
     if (Device->SourceVisible || !Device->DcnBlanked ||
-        !GfxSubmitReady(Device) || !GfxPagingSubmitReady(Device))
+        (lost==0 && (!GfxSubmitReady(Device) || !GfxPagingSubmitReady(Device))) ||
+        (lost!=0 && !GfxSubmitRestoredWithLostWork(Device)))
         return STATUS_DEVICE_NOT_READY;
     KeAcquireSpinLock(&wddm->Lock,&irql);
-    if (!wddm->RetainedPowerPause || !wddm->Stopping || !WddmPowerIdleLocked(wddm)) {
+    // The pending work must be the work that the forced pause recorded: nothing ran in between.
+    if (!wddm->RetainedPowerPause || !wddm->Stopping || WddmPowerBusyLocked(wddm)!=lost) {
         KeReleaseSpinLock(&wddm->Lock,irql);
         return STATUS_INVALID_DEVICE_STATE;
     }
@@ -4867,13 +4908,22 @@ NTSTATUS WddmResumeRetained(_Inout_ BC250_DEVICE* Device)
         wddm->VSyncLast=KeQueryPerformanceCounter(&wddm->VSyncFrequency);
         wddm->RetainedPowerPause=FALSE;
         wddm->Stopping=FALSE;
+        wddm->PowerLostWork=0;
         if (wddm->VSyncEnabled && !Device->VidPnFlipEnabled) {
             due.QuadPart=-((LONGLONG)BC250_WDDM_VSYNC_MS*10000);
             wddm->VSyncArmed=TRUE;
             KeSetTimerEx(&wddm->VSyncTimer,due,BC250_WDDM_VSYNC_MS,&wddm->VSyncDpc);
         }
+        // The forced pause removed the DPCs that owed a report or a paging drain: they run again now.
+        if (lost & (BC250_POWER_BUSY_REPORT|BC250_POWER_BUSY_COMPLETION|BC250_POWER_BUSY_PREEMPTION|
+                    BC250_POWER_BUSY_REFUSAL|BC250_POWER_BUSY_GFX_DEFERRED|BC250_POWER_BUSY_COMPUTE_DEFER))
+            KeInsertQueueDpc(&wddm->ReportDpc,NULL,NULL);
     }
     KeReleaseSpinLock(&wddm->Lock,irql);
+    if (NT_SUCCESS(status) && (lost & BC250_POWER_BUSY_PAGING_QUEUED)) WddmRequeuePagingDrain(wddm);
+    if (lost!=0)
+        GuardLog("wddm: resumed after power loss with busy 0x%04lX: lost seq node 0 %lu, node 2 %lu wait for the TDR",
+                 lost,wddm->PowerLostSeq[BC250_WDDM_NODE_3D],wddm->PowerLostSeq[BC250_WDDM_NODE_COMPUTE]);
     return status;
 }
 
@@ -8916,6 +8966,7 @@ static BOOLEAN WddmAdapterReset(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM
         Wddm->WindowSubmits[n] = 0;
         Wddm->WindowNonEmpty[n] = 0;
         Wddm->WindowFence[n] = 0;
+        Wddm->PowerLostSeq[n] = 0;     // BD-188 D-2: the fence advance covers the jobs that the power took
         Bc250AdapterResetCommitNode(&Wddm->Recovery[n], known[n], fence[n]);
     }
     Wddm->DeferredValid = FALSE;
@@ -9151,7 +9202,8 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         UINT hungFence = 0, lastCompleted = 0, lastSubmitted = 0, abortFence = 0, notifiedFence;
         BOOLEAN onRing;
         BC250_START_HEALTH_RECOVERY witness = BC250_START_HEALTH_RECOVERY_STICKY;
-        int lastKnown, lastSubmittedKnown, completionPending, reportedKnown, abortReported = 0;
+        int lastKnown, lastSubmittedKnown, completionPending, reportedKnown, abortReported = 0, powerLost;
+        ULONG headSeq = 0, lostSeq;
         unsigned node = pResetEngine->NodeOrdinal;
         ULONGLONG epoch, admittedAt, witnessEpoch = 0;
         BC250_HANG_NODE_STATE snapshot;
@@ -9180,6 +9232,12 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         // there is no fence to abort, so 0. Its VMID is the one the kill may name (KMD214: the pool gives each
         // page-table root its own VMID, so there is no single application VMID any more).
         if (onRing) { hungFence = head->Fence; vmid = head->Vmid; }
+        // BD-188 D-2: a head job that was on the ring when the power went (WddmPauseForPowerLoss). The restored engine
+        // holds no wave and no queue state of it, so neither stage can recover it: refused, and the adapter reset
+        // that dxgkrnl calls next retires it (docs/design/power-loss.md section 7).
+        if (onRing) headSeq = head->Seq;
+        lostSeq = wddm->PowerLostSeq[node];
+        powerLost = Bc250HangPowerLost(onRing, headSeq, lostSeq);
         tail = Bc250GfxQueueTail(queue);
         seq = tail != NULL ? tail->Seq : 0;     // the newest sequence on the ring, the one a drain has to retire
         // The lower bound of the 0x119 range is THIS node's last reported fence, never the adapter-wide
@@ -9203,7 +9261,11 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         // guard is defence-in-depth against bugcheck 0x119: the aborted fence is the head job's own, so it is above
         // the last completed and no newer than itself, but we check rather than trust - and before the kill, so
         // that a refusal never follows a kill we cannot report.
-        verdict = Bc250HangPreKillVerdict(onRing, hungFence, lastKnown, lastCompleted, vmid);
+        verdict = powerLost ? BC250_HANG_VERDICT_POWER_LOST :
+                  Bc250HangPreKillVerdict(onRing, hungFence, lastKnown, lastCompleted, vmid);
+        if (powerLost)
+            GuardLog("wddm: ResetEngine node %u: head seq %lu was on the ring at the power loss (lost seq %lu): refused",
+                     node, headSeq, lostSeq);
         // The empty-queue answer is the observed completion, not the last callback
         // or reset boundary. The frozen snapshot remains stable for this node.
         if (verdict == BC250_HANG_VERDICT_NOTHING_ON_RING &&

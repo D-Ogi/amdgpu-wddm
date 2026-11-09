@@ -576,7 +576,34 @@ static NTSTATUS IhPowerRetainedLocked(BC250_DEVICE* Device, BC250_IH* Ih,
     return STATUS_SUCCESS;
 }
 
-// PASSIVE/Level Three coordinator entry. Before resume the same GART owner and
+// BD-188 D-2 (docs/design/power-loss.md section 6): the witness proved a power loss, so the controller is at its
+// power-on state with delivery disabled. Interrupt admission closes if the way down left it open (a refused halt),
+// and the software takes the state of a successful retained halt, from which IhSetPowerRetained(TRUE) restores.
+void IhPowerLost(BC250_DEVICE* Device)
+{
+    BC250_IH* ih;
+    BOOLEAN suspended=FALSE,enabled=FALSE,quiet,closed=TRUE;
+    LONG active=0;
+    if (!Device || KeGetCurrentIrql()!=PASSIVE_LEVEL) return;
+    ExAcquireFastMutex(&Device->GartLock);
+    ih=(BC250_IH*)Device->Ih;
+    quiet=Device->IhQuiet;
+    if (ih) {
+        suspended=ih->PowerSuspended;
+        enabled=ih->Enabled;
+        active=InterlockedCompareExchange(&ih->Active,0,0);
+        if (active || !suspended) closed=IhCloseInterruptAdmission(Device,ih);
+        InterlockedExchange(&ih->Active,0);
+        ih->Enabled=FALSE;
+        ih->PowerSuspended=TRUE;
+        Device->IhQuiet=TRUE;
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+    GuardLog("ih: power lost: suspended %u->1, enabled %u->0, active %ld->0 (admission closed %u), quiet %u->1",
+             (ULONG)suspended,(ULONG)enabled,active,(ULONG)closed,(ULONG)quiet);
+}
+
+// PASSIVE/Level Three coordinator entry. Before resume the same GART mappings must already be reconstructed;// PASSIVE/Level Three coordinator entry. Before resume the same GART owner and
 // mappings must already be reconstructed; GartInitializeHardware is destructive.
 NTSTATUS IhSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume)
 {

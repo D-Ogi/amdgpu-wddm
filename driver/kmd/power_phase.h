@@ -4,6 +4,10 @@
 //   ACTIVE -> SUSPENDING -> SUSPENDED      the way down (DxgkDdiSetPowerState to D1-D3)
 //   SUSPENDED -> RESTORING -> ACTIVE       the way back (D0)
 //   SUSPENDING or RESTORING -> FAILED      a step failed
+//   SUSPENDING -> SUSPENDED_UNSAVED        BD-188 D-2: a step failed while the power goes all the same (a D3 target or
+//                                          a known S3/S4, power_loss.h); the later steps ran in their forced form
+//   SUSPENDED_UNSAVED -> RESTORING         the D0 witness proved that the power was lost: the full restore
+//   SUSPENDED_UNSAVED -> RESTORING -> FAILED  the witness did not prove it (power kept, or no proof)
 //
 // FAILED ends the power transaction for this start. GpuSetPowerRetained refuses each later call, and nothing leaves
 // FAILED until the next start sets ACTIVE (pnp.c). The bus driver takes the power after a failed way down all the
@@ -21,6 +25,7 @@
 #define BC250_POWER_SUSPENDED   2L
 #define BC250_POWER_RESTORING   3L
 #define BC250_POWER_FAILED      4L
+#define BC250_POWER_SUSPENDED_UNSAVED 5L
 
 // BD-293 lab arm: one step of the way down, numbered 1-5 in GpuSetPowerRetained. In the lab flavour, the step that
 // LabPowerDownFault names (guard.c, GuardLabPowerDownFault) does not run and gives STATUS_IO_TIMEOUT, once per load.

@@ -222,9 +222,16 @@ typedef struct _BC250_DEVICE {
     // ask for afterwards: the context is freed and ConnectorLink is NULL, so a second release answers SUCCESS.
     // A caller that has to know whether the hardware is still as the firmware left it reads this as well.
     NTSTATUS ConnectorLinkCleanup;
-    volatile LONG RetainedPowerPhase; // BC250_POWER_* (power_phase.h): ACTIVE, SUSPENDING, SUSPENDED, RESTORING, FAILED
+    volatile LONG RetainedPowerPhase; // BC250_POWER_* (power_phase.h): ACTIVE, SUSPENDING, SUSPENDED, RESTORING, FAILED,
+                                      // SUSPENDED_UNSAVED
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
+    // BD-188 D-2 (power.c, power_loss.h): the steps of the last way down that failed (bit k-1 for step k), and the
+    // power-loss witness of this device. PciId is configuration dword 0, read once at start (pnp.c).
+    ULONG RetainedDownFailed;
+    ULONG PciId;
+    ULONG PowerWitness;                 // BC250_POWER_WITNESS_*, from the per-IP data of PciId
+    BOOLEAN PowerWitnessArmed;          // the last way down wrote the pattern and read it back
     PDEVICE_OBJECT PhysicalDeviceObject;
     DXGKRNL_INTERFACE Dxgk;
     DXGK_START_INFO StartInfo;
@@ -880,6 +887,7 @@ NTSTATUS IhStart(_Inout_ BC250_DEVICE* Device);
 void IhStop(_Inout_ BC250_DEVICE* Device);
 // PASSIVE retained power transition; same GART mappings required before resume.
 NTSTATUS IhSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume);
+void IhPowerLost(BC250_DEVICE* Device);     // BD-188 D-2: see GfxPowerLost
 void IhRemove(_Inout_ BC250_DEVICE* Device);
 BOOLEAN IhInterrupt(_Inout_ BC250_DEVICE* Device);
 void IhDpc(_Inout_ BC250_DEVICE* Device);
@@ -1129,6 +1137,19 @@ NTSTATUS PowerAdapterDown(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POWER_
 // BD-293: after a D0 that ends in BC250_POWER_FAILED, the SMU owner again for the CPU surface alone.
 void PowerFailedThermal(BC250_DEVICE* Device);
 NTSTATUS GfxSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume);
+// BD-188 D-2 (docs/design/power-loss.md). The witness register of power_loss.h (Id BC250_POWER_WITNESS_*), through
+// the GFX sequence's register table. PASSIVE_LEVEL, takes GartLock.
+NTSTATUS GfxPowerWitnessWrite(BC250_DEVICE* Device, ULONG Id, ULONG Value);
+NTSTATUS GfxPowerWitnessRead(BC250_DEVICE* Device, ULONG Id, _Out_ ULONG* Value);
+// After the witness proved that the power was lost: each block takes the software state of its hardware at power-on
+// (suspended, nothing loaded, nothing enabled), so that the normal retained restore runs. Each logs what it
+// changed. PASSIVE_LEVEL, before the first restore step.
+void GfxPowerLost(BC250_DEVICE* Device);
+void PspPowerLost(BC250_DEVICE* Device);
+void GartPowerLost(BC250_DEVICE* Device);
+// WddmResumeRetained with work lost to the power: the engines are restored and only that work stops the normal
+// readiness answer.
+BOOLEAN GfxSubmitRestoredWithLostWork(_In_ const BC250_DEVICE* Device);
 BOOLEAN PspPowerIsSuspended(const BC250_DEVICE* Device);
 NTSTATUS GartSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume);
 NTSTATUS PspSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume, struct _BC250_ESCAPE_PSP* Report);
@@ -1578,6 +1599,10 @@ void WddmFlipFaultDpc(_Inout_ BC250_DEVICE* Device);
 // until the separate hardware suspend/restore coordinator is implemented.
 NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device);
 NTSTATUS WddmResumeRetained(_Inout_ BC250_DEVICE* Device);
+// BD-188 D-2: the pause of WddmSuspendRetained after it refused, for a way down whose power goes all the same. The
+// pending records stay as they are; nothing completes and nothing is freed. The jobs on the rings are recorded as lost
+// work, which only the adapter reset after D0 ends (docs/design/power-loss.md section 7). PASSIVE_LEVEL.
+void WddmPauseForPowerLoss(_Inout_ BC250_DEVICE* Device);
 void WddmDpc(_Inout_ BC250_DEVICE* Device);
 // ADR 0011 point 3 step 3 (0.7.24): the hardware vsync's own DPC-side report - CRTC_VSYNC once per DPC run that
 // found at least one VUPDATE_NO_LOCK event acknowledged (Device->DcnVsyncAcked).

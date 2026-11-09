@@ -626,6 +626,24 @@ void bc250_gfx_soft_recover_vmid(struct amdgpu_device *adev, u32 vmid)
  bc250_gfx_rlc_safe_exit(adev, requested);
 }
 
+/* BD-188 D-2 (docs/design/power-loss.md section 4): the power-loss witness register of the KMD's per-IP data
+ * (driver/kmd/power_loss.h). Not an amdgpu sequence: amdgpu has no witness of this kind. The id names the
+ * register, and the offset comes from the GC register base of this device (SOC15_REG_OFFSET), never from a constant
+ * of the KMD. Through the caller's backend, so the GFX sequence's register table decides the access. 0, or BC250_EINVAL
+ * for an id this file does not know. */
+int bc250_gfx_power_witness(struct amdgpu_device *adev, unsigned id, bool write, u32 *value)
+{
+	if (!adev || !value) return BC250_EINVAL;
+	switch (id) {
+	case BC250_GFX_POWER_WITNESS_SCRATCH_REG1:
+		if (write) WREG32_SOC15(GC, 0, mmSCRATCH_REG1, *value);
+		else *value = RREG32_SOC15(GC, 0, mmSCRATCH_REG1);
+		return 0;
+	default:
+		return BC250_EINVAL;
+	}
+}
+
 /* PROVENANCE: Linux amdgpu gfx_v10_0_rlc_reset, AMD MIT. This callback is
  * not part of ordinary resume; the opt-in reload experiment below owns its use. */
 static void bc250_rlc_reset(struct amdgpu_device *adev)
