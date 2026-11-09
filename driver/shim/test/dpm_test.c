@@ -4299,7 +4299,14 @@ static void test_burst_traces(void)
 /* The plants of the earlier thermal changes with the BD-281 rules on. Session 436 runs at a 1500 MHz ceiling, so the
  * high-clock zone never acts there and its rise is far under the rate threshold: every arm must give the same result as
  * the release default without the two rules. Session 367 runs to 2000 MHz: its bounds (the hot spot under 87 C, no
- * runner stop) must hold, and the cost is the clock above 1800 MHz while the die is at 80 C or more. */
+ * runner stop) must hold, and the cost is the clock above 1800 MHz while the die is at 80 C or more.
+ *
+ * BD-329, the ramp's fast lane, runs with the two rules and changes both plants under 78 C. The median start of 436
+ * (70 C, 1500 MHz ceiling) reaches its ceiling in fewer steps: the same peak and no stop, with the mean clock not lower.
+ * The session 367 starts under BC250_DPM_RAMP_FAST_MAX_MC jump to 1300-1800 MHz instead of climbing, so their hot spot
+ * peaks higher than with the ramp: the bound is the one test_plant367 holds the ramp to (under 87 C, no runner stop,
+ * no two 1 s samples in a row at 87 C), and the lane may cost at most 1.5 C of that margin. From 1 C above the lane's
+ * top (the plant's sensor noise is 0.4 C) nothing changes. */
 static void test_burst_regression(void)
 {
 	struct zone_result a = zone_plant(ZONE_RULES_ZONE, 80200, 1, ZONE_PLANT_DIST_436, 180u);
@@ -4307,19 +4314,221 @@ static void test_burst_regression(void)
 	struct zone_result c = zone_plant(ZONE_RULES_ZONE, 70000, 0, ZONE_PLANT_DIST, 180u);
 	struct zone_result d = zone_plant(ZONE_RULES_BD281, 70000, 0, ZONE_PLANT_DIST, 180u);
 	struct ramp_result e = plant367_ex(1, 75700, 0, 1, 1), f = plant367_ex(1, 75700, 0, 1, 2);
-	int start;
+	unsigned int worst = 0, worst_gain = 0, lane_starts = 0;
+	int start, worst_at = 0;
 
 	zone_print("436, BD-281", &b);
 	zone_print("median, BD-281", &d);
 	ramp_print("zone:", &e);
 	ramp_print("BD-281:", &f);
 	CHECK(a.peak_mc == b.peak_mc && a.mean_mhz == b.mean_mhz && a.stop == b.stop && a.changes == b.changes);
-	CHECK(c.peak_mc == d.peak_mc && c.mean_mhz == d.mean_mhz && c.stop == d.stop && c.changes == d.changes);
-	CHECK(f.die_peak_mc < (unsigned int)BC250_DPM_HOT_MC && f.stops == 0u && f.die_peak_mc <= e.die_peak_mc + 300u);
+	CHECK(c.peak_mc == d.peak_mc && c.stop == d.stop && d.mean_mhz >= c.mean_mhz && d.changes <= c.changes);
+	CHECK(f.die_peak_mc < (unsigned int)BC250_DPM_HOT_MC && f.stops == 0u && f.die_peak_mc <= e.die_peak_mc + 1500u);
 	for (start = 50000; start <= 83000; start += 1000) {
 		struct ramp_result g = plant367_ex(1, start, 0, 1, 1), h = plant367_ex(1, start, 0, 1, 2);
-		CHECK(h.die_peak_mc < (unsigned int)BC250_DPM_HOT_MC && h.stops == 0u && h.die_peak_mc <= g.die_peak_mc + 300u);
+		CHECK(h.die_peak_mc < (unsigned int)BC250_DPM_HOT_MC && h.stops == 0u && h.longest_1s <= 1u);
+		CHECK(h.die_peak_mc <= g.die_peak_mc + 1500u && h.mean_mhz >= g.mean_mhz);
+		if (start >= BC250_DPM_RAMP_FAST_MAX_MC + 1000)
+			CHECK(h.die_peak_mc == g.die_peak_mc && h.mean_mhz == g.mean_mhz && h.reach_ms == g.reach_ms);
+		else if (start >= BC250_DPM_RAMP_KNEE_MC) {
+			lane_starts++;
+			CHECK(h.reach_ms <= g.reach_ms);
+		}
+		if (h.die_peak_mc > worst) { worst = h.die_peak_mc; worst_at = start; }
+		if (h.die_peak_mc > g.die_peak_mc && h.die_peak_mc - g.die_peak_mc > worst_gain)
+			worst_gain = h.die_peak_mc - g.die_peak_mc;
 	}
+	printf("plant367 starts 50-83 C with BD-281 and the fast lane: %u starts in the lane, highest hot spot %u mC (start "
+	       "%d mC), at most %u mC above the ramp's, no runner stop\n", lane_starts, worst, worst_at, worst_gain);
+}
+
+/* ---- the ramp's fast lane (BD-329) ------------------------------------------------------------------------------- */
+
+/* The lane's edges. With both BD-281 rules on, under 78 C raw and under the high-clock band, a raise from under 1800 MHz
+ * goes where the load asks, up to 1800 MHz, with no ramp interval; above 1800 MHz and outside the lane the ramp is
+ * 0.7.203's. */
+static void test_ramp_fast(void)
+{
+	struct bc250_dpm_governor g;
+	const unsigned int l1800 = (unsigned int)bc250_dpm_level_of(1800);
+	unsigned int i, level = 0;
+
+	/* In the lane: 1100 MHz at 73 C, every tick at 1000 permille. The load asks 1400 MHz, then 1800 (1750 rounded up):
+	 * two ticks, no ramp hold, throttle none. */
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(1);
+	CHECK(run_mc(&g, 1000, 73000, 25) == L(4) && g.ramp_fast_used && g.throttle == BC250_DPM_THROTTLE_NONE);
+	CHECK(run_mc(&g, 1000, 73000, 25) == l1800 && g.ramp_fast_raises == 2u && g.ramp_holds == 0u);
+	/* Above high_level the ramp holds: 1900 MHz one interval after the last raise, not before. */
+	for (i = 1; i < bc250_dpm_ramp_interval_ms(73000) / 25u; i++) CHECK(run_mc(&g, 1000, 73000, 25) == l1800);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && !g.ramp_fast_used);
+	(void)run_mc(&g, 1000, 73000, 25);
+	CHECK(run_mc(&g, 1000, 73000, 25) == l1800 + 1u && g.ramp_fast_raises == 2u);
+
+	/* A raise that the load sizes under 1800 MHz stops where the load asks: 1000 MHz at 920 permille asks 1200. */
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(run_mc(&g, 920, 75000, 25) == L(2) && g.ramp_fast_used);
+
+	/* The top of the lane: 77.999 C is in it, 78.000 C is not. */
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(1);
+	CHECK(run_mc(&g, 1000, BC250_DPM_RAMP_FAST_MAX_MC - 1, 25) == L(4) && g.ramp_fast_raises == 1u);
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(1);
+	CHECK(run_mc(&g, 1000, BC250_DPM_RAMP_FAST_MAX_MC, 25) == L(2) && g.ramp_fast_raises == 0u);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
+
+	/* The lane needs both BD-281 rules. The release default without them, the rate rule alone and the high-clock zone
+	 * alone each give the ramp of 0.7.203: one level. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(1);
+	CHECK(run_mc(&g, 1000, 73000, 25) == L(2) && g.ramp_fast_raises == 0u);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, 0u, 1800u) == BC250_DPM_BURST_OK);
+	g.level = L(1);
+	CHECK(run_mc(&g, 1000, 73000, 25) == L(2) && g.ramp_fast_raises == 0u);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_burst_config(&g, 0u, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC, BC250_DPM_HIGH_ZONE_MHZ) ==
+	      BC250_DPM_BURST_OK);
+	g.level = L(1);
+	CHECK(run_mc(&g, 1000, 73000, 25) == L(2) && g.ramp_fast_raises == 0u);
+	/* The soft zone off (DpmThermalZone 0) turns both rules off, and the lane with them. */
+	init_old(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC,
+				     BC250_DPM_HIGH_ZONE_MHZ) == BC250_DPM_BURST_OK);
+	g.level = L(1);
+	CHECK(run_mc(&g, 1000, 73000, 25) == L(2) && g.ramp_fast_raises == 0u);
+
+	/* A rate rule set to act from 75 C ends the lane there. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, 75000u, BC250_DPM_HIGH_ZONE_MC, BC250_DPM_HIGH_ZONE_MHZ) ==
+	      BC250_DPM_BURST_OK);
+	g.level = L(1);
+	CHECK(run_mc(&g, 1000, 75000, 25) == L(2) && g.ramp_fast_raises == 0u);
+	g.raise_ms = BC250_DPM_CAP_MS_MAX;
+	CHECK(run_mc(&g, 1000, 74999, 25) == L(5) && g.ramp_fast_raises == 1u);
+
+	/* A high-clock zone at 1500 MHz is the lane's top too, and a 1500 MHz ceiling under the zone's level is the top. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC, 1500u) ==
+	      BC250_DPM_BURST_OK);
+	g.level = L(1);
+	CHECK(run_mc(&g, 1000, 73000, 25) == L(4) && run_mc(&g, 1000, 73000, 25) == L(5));
+	CHECK(run_mc(&g, 1000, 73000, 25) == L(5) && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
+	burst_init(&g, L(5));
+	g.level = L(1);
+	CHECK(run_mc(&g, 1000, 73000, 25) == L(4) && run_mc(&g, 1000, 73000, 25) == L(5) && g.ramp_fast_raises == 2u);
+
+	/* The high-clock band reads the lead: a die that rose 1 C/s for 5 s reads 77 C raw and 79 C with the lead, so the
+	 * lane is closed although the raw reading is in it. The same 77 C on a flat die opens it (the positive control). */
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	for (i = 0; i < 200u; i++) (void)run_mc(&g, 0, 72000 + (int)i * 25, 25);
+	CHECK(g.level == L(0) && g.zone_lead_mc >= 1900);
+	CHECK(run_mc(&g, 1000, 77000, 25) == L(1) && g.ramp_fast_raises == 0u);
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	for (i = 0; i < 200u; i++) (void)run_mc(&g, 0, 77000, 25);
+	CHECK(g.level == L(0) && g.zone_lead_mc == 0);
+	CHECK(run_mc(&g, 1000, 77000, 25) == L(3) && g.ramp_fast_raises == 1u);
+
+	/* A tick with no reading gets no lane (the sensor rule holds the lab floor anyway). */
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(1);
+	{
+		struct bc250_dpm_input in = tick(1000, 73, 25);
+		in.temperature_valid = 0;
+		level = bc250_dpm_step(&g, &in);
+		CHECK(level <= L(1) && g.ramp_fast_raises == 0u);
+	}
+
+	/* The BD-281 shape after a jump: the lane puts 1800 MHz on a die at 77 C, which then rises 3 C/s. The high-clock
+	 * band holds the clock at 1800 MHz, and the rate rule takes three levels off the cap within 1.5 s of 80 C, before the
+	 * reading reaches 85 C. The clock never goes above 1800 MHz. */
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(1);
+	for (i = 0; i < 40u; i++) (void)run_mc(&g, 1000, 77000, 25);
+	CHECK(g.level == l1800 && g.ramp_fast_raises >= 1u);
+	{
+		int mc = 77000, step_mc = 0;
+		unsigned int top = 0;
+		for (i = 0; i < 120u && mc < 86000; i++, mc += 75) {
+			level = run_mc(&g, 1000, mc, 25);
+			if (level > top) top = level;
+			if (g.rate_steps && !step_mc) step_mc = mc;
+		}
+		CHECK(top <= l1800 && g.rate_steps >= 1u && step_mc > 0 && step_mc <= 84500);
+		CHECK(g.thermal_cap <= l1800 - BC250_DPM_RATE_LEVELS && g.level <= l1800 - BC250_DPM_RATE_LEVELS);
+		printf("ramp fast: 1800 MHz at 77 C, then 3 C/s: first rate step at %d mC, cap %u MHz\n", step_mc,
+		       bc250_dpm_level_mhz(g.thermal_cap));
+	}
+}
+
+/* BD-329 rc3 (2026-11-09, KMD 1801CAD7): Quake II RTX from 1100 MHz at 73.2 C, every tick at 900 permille or more. The
+ * readings of the trace (one per 500 ms of the 11.1 s load, results\bd329-trace-rc3-1109112957.csv) are replayed open
+ * loop at a busy share of 984 permille, the load's mean, with the governor as the KMD starts it. The replay without
+ * the BD-281 rules is the ramp of rc3, and it must give the steps of the trace (1200 MHz at 1.55 s, 1500 at 5.95 s,
+ * 1700 at 9.49 s): the positive control that the replay is the case. With the rules on, the lane must give 1700 MHz
+ * within 4 s. The readings are those of the slow climb, so this test holds the timing of the rule, not the heat of
+ * the faster clock: the closed-loop bound is test_burst_regression. */
+static const int bd329_rc3_mc[] = {
+	73250, 73125, 73000, 72875, 72750, 72625, 72625, 72500, 72500, 72375, 72375, 72375,
+	72375, 72500, 72875, 73125, 73500, 74125, 74625, 75000, 75625, 76250, 76875
+};
+
+struct bd329_replay { unsigned int at1200_ms, at1500_ms, at1700_ms, at1800_ms, at1900_ms, mean_mhz, top_mhz, fast; };
+
+static struct bd329_replay bd329_replay(int burst)
+{
+	struct bc250_dpm_governor g;
+	struct bd329_replay r;
+	const unsigned int n = (unsigned int)(sizeof(bd329_rc3_mc) / sizeof(bd329_rc3_mc[0]));
+	const unsigned int ticks = (n - 1u) * 20u;
+	unsigned long long sum = 0;
+	unsigned int i;
+
+	memset(&r, 0, sizeof(r));
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MS) == 1);
+	if (burst)
+		CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC,
+					     BC250_DPM_HIGH_ZONE_MHZ) == BC250_DPM_BURST_OK);
+	g.level = L(1);		/* the load's first raise, 1000 -> 1100 MHz, has just happened */
+	g.raise_ms = 0;
+	for (i = 0; i < ticks; i++) {
+		unsigned int k = i / 20u, mhz;
+		int mc = bd329_rc3_mc[k] + (bd329_rc3_mc[k + 1u] - bd329_rc3_mc[k]) * (int)(i % 20u) / 20;
+		struct bc250_dpm_input in = tick(984, 0, 25);
+		in.temperature_mc = mc;
+		in.ring_busy = 1;
+		commit_ok(&g, bc250_dpm_step(&g, &in));
+		mhz = bc250_dpm_level_mhz(g.level);
+		sum += mhz;
+		if (mhz > r.top_mhz) r.top_mhz = mhz;
+		if (mhz >= 1200u && !r.at1200_ms) r.at1200_ms = (i + 1u) * 25u;
+		if (mhz >= 1500u && !r.at1500_ms) r.at1500_ms = (i + 1u) * 25u;
+		if (mhz >= 1700u && !r.at1700_ms) r.at1700_ms = (i + 1u) * 25u;
+		if (mhz >= 1800u && !r.at1800_ms) r.at1800_ms = (i + 1u) * 25u;
+		if (mhz >= 1900u && !r.at1900_ms) r.at1900_ms = (i + 1u) * 25u;
+	}
+	r.mean_mhz = (unsigned int)(sum / ticks);
+	r.fast = g.ramp_fast_raises;
+	return r;
+}
+
+static void test_ramp_fast_bd329(void)
+{
+	struct bd329_replay old = bd329_replay(0), now = bd329_replay(1);
+	printf("bd329 rc3 replay, ramp only: 1200 MHz at %u ms, 1500 at %u, 1700 at %u, mean %u MHz, top %u\n",
+	       old.at1200_ms, old.at1500_ms, old.at1700_ms, old.mean_mhz, old.top_mhz);
+	printf("bd329 rc3 replay, fast lane: 1700 MHz at %u ms, 1800 at %u, 1900 at %u, mean %u MHz, top %u, %u lane raises\n",
+	       now.at1700_ms, now.at1800_ms, now.at1900_ms, now.mean_mhz, now.top_mhz, now.fast);
+	/* The positive control: the trace's own steps, each within 500 ms. */
+	CHECK(old.at1200_ms >= 1050u && old.at1200_ms <= 2050u);
+	CHECK(old.at1500_ms >= 5450u && old.at1500_ms <= 6450u);
+	CHECK(old.at1700_ms >= 8990u && old.at1700_ms <= 9990u && old.top_mhz == 1700u && old.fast == 0u);
+	/* The fix: 1700 MHz within 4 s (two ticks here), 1800 MHz with it, and above 1800 MHz the ramp's interval. */
+	CHECK(now.at1700_ms && now.at1700_ms <= 4000u && now.at1800_ms && now.at1800_ms <= 4000u && now.fast >= 1u);
+	CHECK(now.at1900_ms >= now.at1800_ms + bc250_dpm_ramp_interval_ms(72000));
+	CHECK(now.mean_mhz >= old.mean_mhz + 400u);
 }
 
 /* ---- the sustained raise (BD-329) ------------------------------------------------------------------------------------ */
@@ -4551,6 +4760,8 @@ int main(void)
 	test_burst281();
 	test_burst_traces();
 	test_burst_regression();
+	test_ramp_fast();
+	test_ramp_fast_bd329();
 	test_sustain_bd329();
 	test_sustain_guard();
 	test_sustain_no_oscillation();

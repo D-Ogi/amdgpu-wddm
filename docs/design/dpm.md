@@ -574,7 +574,8 @@ zone with no soft release at all: the cap must go up again below the band it ste
 
 From 0.7.203 a thermal ramp starts at 70 C (`BC250_DPM_RAMP_KNEE_MC`). The rules are:
 
-- At 70 C or more and below the warm zone (87 C), a raise goes up one level (100 MHz) at most.
+- At 70 C or more and below the warm zone (87 C), a raise goes up one level (100 MHz) at most. The fast lane below is
+  the exception from BD-329.
 - A raise occurs only when the last raise is at least the ramp interval ago. The interval is 1000 ms at 70 C. It
   increases linearly to 4000 ms at the warm zone (`bc250_dpm_ramp_interval_ms`). From 0.7.204 the warm zone is 87 C.
   Thus the interval is 2764 ms at 80 C, 3470 ms at 84 C, 3647 ms at 85 C and 3823 ms at 86 C. In 0.7.203 the interval
@@ -590,6 +591,37 @@ change.
 
 When the ramp makes a raise smaller or stops it, the throttle reason is `thermal-ramp` (9). The counter `ramp` in the
 driver log lines counts these governor ticks. `want` in the telemetry stays the level that the load asks for.
+
+From BD-329 the ramp has a fast lane below 78 C (`BC250_DPM_RAMP_FAST_MAX_MC`). The rules are:
+
+- The lane is open only when the rate rule and the high-clock zone (BD-281, below) are both on. `DpmThermalRate` 0,
+  `DpmThermalHighZoneMc` 0 or `DpmThermalZone` 0 closes it, and the ramp is then the ramp of 0.7.203.
+- The raw reading must be below 78 C and below `DpmThermalRateFromMc`. The lead reading must be below the band of the
+  high-clock zone (79 C).
+- In the lane, a raise from below the level of the high-clock zone (1800 MHz) goes to the level that the load asks
+  for, up to 1800 MHz, with no ramp interval. A raise above 1800 MHz keeps the ramp.
+- The ceiling, the thermal cap, the warm zone and the band of the high-clock zone come first. The lane widens none of
+  them.
+- The lane has no setting. A new setting is a state catalog change, and the lab cannot swap a KMD of another catalog
+  over an installed package.
+
+The transition line of a raise through the lane says `load fast`. The throttle reason is `none`, because the lane cuts
+nothing.
+
+The reason is the rc3 run of BD-329 (2026-11-09, unit A). Quake II RTX started at 1100 MHz and 73.2 C after the
+pipeline compile. Every tick was at 900 permille or more, so the load asked for 1300-2000 MHz. The ramp let the clock
+go up one level each 1.5-2 s: 1200 MHz at 1.55 s, 1500 MHz at 5.95 s and 1700 MHz at 9.49 s. The run gave 56 fps.
+The runs that started at 64 C reached 1800 MHz by 12 s and gave 70.7 fps. The ramp of 0.7.203 was the only rule
+against a fast increase of the temperature at that time. The rate rule and the high-clock zone of BD-281 now do this
+from 80 C. The lane stops 2 C below 80 C, and it stops at 1800 MHz and not at 2000 MHz.
+
+The cost is that a jump below 78 C does not show in the reading before it is complete. On the session 367 plant, a
+start from 70-77 C with the lane gets a hot spot peak up to 1.2 C higher than the same start with the ramp. No start
+from 50-83 C gets the hot spot to 87 C or a runner stop. A start from 78-79 C with a lane that went to 80 C peaked at
+86.4 C, so the top is 78 C. `test_ramp_fast` covers the edges, `test_ramp_fast_bd329` replays the readings of the rc3
+trace (without the lane it gives the steps of the trace, with the lane 1700 MHz at 50 ms), and `test_burst_regression`
+holds the closed-loop bounds. `run_dpm.ps1 -NoRampFast` and `-RampFastUnbounded` are the negative controls. The
+plant is a model, so the lab must confirm the result.
 
 From BD-228 the ramp has a recall. The governor keeps the highest level that a confirmed transaction set, and goes
 back to it at once within 10 s (`BC250_DPM_RAMP_RECALL_MS`):

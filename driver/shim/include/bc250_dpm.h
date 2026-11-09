@@ -564,6 +564,9 @@ struct bc250_dpm_governor {
 	int		sustain_used;		/* the last step's want came from the rule */
 	unsigned int	sustain_refusals;	/* steps in which the hold ran out and the raise would have landed at or
 						 * under the lowering threshold, so no raise happened */
+	/* BD-329, the ramp's fast lane (bc250_dpm_ramp_fast). No setting: it follows the BD-281 configuration. */
+	unsigned int	ramp_fast_raises;	/* steps in which the lane let a raise go past the ramp's one level */
+	int		ramp_fast_used;		/* the last step's target came from the lane */
 };
 
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level);
@@ -718,6 +721,31 @@ enum bc250_dpm_burst_error bc250_dpm_burst_config(struct bc250_dpm_governor *g, 
 /* The fitted rate in mC/s of the rate ring (the last BC250_DPM_RATE_TICKS readings), for the host test and the log;
  * *available is 0 when the ring cannot give one (not full, a span or an age past BC250_DPM_RATE_MAX_SPAN_MS). */
 int bc250_dpm_rate_mc_per_s(const struct bc250_dpm_governor *g, int *available);
+
+/* ---- the ramp's fast lane (BD-329) ------------------------------------------------------------ */
+
+/* The thermal ramp (0.7.203) cuts every raise from 70 C to one level per ramp interval: 1.5 s at 73 C, 2.3 s at 77 C.
+ * It was the only rule against a fast rise when it came: the session 367 jump to 2000 MHz at 75.7 C gave the hot spot
+ * some 12 C in 5 s, and no rule of that KMD looked at anything but the reading of the tick. BD-281 added two rules
+ * that do look at the rise: the rate rule (from 80 C raw, 1.5 C/s for 500 ms takes three levels off the cap) and the
+ * high-clock zone (from a lead reading of 80 C the cap steps down to 1800 MHz, and from 79 C no clock or cap rises
+ * above 1800 MHz). With both on, the ramp under 80 C guards against what those rules now catch, and it costs a game
+ * that starts warm the whole climb: BD-329, rc3, Quake II RTX from 73.2 C at 1100 MHz with every tick at 900 permille
+ * or more took 9.5 s to 1700 MHz, one level per 1.5-2 s, for 56 fps against 70.7 fps from a 64 C start.
+ *
+ * The lane: while both BD-281 rules are on, the raw reading is under the lower of BC250_DPM_RAMP_FAST_MAX_MC (78 C)
+ * and rate_from_mc, and the lead reading is under the high-clock zone's band, a raise from under high_level goes to
+ * what the load asks for, up to high_level, with no ramp interval. A raise above high_level keeps the ramp. Every other
+ * limit of the tick stays first: the ceiling, the thermal cap, the warm zone and the high-clock band. With either
+ * BD-281 rule off (DpmThermalRate 0, DpmThermalHighZoneMc 0, DpmThermalZone 0) the lane is off and the ramp is exactly
+ * 0.7.203's.
+ *
+ * The tradeoff: a jump under 78 C is not seen in the reading before it is done. The bound is that the jump stops at
+ * high_level, not at 2000 MHz, that it starts 2 C under the readings from which the rate rule and the high-clock zone
+ * act on its rise, and the closed-loop result: on the session 367 plant of dpm_test.c (16 C fast rise at full power,
+ * steady state 86 C at 1400 MHz) a lane start peaks at most 1.2 C above the same start with the ramp, and no start
+ * from 50 to 83 C puts the hot spot at 87 C or stops the lab runner (test_burst_regression). A lane up to 80 C gave
+ * 86.4 C from 78-79 C, which is why the top is 78 C. The lab decides the real board. */
 
 /* ---- the operator's V/F curve and its trial (0.7.210) ---------------------------------------- */
 

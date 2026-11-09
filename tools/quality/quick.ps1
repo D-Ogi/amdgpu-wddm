@@ -444,6 +444,9 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # BD-329: the sustained raise and its landing guard, each with a negative control.
  Check 'dpm-no-sustain' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_dpm.ps1" -Out "$Out\dpm-no-sustain" -Kits "$Kits" -NoSustain -ExpectFailure }
  Check 'dpm-no-sustain-guard' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_dpm.ps1" -Out "$Out\dpm-no-sustain-guard" -Kits "$Kits" -NoSustainGuard -ExpectFailure }
+ # BD-329: the thermal ramp's fast lane and its temperature top, each with a negative control.
+ Check 'dpm-no-ramp-fast' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_dpm.ps1" -Out "$Out\dpm-no-ramp-fast" -Kits "$Kits" -NoRampFast -ExpectFailure }
+ Check 'dpm-ramp-fast-unbounded' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_dpm.ps1" -Out "$Out\dpm-ramp-fast-unbounded" -Kits "$Kits" -RampFastUnbounded -ExpectFailure }
  Check 'cpu' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_cpu.ps1" -Out "$Out\cpu" -Kits "$Kits" }
  Check 'clock-policy' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_clock.ps1" -Root $Workspace -Out "$Out\clock-policy" }
  Check 'oc-tiers' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_oc.ps1" -Root $Workspace -Out "$Out\oc-tiers" }

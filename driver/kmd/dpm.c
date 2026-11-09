@@ -1131,9 +1131,11 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         T->Target = target;
         if (target != S->Gov.level) {
             // The level changes, so the transaction carries the new curve's voltage anyway.
-            // BD-329: a raise the sustained rule chose says so in its transition line.
+            // BD-329: a raise the sustained rule chose says so in its transition line, and so does a raise that the
+            // thermal ramp's fast lane let past one level (the throttle column cannot show it: the lane cuts nothing).
             const char* why = S->Gov.sustain_used ? (curveTake ? "load sustained, curve" : "load sustained")
-                                                  : (curveTake ? "load, curve" : "load");
+                            : S->Gov.ramp_fast_used ? (curveTake ? "load fast, curve" : "load fast")
+                                                    : (curveTake ? "load, curve" : "load");
             if (!DpmApplyEx(Device, S, T, target, why, S->Gov.recall_used ? TRUE : FALSE, curveSerial)) {
                 if (S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT) DpmGiveUp(Device, S, T);
             } else if (curveTake) DpmCurveApplied(S, curveSerial);

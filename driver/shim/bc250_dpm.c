@@ -15,7 +15,8 @@
  * zone, 86 C, with the reading extrapolated 15 s along its own slope, and the clock stops rising at 83 C
  * (bc250_dpm_warm_mc); the 87 C hot cap and the 90 C critical rule stay behind both as backstops on the raw reading.
  * From the warm threshold up no raise happens at all, and from RAMP_KNEE_MC
- * (70 C) a raise goes one level per ramp interval (0.7.203). The thresholds and a runtime floor can change at run
+ * (70 C) a raise goes one level per ramp interval (0.7.203), except in the fast lane of BD-329 (under 78 C with both
+ * BD-281 rules on, up to the high-clock zone's level). The thresholds and a runtime floor can change at run
  * time (struct bc250_dpm_tune, 0.7.185); the runtime floor lifts only what the load asks for, below
  * every limit. Since BD-127 the three load thresholds have a second set, the compute set, in force while a
  * compute context is open: a compute client waits on the CPU between dispatches, so its busy share measures
@@ -889,6 +890,16 @@ static int high_band(const struct bc250_dpm_governor *g, const struct bc250_dpm_
 {
 	return high_on(g, t) && teff >= (int)g->high_mc - (int)BC250_DPM_HIGH_ZONE_HYST_MC;
 }
+/* BD-329: the ramp's fast lane is open. Both BD-281 rules must be on, because they are what replaces the ramp's spacing:
+ * the lane ends under the raw reading at which the rate rule starts (and never above BC250_DPM_RAMP_FAST_MAX_MC), and
+ * under the lead reading at which the high-clock band holds the clock. A tick with no reading gets no lane. */
+static int ramp_fast(const struct bc250_dpm_governor *g, const struct bc250_dpm_tune *t,
+		     const struct bc250_dpm_input *in, int teff)
+{
+	int top = (int)g->rate_from_mc < BC250_DPM_RAMP_FAST_MAX_MC ? (int)g->rate_from_mc : BC250_DPM_RAMP_FAST_MAX_MC;
+	return rate_on(g, t) && high_on(g, t) && in->temperature_valid && in->temperature_mc < top &&
+	       !high_band(g, t, teff);
+}
 
 unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in)
 {
@@ -971,6 +982,7 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	 * cap at the pace of the ramp as before, and only a drop of the load itself (a stall, a loading screen) comes
 	 * back at once. */
 	g->recall_used = 0;
+	g->ramp_fast_used = 0;	/* BD-329 */
 	if (g->recall_valid && (in->curve_serial != g->recall_serial || cur > g->recall_level || compute != compute_was ||
 				in->dt_ms > BC250_DPM_MAX_DT_MS))
 		bc250_dpm_recall_forget(g);
@@ -1334,6 +1346,16 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 		 * at 74.9 C spaces the next one at 75 C. A stalled tick counts as MAX_DT_MS, as everywhere. */
 		if (target > cur && in->temperature_mc >= BC250_DPM_RAMP_KNEE_MC) {
 			unsigned int ramp = g->raise_ms >= bc250_dpm_ramp_interval_ms(in->temperature_mc) ? cur + 1u : cur;
+			/* BD-329, the fast lane (bc250_dpm.h): under the BD-281 rules' own thresholds a raise goes to high_level at
+			 * once. target is already bounded by the cap, the ceiling, the warm zone and the high-clock band. */
+			if (ramp_fast(g, t, in, teff) && cur < g->high_level) {
+				unsigned int fast = target < g->high_level ? target : g->high_level;
+				if (fast > ramp) {
+					ramp = fast;
+					g->ramp_fast_raises++;
+					g->ramp_fast_used = 1;
+				}
+			}
 			/* BD-228: a return to the level held within the recall window is free; a raise above it keeps the ramp.
 			 * The warm zone above has already held any raise at or above its threshold, and target is already
 			 * bounded by the thermal cap and the ceiling, so this widens nothing that those rules refuse. */
