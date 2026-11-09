@@ -601,8 +601,8 @@ From BD-329 the ramp has a fast lane below 78 C (`BC250_DPM_RAMP_FAST_MAX_MC`). 
   `DpmThermalHighZoneMc` 0 or `DpmThermalZone` 0 closes it, and the ramp is then the ramp of 0.7.203.
 - The raw reading must be below 78 C and below `DpmThermalRateFromMc`. The lead reading must be below the band of the
   high-clock zone (79 C).
-- In the lane, a raise from below the top of the lane goes to the level that the load asks for, up to the top, with
-  no ramp interval. A raise from the top up keeps the ramp.
+- In the lane, a raise from below the lane top goes to the level of the load. The lane top is the limit. The
+  raise has no ramp interval. A raise from the lane top up keeps the ramp.
 - The top of the lane is the lower of the level of the high-clock zone (`DpmThermalHighZoneMHz`, 1800 MHz by
   default) and `BC250_DPM_RAMP_FAST_TOP_MHZ` (1800 MHz). The analysis below measured the lane up to 1800 MHz. A zone
   setting above 1800 MHz moves the zone, and the lane stays at 1800 MHz.
