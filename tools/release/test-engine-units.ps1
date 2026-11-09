@@ -1566,7 +1566,10 @@ $installText = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
 $engineText = [IO.File]::ReadAllText((Join-Path $Installer 'engine.ps1'))
 Check ($engineText -match '\$Code = Get-EngineExitCode -Code \$Code -Outcome \$Outcome -Restart \$restart' -and $installText -match "\`$script:EngineRestart\['started'\] = \`$true") 'Exit-Engine maps the code in one place; Request-Restart records a restart it started'
 $uninstallText = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
-$uninstallCmd = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.cmd'))
+# The repository keeps uninstall.cmd in installer\; a package puts it one level up, at the package root.
+$uninstallCmdPath = @((Join-Path $Installer 'uninstall.cmd'), (Join-Path (Split-Path $Installer) 'uninstall.cmd')) |
+    Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+$uninstallCmd = if ($uninstallCmdPath) { [IO.File]::ReadAllText($uninstallCmdPath) } else { '' }
 Check ((Get-RestartExitCode -Started $false) -eq 3010 -and (Get-RestartExitCode -Started $true) -eq 1641 -and
     $uninstallText -match 'exit \(Get-RestartExitCode -Started \$restartStarted\)\s*$' -and $uninstallText -notmatch "(?m)^exit 0\s*\z" -and
     $uninstallCmd -match 'exit /b %AMDGPU_WDDM_EXIT%') 'uninstall ends with the restart code, and uninstall.cmd passes it on'

@@ -108,9 +108,13 @@ function Test-UninstallBlock([int]$Start, [int]$End) {
     }.GetNewClosure(), $true) | Sort-Object { $_.Extent.StartOffset } -Descending)
     foreach ($node in $exits) {
         $code = $node.Pipeline.Extent.Text
-        if ($code -notmatch '^\d+$') { throw 'Unexpected nonliteral uninstall exit' }
+        # A literal code goes into the sentinel as it is. The only accepted expression is the restart exit code
+        # (common.ps1 Get-RestartExitCode): the sentinel evaluates it, so the test sees the code the uninstall returns.
+        $sentinel = if ($code -match '^\d+$') { "throw 'fixture-uninstall-exit:$code'" }
+            elseif ($code -match '^\(Get-RestartExitCode -Started \$\w+\)$') { "throw ('fixture-uninstall-exit:' + $code)" }
+            else { throw "Unexpected nonliteral uninstall exit: $code" }
         $at = $node.Extent.StartOffset - $Start
-        $text = $text.Remove($at, $node.Extent.EndOffset - $node.Extent.StartOffset).Insert($at, "throw 'fixture-uninstall-exit:$code'")
+        $text = $text.Remove($at, $node.Extent.EndOffset - $node.Extent.StartOffset).Insert($at, $sentinel)
     }
     return [scriptblock]::Create($text)
 }
@@ -231,8 +235,9 @@ try {
         $goneRow = [pscustomobject]@{item='driver store';known=$true;present=$false;kept=$false;detail='gone'}
         $keptRow = [pscustomobject]@{item='control application data';known=$true;present=$true;kept=$true;detail='kept'}
         Check ((Run-FootprintFixture @($unknownRow)) -eq 6) "$($f.tag): unknown final footprint is not uninstall success"
-        Check ((Run-FootprintFixture @($remainingRow)) -eq 0) "$($f.tag): known deferred file reports restart path"
-        Check ((Run-FootprintFixture @($goneRow, $keptRow)) -eq 0) "$($f.tag): gone plus intentionally kept is success"
+        # A completed removal with -NoReboot exits 3010: the restart is still to come (BD-093, Get-RestartExitCode).
+Check ((Run-FootprintFixture @($remainingRow)) -eq $script:ExitRebootRequired) "$($f.tag): known deferred file reports restart path"
+        Check ((Run-FootprintFixture @($goneRow, $keptRow)) -eq $script:ExitRebootRequired) "$($f.tag): gone plus intentionally kept is success"
         Check ((Run-FootprintFixture @($unknownRow) -Dry) -eq 0) "$($f.tag): dry-run unknown report is allowed"
     }
 } finally {
