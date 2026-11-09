@@ -12,10 +12,10 @@ static BC250_OVERLAY_REQUEST Request(void)
     BC250_OVERLAY_REQUEST r = {0};
     r.Count=2; r.Caps=&Bc250DcnCaps201; r.McBase=0x10000000000ull; r.VramPhysical=0x300000000ull; r.VramLength=0x10000000ull;
     r.Timing=(BC250_DML201_INPUT){1920,2080,48,32,1200,1235,3,6,154000,0,BC250_DML201_DP,4,256,0,48000,3000000,0,0,0,0,0,0};
-    r.Plane[0]=(BC250_OVERLAY_INPUT){1,BC250_LINEAR_BGRA8,BC250_INPUT_RGB_FULL,BC250_SCALER_FILTER_AMD,0,
+    r.Plane[0]=(BC250_OVERLAY_INPUT){1,BC250_LINEAR_BGRA8,BC250_INPUT_RGB_FULL,BC250_OVERLAY_FILTER_AMD,0,
         1920,1200,7680,0,r.McBase+0x1000000,0x1000000,0,0,
         {0,0,1920,1200},{0,0,1920,1200},{0,0,1920,1200}};
-    r.Plane[1]=(BC250_OVERLAY_INPUT){0,BC250_CNVC_NV12,BC250_INPUT_709_LIMITED,BC250_SCALER_FILTER_AMD,0,
+    r.Plane[1]=(BC250_OVERLAY_INPUT){0,BC250_CNVC_NV12,BC250_INPUT_709_LIMITED,BC250_OVERLAY_FILTER_AMD,0,
         1280,720,1280,1536,r.McBase+0x4000000,0x400000,0,0x100000,
         {0,0,1280,720},{0,60,1920,1140},{0,0,1920,1200}};
     return r;
@@ -70,7 +70,7 @@ int main(void)
         CHECK(Bc250OverlayPrepare(&bad,w,bytes,q)==BC250_OVERLAY_OK);
         CHECK(q->Color[1].Color==color);
     }
-    bad=r; bad.Plane[1].Filter=BC250_SCALER_FILTER_LINEAR;
+    bad=r; bad.Plane[1].Filter=BC250_OVERLAY_FILTER_LINEAR;
     CHECK(Bc250OverlayPrepare(&bad,w,bytes,q)==BC250_OVERLAY_OK);
     CHECK(q->Geometry[1].Scaler.LumaH.Taps==2);
     // Cropping uses component geometry and its original source extents for DML.

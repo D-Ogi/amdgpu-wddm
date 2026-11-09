@@ -19,6 +19,7 @@
 #include "dcn_scale.h"   /* BD-223: BC250_SCALER_PLAN, the shape of a multiplane-overlay plane 0 */
 #include "mpo3_track.h"  /* BD-307: plane 0 of the MPO3 DDIs */
 #include "dcn_plane.h"   /* BD-223 Part S: the shared scaled-plane rule of Check3, linked from dcn_plane.c */
+#include "dcn_overlay_input.h"  /* BD-223 Part Y: the answer of the two-plane Check3 preflight */
 #include "bc250_scanout_caps.h"  /* BD-223: the stretch and shrink limits the caps DDI answers */
 #define UNREFERENCED_PARAMETER(x) ((void)(x))
 typedef int32_t NTSTATUS;
@@ -765,6 +766,17 @@ static void StartHealthCompleted(BC250_DEVICE *d,ULONG sequence)
     if(sequence && sequence!=healthSequence){healthSequence=sequence;healthCompletions++;}
 }
 /* ACTUAL_SOURCE */
+/* BD-223 Part Y: the WDDM side of the two-plane preflight (wddm_mpo_group.inc) is outside the extracted block; this
+ * model counts the calls. Its answer only goes to the log: Check3 must refuse two planes whatever it says. */
+static unsigned groupChecks;
+static NTSTATUS WddmMpo3CheckGroup(BC250_DEVICE* Device, BC250_WDDM* Wddm,
+    const DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT3* Check, const DXGK_MULTIPLANE_OVERLAY_POST_COMPOSITION* Post,
+    BC250_LINK_OVERLAY_CHECK* Out)
+{
+    (void)Device;(void)Wddm;(void)Check;(void)Post;
+    ++groupChecks;memset(Out,0,sizeof(*Out));Out->Described=1;Out->WithinCurrentBudget=1;
+    return STATUS_SUCCESS;
+}
 /* A started adapter on the inherited 1366x768 mode, its desktop primary at 0x1000, the flip gate open, CRTC_VSYNC on,
  * the OTG running and the plane drained; every stub reset. level 1: the flip DDI arrives above DISPATCH_LEVEL. */
 static void Setup(BC250_DEVICE *d,BC250_WDDM *w,int level)
@@ -2571,9 +2583,11 @@ static void Mpo3Checks(void)
     c.PlaneCount=2;
     {
         const unsigned before=logs;
+        const unsigned groups=groupChecks;
         CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && !c.Supported);
-        /* BD-223: the second plane has a line of its own (layer, format, colour space). */
-        CHECK(logs==before+5);
+        /* BD-223: the second plane has a line of its own (layer, format, colour space); Part Y: one preflight, two
+         * lines, and a described group within budget is still refused. */
+        CHECK(logs==before+7 && groupChecks==groups+1);
     }
     CHECK(w.Mpo3Checks[BC250_MPO3_COUNT]==1 && c.ReturnInfo.FailingPlane==1);
     c.PlaneCount=0;

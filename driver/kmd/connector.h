@@ -4,6 +4,7 @@
 #include "../shim/bc250_hpd.h"
 #include "connector_diag.h"
 #include "connector_handoff.h"
+#include "dcn_overlay_input.h"    // BC250_OVERLAY_DESCRIPTION and BC250_LINK_OVERLAY_CHECK of the Check3 preflight
 
 struct _BC250_DEVICE;
 typedef struct _BC250_CONNECTOR_SNAPSHOT {
@@ -107,11 +108,6 @@ typedef struct _BC250_LINK_PLANE_DML {
 struct BC250_DML201_PLAN;
 NTSTATUS ConnectorLinkPlaneDml(struct _BC250_DEVICE* Device, const BC250_LINK_PLANE* Plane,
     BC250_LINK_PLANE_DML* Out, struct BC250_DML201_PLAN* Plan);
-struct BC250_OVERLAY_DESCRIPTION;
-typedef struct _BC250_LINK_OVERLAY_CHECK {
-    ULONG Result, Described, Generation, DispClockKhz, DppClockKhz;
-    ULONG BudgetDispKhz, BudgetDppKhz, WithinCurrentBudget;
-} BC250_LINK_OVERLAY_CHECK;
 // CPU-only Check3 preflight against one locked current mode. Does not reserve
 // pipe 1, raise its clock or establish hardware ownership; no MMIO writes.
 NTSTATUS ConnectorLinkOverlayCheck(struct _BC250_DEVICE* Device,
