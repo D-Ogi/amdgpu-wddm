@@ -170,7 +170,7 @@ class Workspace:
                 "recipe_commit": recipe_commit or self.head,
                 "repositories": {"recipes": {"url": str(self.remote), "checkouts": ["recipes"],
                                              "base": self.base_commit}},
-                "rows": rows}
+                "rows": rows, "containment": []}
 
     def write(self, manifest):
         self.manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
@@ -188,18 +188,24 @@ class Workspace:
         excluded.add('PROGRAMFILES(X86)')
         return {k: v for k, v in os.environ.items() if k.upper() not in excluded and not k.upper().startswith('BC250_TOOL_')}
 
+    def context_inputs(self, manifest):
+        """The audited-input declaration of every recipe the manifest names (build-release-set -ContextInputs, which
+        refuses an undeclared recipe since c7fc36dd6). Every launcher of the tool in these tests passes it."""
+        declarations = self.root / 'context-inputs.json'
+        recipes = []
+        for row in manifest['rows']:
+            commit = row.get('recipe_commit') or (row['commit'] if row['repo'] == manifest['recipe_repository'] else manifest['recipe_commit'])
+            recipes.append({'recipe': row['recipe'], 'commit': commit, 'inputs': [
+                {'path': '{root}/toolchain', 'required': False}, {'path': '{root}/scratch/py', 'required': False}]})
+        declarations.write_text(json.dumps({'schema': 1, 'recipes': recipes}), encoding='utf-8')
+        return declarations
+
     def run(self, manifest, *extra, timeout=600):
         self.write(manifest)
-        declarations=self.root/'context-inputs.json'
-        recipes=[]
-        for row in manifest['rows']:
-            commit=row.get('recipe_commit') or (row['commit'] if row['repo']==manifest['recipe_repository'] else manifest['recipe_commit'])
-            recipes.append({'recipe':row['recipe'],'commit':commit,'inputs':[
-                {'path':'{root}/toolchain','required':False}, {'path':'{root}/scratch/py','required':False}]})
-        declarations.write_text(json.dumps({'schema':1,'recipes':recipes}),encoding='utf-8')
+        declarations = self.context_inputs(manifest)
         r = subprocess.run(["pwsh", "-NoProfile", "-File", str(TOOL), "-Manifest", str(self.manifest_path),
                             "-Out", str(self.out), "-Root", str(self.root), "-Work", str(self.work),
-                            "-ContextInputs",str(declarations),
+                            "-ContextInputs", str(declarations),
                             "-SizeGuard", str(self.guard_dir / "size-guard.py"), *extra],
                            capture_output=True, text=True, timeout=timeout, env=self.child_environment())
         return r.returncode, r.stdout + r.stderr

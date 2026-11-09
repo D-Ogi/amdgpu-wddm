@@ -45,6 +45,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import provenance  # noqa: E402
+import containment  # noqa: E402
 import build_context  # noqa: E402
 sys.path.insert(0, str(HERE.parent / "state"))
 import check_history  # noqa: E402
@@ -196,6 +197,9 @@ def check_manifest(manifest):
     table = manifest["repositories"]
     if manifest["recipe_repository"] not in table:
         errors.append(f"recipe_repository {manifest['recipe_repository']!r} is not in 'repositories'")
+    for i, entry in enumerate(manifest.get("containment") or []):
+        if entry["repo"] not in table:
+            errors.append(f"containment[{i}] {entry['defect']}: repository {entry['repo']!r} is not in 'repositories'")
     ids, slots = set(), {}
     for row in manifest["rows"]:
         rid = row["id"]
@@ -758,6 +762,8 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         "keep_from": str(Path(keep_from).resolve()) if keep_from else None, "shared_trees": list(shared.values()),
         "recipes": [{"repo": a, "commit": b, "recipe": c} for a, b, c in recipes],
         "rows_in_manifest": [r["id"] for r in rows],
+        # The fix commits of the release's rows and the commits of every manifest row (containment gate, G5).
+        "containment": manifest.get("containment"), "containment_rows": containment.plan_rows(rows),
     }
     return plan, []
 
@@ -1047,6 +1053,8 @@ def run_gates(plan, recipe_params, allow_unpushed=False):
         hist_failed = hist_failed or bool(failures)
     gates.append({"name": "state-history", "status": "FAIL" if hist_failed else "PASS",
                   "lines": hist or [f"no row builds the state worker ({STATE_WORKER_RECIPE})"]})
+    # Every fix commit that the manifest names is an ancestor of each row commit that ships it (containment.py).
+    gates.append(containment.check_plan(plan))
     status = "FAIL" if any(g["status"] == "FAIL" for g in gates) else "PASS"
     return {"status": status, "gates": gates}
 
