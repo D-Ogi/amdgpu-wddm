@@ -144,6 +144,12 @@ unsigned int bc250_sdma_fence_size(const struct amdgpu_ring *ring, unsigned int 
  * single dword if the ring is wrong or the address is not 4-byte aligned. */
 int bc250_sdma_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags);
 
+/* The memory poll of sdma_v5_0_ring_emit_pipeline_sync() on a caller-named address and value: BC250_SDMA_MEM_WAIT_DW
+ * dwords into space the caller reserved, no commit. BC250_EINVAL without a write for a wrong ring or an address that
+ * is 0 or not 4-byte aligned. */
+#define BC250_SDMA_MEM_WAIT_DW	6u
+int bc250_sdma_emit_mem_wait(struct amdgpu_ring *ring, u64 addr, u32 ref, u32 mask);
+
 /* [shim] the alloc, the emit and the commit together, which is what a caller actually wants. On a
  * refusal from the emitter the reservation is undone and the ring is left as it was. */
 int bc250_sdma_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags);

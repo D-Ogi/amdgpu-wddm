@@ -119,12 +119,24 @@ static const struct { const char* Name; BC250_GFX_STAGE_FUNCTION Run; } g_Stages
 // compute_ring[1]. Its fence slot is the one after node 0's submission slot, on the same gfx fence page.
 #define BC250_COMPUTE_RING_INDEX 1u
 #define BC250_COMPUTE_FENCE_SLOT 11u
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// Lab rows Q3 and Q6 (queue-reset.md): the gfx fence slot that the LabGfxHang wait polls. The CPU writes 0 into it
+// first, and nothing writes the value the wait needs.
+#define BC250_GFX_LAB_HANG_SLOT 12u
+#define BC250_GFX_LAB_HANG_VALUE 0x51u
+#endif
 
 // ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node.
 // Its own fence slot on the SDMA fence page (BC250_SDMA_FENCE_SLOTS = 16, bc250_sdma.h): 0/1 are the ring
 // tests', 2/3 are SdmaCopyEscape's and GfxFenceEscape's SDMA arm's - one past what the escapes use.
 #define BC250_PAGING_FENCE_SLOT 4u
 #define BC250_PAGING_MARKER_SLOT 5u // private CPU-reset marker; never the OS completion fence
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// Lab row Q5 (queue-reset.md): the slot that the LabPagingHang poll waits on. The CPU writes 0 into it before the
+// poll and nothing writes the value the poll waits for, so SDMA0 stays at the poll until a reset.
+#define BC250_PAGING_LAB_HANG_SLOT 6u
+#define BC250_PAGING_LAB_HANG_VALUE 0x51u
+#endif
 #define BC250_PAGING_POLL_US 500000ul       // node 1's own watchdog budget, same shape as BC250_SUBMIT_POLL_US
 // OS command-buffer capacity; live-ring reservation further limits each batch.
 #define BC250_GFX_PAGING_BUFFER_BYTES 0x10000ul
@@ -2137,6 +2149,20 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
         // count of skip events would understate it by up to a factor of two, which is exactly the kind of quiet
         // number BD-070 taught us not to publish.
         else InterlockedExchangeAdd(&Gfx->HotSubmitLinesSkipped, (Identity != NULL) ? 2 : 1);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        // Lab rows Q3 and Q6 (queue-reset.md): one WDDM job of node 0 after the LabGfxHang delay waits behind a CP
+        // WAIT_REG_MEM on a fence slot that nothing writes, so its fence never arrives and the OS timeout starts the
+        // recovery. The wait is committed on its own in front of the job; a job that is then refused leaves the
+        // wait on the ring, which stops the next job the same way.
+        if (Identity != NULL && GuardLabTakeEngineHang(0))
+        {
+            u64 hangAddr = bc250_gfx_fence_addr(Adev, BC250_GFX_LAB_HANG_SLOT);
+            int hang = (hangAddr != 0 && bc250_gfx_fence_write(Adev, BC250_GFX_LAB_HANG_SLOT, 0) == 0) ?
+                       bc250_gfx_submit_mem_wait(ring, hangAddr, BC250_GFX_LAB_HANG_VALUE, 0xFFFFFFFFu) : -1;
+            GuardLog("gfx: lab gfx hang: seq %lu waits on gfx fence slot %u for 0x%X, which nothing writes (rows Q3, Q6), "
+                     "result %d", seq, BC250_GFX_LAB_HANG_SLOT, BC250_GFX_LAB_HANG_VALUE, hang);
+        }
+#endif
         // The VMID goes into the IB packet's control word (PACKET3_INDIRECT_BUFFER__VMID, bc250_gfx_emit_ib): the
         // CP fetches the IB, and the job makes every access, through this VMID's page tables.
         if (Gfx->RingVmFlushGate)
@@ -4963,7 +4989,8 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
     u64 fenceAddr, wptrBytes;
     GFX_BOUNDARY_NOTE boundary;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-    u64 labBefore;
+    u64 labBefore, labHangAddr = 0;
+    BOOLEAN labHang = FALSE;
 #endif
     int result;
 
@@ -4991,11 +5018,25 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
     seq = (ULONG)InterlockedIncrement(&gfx->FenceSeq);
     if (seq == 0) seq = (ULONG)InterlockedIncrement(&gfx->FenceSeq);
 
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // Lab row Q5: one paging job that SDMA0 cannot finish. The poll goes before the job's own fence, so the OS fence
+    // of this job never arrives and the OS timeout of node 1 starts the recovery.
+    labHangAddr = bc250_sdma_fence_addr(gfx->PagingDevicePtr, BC250_PAGING_LAB_HANG_SLOT);
+    if (labHangAddr != 0 && GuardLabTakeEngineHang(1))
+    {
+        labHang = TRUE;
+        *(volatile u32*)((char*)gfx->PagingDevicePtr->sdma.fence_mem.cpu + BC250_PAGING_LAB_HANG_SLOT*8u) = 0;
+        KeMemoryBarrier();
+    }
+#endif
     KeAcquireSpinLock(&gfx->Sdma0RingLock, &irql);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     labBefore = (u64)ring->wptr << 2;         // where this submission starts, under the lock, before any padding
 #endif
     count = dwords + bc250_sdma_fence_size(ring, AMDGPU_FENCE_FLAG_INT);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    if (labHang) count += BC250_SDMA_MEM_WAIT_DW;
+#endif
     GfxSdmaBoundaryLocked(Device, ring, count, &boundary);
     result = amdgpu_ring_alloc(ring, count);
     if (result == 0)
@@ -5007,6 +5048,10 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
         KeMemoryBarrier();
         if (!PagingPrivateVisitMixed(PrivateData,PrivateBytes,Start,ByteCount,VirtualAddress,PagingWriteRing,ring))
             result = -1;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        else if (labHang && bc250_sdma_emit_mem_wait(ring, labHangAddr, BC250_PAGING_LAB_HANG_VALUE, 0xFFFFFFFFu) != 0)
+            result = -1;
+#endif
         else result = bc250_sdma_emit_fence(ring, fenceAddr, seq, AMDGPU_FENCE_FLAG_INT);
     }
     if (result != 0)
@@ -5033,6 +5078,9 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
     GfxLogBoundary(&boundary, seq);
     GfxLogPagingSubmit(gfx, dwords, Start, seq);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    if (labHang)
+        GuardLog("gfx: lab paging hang: seq %lu waits on SDMA fence slot %u for 0x%X, which nothing writes (row Q5)",
+                 seq, BC250_PAGING_LAB_HANG_SLOT, BC250_PAGING_LAB_HANG_VALUE);
     // BD-235: one receipt at the first paging submission whose 64-bit byte write pointer crosses bit 31, one at
     // bit 32, with this submission as the pending one. Read after the doorbell: the engine may already be at it.
     // Only paging submissions are measured. Under FullWddm no escape writes SDMA0 (display.c admission, gate

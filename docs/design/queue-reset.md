@@ -207,8 +207,10 @@ other tests do.
 |---|---|---|---|
 | Q1 | 2 | `bc250hang --lab --long` compute spin | stage 1 drains (M938). Stage 2 not reached. Control. |
 | Q2 | 2 | A7 call 10 `test_execute_indirect_multi_dispatch_root_descriptors` | stage 1 fails, stage 2 compute passes, 4101 |
-| Q3 | 0 | a GFX `WAIT_REG_MEM` on a CPU flag (the M939 job) | stage 2 GFX passes (as M944 on Linux), 4101 |
+| Q3 | 0 | a GFX `WAIT_REG_MEM` on a value that nothing writes, the Windows form of the M939 job. Lab flavour: `LabGfxHang` = delay in seconds (Parameters, read at `DriverEntry`, used once). The first WDDM job of node 0 after the delay waits behind the wait on gfx fence slot 12 (`gfx.c` `SubmitIbLocked`) | stage 2 GFX passes (as M944 on Linux), 4101 |
 | Q4 | 0 | 3DMark SystemInfo scan on the candidate | stage 2 GFX after a no-retry CPG fault: not measured anywhere. Records the result. |
+| Q5 | 1 | a paging job that SDMA0 cannot finish: lab flavour, `LabPagingHang` = delay in seconds (Parameters, read at `DriverEntry`, used once). The first paging job after the delay waits with an SDMA `POLL_REGMEM` on SDMA fence slot 6 for a value that nothing writes (`gfx.c` `GfxSubmitPagingAccess`) | `ResetEngine` refuses node 1, `ResetFromTimeout` resets SDMA0 (section 13), 4101 |
+| Q6 | 0 | the Q3 hang with `LabQueueReset` 2: `ResetEngine` runs no stage 2, so the hang goes on to `ResetFromTimeout` | the `ResetFromTimeout` GFX queue reset, 4101 |
 
 ## 9. Code
 

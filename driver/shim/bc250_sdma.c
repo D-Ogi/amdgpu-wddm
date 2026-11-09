@@ -1194,6 +1194,28 @@ int bc250_sdma_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned 
 	return 0;
 }
 
+/* The memory form of the SDMA wait in sdma_v5_0_ring_emit_pipeline_sync(): POLL_REGMEM with MEM_POLL 1, function
+ * "equal", the same retry count 0xfff and interval 4. Upstream passes the ring's own fence address and sequence;
+ * here the caller names both, so that a lab arm can make SDMA0 wait for a value that nobody writes (the paging hang
+ * of docs/design/queue-reset.md row Q5). Writes into a ring the caller has already reserved space in. */
+int bc250_sdma_emit_mem_wait(struct amdgpu_ring *ring, u64 addr, u32 ref, u32 mask)
+{
+	if (ring == NULL || ring->funcs == NULL || ring->ring == NULL ||
+	    ring->funcs->type != AMDGPU_RING_TYPE_SDMA || (addr & 0x3u) != 0 || addr == 0)
+		return BC250_EINVAL;
+	amdgpu_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_POLL_REGMEM) |
+				SDMA_PKT_POLL_REGMEM_HEADER_HDP_FLUSH(0) |
+				SDMA_PKT_POLL_REGMEM_HEADER_FUNC(3) | /* equal */
+				SDMA_PKT_POLL_REGMEM_HEADER_MEM_POLL(1));
+	amdgpu_ring_write(ring, lower_32_bits(addr));
+	amdgpu_ring_write(ring, upper_32_bits(addr));
+	amdgpu_ring_write(ring, ref);
+	amdgpu_ring_write(ring, mask);
+	amdgpu_ring_write(ring, SDMA_PKT_POLL_REGMEM_DW5_RETRY_COUNT(0xfff) |
+				SDMA_PKT_POLL_REGMEM_DW5_INTERVAL(4)); /* retry count, poll interval */
+	return 0;
+}
+
 /* [shim] alloc, emit and commit together, the same shape as bc250_gfx_signal_fence(). */
 int bc250_sdma_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags)
 {

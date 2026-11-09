@@ -731,6 +731,11 @@ BOOLEAN GuardLabPowerDownFault(ULONG Step);
 // Lab flavour only (BD-295 arm): LabCpuRevertFault (REG_DWORD under Parameters, read only in DriverEntry), the bit
 // mask of cpu.h BC250_CPU_LAB_FAULT_*. GuardLabCpuFault (declared in cpu.h) clears one bit and returns TRUE once.
 void GuardLabReadCpuRevertFault(_In_ PDRIVER_OBJECT DriverObject);
+// Lab flavour only (queue-reset.md rows Q3, Q5, Q6): LabGfxHang (node 0) and LabPagingHang (node 1) (REG_DWORD under
+// Parameters, read only in DriverEntry), each a delay of 5 to 600 s. GuardLabTakeEngineHang(Node) returns TRUE once
+// per node, at the first call after its delay. Any IRQL.
+void GuardLabReadEngineHang(_In_ PDRIVER_OBJECT DriverObject);
+BOOLEAN GuardLabTakeEngineHang(ULONG Node);
 ULONGLONG GuardLabCommitPagingRingStart(void);
 extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
 extern int bc250_ring_boundary_pad;                     // shim/bc250_ring.c, 0 only in a lab control run

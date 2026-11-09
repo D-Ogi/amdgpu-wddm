@@ -176,6 +176,11 @@ int bc250_gfx_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned i
 /* alloc + emit + commit. The one call the miniport makes; the doorbell is rung on return. */
 int bc250_gfx_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags);
 
+/* alloc + the memory WAIT_REG_MEM of gfx_v10_0_ring_emit_pipeline_sync() on a caller-named address and value +
+ * commit, no fence. A gfx or compute ring; BC250_EINVAL for another ring or an address that is 0 or not 4-byte
+ * aligned. Lab use only: queue-reset.md rows Q3 and Q6. */
+int bc250_gfx_submit_mem_wait(struct amdgpu_ring *ring, u64 addr, u32 ref, u32 mask);
+
 /*
  * The GTT slots the fence value lands in, one page cut into 8-byte slots so that a 64-bit fence is
  * legal in any of them. Allocated on its own, not by bc250_gfx_setup(): the traced bring-up does
