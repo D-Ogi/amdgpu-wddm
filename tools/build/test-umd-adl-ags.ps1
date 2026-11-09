@@ -55,11 +55,12 @@ $runs = @(
     @('host', 'info', 0), @('host', 'loop 20', 0), @('host', 'dx12 --any-adapter', 0),
     @('none', 'expect 6', 0), @('no-modes', 'expect 5', 0),
     # Self-test of the leak verdict of 'loop' (BD-328): a steady heap leak, a leak every 4th round and a handle leak
-    # must fail as leaks (the line names the resource); three one-time growths of 8 KiB must pass.
+    # must fail as leaks (the line names the resource); four one-time growths of 8 KiB, one at the start of each later
+    # part, raise every floor and must still pass.
     @('shipped', 'loop 100 --selftest-leak 16', 1, 'FAIL resources grew over the rounds: heap'),
     @('shipped', 'loop 100 --selftest-leak 16 --selftest-period 4', 1, 'FAIL resources grew over the rounds: heap'),
     @('shipped', 'loop 100 --selftest-handle-leak', 1, 'FAIL resources grew over the rounds:.* handles'),
-    @('shipped', 'loop 100 --selftest-steps 3 --selftest-step-bytes 8192', 0, 'no sustained growth')
+    @('shipped', 'loop 100 --selftest-steps 4 --selftest-step-bytes 8192', 0, 'no sustained growth')
 )
 if ($systemAdl.Count) {
     Write-Warning "an ADL library is in ${sysDir}: $($systemAdl -join ', '); the case 'none' is skipped"

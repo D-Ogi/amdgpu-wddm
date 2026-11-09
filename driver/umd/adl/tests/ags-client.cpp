@@ -349,18 +349,22 @@ LoopSelfTest g_selftest;
 // A leak is growth that goes on: a block lost every round (or every few rounds) raises the floor of the live bytes in
 // every part of the run. One-time growth raises it once. The samples are cut into kSegments equal parts; the floor of
 // a part is its minimum, so a transient allocation of another thread at the moment of a sample does not count. The
-// verdict is a leak when the floors rise strictly from each part to the next (every part grew), or when the whole
-// growth passes a hard bound (a large leak needs no trend). Detection limit: any steady leak of at least one byte
-// whose period is shorter than one part (rounds / 10 * 9 / kSegments rounds, 18 for 100 rounds) shows in every part.
-// A false leak needs a one-time growth in each of the kSegments - 1 later parts; a loaded host gave two in 100
-// rounds (BD-328, 2026-11-06). The old rule (the last sample minus the sample after round 1, above 4 KiB) failed on
-// one such growth of 4141 bytes.
+// verdict is a leak when the floors rise strictly from each part to the next and every part has at least
+// kGrowthsPerPart rounds that grew (a steady leak grows again and again in each part), or when the whole growth passes
+// a hard bound (a large leak needs no trend). Detection limit: any steady leak of at least one byte whose period is at
+// most a part divided by kGrowthsPerPart (9 rounds for 100 rounds) shows in every part. A false leak needs two
+// growths in each of the kSegments parts and a raised floor in each of the later ones; a loaded host gave at most
+// three one-time growths in 100 rounds (BD-328: 2026-11-06, and 20 runs under 2 x CPU load on 2026-11-09). The
+// floors alone were not enough: three one-time growths of the self-test and one of the host raised all four floors.
+// The old rule (the last sample minus the sample after round 1, above 4 KiB) failed on one growth of 4141 bytes.
 constexpr int kSegments = 5;
+constexpr int kGrowthsPerPart = 2;
 
 struct Trend {
     long long floor[kSegments];
-    long long total;   // last sample - first sample
-    bool rising;       // floors strictly rise through every part
+    int growths[kSegments];  // rounds of the part whose sample is above the sample before
+    long long total;         // last sample - first sample
+    bool rising;             // floors strictly rise through every part, and every part grew kGrowthsPerPart times
 };
 
 Trend Floors(const long long* y, int n)
@@ -373,7 +377,9 @@ Trend Floors(const long long* y, int n)
         long long m = y[b];
         for (int i = b + 1; i < e; i++) m = y[i] < m ? y[i] : m;
         t.floor[k] = m;
+        for (int i = b > 0 ? b : 1; i < e; i++) t.growths[k] += y[i] > y[i - 1];
         if (k > 0 && !(t.floor[k] > t.floor[k - 1])) t.rising = false;
+        if (t.growths[k] < kGrowthsPerPart) t.rising = false;
     }
     return t;
 }
@@ -440,8 +446,9 @@ int RunLoop(const Ags& a, int rounds)
     Say("loop: %d rounds (%d warm-up), %d failed, callback allocations %ld total %ld live\n", rounds, warm, failures,
         g_total, g_live);
     Say("loop: heap busy after round %d %lld, after round %d %lld (%+lld), grew in %d of %d rounds; floors of %d parts"
-        " %lld %lld %lld %lld %lld (%s)\n", warm + 1, heap[0], rounds, heap[n - 1], th.total, grew, n - 1, kSegments,
-        th.floor[0], th.floor[1], th.floor[2], th.floor[3], th.floor[4], th.rising ? "rising" : "not rising");
+        " %lld %lld %lld %lld %lld, growths %d %d %d %d %d (%s)\n", warm + 1, heap[0], rounds, heap[n - 1], th.total,
+        grew, n - 1, kSegments, th.floor[0], th.floor[1], th.floor[2], th.floor[3], th.floor[4], th.growths[0],
+        th.growths[1], th.growths[2], th.growths[3], th.growths[4], th.rising ? "rising" : "not rising");
     Say("loop: handles %lld -> %lld, floors %lld %lld %lld %lld %lld (%s); private bytes %lld -> %lld (%s, not"
         " gated: the allocator keeps freed spans)\n", handles[0], handles[n - 1], tc.floor[0], tc.floor[1],
         tc.floor[2], tc.floor[3], tc.floor[4], tc.rising ? "rising" : "not rising", priv[0], priv[n - 1],
