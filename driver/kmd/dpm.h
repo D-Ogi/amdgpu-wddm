@@ -6,6 +6,7 @@
 // The periodic telemetry block's cadence and its decision (BD-097): BC250_DPM_LOG_MS, BC250_DPM_IDLE_LOG_MS,
 // BC250_DPM_IDLE_LOG_MAX_MS and Bc250DpmTelemetryDue live there, so the host test can drive the whole rule.
 #include "dpm_log_cadence.h"
+#include "dpm_sustain_log.h"        // BD-336: the sustained raise's word and lines
 
 #define BC250_DPM_TICK_MS 25u               // the governor's period; the timer resolution may stretch it
 #define BC250_DPM_VERIFY_MS 1000u           // SMU readback of clock and VID
@@ -37,7 +38,8 @@ typedef struct _BC250_DPM_SNAP {
     // and Gov's counters. The log summary names the rules from these after the ring overwrote the start lines.
     ULONG RateMcPerS, RateFromMc, HighMc, HighMHz, RateSteps, RateLevels, HighSteps, HighHolds;
     // BD-329, driver log only: the sustained raise's hold of this start (0: off) and Gov's counters.
-    ULONG SustainMs, SustainRaises, SustainRefusals;
+    // SustainTargetPermille (BD-336) is the mean busy share that the window must reach (Gov.tune.target_permille).
+    ULONG SustainMs, SustainRaises, SustainRefusals, SustainTargetPermille;
     // 0.7.207, the idle state. IdleMHz is the point in force, 0 when the state is off for this start
     // (bc250_dpm_idle_mhz: DpmIdleMHz 0, a refused setting, or a point the firmware refused).
     ULONG IdleMHz, IdleHoldMs, IdleBusyPermille;
@@ -123,6 +125,9 @@ typedef struct _BC250_DPM_STATE {
     // BD-281: the word of this start's start line for both rules, "on" or why they are off. A string literal, written
     // under Lock by DpmStart before the governor thread exists, read by DpmLogSummary.
     const char* BurstState;
+    // BD-336: the same for the sustained raise (BD-329), "on" or why it is off; DpmLogSummary prints it in every
+    // summary, because the start line goes out of the ring within seconds of the boot.
+    const char* SustainState;
 } BC250_DPM_STATE;
 
 // The submit path (gfx.c SubmitIbLocked, after the IB is committed): the ring went, or stays, busy.

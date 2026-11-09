@@ -832,6 +832,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='dpm-log-cadence';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace)}
   @{n='dpm-log-cadence-no-idle';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace,'-NoIdleCadence');Fails=$true}
   @{n='dpm-log-cadence-60s';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace,'-IdleSixtySeconds');Fails=$true}
+  # BD-336: the summary says whether the sustained raise is on in every read, with a control for each half.
+  @{n='dpm-sustain-log';s='driver\kmd\test\run_dpm_sustain_log.ps1';a=@('-Root',$Workspace)}
+  @{n='dpm-sustain-log-after-choice';s='driver\kmd\test\run_dpm_sustain_log.ps1';a=@('-Root',$Workspace,'-ConfigOnlyAfterChoice');Fails=$true}
+  @{n='dpm-sustain-log-no-off-reason';s='driver\kmd\test\run_dpm_sustain_log.ps1';a=@('-Root',$Workspace,'-NoOffReason');Fails=$true}
   # ADR 0019 stage B4: the WDDMVersion of a start from WddmVersionCap (wddm_level.h), with the catalog's allowed set.
   @{n='wddm-level';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace)}
   @{n='wddm-level-no-clamp';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace,'-NoClamp');Fails=$true}
