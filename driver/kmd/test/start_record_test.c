@@ -486,6 +486,9 @@ static void PspStart(BC250_DEVICE* d) { (void)d; }
 static void GpuMemStart(BC250_DEVICE* d) { (void)d; }
 static void GfxStart(BC250_DEVICE* d) { (void)d; }
 static void IhStart(BC250_DEVICE* d) { (void)d; }
+/* BD-332: the PCI id read of pnp.c, which the extracted Bc250StartDevice calls before WddmStart. The record test
+   needs no device id, so it only has to exist. */
+static void PnpReadIdentity(BC250_DEVICE* d) { (void)d; }
 // WddmStart and GpuStartupInitialize name sub-steps of their own; here one stands in for the phase that failed.
 static PCWSTR wddmSubStep;
 static NTSTATUS WddmStart(BC250_DEVICE* d)

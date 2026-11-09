@@ -53,6 +53,10 @@ typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;
     volatile long RuntimeDisplayChanged,RuntimePostValid;
     struct {BOOLEAN InheritedFixed;} Modeset;
     ULONG Rotation;     // BD-247: the committed path rotation value (D3DKMDT_VIDPN_PRESENT_PATH_ROTATION)
+    // BD-332: the per-IP row this start looked up (gpu_capabilities.h), which the identity query hands on. The stub
+    // only has to give the address; the row's fields are not read here.
+    BOOLEAN GpuCapabilityValid;
+    unsigned long GpuCapability;
 } BC250_DEVICE;
 /* BD-197 step 2: dcn.c's own DcnPlaneFormatsOpen, extracted as DcnPlaneFormatsOpenActual by the generator;
    dcn_flip_test.c holds the same function to the flip path. This wrapper counts the branch's questions. */
@@ -71,8 +75,8 @@ typedef struct {void* pOutputData;ULONG OutputDataSize;void* hKmdProcessHandle;}
 static unsigned identityQueries;
 static void* identityProcess;
 static void* WddmProcessIdentity(void* process){return process;}
-static NTSTATUS AmdIdentityQuery(void* process,void* out,ULONG bytes)
-{identityQueries++;identityProcess=process;CHECK(out!=NULL && bytes==BC250_AMD_IDENTITY_BYTES);return STATUS_SUCCESS;}
+static NTSTATUS AmdIdentityQuery(void* process,const void* capability,void* out,ULONG bytes)
+{(void)capability;identityQueries++;identityProcess=process;CHECK(out!=NULL && bytes==BC250_AMD_IDENTITY_BYTES);return STATUS_SUCCESS;}
 // The adapter's WDDM table, of which the extracted branch reads one start-latched byte: whether this
 // start publishes the DirectFlip handshake. WddmStart computes it from the operator's switch ANDed with
 // every start-latched fact the flip path needs; here it is set directly, which is what lets the test

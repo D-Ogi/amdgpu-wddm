@@ -17,7 +17,9 @@ typedef unsigned long ULONG;
 typedef int32_t NTSTATUS;
 typedef int BOOLEAN;
 typedef void* HANDLE;
-typedef struct {void* Mmio;int FullWddm;volatile long DcnSurfaceSequence;volatile long RetainedPowerPhase;} BC250_DEVICE;
+typedef struct {void* Mmio;int FullWddm;volatile long DcnSurfaceSequence;volatile long RetainedPowerPhase;
+    /* BD-332: the per-IP row this start looked up. The stub only has to give the address; the row is not read here. */
+    BOOLEAN GpuCapabilityValid;unsigned long GpuCapability;} BC250_DEVICE;
 /* WDK 10.0.26100 d3dukmdt.h: HardwareAccess 0x1, NoAdapterSynchronization 0x8. */
 typedef union {ULONG Value;struct {ULONG HardwareAccess:1,Unused:2,NoAdapterSynchronization:1;};} D3DDDI_ESCAPEFLAGS;
 typedef struct {void*pPrivateDriverData;ULONG PrivateDriverDataSize;D3DDDI_ESCAPEFLAGS Flags;HANDLE hKmdProcessHandle;} DXGKARG_ESCAPE;
@@ -52,7 +54,7 @@ static void InteropRequest(BC250_DEVICE*d,BC250_ESCAPE_INTEROP*p,ULONG f){(void)
 static void HwmonRequest(BC250_DEVICE*d,BC250_ESCAPE_HWMON*p,ULONG f){(void)d;(void)p;(void)f;others++;}
 /* The per-process FSR 4 policy (amd_identity.c): a record of the calling process, no register. */
 static void* WddmProcessIdentity(HANDLE p){return p;}
-static void AmdIdentityEscape(void*r,BC250_ESCAPE_PROCESS_POLICY*p){(void)r;(void)p;others++;}
+static void AmdIdentityEscape(void*r,const void*capability,BC250_ESCAPE_PROCESS_POLICY*p){(void)r;(void)capability;(void)p;others++;}
 /* BD-296 part (b): the compositor report (escape 39), software state answered before the gates as well. */
 static BOOLEAN CallerIsCompositor(void){return FALSE;}
 static void WddmDesktopCompositorEscape(BC250_DEVICE*d,BC250_ESCAPE_DESKTOP_COMPOSITOR*p,BOOLEAN c){(void)d;(void)p;(void)c;others++;}

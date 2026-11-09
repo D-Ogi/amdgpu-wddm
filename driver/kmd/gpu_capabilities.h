@@ -13,6 +13,12 @@
 #ifndef BC250_GPU_CAPABILITIES_H
 #define BC250_GPU_CAPABILITIES_H
 
+/* The PCI id as configuration dword 0 holds it: vendor in the low half, device in the high half. The t38/l7 branch
+ * carries the same two macros in asic_ip.h next to its per-IP table; an identical redefinition is legal C11 and the
+ * merge keeps one copy. */
+#define BC250_PCI_VENDOR(id) ((unsigned)(id) & 0xFFFFu)
+#define BC250_PCI_DEVICE(id) (((unsigned)(id) >> 16) & 0xFFFFu)
+
 /* What a part tells AMD's FidelityFX upscaler DLL 4.x about itself. NONE keeps the part's own family and revision:
  * the DLL then selects no FSR 4 provider and uses FSR 3.1.6, as it does when the KMD refuses the query. */
 #define BC250_FSR4_CLAIM_NONE 0u

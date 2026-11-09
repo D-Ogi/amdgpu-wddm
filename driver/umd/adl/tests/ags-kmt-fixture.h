@@ -48,7 +48,9 @@ static LONG WINAPI QueryInfo(Query* q)
     // revision of a process that is ON. AGS must take nothing from it (docs/design/fsr4-identity.md).
     if (!legacy && Bc250AmdIdentityExtent(q->bytes)) {
         ++identity_answers;
-        return Bc250AmdIdentityFill(q->data, q->bytes, 1) ? 0 : (LONG)0xc000000d;
+        BC250_GPU_CAPABILITY capability;
+        if (!Bc250GpuCapabilityFor(0x1002u, 0x13FEu, &capability)) return (LONG)0xc000000d;
+        return Bc250AmdIdentityFill(q->data, q->bytes, 1, &capability) ? 0 : (LONG)0xc000000d;
     }
     if (q->bytes < UMD_CAPS_BYTES) return (LONG)0xc0000023;
     memcpy(q->data, umd_caps_blob, UMD_CAPS_BYTES);

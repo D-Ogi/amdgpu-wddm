@@ -78,6 +78,17 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
 
 static void NoteInterruptResource(_Inout_ BC250_DEVICE* Device);
 
+// The PCI id as configuration dword 0 holds it (vendor low, device high), for the per-IP decisions (gpu_capabilities.h):
+// the queue resets and the capability row of wddm.c (BD-332). A failed read gives 0, which no table row matches, so the
+// device gets no per-IP capability. Before WddmStart, which reads PciId.
+static void PnpReadIdentity(_Inout_ BC250_DEVICE* Device)
+{
+    ULONG pci = 0, bytes = 0;
+    NTSTATUS read = Device->Dxgk.DxgkCbReadDeviceSpace(Device->Dxgk.DeviceHandle, DXGK_WHICHSPACE_CONFIG, &pci, 0,
+                                                       sizeof(pci), &bytes);
+    Device->PciId = NT_SUCCESS(read) && bytes == sizeof(pci) ? pci : 0;
+}
+
 NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_START_INFO DxgkStartInfo,
                           _In_ PDXGKRNL_INTERFACE DxgkInterface, _Out_ PULONG NumberOfVideoPresentSources,
                           _Out_ PULONG NumberOfChildren)
@@ -245,6 +256,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     GpuMemStart(device);    // same rule
     GfxStart(device);       // same rule
     IhStart(device);        // same rule
+    PnpReadIdentity(device);
     // WddmStart and GpuStartupInitialize name their own sub-steps inside this one (GuardStartSubStep).
     GuardStartStep(L"WddmStart");
     status = WddmStart(device);

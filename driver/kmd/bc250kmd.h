@@ -226,6 +226,9 @@ typedef struct _BC250_DEVICE {
     volatile LONG RetainedPowerPhase; // BC250_POWER_* (power_phase.h): ACTIVE, SUSPENDING, SUSPENDED, RESTORING, FAILED
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
+    // The PCI id as configuration dword 0 holds it (vendor low, device high), read once at start (pnp.c) for the per-IP
+    // decisions (gpu_capabilities.h). A failed read gives 0, which no table row matches, so the device gets no row.
+    ULONG PciId;
     PDEVICE_OBJECT PhysicalDeviceObject;
     DXGKRNL_INTERFACE Dxgk;
     DXGK_START_INFO StartInfo;

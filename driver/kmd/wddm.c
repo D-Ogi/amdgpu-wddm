@@ -4629,29 +4629,24 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
              wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_OFF ? "fails every time, as before" :
              wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_IDLE ? "succeeds only on idle engines" :
              "kills hung waves, then succeeds only on idle engines");
-    // The queue resets by IP version (queue_reset_caps.h), keyed by the PCI id as cumode.c reads it: configuration
-    // dword 0, device in the high half, vendor in the low half. A failed read gives 0, so no queue reset runs. The
-    // SDMA firmware version is not known here, so only the measured SDMA entry of the table can give that capability.
-    {
-        ULONG pci = 0, bytes = 0;
-        NTSTATUS read = Device->Dxgk.DxgkCbReadDeviceSpace(Device->Dxgk.DeviceHandle, DXGK_WHICHSPACE_CONFIG, &pci,
-                                                           0, sizeof(pci), &bytes);
-        if (!NT_SUCCESS(read) || bytes != sizeof(pci)) pci = 0;
-        wddm->QueueResetCaps = Bc250QueueResetCaps(pci & 0xFFFFu, pci >> 16, BC250_SDMA_FW_UNKNOWN);
-        GuardLog("wddm: queue resets for PCI %04lX:%04lX: caps 0x%lX (1 compute, 2 gfx, 4 SDMA)", pci & 0xFFFFu,
-                 pci >> 16, wddm->QueueResetCaps);
-        // The per-IP capability row (gpu_capabilities.h): what this part can claim to AMD's FidelityFX upscaler DLL.
-        // The same PCI dword as the table above; a failed read leaves no row, and the identity answer then has no
-        // claim (BD-332).
-        Device->GpuCapabilityValid =
-            Bc250GpuCapabilityFor(pci & 0xFFFFu, pci >> 16, &Device->GpuCapability) ? TRUE : FALSE;
-        GuardLog("wddm: per-IP row %s for PCI %04lX:%04lX (FSR 4 claim %lu, own revision 0x%02lX, dots %s)",
-                 Device->GpuCapabilityValid ? "present" : "absent", pci & 0xFFFFu, pci >> 16,
-                 Device->GpuCapabilityValid ? (unsigned long)Device->GpuCapability.Fsr4Claim : 0ul,
-                 Device->GpuCapabilityValid ? (unsigned long)Device->GpuCapability.RevisionOwn : 0ul,
-                 !Device->GpuCapabilityValid ? "unknown"
-                 : Device->GpuCapability.DotClass == BC250_DOT_SOFTWARE ? "software" : "hardware");
-    }
+    // The queue resets by IP version (queue_reset_caps.h), keyed by the PCI id that pnp.c read at start (0 when the read
+    // failed, so no queue reset runs). The SDMA firmware version is not known here, so only the measured SDMA entry of
+    // the table can give that capability.
+    wddm->QueueResetCaps = Bc250QueueResetCaps(BC250_PCI_VENDOR(Device->PciId), BC250_PCI_DEVICE(Device->PciId),
+                                               BC250_SDMA_FW_UNKNOWN);
+    GuardLog("wddm: queue resets for PCI %04lX:%04lX: caps 0x%lX (1 compute, 2 gfx, 4 SDMA)", Device->PciId & 0xFFFFu,
+             Device->PciId >> 16, wddm->QueueResetCaps);
+    // The per-IP capability row (gpu_capabilities.h): what this part can claim to AMD's FidelityFX upscaler DLL. The
+    // same PCI id as the table above; a failed read leaves no row, and the identity answer then has no claim (BD-332).
+    Device->GpuCapabilityValid =
+        Bc250GpuCapabilityFor(BC250_PCI_VENDOR(Device->PciId), BC250_PCI_DEVICE(Device->PciId), &Device->GpuCapability)
+            ? TRUE : FALSE;
+    GuardLog("wddm: IP row %s %04lX:%04lX claim %lu rev 0x%02lX dots %s",
+             Device->GpuCapabilityValid ? "present" : "absent", Device->PciId & 0xFFFFu, Device->PciId >> 16,
+             Device->GpuCapabilityValid ? (unsigned long)Device->GpuCapability.Fsr4Claim : 0ul,
+             Device->GpuCapabilityValid ? (unsigned long)Device->GpuCapability.RevisionOwn : 0ul,
+             !Device->GpuCapabilityValid ? "unknown"
+             : Device->GpuCapability.DotClass == BC250_DOT_SOFTWARE ? "software" : "hardware");
     KeInitializeDpc(&wddm->PagingSubmitDpc, WddmPagingSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->PagingSubmitTimer);
     KeInitializeDpc(&wddm->PagingDrainDpc, WddmPagingDrainDpcRoutine, Device);
