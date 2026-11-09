@@ -271,6 +271,11 @@ typedef struct _BC250_DEVICE {
 
     // The mode the firmware left. M3 offers exactly this one.
     DXGK_DISPLAY_INFORMATION Post;
+    // BD-341: the start found no firmware display. DxgkCbAcquirePostDisplayOwnership failed or gave a zero width,
+    // height, pitch or address, for example a monitor in standby at power-on or a unit with no monitor. Post is then
+    // all zero, nothing is mapped, no inherited timing exists and the child reports no monitor
+    // (docs/design/wddm-startup.md, "Start without a firmware display"). Set by StartDevice, constant until stop.
+    BOOLEAN PostDisplayAbsent;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;
     BOOLEAN InheritedSignalValid;     // immutable from successful start until stop
     BOOLEAN InheritedTmds;            // validated OTG0 TMDS route; DP operations stay off on this start
@@ -1130,6 +1135,10 @@ void VramEscape(_In_ const BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_ME
 PVOID VramMapCpuRange(_In_ const BC250_DEVICE* Device, PHYSICAL_ADDRESS Physical, SIZE_T Length, ULONG Access);
 ULONG VramMappingProtection(_In_ const BC250_DEVICE* Device, ULONGLONG Physical, SIZE_T Length, ULONG Access);
 BOOLEAN VramFramebufferOffset(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset);
+// The VRAM range the firmware framebuffer occupies: its offset and its byte count (Post.Pitch * Post.Height).
+// BD-341: a start without a firmware display has an empty range at offset 0. FALSE when the offset is unknown or a
+// present display has a zero size; every placement above the framebuffer (wddm.c, connector_buffer.c) uses this.
+BOOLEAN VramFramebufferExtent(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset, _Out_ ULONGLONG* Bytes);
 
 // gart.c
 struct _BC250_ESCAPE_GART;

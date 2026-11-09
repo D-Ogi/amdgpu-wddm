@@ -11,6 +11,7 @@ parts = []
 functions = [
     ('vram.c', 'NTSTATUS VramStart('),
     ('vram.c', 'BOOLEAN VramFramebufferOffset('),
+    ('vram.c', 'BOOLEAN VramFramebufferExtent('),
     ('wddm.c', 'static BOOLEAN WddmMemoryLayout('),
     ('gart.c', 'static int RunSetup('),
     ('paging_window.c', 'int PagingApertureBytesValid('),

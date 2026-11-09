@@ -53,6 +53,7 @@ typedef struct _BC250_DEVICE {
     BOOLEAN DcnPipeConnector;
     ULONG DcnPipeDetPlane1;
     ULONG Rotation;                 /* BD-247: the committed path rotation value */
+    BOOLEAN PostDisplayAbsent;      /* BD-341: the start found no firmware display */
 } BC250_DEVICE;
 #include "connector_surface.h"
 #define TRUE 1
@@ -574,6 +575,20 @@ int main(void)
         }
         init(&d,fb);d.DcnDiverged=FALSE;model.scanned=d.DcnFirmwareAddress;model.pitch=d.DcnFirmwarePitch/4-1;
         CHECK(DcnStop(&d)==STATUS_SUCCESS && modeset_stops==1);
+        // BD-341: a start without a firmware display has no firmware surface and no native shape to put back. The
+        // stop turns the pointer off and unmaps, writes no register and reports success, so that the release can
+        // answer "no display" by itself instead of a failed restore.
+        init(&d,fb);d.PostDisplayAbsent=TRUE;memset(&d.Post,0,sizeof(d.Post));d.DcnFirmwareKnown=0;
+        {
+            unsigned before=model.writes;
+            CHECK(DcnStop(&d)==STATUS_SUCCESS && modeset_stops==0 && model.writes==before && !hubp_writes);
+            CHECK(scanout_unmaps==1 && cursor_stops==1);
+            CHECK(logged("dcnflip: stop: no firmware display to restore"));
+        }
+        // A runtime mode of such a start is this driver's own surface, and its restore still runs.
+        init(&d,fb);d.PostDisplayAbsent=TRUE;d.RuntimeDisplayChanged=1;
+        (void)DcnStop(&d);
+        CHECK(modeset_stops==1 && !logged("dcnflip: stop: no firmware display to restore"));
     }
     // Ordinary restore cannot bypass startup blanking, but a validated crash
     // display is an explicit ownership transfer and must remain available.

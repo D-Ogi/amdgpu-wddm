@@ -86,6 +86,15 @@ static NTSTATUS PowerRestoreDisplay(BC250_DEVICE* Device)
             return STATUS_SUCCESS;
         }
     }
+    // BD-341: a start without a firmware display kept no inherited mode, so there is no geometry to compare and no
+    // timing to validate. A display that the firmware lit while the GPU was in D3 is not adopted here: Post stays zero
+    // for the whole start, as the start contract says (docs/design/wddm-startup.md).
+    if (Device->PostDisplayAbsent) {
+        GuardLog("power: D0 without a firmware display; POST answer 0x%08X %ux%u, nothing to restore",
+                 (ULONG)status, post.Width, post.Height);
+        Device->SourceVisible=FALSE;    // as after every D0: the OS asks for visibility again
+        return STATUS_SUCCESS;
+    }
     if (!NT_SUCCESS(status)) return status;
     // Current inherited-mode implementation: never change allocation geometry
     // underneath retained OS handles. General mode initialization remains separate.

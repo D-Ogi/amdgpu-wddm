@@ -12,6 +12,7 @@
 #include "dpaux.h"
 #include "../shim/bc250_dp_train.h"
 #include "dcn_2_0_1_sh_mask.h"
+#include "regs.generated.h"     // BD-341: the timing generator offsets of the cold pipe line
 #include <ntstrsafe.h>
 
 #define MODESET_SETTING L"EnableDisplayModes"
@@ -163,6 +164,30 @@ static ULONG InheritedScalingDefault(ULONG Support)
     for (scaling = 0; scaling < BC250_SCALING_COUNT; ++scaling)
         if (Support & BC250_SCALING_BIT(scaling)) return scaling;
     return BC250_SCALING_COUNT;
+}
+
+// BD-341: the pipe as the firmware left it when it handed over no display. The same read-only snapshot as an
+// inherited start (Bc250InheritedPipeRead) plus the two timing generators, so that the record of a start without a
+// monitor tells a never-lit pipe from a lit one with no surface. That is the input of a later cold mode set
+// (docs/design/wddm-startup.md, "Start without a firmware display"). Writes nothing.
+void ModesetLogColdPipe(BC250_DEVICE* Device)
+{
+    BC250_INHERITED_PIPE pipe;
+    BC250_DISP_IO io;
+    unsigned long otg0 = 0, otg1 = 0, blank = 0;
+    long status, timing;
+
+    RtlZeroMemory(&pipe, sizeof(pipe));
+    IoOpen(Device, &io, 0);
+    status = Bc250InheritedPipeRead(&io, &pipe);
+    timing = MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_CONTROL, &otg0);
+    if (timing >= 0) timing = MmioDcnRead(Device, BC250_REG_DMU_OTG1_OTG_CONTROL, &otg1);
+    if (timing >= 0) timing = MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL, &blank);
+    GuardLog("display cold: otg0 %08lX otg1 %08lX blank %08lX status %08lX",
+             otg0, otg1, blank, (ULONG)timing);
+    GuardLog("display cold: pipe status %08lX valid %lX hubp %08lX format %08lX surface %08lX top %08lX out %08lX",
+             (ULONG)status, pipe.Valid, pipe.Shape.HubpCntl, pipe.SurfaceConfig, pipe.SurfaceControl,
+             pipe.Shape.MpccTopSel, pipe.MpcOut);
 }
 
 NTSTATUS ModesetValidateInherited(BC250_DEVICE* Device)

@@ -309,7 +309,7 @@ typedef struct {
     LONG RetainedPowerPhase;
     unsigned long long DisplayReservationEnd,RuntimeFramebufferLength;
     LONG RuntimePostValid,RuntimeDisplayChanged;
-    BOOLEAN SourceVisible, DcnWriteEnabled, PostDisplayStopAttempted;
+    BOOLEAN SourceVisible, DcnWriteEnabled, PostDisplayStopAttempted, PostDisplayAbsent;
     LONG StartVisibilityPending;
     NTSTATUS PostDisplayStopStatus;
 } BC250_DEVICE;
@@ -415,9 +415,14 @@ static void Snap(PCWSTR name, PWSTR out, SIZE_T room)
     int i = Find(2, name);
     wcscpy_s(out, room, (i >= 0 && vals[i].type == REG_SZ) ? (PCWSTR)vals[i].data : L"absent");
 }
+// BD-341: how often each display step of the inherited path ran, so that a start without a firmware display can show
+// that it ran none of them.
+static unsigned fbMaps, timingCalls, modesetCalls, audioCalls, coldPipeLogs;
+static void ModesetLogColdPipe(BC250_DEVICE* d) { (void)d; coldPipeLogs++; }
 static NTSTATUS DisplayMapFramebuffer(BC250_DEVICE* d)
 {
     (void)d;
+    fbMaps++;
     if (watchInsideStart) {
         Snap(L"Result", resultInsideStart, RTL_NUMBER_OF(resultInsideStart));
         Snap(L"Step", stepInsideStart, RTL_NUMBER_OF(stepInsideStart));
@@ -437,6 +442,7 @@ static int inheritedGateDetail;
 static NTSTATUS DisplayPrepareInheritedTiming(BC250_DEVICE* d)
 {
     (void)d;
+    timingCalls++;
     if (!NT_SUCCESS(timingStatus)) GuardStartDetail(L"timing 0x%08X post %ux%u otg0 ctl %08X", timingStatus, 800u, 600u, 0u);
     else if (inheritedGateDetail)
         GuardStartDetail(L"inherited source 2720x1481 pitch 10880 target 2720x1481 total 3000x1500 pixel 483326400"
@@ -495,8 +501,8 @@ static NTSTATUS WddmStart(BC250_DEVICE* d)
     if (wddmSubStep) GuardStartSubStep(wddmSubStep);
     return wddmStatus;
 }
-static void ModesetStart(BC250_DEVICE* d) { (void)d; }
-static void HdmiLinkStartAudio(BC250_DEVICE* d, BOOLEAN resume) { (void)d; (void)resume; }
+static void ModesetStart(BC250_DEVICE* d) { (void)d; modesetCalls++; }
+static void HdmiLinkStartAudio(BC250_DEVICE* d, BOOLEAN resume) { (void)d; (void)resume; audioCalls++; }
 static BOOLEAN GfxStartupResources(BC250_DEVICE* d, BOOLEAN live) { (void)d; (void)live; return TRUE; }
 static void HangDetectorStart(BC250_DEVICE* d) { (void)d; }
 static void FanStart(BC250_DEVICE* d) { (void)d; }
@@ -539,6 +545,12 @@ static NTSTATUS AcquirePost(void* h, FAKE_POST* p)
 }
 static NTSTATUS AcquirePostFails(void* h, FAKE_POST* p) { (void)h; memset(p, 0, sizeof(*p)); return STATUS_DEVICE_NOT_READY; }
 static NTSTATUS AcquirePostEmpty(void* h, FAKE_POST* p) { (void)h; memset(p, 0, sizeof(*p)); return STATUS_SUCCESS; }
+// BD-341: partial answers. Each has one zero field of a display that cannot be scanned out, or a failure status with
+// a geometry left in the buffer; none of it may survive into Post.
+static NTSTATUS AcquirePostNoPitch(void* h, FAKE_POST* p) { NTSTATUS s = AcquirePost(h, p); p->Pitch = 0; return s; }
+static NTSTATUS AcquirePostNoAddress(void* h, FAKE_POST* p) { NTSTATUS s = AcquirePost(h, p); p->PhysicAddress.QuadPart = 0; return s; }
+static NTSTATUS AcquirePostNoHeight(void* h, FAKE_POST* p) { NTSTATUS s = AcquirePost(h, p); p->Height = 0; return s; }
+static NTSTATUS AcquirePostFailsFilled(void* h, FAKE_POST* p) { (void)AcquirePost(h, p); return STATUS_UNSUCCESSFUL; }
 
 static BC250_DEVICE dev;
 static FAKE_IF iface;
@@ -562,6 +574,7 @@ static void Reset(void)
     originalCauseAtStop = 0;
     admissionCalls = mmioStops = 0;
     cursorPrepares = cursorStops = cursorBufferSeen = 0;
+    fbMaps = timingCalls = modesetCalls = audioCalls = coldPipeLogs = 0;
     blankStatus[0] = blankStatus[1] = restoreStatus = STATUS_SUCCESS;
     admissionStatus = STATUS_SUCCESS;
     mmioAvailable = hardwareVisible = restoreAttempt = TRUE;
@@ -772,8 +785,6 @@ int main(void)
     {
         struct { const char* what; PCWSTR step; ULONG status; } table[] = {
             {"device information", L"DxgkCbGetDeviceInformation", (ULONG)STATUS_ACCESS_DENIED},
-            {"POST display", L"AcquirePostDisplayOwnership", (ULONG)STATUS_DEVICE_NOT_READY},
-            {"POST display geometry", L"PostDisplayGeometry", (ULONG)STATUS_GRAPHICS_NO_VIDEO_MEMORY},
             {"framebuffer map", L"DisplayMapFramebuffer", (ULONG)STATUS_ACCESS_DENIED},
             {"native SMU owner", L"SmuOwnerStart", (ULONG)STATUS_ACCESS_DENIED},
             {"WDDM start", L"WddmStart", (ULONG)STATUS_DEVICE_NOT_READY},
@@ -784,13 +795,11 @@ int main(void)
         for (i = 0; i < RTL_NUMBER_OF(table); i++) {
             Reset();
             if (i == 0) iface.DxgkCbGetDeviceInformation = GetDeviceInfoFails;
-            if (i == 1) iface.DxgkCbAcquirePostDisplayOwnership = AcquirePostFails;
-            if (i == 2) iface.DxgkCbAcquirePostDisplayOwnership = AcquirePostEmpty;
-            if (i == 3) fbStatus = STATUS_ACCESS_DENIED;
-            if (i == 4) { enableNativeSmu = 1; dev.Mmio = &dev; smuStatus = STATUS_ACCESS_DENIED; }
-            if (i == 5) wddmStatus = STATUS_DEVICE_NOT_READY;
-            if (i == 6) timingStatus = STATUS_UNSUCCESSFUL;
-            if (i == 7) connectorStartStatus = STATUS_DEVICE_NOT_READY;
+            if (i == 1) fbStatus = STATUS_ACCESS_DENIED;
+            if (i == 2) { enableNativeSmu = 1; dev.Mmio = &dev; smuStatus = STATUS_ACCESS_DENIED; }
+            if (i == 3) wddmStatus = STATUS_DEVICE_NOT_READY;
+            if (i == 4) timingStatus = STATUS_UNSUCCESSFUL;
+            if (i == 5) connectorStartStatus = STATUS_DEVICE_NOT_READY;
             CHECK((ULONG)Start() == table[i].status);
             // KeepLog is 0, the release value: the record is written all the same. That is the defect.
             CHECK(RecordIs(L"failed", table[i].step, L"-", table[i].status, StageStartFailed));
@@ -801,6 +810,49 @@ int main(void)
             if (failures) { printf("  (step case: %s)\n", table[i].what); break; }
         }
     }
+    // ---- BD-341: no firmware display is not a failed start ------------------------------------------------
+    // A firmware that found no monitor at POST hands over no display: a failed acquire, or a geometry with a zero in
+    // it. The start completes without any step of the inherited display path: no framebuffer map, no blank of a pipe
+    // that is not lit, no inherited timing, mode list or audio, and no final blank. Post holds zeros, the read-only
+    // cold pipe line is written, the connector still starts, and Windows gets its source and child.
+    {
+        NTSTATUS (*answers[])(void*, FAKE_POST*) = { AcquirePostFails, AcquirePostEmpty, AcquirePostNoPitch,
+                                                     AcquirePostNoAddress, AcquirePostNoHeight, AcquirePostFailsFilled };
+        unsigned i, mmio;
+        for (mmio = 0; mmio < 2; mmio++) {
+            for (i = 0; i < RTL_NUMBER_OF(answers); i++) {
+                unsigned starts;
+                Reset(); iface.DxgkCbAcquirePostDisplayOwnership = answers[i]; mmioAvailable = (BOOLEAN)(mmio != 0);
+                starts = connectorStarts;
+                CHECK(Start() == STATUS_SUCCESS);
+                CHECK(RecordIs(L"started", L"-", L"-", 0, StageStartDone));
+                CHECK(dev.PostDisplayAbsent);
+                CHECK(dev.Post.Width == 0 && dev.Post.Height == 0 && dev.Post.Pitch == 0 &&
+                      dev.Post.PhysicAddress.QuadPart == 0 && dev.Post.ColorFormat == 0 && dev.Post.TargetId == 0);
+                CHECK(fbMaps == 0 && admissionCalls == 0 && blankCalls == 0);
+                CHECK(timingCalls == 0 && modesetCalls == 0 && audioCalls == 0);
+                CHECK(coldPipeLogs == (mmio ? 1u : 0u));
+                CHECK(connectorStarts == starts + 1 && readyCalls == 1 && stops == 0);
+                CHECK(outputSources == 1 && outputChildren == 1 && dev.StartVisibilityPending == 1);
+                CHECK(LoggedTimes("post display: none") == 1 && LoggedTimes("start failed") == 0);
+                if (failures) { printf("  (no-display case %u, mmio %u)\n", i, mmio); break; }
+            }
+        }
+        // A start without a display, after it a start with one: the flag is this start's, not the device's.
+        Reset(); iface.DxgkCbAcquirePostDisplayOwnership = AcquirePostEmpty;
+        CHECK(Start() == STATUS_SUCCESS && dev.PostDisplayAbsent);
+        dev.Started = FALSE; dev.StopDone = TRUE;
+        iface.DxgkCbAcquirePostDisplayOwnership = AcquirePost;
+        CHECK(Start() == STATUS_SUCCESS && !dev.PostDisplayAbsent && dev.Post.Width == 1920);
+    }
+    // A firmware display is unchanged by BD-341: every step of the inherited path runs once, and Post is the answer.
+    Reset();
+    CHECK(Start() == STATUS_SUCCESS);
+    CHECK(!dev.PostDisplayAbsent && dev.Post.Width == 1920 && dev.Post.Height == 1080 && dev.Post.Pitch == 7680 &&
+          dev.Post.PhysicAddress.QuadPart == 0x10000000);
+    CHECK(fbMaps == 1 && admissionCalls == 1 && blankCalls == 2 && coldPipeLogs == 0);
+    CHECK(timingCalls == 1 && modesetCalls == 1 && audioCalls == 1);
+    CHECK(LoggedTimes("post display: none") == 0 && LoggedTimes("post display 1920x1080 pitch 7680") == 1);
     // ---- BD-169: a connector refusal that keeps a display completes the start ---------------------------
     // ConnectorStart programs no output, so its refusal leaves the firmware's own
     // stream on the wire. The case above is the other half: when nothing can be

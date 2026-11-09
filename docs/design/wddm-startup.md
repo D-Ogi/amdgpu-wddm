@@ -37,6 +37,62 @@ sequence automatically. Moving RUN inside StartDevice invalidates the current
 failure-cleanup comment that no RUN has occurred; changing that comment alone is
 not a fix.
 
+## Start without a firmware display
+
+Status: BD-341, 2026-11-09. Stage A is implemented. Stages B and C are not
+implemented.
+
+The firmware lights a display only when it finds a monitor at POST. When it
+finds no monitor, `DxgkCbAcquirePostDisplayOwnership` fails, or it returns a
+geometry with a zero width, height, pitch or address. Before BD-341 the start
+failed with `STATUS_GRAPHICS_NO_VIDEO_MEMORY` (Code 43), and a monitor that
+arrived later never got a picture. This behaviour does not depend on the board.
+
+The start contract is now:
+
+| Item | Firmware display present | No firmware display |
+|---|---|---|
+| `Device->Post` | The answer of Windows. | All zero. Nothing of a partial answer is kept. |
+| `Device->PostDisplayAbsent` | FALSE. | TRUE, for the whole start. |
+| Framebuffer map, boot logo, sample | Done. | No map. The logo and the sample find no framebuffer and log that. |
+| Start blank and final blank | Done on OTG0. | Not done. The driver reads the pipe once and logs it (`display cold:` lines). |
+| Inherited timing, mode list, DP audio | Done. | Not done. `InheritedSignalValid` stays FALSE, and each VidPN path that needs it refuses. |
+| VRAM layout | Above the firmware framebuffer (`VramFramebufferExtent`). | The empty firmware range is at offset 0, the result that Linux `amdgpu_gmc_get_vbios_allocations` gives when no pipe is lit. |
+| Connector | Inherited or programmable route. | No HPD arm and no register write (`connector: start without a firmware display`). |
+| Child reports | As before. | `HpdAwarenessInterruptible`, not connected. |
+| D0 (`PowerRestoreDisplay`) | Compares the new POST answer with `Post`. | Logs the answer. Compares nothing and restores nothing. |
+| Stop (`DcnStop`) | Restores the firmware surface and shape. | Restores nothing, unless a runtime mode was committed. |
+| PnP release | Hands back the firmware or runtime mode. | `STATUS_NOT_SUPPORTED` with zeros, unless a runtime mode is on screen. |
+
+No reader of the POST geometry uses a zero geometry. The readers
+that need a real display are on the inherited path, which this start does not
+run. The other readers (scan line, DirectFlip handshake, flip pitch) refuse a
+zero size or are reached only after a committed VidPN.
+
+What stage A gives: the adapter starts, with no Code 43. GPU compute, the WDDM
+memory manager and the start record work as on a start with a display. What
+stage A does not give: a desktop on a monitor that arrives later. The driver
+has no cold mode set, because it programs only a pipe that the firmware lit.
+Two more stages are necessary:
+
+- Stage B: the cold DCN state. Port the AMD DCN 2.0.1 init sequence
+  (`dcn201_init_hw`, `init_pipes`) and the plane enable and pipe program
+  sequence through `driver/shim`. The `display cold:` lines of stage A are the
+  lab input for that port.
+- Stage C: the connector without an inherited pipe. Open the link context
+  without `InheritedSupport`, arm HPD at the start, and let a monitor arrival
+  publish a sink and indicate the child. `CommitVidPn` then programs the pipe
+  through stage B.
+
+Part 1 of BD-341 (a monitor that is on at the restart, and Windows has no
+monitor) has no proven cause yet. A hotplug worker that disables the link,
+indicates "disconnected" and then fails discovery leaves Windows with no
+monitor. To make this visible after the log ring wraps, the connector keeps the
+first eight child events of a start (relations, status answers, indications,
+worker ends) and the latest one. `WddmSummary` and the connector stop print
+them again with the counts and the live HPD0 sense
+(`connector: child summary` and `connector: child kept` lines).
+
 ## Successful-start confirmation
 
 The remaining full-table monitor handshake is specified in

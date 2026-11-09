@@ -1956,6 +1956,13 @@ NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
     // The hardware pointer first: the next owner of the firmware surface reads no cursor of ours (dcn_cursor.c).
     DcnCursorStop(Device);
     DcnUnmapScanout(Device);
+    // BD-341: a start without a firmware display captured no firmware surface and changed no native shape, so there
+    // is nothing of the firmware's to put back. A runtime mode, when one was committed, still goes through the
+    // restore below: that surface is ours and valid.
+    if (Device->PostDisplayAbsent && !changed) {
+        GuardLog("dcnflip: stop: no firmware display to restore");
+        return STATUS_SUCCESS;
+    }
     // BD-090: the inputs of the restore below, so that a failed display handoff names its branch and the reason:
     // the runtime branch needs a valid RuntimePost on the reserved buffer, the firmware branch the captured surface.
     // hubp is HUBP0_DCHUBP_CNTL before the restore: HUBP_BLANK_EN (bit 0) set means this driver's blank, which the

@@ -118,15 +118,11 @@ static NTSTATUS ZeroVram(_In_ const BC250_DEVICE* Device, ULONGLONG Offset, SIZE
 // The window must be inside VRAM, above the firmware framebuffer, and the carve-out identified (vram.c).
 static NTSTATUS CheckWindow(_In_ const BC250_DEVICE* Device)
 {
-    ULONGLONG fb = (ULONGLONG)Device->Post.PhysicAddress.QuadPart, fbOffset;
+    ULONGLONG fbOffset;
 
     if (!Device->VramEnabled || Device->VramLength < 2 * BC250_GART_WINDOW) return STATUS_DEVICE_NOT_READY;
-    if (fb >= (ULONGLONG)Device->VramPhysical.QuadPart && fb < (ULONGLONG)Device->VramPhysical.QuadPart + Device->VramLength)
-        fbOffset = fb - (ULONGLONG)Device->VramPhysical.QuadPart;
-    else if (Device->Bar0Length != 0 && fb >= (ULONGLONG)Device->Bar0Physical.QuadPart &&
-             fb < (ULONGLONG)Device->Bar0Physical.QuadPart + Device->Bar0Length)
-        fbOffset = fb - (ULONGLONG)Device->Bar0Physical.QuadPart;
-    else return STATUS_DEVICE_CONFIGURATION_ERROR;
+    // vram.c's answer, also for a start without a firmware display (BD-341: offset 0, FramebufferLength 0).
+    if (!VramFramebufferOffset(Device, &fbOffset)) return STATUS_DEVICE_CONFIGURATION_ERROR;
     if (fbOffset + Device->FramebufferLength > Device->VramLength - BC250_GART_WINDOW) return STATUS_CONFLICTING_ADDRESSES;
     return STATUS_SUCCESS;
 }

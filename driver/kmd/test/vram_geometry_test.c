@@ -38,6 +38,7 @@ typedef struct {
  PHYSICAL_ADDRESS VramPhysical,Bar0Physical;ULONGLONG VramLength,VramMcBase,Bar0Length,DisplayReservationEnd;
  BOOLEAN LargePageLayout;
  struct {ULONG Pitch,Height;PHYSICAL_ADDRESS PhysicAddress;} Post;
+ BOOLEAN PostDisplayAbsent;          /* BD-341 */
  volatile LONG64 UmaActiveBytes;
 } BC250_DEVICE;
 struct fake_adev {void *dev,*backend;struct {ULONGLONG mc_vram_size,real_vram_size,vram_start;} gmc;};
@@ -167,6 +168,31 @@ int main(void){
   CHECK(!off && !len && !table && !tablelen);
   d.Post.PhysicAddress=d.VramPhysical;CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
   d.Post.Height=0;CHECK(!WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+  // BD-341: a start without a firmware display. The framebuffer range is empty at offset 0, in both views and
+  // without BAR0, so the segment starts at the bottom of VRAM, or above the display reservation when there is one.
+  // A present display with a zero size stays refused (above).
+  {
+   ULONGLONG fbOffset=1,fbBytes=1;
+   int bar;
+   for(bar=0;bar<2;bar++){
+    init(&d,gib);missing_bar=bar;CHECK(VramStart(&d)==0 && d.VramEnabled);
+    d.PostDisplayAbsent=TRUE;memset(&d.Post,0,sizeof(d.Post));
+    CHECK(VramFramebufferOffset(&d,&fbOffset) && fbOffset==0);
+    CHECK(VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbOffset==0 && fbBytes==0);
+    CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+    CHECK(off==0 && len>0 && table==off+len && table+tablelen<=d.VramLength-BC250_VRAM_TOP_RESERVED);
+    d.DisplayReservationEnd=4096ull*2160*4;
+    CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+    CHECK(off==((4096ull*2160*4+65535ull)&~65535ull) && len>0 && table==off+len);
+   }
+   // The flag clear with the same zero geometry is a present display of no size: refused, as before BD-341.
+   init(&d,gib);CHECK(VramStart(&d)==0);memset(&d.Post,0,sizeof(d.Post));
+   CHECK(!VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbBytes==0);
+   CHECK(!WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+   // A present display keeps its offset and size.
+   init(&d,gib);CHECK(VramStart(&d)==0);
+   CHECK(VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbOffset==0 && fbBytes==7680ull*1200);
+  }
  }
  printf("VRAM geometry: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

@@ -62,6 +62,7 @@ typedef struct _BC250_DEVICE {
     DXGK_DISPLAY_INFORMATION Post;
     DXGK_DISPLAY_INFORMATION RuntimePost;
     volatile long RuntimePostValid, RuntimeDisplayChanged;
+    BOOLEAN PostDisplayAbsent;      /* BD-341: the start found no firmware display */
     void* RuntimeFramebuffer;
     size_t RuntimeFramebufferLength;
     LARGE_INTEGER RuntimeFramebufferPhysical;
@@ -260,6 +261,18 @@ int main(void)
     CHECK(logged("stop: display handoff restore 00000000 hdmi 00000000 connector 00000000 result 00000000"));
     CHECK(logged("post-display release: handed back firmware 1920x1200 pitch 7680 address 470000000 target 2424833"));
     CHECK(keptThrough==logCount);
+    /* BD-341: a start without a firmware display hands back no display, not a display of 0x0. The teardown is the
+       same; only the answer differs, and dxgkrnl then calls StopDevice, which finds the teardown done. */
+    init(&d,&w,&o);d.PostDisplayAbsent=TRUE;memset(&d.Post,0,sizeof(d.Post));memset(&info,0xcc,sizeof(info));
+    CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_NOT_SUPPORTED);
+    CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress.QuadPart==0);
+    CHECK(model.restores==1 && model.unmaps==1 && d.StopDone && d.PostDisplayStopStatus==STATUS_SUCCESS);
+    CHECK(logged("post-display release: handed back nothing, status C00000BB: the start had no firmware display"));
+    /* With a runtime mode on the reserved buffer, that mode is what the next owner gets. */
+    init(&d,&w,&o);d.PostDisplayAbsent=TRUE;memset(&d.Post,0,sizeof(d.Post));handoffModel.action=BC250_LINK_HANDOFF_ENABLED;
+    d.RuntimeFramebufferPhysical.QuadPart=0x490000000ll;
+    CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
+    CHECK(info.Pitch==7680 && info.PhysicAddress.QuadPart==0x490000000ll);
     init(&d,&w,&o);model.result=STATUS_IO_TIMEOUT;memset(&info,0xcc,sizeof(info));
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_IO_TIMEOUT);
     CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress.QuadPart==0);
@@ -285,9 +298,9 @@ int main(void)
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,D3DDDI_ID_UNINITIALIZED,&info)==STATUS_SUCCESS);
     CHECK(model.joined==0 && model.restores==1 && model.vidmm==0 && info.TargetId==BC250_CHILD_UID);
     CHECK(retireSignals==0);   /* no WDDM state, no held submission to wake */
-    /* One per stop that tears down (five here), and the post-display stop goes through the ordinary one. The BD-090
+    /* One per stop that tears down (seven here), and the post-display stop goes through the ordinary one. The BD-090
        repeat after a failed release returns before the episode: a stop that does nothing keeps no file. */
-    CHECK(stopEpisodes==5);
+    CHECK(stopEpisodes==7);
     /* Stop of a different PDO must not tear down this image's current owner or
      * publish its framebuffer. This also checks the absent-owner/null cases. */
     {unsigned i;for(i=0;i<4;i++){
@@ -300,7 +313,7 @@ int main(void)
         CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(i==3?NULL:&d,BC250_CHILD_UID,&info)==STATUS_DEVICE_NOT_READY);
         CHECK(model.smu==0 && model.joined==0 && model.restores==0 && model.unmaps==0 && model.objects==0 && model.hdmiStops==0);
         CHECK(d.Started && !d.StopDone && d.StartVisibilityPending==1 && d.Smu.BoardAllowed && d.Hwmon.BoardAllowed && postIs(0xab));
-        CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress.QuadPart==0 && stopEpisodes==5);
+        CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress.QuadPart==0 && stopEpisodes==7);
         CHECK(handoffModel.calls==0 && logCount==0);   /* not this driver's device: no link touched, no line */
     }}
     // A final failed encoder restore cannot be reported as a successful handoff.

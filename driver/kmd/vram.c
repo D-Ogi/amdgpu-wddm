@@ -155,9 +155,22 @@ BOOLEAN VramFramebufferOffset(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* 
     ULONGLONG vram = (ULONGLONG)Device->VramPhysical.QuadPart, bar = (ULONGLONG)Device->Bar0Physical.QuadPart;
 
     *Offset = 0;
+    // BD-341: no firmware display, no firmware framebuffer. Its empty range sits at the bottom of VRAM, which is
+    // what amdgpu_gmc_get_vbios_allocations reserves when no pipe was lit (gmc_v10_0_get_vbios_fb_size gives the
+    // HUBP0 viewport height times the pitch, 0 with no surface), so everything placed above it starts at offset 0.
+    if (Device->PostDisplayAbsent) return TRUE;
     if (fb >= vram && fb < vram + Device->VramLength) { *Offset = fb - vram; return TRUE; }
     if (Device->Bar0Length != 0 && fb >= bar && fb < bar + Device->Bar0Length) { *Offset = fb - bar; return TRUE; }
     return FALSE;
+}
+
+BOOLEAN VramFramebufferExtent(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset, _Out_ ULONGLONG* Bytes)
+{
+    *Bytes = 0;
+    if (!VramFramebufferOffset(Device, Offset)) return FALSE;
+    if (Device->PostDisplayAbsent) return TRUE;
+    *Bytes = (ULONGLONG)Device->Post.Pitch * Device->Post.Height;
+    return *Bytes != 0;
 }
 
 // Match the existing POST mapping at physical-page granularity. Equal VRAM

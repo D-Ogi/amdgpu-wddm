@@ -54,6 +54,7 @@ struct _BC250_DEVICE;
 void ModesetInitialize(struct _BC250_DEVICE* Device);                   // AddDevice
 NTSTATUS ModesetPrepareInherited(struct _BC250_DEVICE* Device, const D3DKMDT_VIDEO_SIGNAL_INFO* Signal);
 NTSTATUS ModesetValidateInherited(struct _BC250_DEVICE* Device);        // before D0 display access or VSync re-arm
+void ModesetLogColdPipe(struct _BC250_DEVICE* Device);                  // BD-341: StartDevice without a firmware display
 void ModesetStart(struct _BC250_DEVICE* Device);                        // StartDevice, after the inherited timing
 // CommitVidPn of a source mode Width x Height with a VidPN scaling (enum bc250_scaling; IDENTITY for the native
 // size). Returns STATUS_GRAPHICS_INVALID_VIDEO_PRESENT_SOURCE_MODE for a size or scaling this start does not offer.

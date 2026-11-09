@@ -15,7 +15,11 @@ typedef struct {
     PHYSICAL_ADDRESS VramPhysical,RuntimeFramebufferPhysical;
     unsigned DcnWriteEnabled,VramEnabled,VramWriteEnabled;
     struct {uint32_t Pitch,Height;} Post;
+    unsigned PostDisplayAbsent;     /* BD-341 */
 } BC250_DEVICE;
+typedef int BOOLEAN;
+#define TRUE 1
+#define FALSE 0
 #define MAXULONGLONG UINT64_MAX
 #define MAXLONGLONG INT64_MAX
 #define BC250_VRAM_TOP_RESERVED (32ull<<20)
@@ -33,7 +37,9 @@ static PHYSICAL_ADDRESS mappedPhysical;
 static unsigned char dummy;
 #define CHECK(x) do{++checks;if(!(x)){++failures;printf("line%u: %s\n",__LINE__,#x);}}while(0)
 static int WddmFullTableSelected(void){return (int)full;}
-static int VramFramebufferOffset(BC250_DEVICE*d,ULONGLONG*out){(void)d;*out=postOffset;return (int)offsetOk;}
+/* vram.c: offset 0 for an absent firmware display (vram_geometry_test.c runs the production body). */
+static int VramFramebufferOffset(const BC250_DEVICE*d,ULONGLONG*out)
+{*out=d->PostDisplayAbsent?0:postOffset;return d->PostDisplayAbsent?1:(int)offsetOk;}
 static void* VramMapCpuRange(BC250_DEVICE*d,PHYSICAL_ADDRESS p,SIZE_T n,unsigned protection)
 {(void)d;++maps;CHECK(protection==PAGE_READWRITE);mappedPhysical=p;mappedBytes=n;return mapFails?NULL:&dummy;}
 static void MmUnmapIoSpace(void*p,SIZE_T n){++unmaps;CHECK(p==&dummy&&n==mappedBytes);}
@@ -94,6 +100,14 @@ int main(void)
     CHECK(ConnectorBufferPrepare(&d)==STATUS_INVALID_PARAMETER);CHECK(!maps);empty(&d);
     init(&d);d.VramPhysical.QuadPart=MAXLONGLONG-(LONGLONG)start+1;
     CHECK(ConnectorBufferPrepare(&d)==STATUS_INVALID_PARAMETER);CHECK(!maps);empty(&d);
+    /* BD-341: no firmware display. The buffer starts at the bottom of VRAM; the reservation ends right after it. */
+    init(&d);d.PostDisplayAbsent=1;d.Post.Pitch=0;d.Post.Height=0;
+    CHECK(ConnectorBufferPrepare(&d)==STATUS_SUCCESS);CHECK(maps==1&&zeros==1);
+    CHECK(mappedPhysical.QuadPart==d.VramPhysical.QuadPart&&d.DisplayReservationEnd==CONNECTOR_BUFFER_BYTES);
+    ConnectorBufferRelease(&d);
+    init(&d);d.PostDisplayAbsent=1;d.Post.Pitch=0;d.Post.Height=0;
+    d.VramLength=CONNECTOR_BUFFER_BYTES+BC250_VRAM_TOP_RESERVED-1;
+    CHECK(ConnectorBufferPrepare(&d)==STATUS_NO_MEMORY);CHECK(!maps);empty(&d);
     init(&d);d.VramLength=UINT64_MAX;postOffset=(ULONGLONG)MAXLONGLONG;
     CHECK(ConnectorBufferPrepare(&d)==STATUS_INVALID_PARAMETER);CHECK(!maps);empty(&d);
     printf("connector buffer: %u checks, %u failures\n",checks,failures);return failures?1:0;
