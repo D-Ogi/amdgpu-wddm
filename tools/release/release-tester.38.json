@@ -932,7 +932,8 @@
           "pass": "^DIRECTIONAL-FORMAT PASS 23 checks 0 failures\\r?$"
         }
       ],
-      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
+      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68",
+      "recipe_commit": "b8922a8d234cc0770ca8a500b363bd6ededefb85"
     },
     {
       "id": "dxvk-x86-rel",
@@ -1031,7 +1032,8 @@
           "pass": "^DIRECTIONAL-FORMAT PASS 23 checks 0 failures\\r?$"
         }
       ],
-      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
+      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68",
+      "recipe_commit": "b8922a8d234cc0770ca8a500b363bd6ededefb85"
     },
     {
       "id": "dxvk-x64-lab",
@@ -1131,7 +1133,8 @@
           "pass": "^DIRECTIONAL-FORMAT PASS 23 checks 0 failures\\r?$"
         }
       ],
-      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
+      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68",
+      "recipe_commit": "b8922a8d234cc0770ca8a500b363bd6ededefb85"
     },
     {
       "id": "dxvk-x86-lab",
@@ -1231,7 +1234,8 @@
           "pass": "^DIRECTIONAL-FORMAT PASS 23 checks 0 failures\\r?$"
         }
       ],
-      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
+      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68",
+      "recipe_commit": "b8922a8d234cc0770ca8a500b363bd6ededefb85"
     },
     {
       "id": "d3d11-x64-rel",

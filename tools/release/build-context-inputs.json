@@ -2281,6 +2281,46 @@
         }
       ],
       "workspace_from_kits": false
+    },
+    {
+      "recipe": "tools/build/build-dxvk.ps1",
+      "commit": "b8922a8d234cc0770ca8a500b363bd6ededefb85",
+      "bindings": {
+        "tools/build/build-dxvk.ps1": "88c231cc330edbc66e5e245f928f07d14967a747",
+        "tools/build": "016beb62ac24d83721299be88a6b518f8e98ed79",
+        "tools/quality": "6259f001a77d6826b4244314d4573076ecd85c14",
+        "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/scratch/py",
+          "required": true,
+          "parameter": "PythonPath"
+        },
+        {
+          "path": "{root}/scratch/glslang/bin",
+          "required": true,
+          "parameter": "Glslang"
+        }
+      ],
+      "workspace_from_kits": false
     }
   ]
 }
