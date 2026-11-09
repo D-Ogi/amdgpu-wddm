@@ -866,7 +866,12 @@ if ($kmdRows.Count) {
 # or unlanded work that serves it refuses the package, and tester.37 found that only after its 78-minute set build.
 $ledgerTool = Join-Path $Root 'scratch\ledger\ledger.py'
 if (Test-Path -LiteralPath $ledgerTool) {
-    $ledgerOut = @(& $python $ledgerTool --root $Root check --release $planData.version 2>&1 | ForEach-Object { [string]$_ })
+    # BD-326 (b): before -Register the row pins of this release are only in its manifest. The gate reads them from a
+    # pins file under <Out>, so a fork landing in a commit that this release builds counts.
+    $ledgerPins = Join-Path $Out 'ledger-manifest-pins.json'
+    $pinsOut = @(& $python $buildReleaseSet ledger-pins --manifest $Manifest --write $ledgerPins 2>&1 | ForEach-Object { [string]$_ })
+    if ($LASTEXITCODE -ne 0) { $pinsOut | ForEach-Object { "  $_" }; throw "build_release_set.py ledger-pins failed with exit $LASTEXITCODE" }
+    $ledgerOut = @(& $python $ledgerTool --root $Root check --release $planData.version --release-sources $ledgerPins 2>&1 | ForEach-Object { [string]$_ })
     $ledgerExit = $LASTEXITCODE
     # -LedgerDebtReason turns a refusal into DEBT (BD-334, LedgerGate.psm1); -Package checks the ledger again.
     Import-Module (Join-Path $PSScriptRoot 'LedgerGate.psm1') -Force

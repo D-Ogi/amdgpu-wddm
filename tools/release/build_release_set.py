@@ -278,10 +278,13 @@ def previous_builds(out):
     return {b["id"]: b for b in report.get("builds", []) if b.get("status") == "ok" and b.get("outputs")}
 
 
-def recipe_checkout(root, table, name):
-    """The first checkout of repository `name` that exists under root, or None."""
-    for c in (table.get(name) or {}).get("checkouts") or []:
-        path = Path(root) / c
+def recipe_checkout(root, table, name, repo):
+    """The first checkout of repository `name` that exists, or None. A checkout is a path under root, or "{repo}" for
+    the repository of the tree that runs this tool (BD-326: the release manifests name amdgpu-wddm so, and a join of
+    "{repo}" to root found nothing, so every row whose recipe commit moved was built again)."""
+    if name not in table:
+        return None
+    for path in provenance.Repositories(table, root, repo).checkouts(name):
         if path.exists():
             return path
     return None
@@ -557,7 +560,7 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
                     foreign[rid] = rebase_entry(entry, was, Path(keep_from).resolve())
                 except ValueError:
                     pass                                         # a path outside that -Out stays as it is
-    recipe_tree = recipe_checkout(root, table, recipe_repo)
+    recipe_tree = recipe_checkout(root, table, recipe_repo, repo)
     reusable = {}
 
     def stands_for(entry, rid, imported=False):
@@ -1404,6 +1407,20 @@ def register(rows_doc, sources_path, root, repo, version, configs_out):
 
 # ---------------------------------------------------------------------------------------------------------------
 
+def ledger_pins(manifest):
+    """BD-326 (b): the row pins of a release manifest in the shape of release-sources.json "files" (built_from with repo,
+    commit and row; no hashes), for `ledger.py check --release-sources`. Before -Register the pins of the release that
+    is being built are only in its manifest, so without them the ledger gate refuses every fork landing in a commit
+    that this release builds. The document is not a release-sources.json for a package."""
+    files = []
+    for r in manifest["rows"]:
+        for o in r.get("outputs") or []:
+            files.append({"path": o["path"], "component": o.get("component", r.get("component")),
+                          "flavour": r["flavour"], "built_from": {"repo": r["repo"], "commit": r["commit"], "row": r["id"]}})
+    return {"note": f"row pins of the {manifest['version']} manifest for ledger.py --release-sources; no hashes",
+            "files": files}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1446,7 +1463,15 @@ def main():
     reg.add_argument("--repo", required=True)
     reg.add_argument("--configs-out", required=True)
     reg.add_argument("--receipt", required=True)
+    lp = sub.add_parser("ledger-pins")
+    lp.add_argument("--manifest", required=True)
+    lp.add_argument("--write", required=True)
     args = parser.parse_args()
+    if args.command == "ledger-pins":
+        doc = ledger_pins(load_json(args.manifest))
+        write_json(args.write, doc)
+        print(f"ledger pins: {len(doc['files'])} files -> {args.write}")
+        return 0
     if args.command == "register":
         rows_doc = load_json(args.rows)
         data, receipts, errors = register(rows_doc, args.sources, args.root, args.repo, rows_doc["version"],

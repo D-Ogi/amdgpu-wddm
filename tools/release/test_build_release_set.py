@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -257,6 +258,48 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
                   for r in plan["recipes"]}
         result = build_release_set.run_gates(plan, params, allow_unpushed)
         return result, {g["name"]: g for g in result["gates"]}
+
+    def test_the_recipe_checkout_expands_repo(self):
+        # BD-326 (a): the release manifests name the recipe repository with the checkout "{repo}". recipe_checkout()
+        # joined it to root, found nothing, and every row whose recipe commit moved was built again.
+        ws = self.ws
+        table = {"recipes": {"url": str(ws.remote), "checkouts": ["{repo}"]}}
+        found = build_release_set.recipe_checkout(ws.root / "elsewhere", table, "recipes", ws.repo)
+        self.assertEqual(found, ws.repo)
+        c1 = ws.head
+        c2 = ws.commit("a change outside the recipe directory")
+        self.assertIsNone(build_release_set.recipe_difference(found, c1, c2, "sub/stub.ps1"))
+        # Negative controls: a path under root still resolves, a missing one or an unknown repository does not, and
+        # without a checkout the row keeps the old reason.
+        self.assertEqual(build_release_set.recipe_checkout(ws.root, {"recipes": {"checkouts": ["recipes"]}},
+                                                           "recipes", ws.root / "nothing"), ws.repo)
+        self.assertIsNone(build_release_set.recipe_checkout(ws.root, {"recipes": {"checkouts": ["missing"]}},
+                                                            "recipes", ws.repo))
+        self.assertIsNone(build_release_set.recipe_checkout(ws.root, table, "other", ws.repo))
+        self.assertEqual(build_release_set.recipe_difference(None, c1, c2, "sub/stub.ps1"),
+                         "no checkout of the recipe repository")
+
+    def test_the_ledger_gate_reads_the_manifest_pins(self):
+        # BD-326 (b): before -Register the row pins are only in the manifest; the plan-mode ledger gate gets them.
+        manifest = self.ws.manifest([self.ws.row("a", sleep=0), self.ws.row("b", sleep=0)])
+        doc = build_release_set.ledger_pins(manifest)
+        self.assertEqual(len(doc["files"]), 2)
+        outputs = [(r, o) for r in manifest["rows"] for o in r.get("outputs") or []]
+        self.assertEqual(len(doc["files"]), len(outputs))
+        for f, (r, o) in zip(doc["files"], outputs):
+            self.assertEqual(f["path"], o["path"])
+            self.assertEqual(f["flavour"], r["flavour"])
+            self.assertEqual(f["built_from"], {"repo": r["repo"], "commit": r["commit"], "row": r["id"]})
+            self.assertNotIn("sha256", f)
+        # The set script writes the file with this verb and gives exactly that file to the ledger check.
+        src = (HERE / "build-release-set.ps1").read_text(encoding="utf-8")
+        self.assertRegex(src, r"\$buildReleaseSet ledger-pins --manifest \$Manifest --write \$ledgerPins")
+        self.assertRegex(src, r"\$ledgerTool --root \$Root check --release \$planData\.version --release-sources \$ledgerPins")
+        out = Path(self.tmp) / "pins.json"
+        done = subprocess.run([sys.executable, str(HERE / "build_release_set.py"), "ledger-pins", "--manifest",
+                               str(self.ws.write(manifest)), "--write", str(out)], capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(json.loads(out.read_text(encoding="utf-8")), doc)
 
     def test_the_example_manifest_is_valid(self):
         manifest = build_release_set.load_json(HERE / "release-tester.32.json")
