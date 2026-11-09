@@ -23,6 +23,7 @@ import stat
 import struct
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -44,11 +45,39 @@ def sha(data):
     return hashlib.sha256(data).hexdigest().upper()
 
 
+SHARING_VIOLATION = 32
+DIR_NOT_EMPTY = 145
+REMOVE_WAIT_S = 60.0
+
+
 def remove_tree(path):
-    """shutil.rmtree that also removes the read-only object files git writes on Windows."""
+    """shutil.rmtree that also removes the read-only object files git writes on Windows. A killed worker can hold a
+    file open, or write one more file into a folder, for a short time after the kill (longer on a loaded host). So a
+    sharing violation (WinError 32) and a folder that is not empty yet (WinError 145) are retried until REMOVE_WAIT_S
+    has passed; then the last error is raised."""
+    deadline = time.monotonic() + REMOVE_WAIT_S
+
     def writable_again(func, target, _):
-        os.chmod(target, stat.S_IWRITE)
-        func(target)
+        while True:
+            try:
+                if os.path.lexists(target):
+                    os.chmod(target, stat.S_IWRITE)
+                if func is os.rmdir:
+                    for name in os.listdir(target):
+                        child = os.path.join(target, name)
+                        if os.path.isdir(child) and not os.path.islink(child):
+                            shutil.rmtree(child, onexc=writable_again)
+                        else:
+                            writable_again(os.unlink, child, None)
+                func(target)
+                return
+            except FileNotFoundError:
+                return
+            except OSError as e:
+                retry = getattr(e, "winerror", None) in (SHARING_VIOLATION, DIR_NOT_EMPTY)
+                if not retry or time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.5)
     shutil.rmtree(path, onexc=writable_again)
 
 
