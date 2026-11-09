@@ -5,7 +5,7 @@
 #include "dcn_plane.h"
 #include "../contract/bc250_nv12_layout.h"
 #include "../shim/bc250_scaler_filter.h"
-#include <stdint.h>
+#include <stddef.h>
 #include <string.h>
 
 // The boundary names the filter without the shim header (dcn_overlay_input.h). Translate each name explicitly
@@ -50,9 +50,11 @@ typedef struct OVERLAY_ARGS {
     unsigned long long McBase, VramPhysical, VramLength;
 } OVERLAY_ARGS;
 
+_Static_assert(sizeof(size_t) == sizeof(void*), "Overlaps compares addresses as size_t");
 static int Overlaps(const void* A, size_t ABytes, const void* B, size_t BBytes)
 {
-    uintptr_t a = (uintptr_t)A, b = (uintptr_t)B;
+    // size_t holds an address on every target of this file (x64 KMD, x64 host test); the KMD has no stdint.h.
+    size_t a = (size_t)A, b = (size_t)B;
     return a < b + BBytes && b < a + ABytes;
 }
 
@@ -64,11 +66,13 @@ static unsigned OverlayPrepare(const OVERLAY_ARGS* Args,
     BC250_MPC_REQUEST mpc = {0};
     unsigned result = BC250_OVERLAY_ARGUMENT, pipes = 0, layers = 0;
     const BC250_DCN_CAPS* caps;
+    if (!Plan) return result;
     // The plan is written while the inputs are read: they must not share storage.
-    if (!Plan || !in.Plane || !in.Timing || Overlaps(Plan,sizeof(*Plan),in.Plane,2u * sizeof(*in.Plane)) ||
+    if (!in.Plane || !in.Timing ||
+        Overlaps(Plan,sizeof(*Plan),in.Plane,2u * sizeof(*in.Plane)) ||
         Overlaps(Plan,sizeof(*Plan),in.Timing,sizeof(*in.Timing)) ||
         (in.Caps && Overlaps(Plan,sizeof(*Plan),in.Caps,sizeof(*in.Caps)))) {
-        if (Plan) memset(Plan,0,sizeof(*Plan));
+        memset(Plan,0,sizeof(*Plan));
         return result;
     }
     memset(Plan,0,sizeof(*Plan));
@@ -161,11 +165,7 @@ unsigned Bc250OverlayPrepare(const BC250_OVERLAY_REQUEST* Request,
         if (Plan) memset(Plan,0,sizeof(*Plan));
         return BC250_OVERLAY_ARGUMENT;
     }
-    // The scalar fields are copied here; the plan must not overlap the request at all.
-    if (Plan && Overlaps(Plan,sizeof(*Plan),Request,sizeof(*Request))) {
-        memset(Plan,0,sizeof(*Plan));
-        return BC250_OVERLAY_ARGUMENT;
-    }
+    // The scalar fields are copied here; OverlayPrepare refuses a plan over the planes or the timing.
     args.Count = Request->Count; args.SourceId = Request->SourceId;
     args.PostCompositionChanged = Request->PostCompositionChanged; args.Caps = Request->Caps;
     args.Timing = &Request->Timing; args.Plane = Request->Plane;
@@ -178,8 +178,7 @@ unsigned Bc250OverlayDescribe(const BC250_OVERLAY_DESCRIPTION* Description,
     BC250_OVERLAY_PLAN* Plan)
 {
     OVERLAY_ARGS args = {0};
-    if (!Description || !Timing || !Caps ||
-        (Plan && Overlaps(Plan,sizeof(*Plan),Description,sizeof(*Description)))) {
+    if (!Description || !Timing || !Caps) {
         if (Plan) memset(Plan,0,sizeof(*Plan));
         return BC250_OVERLAY_ARGUMENT;
     }
