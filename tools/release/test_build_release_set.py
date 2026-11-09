@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -257,6 +258,97 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
                   for r in plan["recipes"]}
         result = build_release_set.run_gates(plan, params, allow_unpushed)
         return result, {g["name"]: g for g in result["gates"]}
+
+    def test_the_recipe_checkout_expands_repo(self):
+        # BD-326 (a): the release manifests name the recipe repository with the checkout "{repo}". recipe_checkout()
+        # joined it to root, found nothing, and every row whose recipe commit moved was built again.
+        ws = self.ws
+        table = {"recipes": {"url": str(ws.remote), "checkouts": ["{repo}"]}}
+        found = build_release_set.recipe_checkout(ws.root / "elsewhere", table, "recipes", ws.repo)
+        self.assertEqual(found, ws.repo)
+        c1 = ws.head
+        c2 = ws.commit("a change outside the recipe directory")
+        self.assertIsNone(build_release_set.recipe_difference(found, c1, c2, "sub/stub.ps1"))
+        # Negative controls: a path under root still resolves, a missing one or an unknown repository does not, and
+        # without a checkout the row keeps the old reason.
+        self.assertEqual(build_release_set.recipe_checkout(ws.root, {"recipes": {"checkouts": ["recipes"]}},
+                                                           "recipes", ws.root / "nothing"), ws.repo)
+        self.assertIsNone(build_release_set.recipe_checkout(ws.root, {"recipes": {"checkouts": ["missing"]}},
+                                                            "recipes", ws.repo))
+        self.assertIsNone(build_release_set.recipe_checkout(ws.root, table, "other", ws.repo))
+        self.assertEqual(build_release_set.recipe_difference(None, c1, c2, "sub/stub.ps1"),
+                         "no checkout of the recipe repository")
+
+    def test_the_ledger_gate_reads_the_manifest_pins(self):
+        # BD-326 (b): before -Register the row pins are only in the manifest; the plan-mode ledger gate gets them.
+        manifest = self.ws.manifest([self.ws.row("a", sleep=0), self.ws.row("b", sleep=0)])
+        doc = build_release_set.ledger_pins(manifest)
+        self.assertEqual(len(doc["files"]), 2)
+        outputs = [(r, o) for r in manifest["rows"] for o in r.get("outputs") or []]
+        self.assertEqual(len(doc["files"]), len(outputs))
+        for f, (r, o) in zip(doc["files"], outputs):
+            self.assertEqual(f["path"], o["path"])
+            self.assertEqual(f["flavour"], r["flavour"])
+            self.assertEqual(f["built_from"], {"repo": r["repo"], "commit": r["commit"], "row": r["id"]})
+            self.assertNotIn("sha256", f)
+        # Review finding 1: ledger.py reads the submodule gitlink pins from "repositories"; and a row's inputs go into
+        # built_from as make_rows() writes them at -Register.
+        self.assertEqual(doc["repositories"], manifest["repositories"])
+        inputs = {"engine": {"repo": "recipes", "commit": self.ws.head, "paths": ["sub"]}}
+        with_inputs = build_release_set.ledger_pins(self.ws.manifest([self.ws.row("c", sleep=0, inputs=inputs)]))
+        self.assertEqual(with_inputs["files"][0]["built_from"]["inputs"], inputs)
+        # The set script writes the file with this verb and gives exactly that file to the ledger check.
+        src = (HERE / "build-release-set.ps1").read_text(encoding="utf-8")
+        self.assertRegex(src, r"\$buildReleaseSet ledger-pins --manifest \$Manifest --write \$ledgerPins")
+        self.assertRegex(src, r"\$ledgerTool --root \$Root check --release \$planData\.version --release-sources \$ledgerPins")
+        out = Path(self.tmp) / "pins.json"
+        done = subprocess.run([sys.executable, str(HERE / "build_release_set.py"), "ledger-pins", "--manifest",
+                               str(self.ws.write(manifest)), "--write", str(out)], capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(json.loads(out.read_text(encoding="utf-8")), doc)
+
+    def test_a_moved_recipe_commit_with_the_same_recipe_directory_keeps_the_row(self):
+        # BD-326 (a), review: make_plan through the "{repo}" checkout. Row a reads its recipe from sub/; the recipe
+        # commit moves over a change outside sub/, so a row that the selection leaves out keeps its earlier build.
+        ws = self.ws
+        (ws.repo / "sub").mkdir()
+        (ws.repo / "sub" / "stub.ps1").write_bytes(STUB)
+        c1 = ws.commit("the recipe in sub", name="sub/README.txt")
+        c2 = ws.commit("a change outside the recipe directory")
+        c3 = ws.commit("# a change of the recipe directory\n", name="sub/note.txt")
+        context = build_context.capture_context(ws.root, HERE.parents[1], environ={}, executables={},
+                                                discover_vs=False)
+        # The recipe checkout is "{repo}", the tree that runs the tool: here the fixture's recipe repository.
+        ws.plan = lambda m, **kw: build_release_set.make_plan(ws.write(m), ws.root, ws.repo, ws.out, ws.work,
+                                                             reuse_context=context, **kw)
+
+        def manifest(recipe_commit):
+            m = ws.manifest([ws.row("a", commit=c1, recipe="sub/stub.ps1", recipe_commit=recipe_commit),
+                             ws.row("b")])
+            m["repositories"]["recipes"]["checkouts"] = ["{repo}"]
+            return m
+        self.seed_success(manifest(c1))
+        plan, errors = ws.plan(manifest(c2), only=["b"])
+        self.assertEqual(errors, [])
+        self.assertEqual([b["id"] for b in plan["builds"]], ["b"])
+        kept = next(k for k in plan["kept"] if k["id"] == "a")
+        self.assertEqual(kept["definition"]["recipe_commit"], c1)
+        self.assertEqual(kept["definition"]["recipe_equivalent"], {"manifest": c2, "built": c1, "paths": ["sub"]})
+        # Negative control: a change inside sub/ between the two recipe commits keeps nothing.
+        plan, errors = ws.plan(manifest(c3), only=["b"])
+        self.assertFalse(plan and any(k["id"] == "a" for k in plan["kept"]), errors)
+
+    def test_a_null_repository_entry_is_refused_before_the_recipe_checkout(self):
+        # BD-326 (a), review: recipe_checkout() reads the table without a guard; check_manifest() refuses a null entry
+        # and a null or empty "checkouts" first, and make_plan() stops on those errors.
+        for table in ({"recipes": None}, {"recipes": {"url": "u", "checkouts": None}},
+                      {"recipes": {"url": "u", "checkouts": []}}):
+            m = self.ws.manifest([self.ws.row("a")])
+            m["repositories"] = table
+            self.assertNotEqual(build_release_set.check_manifest(m), [], table)
+            plan, errors = self.ws.plan(m)
+            self.assertIsNone(plan)
+            self.assertNotEqual(errors, [])
 
     def test_the_example_manifest_is_valid(self):
         manifest = build_release_set.load_json(HERE / "release-tester.32.json")

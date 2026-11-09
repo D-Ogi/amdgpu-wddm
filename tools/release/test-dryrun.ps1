@@ -27,6 +27,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
 . (Join-Path $PSScriptRoot 'installer\driver-package.ps1')
 . (Join-Path $PSScriptRoot 'installer\firmware-package.ps1')   # Test-DriverStoreFirmware (71b3e6bc); dot-sourcing does no I/O
+. (Join-Path $PSScriptRoot 'firmware-preflight.ps1')           # Get-FirmwarePreflight (BD-325); no I/O
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
@@ -350,7 +351,11 @@ if (Test-DriverStoreFirmware $m.firmware) {
 } else {
     Check ($r.text -match 'C:\\BC250 itself is not changed') 'firmware step leaves C:\BC250 itself alone'
 }
-Check ($r.text -match '\[ok\s*\]\s+GPU firmware\s+download from linux-firmware [0-9a-f]{40}: git\.kernel\.org, gitlab\.com reachable') 'preflight: both firmware download hosts reachable'
+# BD-325: the installer is [ok] with one host, so the test is too. The URLs of both hosts are checked below; a host
+# that did not answer at that second is a warning about the network of this computer, not a fault of the package.
+$fwPre = Get-FirmwarePreflight $r.text (Get-FirmwareHosts $m.firmware)
+Check ($null -ne $fwPre) 'preflight: the GPU firmware line is [ok] (at least one download host reachable)'
+Get-FirmwarePreflightWarning $fwPre
 Check ($r.text -match 'would: get the 9 GPU firmware files from linux-firmware [0-9a-f]{40} into ') 'phase 2 shows the firmware download'
 foreach ($f in @($m.firmware.files)) {
     $u1 = [regex]::Escape("https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/$($f.path)?id=$($m.firmware.commit)")
