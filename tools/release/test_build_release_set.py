@@ -170,7 +170,7 @@ class Workspace:
                 "recipe_commit": recipe_commit or self.head,
                 "repositories": {"recipes": {"url": str(self.remote), "checkouts": ["recipes"],
                                              "base": self.base_commit}},
-                "rows": rows}
+                "rows": rows, "containment": []}
 
     def write(self, manifest):
         self.manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
