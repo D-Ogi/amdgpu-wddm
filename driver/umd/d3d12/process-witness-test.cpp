@@ -227,6 +227,10 @@ void test_handler() {
     // Disarmed: a fault writes nothing (the handler is also unregistered).
     CHECK(detail::fault_handler(&info) == EXCEPTION_CONTINUE_SEARCH);
     CHECK(count_fault_lines() == 9);
+    // A second disarm is a no-op: the last device destroy and a later DllMain may both reach it.
+    amdgpu_wddm_witness::disarm();
+    CHECK(!detail::recording().load());
+    CHECK(detail::handler_handle().load() == nullptr);
 }
 
 } // namespace

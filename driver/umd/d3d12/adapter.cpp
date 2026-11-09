@@ -294,15 +294,15 @@ void APIENTRY destroy_device(D3D12DDI_HDEVICE h) {
 // already, one of them may hold the log, and a line is not worth a hang at exit. A game that exits that way leaves
 // its numbers in the periodic line instead (device-engine.cpp, kPsoSummaryPeriodMs).
 //
-// The fault witness is removed on every detach (BD-332): its handler is code of this image, and an exception after
-// the unload must not reach it. RemoveVectoredExceptionHandler does not block, so this is allowed at termination.
+// The fault witness is removed on a FreeLibrary (BD-332): its handler is code of this image, and an exception after
+// the unload must not reach it. At process termination (reserved not null) nothing is done, as for the summary
+// above: the other threads are already gone, the image stays mapped until the process is, and an exception handler
+// of a process that is exiting has no report to make.
 extern "C" BOOL WINAPI DllMain(HINSTANCE,DWORD reason,LPVOID reserved) {
-    if(reason==DLL_PROCESS_DETACH){
+    if(reason==DLL_PROCESS_DETACH && !reserved){
         amdgpu_wddm_witness::disarm();
-        if(!reserved){
-            const unsigned written=engine_ddi::pso_detach_summary();
-            if(written)trace("DllMain-pso-summary",written);
-        }
+        const unsigned written=engine_ddi::pso_detach_summary();
+        if(written)trace("DllMain-pso-summary",written);
     }
     return TRUE;
 }
