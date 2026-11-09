@@ -1054,6 +1054,46 @@
       "workspace_from_kits": false
     },
     {
+      "recipe": "tools/build/build-umd-d3d12.ps1",
+      "commit": "d5aff7e8b1ec7851ca6cc5932f29718354274ec2",
+      "bindings": {
+        "tools/build/build-umd-d3d12.ps1": "4cefc2024aae53772355f8939ae4420122fcb9d8",
+        "tools/build": "af4d22f296f4ac8ea8865da7b7d303fda9bbe8f0",
+        "tools/quality": "b62b88c17631dfcba8102bc108153f168c7a0287",
+        "tools/release/installer": "efa98d90159ca8071078f069e2a27df495efd696",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/toolchain/nuget/microsoft.windows.wdk.x64/c/Include/10.0.26100.0/um",
+          "required": true,
+          "parameter": "DdiInclude"
+        },
+        {
+          "path": "{root}/toolchain/nuget/microsoft.direct3d.d3d12.1.619.6/build/native/include",
+          "required": true,
+          "parameter": "ApiInclude"
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "commit": "091ef3c31349f7a2b8c1d343694a1e0f27b2cf6f",
       "bindings": {
