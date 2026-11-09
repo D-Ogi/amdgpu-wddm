@@ -38,25 +38,32 @@ void prepare_log() {
     SetEnvironmentVariableA("AMDGPU_WDDM_LOG", g_log_variable);
 }
 
+// The log's text. A Win32 reader, not the CRT: the sink holds the file with FILE_APPEND_DATA, and the CRT's
+// fopen refuses that share mode on the same file in the same process (measured 2026-11-09, EACCES).
+std::size_t read_log(char* out, std::size_t size) {
+    if (!size) return 0;
+    out[0] = '\0';
+    HANDLE h = CreateFileA(g_log_name, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    DWORD n = 0;
+    ReadFile(h, out, static_cast<DWORD>(size - 1), &n, nullptr);
+    CloseHandle(h);
+    out[n] = '\0';
+    return n;
+}
+
 int count_fault_lines() {
-    FILE* const f = std::fopen(g_log_name, "rb");
-    if (!f) return -1;
     char text[8192];
-    const std::size_t n = std::fread(text, 1, sizeof(text) - 1, f);
-    std::fclose(f);
-    text[n] = '\0';
+    read_log(text, sizeof(text));
     int count = 0;
     for (const char* p = text; (p = std::strstr(p, "fault witness: code")) != nullptr; ++p) ++count;
     return count;
 }
 
 bool log_contains(const char* needle) {
-    FILE* const f = std::fopen(g_log_name, "rb");
-    if (!f) return false;
     char text[8192];
-    const std::size_t n = std::fread(text, 1, sizeof(text) - 1, f);
-    std::fclose(f);
-    text[n] = '\0';
+    read_log(text, sizeof(text));
     return std::strstr(text, needle) != nullptr;
 }
 
