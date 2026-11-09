@@ -210,9 +210,6 @@ HRESULT ensure_caps(Adapter& adapter, AdapterCapsOwner** out) noexcept {
 }
 HRESULT get_adapter_caps(Adapter& adapter,const D3D12DDIARG_GETCAPS* request) noexcept {
     if(!request || !request->pData)return E_INVALIDARG;
-    AdapterCapsOwner* owner{};
-    HRESULT hr=ensure_caps(adapter,&owner);
-    if(FAILED(hr))return hr;
     // GetCaps is adapter-scoped. Before the first CreateDevice records the negotiated build (adopt_ddi_version), the
     // answers use the newest layout the adapter offers (kDdiMax); the runtimes ask only 1074 there. The feature
     // types (1006, 1012 and the later ones) come after CreateDevice and get the answers of the negotiated build: tier
@@ -220,6 +217,13 @@ HRESULT get_adapter_caps(Adapter& adapter,const D3D12DDIARG_GETCAPS* request) no
     // 0093 changes no 0092 payload, and a runtime asks 1079 only after it negotiated 0093.
     const UINT adopted=adapter.ddi_version.load(std::memory_order_acquire);
     const uint32_t build=adopted?(adopted>>16)&0xFFFFu:kDdiMax;
+    // A type that does not read the engine is a constant of this shell: it is answered without the engine query,
+    // so the latched failure of that query (ensure_caps) is returned only for the types that depend on it (BD-331).
+    if(!engine_ddi::caps_type_reads_engine(static_cast<UINT>(request->Type)))
+        return engine_ddi::build_caps(nullptr,build,request);
+    AdapterCapsOwner* owner{};
+    HRESULT hr=ensure_caps(adapter,&owner);
+    if(FAILED(hr))return hr;
     return engine_ddi::build_caps(owner->caps,build,request);
 }
 HRESULT adapter_render_pass_supported(Adapter& adapter,bool* supported) noexcept {
