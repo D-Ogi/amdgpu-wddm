@@ -2,6 +2,7 @@
  * KMD's compiler; the same script reads wddm.c for the properties that the host cannot compile. */
 #include <stdio.h>
 #include "power_loss.h"
+#include "power_phase.h"
 
 static unsigned checks, failures;
 #define CHECK(x) do { checks++; if (!(x)) { failures++; printf("FAIL %u: %s\n", __LINE__, #x); } } while (0)
@@ -31,6 +32,16 @@ int main(void)
     CHECK(Bc250PowerWitnessOfDevice(0x13FF1002u) == BC250_POWER_WITNESS_NONE);   /* not in asic_ip.h */
     CHECK(Bc250PowerWitnessOfDevice(0x13FE1022u) == BC250_POWER_WITNESS_NONE);   /* another vendor */
     CHECK(Bc250PowerWitnessOfDevice(0u) == BC250_POWER_WITNESS_NONE);            /* a failed configuration read */
+
+    /* pnp.c: the display repair after a failed way down, never after an unsaved one (its engines are down). */
+    {
+        volatile long phase=BC250_POWER_FAILED;
+        CHECK(Bc250PowerDownRepairsDisplay(phase));
+        phase=BC250_POWER_SUSPENDING;
+        CHECK(Bc250PowerDownRepairsDisplay(phase));
+        phase=BC250_POWER_SUSPENDED_UNSAVED;
+        CHECK(!Bc250PowerDownRepairsDisplay(phase));
+    }
 
     /* The verdict: only 0 is a power loss, only the pattern is power kept, everything else is no proof. */
     CHECK(Bc250PowerWitnessVerdict(1, 1, 0u) == BC250_POWER_WITNESS_LOST);

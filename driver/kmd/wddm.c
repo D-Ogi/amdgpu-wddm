@@ -4768,16 +4768,15 @@ static ULONG WddmPowerBusyLocked(const BC250_WDDM* Wddm)
     return busy;
 }
 
-// The second half of both pauses, with Lock held and Stopping set: no timer and no DPC of this file runs after it.
-// Releases Lock. Device->Wddm, Objects, aperture, capture owners and all fence values stay.
+// The second half of both pauses, with Lock held, Stopping and RetainedPowerPause set and VSyncArmed clear (the callers
+// write the flags of the transition, so that it reads in one function): no timer and no DPC of this file runs after it.
+// Releases Lock. Device->Wddm, Objects, aperture, capture state and all fence values stay.
 static void WddmRetainedPauseTail(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* wddm, KIRQL irql)
 {
-    wddm->RetainedPowerPause=TRUE;
     wddm->PrimaryNeedsRestore=TRUE;
     // M15.14: the plane's format registers may change with its address. Unknown (NONE) makes the next flip
     // write the format, whatever it is, and keeps the CPU blit off the plane until then (dcn.c).
     if (Device->DcnPlaneFormats) Device->DcnPlaneFormat=BC250_PLANE_FORMAT_NONE;
-    wddm->VSyncArmed=FALSE;
     KeCancelTimer(&wddm->VSyncTimer);
     KeCancelTimer(&wddm->SubmitTimer);
     KeCancelTimer(&wddm->PagingSubmitTimer);
@@ -4839,6 +4838,8 @@ NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device)
         KeReleaseSpinLock(&wddm->Lock,irql);
         return status;
     }
+    wddm->RetainedPowerPause=TRUE;
+    wddm->VSyncArmed=FALSE;
     WddmRetainedPauseTail(Device,wddm,irql);
     return STATUS_SUCCESS;
 }
@@ -4868,6 +4869,8 @@ void WddmPauseForPowerLoss(_Inout_ BC250_DEVICE* Device)
     }
     wddm->Stopping=TRUE;
     if (Device->DcnVsyncArmed) vsync=DcnVsyncEnable(Device,FALSE);
+    wddm->RetainedPowerPause=TRUE;
+    wddm->VSyncArmed=FALSE;
     WddmRetainedPauseTail(Device,wddm,irql);
     GuardLog("wddm: forced pause for power loss: busy 0x%04lX, lost seq node 0 %lu, node 2 %lu, vsync off 0x%08X",
              wddm->PowerLostWork,wddm->PowerLostSeq[BC250_WDDM_NODE_3D],wddm->PowerLostSeq[BC250_WDDM_NODE_COMPUTE],
@@ -4888,7 +4891,7 @@ NTSTATUS WddmResumeRetained(_Inout_ BC250_DEVICE* Device)
     if (!wddm) return STATUS_DEVICE_NOT_READY;
     // BD-188 D-2: after a forced pause the jobs that were on the rings went with the power. The rings restarted
     // empty, so those jobs keep the normal readiness answer false until the adapter reset after D0 retires them
-    // (docs/design/power-loss.md section 7); only the restored engines are checked then.
+    // (docs/design/power-loss.md section 5); only the restored engines are checked then.
     lost=wddm->PowerLostWork;
     if (Device->SourceVisible || !Device->DcnBlanked ||
         (lost==0 && (!GfxSubmitReady(Device) || !GfxPagingSubmitReady(Device))) ||
@@ -9234,7 +9237,7 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         if (onRing) { hungFence = head->Fence; vmid = head->Vmid; }
         // BD-188 D-2: a head job that was on the ring when the power went (WddmPauseForPowerLoss). The restored engine
         // holds no wave and no queue state of it, so neither stage can recover it: refused, and the adapter reset
-        // that dxgkrnl calls next retires it (docs/design/power-loss.md section 7).
+        // that dxgkrnl calls next retires it (docs/design/power-loss.md section 6).
         if (onRing) headSeq = head->Seq;
         lostSeq = wddm->PowerLostSeq[node];
         powerLost = Bc250HangPowerLost(onRing, headSeq, lostSeq);

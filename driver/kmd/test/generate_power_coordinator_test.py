@@ -4,7 +4,7 @@ p=argparse.ArgumentParser();p.add_argument('--source',type=Path,required=True);p
 # BD-188 negative controls: the pre-fix behaviour, one per requirement.
 p.add_argument('--old-display-gate',action='store_true',help='a failed display step returns before the engines are saved')
 p.add_argument('--old-post-gate',action='store_true',help='a refused POST ownership at D0 keeps the engines suspended')
-# BD-188 D-2 negative controls (docs/design/power-loss.md section 8).
+# BD-188 D-2 negative controls (docs/design/power-loss.md section 7).
 p.add_argument('--forced-d1',action='store_true',help='the forced way down also for D1 without a sleep action')
 p.add_argument('--witness-ignored',action='store_true',help='the restore after an unsaved way down ignores the witness')
 p.add_argument('--failed-restore-active',action='store_true',help='a failed restore ends in ACTIVE')

@@ -5342,8 +5342,9 @@ NTSTATUS GfxPowerWitnessRead(_In_ BC250_DEVICE* Device, ULONG Id, _Out_ ULONG* V
 }
 
 // The witness proved a power loss: the engines are at their power-on state, whatever the way down left in software.
-// The halt verdict becomes "suspended"; a Failed that only the retained halt set goes, and so does
-// GpuStopUnconfirmed, which nothing else clears outside a start (the chip that it distrusted lost its state). A
+// The halt verdict becomes "suspended"; a Failed that only the retained halt set goes. GpuStopUnconfirmed, which
+// nothing else clears outside a start, goes only when IhPowerLost (which runs first) found interrupt admission
+// closed (IhQuiet): the witness proves the chip state, not that the OS stopped calling the ISR. A
 // fence that a ring still owes can never come: the restore starts every ring empty. Jobs in flight stay in flight
 // for the adapter reset after D0 (PowerLostWork). No fence and no sequence changes here.
 void GfxPowerLost(_Inout_ BC250_DEVICE* Device)
@@ -5373,14 +5374,16 @@ void GfxPowerLost(_Inout_ BC250_DEVICE* Device)
         inFlight=gfx->SubmitInFlight!=0 || gfx->PagingSubmitInFlight!=0 || gfx->ComputeInFlight!=0;
         gfx->PowerLostWork=inFlight;
     }
-    Device->GpuStopUnconfirmed=FALSE;
+    if (Device->IhQuiet) Device->GpuStopUnconfirmed=FALSE;
     ExReleaseFastMutex(&Device->GartLock);
     ExReleasePushLockExclusive(&Device->GfxPagingLock);
     KeLeaveCriticalRegion();
     // Before: suspended, failed (and whether the halt set it), stop unconfirmed, the rings that owed a fence. After:
-    // suspended, not failed when the halt set it, confirmed, nothing owed; the jobs in flight stay.
-    GuardLog("gfx: power lost: was suspended %u failed %u (halt %u) unconfirmed %u owed 0x%lX, in flight %u",
-             (ULONG)suspended,(ULONG)failed,(ULONG)haltFailed,(ULONG)unconfirmed,owes,(ULONG)inFlight);
+    // suspended, not failed when the halt set it, unconfirmed only with open IH admission, nothing owed; the jobs in
+    // flight stay.
+    GuardLog("gfx: power lost: was suspended %u failed %u (halt %u) unconfirmed %u->%u owed 0x%lX, in flight %u",
+             (ULONG)suspended,(ULONG)failed,(ULONG)haltFailed,(ULONG)unconfirmed,(ULONG)Device->GpuStopUnconfirmed,owes,
+             (ULONG)inFlight);
 }
 
 // WddmResumeRetained after a forced pause: GfxSubmitReady and GfxPagingSubmitReady without their "nothing in flight"

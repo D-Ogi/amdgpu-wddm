@@ -36,15 +36,19 @@ The steps keep their order. Each step that fails is recorded, and the next step 
 | 1 WDDM | `WddmPauseForPowerLoss`: the pause of `WddmSuspendRetained` (timers and DPCs off, `Stopping`, `RetainedPowerPause`), with every pending record kept. It records the busy mask in `PowerLostWork` and, for nodes 0 and 2, the newest ring sequence in `PowerLostSeq`. It completes nothing, frees nothing and moves no fence |
 | 2 IH | Runs as before |
 | 3 GFX | Runs as before. A refused stop sets `Failed`, `GpuStopUnconfirmed` and now `PowerHaltFailed` |
-| 4 PSP | Runs as before. Its own precondition refuses it when the GFX is not suspended or the stop is unconfirmed |
+| 4 PSP | Runs as before. Its own precondition refuses it when the GFX is not suspended or the stop is unconfirmed. Without memory for the PSP report, this step fails and the other steps still run |
 | 5 GART | Runs as before. Its own precondition refuses it in the same cases |
 
 power.c calls functions. It sets no flag of another block.
 
+The call returns a failure, so `pnp.c` would put the committed display shape back at once, as after a failed way down.
+After an unsaved way down it does not (`Bc250PowerDownRepairsDisplay`, `power_phase.h`): the engines are down, and a display
+writer would act on a suspended device. The D0 restores the display.
+
 ## 4. The witness
 
 The last act of every way down whose power goes, saved or unsaved, writes `BC250_POWER_WITNESS_PATTERN` into the
-witness register and reads it back. Only a read-back that matches arms the witness. At D0, before the SMU owner and
+witness register and reads it back. Only a read-back that matches arms the witness. At D0, before the SMU starts and
 before any restore step, the driver reads the register once:
 
 | Read | Verdict |
@@ -82,8 +86,11 @@ Checked with `git grep` on 2026-11-09 (lane l7, base 9632e4a6f plus the l7 chang
 2. Power kept or no proof: FAILED, as before. Nothing restores over a chip that can still hold state.
 3. Power lost: each block takes the software state of a successful retained suspend, through its own function, and
    logs what it changed: `IhPowerLost`, `GfxPowerLost`, `PspPowerLost`, `GartPowerLost`. `GfxPowerLost` clears
-   `GpuStopUnconfirmed`: the only place outside a start that clears it, and only with the witness. It clears `Failed`
-   only when the retained stop set it (`PowerHaltFailed`). A fence that a ring owes is dropped: every ring starts
+   `GpuStopUnconfirmed`: the only place outside a start that clears it, and only with the witness. The witness proves the
+   chip state, but not that the OS stopped calling the ISR. `IhPowerLost` therefore calls the IH quiet only when interrupt
+   admission is closed, and `GfxPowerLost` clears `GpuStopUnconfirmed` only when the IH is quiet. With open admission the
+   restore refuses, and the D0 is FAILED. `GfxPowerLost` clears `Failed` only when the retained stop set it
+   (`PowerHaltFailed`). A fence that a ring owes is dropped: every ring starts
    empty. Jobs in flight stay in flight (`Gfx->PowerLostWork`).
 4. The normal restore runs, with the normal failure rule: a failed restore step is FAILED.
 5. `WddmResumeRetained` accepts the work that the forced pause recorded in place of "idle"
@@ -113,6 +120,8 @@ The lost jobs never complete: their ring contents went with the power. dxgkrnl t
 - A failed restore stays FAILED.
 - No proof (other value, refused read, not armed, no witness row): FAILED.
 - D1 without a sleep action: FAILED at the first step.
+- No memory for the PSP report: step 4 fails. At a hibernate the other steps run and the D0 after a power loss
+  restores. At D1 without a sleep action the way down is FAILED.
 
 `retained_power_test.c` (generated from `wddm.c`): the forced pause keeps every record and fence and records the lost
 sequences. The resume accepts only that work.
@@ -123,10 +132,13 @@ sequences. The resume accepts only that work.
 - ResetEngine refuses before any kill.
 - No fence moves in the pause or the resume.
 - The commit clears `PowerLostSeq`.
+- `IhPowerLost` calls the IH quiet only with closed interrupt admission, and `GfxPowerLost` clears `GpuStopUnconfirmed`
+  only with a quiet IH.
+- `pnp.c` repairs the display only by `Bc250PowerDownRepairsDisplay`.
 
 Negative controls in `tools/quality/quick.ps1`, each must fail: `power-coordinator-forced-d1`,
 `-witness-ignored`, `-failed-restore-active`, `-lost-before-witness`, `power-loss-no-rule`,
-`power-loss-fence-at-resume`.
+`power-loss-fence-at-resume`, `power-loss-ih-quiet-always`, `power-loss-repair-after-unsaved`.
 
 ## 8. Risks
 

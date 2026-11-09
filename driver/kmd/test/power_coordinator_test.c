@@ -37,7 +37,8 @@ static LONG InterlockedCompareExchange(volatile LONG*p,LONG x,LONG c){LONG old=*
 static LONG InterlockedExchange(volatile LONG*p,LONG x){LONG old=*p;*p=x;return old;}
 static void*ExAllocatePool2(int f,size_t n,int t){(void)f;(void)t;return allocFail?NULL:malloc(n);}
 static void ExFreePoolWithTag(void*p,int t){(void)t;free(p);}
-#define GuardLog(...) ((void)0)
+/* A function, not an empty macro: the arguments are evaluated, as in the driver (a parameter used only in a log line is used). */
+static void GuardLog(const char*f,...){(void)f;}
 static void StartHealthClose(BC250_DEVICE*d){(void)d;(void)note('H');}
 static void SmuOwnerStop(int*s){(void)s;(void)note('S');}
 static NTSTATUS WddmSuspendRetained(BC250_DEVICE*d){(void)d;return note('W');}
@@ -152,12 +153,22 @@ int main(void){BC250_DEVICE d;
  CHECK(!strcmp(trace,"KCLMHSWIGPT") && d.RetainedDownFailed==0x4);resetTrace();
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==STATUS_DEVICE_HARDWARE_ERROR && d.RetainedPowerPhase==4);
  CHECK(!strcmp(trace,"HS"));resetTrace();
- CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==STATUS_INVALID_DEVICE_STATE && !pos); // No report memory on the way down: phase 4, not a phase 0 that a D0 would take for a device still up.
- setup(&d);allocFail=1;
- CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,3)==STATUS_INSUFFICIENT_RESOURCES && d.RetainedPowerPhase==4);
- CHECK(!strcmp(trace,"HS"));allocFail=0;resetTrace();
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==STATUS_INVALID_DEVICE_STATE && !pos);
- // ---- BD-188 D-2 (docs/design/power-loss.md section 8) ----
+ // No report memory on the way down (BD-188 D-2): step 4 alone fails. At a hibernate the other steps still run, the
+ // phase is SUSPENDED_UNSAVED with the witness armed, and after a power loss the D0 restores in full.
+ setup(&d);d.PowerWitness=BC250_POWER_WITNESS_GC_SCRATCH_REG1;allocFail=1;
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,3)==STATUS_INSUFFICIENT_RESOURCES&&d.RetainedPowerPhase==BC250_POWER_SUSPENDED_UNSAVED);
+ CHECK(!strcmp(trace,"HSWIGTAQ")&&d.RetainedDownFailed==0x8&&d.PowerWitnessArmed);allocFail=0;resetTrace();witnessReg=0;
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0&&d.RetainedPowerPhase==0&&!strcmp(trace,"Qyxzuscdvbtpigwh"));
+ // Where the power can stay (D1 without a sleep action) it is FAILED at step 4, as at every other step.
+ setup(&d);allocFail=1;
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD1,0)==STATUS_INSUFFICIENT_RESOURCES&&d.RetainedPowerPhase==4);
+ CHECK(!strcmp(trace,"HSWIGHS"));allocFail=0;resetTrace();
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==STATUS_INVALID_DEVICE_STATE&&!pos);
+ // A D0 without report memory changes nothing.
+ setup(&d);CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,3)==0);resetTrace();allocFail=1;
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==STATUS_INSUFFICIENT_RESOURCES&&d.RetainedPowerPhase==2&&!pos);allocFail=0;
+ // ---- BD-188 D-2 (docs/design/power-loss.md section 7) ----
  // A saved way down to D3 arms the witness as its last act and the D0 only logs it (lab row A3): power kept here.
  setup(&d);d.PowerWitness=BC250_POWER_WITNESS_GC_SCRATCH_REG1;
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,3)==0&&d.RetainedPowerPhase==2&&d.PowerWitnessArmed);

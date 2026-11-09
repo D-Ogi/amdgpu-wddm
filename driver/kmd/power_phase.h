@@ -27,6 +27,11 @@
 #define BC250_POWER_FAILED      4L
 #define BC250_POWER_SUSPENDED_UNSAVED 5L
 
+// pnp.c, Bc250SetPowerState: after a way down that returned a failure, the committed display shape goes back at once.
+// Not after an unsaved way down (BD-188 D-2): its later steps ran, the engines are down and the witness is armed, so a
+// display writer then would act on a suspended device. The D0 restores the display from the witness verdict.
+#define Bc250PowerDownRepairsDisplay(Phase) ((Phase) != BC250_POWER_SUSPENDED_UNSAVED)
+
 // BD-293 lab arm: one step of the way down, numbered 1-5 in GpuSetPowerRetained. In the lab flavour, the step that
 // LabPowerDownFault names (guard.c, GuardLabPowerDownFault) does not run and gives STATUS_IO_TIMEOUT, once per load.
 // In the release flavour, and in the host tests, the macro is the call itself.

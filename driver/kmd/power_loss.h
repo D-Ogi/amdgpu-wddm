@@ -72,7 +72,7 @@ static __inline unsigned Bc250PowerWitnessVerdict(int armed, int readOk, unsigne
 
 /* ResetEngine: the head job of the node was on its ring when the power went (lostSeq, the newest ring sequence of
  * the node at the forced pause, 0 for none), so no wave or queue of the restored engine holds it. The wave kill and
- * the queue reset cannot recover it; the adapter reset can (docs/design/power-loss.md section 7). Sequences wrap,
+ * the queue reset cannot recover it; the adapter reset can (docs/design/power-loss.md section 6). Sequences wrap,
  * so the comparison is a signed difference. */
 static __inline int Bc250HangPowerLost(int onRing, unsigned headSeq, unsigned lostSeq)
 {

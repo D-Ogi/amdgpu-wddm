@@ -1601,7 +1601,7 @@ NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device);
 NTSTATUS WddmResumeRetained(_Inout_ BC250_DEVICE* Device);
 // BD-188 D-2: the pause of WddmSuspendRetained after it refused, for a way down whose power goes all the same. The
 // pending records stay as they are; nothing completes and nothing is freed. The jobs on the rings are recorded as lost
-// work, which only the adapter reset after D0 ends (docs/design/power-loss.md section 7). PASSIVE_LEVEL.
+// work, which only the adapter reset after D0 ends (docs/design/power-loss.md section 6). PASSIVE_LEVEL.
 void WddmPauseForPowerLoss(_Inout_ BC250_DEVICE* Device);
 void WddmDpc(_Inout_ BC250_DEVICE* Device);
 // ADR 0011 point 3 step 3 (0.7.24): the hardware vsync's own DPC-side report - CRTC_VSYNC once per DPC run that

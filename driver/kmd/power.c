@@ -123,21 +123,17 @@ NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POW
         GuardLog("power: state %u refused in phase %ld",(ULONG)State,phase);
         return STATUS_INVALID_DEVICE_STATE;
     }
+    // Only the PSP step uses the report. On the way down a missing report is a failure of step 4 alone, under the rule
+    // of every other step (BD-188 D-2): the other steps still run, and a way down whose power goes is SUSPENDED_UNSAVED
+    // with the witness armed. A D0 without a report changes nothing.
     report=(BC250_ESCAPE_PSP*)ExAllocatePool2(POOL_FLAG_NON_PAGED,sizeof(*report),BC250_POWER_TAG);
-    if (!report) {
-        // BD-188: a way down that saves nothing must not stay ACTIVE. The D0
-        // after it would find nothing to restore and report the engines as up.
-        if (State!=PowerDeviceD0) {
-            StartHealthClose(Device);
-            SmuOwnerStop(&Device->Smu);
-            InterlockedExchange(&Device->RetainedPowerPhase,BC250_POWER_FAILED);
-        }
-        GuardLog("power: state %u no report memory, phase %ld",(ULONG)State,Device->RetainedPowerPhase);
-        return STATUS_INSUFFICIENT_RESOURCES;
+    if (report) RtlZeroMemory(report,sizeof(*report));
+    else {
+        GuardLog("power: state %u no report memory, phase %ld",(ULONG)State,phase);
+        if (State==PowerDeviceD0) return STATUS_INSUFFICIENT_RESOURCES;
     }
-    RtlZeroMemory(report,sizeof(*report));
     if (State!=PowerDeviceD0) {
-        // BD-188 D-2 (docs/design/power-loss.md section 5). When the power goes all the same (power_loss.h), a
+        // BD-188 D-2 (docs/design/power-loss.md section 3). When the power goes all the same (power_loss.h), a
         // failed step no longer ends the way down: each later step still runs, in the form that its own module
         // allows after the earlier failure (a refused WDDM pause becomes the forced pause; PSP and GART refuse by
         // their own preconditions after a GFX halt that did not happen). The phase is then SUSPENDED_UNSAVED and the
@@ -161,7 +157,7 @@ NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POW
         if (PowerDownStepFailed(status,2,&failed,&first) && !lossExpected) goto Failed;
         status=BC250_POWER_DOWN_STEP(3,GfxSetPowerRetained(Device,FALSE));
         if (PowerDownStepFailed(status,3,&failed,&first) && !lossExpected) goto Failed;
-        status=BC250_POWER_DOWN_STEP(4,PspSetPowerRetained(Device,FALSE,report));
+        status=BC250_POWER_DOWN_STEP(4,report ? PspSetPowerRetained(Device,FALSE,report) : STATUS_INSUFFICIENT_RESOURCES);
         if (PowerDownStepFailed(status,4,&failed,&first) && !lossExpected) goto Failed;
         status=BC250_POWER_DOWN_STEP(5,GartSetPowerRetained(Device,FALSE));
         if (PowerDownStepFailed(status,5,&failed,&first) && !lossExpected) goto Failed;
@@ -181,7 +177,7 @@ NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POW
     }
     // Action on D0 is not authoritative: use the retained down-transition state.
     InterlockedExchange(&Device->RetainedPowerPhase,BC250_POWER_RESTORING);
-    // BD-188 D-2 (docs/design/power-loss.md section 6): the witness first, before the SMU owner and any restore step.
+    // BD-188 D-2 (docs/design/power-loss.md section 5): the witness first, before the SMU starts and before any restore step.
     // After an unsaved way down only "power lost" allows the restore: each block then takes its power-on software
     // state, and the normal restore below runs with the normal failure rule. Kept or no proof: FAILED, as before.
     if (PowerWitnessTake(Device,unsaved)!=BC250_POWER_WITNESS_LOST && unsaved) {
@@ -233,7 +229,7 @@ Failed:
 Done:
     GuardLog("power: state %u prior action %u phase %ld result 0x%08X",(ULONG)State,
         (ULONG)Device->RetainedDownAction,Device->RetainedPowerPhase,status);
-    ExFreePoolWithTag(report,BC250_POWER_TAG);
+    if (report) ExFreePoolWithTag(report,BC250_POWER_TAG);
     return status;
 }
 

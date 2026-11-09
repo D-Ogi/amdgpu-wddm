@@ -709,7 +709,7 @@ Done:
     return status;
 }
 
-// BD-188 D-2 (docs/design/power-loss.md section 6): the witness proved a power loss, so the PSP knows no ring and no
+// BD-188 D-2 (docs/design/power-loss.md section 5): the witness proved a power loss, so the PSP knows no ring and no
 // TMR, and no firmware is loaded. The software takes the state of a successful retained unload, from which
 // PspSetPowerRetained(TRUE) loads the retained images again. Under GartLock, as the unload.
 void PspPowerLost(BC250_DEVICE* Device)
@@ -734,7 +734,8 @@ void PspPowerLost(BC250_DEVICE* Device)
              (ULONG)ringUp,(ULONG)tmrUp);
 }
 
-// Cached under GartLock. A suspended flag alone is not proof of hardware stop.BOOLEAN PspPowerIsSuspended(const BC250_DEVICE* Device)
+// Cached under GartLock. A suspended flag alone is not proof of hardware stop.
+BOOLEAN PspPowerIsSuspended(const BC250_DEVICE* Device)
 {
     const BC250_PSP* psp=(const BC250_PSP*)Device->Psp;
     return psp && psp->PowerSuspended && !psp->RingUp && !psp->TmrUp;

@@ -35,7 +35,7 @@ typedef struct {
  int ActiveSubmissions[3],CompletionPending[3],PreemptionPending[3];
  int RefusalPending[3],RejectedPending[3],WatchdogFaulted[3];
  int PrimaryNeedsRestore;
- /* BD-188 D-2: the forced pause's record of lost work (before Objects: it may change, the owners may not). */
+ /* BD-188 D-2: the forced pause's record of lost work (before Objects: it may change, the fields after it may not). */
  ULONG PowerLostSeq[3],PowerLostWork;
  int VSyncArmed,VSyncEnabled,VSyncTimer,SubmitTimer,PagingSubmitTimer,PagingDrainTimer;
  int SubmitDpc,PagingSubmitDpc,PagingDrainDpc,VSyncDpc,ReportDpc;
