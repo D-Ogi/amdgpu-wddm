@@ -2618,10 +2618,16 @@ static void Mpo3Checks(void)
     post.VidPnSourceId=0;post.PostComposition.Flags.Value=0;
     CHECK(Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c)==STATUS_SUCCESS && c.Supported);
     /* Four lines a call for the first BC250_WDDM_MPO3_LOG_CALLS calls of the three DDIs, then none (one more for the
-     * call with a second plane). */
-    CHECK(w.Mpo3Notes==11 && logs==logged+45);
+     * call with a second plane, and in the lab flavour two more for its Part Y preflight). */
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+#define PART_Y_GROUP_LINES 2u
+#else
+#define PART_Y_GROUP_LINES 0u
+#endif
+    CHECK(w.Mpo3Notes==11 && logs==logged+45+PART_Y_GROUP_LINES);
     for(i=0;i<40;i++) (void)Bc250WddmCheckMultiPlaneOverlaySupport3(&d,&c);
-    CHECK(logs==logged+129);
+    CHECK(logs==logged+129+PART_Y_GROUP_LINES);
+#undef PART_Y_GROUP_LINES
     /* PostMultiPlaneOverlayPresent: counted, success. */
     pres.PresentID=9;
     CHECK(Bc250WddmPostMultiPlaneOverlayPresent(&d,&pres)==STATUS_SUCCESS && w.Mpo3PostPresents==1);
