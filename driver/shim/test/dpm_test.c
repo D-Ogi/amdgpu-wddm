@@ -4419,6 +4419,31 @@ static void test_ramp_fast(void)
 	g.level = L(1);
 	CHECK(run_mc(&g, 1000, 73000, 25) == L(4) && run_mc(&g, 1000, 73000, 25) == L(5) && g.ramp_fast_raises == 2u);
 
+	/* A high-clock zone above 1800 MHz moves the zone and not the lane: with DpmThermalHighZoneMHz 2000 the lane still
+	 * stops at BC250_DPM_RAMP_FAST_TOP_MHZ, and the ramp holds the raise above it (review T007, F1). */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC, 2000u) ==
+	      BC250_DPM_BURST_OK);
+	CHECK(g.high_level == L(10));
+	g.level = L(1);
+	CHECK(run_mc(&g, 1000, 73000, 25) == L(4) && run_mc(&g, 1000, 73000, 25) == l1800);
+	CHECK(run_mc(&g, 1000, 73000, 25) == l1800 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && g.ramp_fast_raises == 2u);
+	CHECK(bc250_dpm_level_mhz(l1800) == BC250_DPM_RAMP_FAST_TOP_MHZ);
+
+	/* The lane goes to the tick's target, which the thermal cap already bounds, not to what the load asks for: with the
+	 * cap at 1600 MHz and the load asking 1700 MHz from 1300 MHz, the lane gives 1600 MHz (review T007, F2). */
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(3);
+	g.thermal_cap = L(6);
+	CHECK(run_mc(&g, 1000, 73000, 25) == L(6) && g.ramp_fast_used && g.want == L(7));
+	/* The ramp only lowers the target, so a lane sized on the load's want could not raise the clock past the cap, but it
+	 * would claim raises it did not make: the counter and the `load fast` line. With the cap one level up and the ramp
+	 * interval run out, the ramp alone gives the cap, and the lane must not count it. */
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(3);
+	g.thermal_cap = L(4);
+	CHECK(run_mc(&g, 1000, 73000, 25) == L(4) && !g.ramp_fast_used && g.ramp_fast_raises == 0u && g.want == L(7));
+
 	/* The high-clock band reads the lead: a die that rose 1 C/s for 5 s reads 77 C raw and 79 C with the lead, so the
 	 * lane is closed although the raw reading is in it. The same 77 C on a flat die opens it (the positive control). */
 	burst_init(&g, BC250_DPM_TOP_LEVEL);

@@ -893,6 +893,14 @@ static int high_band(const struct bc250_dpm_governor *g, const struct bc250_dpm_
 /* BD-329: the ramp's fast lane is open. Both BD-281 rules must be on, because they are what replaces the ramp's spacing:
  * the lane ends under the raw reading at which the rate rule starts (and never above BC250_DPM_RAMP_FAST_MAX_MC), and
  * under the lead reading at which the high-clock band holds the clock. A tick with no reading gets no lane. */
+/* The lane's highest level: the high-clock zone's level, but never above BC250_DPM_RAMP_FAST_TOP_MHZ, the clock the
+ * lane's analysis measured. DpmThermalHighZoneMHz admits 1000-2300 MHz, and a zone at 2000 MHz would otherwise let one
+ * tick jump from 1100 to 2000 MHz under 78 C, which is the session 367 case. */
+static unsigned int ramp_fast_top(const struct bc250_dpm_governor *g)
+{
+	unsigned int top = (unsigned int)bc250_dpm_level_of(BC250_DPM_RAMP_FAST_TOP_MHZ);
+	return g->high_level < top ? g->high_level : top;
+}
 static int ramp_fast(const struct bc250_dpm_governor *g, const struct bc250_dpm_tune *t,
 		     const struct bc250_dpm_input *in, int teff)
 {
@@ -1348,8 +1356,9 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 			unsigned int ramp = g->raise_ms >= bc250_dpm_ramp_interval_ms(in->temperature_mc) ? cur + 1u : cur;
 			/* BD-329, the fast lane (bc250_dpm.h): under the BD-281 rules' own thresholds a raise goes to high_level at
 			 * once. target is already bounded by the cap, the ceiling, the warm zone and the high-clock band. */
-			if (ramp_fast(g, t, in, teff) && cur < g->high_level) {
-				unsigned int fast = target < g->high_level ? target : g->high_level;
+			unsigned int lane_top = ramp_fast_top(g);
+			if (ramp_fast(g, t, in, teff) && cur < lane_top) {
+				unsigned int fast = target < lane_top ? target : lane_top;
 				if (fast > ramp) {
 					ramp = fast;
 					g->ramp_fast_raises++;

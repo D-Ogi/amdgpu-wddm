@@ -122,6 +122,10 @@ static inline int bc250_board_supported(unsigned int provider_id)
  * (80 C): on the session 367 plant a jump from 78-79 C puts the hot spot at 86.4 C, from 77 C at 85.4 C. The lane also
  * ends under rate_from_mc when a setting moves the rate rule lower. */
 #define BC250_DPM_RAMP_FAST_MAX_MC	78000
+/* The highest clock of the lane: the clock its analysis measured (session 367 plant, rc3 replay). The lane also stops
+ * at the high-clock zone's level when DpmThermalHighZoneMHz puts that lower; a higher zone setting stays the operator's
+ * and moves the zone, never the lane. */
+#define BC250_DPM_RAMP_FAST_TOP_MHZ	1800u
 #define BC250_DPM_CRITICAL_MC		90000
 #define BC250_DPM_RELEASE_MC		82000	/* below: the thermal cap rises again (HOT_MC - 5 C) */
 #define BC250_DPM_RELEASE_STEP_MS	1000u	/* one level per this, while below RELEASE_MC */

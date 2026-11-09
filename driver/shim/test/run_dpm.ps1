@@ -15,6 +15,7 @@
 #   -NoSustainGuard  the sustained raise ignores its landing guard and may land at or under the lowering threshold
 #   -NoRampFast      the thermal ramp's fast lane chooses nothing (the one-level ramp of rc3)
 #   -RampFastUnbounded  the fast lane ignores its temperature top (BC250_DPM_RAMP_FAST_MAX_MC, rate_from_mc)
+#   -RampFastIgnoreTarget  the fast lane takes the load's want instead of the tick's bounded target
 
 param(
     [string]$Out = 'P:\BC-250\scratch\build\dpm',
@@ -24,6 +25,7 @@ param(
     [switch]$NoSustainGuard,
     [switch]$NoRampFast,
     [switch]$RampFastUnbounded,
+    [switch]$RampFastIgnoreTarget,
     [switch]$ExpectFailure          # a negative control: exit 0 only when the test fails
 )
 
@@ -56,7 +58,7 @@ $env:TEMP = Join-Path $Out 'tmp'; $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 
 $sources = @('bc250_dpm.c', 'bc250_clock.c') | ForEach-Object { Join-Path $shim $_ }
-if ($NoSustain -or $NoSustainGuard -or $NoRampFast -or $RampFastUnbounded) {
+if ($NoSustain -or $NoSustainGuard -or $NoRampFast -or $RampFastUnbounded -or $RampFastIgnoreTarget) {
     $policy = [IO.File]::ReadAllText((Join-Path $shim 'bc250_dpm.c'))
     if ($NoSustain) {
         $live = 'want = next;'
@@ -72,6 +74,11 @@ if ($NoSustain -or $NoSustainGuard -or $NoRampFast -or $RampFastUnbounded) {
         $live = 'ramp = fast;'
         if (([regex]::Matches($policy, [regex]::Escape($live))).Count -ne 1) { throw 'negative control: the fast lane moved' }
         $policy = $policy.Replace($live, '(void)fast;')
+    }
+    if ($RampFastIgnoreTarget) {
+        $live = 'unsigned int fast = target < lane_top ? target : lane_top;'
+        if (([regex]::Matches($policy, [regex]::Escape($live))).Count -ne 1) { throw 'negative control: the fast lane target moved' }
+        $policy = $policy.Replace($live, 'unsigned int fast = g->want < lane_top ? g->want : lane_top;')
     }
     if ($RampFastUnbounded) {
         $live = 'in->temperature_mc < top &&'
