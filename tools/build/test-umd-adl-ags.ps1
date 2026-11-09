@@ -6,7 +6,8 @@
 #
 # Cases (the ADL library of each case is copied under the name that the Arch needs):
 #   shipped   the shipped library: agsInitialize returns 0 with and without GPU information, no AMD device on a host
-#             without our driver, 100 rounds without a leak, and a DX12 device through AGS on any adapter
+#             without our driver, 100 rounds without a leak, and a DX12 device through AGS on any adapter; the leak
+#             self-test mutants of 'loop' (BD-328) fail or pass as the leak verdict must
 #   inject    test\atiadl-test.dll with the snapshot of tests\test-snapshot.h (two AMD GPUs, three displays): the
 #             AGS parsers over a nonempty adapter list
 #   host      test\atiadl-test-host.dll (only when the build has it): the discovery on the GPU of this host
@@ -52,7 +53,14 @@ $runs = @(
     @('inject', 'info --kmt-fixture --guard-allocations', 0),
     @('inject', 'loop 20 --kmt-fixture --guard-allocations', 0),
     @('host', 'info', 0), @('host', 'loop 20', 0), @('host', 'dx12 --any-adapter', 0),
-    @('none', 'expect 6', 0), @('no-modes', 'expect 5', 0)
+    @('none', 'expect 6', 0), @('no-modes', 'expect 5', 0),
+    # Self-test of the leak verdict of 'loop' (BD-328): a steady heap leak, a leak every 4th round and a handle leak
+    # must fail as leaks (the line names the resource); four one-time growths of 8 KiB, one at the start of each later
+    # part, raise every floor and must still pass.
+    @('shipped', 'loop 100 --selftest-leak 16', 1, 'FAIL resources grew over the rounds: heap'),
+    @('shipped', 'loop 100 --selftest-leak 16 --selftest-period 4', 1, 'FAIL resources grew over the rounds: heap'),
+    @('shipped', 'loop 100 --selftest-handle-leak', 1, 'FAIL resources grew over the rounds:.* handles'),
+    @('shipped', 'loop 100 --selftest-steps 4 --selftest-step-bytes 8192', 0, 'no sustained growth')
 )
 if ($systemAdl.Count) {
     Write-Warning "an ADL library is in ${sysDir}: $($systemAdl -join ', '); the case 'none' is skipped"
@@ -75,7 +83,7 @@ foreach ($case in $libraries.Keys) {
 $results = @()
 $failed = 0
 foreach ($r in $runs) {
-    $case, $arguments, $want = $r
+    $case, $arguments, $want, $must = $r
     $dir = Join-Path $stage $case
     $tag = "$case-" + (($arguments -replace '--', '') -replace '[^A-Za-z0-9]+', '-').Trim('-')
     $out = Join-Path $EvidenceDir "$tag.txt"
@@ -91,6 +99,8 @@ foreach ($r in $runs) {
     }
     Remove-Item -LiteralPath (Join-Path $EvidenceDir "$tag.stdout") -ErrorAction SilentlyContinue
     $ok = $code -eq $want
+    # A self-test case must fail or pass for its own reason, not for another fault of the run.
+    if ($ok -and $must -and -not (Select-String -LiteralPath $out -Pattern $must -Quiet)) { $ok = $false; Write-Host "missing in ${tag}.txt: $must" }
     if (-not $ok) { $failed++ }
     Write-Host ('{0} {1,-40} exit {2} (expected {3})' -f $(if ($ok) { 'PASS' } else { 'FAIL' }), "$Arch $case $arguments", $code, $want)
     $results += [ordered]@{ case = $case; arguments = $arguments; exit = $code; expected = $want; pass = $ok; output = "$tag.txt" }

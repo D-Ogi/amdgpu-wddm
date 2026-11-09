@@ -8,8 +8,13 @@
 //       the nine mandatory exports).
 //   ags-client.exe loop <n> [--out <file>]
 //       n rounds of agsInitialize/agsDeInitialize, with and without GPU information in turn. Fails on a nonzero
-//       result, on a callback allocation left after a round, on a handle count that grows, and on live process
-//       heap bytes (HeapWalk) that grow by more than 4 KiB over the rounds after the first.
+//       result, on a callback allocation left after a round, and on a leak: live process heap bytes (HeapWalk) or
+//       handles that grow in a sustained way after the warm-up rounds (see LeakVerdict; BD-328). One-time growth
+//       (a lazy cache of the loader or of a system library, a thread pool worker that another thread's timing
+//       keeps alive) is not a leak and does not fail.
+//       Self-test mutants of the leak check (never in a release run): --selftest-leak <bytes> [--selftest-period <k>]
+//       leaks <bytes> of the process heap every k-th round (default 1); --selftest-steps <m> --selftest-step-bytes
+//       <bytes> makes m one-time allocations at spread rounds; --selftest-handle-leak leaks one event handle a round.
 //   ags-client.exe <mode> --inject ...
 //       Before AGS loads, load the ADL library of this directory and give it the test snapshot of
 //       test-snapshot.h through Bc250AdlTest_SetSnapshot (test builds only): two AMD GPUs, three displays.
@@ -329,11 +334,78 @@ Usage Measure()
     return u;
 }
 
+// Self-test mutants of the leak check (BD-328): the gate runs them and expects the verdicts below.
+struct LoopSelfTest {
+    size_t leak_bytes = 0;  // leaked every `period`-th round: must FAIL
+    int period = 1;
+    int steps = 0;          // one-time allocations at spread rounds: must PASS
+    size_t step_bytes = 0;
+    bool handle_leak = false;  // one event handle a round: must FAIL
+};
+LoopSelfTest g_selftest;
+
+// The leak verdict over the samples after the warm-up (one sample after every round).
+//
+// A leak is growth that goes on: a block lost every round (or every few rounds) raises the floor of the live bytes in
+// every part of the run. One-time growth raises it once. The samples are cut into kSegments equal parts; the floor of
+// a part is its minimum, so a transient allocation of another thread at the moment of a sample does not count. The
+// verdict is a leak when the floors rise strictly from each part to the next and every part has at least
+// kGrowthsPerPart rounds that grew (a steady leak grows again and again in each part), or when the whole growth passes
+// a hard bound (a large leak needs no trend). Detection limit: any steady leak of at least one byte whose period is at
+// most a part divided by kGrowthsPerPart (9 rounds for 100 rounds) shows in every part. A false leak needs two
+// growths in each of the kSegments parts and a raised floor in each of the later ones; a loaded host gave at most
+// three one-time growths in 100 rounds (BD-328: 2026-11-06, and 20 runs under 2 x CPU load on 2026-11-09). The
+// floors alone were not enough: three one-time growths of the self-test and one of the host raised all four floors.
+// The old rule (the last sample minus the sample after round 1, above 4 KiB) failed on one growth of 4141 bytes.
+constexpr int kSegments = 5;
+constexpr int kGrowthsPerPart = 2;
+
+struct Trend {
+    long long floor[kSegments];
+    int growths[kSegments];  // rounds of the part whose sample is above the sample before
+    long long total;         // last sample - first sample
+    bool rising;             // floors strictly rise through every part, and every part grew kGrowthsPerPart times
+};
+
+Trend Floors(const long long* y, int n)
+{
+    Trend t = {};
+    t.total = y[n - 1] - y[0];
+    t.rising = true;
+    for (int k = 0; k < kSegments; k++) {
+        int b = n * k / kSegments, e = n * (k + 1) / kSegments;
+        long long m = y[b];
+        for (int i = b + 1; i < e; i++) m = y[i] < m ? y[i] : m;
+        t.floor[k] = m;
+        for (int i = b > 0 ? b : 1; i < e; i++) t.growths[k] += y[i] > y[i - 1];
+        if (k > 0 && !(t.floor[k] > t.floor[k - 1])) t.rising = false;
+        if (t.growths[k] < kGrowthsPerPart) t.rising = false;
+    }
+    return t;
+}
+
 int RunLoop(const Ags& a, int rounds)
 {
     AGSConfiguration config = Config();
-    Usage u0 = {}, u1 = {};
     int failures = 0;
+    // Warm-up: the first tenth of the rounds (at least one) fills the caches of the CRT, the loader and the system
+    // libraries; the samples start after it.
+    int warm = rounds / 10 > 0 ? rounds / 10 : 1;
+    int n = rounds - warm;
+    if (n < 2 * kSegments) {
+        Say("loop: %d rounds leave %d samples after %d warm-up rounds; at least %d are needed\n", rounds, n, warm,
+            2 * kSegments);
+        return 1;
+    }
+    // The samples live outside the process heaps, so that storing them changes nothing that is measured.
+    long long* heap = (long long*)VirtualAlloc(nullptr, sizeof(long long) * 3 * (size_t)n, MEM_RESERVE | MEM_COMMIT,
+                                               PAGE_READWRITE);
+    if (!heap) {
+        Say("loop: no memory for %d samples\n", n);
+        return 1;
+    }
+    long long* priv = heap + n;
+    long long* handles = priv + n;
     int step = rounds >= 100 ? rounds / 10 : rounds;
     for (int i = 0; i < rounds; i++) {
         AGSContext* ctx = nullptr;
@@ -345,29 +417,53 @@ int RunLoop(const Ags& a, int rounds)
             Say("round %d: agsInitialize %d agsDeInitialize %d live %ld\n", i, (int)rc, (int)d, g_live);
             failures++;
         }
-        if (i == 0) {
-            u0 = Measure();  // after the first round: the CRT and loader caches are warm
-        } else if ((i + 1) % step == 0) {
+        if (g_selftest.leak_bytes && (i % g_selftest.period) == 0) {
+            HeapAlloc(GetProcessHeap(), 0, g_selftest.leak_bytes);  // lost on purpose
+        }
+        for (int j = 0; j < g_selftest.steps; j++) {
+            if (i - warm == (j + 1) * n / (g_selftest.steps + 1)) {
+                HeapAlloc(GetProcessHeap(), 0, g_selftest.step_bytes);  // one-time growth, kept on purpose
+            }
+        }
+        if (g_selftest.handle_leak) {
+            CreateEventW(nullptr, TRUE, FALSE, nullptr);  // lost on purpose
+        }
+        if (i >= warm) {
             Usage u = Measure();
-            Say("loop: after round %d heap busy %llu (%+lld) private %llu (%+lld) handles %lu\n", i + 1,
-                (unsigned long long)u.heap_busy_bytes, (long long)u.heap_busy_bytes - (long long)u0.heap_busy_bytes,
-                (unsigned long long)u.private_bytes, (long long)u.private_bytes - (long long)u0.private_bytes,
-                u.handles);
+            int s = i - warm;
+            heap[s] = (long long)u.heap_busy_bytes;
+            priv[s] = (long long)u.private_bytes;
+            handles[s] = (long long)u.handles;
+            if ((i + 1) % step == 0) {
+                Say("loop: after round %d heap busy %lld (%+lld) private %lld (%+lld) handles %lld (%+lld)\n", i + 1,
+                    heap[s], heap[s] - heap[0], priv[s], priv[s] - priv[0], handles[s], handles[s] - handles[0]);
+            }
         }
     }
-    u1 = Measure();
-    long long grown = (long long)u1.heap_busy_bytes - (long long)u0.heap_busy_bytes;
-    Say("loop: %d rounds, %d failed, callback allocations %ld total %ld live\n", rounds, failures, g_total, g_live);
-    Say("loop: heap busy bytes after round 1 %llu, after round %d %llu (%+lld); private bytes %llu -> %llu;"
-        " handles %lu -> %lu\n", (unsigned long long)u0.heap_busy_bytes, rounds,
-        (unsigned long long)u1.heap_busy_bytes, grown, (unsigned long long)u0.private_bytes,
-        (unsigned long long)u1.private_bytes, u0.handles, u1.handles);
+    int grew = 0;
+    for (int s = 1; s < n; s++) grew += heap[s] > heap[s - 1];
+    Trend th = Floors(heap, n), tc = Floors(handles, n), tp = Floors(priv, n);
+    Say("loop: %d rounds (%d warm-up), %d failed, callback allocations %ld total %ld live\n", rounds, warm, failures,
+        g_total, g_live);
+    Say("loop: heap busy after round %d %lld, after round %d %lld (%+lld), grew in %d of %d rounds; floors of %d parts"
+        " %lld %lld %lld %lld %lld, growths %d %d %d %d %d (%s)\n", warm + 1, heap[0], rounds, heap[n - 1], th.total,
+        grew, n - 1, kSegments, th.floor[0], th.floor[1], th.floor[2], th.floor[3], th.floor[4], th.growths[0],
+        th.growths[1], th.growths[2], th.growths[3], th.growths[4], th.rising ? "rising" : "not rising");
+    Say("loop: handles %lld -> %lld, floors %lld %lld %lld %lld %lld (%s); private bytes %lld -> %lld (%s, not"
+        " gated: the allocator keeps freed spans)\n", handles[0], handles[n - 1], tc.floor[0], tc.floor[1],
+        tc.floor[2], tc.floor[3], tc.floor[4], tc.rising ? "rising" : "not rising", priv[0], priv[n - 1],
+        tp.rising ? "rising" : "not rising");
     SayAdlModule("after the loop");
-    // A leak of even 16 bytes a round shows over 100 rounds; heap bookkeeping of the loader stays below 4 KiB.
-    if (grown > 4096 || u1.handles > u0.handles) {
-        Say("FAIL resources grew over the rounds\n");
+    // Hard bounds: 64 KiB of live heap or 8 handles over the run fail even without a trend.
+    bool heap_leak = th.rising || th.total > 65536;
+    bool handle_leak = tc.rising || tc.total > 8;
+    if (heap_leak || handle_leak) {
+        Say("FAIL resources grew over the rounds:%s%s\n", heap_leak ? " heap" : "", handle_leak ? " handles" : "");
         failures++;
+    } else {
+        Say("loop: no sustained growth (one-time growth %+lld heap bytes, %+lld handles)\n", th.total, tc.total);
     }
+    VirtualFree(heap, 0, MEM_RELEASE);
     return failures ? 1 : 0;
 }
 
@@ -664,6 +760,16 @@ int main(int argc, char** argv)
             any_adapter = true;
         } else if (strcmp(argv[i], "--guard-allocations") == 0) {
             g_guard_allocations = true;
+        } else if (strcmp(argv[i], "--selftest-leak") == 0 && i + 1 < argc) {
+            g_selftest.leak_bytes = (size_t)atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--selftest-period") == 0 && i + 1 < argc) {
+            g_selftest.period = atoi(argv[++i]) > 0 ? atoi(argv[i]) : 1;
+        } else if (strcmp(argv[i], "--selftest-steps") == 0 && i + 1 < argc) {
+            g_selftest.steps = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--selftest-step-bytes") == 0 && i + 1 < argc) {
+            g_selftest.step_bytes = (size_t)atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--selftest-handle-leak") == 0) {
+            g_selftest.handle_leak = true;
         } else if (strcmp(argv[i], "--out") == 0 && i + 1 < argc) {
             fopen_s(&g_out, argv[++i], "w");
         } else {
