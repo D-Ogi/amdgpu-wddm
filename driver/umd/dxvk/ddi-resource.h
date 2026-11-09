@@ -36,6 +36,9 @@ struct ResourceDescription {
     std::vector<D3D11_SUBRESOURCE_DATA> initial;
 };
 HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &input,ResourceDescription &output);
+// The status that CreateResource reports when it does not complete `desc` after the failure `hr`
+// (ddi_create_resource_status): DXGI_DDI_ERR_UNSUPPORTED only for a primary, never device removal for a refusal.
+HRESULT create_refusal(const D3D11DDIARG_CREATERESOURCE &desc,HRESULT hr);
 // scanout is the device's scan-out source (scanout-primary.h); nullptr asks for no scan-out primary.
 HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &,HANDLE,RuntimeSurfaceRequest &,D3D11_TEXTURE2D_DESC1 &,
     const ScanoutSource *scanout=nullptr);

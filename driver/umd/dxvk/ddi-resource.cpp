@@ -276,11 +276,6 @@ HRESULT decode_open_resource(const D3D10DDIARG_OPENRESOURCE &input,BC250_WDDM_AL
     metadata=m; desc=d; return S_OK;
 }
 namespace {
-// CreateResource may report E_OUTOFMEMORY, D3DDDIERR_DEVICEREMOVED or DXGI_DDI_ERR_UNSUPPORTED. A
-// descriptor this driver cannot serve is the third case, not the second: the runtime then fails that
-// one call and its caller can choose another format, while device removal ends every device of the
-// process. The Ascent's RGB10A2 primary (339-342) is the measured example, and BD-071 is the same
-// mistake made with E_NOTIMPL, a status this page does not allow at all.
 // OpenResource may report only E_OUTOFMEMORY or D3DDDIERR_DEVICEREMOVED; the runtime takes every other status as
 // critical (d3d10umddi.md, PFND3D10DDI_OPENRESOURCE remarks). A surface that this driver cannot describe or adopt is
 // therefore E_OUTOFMEMORY: the runtime fails that one OpenSharedResource and keeps the device. Before BD-253 such a
@@ -289,10 +284,15 @@ namespace {
 HRESULT unopenable_resource(HRESULT hr) {
     return ddi_device_status(hr)==D3DDDIERR_DEVICEREMOVED ? D3DDDIERR_DEVICEREMOVED : E_OUTOFMEMORY;
 }
-HRESULT unsupported_request(HRESULT hr) {
-    const HRESULT status=ddi_device_status(hr);
-    return (status==E_OUTOFMEMORY || status==D3DDDIERR_DEVICEREMOVED) ? status : DXGI_DDI_ERR_UNSUPPORTED;
 }
+// Every CreateResource that this shell does not complete reports through this one rule (ddi_create_resource_status):
+// DXGI_DDI_ERR_UNSUPPORTED for a primary, which the runtime then makes in another way (the Ascent's RGB10A2 primary,
+// 339-342), and E_OUTOFMEMORY for every other resource. Neither status ends the device. The failed step does not
+// matter: descriptor conversion, the engine create and the runtime surface all report through this rule.
+HRESULT create_refusal(const D3D11DDIARG_CREATERESOURCE &desc,HRESULT hr) {
+    return ddi_create_resource_status(hr,desc.pPrimaryDesc && (desc.BindFlags&D3D10_DDI_BIND_PRESENT));
+}
+namespace {
 // BD-168: one line for each OpenResource that this shell refuses, in both flavours, at most 16 for each process. Every
 // refusal reaches the runtime as E_OUTOFMEMORY (unopenable_resource), the status that a real allocation failure also
 // has, so only this line tells them apart: the step (decode, adopt, wait), the status of that step, the status that
@@ -354,7 +354,7 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
                     OutputDebugStringA(text);
                     amdgpu_wddm_log::print("%s",text);   // BD-253: also in the game log
                 }
-                report_ddi_error(owner,unsupported_request(hr),DdiErrorClass::unsupported); return;
+                report_ddi_error(owner,create_refusal(*desc,hr),DdiErrorClass::unsupported); return;
             }
             RuntimeSurface *surface=nullptr;
             const char *failedStep="begin";
@@ -363,7 +363,7 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
             if (hr!=S_OK) {
                 surface_failed_note(failedStep,hr,request,surface,owner.runtime().hDevice);
                 if (surface) owner.release_surface_handle(*surface);
-                report_ddi_error(owner,FAILED(hr) ? hr : D3DDDIERR_DEVICEREMOVED,DdiErrorClass::unsupported); return;
+                report_ddi_error(owner,FAILED(hr) ? create_refusal(*desc,hr) : D3DDDIERR_DEVICEREMOVED,DdiErrorClass::unsupported); return;
             }
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
             // BD-253, lab flavour: each runtime surface that this device creates, at most 32 lines per process.
@@ -388,7 +388,7 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
         }
         ResourceDescription d;
         HRESULT hr=convert_resource(*desc,d);
-        if (FAILED(hr)) { report_ddi_error(owner,unsupported_request(hr),DdiErrorClass::unsupported); return; }
+        if (FAILED(hr)) { report_ddi_error(owner,create_refusal(*desc,hr),DdiErrorClass::unsupported); return; }
         const auto *initial=d.initial.empty() ? nullptr : d.initial.data();
         switch(d.dimension) {
         case D3D10DDIRESOURCE_BUFFER: case D3D11DDIRESOURCE_BUFFEREX: {
@@ -407,8 +407,8 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
         }
         if (FAILED(hr)) {
             if (s->object) { s->object->Release(); s->object=nullptr; }
-            // The engine refuses a format or a flag combination it cannot build with E_INVALIDARG.
-            report_ddi_error(owner,unsupported_request(hr),DdiErrorClass::unsupported);
+            // The engine refuses a format or a flag combination it cannot build with E_INVALIDARG (BD-330).
+            report_ddi_error(owner,create_refusal(*desc,hr),DdiErrorClass::unsupported);
         } else if (!s->object) report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::unsupported);
         else s->dimension=d.dimension;
     },DdiErrorClass::unsupported);
