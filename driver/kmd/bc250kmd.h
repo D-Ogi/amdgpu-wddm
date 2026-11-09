@@ -1147,6 +1147,10 @@ BOOLEAN VramFramebufferOffset(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* 
 // BD-341: a start without a firmware display has an empty range at offset 0. FALSE when the offset is unknown or a
 // present display has a zero size; every placement above the framebuffer (wddm.c, connector_buffer.c) uses this.
 BOOLEAN VramFramebufferExtent(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset, _Out_ ULONGLONG* Bytes);
+// The one check of the top of VRAM against that range: STATUS_SUCCESS when the range ends at or below
+// VramLength - TopBytes, STATUS_CONFLICTING_ADDRESSES when it reaches into the window, and
+// STATUS_DEVICE_CONFIGURATION_ERROR when the range is unknown. gart.c, psp.c, gpumem.c and the start use it.
+NTSTATUS VramFirmwareRangeBelowTop(_In_ const BC250_DEVICE* Device, ULONGLONG TopBytes);
 
 // gart.c
 struct _BC250_ESCAPE_GART;

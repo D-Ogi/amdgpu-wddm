@@ -314,6 +314,8 @@ typedef struct {
     unsigned long DisplayStart;
     ULONG ColdScanoutBytes;
     volatile LONG FirmwarePipesHeld;
+    BOOLEAN VramEnabled;
+    unsigned long long VramLength;
     LONG StartVisibilityPending;
     NTSTATUS PostDisplayStopStatus;
 } BC250_DEVICE;
@@ -326,7 +328,7 @@ static void* ownerIdentity;
 // This model is separate from the visibility implementation: this fixture owns
 // StartDevice's sequencing, result and unwind, while the DCN gate tests MMIO.
 enum START_EVENT { EVENT_MMIO = 1, EVENT_BLANK, EVENT_LOGO, EVENT_GPU,
-                   EVENT_CONNECTOR, EVENT_READY, EVENT_STOP };
+                   EVENT_CONNECTOR, EVENT_READY, EVENT_STOP, EVENT_CHILD_BEGIN, EVENT_RANGE };
 static enum START_EVENT startEvents[32];
 static unsigned startEventCount;
 static unsigned blankCalls, logoCalls, gpuCalls, pendingAtStop, blankWithoutHold;
@@ -378,6 +380,9 @@ static unsigned readyCalls;
 static void StartHealthReady(BC250_DEVICE* d, BOOLEAN r)
 { (void)d; (void)r; readyCalls++; visibleAtReady = hardwareVisible; StartEvent(EVENT_READY); }
 static void CuModeBegin(BC250_DEVICE* d) { (void)d; }
+/* BD-341: the child-event ring of the start (connector.c). Its place in the start is what this test checks. */
+static unsigned childBegins;
+static void ConnectorChildBegin(BC250_DEVICE* d) { (void)d; childBegins++; StartEvent(EVENT_CHILD_BEGIN); }
 static void WddmLevelStart(BC250_DEVICE* d) { (void)d; }
 static void BoardMemoryIdentityClear(BC250_DEVICE* d) { (void)d; if (lastStage) Trace("bmclear"); }
 static void BoardMemoryIdentityCapture(BC250_DEVICE* d) { (void)d; }
@@ -483,7 +488,17 @@ static NTSTATUS DcnBeginStartVisibility(BC250_DEVICE* d, BOOLEAN* touched)
 }
 static void HwmonStart(BC250_DEVICE* d) { (void)d; }
 static NTSTATUS SmuOwnerStart(ULONG* s, void* mmio) { (void)s; (void)mmio; return smuStatus; }
-static void VramStart(BC250_DEVICE* d) { (void)d; }
+/* VramStart behind its gate: closed unless a case opens it. vram_geometry_test.c runs the real range check
+ * (VramFirmwareRangeBelowTop); here it answers what a case sets, and the start shows what it does with the answer. */
+#define BC250_VRAM_TOP_RESERVED 0x2000000ull
+#define STATUS_CONFLICTING_ADDRESSES (-14L)
+static BOOLEAN vramOpen;
+static unsigned rangeCalls;
+static unsigned long long rangeTop;
+static NTSTATUS rangeStatus;
+static void VramStart(BC250_DEVICE* d) { d->VramEnabled = vramOpen; d->VramLength = vramOpen ? 431ull << 20 : 0; }
+static NTSTATUS VramFirmwareRangeBelowTop(const BC250_DEVICE* d, unsigned long long top)
+{ (void)d; rangeCalls++; rangeTop = top; StartEvent(EVENT_RANGE); return rangeStatus; }
 // The VBIOS capture around HardwareInfoWrite (BD-245): the fixture has no firmware, so the capture fails and the
 // start takes the no-VBIOS path. Only the fields that StartDevice reads are modelled.
 typedef enum { BC250_ATOM_OK, BC250_ATOM_ARGUMENT, BC250_ATOM_IO } BC250_ATOM_STATUS;
@@ -581,6 +596,7 @@ static void Reset(void)
     admissionCalls = mmioStops = 0;
     cursorPrepares = cursorStops = cursorBufferSeen = 0;
     fbMaps = timingCalls = modesetCalls = audioCalls = coldPipeLogs = 0;
+    childBegins = rangeCalls = 0; rangeTop = 0; rangeStatus = STATUS_SUCCESS; vramOpen = FALSE;
     blankStatus[0] = blankStatus[1] = restoreStatus = STATUS_SUCCESS;
     admissionStatus = STATUS_SUCCESS;
     mmioAvailable = hardwareVisible = restoreAttempt = TRUE;
@@ -856,6 +872,45 @@ int main(void)
         CHECK(Start() == STATUS_SUCCESS && dev.DisplayStart == BC250_DISPLAY_START_INHERITED && dev.Post.Width == 1920);
         CHECK(dev.ColdScanoutBytes == 0 && dev.FirmwarePipesHeld == 0);
     }
+    // ---- BD-341: the cold scan-out reserve against the top of VRAM -----------------------------------------
+    // With the VRAM carve-out known, a start without a firmware display asks vram.c whether its cold reserve stays
+    // below the reserved tail (the GART, PSP and pool windows). A reserve that reaches into the tail refuses the start
+    // in its own step, with a log line, before the GPU and the connector start; it does not pass silently.
+    Reset(); iface.DxgkCbAcquirePostDisplayOwnership = AcquirePostEmpty; vramOpen = TRUE;
+    CHECK(Start() == STATUS_SUCCESS && dev.DisplayStart == BC250_DISPLAY_START_NO_POST);
+    CHECK(RecordIs(L"started", L"-", L"-", 0, StageStartDone));
+    CHECK(rangeCalls == 1 && rangeTop == BC250_VRAM_TOP_RESERVED && EventBefore(EVENT_RANGE, EVENT_GPU));
+    CHECK(LoggedTimes("vram: cold scan-out reserve") == 0);
+    {
+        NTSTATUS refused[] = { STATUS_CONFLICTING_ADDRESSES, STATUS_DEVICE_CONFIGURATION_ERROR };
+        unsigned i, starts, prepares;
+        for (i = 0; i < RTL_NUMBER_OF(refused); i++) {
+            Reset(); iface.DxgkCbAcquirePostDisplayOwnership = AcquirePostEmpty; vramOpen = TRUE;
+            rangeStatus = refused[i]; starts = connectorStarts; prepares = connectorPrepares;
+            CHECK(Start() == refused[i]);
+            CHECK(RecordIs(L"failed", L"ColdScanoutReserve", L"-", (ULONG)refused[i], StageStartFailed));
+            CHECK(LoggedTimes("vram: cold scan-out reserve 0x7E9000 in the top 0x2000000 of VRAM 0x1AF00000") == 1);
+            CHECK(rangeCalls == 1 && gpuCalls == 0 && connectorPrepares == prepares && connectorStarts == starts);
+            CHECK(readyCalls == 0 && stops == 1 && outputSources == 0 && outputChildren == 0);
+        }
+    }
+    // The gate closed: no carve-out, no top windows, nothing to check. An inherited display is unchanged: its range
+    // is checked where it was before (gart.c, psp.c, gpumem.c), not by a new start step.
+    Reset(); iface.DxgkCbAcquirePostDisplayOwnership = AcquirePostEmpty; rangeStatus = STATUS_CONFLICTING_ADDRESSES;
+    CHECK(Start() == STATUS_SUCCESS && rangeCalls == 0);
+    Reset(); vramOpen = TRUE; rangeStatus = STATUS_CONFLICTING_ADDRESSES;
+    CHECK(Start() == STATUS_SUCCESS && dev.DisplayStart == BC250_DISPLAY_START_INHERITED && rangeCalls == 0);
+    // ---- BD-341: the child events of a start begin at its top ---------------------------------------------
+    // Once per admitted start, before the first step that touches the GPU and before the connector, so that a
+    // QueryChildRelations of this start is kept in this start's ring with this start's epoch. Also a start that fails
+    // after the guard begins its ring: its stop logs the events of this start, not of the start before it.
+    Reset();
+    CHECK(Start() == STATUS_SUCCESS && childBegins == 1);
+    CHECK(startEventCount > 0 && startEvents[0] == EVENT_CHILD_BEGIN && EventBefore(EVENT_CHILD_BEGIN, EVENT_CONNECTOR));
+    Reset(); iface.DxgkCbGetDeviceInformation = GetDeviceInfoFails;
+    CHECK(Start() == STATUS_ACCESS_DENIED && childBegins == 1);
+    Reset(); guardStatus = STATUS_DEVICE_BUSY;
+    CHECK(Start() == STATUS_DEVICE_BUSY && childBegins == 0);
     // A firmware display is unchanged by BD-341: every step of the inherited path runs once, and Post is the answer.
     Reset();
     CHECK(Start() == STATUS_SUCCESS);

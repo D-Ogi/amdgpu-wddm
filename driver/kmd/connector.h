@@ -97,6 +97,8 @@ BOOLEAN ConnectorIsConnected(struct _BC250_DEVICE* Device);
 // (stage A cannot light a pipe). Otherwise the static inherited path shows the firmware's display, always there. PASSIVE.
 ULONG ConnectorChildHpd(struct _BC250_DEVICE* Device);      // BC250_CHILD_HPD_* (display_start.h Bc250ChildHpd)
 BOOLEAN ConnectorChildConnected(struct _BC250_DEVICE* Device);
+// BD-341: clear the child events and set their epoch, at the top of each start. PASSIVE.
+void ConnectorChildBegin(struct _BC250_DEVICE* Device);
 // BD-341: keep and log one child event (BC250_CHILD_EVENT_*). Sense is -1 when the caller read none. PASSIVE.
 void ConnectorChildRecord(struct _BC250_DEVICE* Device, ULONG Kind, BOOLEAN Connected, LONG Sense, NTSTATUS Status);
 // BD-341: the kept child events, the counts and the live HPD0 sense, for the summary and the stop. PASSIVE.

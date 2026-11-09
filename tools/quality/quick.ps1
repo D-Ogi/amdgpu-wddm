@@ -810,6 +810,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='connector-resume';s='driver\kmd\test\run_connector_resume.ps1';a=@('-Root',$Workspace)}
   @{n='connector-resume-refusal-fails-d0';s='driver\kmd\test\run_connector_resume.ps1';a=@('-Root',$Workspace,'-RefusalFailsD0');Fails=$true}
   @{n='vram-geometry';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace)}
+  # BD-341: the top-of-VRAM check before the fix (FramebufferLength, 0 without a firmware display) must fail it.
+  @{n='vram-geometry-framebuffer-length';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace,'-RangeMutation','framebuffer-length');Fails=$true}
   @{n='guard-start';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace)}
   # BD-122: the start record, and the four pre-fix behaviours as its controls, one per requirement.
   @{n='start-record';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace)}
@@ -822,6 +824,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='start-visibility-no-initial-blank';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-NoInitialBlank');Fails=$true}
   @{n='start-visibility-no-final-blank';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-NoFinalBlank');Fails=$true}
   @{n='start-visibility-stop-keeps-hold';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-KeepStopVisibilityHold');Fails=$true}
+  # BD-341: a cold scan-out reserve in the top of VRAM that passes silently, and a start that keeps the child ring of
+  # the start before it.
+  @{n='start-record-no-cold-reserve-check';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-NoColdReserveCheck');Fails=$true}
+  @{n='start-record-no-child-begin';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-NoChildBegin');Fails=$true}
   @{n='guard-start-not-durable';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace,'-IgnoreDurability');Fails=$true}
   @{n='start-health';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace)}
   @{n='start-health-no-flush';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-IgnoreFlush');Fails=$true}

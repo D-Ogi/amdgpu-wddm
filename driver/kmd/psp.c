@@ -191,13 +191,9 @@ static PUCHAR MapVram(_In_ const BC250_DEVICE* Device, ULONGLONG BelowEnd, SIZE_
 // The window must be inside VRAM and above the firmware framebuffer, wherever the firmware says that is.
 static NTSTATUS CheckWindow(_In_ const BC250_DEVICE* Device)
 {
-    ULONGLONG fbOffset;
-
     if (!Device->VramEnabled || Device->VramLength < 2 * BC250_PSP_TOP_WINDOW) return STATUS_DEVICE_NOT_READY;
-    // vram.c's answer, also for a start without a firmware display (BD-341: offset 0, FramebufferLength 0).
-    if (!VramFramebufferOffset(Device, &fbOffset)) return STATUS_DEVICE_CONFIGURATION_ERROR;
-    if (fbOffset + Device->FramebufferLength > Device->VramLength - BC250_PSP_TOP_WINDOW) return STATUS_CONFLICTING_ADDRESSES;
-    return STATUS_SUCCESS;
+    // vram.c's range, also the cold scan-out reserve of a start without a firmware display (BD-341).
+    return VramFirmwareRangeBelowTop(Device, BC250_PSP_TOP_WINDOW);
 }
 
 // ---- the command --------------------------------------------------------------------------------------------------------

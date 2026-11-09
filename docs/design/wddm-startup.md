@@ -78,6 +78,13 @@ pipe can keep its old HUBP0 values. The start reads the three registers once
 `VramFramebufferExtent` applies the 8 MiB rule. When the start cannot read the
 registers (no BAR5 mapping or a refused read), it keeps 9 MiB. The connector
 buffer and its zero fill, and the VidMm segment, start above this range.
+The GART window, the PSP window and the GPU memory pool at the top of VRAM
+use the same range (`VramFirmwareRangeBelowTop`). When the carve-out is
+known and the range reaches into the reserved tail at the top
+(`BC250_VRAM_TOP_RESERVED`), the start fails in the step `ColdScanoutReserve`
+with the line `vram: cold scan-out reserve`. A stale HUBP0 pipe on a small
+carve-out can give such a range, and the firmware could then scan out of the
+memory of those owners.
 
 The child report says what stage A delivers. Nothing is armed, so no
 indication comes, and the child is `HpdAwarenessPolled`: dxgkrnl learns the
@@ -128,7 +135,9 @@ monitor) has no proven cause yet. A hotplug worker that disables the link,
 indicates "disconnected" and then fails discovery leaves Windows with no
 monitor. To make this visible after the log ring wraps, the connector keeps the
 first eight child events of a start (relations, status answers, indications,
-worker ends) and the latest one. `WddmSummary` and the connector stop print
+worker ends) and the latest one. The start clears these events at its top
+(`ConnectorChildBegin`), so that the first child event of a start is kept with
+the time base of that start. `WddmSummary` and the connector stop print
 them again with the counts and the live HPD0 sense
 (`connector: child summary` and `connector: child kept` lines).
 

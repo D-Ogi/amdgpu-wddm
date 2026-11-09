@@ -187,6 +187,20 @@ static void ChildEventLog(const char* Label, ULONG Index, const BC250_CONNECTOR_
         Label, Index, E->Ms, E->Generation, E->Published, E->Sense, (ULONG)E->Status);
 }
 
+// BD-341: the child events of one start begin here. StartDevice calls this at its top, before any step that can
+// fail, so that dxgkrnl cannot ask for the child relations of this start while the ring still holds the events and
+// the epoch of the previous start. PASSIVE_LEVEL, no lock: no child DDI of this start can run yet.
+void ConnectorChildBegin(BC250_DEVICE* Device)
+{
+    BC250_CONNECTOR* c = &Device->Connector;
+    c->ChildEpoch = KeQueryInterruptTime();
+    RtlZeroMemory(c->ChildEvents, sizeof(c->ChildEvents));
+    RtlZeroMemory(&c->ChildLast, sizeof(c->ChildLast));
+    InterlockedExchange(&c->ChildEventCount, 0);
+    InterlockedExchange(&c->ChildStatusCalls, 0);
+    InterlockedExchange(&c->ChildStatusDisconnected, 0);
+}
+
 void ConnectorChildRecord(BC250_DEVICE* Device, ULONG Kind, BOOLEAN Connected, LONG Sense, NTSTATUS Status)
 {
     BC250_CONNECTOR* c = &Device->Connector;
@@ -670,13 +684,7 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
     c->StartPreserved=0;        // earned per return path below (BD-169)
     Device->ConnectorLinkCleanup=STATUS_SUCCESS;     // no earlier attempt's cleanup is this start's
     c->StartStatus=STATUS_NOT_SUPPORTED;
-    // BD-341: the child events of this start begin here.
-    c->ChildEpoch=KeQueryInterruptTime();
-    RtlZeroMemory(c->ChildEvents,sizeof(c->ChildEvents));
-    RtlZeroMemory(&c->ChildLast,sizeof(c->ChildLast));
-    InterlockedExchange(&c->ChildEventCount,0);
-    InterlockedExchange(&c->ChildStatusCalls,0);
-    InterlockedExchange(&c->ChildStatusDisconnected,0);
+    // BD-341: the child events of this start began at the top of the start (ConnectorChildBegin).
     if (!Device->FullWddm) {
         // Display-only does not own a hardware connector.
         c->StartPreserved=1;

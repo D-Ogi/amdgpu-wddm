@@ -108,11 +108,8 @@ static NTSTATUS FindDoorbellBar(_In_ BC250_DEVICE* Device, _Out_ PHYSICAL_ADDRES
 // The pool must be above the firmware framebuffer, wherever the firmware says that is (as in gart.c and psp.c).
 static BOOLEAN PoolIsAboveFramebuffer(_In_ const BC250_DEVICE* Device)
 {
-    ULONGLONG fbOffset;
-
-    // vram.c's answer, also for a start without a firmware display (BD-341: offset 0, FramebufferLength 0).
-    if (!VramFramebufferOffset(Device, &fbOffset)) return FALSE;
-    return fbOffset + Device->FramebufferLength <= Device->VramLength - BC250_GPUMEM_POOL_BELOW;
+    // vram.c's range, also the cold scan-out reserve of a start without a firmware display (BD-341).
+    return NT_SUCCESS(VramFirmwareRangeBelowTop(Device, BC250_GPUMEM_POOL_BELOW));
 }
 
 // ---- start, stop ------------------------------------------------------------------------------------------------------------

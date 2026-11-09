@@ -179,6 +179,22 @@ BOOLEAN VramFramebufferExtent(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* 
     return *Bytes != 0;
 }
 
+// Whether the firmware range ends at or below the window of TopBytes at the end of VRAM. Every user of the top of
+// VRAM asks here: the GART window (gart.c), the PSP window (psp.c), the GPU memory pool (gpumem.c) and the start
+// (pnp.c, BD-341). So all of them see the same range, also the cold scan-out reserve of a start without a firmware
+// display. For an inherited display the range is Post.Pitch * Post.Height, which is FramebufferLength from the
+// framebuffer map to the stop, so those users keep the answer that they had before.
+NTSTATUS VramFirmwareRangeBelowTop(_In_ const BC250_DEVICE* Device, ULONGLONG TopBytes)
+{
+    ULONGLONG offset, bytes, limit;
+
+    if (!VramFramebufferExtent(Device, &offset, &bytes)) return STATUS_DEVICE_CONFIGURATION_ERROR;
+    if (TopBytes > Device->VramLength) return STATUS_CONFLICTING_ADDRESSES;
+    limit = Device->VramLength - TopBytes;
+    if (offset > limit || bytes > limit - offset) return STATUS_CONFLICTING_ADDRESSES;
+    return STATUS_SUCCESS;
+}
+
 // Match the existing POST mapping at physical-page granularity. Equal VRAM
 // offsets in BAR0 and the carve-out are not equal CPU physical addresses.
 // PnP serialization must retain Device->Framebuffer throughout the caller.

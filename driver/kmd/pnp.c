@@ -163,6 +163,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     device->DisplayStart=BC250_DISPLAY_START_UNKNOWN;  // BD-341: the acquire below sets it, before its first reader
     device->ColdScanoutBytes=0;
     device->FirmwarePipesHeld=0;
+    ConnectorChildBegin(device);   // BD-341: before dxgkrnl can ask for the child relations of this start
 
     StartHealthBegin(device,WddmFullTableSelected());
     CuModeBegin(device);
@@ -266,6 +267,20 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         }
     }
     VramStart(device);      // same rule
+    if (device->DisplayStart == BC250_DISPLAY_START_NO_POST && device->VramEnabled)
+    {
+        // BD-341: the cold scan-out reserve at the bottom of VRAM must stay below the reserved tail at the top (the
+        // GART, PSP and pool windows, bc250kmd.h). A stale pipe can give a reserve that reaches into the tail, and the
+        // firmware could then scan out of memory that those owners write. Refuse the start, do not pass silently.
+        GuardStartStep(L"ColdScanoutReserve");
+        status = VramFirmwareRangeBelowTop(device, BC250_VRAM_TOP_RESERVED);
+        if (!NT_SUCCESS(status)) {
+            GuardLog("vram: cold scan-out reserve 0x%lX in the top 0x%llX of VRAM 0x%llX, status 0x%08X",
+                     device->ColdScanoutBytes, BC250_VRAM_TOP_RESERVED, device->VramLength, (ULONG)status);
+            GuardStartFailureMark();
+            goto failed;
+        }
+    }
     {
         BC250_ATOM_FIRMWARE fw = {0};
         BC250_ATOM_STATUS fwReason = BC250_ATOM_ARGUMENT;
