@@ -2,6 +2,7 @@
 #include "runtime-image-memory.h"
 #include "runtime-texture.h"
 #include "runtime-surface.h"
+#include "../../contract/bc250_nv12_layout.h"
 #include <cstdlib>
 #include <iostream>
 using namespace bc250::umd;
@@ -376,7 +377,31 @@ int main() {
     nv12Planes[1].offset=2048; refused(); nv12Planes[1].offset=4096;
     nv12Planes[1].offset=UINT64_MAX-31; refused(); nv12Planes[1].offset=4096;
     nv12Planes[1].size=2047; refused(); nv12Planes[1].size=2048;
+    // An odd UV offset splits a two-byte sample: refused by the integrity rule on any GPU.
     nv12Planes[1].offset=4097; refused(); nv12Planes[1].offset=4096;
+    // Another GPU's layout answer (64-byte row padding, UV right after Y) is admitted: the UMD applies no display
+    // engine's 256-byte alignment or size limit (the DCN201 limits are the KMD's, dcn_nv12_layout_test.c).
+    nv12Planes[0]={0,3072,192,0,0}; nv12Planes[1]={3072,1536,192,0,0}; nv12Memory.size=4608;
+    check(prepare()==S_OK && preparedLayout.plane[0].rowPitch==192 && preparedLayout.plane[1].offset==3072);
+    destroy_runtime_image(device,imageDispatch,preparedImage);
+    {
+        const BC250_NV12_STORAGE other{64,16,192,192,4608,0,3072};
+        check(Bc250Nv12StorageIntegrity(&other));
+        const BC250_NV12_STORAGE dcn{64,16,256,256,8192,0,4096};
+        check(Bc250Nv12StorageIntegrity(&dcn));
+        const BC250_NV12_STORAGE wide{16384,16,16384,16384,16384ull*24,0,16384ull*16};
+        check(Bc250Nv12StorageIntegrity(&wide));  // past the DCN201 extent limit: not a UMD rule
+        const BC250_NV12_STORAGE oddPitch{64,16,192,193,4608,0,3072};
+        check(!Bc250Nv12StorageIntegrity(&oddPitch));
+        const BC250_NV12_STORAGE overlap{64,16,192,192,4608,0,2048};
+        check(!Bc250Nv12StorageIntegrity(&overlap));
+        const BC250_NV12_STORAGE outside{64,16,192,192,4607,0,3072};
+        check(!Bc250Nv12StorageIntegrity(&outside));
+        const BC250_NV12_STORAGE narrow{64,16,62,192,4608,0,3072};
+        check(!Bc250Nv12StorageIntegrity(&narrow));
+        check(!Bc250Nv12StorageIntegrity(nullptr));
+    }
+    nv12Planes[0]={0,4096,256,0,0}; nv12Planes[1]={4096,2048,256,0,0}; nv12Memory.size=8192;
     nv12Memory.size=6143; refused(); nv12Memory.size=8192;
     nv12Memory.alignment=3; refused(); nv12Memory.alignment=256;
     nv12Memory.memoryTypeBits=0; refused(); nv12Memory.memoryTypeBits=2;
