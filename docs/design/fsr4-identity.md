@@ -51,9 +51,10 @@ The KMD decides for each query. The first rule that matches gives the answer:
 
 1. The query has no KMD process handle (`DXGKARG_QUERYADAPTERINFO.hKmdProcessHandle` is NULL): OFF.
 2. The image is in the anti-cheat list: OFF. The setting cannot change this.
-3. The D3D12 shell sent `FsrUpgrade`: that value.
-4. The KMD knows no image name for the process: OFF, because it cannot check the list.
-5. Otherwise: ON.
+3. The D3D12 shell sent `FsrUpgrade` 1: ON, but only when the part has a claim (next section). Without a claim: OFF.
+4. The D3D12 shell sent `FsrUpgrade` 0: OFF.
+5. The KMD knows no image name for the process: OFF, because it cannot check the list.
+6. Otherwise: ON, but only when the part has a claim. Without a claim: OFF.
 
 The KMD checks the list against two names: dxgkrnl's process name (`DXGKARG_CREATEPROCESS.pProcessName`) and the
 image name that the shell sends. A match on either name is a match. The compare uses only the part after the last
@@ -62,6 +63,27 @@ shortened name (for example the 15 characters of the EPROCESS image file name). 
 `FortniteClient-Win64-Shipping.exe` and `EscapeFromTarkov.exe` do not match. Thus the list must not depend on that
 name alone: the shell sends its full image name at every device creation, also when the setting has no value. The
 lab log of the KMD records the length and the form of dxgkrnl's name, so that the form is measured.
+
+## The per-IP table
+
+The family and revision in the answer are not constants of the driver. They are the row of the part in
+`driver/kmd/gpu_capabilities.h`, chosen by the PCI vendor and device id that the KMD reads from configuration dword
+0 at start. The table gives, for each part, its own family and revision, what it claims to the FSR 4 DLL, and its
+dot product class.
+
+- A part with a row that has an `Fsr4Claim` gets the claim revision when the process is ON, and its own revision when
+  the process is OFF.
+- A part with a row that has no claim gets its own revision, whatever the setting says.
+- A part with no row, and a start whose configuration read failed, gives an all-zero 608-byte block. The DLL reads
+  a family of 0 as "no provider", the same as a refusal. Another part's family is never written.
+
+This is the rule that keeps the answer honest for every AMD GPU the driver will serve: the driver does not report
+FSR 4 for a part whose path was not measured. Today the table has one row, the BC-250 (PCI 1002:13FE, GFX1013). Its
+claim rests on a measured run of the FSR 4.1.2 INT8 provider on unit A.
+
+The dot product class in the same row is the second fact a future IP needs: a part with `BC250_DOT_SOFTWARE` runs
+the FSR 4 INT8 shaders through the software lowering (dxil-spirv for DXIL, RADV's NIR lowering for SPIR-V), because
+it has no hardware packed dot product.
 
 ## The setting
 
@@ -154,20 +176,26 @@ d3d12-fsr-identity FsrUpgrade=0/application result=00000000 status=0 answer=0 so
 | File | Part |
 |---|---|
 | `driver/contract/bc250_caps_query.h` | `BC250_AMD_IDENTITY_BYTES` and the offsets |
+| `driver/kmd/gpu_capabilities.h` | the per-IP table: family, revisions, FSR 4 claim, dot product class (no kernel header) |
 | `driver/kmd/amd_identity_policy.h`, `.c` | the list, the precedence and the reply bytes (no kernel header) |
 | `driver/kmd/amd_identity.h`, `.c` | the process record, the query answer, the escape and the lab log lines |
-| `driver/kmd/wddm.c` | the hooks in `Bc250WddmCreateProcess` and `QueryAdapterInfo` |
+| `driver/kmd/wddm.c` | the hooks in `Bc250WddmCreateProcess` and `QueryAdapterInfo`, the row capture at start |
 | `driver/kmd/display.c` | the escape dispatch in `Bc250Escape` |
 | `driver/kmd/bc250kmd_escape.h` | `BC250_ESCAPE_PROCESS_POLICY` |
 | `driver/umd/app-settings/app-settings-core.h` | `FsrUpgrade` |
 | `driver/umd/d3d12/fsr-identity.h`, `adapter.cpp` | the sender |
+| `driver/umd/d3d12/process-witness.h` | the module line and the fault witness that name a module in a game log (BD-332) |
 | `tools/win/amdgpu_wddm_control/src/GraphicsSettings.cs` | the control in the application |
 
 Tests:
 
 - `driver/kmd/test/run_amd_identity.ps1` (the `amd-identity` check of `tools/quality/quick.ps1`): the list, the
   precedence, the escape's shell word (UNSET, and shortened dxgkrnl names of listed games), the reply bytes and the
-  sizes that are not 608.
+  sizes that are not 608. It also checks the per-IP table: the BC-250 row and its negative controls, a second AMD
+  part with its own row (the lookup is generic), a non-AMD vendor with no row, and the all-zero answer of a part
+  without a row.
 - `driver/umd/d3d12/fsr-identity-test.cpp` (run by `tools/build/build-umd-d3d12.ps1`): the escape that the shell
   sends, against fake KMT entry points.
+- `driver/umd/d3d12/process-witness-test.cpp` (run by `tools/build/build-umd-d3d12.ps1`): the exact module line and
+  fault line, a table that is too small, and arming without a recording.
 - `driver/umd/app-settings/app-settings-test.cpp`: the setting and its precedence.

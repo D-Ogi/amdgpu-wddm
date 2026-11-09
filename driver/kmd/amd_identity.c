@@ -92,14 +92,15 @@ void AmdIdentityProcessCreate(_Out_ BC250_AMD_IDENTITY_PROCESS* Process, _In_rea
     AmdIdentityAscii(Process->Head, sizeof(Process->Head), Name, 0, Process->NameEnd);
 }
 
-NTSTATUS AmdIdentityQuery(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process, _Out_writes_bytes_(Bytes) void* Out, UINT Bytes)
+NTSTATUS AmdIdentityQuery(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process,
+    _In_opt_ const BC250_GPU_CAPABILITY* Capability, _Out_writes_bytes_(Bytes) void* Out, UINT Bytes)
 {
     unsigned int shell = BC250_AMD_IDENTITY_SHELL_NONE, names = 0, source = 0;
-    int on;
+    int on, claim = Capability != NULL && Capability->Fsr4Claim != BC250_FSR4_CLAIM_NONE;
 
     if (Process != NULL) names = AmdIdentityFacts(Process, &shell);
-    on = Bc250AmdIdentityDecide(Process != NULL, names, shell, &source);
-    if (!Bc250AmdIdentityFill(Out, Bytes, on)) return STATUS_INVALID_PARAMETER;
+    on = Bc250AmdIdentityDecide(Process != NULL, names, shell, claim, &source);
+    if (!Bc250AmdIdentityFill(Out, Bytes, on, Capability)) return STATUS_INVALID_PARAMETER;
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
     // One line for each process's first answer (every answer without a process), at most AMD_IDENTITY_LOG_LINES.
     // With a process, two more lines: what DXGKARG_CREATEPROCESS held at CreateProcess (whether pProcessName was set,
@@ -110,7 +111,8 @@ NTSTATUS AmdIdentityQuery(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process, _Out_wri
     if ((Process == NULL || InterlockedExchange(&Process->Logged, 1) == 0) && AmdIdentityLogSlot()) {
         GuardLog("fsr4-identity: query image %s source %s revision 0x%02X names 0x%X shell %u",
             (Process != NULL && Process->Image[0]) ? Process->Image : "-", Bc250AmdIdentitySourceName(source),
-            on ? BC250_AMD_IDENTITY_EREV_NAVI22 : BC250_AMD_IDENTITY_EREV_OWN, names, shell);
+            (on && claim) ? Capability->RevisionClaim : Capability != NULL ? Capability->RevisionOwn : 0u,
+            names, shell);
         if (Process != NULL && AmdIdentityLogSlot())
             GuardLog("fsr4-identity: dxgkrnl name %s ptr %lu chars %lu end %lu at %lu names 0x%lX",
                 Process->Image[0] ? Process->Image : "-", Process->NamePointer, Process->NameChars, Process->NameEnd,
@@ -123,10 +125,11 @@ NTSTATUS AmdIdentityQuery(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process, _Out_wri
     return STATUS_SUCCESS;
 }
 
-void AmdIdentityEscape(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process, _Inout_ BC250_ESCAPE_PROCESS_POLICY* Data)
+void AmdIdentityEscape(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process,
+    _In_opt_ const BC250_GPU_CAPABILITY* Capability, _Inout_ BC250_ESCAPE_PROCESS_POLICY* Data)
 {
     unsigned int imageFlags, names, shell, source = 0, word = 0, before;
-    int on;
+    int on, claim = Capability != NULL && Capability->Fsr4Claim != BC250_FSR4_CLAIM_NONE;
 
     C_ASSERT(BC250_PROCESS_POLICY_FSR_OFF == BC250_AMD_IDENTITY_FSR_OFF);
     C_ASSERT(BC250_PROCESS_POLICY_FSR_ON == BC250_AMD_IDENTITY_FSR_ON);
@@ -153,7 +156,7 @@ void AmdIdentityEscape(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process, _Inout_ BC2
     (void)Bc250AmdIdentityShellWord(Data->FsrIdentity, imageFlags, &word);
     before = (unsigned int)InterlockedExchange(&Process->Shell, (LONG)word);
     names = AmdIdentityFacts(Process, &shell);
-    on = Bc250AmdIdentityDecide(TRUE, names, shell, &source);
+    on = Bc250AmdIdentityDecide(TRUE, names, shell, claim, &source);
     Data->Answer = (ULONG)on;
     Data->Source = source;
     Data->NameFlags = names;
@@ -172,7 +175,7 @@ void AmdIdentityEscape(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process, _Inout_ BC2
         AmdIdentityNarrow(image, sizeof(image), (const WCHAR*)Data->Image, BC250_PROCESS_POLICY_IMAGE_CHARS);
         GuardLog("fsr4-identity: shell image %s FsrUpgrade %lu source %s revision 0x%02X names 0x%X",
             image[0] ? image : "-", Data->FsrIdentity, Bc250AmdIdentitySourceName(source),
-            on ? BC250_AMD_IDENTITY_EREV_NAVI22 : BC250_AMD_IDENTITY_EREV_OWN, names);
+            (on && claim) ? Capability->RevisionClaim : Capability != NULL ? Capability->RevisionOwn : 0u, names);
     }
 #endif
 }

@@ -79,9 +79,10 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
 
 static void NoteInterruptResource(_Inout_ BC250_DEVICE* Device);
 
-// The PCI id as configuration dword 0 holds it (vendor low, device high), for the per-IP decisions (asic_ip.h): the
-// queue resets of wddm.c and the power-loss witness of power.c (BD-188 D-2). A failed read gives 0, which no table row
-// matches, so the device gets no per-IP capability. Before WddmStart, which reads PciId.
+// The PCI id as configuration dword 0 holds it (vendor low, device high), for the per-IP decisions: the queue resets
+// (asic_ip.h) and the capability row (gpu_capabilities.h, BD-332) of wddm.c, and the power-loss witness of power.c
+// (BD-188 D-2). A failed read gives 0, which no table row matches, so the device gets no per-IP capability. Before
+// WddmStart, which reads PciId.
 static void PnpReadIdentity(_Inout_ BC250_DEVICE* Device)
 {
     ULONG pci = 0, bytes = 0;

@@ -20,6 +20,7 @@
 #include "stdio-log.h"
 #include "../recent-launch/recent-launch.h"
 #include "fsr-identity.h"
+#include "process-witness.h"
 namespace {
 using native12::Adapter;
 using native12::Device;
@@ -166,6 +167,10 @@ HRESULT APIENTRY create_device(D3D12DDI_HADAPTER h,const D3D12DDIARG_CREATEDEVIC
     if(FAILED(hr)){device->~Device();trace("CreateDevice-engine-failed",static_cast<unsigned>(hr));return hr;}
     ++adapter->devices;
     send_fsr_setting(*adapter,settings);
+    // BD-332: what else is in this process (an upscaling file, a proxy for a system DLL) and a witness for a fault
+    // that would end it. Both write only while the game log records (process-witness.h).
+    amdgpu_wddm_witness::log_modules();
+    amdgpu_wddm_witness::arm();
     // The outer device exists: note the launch once per process, off this thread (recent-launch.h).
     amdgpu_wddm::recent_launch::note_outer_device(amdgpu_wddm::recent_launch::ApiD3D12);
     return S_OK;
@@ -275,6 +280,9 @@ void APIENTRY destroy_device(D3D12DDI_HDEVICE h) {
     trace("DestroyDevice-unresolved-active-memory",active);
     // These are CPU records only. OS context reclamation remains a lab acceptance gate.
     device->~Device();--adapter->devices;trace("DestroyDevice");
+    // BD-332: the last outer device of the process is gone, so the fault witness is removed with it and a later
+    // device arms it again (process-witness.h).
+    if(!adapter->devices.load())amdgpu_wddm_witness::disarm();
 }
 }
 // The shell's only DllMain. It exists for one line: the counters of the pipeline compile pool of every device that
@@ -285,8 +293,14 @@ void APIENTRY destroy_device(D3D12DDI_HDEVICE h) {
 // Only on a FreeLibrary (lpReserved null). A process that is terminating gets nothing: its other threads are gone
 // already, one of them may hold the log, and a line is not worth a hang at exit. A game that exits that way leaves
 // its numbers in the periodic line instead (device-engine.cpp, kPsoSummaryPeriodMs).
+//
+// The fault witness is removed on a FreeLibrary (BD-332): its handler is code of this image, and an exception after
+// the unload must not reach it. At process termination (reserved not null) nothing is done, as for the summary
+// above: the other threads are already gone, the image stays mapped until the process is, and an exception handler
+// of a process that is exiting has no report to make.
 extern "C" BOOL WINAPI DllMain(HINSTANCE,DWORD reason,LPVOID reserved) {
     if(reason==DLL_PROCESS_DETACH && !reserved){
+        amdgpu_wddm_witness::disarm();
         const unsigned written=engine_ddi::pso_detach_summary();
         if(written)trace("DllMain-pso-summary",written);
     }

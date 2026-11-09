@@ -4643,6 +4643,17 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
                                                BC250_SDMA_FW_UNKNOWN);
     GuardLog("wddm: queue resets for PCI %04lX:%04lX: caps 0x%lX (1 compute, 2 gfx, 4 SDMA)", Device->PciId & 0xFFFFu,
              Device->PciId >> 16, wddm->QueueResetCaps);
+    // The per-IP capability row (gpu_capabilities.h): what this part can claim to AMD's FidelityFX upscaler DLL. The
+    // same PCI id as the table above; a failed read leaves no row, and the identity answer then has no claim (BD-332).
+    Device->GpuCapabilityValid =
+        Bc250GpuCapabilityFor(BC250_PCI_VENDOR(Device->PciId), BC250_PCI_DEVICE(Device->PciId), &Device->GpuCapability)
+            ? TRUE : FALSE;
+    GuardLog("wddm: IP row %s %04lX:%04lX claim %lu rev 0x%02lX dots %s",
+             Device->GpuCapabilityValid ? "present" : "absent", Device->PciId & 0xFFFFu, Device->PciId >> 16,
+             Device->GpuCapabilityValid ? (unsigned long)Device->GpuCapability.Fsr4Claim : 0ul,
+             Device->GpuCapabilityValid ? (unsigned long)Device->GpuCapability.RevisionOwn : 0ul,
+             !Device->GpuCapabilityValid ? "unknown"
+             : Device->GpuCapability.DotClass == BC250_DOT_SOFTWARE ? "software" : "hardware");
     KeInitializeDpc(&wddm->PagingSubmitDpc, WddmPagingSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->PagingSubmitTimer);
     KeInitializeDpc(&wddm->PagingDrainDpc, WddmPagingDrainDpcRoutine, Device);
@@ -5810,7 +5821,8 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         // AMD's 608-byte identity block, which our UMDs never ask for: the FSR 4 answer per process (amd_identity.c).
         if (Bc250AmdIdentityExtent(QueryAdapterInfo->OutputDataSize)) {
             status = AmdIdentityQuery(WddmProcessIdentity(QueryAdapterInfo->hKmdProcessHandle),
-                QueryAdapterInfo->pOutputData, QueryAdapterInfo->OutputDataSize);
+                device->GpuCapabilityValid ? &device->GpuCapability : NULL, QueryAdapterInfo->pOutputData,
+                QueryAdapterInfo->OutputDataSize);
             break;
         }
         if (QueryAdapterInfo->OutputDataSize < UMD_CAPS_BYTES) { status = STATUS_BUFFER_TOO_SMALL; break; }

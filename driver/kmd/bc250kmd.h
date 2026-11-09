@@ -82,6 +82,7 @@
 #include "modeset.h"
 #include "connector.h"
 #include "board_memory_service.h"
+#include "gpu_capabilities.h"
 #include "blit_map_cache.h"     // BD-289: the CPU present blit's kept source and destination mappings
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
@@ -227,7 +228,8 @@ typedef struct _BC250_DEVICE {
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
     // BD-188 D-2 (power.c, power_loss.h): the steps of the last way down that failed (bit k-1 for step k), and the
-    // power-loss witness of this device. PciId is configuration dword 0, read once at start (pnp.c).
+    // power-loss witness of this device. PciId is configuration dword 0, read once at start (pnp.c). A failed read
+    // gives 0, which no per-IP table row matches: no queue reset, no power-loss witness, no capability row (BD-332).
     ULONG RetainedDownFailed;
     ULONG PciId;
     ULONG PowerWitness;                 // BC250_POWER_WITNESS_*, from the per-IP data of PciId
@@ -432,6 +434,11 @@ typedef struct _BC250_DEVICE {
     volatile LONG64 UmaActiveBytes; // atomic software view; zero outside a successful VRAM start
     UCHAR BoardMemoryMachineId[16];
     ULONG BoardMemoryBiosId;
+    // The part's row of gpu_capabilities.h, captured at start from PCI configuration dword 0 (the same read that
+    // gives the queue reset table) and immutable after it. Valid 0: the part is not in the table, so the FSR 4
+    // identity answer gives no claim (BD-332).
+    BC250_GPU_CAPABILITY GpuCapability;
+    BOOLEAN GpuCapabilityValid;
     // The overclock tier of this start (oc_tier.c). OcTier is the effective tier (BC250_OC_TIER_*), OcStoredTier the
     // tier the settings still hold after the start (0 when it deleted them), OcReason an enum bc250_oc_reason, OcBoard
     // this board's fingerprint (0 when the board is not a positively identified BC-250). Written once by OcTierStart

@@ -127,6 +127,15 @@ try {
   if($LASTEXITCODE){throw 'FSR identity test build failed'}
   & .\fsr-identity-test.exe
   if($LASTEXITCODE){throw 'FSR identity tests failed'}
+  # BD-332: the module line, the fault line and the handler's contract of process-witness.h (arm/remove, the line
+  # bound, repeat suppression, the re-entrancy guard). The test opens a real sink through AMDGPU_WDDM_LOG, which
+  # only the lab flavour reads directly, so it is built with that define when this build is the release flavour.
+  $witnessFlags = @($dllFlags)
+  if (-not $Lab) { $witnessFlags += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
+  & $compilerExe @witnessFlags /Fe:process-witness-test.exe "$repo\driver\umd\d3d12\process-witness-test.cpp"
+  if($LASTEXITCODE){throw 'Process witness test build failed'}
+  & .\process-witness-test.exe
+  if($LASTEXITCODE){throw 'Process witness tests failed'}
   # Built only: the probe asks the BC-250's adapter key and belongs on the target.
   & cl.exe @flags /Fe:instance-policy-probe.exe "$repo\driver\umd\d3d12\instance-policy-probe.cpp" /link dxgi.lib
   if($LASTEXITCODE){throw 'Instance policy probe build failed'}
