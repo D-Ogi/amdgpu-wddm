@@ -117,6 +117,11 @@ static inline int bc250_board_supported(unsigned int provider_id)
  * stall of about a second in a game cost 30-36 s at a reduced clock with the ramp alone (OWN3, 80 C). The thermal
  * rules stay the bound; docs/design/dpm.md lists what ends the recall. */
 #define BC250_DPM_RAMP_RECALL_MS	10000u
+/* BD-329: the ramp's fast lane (bc250_dpm.h has the reasons). Under this raw reading, and only while both BD-281 rules
+ * are on, a raise goes to the high-clock zone's level in one step. 2 C under the shipped threshold of both BD-281 rules
+ * (80 C): on the session 367 plant a jump from 78-79 C puts the hot spot at 86.4 C, from 77 C at 85.4 C. The lane also
+ * ends under rate_from_mc when a setting moves the rate rule lower. */
+#define BC250_DPM_RAMP_FAST_MAX_MC	78000
 #define BC250_DPM_CRITICAL_MC		90000
 #define BC250_DPM_RELEASE_MC		82000	/* below: the thermal cap rises again (HOT_MC - 5 C) */
 #define BC250_DPM_RELEASE_STEP_MS	1000u	/* one level per this, while below RELEASE_MC */

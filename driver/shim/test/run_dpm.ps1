@@ -13,6 +13,8 @@
 # changed, never the tree:
 #   -NoSustain       the sustained raise chooses nothing (the single-tick rule of the releases before BD-329)
 #   -NoSustainGuard  the sustained raise ignores its landing guard and may land at or under the lowering threshold
+#   -NoRampFast      the thermal ramp's fast lane chooses nothing (the one-level ramp of rc3)
+#   -RampFastUnbounded  the fast lane ignores its temperature top (BC250_DPM_RAMP_FAST_MAX_MC, rate_from_mc)
 
 param(
     [string]$Out = 'P:\BC-250\scratch\build\dpm',
@@ -20,6 +22,8 @@ param(
     [string]$KitVersion = '10.0.26100.0',
     [switch]$NoSustain,
     [switch]$NoSustainGuard,
+    [switch]$NoRampFast,
+    [switch]$RampFastUnbounded,
     [switch]$ExpectFailure          # a negative control: exit 0 only when the test fails
 )
 
@@ -52,7 +56,7 @@ $env:TEMP = Join-Path $Out 'tmp'; $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 
 $sources = @('bc250_dpm.c', 'bc250_clock.c') | ForEach-Object { Join-Path $shim $_ }
-if ($NoSustain -or $NoSustainGuard) {
+if ($NoSustain -or $NoSustainGuard -or $NoRampFast -or $RampFastUnbounded) {
     $policy = [IO.File]::ReadAllText((Join-Path $shim 'bc250_dpm.c'))
     if ($NoSustain) {
         $live = 'want = next;'
@@ -63,6 +67,16 @@ if ($NoSustain -or $NoSustainGuard) {
         $live = '(unsigned long long)t->down_permille * bc250_dpm_level_mhz(next) <'
         if (-not $policy.Contains($live)) { throw 'negative control: the sustained raise guard moved' }
         $policy = $policy.Replace($live, '0ull * bc250_dpm_level_mhz(next) <')
+    }
+    if ($NoRampFast) {
+        $live = 'ramp = fast;'
+        if (([regex]::Matches($policy, [regex]::Escape($live))).Count -ne 1) { throw 'negative control: the fast lane moved' }
+        $policy = $policy.Replace($live, '(void)fast;')
+    }
+    if ($RampFastUnbounded) {
+        $live = 'in->temperature_mc < top &&'
+        if (([regex]::Matches($policy, [regex]::Escape($live))).Count -ne 1) { throw 'negative control: the fast lane top moved' }
+        $policy = $policy.Replace($live, 'in->temperature_mc < top + 100000 &&')
     }
     $mutant = Join-Path $Out 'mutant'
     New-Item -ItemType Directory -Force $mutant | Out-Null
