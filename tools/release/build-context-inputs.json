@@ -635,8 +635,8 @@
         "tools/quality": "4a61c1d7e579dd45f2ba5ec236407af3e8e4aa53",
         "tools/release/installer": "3736b797fb20d7e03d98468145ff01da24eccc50",
         "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004",
-        "driver": "6a9ea2bed1760a556aafede71c868c94f5fc0816",
-        "tools/win": "3e348eb08acaf6db2d2441b0765b7f87b730859e",
+        "driver": "5d22d594463805bab4f314d2a1dba9ac967d5346",
+        "tools/win": "fe42497cbe2b1feac72c9ebb944c497bbdea926c",
         "tools/state": "1103e68399f420f05829c5d106959ffd8741d40d",
         "tools/hwinfo": "12d9e4823476e36422e8a6f976bb0ef17c48e11f",
         "tools/docs": "d5485f5009c5af2ca77fda2f9202fc1ac207bbb6",
@@ -2080,7 +2080,7 @@
         "driver/kmd/test": "a718bb23bc754dd1be961ffde57770674c58a2be",
         "driver/state": "d11313e11da4e9185e80ac4da9a20a08d94c44a4",
         "tools/win/bc250kmd_cli": "ab38bf940fc11e804c9ac0c564f4afe03461e70e",
-        "tools/win/amdgpu_wddm_control": "bd3f864ac9ed86062c6926e3efa2c2df7a48ef53"
+        "tools/win/amdgpu_wddm_control": "3188635fbc107405a7da436e68681d662f59d1ae"
       },
       "inputs": [
         {
