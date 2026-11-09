@@ -800,7 +800,13 @@ void free_adapter_caps(AdapterCaps* caps) noexcept;
 // (D3D12DDI_BUILD_VERSION_0092 to _0094); type 1079 needs 93 or later. It writes only when DataSize is the exact
 // payload size of the type, never a prefix; a wrong size or a bad pInfo is E_INVALIDARG with nothing written, and a type it does not
 // answer is E_NOTIMPL. Both are logged with the type and the size. Thread-safe: it only reads caps.
+// caps may be null for a type that caps_type_reads_engine does not name: that answer is a constant of the shell.
+// A type that reads the engine gets E_INVALIDARG with null caps.
 HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDIARG_GETCAPS* request) noexcept;
+// Whether build_caps answers the type from the engine's answers (AdapterCaps). The other types, the unknown ones
+// included, do not depend on the engine, so a caller need not query the engine for them and a failed engine query
+// must not decide their answer (BD-331).
+bool caps_type_reads_engine(UINT type) noexcept;
 
 // Whether this adapter's render pass table may be published: the same answer 1006 RenderPassTier reports, which is
 // the engine's own OPTIONS5 answer (the pinned engine says tier 0, "Currently not supported", although it

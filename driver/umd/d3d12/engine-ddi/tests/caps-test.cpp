@@ -312,6 +312,57 @@ void check_none_types(const engine_ddi::AdapterCaps* caps, const char* what) {
           sizeof(BOOL));
 }
 
+HRESULT APIENTRY refusing_query(const BC250_VKD3D_DEVICE_CREATE_INFO*, UINT32, BC250_VKD3D_FEATURE_QUERY*) {
+    ++g_calls;
+    return E_INVALIDARG; // the engine found no Vulkan physical device with the adapter's LUID (BD-331)
+}
+
+// BD-331: an engine that refuses the adapter leaves no AdapterCaps. The types that read the engine then fail, and
+// every other type keeps the shell's constant answer: one failed engine query does not decide unrelated types.
+void test_no_engine_caps(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    BC250_VKD3D_ENGINE_FUNCS funcs = stub_funcs();
+    funcs.QueryAdapterCaps = refusing_query;
+    g_calls = 0;
+    engine_ddi::AdapterCaps* caps = nullptr;
+    const HRESULT query = engine_ddi::query_adapter_caps(&funcs, &info, &caps);
+    check(query == E_INVALIDARG && !caps && g_calls == 1,
+          "no engine caps: the engine's refusal is returned and no caps exist (hr %08lx)",
+          static_cast<unsigned long>(query));
+
+    HRESULT hr;
+    (void)level_1074(nullptr, D3D12DDI_3DPIPELINELEVEL_12_2, hr);
+    check(hr == E_INVALIDARG, "no engine caps: 1074 reads the engine and fails with E_INVALIDARG (hr %08lx)",
+          static_cast<unsigned long>(hr));
+    D3D12DDI_3DPIPELINELEVEL old;
+    std::memset(&old, 0xEE, sizeof(old));
+    hr = get(nullptr, D3D12DDICAPS_TYPE_3DPIPELINESUPPORT, old);
+    check(hr == E_INVALIDARG && untouched(&old, sizeof(old)),
+          "no engine caps: 1007 fails with E_INVALIDARG, nothing written (hr %08lx)", static_cast<unsigned long>(hr));
+
+    UINT key[2] = {D3D12DDI_TL_ROW_MAJOR, static_cast<UINT>(D3D12DDI_FUNCUNIT_COMBINED)};
+    D3D12DDI_ROW_MAJOR_LAYOUT_CAPS sets;
+    std::memset(&sets, 0xEE, sizeof(sets));
+    hr = get(nullptr, D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS, sets, key, 20);
+    check(hr == S_OK && sets.SubCaps[0].MaxElementSize == 0xFFFF && sets.SubCaps[0].PitchAlignment == 1,
+          "no engine caps: 1003 keeps its constant answer (hr %08lx)", static_cast<unsigned long>(hr));
+    check_none_types(nullptr, "no engine caps");
+    UINT64 unknown;
+    std::memset(&unknown, 0xEE, sizeof(unknown));
+    hr = get(nullptr, static_cast<D3D12DDICAPS_TYPE>(1100), unknown);
+    check(hr == E_NOTIMPL && untouched(&unknown, sizeof(unknown)),
+          "no engine caps: an unknown type is E_NOTIMPL as with caps, not the engine's failure (hr %08lx)",
+          static_cast<unsigned long>(hr));
+
+    check(engine_ddi::caps_type_reads_engine(D3D12DDICAPS_TYPE_0081_3DPIPELINESUPPORT1) &&
+              engine_ddi::caps_type_reads_engine(D3D12DDICAPS_TYPE_3DPIPELINESUPPORT) &&
+              engine_ddi::caps_type_reads_engine(D3D12DDICAPS_TYPE_0011_SHADER_MODELS) &&
+              engine_ddi::caps_type_reads_engine(1099) &&
+              !engine_ddi::caps_type_reads_engine(D3D12DDICAPS_TYPE_EXECUTECOMMANDLISTS_PARALLELISM) &&
+              !engine_ddi::caps_type_reads_engine(D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS) &&
+              !engine_ddi::caps_type_reads_engine(1110) && !engine_ddi::caps_type_reads_engine(1100),
+          "caps_type_reads_engine: 1074, 1007, 1012 and 1099 read the engine; 1069, 1003, 1110 and 1100 do not");
+}
+
 void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     // A 1.1 function table (the shell asked GetFuncs for 1.1): no QueryAdapterCaps, refused before any call.
     {
@@ -1912,6 +1963,7 @@ int wmain(int argc, wchar_t** argv) {
         info.AbiVersion = kAbi12;
         info.InstanceMode = BC250_VKD3D_INSTANCE_MODE_PRIVATE;
         test_stub(info);
+        test_no_engine_caps(info);
         test_policy_stub(info);
         test_raytracing_tier_reporting(info);
         test_mesh_shader_tier(info);
