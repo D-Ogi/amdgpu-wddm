@@ -848,6 +848,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='kmd-queue-reset-no-measured-sdma';s='driver\kmd\test\run_queue_reset.ps1';a=@('-Root',$Workspace,'-NoMeasuredSdma');Fails=$true}
   @{n='kmd-queue-reset-sdma-args-unconfirmed';s='driver\kmd\test\run_queue_reset.ps1';a=@('-Root',$Workspace,'-SdmaArgsUnconfirmed');Fails=$true}
   @{n='kmd-queue-reset-gfx-lab-only';s='driver\kmd\test\run_queue_reset.ps1';a=@('-Root',$Workspace,'-GfxLabOnly');Fails=$true}
+  # BD-188: the bounded wait of the retained way down. No wait, a wait for a watchdog fault, a bound in delays.
+  @{n='retained-power-drain-none';s='driver\kmd\test\run_retained_power.ps1';a=@('-Root',$Workspace,'-DrainNone');Fails=$true}
+  @{n='retained-power-drain-watchdog';s='driver\kmd\test\run_retained_power.ps1';a=@('-Root',$Workspace,'-DrainWatchdog');Fails=$true}
+  @{n='retained-power-drain-step-count';s='driver\kmd\test\run_retained_power.ps1';a=@('-Root',$Workspace,'-DrainStepCount');Fails=$true}
   @{n='submit-watchdog-CountUnchangedAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountUnchangedAsActivity');Fails=$true}
   @{n='submit-watchdog-CountPrimeAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountPrimeAsActivity');Fails=$true}
   @{n='submit-watchdog-CountGapAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountGapAsActivity');Fails=$true}

@@ -27,6 +27,7 @@
 #include "paging_private.h"
 #include "paging_ddi_status.h"   // BD-235: the statuses that BuildPagingBuffer may give to the OS
 #include "paging_drain.h"
+#include "power_drain.h"         // BD-188: the bounded wait of the retained way down and its busy reasons
 #include "table_budget.h"        // BD-028 stage B: the 64 MiB cap on the table segment
 #include "object_index.h"
 #include "ring_gap.h"            // C48/C49: the node's own idle-gap accounting, the same object the ETW analysis used
@@ -4744,19 +4745,30 @@ Failed:
 // must stop/join IH and hardware consumers separately before powering down.
 // SetPowerState is Level Three: OS work is already idle. Never fake retirement
 // or destroy live OS objects to make that invariant appear true.
-static BOOLEAN WddmPowerIdleLocked(const BC250_WDDM* Wddm)
+static ULONG WddmPowerBusyLocked(const BC250_WDDM* Wddm)
 {
     UINT node;
-    if (Wddm->HwPending || Wddm->DeferredValid || Wddm->ComputeHwPending || Wddm->ComputeDeferredValid ||
-        Wddm->PagingHwPending ||
-        Wddm->PagingHead || Wddm->PagingTail ||
-        Wddm->ReportActive || Wddm->ReportAgain) return FALSE;
+    ULONG busy=0;
+    if (Wddm->HwPending) busy|=BC250_POWER_BUSY_GFX_HW;
+    if (Wddm->DeferredValid) busy|=BC250_POWER_BUSY_GFX_DEFERRED;
+    if (Wddm->ComputeHwPending) busy|=BC250_POWER_BUSY_COMPUTE_HW;
+    if (Wddm->ComputeDeferredValid) busy|=BC250_POWER_BUSY_COMPUTE_DEFER;
+    if (Wddm->PagingHwPending) busy|=BC250_POWER_BUSY_PAGING_HW;
+    if (Wddm->PagingHead || Wddm->PagingTail) busy|=BC250_POWER_BUSY_PAGING_QUEUED;
+    if (Wddm->ReportActive || Wddm->ReportAgain) busy|=BC250_POWER_BUSY_REPORT;
     for (node=0;node<BC250_WDDM_NODE_COUNT_MAX;node++) {
-        if (Wddm->ActiveSubmissions[node] || Wddm->CompletionPending[node] ||
-            Wddm->PreemptionPending[node] || Wddm->RefusalPending[node] ||
-            Wddm->RejectedPending[node] || Wddm->WatchdogFaulted[node]) return FALSE;
+        if (Wddm->ActiveSubmissions[node]) busy|=BC250_POWER_BUSY_SUBMISSIONS;
+        if (Wddm->CompletionPending[node]) busy|=BC250_POWER_BUSY_COMPLETION;
+        if (Wddm->PreemptionPending[node]) busy|=BC250_POWER_BUSY_PREEMPTION;
+        if (Wddm->RefusalPending[node] || Wddm->RejectedPending[node]) busy|=BC250_POWER_BUSY_REFUSAL;
+        if (Wddm->WatchdogFaulted[node]) busy|=BC250_POWER_BUSY_WATCHDOG;
     }
-    return TRUE;
+    return busy;
+}
+
+static BOOLEAN WddmPowerIdleLocked(const BC250_WDDM* Wddm)
+{
+    return WddmPowerBusyLocked(Wddm)==0;
 }
 
 NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device)
@@ -4764,20 +4776,40 @@ NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device)
     BC250_WDDM* wddm=(BC250_WDDM*)Device->Wddm;
     KIRQL irql;
     NTSTATUS status=STATUS_SUCCESS;
+    ULONG busy, waited=0, first=0, rounds=0;
+    ULONGLONG start;
+    LARGE_INTEGER step;
     if (KeGetCurrentIrql()!=PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;
     if (!wddm) return STATUS_DEVICE_NOT_READY;
-    // Give already queued completion notifications their normal publication path.
-    // This does not poll hardware, clear pending work or manufacture completion.
-    KeFlushQueuedDpcs();
-    KeAcquireSpinLock(&wddm->Lock,&irql);
-    if (wddm->RetainedPowerPause) {
+    // BD-188: SetPowerState is Level Three and the OS has idled its work, but the last completions can still be on
+    // their way (the interrupt, the DPC, the OS report). Wait for them on their normal path, a bounded time
+    // (power_drain.h). Each round flushes the queued DPCs. Nothing here polls hardware, clears pending work or
+    // makes up a completion; work that does not complete in the bound refuses the way down as before.
+    step.QuadPart=-10000;                       // 1 ms, relative; the timer resolution can make a step longer
+    start=KeQueryInterruptTime();               // so the bound is elapsed time, not a count of steps
+    for (;;) {
+        KeFlushQueuedDpcs();
+        KeAcquireSpinLock(&wddm->Lock,&irql);
+        if (wddm->RetainedPowerPause) {
+            KeReleaseSpinLock(&wddm->Lock,irql);
+            return STATUS_SUCCESS;
+        }
+        busy=WddmPowerBusyLocked(wddm) | (wddm->Stopping ? BC250_POWER_BUSY_STOPPING : 0u);
+        if (busy==0) break;                     // keeps the lock: the pause below starts from this idle state
         KeReleaseSpinLock(&wddm->Lock,irql);
-        return STATUS_SUCCESS;
+        if (rounds==0) first=busy;
+        waited=(ULONG)((KeQueryInterruptTime()-start)/10000u);
+        if (!Bc250PowerDrainWorthWaiting(busy) || waited>=BC250_WDDM_SUSPEND_DRAIN_MS) {
+            GuardLog("wddm: retained way down refused after %lu ms, %lu rounds: busy 0x%04lX (first 0x%04lX)",
+                     waited,rounds,busy,first);
+            return STATUS_DEVICE_BUSY;
+        }
+        KeDelayExecutionThread(KernelMode,FALSE,&step);
+        rounds++;
     }
-    if (wddm->Stopping || !WddmPowerIdleLocked(wddm)) {
-        KeReleaseSpinLock(&wddm->Lock,irql);
-        return STATUS_DEVICE_BUSY;
-    }
+    if (rounds!=0)
+        GuardLog("wddm: retained way down waited %lu ms, %lu rounds, for busy 0x%04lX to complete",
+                 (ULONG)((KeQueryInterruptTime()-start)/10000u),rounds,first);
     wddm->Stopping=TRUE;
     if (Device->DcnVsyncArmed) status=DcnVsyncEnable(Device,FALSE);
     if (!NT_SUCCESS(status)) {

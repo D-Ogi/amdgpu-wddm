@@ -6,9 +6,13 @@
 #ifndef _Inout_
 #define _Inout_
 #endif
+#include "power_drain.h"    /* BD-188: the bounded wait of the way down */
 typedef int BOOLEAN, NTSTATUS, KIRQL;
 typedef unsigned UINT;
+typedef unsigned long ULONG;
+typedef unsigned long long ULONGLONG;
 typedef long long LONGLONG;
+#define KernelMode 0
 typedef struct {long long QuadPart;} LARGE_INTEGER;
 #define TRUE 1
 #define FALSE 0
@@ -58,6 +62,19 @@ static int GfxSubmitReady(BC250_DEVICE*d){(void)d;CHECK(!lockHeld);return gfxRea
 static int GfxPagingSubmitReady(BC250_DEVICE*d){(void)d;CHECK(!lockHeld);return pagingReady;}
 static LONGLONG InterlockedExchange64(volatile LONGLONG*p,LONGLONG v){LONGLONG old=*p;CHECK(lockHeld);*p=v;return old;}
 static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER*f){LARGE_INTEGER n={1234};f->QuadPart=1000000;return n;}
+/* BD-188 drain model: the interrupt clock moves only in the delay. stepTicks is how far one 1 ms delay really moves
+ * it (the timer resolution can make it 15.6 ms). completeAfter > 0: the pending job completes on its normal path
+ * (here: HwPending clears) in that delay. delays stops at a hard limit so that an unbounded wait ends the test. */
+static ULONGLONG interruptTime=0,stepTicks=10000;
+static unsigned delays,completeAfter,logs,delayLimitHit;
+static ULONGLONG KeQueryInterruptTime(void){return interruptTime;}
+static NTSTATUS KeDelayExecutionThread(int mode,int alertable,LARGE_INTEGER*interval){
+ (void)mode;(void)alertable;CHECK(!lockHeld && interval->QuadPart==-10000);
+ delays++;interruptTime+=stepTicks;
+ if(completeAfter && delays==completeAfter) observed->HwPending=0;
+ if(delays>=100000){delayLimitHit=1;observed->HwPending=0;observed->WatchdogFaulted[0]=0;}
+ return 0;}
+static void GuardLog(const char*f,...){(void)f;logs++;}
 /* ACTUAL_SOURCE */
 static void setup(BC250_DEVICE*d,BC250_WDDM*w){
  memset(w,0,sizeof(*w));memset(d,0,sizeof(*d));d->Wddm=w;observed=w;
@@ -66,6 +83,7 @@ static void setup(BC250_DEVICE*d,BC250_WDDM*w){
  w->SubmittedFence[0]=123;w->SubmittedFence[1]=456;
  w->LastReportedFence[0]=123;w->LastReportedFence[1]=456;w->LastCompletedFence=456;
  flushes=cancels=removes=arms=mmio=0;currentIrql=enableStatus=0;gfxReady=pagingReady=1;
+ delays=completeAfter=logs=delayLimitHit=0;stepTicks=10000;
 }
 static void retained(BC250_WDDM*w,const BC250_WDDM*before){
  size_t off=offsetof(BC250_WDDM,Objects);
@@ -110,6 +128,32 @@ int main(void){
  setup(&d,&w);w.VSyncEnabled=0;CHECK(WddmSuspendRetained(&d)==0);CHECK(WddmResumeRetained(&d)==0 && !d.DcnVsyncArmed && !arms);
  setup(&d,&w);currentIrql=2;CHECK(WddmSuspendRetained(&d)==STATUS_INVALID_DEVICE_STATE && !flushes);CHECK(WddmResumeRetained(&d)==STATUS_INVALID_DEVICE_STATE);currentIrql=0;
  d.Wddm=NULL;CHECK(WddmSuspendRetained(&d)==STATUS_DEVICE_NOT_READY);CHECK(WddmResumeRetained(&d)==STATUS_DEVICE_NOT_READY);
+ // BD-188 drain: a job that completes on its normal path inside the bound lets the way down go on.
+ setup(&d,&w);w.HwPending=1;completeAfter=3;
+ CHECK(WddmSuspendRetained(&d)==0 && w.RetainedPowerPause && w.Stopping && delays==3 && flushes==5 && logs==1);
+ // The same with a coarse timer: the bound is elapsed time, so 15.6 ms steps still complete at the third delay.
+ setup(&d,&w);w.HwPending=1;completeAfter=3;stepTicks=156250;
+ CHECK(WddmSuspendRetained(&d)==0 && delays==3);
+ // Work that does not complete: refused after the bound, the state unchanged, nothing cancelled.
+ setup(&d,&w);w.HwPending=1;before=w;
+ CHECK(WddmSuspendRetained(&d)==STATUS_DEVICE_BUSY);
+ CHECK(!memcmp(&w,&before,sizeof(w)) && !cancels && !removes && !mmio && !delayLimitHit);
+ CHECK(delays==BC250_WDDM_SUSPEND_DRAIN_MS && interruptTime>=(ULONGLONG)BC250_WDDM_SUSPEND_DRAIN_MS*10000u && logs==1);
+ // With 15.6 ms steps the bound is reached after 32 delays (500 ms), not after 500 delays (7.8 s).
+ setup(&d,&w);interruptTime=0;w.PagingHwPending=1;stepTicks=156250;
+ CHECK(WddmSuspendRetained(&d)==STATUS_DEVICE_BUSY && delays==32 && !delayLimitHit);
+ // A watchdog fault or a started stop can end only by a reset or the stop itself: no wait at all.
+ setup(&d,&w);w.WatchdogFaulted[1]=1;before=w;
+ CHECK(WddmSuspendRetained(&d)==STATUS_DEVICE_BUSY && delays==0 && !memcmp(&w,&before,sizeof(w)) && logs==1);
+ setup(&d,&w);w.HwPending=1;w.WatchdogFaulted[0]=1;CHECK(WddmSuspendRetained(&d)==STATUS_DEVICE_BUSY && delays==0);
+ setup(&d,&w);w.Stopping=1;before=w;CHECK(WddmSuspendRetained(&d)==STATUS_DEVICE_BUSY && delays==0 && !memcmp(&w,&before,sizeof(w)));
+ // The busy mask names each shape.
+ setup(&d,&w);CHECK(WddmPowerBusyLocked(&w)==0);
+ w.HwPending=1;w.PagingHead=&d;w.RefusalPending[2]=1;
+ CHECK(WddmPowerBusyLocked(&w)==(BC250_POWER_BUSY_GFX_HW|BC250_POWER_BUSY_PAGING_QUEUED|BC250_POWER_BUSY_REFUSAL));
+ CHECK(Bc250PowerDrainWorthWaiting(BC250_POWER_BUSY_GFX_HW) && !Bc250PowerDrainWorthWaiting(0) &&
+       !Bc250PowerDrainWorthWaiting(BC250_POWER_BUSY_GFX_HW|BC250_POWER_BUSY_WATCHDOG) &&
+       !Bc250PowerDrainWorthWaiting(BC250_POWER_BUSY_STOPPING));
  printf("Retained WDDM power: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }
 
