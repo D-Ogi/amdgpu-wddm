@@ -8,10 +8,19 @@
 #
 # Everything is written under -Out, never into the repository and never onto drive C:.
 
+#
+# Negative controls (BD-329), each must make the test fail. The policy source is copied under -Out and the copy is
+# changed, never the tree:
+#   -NoSustain       the sustained raise chooses nothing (the single-tick rule of the releases before BD-329)
+#   -NoSustainGuard  the sustained raise ignores its landing guard and may land at or under the lowering threshold
+
 param(
     [string]$Out = 'P:\BC-250\scratch\build\dpm',
     [string]$Kits = 'P:\BC-250\toolchain\nuget',
-    [string]$KitVersion = '10.0.26100.0'
+    [string]$KitVersion = '10.0.26100.0',
+    [switch]$NoSustain,
+    [switch]$NoSustainGuard,
+    [switch]$ExpectFailure          # a negative control: exit 0 only when the test fails
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,6 +52,23 @@ $env:TEMP = Join-Path $Out 'tmp'; $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 
 $sources = @('bc250_dpm.c', 'bc250_clock.c') | ForEach-Object { Join-Path $shim $_ }
+if ($NoSustain -or $NoSustainGuard) {
+    $policy = [IO.File]::ReadAllText((Join-Path $shim 'bc250_dpm.c'))
+    if ($NoSustain) {
+        $live = 'want = next;'
+        if (([regex]::Matches($policy, [regex]::Escape($live))).Count -ne 1) { throw 'negative control: the sustained raise moved' }
+        $policy = $policy.Replace($live, '(void)next;')
+    }
+    if ($NoSustainGuard) {
+        $live = '(unsigned long long)t->down_permille * bc250_dpm_level_mhz(next) <'
+        if (-not $policy.Contains($live)) { throw 'negative control: the sustained raise guard moved' }
+        $policy = $policy.Replace($live, '0ull * bc250_dpm_level_mhz(next) <')
+    }
+    $mutant = Join-Path $Out 'mutant'
+    New-Item -ItemType Directory -Force $mutant | Out-Null
+    [IO.File]::WriteAllText((Join-Path $mutant 'bc250_dpm.c'), $policy)
+    $sources = @((Join-Path $mutant 'bc250_dpm.c'), (Join-Path $shim 'bc250_clock.c'))
+}
 $incUser = @("/I$shim\include", "/I$imports",
     "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared",
     "/I$($msvc.FullName)\include")
@@ -67,4 +93,9 @@ Write-Host 'run'
 & "$Out\dpm_test.exe"
 $code = $LASTEXITCODE
 Write-Host "dpm_test.exe exit code $code"
+if ($ExpectFailure) {
+    if ($code -eq 0) { Write-Host 'negative control: the test passed against the mutant'; exit 1 }
+    Write-Host 'negative control: the test failed against the mutant, as it must'
+    exit 0
+}
 exit $code

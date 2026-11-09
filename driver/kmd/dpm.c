@@ -560,6 +560,9 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.RateLevels = g->rate_levels;
     snap.HighSteps = g->high_steps;
     snap.HighHolds = g->high_holds;
+    snap.SustainMs = g->sustain_hold_ms;
+    snap.SustainRaises = g->sustain_raises;
+    snap.SustainRefusals = g->sustain_refusals;
     // The idle point only while this start governs the clock: a fixed-lab start never configures the state, and
     // a start that gave up after SMU failures no longer steps the governor, so neither may name a point that
     // nothing would apply (0.7.207, review). The flag below follows the same rule.
@@ -690,6 +693,16 @@ static void DpmLogRecallLine(const char* What, const BC250_DPM_SNAP* P)
     if (P->RecallRaises == 0) return;
     GuardLog("dpm: %s ramp recall raises %lu revoked %lu, recalled level %lu", What, P->RecallRaises, P->RecallRevokes,
              P->RecallLevel);
+}
+
+// The sustained raise (BD-329) on a line of its own, once it chose a raise or refused one: a start whose load never sat
+// in the band logs what the release before it logged. N counts choices; the limits of the same tick (the ramp, the
+// warm zone, the cap) may still have held the clock, and the `dpm: A -> B MHz` lines show what the hardware took.
+static void DpmLogSustainLine(const char* What, const BC250_DPM_SNAP* P)
+{
+    if (P->SustainRaises == 0 && P->SustainRefusals == 0) return;
+    GuardLog("dpm: %s sustained raises %lu refused %lu, hold %lu ms", What, P->SustainRaises, P->SustainRefusals,
+             P->SustainMs);
 }
 
 // The compute threshold set (BD-127) on two lines of its own, and only once it has something to say: a start whose GPU
@@ -1118,8 +1131,10 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         T->Target = target;
         if (target != S->Gov.level) {
             // The level changes, so the transaction carries the new curve's voltage anyway.
-            if (!DpmApplyEx(Device, S, T, target, curveTake ? "load, curve" : "load", S->Gov.recall_used ? TRUE : FALSE,
-                            curveSerial)) {
+            // BD-329: a raise the sustained rule chose says so in its transition line.
+            const char* why = S->Gov.sustain_used ? (curveTake ? "load sustained, curve" : "load sustained")
+                                                  : (curveTake ? "load, curve" : "load");
+            if (!DpmApplyEx(Device, S, T, target, why, S->Gov.recall_used ? TRUE : FALSE, curveSerial)) {
                 if (S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT) DpmGiveUp(Device, S, T);
             } else if (curveTake) DpmCurveApplied(S, curveSerial);
         } else if (curveTake) {
@@ -1209,6 +1224,7 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         DpmLogIdleLine("telemetry", &snap);
         DpmLogComputeLine("telemetry", &snap);
         DpmLogRecallLine("telemetry", &snap);
+        DpmLogSustainLine("telemetry", &snap);
         DpmLogJointLine("telemetry", &snap);
         // BD-281: the rate rule's and the high-clock zone's counters, only in a block after a change. This thread owns
         // S->Gov (DpmTick runs under TickLock), so the counters are read without the snapshot.
@@ -1437,6 +1453,19 @@ static void DpmConfigureBurst(BC250_DPM_STATE* S, BOOLEAN Dpm)
              S->Gov.high_mc ? (ULONG)(S->Gov.high_mc - BC250_DPM_HIGH_ZONE_HYST_MC) : 0ul);
     GuardLog("dpm: rate rule %s, high-clock zone %s", S->Gov.rate_mc_per_s ? state : "off by setting",
              S->Gov.high_mc ? state : "off by setting");
+}
+
+// BD-329: the sustained raise, on in every governing start with the hold of bc250_board_envelope.h. No registry value:
+// a new setting is a new entry of the state catalog (driver/state/catalog.json), and a KMD built on another catalog
+// does not load over an installed package (the MPO A1 s3 refusal of 2026-11-07), so the lab could not swap a candidate
+// in. A bisect against the single-tick rule runs the KMD before this change. A start that does not govern never
+// reaches bc250_dpm_step, so the rule could not act there either.
+// PASSIVE_LEVEL, under Lock, before the governor thread exists.
+static void DpmConfigureSustain(BC250_DPM_STATE* S, BOOLEAN Dpm)
+{
+    (void)bc250_dpm_sustain_config(&S->Gov, Dpm ? BC250_DPM_SUSTAIN_MS : 0u);   // no thread yet: no lock for Gov
+    GuardLog("dpm: sustained raise: avg at %lu permille for %lu ms raises -> %s", (ULONG)S->Gov.tune.target_permille,
+             (ULONG)S->Gov.sustain_hold_ms, Dpm ? "on" : "off: this start does not govern the clock");
 }
 
 // This start's V/F curve, with the same two-mark guard as DPM itself (docs/design/tuner.md, ADR 0020). A curve
@@ -1721,6 +1750,7 @@ void DpmStart(BC250_DEVICE* Device)
     DpmConfigureZone(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureBurst(s, d->mode == BC250_DPM_MODE_DPM);     // BD-281, after the zone: it reads the zone's switch
     DpmConfigureCompute(s, d->mode == BC250_DPM_MODE_DPM);
+    DpmConfigureSustain(s, d->mode == BC250_DPM_MODE_DPM);  // BD-329
     DpmConfigureIdle(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureCurve(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureJoint(s, d->mode == BC250_DPM_MODE_DPM && r.smu_online);
@@ -1852,6 +1882,7 @@ void DpmStop(BC250_DEVICE* Device)
         DpmLogIdleLine("stopped", &snap);
         DpmLogComputeLine("stopped", &snap);
         DpmLogRecallLine("stopped", &snap);
+        DpmLogSustainLine("stopped", &snap);
         DpmLogJointLine("stopped", &snap);
         DpmLogCurveLine("stopped", &snap);
     }
@@ -2011,6 +2042,7 @@ void DpmLogSummary(BC250_DEVICE* Device)
     DpmLogIdleLine("summary", &snap);
     DpmLogComputeLine("summary", &snap);
     DpmLogRecallLine("summary", &snap);
+    DpmLogSustainLine("summary", &snap);
     DpmLogJointLine("summary", &snap);
     HwmonLogLine(Device, "summary");
     SmuMetricsLogLine(Device, "summary");

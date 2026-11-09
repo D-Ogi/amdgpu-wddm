@@ -334,6 +334,18 @@ void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 	bc250_dpm_compute_default(&g->compute);
 }
 
+int bc250_dpm_sustain_config(struct bc250_dpm_governor *g, unsigned int hold_ms)
+{
+	g->sustain_ms = 0;
+	g->sustain_acc = 0;
+	if (hold_ms != 0u && (hold_ms < BC250_DPM_SUSTAIN_MIN_MS || hold_ms > BC250_DPM_SUSTAIN_MAX_MS)) {
+		g->sustain_hold_ms = 0;
+		return 0;
+	}
+	g->sustain_hold_ms = hold_ms;
+	return 1;
+}
+
 enum bc250_dpm_idle_error bc250_dpm_idle_config(struct bc250_dpm_governor *g, unsigned int idle_mhz,
 						unsigned int hold_ms, unsigned int busy_permille)
 {
@@ -1178,16 +1190,51 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	} else g->rate_over_ms = 0;
 
 	/* The load. */
+	g->sustain_used = 0;
 	if (busy >= t->up_permille) {
 		want = raise_level(cur, busy, t->target_permille, load_top(g->max_level));
 		g->down_ms = 0;
-	} else if (g->avg_permille < t->down_permille) {
-		g->down_ms += dt;
-		if (g->down_ms >= t->down_hold_ms) {
-			g->down_ms = 0;
-			if (cur > BC250_DPM_FLOOR_LEVEL) want = cur - 1u;
+	} else {
+		/* BD-329, the sustained raise (bc250_dpm.h): the band between the lowering threshold and up_permille holds a
+		 * level for ever when the load sits at the target share. The rule reads the mean busy share of a whole window
+		 * at one clock, not the average above: with ticks that swing by 100 permille around the mean, the average
+		 * dips under the target often enough that a hold on it rarely runs out. The window starts again at every
+		 * change of the clock, so it measures the load at the clock it would be raised from. The guard is the
+		 * lowering rule's own arithmetic: a raise whose landing share would be at or under down_permille is refused,
+		 * so the two cannot chase each other for any tune. */
+		if (g->sustain_hold_ms) {
+			if (cur != g->sustain_level) {
+				g->sustain_level = cur;
+				g->sustain_ms = 0;
+				g->sustain_acc = 0;
+			}
+			g->sustain_ms = add_ms(g->sustain_ms, dt);
+			g->sustain_acc = add_ms(g->sustain_acc, busy * dt);
+			if (g->sustain_ms >= g->sustain_hold_ms) {
+				unsigned int mean = g->sustain_acc / g->sustain_ms;
+				g->sustain_ms = 0;
+				g->sustain_acc = 0;
+				if (mean >= t->target_permille) {
+					unsigned int next = raise_level(cur, mean, t->target_permille, load_top(g->max_level));
+					if (next > cur) {
+						if ((unsigned long long)t->down_permille * bc250_dpm_level_mhz(next) <
+						    (unsigned long long)mean * bc250_dpm_level_mhz(cur)) {
+							want = next;
+							g->sustain_raises++;
+							g->sustain_used = 1;
+						} else g->sustain_refusals++;
+					}
+				}
+			}
 		}
-	} else g->down_ms = 0;
+		if (want == cur && g->avg_permille < t->down_permille) {
+			g->down_ms += dt;
+			if (g->down_ms >= t->down_hold_ms) {
+				g->down_ms = 0;
+				if (cur > BC250_DPM_FLOOR_LEVEL) want = cur - 1u;
+			}
+		} else g->down_ms = 0;
+	}
 	/* The load's own answer never goes under the lab floor: the two levels below it are the thermal cap's
 	 * alone (0.7.205). cur is below the floor only while that cap holds it there, and the cap is applied
 	 * further down anyway, so this changes nothing but what the telemetry calls the load's demand. */

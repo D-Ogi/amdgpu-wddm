@@ -95,6 +95,11 @@ static inline int bc250_board_supported(unsigned int provider_id)
 #define BC250_DPM_TARGET_PERMILLE	800u	/* a raise aims at this share at the new clock */
 #define BC250_DPM_DOWN_PERMILLE		650u	/* the average below this for DOWN_HOLD_MS: one step down */
 #define BC250_DPM_DOWN_HOLD_MS		200u
+/* BD-329, the sustained raise: a window this long whose mean busy share is at or above the target share raises the clock
+ * (bc250_dpm.h has the reasons). Every governing start runs it with this window. */
+#define BC250_DPM_SUSTAIN_MS		250u
+#define BC250_DPM_SUSTAIN_MIN_MS	100u	/* four governor ticks: a shorter window is one tick's noise */
+#define BC250_DPM_SUSTAIN_MAX_MS	5000u
 /* The compute threshold set (BD-127): the three load thresholds in force while a compute context is open.
  * Measured on unit A: a 1.7B model generating through HIP held 57.9 % GPU busy at 1000 MHz and gained 31 %
  * of its tokens a second at a 2000 MHz floor, so the clock was the limit and the graphics thresholds above

@@ -4322,6 +4322,186 @@ static void test_burst_regression(void)
 	}
 }
 
+/* ---- the sustained raise (BD-329) ------------------------------------------------------------------------------------ */
+
+/* The BD-329 plant: a frame loop whose GPU part scales with the clock (gpu_us_1000 microseconds at 1000 MHz) and whose
+ * stall does not (stall_us: the CPU side of a frame, a wait on a residency or paging operation). The engine is sampled
+ * every 1 ms, 25 samples a 25 ms tick, as DpmHwSample does, and the share goes through bc250_dpm_busy_permille. */
+struct frame_plant {
+	unsigned long long now_us, frame_us;	/* the plant's clock and the start of the running frame */
+	unsigned int max_busy;			/* the highest tick share seen */
+};
+
+static unsigned int plant_busy(struct frame_plant *p, unsigned int mhz, unsigned int gpu_us_1000, unsigned int stall_us)
+{
+	enum bc250_dpm_busy_source src;
+	unsigned int s, active = 0, busy;
+	unsigned int gpu_us = gpu_us_1000 * 1000u / mhz;
+	for (s = 0; s < 25u; s++) {
+		p->now_us += 1000u;
+		while (p->now_us >= p->frame_us + gpu_us + stall_us) p->frame_us += gpu_us + stall_us;
+		if (p->now_us - p->frame_us < gpu_us) active++;
+	}
+	busy = bc250_dpm_busy_permille(25u, active, 0u, &src);
+	if (busy > p->max_busy) p->max_busy = busy;
+	return busy;
+}
+
+/* Ten seconds (the timedemo's length) of the plant at a fixed reading. Returns the highest level reached; *last is the
+ * level at the end and *changes counts the level changes in the last 4 s. */
+static unsigned int run_plant(struct bc250_dpm_governor *g, struct frame_plant *p, unsigned int gpu_us_1000,
+			      unsigned int stall_us, int temp_c, unsigned int ticks, unsigned int *last, unsigned int *changes)
+{
+	unsigned int i, top = 0, level = g->level, before;
+	*changes = 0;
+	for (i = 0; i < ticks; i++) {
+		before = level;
+		level = run(g, plant_busy(p, bc250_dpm_level_mhz(g->level), gpu_us_1000, stall_us), temp_c, 25);
+		if (level > top) top = level;
+		if (i + 160u >= ticks && level != before) (*changes)++;
+	}
+	*last = level;
+	return top;
+}
+
+static void test_sustain_bd329(void)
+{
+	struct bc250_dpm_governor g;
+	struct frame_plant p;
+	unsigned int top, last, changes;
+
+	/* The plant is in the band: no tick reaches UP (each tick holds at least three sampled stall milliseconds), and the
+	 * average at the lab floor is above the target. 20 ms + 3.2 ms a frame: 862 permille at 1000 MHz. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(g.sustain_hold_ms == 0u);		/* off until configured: every older case keeps the single-tick rule */
+	memset(&p, 0, sizeof(p));
+	top = run_plant(&g, &p, 20000u, 3200u, 71, 400u, &last, &changes);
+	CHECK(p.max_busy < BC250_DPM_UP_PERMILLE);
+	CHECK(g.avg_permille >= BC250_DPM_TARGET_PERMILLE);
+	/* The BD-329 reading: without the rule the whole 10 s stay at the lab floor. */
+	CHECK(top == L(0) && last == L(0) && g.raises == 0u && g.sustain_raises == 0u);
+
+	/* With the rule, at 71 C (the ramp of 0.7.203: one level per raise, a raise per ~1.2 s): out of the band within the
+	 * 10 s, and settled where the mean share falls under the target: 1800 MHz on this plant (11.1 ms + 3.2 ms a frame,
+	 * which the 1 ms samples read as some 780 permille). */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MS) == 1 && g.sustain_hold_ms == BC250_DPM_SUSTAIN_MS);
+	memset(&p, 0, sizeof(p));
+	top = run_plant(&g, &p, 20000u, 3200u, 71, 400u, &last, &changes);
+	CHECK(p.max_busy < BC250_DPM_UP_PERMILLE);
+	CHECK(top >= L(5) && g.sustain_raises >= 5u);
+	CHECK(g.ramp_holds > 0u);		/* the ramp still spaced them: the rule widens no thermal rule */
+	/* Another 30 s: settled, the share under the target and over the lowering threshold. */
+	top = run_plant(&g, &p, 20000u, 3200u, 71, 1200u, &last, &changes);
+	CHECK(changes == 0u && last == L(8));
+	CHECK(g.avg_permille < BC250_DPM_TARGET_PERMILLE && g.avg_permille >= BC250_DPM_DOWN_PERMILLE);
+	CHECK(g.lowers == 0u);
+
+	/* Under the ramp's knee the same plant gets there faster: a raise per window, within 4 s. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	(void)bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MS);
+	memset(&p, 0, sizeof(p));
+	top = run_plant(&g, &p, 20000u, 3200u, 60, 160u, &last, &changes);
+	CHECK(top == L(8) && last == L(8));
+
+	/* A plant out of the band keeps its old answer: a saturated load still jumps on its first tick, an idle one never
+	 * raises, a 700 permille load holds (between DOWN and TARGET). */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	(void)bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MS);
+	CHECK(run(&g, 1000, 60, 25) == L(3) && g.sustain_raises == 0u);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	(void)bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MS);
+	for (last = 0; last < 400u; last++) CHECK(run(&g, 0, 60, 25) == L(0));
+	for (last = 0; last < 400u; last++) CHECK(run(&g, 700, 60, 25) == L(0));
+	CHECK(g.sustain_raises == 0u && g.sustain_refusals == 0u);
+
+	/* The window: nothing happens before it ends, and it judges its mean, not its last tick. Nine ticks at 850 and one
+	 * at 0 are a mean of 765: no raise, and the next window starts empty. Ten ticks at 850 then raise, at the end of the
+	 * window and not before: 1000 x 850 / 800 = 1062.5, one level. The window after the raise starts at the new clock. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	(void)bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MS);
+	for (last = 0; last < BC250_DPM_SUSTAIN_MS / 25u - 1u; last++) CHECK(run(&g, 850, 60, 25) == L(0));
+	CHECK(run(&g, 0, 60, 25) == L(0) && g.sustain_ms == 0u && g.sustain_raises == 0u);
+	for (last = 0; last < BC250_DPM_SUSTAIN_MS / 25u - 1u; last++) CHECK(run(&g, 850, 60, 25) == L(0));
+	CHECK(run(&g, 850, 60, 25) == L(1) && g.sustain_raises == 1u && g.sustain_used == 1);
+	CHECK(run(&g, 850, 60, 25) == L(1) && g.sustain_used == 0 && g.sustain_level == L(1) && g.sustain_ms == 25u);
+	/* A tick at UP inside a window raises at once, as it always did, and the window starts again at the new clock. */
+	CHECK(run(&g, 950, 60, 25) == L(4) && g.sustain_used == 0);	/* 1100 x 950 / 800 = 1306 */
+	CHECK(run(&g, 850, 60, 25) == L(4) && g.sustain_level == L(4) && g.sustain_ms == 25u);
+
+	/* The ceiling and the thermal cap still bound it: at DpmMaxMHz 1500 no level above L(5), at 88 C no raise. */
+	bc250_dpm_init(&g, L(5));
+	(void)bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MS);
+	for (last = 0; last < 400u; last++) CHECK(run(&g, 850, 60, 25) <= L(5));
+	CHECK(g.level == L(5));
+	init_old(&g, BC250_DPM_TOP_LEVEL);
+	(void)bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MS);
+	for (last = 0; last < 400u; last++) CHECK(run(&g, 850, 88, 25) <= L(0));
+
+	/* The configuration: 0 is off, the range is checked, a refused value is off. */
+	CHECK(bc250_dpm_sustain_config(&g, 0u) == 1 && g.sustain_hold_ms == 0u);
+	CHECK(bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MIN_MS - 1u) == 0 && g.sustain_hold_ms == 0u);
+	CHECK(bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MAX_MS + 1u) == 0 && g.sustain_hold_ms == 0u);
+	CHECK(bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MAX_MS) == 1 && g.sustain_hold_ms == BC250_DPM_SUSTAIN_MAX_MS);
+}
+
+/* The landing guard: a tune whose target sits close to its lowering threshold must not raise into a lowering. up 900,
+ * target 740, down 680 passes bc250_dpm_tune_check (both invariants are about UP); a one-level raise from 1000 MHz at
+ * a mean of 745 would land at 677, under 680. */
+static void test_sustain_guard(void)
+{
+	struct bc250_dpm_governor g;
+	struct bc250_dpm_tune t;
+	unsigned int i;
+
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	(void)bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MS);
+	t = g.tune;
+	t.target_permille = 740u;
+	t.down_permille = 680u;
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+	for (i = 0; i < 200u; i++) CHECK(run(&g, 745, 60, 25) == L(0));
+	CHECK(g.sustain_raises == 0u && g.sustain_refusals >= 10u && g.lowers == 0u);
+	/* A load of 790 permille at 1000 MHz that scales with the clock lands at 718: the raise is admitted, and the
+	 * lowering rule never undoes it. */
+	for (i = 0; i < 400u; i++) run(&g, 790000u / bc250_dpm_level_mhz(g.level), 60, 25);
+	CHECK(g.level == L(1) && g.sustain_raises == 1u && g.lowers == 0u);
+}
+
+/* The no-oscillation sweep of test_no_oscillation with the rule on, for the graphics set and the compute set: a load
+ * that needs a fixed amount of work settles, never changes level after the first second, and the settled share is
+ * under the target (or the level is the top) and at or over the lowering threshold (or the level is the floor). */
+static void test_sustain_no_oscillation(void)
+{
+	unsigned int demand, i, set;
+	for (set = 0; set < 2u; set++) {
+		for (demand = 100; demand <= 2400; demand += 10) {
+			struct bc250_dpm_governor g;
+			struct bc250_dpm_input in;
+			unsigned int changes = 0, last = 0, level = 0, mhz, busy;
+			unsigned int target = set ? BC250_DPM_COMPUTE_TARGET_PERMILLE : BC250_DPM_TARGET_PERMILLE;
+			unsigned int down = set ? BC250_DPM_COMPUTE_DOWN_PERMILLE : BC250_DPM_DOWN_PERMILLE;
+			bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+			(void)bc250_dpm_sustain_config(&g, BC250_DPM_SUSTAIN_MS);
+			for (i = 0; i < 2000; i++) {
+				mhz = bc250_dpm_level_mhz(g.level);
+				busy = demand >= mhz ? 1000u : demand * 1000u / mhz;
+				in = tick(busy, 60, 25);
+				in.compute_contexts = set;
+				level = bc250_dpm_step(&g, &in);
+				commit_ok(&g, level);
+				if (i >= 1000 && level != last) changes++;
+				last = level;
+			}
+			CHECK(changes == 0);
+			mhz = bc250_dpm_level_mhz(level);
+			busy = demand >= mhz ? 1000u : demand * 1000u / mhz;
+			if (level < BC250_DPM_TOP_LEVEL) CHECK(busy < target);
+			if (level > L(0)) CHECK(busy >= down - 1u);
+		}
+	}
+}
+
 int main(void)
 {
 	test_table();
@@ -4371,6 +4551,9 @@ int main(void)
 	test_burst281();
 	test_burst_traces();
 	test_burst_regression();
+	test_sustain_bd329();
+	test_sustain_guard();
+	test_sustain_no_oscillation();
 	printf("dpm policy: %d checks, %d failures\n", checks, failures);
 	return failures ? 1 : 0;
 }
