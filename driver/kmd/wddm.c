@@ -12632,8 +12632,11 @@ static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport3(_In_ const HANDLE hAdapt
             GuardLog("wddm: MPO3 group %ld status %x result %lu described %lu gen %lu budget %lu",note,
                 (ULONG)groupStatus,(ULONG)group.Result,(ULONG)group.Described,(ULONG)group.Generation,
                 (ULONG)group.WithinCurrentBudget);
-            GuardLog("wddm: MPO3 group %ld disp %lu/%lu dpp %lu/%lu admission pending",note,
-                (ULONG)group.DispClockKhz,(ULONG)group.BudgetDispKhz,(ULONG)group.DppClockKhz,(ULONG)group.BudgetDppKhz);
+            // A refused or failed preflight has no clock answer: the record stays zero.
+            if (NT_SUCCESS(groupStatus))
+                GuardLog("wddm: MPO3 group %ld disp %lu/%lu dpp %lu/%lu admission pending",note,
+                    (ULONG)group.DispClockKhz,(ULONG)group.BudgetDispKhz,(ULONG)group.DppClockKhz,
+                    (ULONG)group.BudgetDppKhz);
         }
     }
 #endif

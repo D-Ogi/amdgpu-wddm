@@ -70,6 +70,10 @@ int main(void)
         CHECK(Bc250OverlayPrepare(&bad,w,bytes,q)==BC250_OVERLAY_OK);
         CHECK(q->Color[1].Color==color);
     }
+    // Each boundary filter name reaches its own scaler kind: the AMD filter takes more than two taps here.
+    bad=r; bad.Plane[1].Filter=BC250_OVERLAY_FILTER_AMD;
+    CHECK(Bc250OverlayPrepare(&bad,w,bytes,q)==BC250_OVERLAY_OK);
+    CHECK(q->Geometry[1].Scaler.LumaH.Taps>2);
     bad=r; bad.Plane[1].Filter=BC250_OVERLAY_FILTER_LINEAR;
     CHECK(Bc250OverlayPrepare(&bad,w,bytes,q)==BC250_OVERLAY_OK);
     CHECK(q->Geometry[1].Scaler.LumaH.Taps==2);

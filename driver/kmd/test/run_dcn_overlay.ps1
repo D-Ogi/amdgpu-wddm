@@ -1,5 +1,5 @@
 param([Parameter(Mandatory=$true)][string]$Root, [Parameter(Mandatory=$true)][string]$Out,
-      [ValidateSet('', 'layer-order', 'chroma-bytes', 'skip-layout', 'skip-color', 'skip-dml', 'describe-ready', 'describe-nv12-storage', 'describe-rgb-span', 'caps-nv12', 'caps-nv12-scale', 'caps-pipes', 'caps-src-width', 'all')][string]$Mutation='')
+      [ValidateSet('', 'layer-order', 'chroma-bytes', 'skip-layout', 'skip-color', 'skip-dml', 'describe-ready', 'describe-nv12-storage', 'describe-rgb-span', 'caps-nv12', 'caps-nv12-scale', 'caps-pipes', 'caps-src-width', 'filter-swapped', 'all')][string]$Mutation='')
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path "$PSScriptRoot\..\..\..").Path
 $cc=Join-Path $Root 'toolchain\llvm-23.1.4-win64\bin\clang-cl.exe'
@@ -23,6 +23,7 @@ $mutations=@{
  'caps-nv12-scale'=@('unsigned up = Nv12 ? Caps->MaxUpscaleNv12 : Caps->MaxUpscaleArgb;', 'unsigned up = Caps->MaxUpscaleArgb; (void)Nv12;')
  'caps-pipes'=@('if (caps->Pipes < 2u || caps->MaxSlavePlanes < 1u) goto refused;', '')
  'caps-src-width'=@('> (long long)caps->MaxDownscaleSourceWidth &&', '> 3840 &&')
+ 'filter-swapped'=@('if (Filter == BC250_OVERLAY_FILTER_AMD) *Kind = BC250_SCALER_FILTER_AMD;', 'if (Filter == BC250_OVERLAY_FILTER_AMD) *Kind = BC250_SCALER_FILTER_LINEAR;')
  'skip-dml'=@('if (Bc250Dml201PlanGroup(&in.Timing,dml,2,Workspace,WorkspaceBytes,&Plan->Dml) != BC250_DML201_OK) goto refused;', '(void)Bc250Dml201PlanGroup(&in.Timing,dml,2,Workspace,WorkspaceBytes,&Plan->Dml);')
 }
 $names=if($Mutation -eq 'all'){@($mutations.Keys)}elseif($Mutation){@($Mutation)}else{@('tree')}

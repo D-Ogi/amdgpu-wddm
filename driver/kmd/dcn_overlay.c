@@ -6,9 +6,15 @@
 #include "../contract/bc250_nv12_layout.h"
 #include "../shim/bc250_scaler_filter.h"
 
-// The boundary names the filter without the shim header (dcn_overlay_input.h); the planner passes it on as is.
-_Static_assert((int)BC250_OVERLAY_FILTER_AMD == (int)BC250_SCALER_FILTER_AMD, "overlay filter AMD");
-_Static_assert((int)BC250_OVERLAY_FILTER_LINEAR == (int)BC250_SCALER_FILTER_LINEAR, "overlay filter linear");
+// The boundary names the filter without the shim header (dcn_overlay_input.h). Translate each name explicitly
+// to the scaler kind: an equal value of two enum types is not a contract. An unknown name is refused.
+static int OverlayFilterKind(unsigned Filter, uint32_t* Kind)
+{
+    if (Filter == BC250_OVERLAY_FILTER_AMD) *Kind = BC250_SCALER_FILTER_AMD;
+    else if (Filter == BC250_OVERLAY_FILTER_LINEAR) *Kind = BC250_SCALER_FILTER_LINEAR;
+    else return 0;
+    return 1;
+}
 
 static int OverlayAxis(const BC250_DCN_CAPS* Caps, int Nv12, unsigned Limit,
     BC250_SCALER_AXIS_INPUT* Axis, unsigned Surface, unsigned Active,
@@ -100,7 +106,7 @@ static unsigned OverlayPrepare(const BC250_OVERLAY_REQUEST* Request,
         if ((long long)p->Source.Right - p->Source.Left > (long long)caps->MaxDownscaleSourceWidth &&
             (long long)p->Destination.Right - p->Destination.Left < (long long)p->Source.Right - p->Source.Left) goto refused;
         scaler.Geometry.ChromaDivisor = pipe ? 2u : 1u;
-        scaler.FilterKind = p->Filter;
+        if (!OverlayFilterKind(p->Filter,&scaler.FilterKind)) goto refused;
         if (Bc250DcnGeometryPrepare(&scaler,pipe ? BC250_DCN_YCBCR420 : BC250_DCN_RGB,
             &Plan->Geometry[pipe]) != BC250_SCALER_GEOMETRY_OK) goto refused;
         Plan->LayerByPipe[pipe] = p->LayerIndex;
