@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "release": "tester.38",
-  "version": "0.7.216.111-tester.38",
-  "note": "tester.38 release manifest, started from the tester.37 manifest: the kmd and control rows move to the main commit with BD-292, BD-293, BD-295, BD-297 and the stage 2 queue reset of node 2; every other row keeps its tester.37 commit. BD-315: the system, wow64, desktop, zink and gl rows move to the t38/bd315-uqueue-* heads (global locks deleted at unload; the system head also has the util tests Windows build fix), and recipe_commit to the main commit with BD-317 (the RADV host tests link the real monitored fence). BD-211: the zink and gl rows move to merges of their BD-315 heads with the memstream temporary-file fix. rc1 (main 99a91dc8): the kmd, control, control-exe, router, d3d11 shell and state-worker rows move to main 99a91dc8, and the kmd rows to main b9f5e3bb with BD-321 (BD-205, BD-296, BD-306, BD-307, BD-298, BD-291, bd309), because main had commits under their source paths that they did not ship. BD-308/BD-309 (rc1): the dxvk engine rows (x64 and x86) move to dxvk t38/bd309-offer f9c4f228 (engine ABI 1.6, PrepareOffer) and the hosted ICD rows (x64 and x86) to mesa t38/bd309-hosted-t38 8b7160da (bc250GetMemoryAllocation), so that the d3d11 shell at 99a91dc8 gives offered engine resources to the kernel. rc2 (set-rc2, version 0.7.216.110-tester.38 kept, so the rc2 zips have the rc1 names; DriverVer equal to rc1, so an rc1 installation must be uninstalled before rc2 is installed; main 4e3867f9): the kmd, d3d11 shell, router, control, control-exe and state-worker rows move to main 4e3867f9 with BD-307 (WddmVersionCap, default WDDM 2.9; state catalog 02c7eed4) and BD-327 (engine worker memory scope of the d3d11 shell), and the dxvk engine rows and the d3d11 shell input dxvk to dxvk 87f730aa (engine ABI 1.7), because the BD-327 shell needs that engine. The d3d12 shell, engine12, hosted, adl and extra rows do not read driver/state and keep their rc1 commits. rc3 (0.7.216.111, ranks above rc1/rc2 and tester.37): the kmd, router, control, control-exe and state-worker rows and recipe_commit move to the main head with the BD-195 and BD-329 fixes, BD-324, the BD-223 caps DDIs and planes clamp, and BD-319; the d3d11 and d3d12 shell rows move to the head with the BD-200 shell part; the system, hosted, wow64 and desktop rows move to the BD-200 Fix A heads. The containment list names the fix commits that the containment gate checks in their rows.",
+  "version": "0.7.216.112-tester.38",
+  "note": "tester.38 release manifest, started from the tester.37 manifest: the kmd and control rows move to the main commit with BD-292, BD-293, BD-295, BD-297 and the stage 2 queue reset of node 2; every other row keeps its tester.37 commit. BD-315: the system, wow64, desktop, zink and gl rows move to the t38/bd315-uqueue-* heads (global locks deleted at unload; the system head also has the util tests Windows build fix), and recipe_commit to the main commit with BD-317 (the RADV host tests link the real monitored fence). BD-211: the zink and gl rows move to merges of their BD-315 heads with the memstream temporary-file fix. rc1 (main 99a91dc8): the kmd, control, control-exe, router, d3d11 shell and state-worker rows move to main 99a91dc8, and the kmd rows to main b9f5e3bb with BD-321 (BD-205, BD-296, BD-306, BD-307, BD-298, BD-291, bd309), because main had commits under their source paths that they did not ship. BD-308/BD-309 (rc1): the dxvk engine rows (x64 and x86) move to dxvk t38/bd309-offer f9c4f228 (engine ABI 1.6, PrepareOffer) and the hosted ICD rows (x64 and x86) to mesa t38/bd309-hosted-t38 8b7160da (bc250GetMemoryAllocation), so that the d3d11 shell at 99a91dc8 gives offered engine resources to the kernel. rc2 (set-rc2, version 0.7.216.110-tester.38 kept, so the rc2 zips have the rc1 names; DriverVer equal to rc1, so an rc1 installation must be uninstalled before rc2 is installed; main 4e3867f9): the kmd, d3d11 shell, router, control, control-exe and state-worker rows move to main 4e3867f9 with BD-307 (WddmVersionCap, default WDDM 2.9; state catalog 02c7eed4) and BD-327 (engine worker memory scope of the d3d11 shell), and the dxvk engine rows and the d3d11 shell input dxvk to dxvk 87f730aa (engine ABI 1.7), because the BD-327 shell needs that engine. The d3d12 shell, engine12, hosted, adl and extra rows do not read driver/state and keep their rc1 commits. rc3 (0.7.216.111, ranks above rc1/rc2 and tester.37): the kmd, router, control, control-exe and state-worker rows and recipe_commit move to the main head with the BD-195 and BD-329 fixes, BD-324, the BD-223 caps DDIs and planes clamp, and BD-319; the d3d11 and d3d12 shell rows move to the head with the BD-200 shell part; the system, hosted, wow64 and desktop rows move to the BD-200 Fix A heads. The containment list names the fix commits that the containment gate checks in their rows. rc4 (0.7.216.112, ranks above rc3): the kmd, router, control, control-exe, state-worker, d3d11 and d3d12 shell rows and recipe_commit move to the rc4 integration head (BD-336, BD-329 thermal fast lane, BD-332 per-IP row and D3D12 fault witness, BD-327 lab note, BD-325/326 tooling, BD-188 D-2, BD-223 Part Y); the dxvk rows and the dxvk input of the d3d11 shell rows move to the YUY2 caps and stats sink head; the hosted rows move to the BD-226 timing gate; the engine12 rows move to the BD-331 LUID log r2. The other Mesa lines stay.",
   "recipe_repository": "amdgpu-wddm",
-  "recipe_commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+  "recipe_commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
   "repositories": {
     "amdgpu-wddm": {
       "url": "https://github.com/D-Ogi/amdgpu-wddm",
@@ -487,6 +487,170 @@
         "d3d11-x86-lab"
       ],
       "note": "d3d11: report CreateResource refusals by the DDI error contract (main merge 05819058f)"
+    },
+    {
+      "defect": "BD-336",
+      "repo": "amdgpu-wddm",
+      "commit": "34e5e23999c5c0eddfa9598bc594841ff117107b",
+      "rows": [
+        "kmd-rel",
+        "kmd-lab"
+      ],
+      "note": "kmd: the log summary always names the sustained raise and its state"
+    },
+    {
+      "defect": "BD-329",
+      "repo": "amdgpu-wddm",
+      "commit": "92213a4de64e2b71998529f4ecf763f40706a390",
+      "rows": [
+        "kmd-rel",
+        "kmd-lab"
+      ],
+      "note": "dpm: a fast lane for the thermal ramp under 78 C"
+    },
+    {
+      "defect": "BD-329",
+      "repo": "amdgpu-wddm",
+      "commit": "ba0a34ef50973b7b83542f38e4935a1d6c69b69d",
+      "rows": [
+        "kmd-rel",
+        "kmd-lab"
+      ],
+      "note": "dpm: the fast lane of the thermal ramp bounded at 1800 MHz (review F1/F2)"
+    },
+    {
+      "defect": "BD-332",
+      "repo": "amdgpu-wddm",
+      "commit": "3980ede0bbe8f91ddbac15833f332f0d8dc728a2",
+      "rows": [
+        "kmd-rel",
+        "kmd-lab",
+        "d3d12-x64-rel",
+        "d3d12-x86-rel",
+        "d3d12-x64-lab",
+        "d3d12-x86-lab"
+      ],
+      "note": "per-IP FSR 4 identity row (kmd) and the D3D12 module line and fault witness (shell)"
+    },
+    {
+      "defect": "BD-332",
+      "repo": "amdgpu-wddm",
+      "commit": "391553b1f6d285d321f8d45ba6ab7b28ed0110bd",
+      "rows": [
+        "kmd-rel",
+        "kmd-lab"
+      ],
+      "note": "kmd: the per-IP row keyed by the start PCI id, gate findings closed"
+    },
+    {
+      "defect": "BD-327",
+      "repo": "amdgpu-wddm",
+      "commit": "a3663a95835a1b0b84f013f94e55264ba8955f7f",
+      "rows": [
+        "d3d11-x64-rel",
+        "d3d11-x86-rel",
+        "d3d11-x64-lab",
+        "d3d11-x86-lab"
+      ],
+      "note": "umd/dxvk: stats line comment and the lab line for the first admitted worker host calls"
+    },
+    {
+      "defect": "BD-327",
+      "repo": "dxvk",
+      "commit": "744e178abf5490458b498259ccf59a6f11296394",
+      "rows": [
+        "dxvk-x64-rel",
+        "dxvk-x86-rel",
+        "dxvk-x64-lab",
+        "dxvk-x86-lab",
+        "d3d11-x64-rel",
+        "d3d11-x86-rel",
+        "d3d11-x64-lab",
+        "d3d11-x86-lab"
+      ],
+      "note": "ddi: the shader stats line goes to the closing device own sink"
+    },
+    {
+      "defect": "BD-325",
+      "repo": "amdgpu-wddm",
+      "commit": "bf6ecd198e847bf6fb317b3b8b5c50887c797dc0",
+      "rows": [
+        "@recipe"
+      ],
+      "note": "release tooling: the package dry run accepts the firmware preflight with one host"
+    },
+    {
+      "defect": "BD-326",
+      "repo": "amdgpu-wddm",
+      "commit": "bf6ecd198e847bf6fb317b3b8b5c50887c797dc0",
+      "rows": [
+        "@recipe"
+      ],
+      "note": "release tooling: recipe checkout {repo} and the manifest pins to the ledger gate"
+    },
+    {
+      "defect": "BD-188",
+      "repo": "amdgpu-wddm",
+      "commit": "2f3db725617c76bcea484b45d2ba689cb0edb5b0",
+      "rows": [
+        "kmd-rel",
+        "kmd-lab"
+      ],
+      "note": "D-2: keep the save going when a retained way down fails and the power goes"
+    },
+    {
+      "defect": "BD-330",
+      "repo": "dxvk",
+      "commit": "b4604c27b6ac51fe2e504ff36b3e71e20cd8d06a",
+      "rows": [
+        "dxvk-x64-rel",
+        "dxvk-x86-rel",
+        "dxvk-x64-lab",
+        "dxvk-x86-lab",
+        "d3d11-x64-rel",
+        "d3d11-x86-rel",
+        "d3d11-x64-lab",
+        "d3d11-x86-lab"
+      ],
+      "note": "d3d11: the YUY2 format support set to the D3D11.1 table row (Deep3 T003 F1)"
+    },
+    {
+      "defect": "BD-226",
+      "repo": "mesa-amdgpu-wddm",
+      "commit": "e52641e85239bbab28995c7e182366f48148ff51",
+      "rows": [
+        "hosted-x64-rel",
+        "hosted-x86-rel",
+        "hosted-x64-lab",
+        "hosted-x86-lab"
+      ],
+      "note": "hosted: the D3DKMT call timing only when the switch is on (Deep3 T003 F2)"
+    },
+    {
+      "defect": "BD-331",
+      "repo": "vkd3d-proton",
+      "commit": "290f53c38487bda688c6919ed7b89b2f43e8d5d2",
+      "rows": [
+        "engine12-x64-rel",
+        "engine12-x86-rel",
+        "engine12-x64-lab",
+        "engine12-x86-lab"
+      ],
+      "note": "engine: the LUID miss line names the step that ended the search (Deep3 T003 F3)"
+    },
+    {
+      "defect": "BD-223",
+      "repo": "amdgpu-wddm",
+      "commit": "d368bf9d3dba768ad90bfde2f7e7c7da61099b6a",
+      "rows": [
+        "kmd-rel",
+        "kmd-lab",
+        "d3d11-x64-rel",
+        "d3d11-x86-rel",
+        "d3d11-x64-lab",
+        "d3d11-x86-lab"
+      ],
+      "note": "Part Y: two-plane composition adapter, the lab-flavour preflight and the NV12 layouts of the D3D11 shell"
     }
   ],
   "rows": [
@@ -496,7 +660,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "driver/kmd/build.ps1",
       "args": [
@@ -542,7 +706,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "driver/kmd/build.ps1",
       "args": [
@@ -577,7 +741,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "da345167da691ef47ed5e5aca05d4f5e962be940",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -643,7 +807,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "da345167da691ef47ed5e5aca05d4f5e962be940",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -709,7 +873,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "da345167da691ef47ed5e5aca05d4f5e962be940",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -775,7 +939,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "da345167da691ef47ed5e5aca05d4f5e962be940",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -841,7 +1005,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "dxvk",
-      "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6",
+      "commit": "11e599ddca189a7a10383b4e53e934e6c2b2ba1d",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -941,7 +1105,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "dxvk",
-      "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6",
+      "commit": "11e599ddca189a7a10383b4e53e934e6c2b2ba1d",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -1041,7 +1205,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "dxvk",
-      "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6",
+      "commit": "11e599ddca189a7a10383b4e53e934e6c2b2ba1d",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -1142,7 +1306,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "dxvk",
-      "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6",
+      "commit": "11e599ddca189a7a10383b4e53e934e6c2b2ba1d",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -1243,7 +1407,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -1267,7 +1431,7 @@
       "inputs": {
         "dxvk": {
           "repo": "dxvk",
-          "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6"
+          "commit": "11e599ddca189a7a10383b4e53e934e6c2b2ba1d"
         }
       },
       "compiler": "clang-cl",
@@ -1287,7 +1451,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -1311,7 +1475,7 @@
       "inputs": {
         "dxvk": {
           "repo": "dxvk",
-          "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6"
+          "commit": "11e599ddca189a7a10383b4e53e934e6c2b2ba1d"
         }
       },
       "compiler": "clang-cl",
@@ -1331,7 +1495,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -1355,7 +1519,7 @@
       "inputs": {
         "dxvk": {
           "repo": "dxvk",
-          "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6"
+          "commit": "11e599ddca189a7a10383b4e53e934e6c2b2ba1d"
         }
       },
       "compiler": "clang-cl",
@@ -1375,7 +1539,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -1399,7 +1563,7 @@
       "inputs": {
         "dxvk": {
           "repo": "dxvk",
-          "commit": "3c4f421f4a866995b0a8f77d8a466d397aa5dab6"
+          "commit": "11e599ddca189a7a10383b4e53e934e6c2b2ba1d"
         }
       },
       "compiler": "clang-cl",
@@ -1419,7 +1583,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "de7d51e54e614e7cc26e5d7e11c8c6feaeafff7d",
+      "commit": "e52641e85239bbab28995c7e182366f48148ff51",
       "recipe_commit": "47c4695ae96f39afc3c2ecd7755cb48223b0a29d",
       "base": "7def507b03541117ce0f48482f3f4022263ad763",
       "recipe": "tools/build/build-mesa.ps1",
@@ -1532,7 +1696,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "de7d51e54e614e7cc26e5d7e11c8c6feaeafff7d",
+      "commit": "e52641e85239bbab28995c7e182366f48148ff51",
       "recipe_commit": "47c4695ae96f39afc3c2ecd7755cb48223b0a29d",
       "base": "7def507b03541117ce0f48482f3f4022263ad763",
       "recipe": "tools/build/build-mesa.ps1",
@@ -1882,7 +2046,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "de7d51e54e614e7cc26e5d7e11c8c6feaeafff7d",
+      "commit": "e52641e85239bbab28995c7e182366f48148ff51",
       "recipe_commit": "47c4695ae96f39afc3c2ecd7755cb48223b0a29d",
       "base": "7def507b03541117ce0f48482f3f4022263ad763",
       "recipe": "tools/build/build-mesa.ps1",
@@ -2011,7 +2175,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "de7d51e54e614e7cc26e5d7e11c8c6feaeafff7d",
+      "commit": "e52641e85239bbab28995c7e182366f48148ff51",
       "recipe_commit": "47c4695ae96f39afc3c2ecd7755cb48223b0a29d",
       "base": "7def507b03541117ce0f48482f3f4022263ad763",
       "recipe": "tools/build/build-mesa.ps1",
@@ -2780,7 +2944,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2813,7 +2977,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2846,7 +3010,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -2892,7 +3056,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -2926,7 +3090,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2959,7 +3123,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2992,7 +3156,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3038,7 +3202,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3072,7 +3236,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "driver/state/installer-build.ps1",
       "args": [
@@ -3106,7 +3270,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "d3f2d172a35d6c6c8200e8bda1123bf8d0806cc0",
+      "commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
       "tree": "shared",
       "recipe": "driver/state/installer-build.ps1",
       "args": [
@@ -3140,7 +3304,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "d97eb5f835aa435ac17549ec12e196e831d5de9b",
+      "commit": "290f53c38487bda688c6919ed7b89b2f43e8d5d2",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -3210,7 +3374,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "d97eb5f835aa435ac17549ec12e196e831d5de9b",
+      "commit": "290f53c38487bda688c6919ed7b89b2f43e8d5d2",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -3280,7 +3444,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "d97eb5f835aa435ac17549ec12e196e831d5de9b",
+      "commit": "290f53c38487bda688c6919ed7b89b2f43e8d5d2",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -3350,7 +3514,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "d97eb5f835aa435ac17549ec12e196e831d5de9b",
+      "commit": "290f53c38487bda688c6919ed7b89b2f43e8d5d2",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
