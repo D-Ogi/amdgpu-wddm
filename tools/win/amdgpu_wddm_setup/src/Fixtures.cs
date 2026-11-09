@@ -180,21 +180,21 @@ namespace AmdgpuWddmSetup
                 new Fixture { Name = "working", Screen = Screen.Working, Events = RunEvents("files", false, true) },
                 new Fixture { Name = "working-reinstalled", Screen = Screen.Working, Events = RunEvents("files", false, true, repaired: true) },
                 new Fixture { Name = "restart-reinstalled", Screen = Screen.Restart, Events = RunEvents("finish", false, true, repaired: true),
-                    Result = ResultJson("run", "restart-required", 0, "result.installed-restart", true) },
+                    Result = ResultJson("run", "restart-required", 3010, "result.installed-restart", true) },
                 new Fixture { Name = "working-cancel", Screen = Screen.Working, Events = RunEvents("preflight", true, false) },
                 new Fixture { Name = "continue", Flow = "continue", Screen = Screen.Working, Events = RunEvents("driver", false, true) },
                 // The stage screen after the engine wrote its result and before its process ended: a restart is a
                 // normal ending (the stage is done), a failure is not (the stage carries the stopped mark).
                 new Fixture { Name = "working-restart", Screen = Screen.Working, Events = RunEvents("test-signing", false, true, "run", "restart-required"),
-                    Result = ResultJson("run", "restart-required", 0, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
+                    Result = ResultJson("run", "restart-required", 3010, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
                 new Fixture { Name = "working-stopped", Screen = Screen.Working, Events = RunEvents("driver", false, true, "run", "failed"),
                     Result = ResultJson("run", "failed", 6, "result.step-failed", true, ",\"step\":\"x\",\"detail\":\"x\"") },
                 new Fixture { Name = "working-name-tip", Screen = Screen.Working, Events = RunEvents("files", false, true), TipTurn = 1 },
-                new Fixture { Name = "restart", Screen = Screen.Restart, Events = RunEvents("test-signing", false, true), Result = ResultJson("run", "restart-required", 0, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
+                new Fixture { Name = "restart", Screen = Screen.Restart, Events = RunEvents("test-signing", false, true), Result = ResultJson("run", "restart-required", 3010, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
                 // The countdown of the restart screen a few seconds in, so that a render shows the running number
                 // and not only its first value.
-                new Fixture { Name = "restart-countdown", Screen = Screen.Restart, RestartSecondsLeft = 7, Events = RunEvents("test-signing", false, true), Result = ResultJson("run", "restart-required", 0, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
-                new Fixture { Name = "restart-later", Screen = Screen.Restart, RestartLater = true, Events = RunEvents("finish", false, true), Result = ResultJson("run", "restart-required", 0, "result.installed-restart", true) },
+                new Fixture { Name = "restart-countdown", Screen = Screen.Restart, RestartSecondsLeft = 7, Events = RunEvents("test-signing", false, true), Result = ResultJson("run", "restart-required", 3010, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
+                new Fixture { Name = "restart-later", Screen = Screen.Restart, RestartLater = true, Events = RunEvents("finish", false, true), Result = ResultJson("run", "restart-required", 3010, "result.installed-restart", true) },
                 new Fixture { Name = "result-verified", Flow = "continue", Screen = Screen.Result, Events = RunEvents("preflight", false, false, "verify"), Result = ResultJson("verify", "verified", 0, "result.verified", false) },
                 new Fixture { Name = "result-refused", RunKind = "plan", Screen = Screen.Result, Events = PlanEvents("install", null, "", "download", false).Take(6).ToArray(), Result = ResultJson("plan", "refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"gpu.missing\",\"secureboot.on\",\"vcruntime.no-installer\"]") },
                 // Smart App Control did not turn off in the run: the run is refused before any program of the driver,

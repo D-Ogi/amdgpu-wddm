@@ -314,6 +314,15 @@ function Start-EngineTestChild {
 }
 
 # ---- the terminal result ----------------------------------------------------------------------------------------
+# The process exit code of a run that ends at a restart boundary (BD-093): never 0, but Get-RestartExitCode
+# (common.ps1). In a -Gui run the engine never starts the restart, so the code is 3010 there. The other
+# restart-required codes keep their meaning: 5 (test signing not active after the restart) and 7 (the boundary of an
+# earlier run is still pending).
+function Get-EngineExitCode([int]$Code, [string]$Outcome, $Restart) {
+    if ($Code -ne 0 -or $Outcome -ne 'restart-required') { return $Code }
+    return Get-RestartExitCode -Started ([bool]($Restart -and $Restart['started']))
+}
+
 # Written once, at the end of every run that got this far, also after a failed step (the trap). The window believes
 # the result only when its invocation is the one it started; the exit code alone is never the outcome.
 function Exit-Engine {
@@ -322,6 +331,7 @@ function Exit-Engine {
     try { if ($script:state -and $script:state.PSObject.Properties['phase']) { $phaseAfter = [string]$script:state.phase } } catch { }
     $restart = $script:EngineRestart
     if (-not $restart) { $restart = [ordered]@{ required = $false } }
+    $Code = Get-EngineExitCode -Code $Code -Outcome $Outcome -Restart $restart
     $children = Close-EngineChildren
     $r = [ordered]@{
         schema = $script:ResultSchema

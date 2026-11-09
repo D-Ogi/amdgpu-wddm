@@ -183,7 +183,7 @@ static partial class UnitTests
         r.Apply(Ev(10, "stage", "\"id\":\"files\",\"text\":\"x\"", Id, "amdgpu-wddm.engine-event/2"));
         r.Apply("{not json");
         r.Apply(Ev(10, "restart-required", "\"reason_id\":\"restart.driver-package\",\"continuation\":\"c\""));
-        r.Apply(Ev(10, "result", "\"outcome\":\"restart-required\",\"exit_code\":0,\"message_id\":\"result.restart-driver\",\"mutated\":true"));
+        r.Apply(Ev(10, "result", "\"outcome\":\"restart-required\",\"exit_code\":3010,\"message_id\":\"result.restart-driver\",\"mutated\":true"));
         Equal("run", r.Mode, "model: mode");
         Equal("upgrade", r.Decision.Action, "model: decision action");
         Equal(2, r.Decision.Consents.Length, "model: consents");
@@ -228,7 +228,7 @@ static partial class UnitTests
         Check(EngineResult.Read(Result(Id, "verified", 0, "result.verified", false, "", "amdgpu-wddm.engine-result/9"), Id, out problem) == null, "A2: an unknown result schema is not");
         Check(EngineResult.Read(null, Id, out problem) == null, "A2: no result file, no result");
         Check(EngineResult.Read("{\"schema\":\"" + EngineRun.ResultSchema + "\",\"invocation\":\"" + Id + "\"}", Id, out problem) == null, "A2: a result without an outcome is not");
-        var r = EngineResult.Read(Result(Id, "restart-required", 0, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\",\"continuation\":{\"command\":\"x\"}},\"consents_needed\":[],\"failed_checks\":[\"gpu.missing\"]"), Id, out problem);
+        var r = EngineResult.Read(Result(Id, "restart-required", 3010, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\",\"continuation\":{\"command\":\"x\"}},\"consents_needed\":[],\"failed_checks\":[\"gpu.missing\"]"), Id, out problem);
         Check(r.RestartRequired && r.RestartReason == "restart.test-signing" && r.ContinuationCommand == "x" && r.FailedChecks.Length == 1, "A2: restart and continuation read");
         // The engine's automatic diagnostics of a driver start that did not pass: the window only carries the
         // path, and the support file adds that file as run-<n>-diagnostics.txt.
@@ -257,7 +257,7 @@ static partial class UnitTests
         run.Apply(Ev(1, "install-action", "\"action\":\"install\",\"boot_id\":1"));
         v = ResultView.For(null, run);
         Check(v.Kind == ViewKind.Problem && v.ChangesUnknown && v.ChangesMade && !v.NothingChanged, "A3: no bound result: setup cannot tell, never 'nothing was changed'");
-        v = V("restart-required", 0, "result.restart-driver", true);
+        v = V("restart-required", 3010, "result.restart-driver", true);
         Check(v.Kind == ViewKind.Restart && v.OfferRestart && !v.NothingChanged, "C17: the window offers the restart");
         v = V("restart-required", 5, "result.testsigning-secureboot", false);
         Check(v.Kind == ViewKind.Problem && !v.OfferRestart, "Secure Boot on: no restart offered");

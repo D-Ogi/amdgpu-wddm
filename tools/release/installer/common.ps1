@@ -3791,6 +3791,19 @@ function Resolve-OrphanFilePlan {
 }
 
 # ---------------------------------------------------------------------------------------------------------------
+# The exit code of an install or an uninstall that changed the driver (BD-093). Windows must restart after every driver
+# change: a driver that starts or stops in the running session can leave the processor slow until the next restart.
+# Such a run therefore never exits 0. It uses the codes of Windows Installer: 1641 (ERROR_SUCCESS_REBOOT_INITIATED)
+# when the run started the restart itself, else 3010 (ERROR_SUCCESS_REBOOT_REQUIRED: "Later", a key during the
+# countdown, -NoReboot, or a restart that Windows refused).
+$script:ExitRebootRequired = 3010
+$script:ExitRebootInitiated = 1641
+function Get-RestartExitCode([bool]$Started) {
+    if ($Started) { return $script:ExitRebootInitiated }
+    return $script:ExitRebootRequired
+}
+
+# ---------------------------------------------------------------------------------------------------------------
 # A normal restart of Windows (ExitWindowsEx EWX_REBOOT with a planned reason, never EWX_FORCE): programs are asked to
 # close and can keep unsaved work. The command-line installer calls it after the tester typed Y; a run that the setup
 # window drives never restarts (the window asks the user and calls the same API). Returns $null when Windows accepted

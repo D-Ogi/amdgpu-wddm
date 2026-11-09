@@ -496,10 +496,12 @@ Write-Host 'Until the restart, some Windows 11 apps (the command bar of File Exp
 # A normal, planned restart (common.ps1, Request-PlannedRestart): programs are asked to close and may keep unsaved
 # work. It starts by itself after a visible countdown, as the installer's does: Enter starts it
 # at once, any other key puts it off, and nothing has to be pressed. -NoReboot skips it for a script.
+# The removal changed the driver in this session, so the exit code is never 0 (BD-093, Get-RestartExitCode).
+$restartStarted = $false
 if (-not $NoReboot -and -not $DryRun) {
     if ((Wait-RestartCountdown -Seconds $script:RestartCountdownSeconds) -eq 'now') {
         $why = Request-PlannedRestart
-        if ($why) { Write-Warn2 "Windows did not start the restart ($why): restart the computer yourself" }
+        if ($why) { Write-Warn2 "Windows did not start the restart ($why): restart the computer yourself" } else { $restartStarted = $true }
     } else { Write-Info 'restart later; the removal finishes at the next restart' }
 }
-exit 0
+exit (Get-RestartExitCode -Started $restartStarted)

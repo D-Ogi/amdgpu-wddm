@@ -224,6 +224,12 @@ for example `install.cmd -Console -DryRun`:
 
 You can run the verification again at any time with `verify.cmd` in `C:\Program Files\amdgpu-wddm`.
 
+Windows must restart after every driver change. If it does not, the processor can stay slow until the next restart
+[BD-093]. For this reason an install or an uninstall that changed the driver never ends with exit code 0. The exit
+code is 1641 when the installer started the restart itself. It is 3010 when the restart is still to come: you pressed
+a key during the countdown, you selected "Later", or you gave `-NoReboot`. A script that runs `install.cmd -Console`
+or `uninstall.cmd` must then restart Windows before it uses the GPU.
+
 To install a newer package, unpack it to a new folder and start its setup window or its `install.cmd`. You do not
 have to uninstall first. The installer shows `upgrading <old> -> <new>`, keeps the files that did not change,
 replaces the others and restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing;

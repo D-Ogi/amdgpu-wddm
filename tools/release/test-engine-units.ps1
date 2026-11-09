@@ -1554,6 +1554,23 @@ Check ((Test-PspDeviceRow 'ACPI\AMDI0030\0' 'AMD PSP 3.0 Device' '') -and (Test-
 Check ($verify -match "Get-PspFunctionVerdict -Readings \(Read-PspFunctionState\)" -and $verify -match "Add-Warning 'secure processor'" -and $verify -notmatch "Add-Result 'secure processor'") 'verify reads the PSP function and never fails on it'
 Check ($commonText -match "PspFunctionHardwareId = 'PCI\\VEN_1022&DEV_143E'") 'the PSP check matches the hardware id 1022:143E'
 
+# BD-093: a run that ends at a restart boundary never exits 0. 3010 when the restart did not start, 1641 when the engine
+# started it; every other code and outcome stays as given.
+"BD-093 exit code of a restart boundary"
+Check ((Get-EngineExitCode 0 'restart-required' ([ordered]@{ required = $true; started = $false })) -eq 3010) 'restart-required, not started: 3010'
+Check ((Get-EngineExitCode 0 'restart-required' ([ordered]@{ required = $true; started = $true })) -eq 1641) 'restart-required, started by the engine: 1641'
+Check ((Get-EngineExitCode 0 'restart-required' $null) -eq 3010) 'restart-required with no restart record: 3010, never 0'
+Check ((Get-EngineExitCode 5 'restart-required' ([ordered]@{ required = $true; started = $false })) -eq 5 -and (Get-EngineExitCode 7 'restart-required' $null) -eq 7) 'restart-required 5 and 7 keep their codes'
+Check ((Get-EngineExitCode 0 'verified' $null) -eq 0 -and (Get-EngineExitCode 0 'completed' $null) -eq 0 -and (Get-EngineExitCode 0 'already' $null) -eq 0 -and (Get-EngineExitCode 6 'failed' $null) -eq 6) 'other outcomes keep their codes'
+$installText = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+$engineText = [IO.File]::ReadAllText((Join-Path $Installer 'engine.ps1'))
+Check ($engineText -match '\$Code = Get-EngineExitCode -Code \$Code -Outcome \$Outcome -Restart \$restart' -and $installText -match "\`$script:EngineRestart\['started'\] = \`$true") 'Exit-Engine maps the code in one place; Request-Restart records a restart it started'
+$uninstallText = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
+$uninstallCmd = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.cmd'))
+Check ((Get-RestartExitCode -Started $false) -eq 3010 -and (Get-RestartExitCode -Started $true) -eq 1641 -and
+    $uninstallText -match 'exit \(Get-RestartExitCode -Started \$restartStarted\)\s*$' -and $uninstallText -notmatch "(?m)^exit 0\s*\z" -and
+    $uninstallCmd -match 'exit /b %AMDGPU_WDDM_EXIT%') 'uninstall ends with the restart code, and uninstall.cmd passes it on'
+
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 if ($fail) { "$fail check(s) failed"; exit 1 }
 'all checks passed'
