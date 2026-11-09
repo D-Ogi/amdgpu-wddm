@@ -61,13 +61,16 @@ HRESULT prepare_linear_runtime_image(RuntimeDevice &runtime,VkDevice device,cons
     if (nv12 && valid) {
         // Validate full padded rows, not just the last visible texel. A future
         // allocation record can retain these offsets without guessing UV.
+        // Integrity only: the pitch and offsets are the device's own layout
+        // answer, so no display engine's alignment or size limit applies here
+        // (the scan-out limits are the KMD's, Bc250Nv12LayoutPrepare).
         const auto &y=measured.plane[0]; const auto &uv=measured.plane[1];
         BC250_NV12_STORAGE storage{info.extent.width,info.extent.height,
             UINT(y.rowPitch),UINT(uv.rowPitch),measured.memory.size,y.offset,uv.offset};
         valid=y.rowPitch<=UINT32_MAX && uv.rowPitch<=UINT32_MAX &&
             y.size>=y.rowPitch*info.extent.height && uv.size>=uv.rowPitch*(info.extent.height/2u) &&
             !(y.offset<uv.offset+uv.size && uv.offset<y.offset+y.size) &&
-            Bc250Nv12StorageValid(&storage);
+            Bc250Nv12StorageIntegrity(&storage);
     }
     if (!valid) { vk.destroy(device,created.image,nullptr); return E_INVALIDARG; }
     out=created; layout=measured; return S_OK;
