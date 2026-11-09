@@ -8,6 +8,7 @@
 #        [-AllowUnpushed] [-MaxParallel <n>] [-Jobs <n>] [-Version <v>] [-Work <dir>] [-Tool name=path[,...]]
 #        [-PackageCache <dir>] [-SizeGuard <size-guard.py>] [-GuardMaxAge <s>] [-BuildTimeout <s>] [-KeepGoing]
 #        [-Keep] [-Compare <release-sources.json>] [-MergeInto <release-sources.json>] [-Register]
+#        [-LedgerDebtReason <text>]
 #
 # The manifest (release-manifest.schema.json; release-tester.32.json is an example) has one row per component build:
 # the repository and commit, the recipe of this repository and its arguments, the flavour, the architecture, the
@@ -26,6 +27,11 @@
 #                 the row's commit, and each history file is named by its catalog identity
 #                 (tools/state/check_history.py): else the worker moves the removal record of that release aside;
 #    size         the size guard (scratch\cleanup-250\size-guard.py) says the workspace is under its warning lines.
+#    ledger       the work ledger (scratch\ledger\ledger.py check --release <version>) has no open or deferred work that
+#                 serves this release. -LedgerDebtReason <text> records a known debt: the gate is DEBT, not FAIL, with
+#                 each error line and the reason, and the report keeps the reason (ledger_debt_reason). A release
+#                 candidate needs it while later work of the same release is open. -Package checks the ledger again
+#                 and needs its own -LedgerDebtReason (LedgerGate.psm1, BD-334).
 #    host         a warning only: the compiler processes of other builds that run on this PC at the start.
 # 2. Builds, in parallel: at most -MaxParallel slots at once (a row may take several), each build with
 #    {jobs} = slots x (logical processors / -MaxParallel), unless -Jobs gives the jobs of one slot. A build starts only
@@ -138,7 +144,7 @@ param(
     # default <PackageRoot>\secrets\release, as build-release.ps1 reads them. A host test gives a folder of its own.
     [Parameter(ParameterSetName = 'Repack')][string]$SigningSecrets,
     # Unlanded ledger work this release carries on purpose (build-release.ps1 -AllowLedgerDebt).
-    [Parameter(ParameterSetName = 'Package')][string]$LedgerDebtReason = '',
+    [Parameter(ParameterSetName = 'Set')][Parameter(ParameterSetName = 'Package')][string]$LedgerDebtReason = '',
     [Parameter(ParameterSetName = 'Package')][Parameter(ParameterSetName = 'Repack')][string]$PackageRoot = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [Parameter(ParameterSetName = 'Package')][string]$PackageGuard,
     # Build the flavours at the same time, each in its own process and worktree (see "5. Packages" above).
@@ -862,9 +868,9 @@ $ledgerTool = Join-Path $Root 'scratch\ledger\ledger.py'
 if (Test-Path -LiteralPath $ledgerTool) {
     $ledgerOut = @(& $python $ledgerTool --root $Root check --release $planData.version 2>&1 | ForEach-Object { [string]$_ })
     $ledgerExit = $LASTEXITCODE
-    $ledgerLines = @($ledgerOut | Where-Object { $_ -match '^\s*ERROR|error\(s\)' } | ForEach-Object { $_.Trim() })
-    $gateList.Add([ordered]@{ name = 'ledger'; status = $(if ($ledgerExit -eq 0) { 'PASS' } else { 'FAIL' })
-            lines = @($(if ($ledgerLines.Count) { $ledgerLines } else { "ledger.py check --release $($planData.version): exit $ledgerExit" })) })
+    # -LedgerDebtReason turns a refusal into DEBT (BD-334, LedgerGate.psm1); -Package checks the ledger again.
+    Import-Module (Join-Path $PSScriptRoot 'LedgerGate.psm1') -Force
+    $gateList.Add((Get-LedgerGate -ExitCode $ledgerExit -Output $ledgerOut -Version $planData.version -DebtReason $LedgerDebtReason))
 }
 foreach ($g in @($gateList | Select-Object -Skip $gates.gates.Count)) {
     "gate $($g.name): $($g.status)"
@@ -936,10 +942,11 @@ $report = [ordered]@{ tool = 'build-release-set'; schema = 1; worker_guard_schem
     manifest_sha256 = $planData.manifest_sha256; root = $Root; out = $Out; work = $Work; only = $Only; plan = [bool]$Plan
     started_utc = $started.ToString('yyyy-MM-ddTHH:mm:ssZ'); finished_utc = $null; seconds = 0; status = $null
     host = [ordered]@{ logical_processors = $planData.logical_processors; max_parallel = $MaxParallel; jobs_per_slot = $planData.jobs_per_slot }
-    gates = $gateList; reuse_context = $planData.reuse_context
-    disk = [ordered]@{ measurements = $measures; peak_used_estimate = [long]0 }; builds = @(); rows = $null }
+    gates = $gateList; ledger_debt_reason = $(if (@($gateList | Where-Object { $_.status -eq 'DEBT' }).Count) { $LedgerDebtReason.Trim() } else { $null })
+    reuse_context = $planData.reuse_context
+    disk =[ordered]@{ measurements = $measures; peak_used_estimate = [long]0 }; builds = @(); rows = $null }
 if ($Plan) {
-    "build-release-set: -Plan, nothing built; gates $(if ($gatesPass) { 'PASS' } else { 'FAIL' })"
+    "build-release-set: -Plan, nothing built; gates $(if (-not $gatesPass) { 'FAIL' } elseif ($report.ledger_debt_reason) { 'PASS with ledger debt' } else { 'PASS' })"
     exit $(if ($gatesPass) { 0 } else { 1 })
 }
 if (-not $gatesPass) {

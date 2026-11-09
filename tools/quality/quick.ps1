@@ -214,6 +214,7 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  Check 'shared-build-tree' { & pwsh -NoProfile -File "$repo\tools\release\test-shared-build-tree.ps1" -FixtureRoot (New-Item -ItemType Directory -Force "$Out\shared-build-tree").FullName }
  # The outputs of an earlier package round, all named before the first step, and -SetAside (BD-272).
  Check 'package-round' { & pwsh -NoProfile -File "$repo\tools\release\test-package-round.ps1" -Out (New-Item -ItemType Directory -Force "$Out\package-round").FullName }
+ Check 'ledger-gate' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-gate.ps1" -Out (New-Item -ItemType Directory -Force "$Out\ledger-gate").FullName -Ledger (Join-Path $Workspace 'scratch\ledger\ledger.py') }
  # The notes-only repack of a gated package (BD-265): every file but the notes and manifest.json byte for byte.
  Check 'repack-notes' { & pwsh -NoProfile -File "$repo\tools\release\test-repack-notes.ps1" -Out (New-Item -ItemType Directory -Force "$Out\repack-notes").FullName }
  # The release gates read the commit that the package names: a dirty tree, or one that changes during a run, stops build-release.ps1 (BD-263).
