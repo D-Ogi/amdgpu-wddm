@@ -1,5 +1,6 @@
 // Project adapter: PolyForm Noncommercial 1.0.0, see LICENSE.md and NOTICE.
 #pragma once
+#include "../shim/bc250_scaler_filter.h"   // Filter takes an enum BC250_SCALER_FILTER_KIND value
 
 // Integer-only boundary shared by WDDM and the connector's FPU-owning planner.
 typedef struct BC250_OVERLAY_RECT { int Left, Top, Right, Bottom; } BC250_OVERLAY_RECT;
