@@ -259,6 +259,18 @@ the cap gives up less CPU clock than 85 C does.
 - The board capability query reports the default from ABI 3 (`CpuDefaultTempC`). A reply of ABI 1 or 2 has that word
   at zero, and the application then takes the top of the band, which is what an older driver leaves in force.
 
+The cap is a control target of the firmware, not a ceiling (BD-349, 2026-11-10). With a CPU-only load and a cap of
+85 C, the firmware held Tctl at 85.0 to 85.6 C for 85 s. When the GPU also works, its heat goes into the same die,
+and the CPU cap cannot control that heat. In the CPU test of 3DMark Night Raid, Tctl went 2.8 C above a cap of 85 C
+and 2.0 C above the default cap of 87 C. Both readings were still rising when the lab guard stopped the run, so they
+are not the highest overshoot. No rule of this driver lowers the CPU clock under the firmware cap for this reason.
+
+Set the cap at least 3 C below the highest Tctl that you accept, for example 85 C for 88 C. While the GPU also
+works, use a larger margin and watch the temperature. A start applies the stored cap, or the default of 87 C when no
+cap is stored. `bc250kmd_cli cpu set temp <C>` and "Test this limit" in the application start a trial, and a restart
+ends the trial. Only `bc250kmd_cli cpu keep` and "Keep it" in the application store the cap in `CpuTempC`. The GPU
+thermal policy (`docs/design/dpm.md`) is a separate rule, and this cap does not change it.
+
 One undervolt step is not a fixed number of millivolts. The community's own fitted model is about
 `0.004325 x f - 10` mV per step, which is 3 mV at 3000 MHz and 7 mV at 4000 MHz. The driver therefore never
 computes a voltage from a step count: it reads the voltage back.
