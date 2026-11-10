@@ -11,6 +11,14 @@
 //   LegacyClientScan(adl)     the scanner's calls; returns the number of failed checks
 //   LegacyClientDestroy(adl)  ADL_Main_Control_Destroy
 //   LegacyClientAllocations() the number of calls to the private-heap callback
+//   LegacyClientNoContext(adl) for a module without its own context: every call that allocates through the
+//                             callback or changes the context must return ADL_ERR_NOT_INIT with its outputs clear;
+//                             returns the number of failed checks
+//   LegacyClientFacts(adl)    ADL_Adapter_NumberOfAdapters_Get, a call that returns no memory: its status
+//
+// The build makes two files of this source, both at the same fixed base address without ASLR:
+// adl-legacy-client.dll and, with ADL_CLIENT_VARIANT_B, adl-legacy-client-b.dll, which is larger. The test loads
+// one after the other at that base, so that the second module has the base of the first one and a different key.
 #include <windows.h>
 #include <stdio.h>
 
@@ -55,6 +63,14 @@ typedef int(ADL_API* PFN_LegacyDisplayInfo)(int, int*, ADLDisplayInfo**, int);
 typedef int(ADL_API* PFN_LegacyModes)(int, int, int*, ADLMode**);
 typedef int(ADL_API* PFN_LegacyMapConfig)(int, int*, ADLDisplayMap**, int*, ADLDisplayTarget**, int);
 typedef int(ADL_API* PFN_DisplayInfo)(ADL_CONTEXT_HANDLE, int, int*, ADLDisplayInfo**, int);
+typedef int(ADL_API* PFN_LegacySlsIndex)(int, int, ADLDisplayTarget*, int*);
+typedef int(ADL_API* PFN_LegacySlsConfig)(int, int, ADLSLSMap*, int*, ADLSLSTarget**, int*, ADLSLSMode**, int*,
+                                          ADLBezelTransientMode**, int*, ADLBezelTransientMode**, int*,
+                                          ADLSLSOffset**, int);
+
+#if defined(ADL_CLIENT_VARIANT_B)
+volatile char g_variant_pad[65536] = {1};  // makes this file larger than the first variant
+#endif
 
 template <typename T>
 T Get(HMODULE adl, const char* name)
@@ -158,7 +174,69 @@ extern "C" __declspec(dllexport) int __cdecl LegacyClientDestroy(HMODULE adl)
     return destroy ? Keep(destroy()) : ADL_ERR;
 }
 
-extern "C" __declspec(dllexport) int __cdecl LegacyClientAllocations() { return (int)g_allocations; }
+extern "C" __declspec(dllexport) int __cdecl LegacyClientAllocations()
+{
+#if defined(ADL_CLIENT_VARIANT_B)
+    (void)g_variant_pad[0];
+#endif
+    return (int)g_allocations;
+}
+
+extern "C" __declspec(dllexport) int __cdecl LegacyClientNoContext(HMODULE adl)
+{
+    g_failures = 0;
+    auto refresh = Get<PFN_LegacyVoid>(adl, "ADL_Main_Control_Refresh");
+    auto destroy = Get<PFN_LegacyVoid>(adl, "ADL_Main_Control_Destroy");
+    auto infoX2 = Get<PFN_LegacyInfoX2>(adl, "ADL_Adapter_AdapterInfoX2_Get");
+    auto displayInfo = Get<PFN_LegacyDisplayInfo>(adl, "ADL_Display_DisplayInfo_Get");
+    auto modes = Get<PFN_LegacyModes>(adl, "ADL_Display_Modes_Get");
+    auto mapConfig = Get<PFN_LegacyMapConfig>(adl, "ADL_Display_DisplayMapConfig_Get");
+    auto slsIndex = Get<PFN_LegacySlsIndex>(adl, "ADL_Display_SLSMapIndex_Get");
+    auto slsConfig = Get<PFN_LegacySlsConfig>(adl, "ADL_Display_SLSMapConfig_Get");
+    auto displayInfo2 = Get<PFN_DisplayInfo>(adl, "ADL2_Display_DisplayInfo_Get");
+    if (!refresh || !destroy || !infoX2 || !displayInfo || !modes || !mapConfig || !slsIndex || !slsConfig ||
+        !displayInfo2) {
+        Check(false, "missing export");
+        return g_failures;
+    }
+    const int before = (int)g_allocations;
+    Check(Keep(refresh()) == ADL_ERR_NOT_INIT, "ADL_Main_Control_Refresh without a context of this module");
+    Check(Keep(destroy()) == ADL_ERR_NOT_INIT, "ADL_Main_Control_Destroy without a context of this module");
+    AdapterInfo* ai = reinterpret_cast<AdapterInfo*>(1);
+    Check(Keep(infoX2(&ai)) == ADL_ERR_NOT_INIT && !ai, "ADL_Adapter_AdapterInfoX2_Get without a context");
+    int n = 9;
+    ADLDisplayInfo* di = reinterpret_cast<ADLDisplayInfo*>(1);
+    Check(Keep(displayInfo(-1, &n, &di, 0)) == ADL_ERR_NOT_INIT && !n && !di, "ADL_Display_DisplayInfo_Get");
+    n = 9;
+    di = reinterpret_cast<ADLDisplayInfo*>(1);
+    Check(Keep(displayInfo2(nullptr, -1, &n, &di, 0)) == ADL_ERR_NOT_INIT && !n && !di,
+          "ADL2_Display_DisplayInfo_Get, null handle");
+    n = 9;
+    ADLMode* m = reinterpret_cast<ADLMode*>(1);
+    Check(Keep(modes(-1, -1, &n, &m)) == ADL_ERR_NOT_INIT && !n && !m, "ADL_Display_Modes_Get");
+    int nmaps = 9, ntargets = 9;
+    ADLDisplayMap* maps = reinterpret_cast<ADLDisplayMap*>(1);
+    ADLDisplayTarget* targets = reinterpret_cast<ADLDisplayTarget*>(1);
+    Check(Keep(mapConfig(-1, &nmaps, &maps, &ntargets, &targets, 0)) == ADL_ERR_NOT_INIT && !nmaps && !maps &&
+              !ntargets && !targets,
+          "ADL_Display_DisplayMapConfig_Get");
+    int sls = 5;
+    Check(Keep(slsIndex(0, 0, nullptr, &sls)) == ADL_ERR_NOT_INIT && sls == -1, "ADL_Display_SLSMapIndex_Get");
+    n = 9;
+    ADLSLSTarget* st = reinterpret_cast<ADLSLSTarget*>(1);
+    Check(Keep(slsConfig(0, 0, nullptr, &n, &st, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+                         nullptr, 0)) == ADL_ERR_NOT_INIT && !n && !st,
+          "ADL_Display_SLSMapConfig_Get");
+    Check((int)g_allocations == before, "no call of this module's callback");
+    return g_failures;
+}
+
+extern "C" __declspec(dllexport) int __cdecl LegacyClientFacts(HMODULE adl)
+{
+    auto count = Get<PFN_LegacyCount>(adl, "ADL_Adapter_NumberOfAdapters_Get");
+    int n = 0;
+    return count ? Keep(count(&n)) : ADL_ERR;
+}
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
 {

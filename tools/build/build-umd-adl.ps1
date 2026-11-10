@@ -8,7 +8,8 @@
 #   atiadlxx.dll / atiadlxy.dll   the shipped library (atiadl.def, no test hook)
 #   test\atiadl-test.dll          the same sources with BC250_ADL_TEST_HOOKS (snapshot injection, live block count)
 #   test\atiadl-no-modes.dll      the shipped library without ADL2_Display_Modes_Get (AGS negative control)
-#   test\adl-legacy-client.dll    a second caller module of the ADL_* functions for the unit test (BD-347)
+#   test\adl-legacy-client.dll    a second caller module of the ADL_* functions for the unit test (BD-347), and
+#   test\adl-legacy-client-b.dll  a larger variant of it at the same fixed base
 #   test\atiadl-test-host.dll     only with -TestService: the test build that takes the named service (for example
 #                                 nvlddmkm) for ours, so that the discovery runs against a host GPU
 #   adl-unit-test.exe             the export contract against the test build (tests\adl-unit-test.cpp)
@@ -97,9 +98,15 @@ try {
     Invoke-Bc250UmdCompiler $cc @flags "/Fo$obj\" "/Fd$obj\unit.pdb" "$src\tests\adl-unit-test.cpp" `
         "/Fe$(Join-Path $OutputDir 'adl-unit-test.exe')" /link /Brepro
     if ($LASTEXITCODE -ne 0) { throw 'adl-unit-test build failed' }
-    Invoke-Bc250UmdCompiler $cc @flags "/Fo$obj\" "/Fd$obj\legacy-client.pdb" "$src\tests\adl-legacy-client.cpp" `
-        "/Fe$(Join-Path $testDir 'adl-legacy-client.dll')" /LD /link /DLL /Brepro
-    if ($LASTEXITCODE -ne 0) { throw 'adl-legacy-client build failed' }
+    # Two variants of the second caller module at one fixed base without ASLR: the unit test loads the second where
+    # the first was, to test the key of an implicit context (base, size, time stamp).
+    foreach ($variant in @(@('adl-legacy-client', @()), @('adl-legacy-client-b', @('/DADL_CLIENT_VARIANT_B')))) {
+        New-Item -ItemType Directory -Force "$obj\$($variant[0])" | Out-Null
+        Invoke-Bc250UmdCompiler $cc @flags @($variant[1]) "/Fo$obj\$($variant[0])\" "/Fd$obj\$($variant[0]).pdb" `
+            "$src\tests\adl-legacy-client.cpp" "/Fe$(Join-Path $testDir "$($variant[0]).dll")" /LD /link /DLL /Brepro `
+            /BASE:0x5A000000 /DYNAMICBASE:NO
+        if ($LASTEXITCODE -ne 0) { throw "$($variant[0]) build failed" }
+    }
     # The AGS header is the SDK's: a system header for the warning policy. Its D3D forward declarations are left
     # out in favour of the real headers, and the D3D11 half is not needed.
     Invoke-Bc250UmdCompiler $cc @flags "/imsvc$AgsSdk" /DAGS_EXCLUDE_DIRECTX_TYPES /DAGS_EXCLUDE_DIRECTX_11 "/Fo$obj\" `

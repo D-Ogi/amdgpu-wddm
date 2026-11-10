@@ -14,10 +14,18 @@
 // The ADL_* functions without a handle (and the ADL2_* functions with a null handle) use an implicit context. More
 // than one module of a process can use them, each with its own allocation callback and its own deallocator: for
 // example a GPU library and a CPU library in one hardware scanner. Thus the implicit context is per calling module,
-// found from the return address of the export. Each module gets its arrays from the callback that it gave to
-// ADL_Main_Control_Create, and can free them with its own deallocator. A module that did not call
-// ADL_Main_Control_Create itself (a call through a helper module) uses the newest implicit context. All code outside
-// an image (generated code) is one caller, with the key null.
+// found from the return address of the export. The key of a module is its base address, its SizeOfImage and the
+// TimeDateStamp of its PE header. All code outside an image (generated code) is one caller, with the key zero.
+//
+// The rule for memory: an export that returns memory either fills a caller buffer of a size that the caller gives,
+// or allocates through an allocation callback that the same caller gave for itself. Thus every function that
+// allocates through the callback (AdapterInfoX2, DisplayInfo, Modes, DisplayMapConfig and the SLS pair, also through
+// ADL2 with a null handle) uses only the context of the calling module: a module without its own
+// ADL_Main_Control_Create gets ADL_ERR_NOT_INIT. Refresh and Destroy also act only on the context of the calling
+// module. The functions that return no memory (NumberOfAdapters, AdapterInfo into a caller buffer, Active,
+// MemoryInfo, Versions) use the newest implicit context when the caller has none: a call through a helper module
+// still gets the facts. Each module has its own snapshot: a Refresh of one module does not change what another
+// module reads.
 //
 // The SDK documentation says only that ADL_Main_Control_Create "initializes global pointers", that the callback
 // allocates the output arrays that the user frees, and that the ADL2 functions exist "to assure that there is no
@@ -25,8 +33,10 @@
 // ADL_Main_Control_Create does. One context per module gives each caller the result that it can get from one
 // process-wide context in the cases where that is correct, and is also correct when two modules use the functions.
 //
-// When a module unloads, its implicit context goes with it (a loader notification), so that a module that loads
-// later at the same address does not get the context and the callback of the earlier one.
+// When a module unloads, its implicit context goes with it (a loader notification). If the notification is not
+// available, the key still keeps a module that loads later at the same address from the context and the callback of
+// the earlier one: its size or time stamp is different, so it gets a new context, and the old one stays as a leak
+// of one block until this library unloads.
 #include <windows.h>
 #include <intrin.h>
 #include <string.h>
@@ -38,13 +48,26 @@ namespace {
 
 const uint32_t kContextMagic = 0x41444c32;  // 'ADL2'
 
+// The identity of a calling module. A module that unloads and a different module that loads at the same base have
+// different keys unless the two files have the same size and the same time stamp.
+struct CallerId {
+    const void* base;  // null for code outside an image
+    DWORD size;        // SizeOfImage
+    DWORD stamp;       // TimeDateStamp of the PE file header
+
+    bool operator==(const CallerId& other) const
+    {
+        return base == other.base && size == other.size && stamp == other.stamp;
+    }
+};
+
 struct AdlContext {
     uint32_t magic;
     AdlContext* next;
     ADL_MAIN_MALLOC_CALLBACK alloc;
     int enum_connected;
     int threading;
-    HMODULE owner;    // implicit contexts only: the calling module (null for code outside an image)
+    CallerId owner;   // implicit contexts only: the calling module
     int legacy_refs;  // implicit contexts only: ADL_Main_Control_Create calls not yet destroyed
     AdlSnapshot snap;
 };
@@ -54,26 +77,41 @@ AdlContext* g_contexts;     // ADL2 contexts, by handle
 AdlContext* g_legacy;       // implicit contexts, one per calling module, newest first
 LONG g_live_blocks;         // context blocks not yet freed (read by the test build)
 
-// The module that contains a code address, or null for code outside an image. RtlPcToFileHeader reads the inverted
-// function table under its own shared lock and does not take the loader lock, so a caller can be in a DllMain. The
-// result is a key for comparison only: the module reference count does not change.
-HMODULE ModuleOf(void* address)
+// The key of the module that contains a code address; zero for code outside an image. RtlPcToFileHeader reads the
+// inverted function table under its own shared lock and does not take the loader lock, so a caller can be in a
+// DllMain. The module reference count does not change. The headers are readable: the caller runs code of that module.
+CallerId CallerOf(void* address)
 {
+    CallerId id = {};
     void* base = nullptr;
     RtlPcToFileHeader(address, &base);
-    return static_cast<HMODULE>(base);
+    if (!base) {
+        return id;
+    }
+    const IMAGE_DOS_HEADER* dos = static_cast<const IMAGE_DOS_HEADER*>(base);
+    const IMAGE_NT_HEADERS* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(static_cast<const char*>(base) + dos->e_lfanew);
+    id.base = base;
+    id.size = nt->OptionalHeader.SizeOfImage;
+    id.stamp = nt->FileHeader.TimeDateStamp;
+    return id;
 }
 
 // The context that a call names: an ADL2 handle, or for a null handle the implicit context of the calling module.
 struct Ref {
     ADL_CONTEXT_HANDLE handle;
-    HMODULE caller;
+    CallerId caller;
 };
 
 Ref MakeRef(ADL_CONTEXT_HANDLE handle, void* return_address)
 {
-    return Ref{handle, handle ? nullptr : ModuleOf(return_address)};
+    return Ref{handle, handle ? CallerId{} : CallerOf(return_address)};
 }
+
+// Which implicit context a call without a handle may use when the calling module has none of its own.
+enum class Scope {
+    kOwnOnly,      // the call allocates through the callback, or changes the context: the caller's context only
+    kOwnOrNewest,  // the call returns facts and no memory: else the newest implicit context
+};
 
 // Use only in the body of an export: the return address must be the one into the calling module.
 #define CALLER_REF(handle) MakeRef((handle), _ReturnAddress())
@@ -142,7 +180,7 @@ void* CallerBlock(ADL_MAIN_MALLOC_CALLBACK alloc, size_t count, size_t size)
 }
 
 // Under the lock. The implicit context of exactly this module, or null.
-AdlContext* OwnImplicitContext(HMODULE caller)
+AdlContext* OwnImplicitContext(const CallerId& caller)
 {
     for (AdlContext* c = g_legacy; c; c = c->next) {
         if (c->owner == caller) {
@@ -152,17 +190,13 @@ AdlContext* OwnImplicitContext(HMODULE caller)
     return nullptr;
 }
 
-// Under the lock. The implicit context of the module, else the newest implicit context.
-AdlContext* ImplicitContext(HMODULE caller)
-{
-    AdlContext* own = OwnImplicitContext(caller);
-    return own ? own : g_legacy;
-}
-
-AdlContext* Resolve(Ref ref)
+// Under the lock. The context of an ADL2 handle; for a null handle the implicit context of the calling module, else
+// with kOwnOrNewest the newest implicit context.
+AdlContext* Resolve(Ref ref, Scope scope)
 {
     if (!ref.handle) {
-        return ImplicitContext(ref.caller);
+        AdlContext* own = OwnImplicitContext(ref.caller);
+        return own || scope == Scope::kOwnOnly ? own : g_legacy;
     }
     for (AdlContext* c = g_contexts; c; c = c->next) {
         if (c == ref.handle && c->magic == kContextMagic) {
@@ -174,7 +208,8 @@ AdlContext* Resolve(Ref ref)
 
 // Do not retain a context pointer across an application callback. The callback may re-enter ADL, including
 // Destroy or Refresh. Copy the snapshot under the context lock, then release the lock before any callback.
-// The snapshot is on our heap, not the caller's stack or allocation callback.
+// The snapshot is on our heap, not the caller's stack or allocation callback. The callback is the caller's own:
+// a call without a handle from a module without its own context gets ADL_ERR_NOT_INIT.
 struct CallSnapshot {
     AdlSnapshot* snap = nullptr;
     ADL_MAIN_MALLOC_CALLBACK alloc = nullptr;
@@ -187,7 +222,7 @@ struct CallSnapshot {
             return;
         }
         Lock lock;
-        AdlContext* context = Resolve(ref);
+        AdlContext* context = Resolve(ref, Scope::kOwnOnly);
         if (!context) {
             status = ADL_ERR_NOT_INIT;
             return;
@@ -283,7 +318,7 @@ int Refresh(Ref ref)
     int result = ADL_ERR_NOT_INIT;
     {
         Lock lock;
-        AdlContext* c = Resolve(ref);
+        AdlContext* c = Resolve(ref, Scope::kOwnOnly);  // the snapshot of the calling module only
         if (c) {
             c->snap = *fresh;
             result = ADL_OK;
@@ -310,8 +345,13 @@ typedef LONG(NTAPI* PFN_LdrUnregisterDllNotification)(PVOID);
 INIT_ONCE g_unload_watch_once = INIT_ONCE_STATIC_INIT;
 PVOID g_unload_watch_cookie;
 
-// Called by the loader, with the loader lock, when a module unloads: the implicit contexts of that module go. The
-// library never holds g_lock while it waits for the loader lock, so this cannot deadlock.
+#if defined(BC250_ADL_TEST_HOOKS)
+bool g_test_ignore_unload;  // test build only: tests the key without the notification
+#endif
+
+// Called by the loader, with the loader lock, when a module unloads: the implicit contexts at that base go, also
+// a context that an earlier module at the same base left. The library never holds g_lock while it waits for the
+// loader lock, so this cannot deadlock.
 VOID CALLBACK OnLoaderNotification(ULONG reason, const LoaderNotificationData* data, PVOID)
 {
     if (reason != kLoaderNotificationUnloaded || !data || !data->dll_base) {
@@ -320,9 +360,14 @@ VOID CALLBACK OnLoaderNotification(ULONG reason, const LoaderNotificationData* d
     AdlContext* gone = nullptr;
     {
         Lock lock;
+#if defined(BC250_ADL_TEST_HOOKS)
+        if (g_test_ignore_unload) {
+            return;
+        }
+#endif
         for (AdlContext** link = &g_legacy; *link;) {
             AdlContext* c = *link;
-            if (c->owner == static_cast<HMODULE>(data->dll_base)) {
+            if (c->owner.base == data->dll_base) {
                 *link = c->next;
                 c->next = gone;
                 gone = c;
@@ -363,7 +408,7 @@ void StopUnloadWatch()
 
 // ADL_Main_Control_Create: counted per calling module. A second Create of the same module keeps its context and
 // takes the new callback: the callback of the latest Create is the one that the module can call now.
-int LegacyCreate(ADL_MAIN_MALLOC_CALLBACK alloc, int enum_connected, HMODULE caller)
+int LegacyCreate(ADL_MAIN_MALLOC_CALLBACK alloc, int enum_connected, const CallerId& caller)
 {
     if (!alloc) {
         return ADL_ERR_INVALID_CALLBACK;
@@ -395,23 +440,16 @@ int LegacyCreate(ADL_MAIN_MALLOC_CALLBACK alloc, int enum_connected, HMODULE cal
     return ADL_OK;
 }
 
-// ADL_Main_Control_Destroy: releases one Create of the implicit context of the calling module. A module without its
-// own context releases the only implicit context. With more than one, it is not known which one the caller used: a
-// caller can jump to the export with a tail call, and then the return address is in the module that called that
-// caller. Then no context is released, so that the context of another module stays valid; the library frees it at
-// unload.
-int LegacyDestroy(HMODULE caller)
+// ADL_Main_Control_Destroy: releases one Create of the implicit context of the calling module. A caller without its
+// own context gets ADL_ERR_NOT_INIT and no context is released: the context of another module stays valid. (A caller
+// can jump to the export with a tail call; then the return address is in the module that called that caller, and the
+// library cannot know which context the caller used.)
+int LegacyDestroy(const CallerId& caller)
 {
     AdlContext* gone = nullptr;
     {
         Lock lock;
         AdlContext* c = OwnImplicitContext(caller);
-        if (!c && g_legacy && g_legacy->next) {
-            return ADL_OK;
-        }
-        if (!c) {
-            c = g_legacy;
-        }
         if (!c) {
             return ADL_ERR_NOT_INIT;
         }
@@ -509,7 +547,7 @@ int NumberOfAdapters(Ref ref, int* count)
     }
     *count = 0;
     Lock lock;
-    AdlContext* c = Resolve(ref);
+    AdlContext* c = Resolve(ref, Scope::kOwnOrNewest);
     if (!c) {
         return ADL_ERR_NOT_INIT;
     }
@@ -547,7 +585,7 @@ int AdapterInfoBuffer(Ref ref, AdapterInfo* info, int bytes)
         return ADL_ERR_NULL_POINTER;
     }
     Lock lock;
-    AdlContext* c = Resolve(ref);
+    AdlContext* c = Resolve(ref, Scope::kOwnOrNewest);
     if (!c) {
         return ADL_ERR_NOT_INIT;
     }
@@ -568,7 +606,7 @@ int AdapterActive(Ref ref, int index, int* status)
     }
     *status = 0;
     Lock lock;
-    AdlContext* c = Resolve(ref);
+    AdlContext* c = Resolve(ref, Scope::kOwnOrNewest);
     if (!c) {
         return ADL_ERR_NOT_INIT;
     }
@@ -586,7 +624,7 @@ int MemoryInfo(Ref ref, int index, ADLMemoryInfo* info)
     }
     memset(info, 0, sizeof(*info));
     Lock lock;
-    AdlContext* c = Resolve(ref);
+    AdlContext* c = Resolve(ref, Scope::kOwnOrNewest);
     if (!c) {
         return ADL_ERR_NOT_INIT;
     }
@@ -604,7 +642,7 @@ int MemoryInfo(Ref ref, int index, ADLMemoryInfo* info)
 int Versions(Ref ref, int index, char* driver_version)
 {
     Lock lock;
-    AdlContext* c = Resolve(ref);
+    AdlContext* c = Resolve(ref, Scope::kOwnOrNewest);
     if (!c) {
         return ADL_ERR_NOT_INIT;
     }
@@ -806,7 +844,7 @@ int SlsMapIndex(Ref ref, int* sls_index)
         *sls_index = -1;  // no SLS group
     }
     Lock lock;
-    return Resolve(ref) ? ADL_ERR_NOT_SUPPORTED : ADL_ERR_NOT_INIT;
+    return Resolve(ref, Scope::kOwnOnly) ? ADL_ERR_NOT_SUPPORTED : ADL_ERR_NOT_INIT;
 }
 
 template <typename T>
@@ -829,8 +867,9 @@ int VersionsInfo(Ref ref, LPADLVersionsInfo info)
     return Versions(ref, -1, info->strDriverVer);
 }
 
-// No SLS group: clears every output and returns ADL_ERR_NOT_SUPPORTED.
-int NoSlsConfig(ADLSLSMap* map, int* num_target, ADLSLSTarget** target, int* num_native, ADLSLSMode** native,
+// No SLS group: clears every output and returns ADL_ERR_NOT_SUPPORTED. The call returns arrays in AMD's library, so
+// it takes the same context rule as the other array functions: ADL_ERR_NOT_INIT without a context of the caller.
+int NoSlsConfig(Ref ref, ADLSLSMap* map, int* num_target, ADLSLSTarget** target, int* num_native, ADLSLSMode** native,
                 int* num_bezel, ADLBezelTransientMode** bezel, int* num_transient, ADLBezelTransientMode** transient,
                 int* num_offset, ADLSLSOffset** offset)
 {
@@ -842,7 +881,8 @@ int NoSlsConfig(ADLSLSMap* map, int* num_target, ADLSLSTarget** target, int* num
     ClearArray(num_bezel, bezel);
     ClearArray(num_transient, transient);
     ClearArray(num_offset, offset);
-    return ADL_ERR_NOT_SUPPORTED;
+    Lock lock;
+    return Resolve(ref, Scope::kOwnOnly) ? ADL_ERR_NOT_SUPPORTED : ADL_ERR_NOT_INIT;
 }
 
 }  // namespace
@@ -960,11 +1000,10 @@ int ADL_API ADL2_Display_SLSMapConfig_Get(ADL_CONTEXT_HANDLE context, int iAdapt
                                           ADLBezelTransientMode** lppTransientMode, int* lpNumSLSOffset,
                                           ADLSLSOffset** lppSLSOffset, int iOption)
 {
-    (void)context;
     (void)iAdapterIndex;
     (void)iSLSMapIndex;
     (void)iOption;
-    return NoSlsConfig(lpSLSMap, lpNumSLSTarget, lppSLSTarget, lpNumNativeMode, lppNativeMode, lpNumBezelMode,
+    return NoSlsConfig(CALLER_REF(context), lpSLSMap, lpNumSLSTarget, lppSLSTarget, lpNumNativeMode, lppNativeMode, lpNumBezelMode,
                        lppBezelMode, lpNumTransientMode, lppTransientMode, lpNumSLSOffset, lppSLSOffset);
 }
 
@@ -1050,7 +1089,7 @@ int ADL_API ADL_Display_SLSMapConfig_Get(int iAdapterIndex, int iSLSMapIndex, AD
     (void)iAdapterIndex;
     (void)iSLSMapIndex;
     (void)iOption;
-    return NoSlsConfig(lpSLSMap, lpNumSLSTarget, lppSLSTarget, lpNumNativeMode, lppNativeMode, lpNumBezelMode,
+    return NoSlsConfig(CALLER_REF(nullptr), lpSLSMap, lpNumSLSTarget, lppSLSTarget, lpNumNativeMode, lppNativeMode, lpNumBezelMode,
                        lppBezelMode, lpNumTransientMode, lppTransientMode, lpNumSLSOffset, lppSLSOffset);
 }
 
@@ -1075,6 +1114,13 @@ __declspec(dllexport) void ADL_API Bc250AdlTest_SetSnapshot(const AdlSnapshot* s
 }
 
 __declspec(dllexport) int ADL_API Bc250AdlTest_LiveBlocks() { return (int)g_live_blocks; }
+
+// Nonzero: the unload notification removes nothing, so that a test sees what the key alone does.
+__declspec(dllexport) void ADL_API Bc250AdlTest_IgnoreUnload(int ignore)
+{
+    Lock lock;
+    g_test_ignore_unload = ignore != 0;
+}
 
 __declspec(dllexport) void ADL_API Bc250AdlTest_Discover(AdlSnapshot* out) { AdlDiscover(out); }
 #endif

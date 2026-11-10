@@ -131,15 +131,28 @@ export the functions that give them.
 ## Contexts and memory
 
 - Each context holds its own snapshot. `ADL2_Main_Control_Destroy` frees the context and the snapshot.
-- Every array that a function returns comes from the allocation callback of the context, and the caller frees it.
-  This is the ADL contract.
+- The rule for memory: an export that returns memory either fills a caller buffer of a size that the caller gives,
+  or allocates through an allocation callback that the same caller gave for itself. It never uses an allocator that
+  a different module chose. The caller frees what the callback gave. This is the ADL contract, applied to each
+  caller. Keep this rule for every shim that returns memory to a caller.
 - The `ADL_*` functions (and the `ADL2_*` functions with a null handle) use an implicit context. There is one
   implicit context for each calling module, with a reference count. The library finds the calling module from the
-  return address of the export. `ADL_Main_Control_Create` and `ADL_Main_Control_Destroy` change the count of the
-  context of that module. Thus each module gets the arrays of the callback that it gave, and can free them with its
-  own deallocator (BD-347). A module without its own `ADL_Main_Control_Create` uses the newest implicit context.
-  Its `ADL_Main_Control_Destroy` releases the only implicit context, or none when there is more than one. The
-  library frees the remaining contexts at unload.
+  return address of the export. The key of a module is its base address, its `SizeOfImage` and the `TimeDateStamp`
+  of its PE header. `ADL_Main_Control_Create` and `ADL_Main_Control_Destroy` change the count of the context of that
+  module. Thus each module gets the arrays of the callback that it gave, and can free them with its own deallocator
+  (BD-347).
+- A caller without an implicit context of its own (a module that did not call `ADL_Main_Control_Create`, a call
+  through a helper module, code outside an image):
+  - The functions that allocate through the callback get `ADL_ERR_NOT_INIT`, with their outputs cleared:
+    `AdapterInfoX2_Get`, `DisplayInfo_Get`, `Modes_Get`, `DisplayMapConfig_Get`, `SLSMapIndex_Get` and
+    `SLSMapConfig_Get`. The callback of a different module is never used.
+  - `ADL_Main_Control_Refresh` and `ADL_Main_Control_Destroy` get `ADL_ERR_NOT_INIT`. They never change the context
+    of a different module.
+  - The functions that return no memory (`NumberOfAdapters_Get`, `AdapterInfo_Get` into a caller buffer,
+    `Active_Get`, `MemoryInfo_Get`, `Versions_Get`) use the newest implicit context. A caller through a helper module
+    thus still gets the facts.
+- Each module holds its own snapshot. A `Refresh` of one module does not change what another module reads. Before
+  BD-347 all modules shared one snapshot.
 - The vendor contract. The SDK documentation (`ADL_SDK.html` and the reference pages of `adl.h`) says that
   `ADL_Main_Control_Create` "initializes global pointers". It says that the library allocates output arrays with the
   callback and that the user frees them. It also says that the `ADL2_*` functions exist "to assure that there is no
@@ -149,16 +162,16 @@ export the functions that give them.
   context per module gives that result, and it gives the result of one process-wide context to a single module.
 - The library finds the module of the return address with `RtlPcToFileHeader`. That function reads the inverted
   function table under a shared lock of its own and does not take the loader lock, so a caller in a `DllMain` cannot
-  cause a deadlock here. Code outside an image (generated code) has no module: all such callers share the key null,
-  and without a context of their own they use the newest implicit context.
-- When a module unloads, the library removes the implicit contexts of that module. A loader notification
-  (`LdrRegisterDllNotification`) tells the library about the unload. A module that loads later at the same address
-  thus starts without a context and never gets the callback of the earlier module. The notification runs with the
-  loader lock. The library never waits for the loader lock while it holds its own lock.
+  cause a deadlock here. Code outside an image (generated code) has no module: all such callers share the key zero.
+- When a module unloads, the library removes the implicit contexts at its base address. A loader notification
+  (`LdrRegisterDllNotification`) tells the library about the unload. The notification runs with the loader lock.
+  The library never waits for the loader lock while it holds its own lock. Without the notification, the key still
+  protects a module that loads later at the same address: its size or time stamp is different, so it starts without
+  a context and never gets the callback of the earlier module. The context of the earlier module is then a leak of
+  one block until the library unloads. Only a later copy of the same file at the same address can have the same key.
 - Limit: a caller that jumps to an export with a tail call has the return address of its own caller. The library
-  then uses the context of that module, or the newest one. The libraries in the scanner of BD-347 make ordinary
-  calls.
-- One lock protects context state. Discovery and caller allocation callbacks run outside that lock. Array queries
+  then uses the context of that module, or for a function that returns no memory the newest one. The libraries in
+  the scanner of BD-347 make ordinary calls.- One lock protects context state. Discovery and caller allocation callbacks run outside that lock. Array queries
   copy the snapshot and callback while locked, then use that private copy until the query returns. A callback can
   query, refresh or destroy its context without a recursive lock or use of freed context memory.
 - `DisplayMapConfig_Get` needs two caller allocations. If the second fails, it returns an error with the first

@@ -127,9 +127,11 @@ typedef int(ADL_API* PFN_LegacySlsConfig)(int, int, ADLSLSMap*, int*, ADLSLSTarg
 typedef void(ADL_API* PFN_SetSnapshot)(const AdlSnapshot*);
 typedef int(ADL_API* PFN_LiveBlocks)();
 typedef void(ADL_API* PFN_Discover)(AdlSnapshot*);
+typedef void(ADL_API* PFN_IgnoreUnload)(int);
 
 HMODULE g_dll;
 const char* g_client_path;
+const char* g_client_b_path;  // the larger variant of the second caller module, at the same base
 
 template <typename T>
 T Get(const char* name)
@@ -306,16 +308,21 @@ T GetFrom(HMODULE module, const char* name)
     return reinterpret_cast<T>(reinterpret_cast<void*>(GetProcAddress(module, name)));
 }
 
-// Calls fn (no arguments) from code outside any module: a caller that the library cannot name.
-int CallFromAnonymousCode(PFN_LegacyVoid fn)
+// Calls fn with one pointer argument from code outside any module: a caller that the library cannot name. A
+// function without arguments ignores the argument (cdecl: the caller removes it).
+int CallFromAnonymousCode(void* fn, void* arg = nullptr)
 {
 #if defined(_M_IX86)
-    unsigned char code[] = {0xB8, 0, 0, 0, 0, 0xFF, 0xD0, 0xC3};  // mov eax, fn; call eax; ret
+    // mov eax, fn; push arg; call eax; add esp, 4; ret
+    unsigned char code[] = {0xB8, 0, 0, 0, 0, 0x68, 0, 0, 0, 0, 0xFF, 0xD0, 0x83, 0xC4, 0x04, 0xC3};
     memcpy(code + 1, &fn, sizeof(fn));
+    memcpy(code + 6, &arg, sizeof(arg));
 #elif defined(_M_X64)
-    // sub rsp, 28h; mov rax, fn; call rax; add rsp, 28h; ret
-    unsigned char code[] = {0x48, 0x83, 0xEC, 0x28, 0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xD0, 0x48, 0x83, 0xC4, 0x28, 0xC3};
-    memcpy(code + 6, &fn, sizeof(fn));
+    // sub rsp, 28h; mov rcx, arg; mov rax, fn; call rax; add rsp, 28h; ret
+    unsigned char code[] = {0x48, 0x83, 0xEC, 0x28, 0x48, 0xB9, 0, 0, 0, 0, 0, 0, 0, 0, 0x48, 0xB8, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0xFF, 0xD0, 0x48, 0x83, 0xC4, 0x28, 0xC3};
+    memcpy(code + 6, &arg, sizeof(arg));
+    memcpy(code + 16, &fn, sizeof(fn));
 #else
 #error "CallFromAnonymousCode supports x86 and x64"
 #endif
@@ -339,12 +346,14 @@ struct LegacyClient {
     PFN_ClientCall scan = nullptr;
     PFN_ClientCall destroy = nullptr;
     PFN_ClientCount allocations = nullptr;
+    PFN_ClientCall no_context = nullptr;
+    PFN_ClientCall facts = nullptr;
 
-    bool Load()
+    bool Load(const char* path = g_client_path)
     {
-        module = LoadLibraryA(g_client_path);
+        module = LoadLibraryA(path);
         if (!module) {
-            printf("FAIL cannot load the second caller module %s (error %lu)\n", g_client_path, GetLastError());
+            printf("FAIL cannot load the second caller module %s (error %lu)\n", path, GetLastError());
             g_failures++;
             return false;
         }
@@ -352,8 +361,11 @@ struct LegacyClient {
         scan = GetFrom<PFN_ClientCall>(module, "LegacyClientScan");
         destroy = GetFrom<PFN_ClientCall>(module, "LegacyClientDestroy");
         allocations = GetFrom<PFN_ClientCount>(module, "LegacyClientAllocations");
-        CHECK(create && scan && destroy && allocations);
-        return create && scan && destroy && allocations;
+        no_context = GetFrom<PFN_ClientCall>(module, "LegacyClientNoContext");
+        facts = GetFrom<PFN_ClientCall>(module, "LegacyClientFacts");
+        bool all = create && scan && destroy && allocations && no_context && facts;
+        CHECK(all);
+        return all;
     }
 
     void Unload()
@@ -393,16 +405,19 @@ void CheckTwoCallerModules()
     int before = client.allocations();
     CHECK(client.scan(g_dll) == 0);
     CHECK(client.allocations() > before);
-    // A caller outside any image (generated code) uses the newest implicit context. Its Destroy, with two implicit
-    // contexts, releases neither.
-    CHECK(CallFromAnonymousCode(lRefresh) == ADL_OK);
-    CHECK(CallFromAnonymousCode(lDestroy) == ADL_OK && liveBlocks() == 2);
+    // A caller outside any image (generated code) has no context of its own. A call that returns no memory uses the
+    // newest implicit context; an array call, Refresh and Destroy get ADL_ERR_NOT_INIT and change nothing.
+    int n = -1;
+    CHECK(CallFromAnonymousCode(reinterpret_cast<void*>(lCount), &n) == ADL_OK && n == 3);
+    AdapterInfo* ai = reinterpret_cast<AdapterInfo*>(1);
+    CHECK(CallFromAnonymousCode(reinterpret_cast<void*>(lInfoX2), &ai) == ADL_ERR_NOT_INIT && ai == nullptr);
+    CHECK(CallFromAnonymousCode(reinterpret_cast<void*>(lRefresh)) == ADL_ERR_NOT_INIT);
+    CHECK(CallFromAnonymousCode(reinterpret_cast<void*>(lDestroy)) == ADL_ERR_NOT_INIT && liveBlocks() == 2);
     // The arrays of this module still come from its own callback.
-    int n = 0;
     ADLDisplayInfo* di = nullptr;
     CHECK(lDisplayInfo(0, &n, &di, 0) == ADL_OK && n == 3);
     CHECK(FreeTracked(di));
-    AdapterInfo* ai = nullptr;
+    ai = nullptr;
     CHECK(lInfoX2(&ai) == ADL_OK);
     CHECK(FreeTracked(ai));
     // Counted per module: the second module creates again and scans again; then it releases both of its Creates.
@@ -414,34 +429,65 @@ void CheckTwoCallerModules()
     di = nullptr;
     CHECK(lDisplayInfo(1, &n, &di, 0) == ADL_OK && n == 3);
     CHECK(FreeTracked(di));
-    CHECK(lDestroy() == ADL_OK && liveBlocks() == 0);
-    CHECK(lDestroy() == ADL_ERR_NOT_INIT);
-    CHECK(CallFromAnonymousCode(lRefresh) == ADL_ERR_NOT_INIT);
-    // A module without its own Create (a call through a helper module) uses the newest implicit context, and its
-    // Destroy releases the only one.
-    CHECK(client.create(g_dll) == ADL_OK);
-    n = -1;
-    CHECK(lCount(&n) == ADL_OK && n == 3);
-    CHECK(lDestroy() == ADL_OK && liveBlocks() == 0);
+    // A module without its own Create (the second module now): the array calls, Refresh and Destroy get
+    // ADL_ERR_NOT_INIT, its callback is not called and the context of this module stays; a call that returns no
+    // memory gets the facts of the newest implicit context.
+    CHECK(client.no_context(g_dll) == 0);
+    CHECK(client.facts(g_dll) == ADL_OK);
+    CHECK(liveBlocks() == 1);
+    // A Destroy of one module leaves the context of the other module alive.
+    CHECK(client.create(g_dll) == ADL_OK && liveBlocks() == 2);
+    CHECK(lDestroy() == ADL_OK && liveBlocks() == 1);
+    CHECK(lDestroy() == ADL_ERR_NOT_INIT && liveBlocks() == 1);
+    CHECK(client.scan(g_dll) == 0);
+    CHECK(client.destroy(g_dll) == ADL_OK && liveBlocks() == 0);
     CHECK(client.destroy(g_dll) == ADL_ERR_NOT_INIT);
-    // A module that unloads without Destroy: its context goes at the unload. A module that loads later (here at
-    // the same address, most probably) starts with no context and does not get the callback of the earlier one.
+    // No implicit context at all: the facts calls get ADL_ERR_NOT_INIT too.
+    CHECK(client.facts(g_dll) == ADL_ERR_NOT_INIT);
+    CHECK(CallFromAnonymousCode(reinterpret_cast<void*>(lCount), &n) == ADL_ERR_NOT_INIT);
+    // A module that unloads without Destroy: its context goes at the unload (the loader notification). A module that
+    // loads later at the same address starts with no context and does not get the callback of the earlier one.
     CHECK(lCreate(TrackedAlloc, 1) == ADL_OK);
     CHECK(client.create(g_dll) == ADL_OK && liveBlocks() == 2);
     client.Unload();
     CHECK(liveBlocks() == 1);
     if (client.Load()) {
+        CHECK(client.no_context(g_dll) == 0);
         CHECK(client.create(g_dll) == ADL_OK && liveBlocks() == 2);
         CHECK(client.scan(g_dll) == 0);
         CHECK(client.destroy(g_dll) == ADL_OK && liveBlocks() == 1);
     }
+    client.Unload();
+    // The key alone, with the notification ignored: the second module loads at the base of the first one, which
+    // unloaded without Destroy. Its key differs (size, time stamp), so it does not get the context that the first
+    // module left: that context is a leak of one block until the notification of that base.
+    auto ignoreUnload = Get<PFN_IgnoreUnload>("Bc250AdlTest_IgnoreUnload");
+    ignoreUnload(1);
+    LegacyClient first;
+    if (first.Load()) {
+        HMODULE base = first.module;
+        CHECK(first.create(g_dll) == ADL_OK && liveBlocks() == 2);
+        first.Unload();
+        CHECK(liveBlocks() == 2);
+        LegacyClient second;
+        if (second.Load(g_client_b_path)) {
+            CHECK(second.module == base);
+            CHECK(second.no_context(g_dll) == 0);
+            CHECK(second.create(g_dll) == ADL_OK && liveBlocks() == 3);
+            CHECK(second.scan(g_dll) == 0);
+            CHECK(second.destroy(g_dll) == ADL_OK && liveBlocks() == 2);
+            ignoreUnload(0);
+            second.Unload();  // the notification of this base also removes the context that the first module left
+            CHECK(liveBlocks() == 1);
+        }
+    }
+    ignoreUnload(0);
     CHECK(lDestroy() == ADL_OK && liveBlocks() == 0);
     for (void* p : g_tracked) {
         CHECK(p == nullptr);
     }
     HeapDestroy(g_tracked_heap);
     g_tracked_heap = nullptr;
-    client.Unload();
 }
 int RunUnit()
 {
@@ -884,7 +930,8 @@ int RunDiscover()
 int main(int argc, char** argv)
 {
     if (argc < 2) {
-        printf("usage: adl-unit-test <test atiadl dll> [unit|discover] [<adl-legacy-client.dll>]\n");
+        printf("usage: adl-unit-test <test atiadl dll> [unit|discover] [<adl-legacy-client.dll>]\n"
+               "       (adl-legacy-client-b.dll must be next to adl-legacy-client.dll)\n");
         return 2;
     }
     g_dll = LoadLibraryA(argv[1]);
@@ -906,6 +953,14 @@ int main(int argc, char** argv)
         }
         g_client_path = client;
     }
+    // The larger variant is next to the second caller module: <name>-b.dll.
+    static char client_b[MAX_PATH];
+    size_t length = strlen(g_client_path);
+    if (length > 4 && length + 2 < sizeof(client_b) && _stricmp(g_client_path + length - 4, ".dll") == 0) {
+        memcpy(client_b, g_client_path, length - 4);
+        strcpy_s(client_b + length - 4, sizeof(client_b) - (length - 4), "-b.dll");
+    }
+    g_client_b_path = client_b;
     int rc = strcmp(mode, "discover") == 0 ? RunDiscover() : RunUnit();
     FreeLibrary(g_dll);
     printf("%s %s\n", rc == 0 ? "PASS" : "FAIL", mode);
