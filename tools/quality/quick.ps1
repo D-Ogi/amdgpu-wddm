@@ -857,6 +857,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='start-health-no-output-without-engines';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoOutputWithoutEngines');Fails=$true}
 @{n='dpm-curve-mark';s='driver\kmd\test\run_dpm_curve_mark.ps1';a=@('-Root',$Workspace)}
 @{n='dpm-curve-mark-clear-any-pending';s='driver\kmd\test\run_dpm_curve_mark.ps1';a=@('-Root',$Workspace,'-ClearAnyPending');Fails=$true}
+@{n='dpm-curve-mark-sum-seal';s='driver\kmd\test\run_dpm_curve_mark.ps1';a=@('-Root',$Workspace,'-SumSeal');Fails=$true}
 @{n='start-health-no-output-releases-requests';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoOutputReleasesRequests');Fails=$true}
   @{n='gfx-pipeline';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly')}
   @{n='vmid-pool';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace)}

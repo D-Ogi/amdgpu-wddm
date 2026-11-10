@@ -151,14 +151,21 @@ mark, which each start that applies the curve writes again. A start that finds
 a mark drops the curve. A confirmation by the display milestone clears the
 mark (`DpmConfirm`). A confirmation by the rule for no output clears it only
 when a start with a display already confirmed the same curve, so
-DpmCurveConfirmed holds its checksum (`DpmConfirmKnownCurve`,
+DpmCurveConfirmed holds its seal (`DpmConfirmKnownCurve`,
 `dpm_curve_mark.h`). The minute without output is the same witness for such a
 curve as a display minute, and neither proves an hour of load. A curve that no
 start with a display confirmed stays pending, and the next start drops it. A
 start without output that nobody confirms also keeps the mark. The KMD log
-names the rule ("kept by start-health, no-output rule" or "left pending").
-Host test: `driver/kmd/test/dpm_curve_mark_test.c` with the negative control
--ClearAnyPending. Already confirmed CU mode and DPM requests need no new
+names the rule ("cleared by start-health, no-output rule" or "left pending").
+The seal is a 32-bit mix of the curve values, not the 16-bit checksum of the
+pending mark: two curves with the same checksum are easy to make, and their
+seals differ. A curve that an edit outside the driver changed thus does not
+pass as confirmed. The seal is no defence against a writer of the state
+store, who can also write DpmCurveConfirmed. A store of an older driver holds
+the checksum in DpmCurveConfirmed, and a seal is never equal to it: after an
+update, a start without output clears no mark until a start with a display
+confirms the curve again. Host test: `driver/kmd/test/dpm_curve_mark_test.c`
+with the negative controls -ClearAnyPending and -SumSeal. Already confirmed CU mode and DPM requests need no new
 confirmation, and they stay over starts without output (the shim tests
 `test_confirmed_survives_headless_starts`).
 A reading with VISIBLE and NO_OUTPUT together. The KMD never publishes both.
