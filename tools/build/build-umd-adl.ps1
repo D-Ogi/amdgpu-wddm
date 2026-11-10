@@ -79,7 +79,7 @@ try {
 
     Invoke-Bc250UmdCompiler $cc @flags /Zs "/imsvc$AdlSdk" "$src\tests\adl-sdk-layout-test.cpp"
     if ($LASTEXITCODE -ne 0) { throw 'public ADL SDK layout gate failed' }
-    Write-Host 'PASS public ADL SDK layout gate: 15 sizes, alignments and selected offsets'
+    Write-Host 'PASS public ADL SDK layout gate: 26 sizes, alignments and selected offsets'
 
     function Build-Dll([string]$Out, [string]$Def, [string]$ObjDir, [string[]]$Defines) {
         New-Item -ItemType Directory -Force $ObjDir | Out-Null
@@ -130,7 +130,7 @@ try {
         $gotExports = @(& dumpbin.exe /nologo /exports $name | ForEach-Object {
             if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]{8}\s+(\w+)') { $Matches[1] } } | Sort-Object)
         $diff = @(Compare-Object $wantExports $gotExports)
-        if ($diff.Count -or $gotExports.Count -ne 31) {
+        if ($diff.Count -or $gotExports.Count -ne 43) {
             throw "export gate: $name differs from atiadl.def: $(($diff | ForEach-Object { "$($_.SideIndicator)$($_.InputObject)" }) -join ' ')"
         }
         Write-Host "PASS export gate: $($gotExports.Count) exports, as atiadl.def"

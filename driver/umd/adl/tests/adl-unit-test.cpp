@@ -308,21 +308,24 @@ T GetFrom(HMODULE module, const char* name)
     return reinterpret_cast<T>(reinterpret_cast<void*>(GetProcAddress(module, name)));
 }
 
-// Calls fn with one pointer argument from code outside any module: a caller that the library cannot name. A
-// function without arguments ignores the argument (cdecl: the caller removes it).
-int CallFromAnonymousCode(void* fn, void* arg = nullptr)
+// Calls fn with two pointer-size arguments from code outside any module: a caller that the library cannot name. A
+// function with fewer arguments ignores the others (cdecl: the caller removes them).
+int CallFromAnonymousCode(void* fn, void* arg = nullptr, void* arg2 = nullptr)
 {
 #if defined(_M_IX86)
-    // mov eax, fn; push arg; call eax; add esp, 4; ret
-    unsigned char code[] = {0xB8, 0, 0, 0, 0, 0x68, 0, 0, 0, 0, 0xFF, 0xD0, 0x83, 0xC4, 0x04, 0xC3};
+    // mov eax, fn; push arg2; push arg; call eax; add esp, 8; ret
+    unsigned char code[] = {0xB8, 0, 0, 0, 0, 0x68, 0, 0, 0, 0, 0x68, 0, 0, 0, 0,
+                            0xFF, 0xD0, 0x83, 0xC4, 0x08, 0xC3};
     memcpy(code + 1, &fn, sizeof(fn));
-    memcpy(code + 6, &arg, sizeof(arg));
+    memcpy(code + 6, &arg2, sizeof(arg2));
+    memcpy(code + 11, &arg, sizeof(arg));
 #elif defined(_M_X64)
-    // sub rsp, 28h; mov rcx, arg; mov rax, fn; call rax; add rsp, 28h; ret
-    unsigned char code[] = {0x48, 0x83, 0xEC, 0x28, 0x48, 0xB9, 0, 0, 0, 0, 0, 0, 0, 0, 0x48, 0xB8, 0, 0, 0, 0, 0, 0,
-                            0, 0, 0xFF, 0xD0, 0x48, 0x83, 0xC4, 0x28, 0xC3};
+    // sub rsp, 28h; mov rcx, arg; mov rdx, arg2; mov rax, fn; call rax; add rsp, 28h; ret
+    unsigned char code[] = {0x48, 0x83, 0xEC, 0x28, 0x48, 0xB9, 0, 0, 0, 0, 0, 0, 0, 0, 0x48, 0xBA, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xD0, 0x48, 0x83, 0xC4, 0x28, 0xC3};
     memcpy(code + 6, &arg, sizeof(arg));
-    memcpy(code + 16, &fn, sizeof(fn));
+    memcpy(code + 16, &arg2, sizeof(arg2));
+    memcpy(code + 26, &fn, sizeof(fn));
 #else
 #error "CallFromAnonymousCode supports x86 and x64"
 #endif
@@ -489,6 +492,278 @@ void CheckTwoCallerModules()
     HeapDestroy(g_tracked_heap);
     g_tracked_heap = nullptr;
 }
+
+// The presence exports (docs/design/adl-subset.md, "Presence exports"), with the SDK prototypes.
+typedef int(ADL_API* PFN_AdapterId)(int, int*);
+typedef int(ADL_API* PFN_CrossfireCaps)(int, int*, int*, ADLCrossfireComb**);
+typedef int(ADL_API* PFN_CrossfireGet)(int, ADLCrossfireComb*, ADLCrossfireInfo*);
+typedef int(ADL_API* PFN_MvpuStatus)(int, ADLMVPUStatus*);
+typedef int(ADL_API* PFN_Activity)(int, ADLPMActivity*);
+typedef int(ADL_API* PFN_ThermalEnum)(int, int, ADLThermalControllerInfo*);
+typedef int(ADL_API* PFN_Temperature)(int, int, ADLTemperature*);
+typedef int(ADL_API* PFN_FanInfo)(int, int, ADLFanSpeedInfo*);
+typedef int(ADL_API* PFN_FanSpeed)(int, int, ADLFanSpeedValue*);
+typedef int(ADL_API* PFN_OdParameters)(int, ADLODParameters*);
+typedef int(ADL_API* PFN_ProfileSearch)(const char*, const char*, const char*, const char*, ADLApplicationProfile**);
+
+// A structure of the SDK filled with 0xcd, with iSize set as a caller sets it.
+template <typename T>
+T Dirty()
+{
+    T t;
+    memset(&t, 0xcd, sizeof(t));
+    t.iSize = (int)sizeof(T);
+    return t;
+}
+
+// True when only iSize (the first int) is not zero.
+template <typename T>
+bool ClearedButSize(const T& t)
+{
+    return t.iSize == (int)sizeof(T) && AllZero(reinterpret_cast<const char*>(&t) + sizeof(int), sizeof(T) - sizeof(int));
+}
+
+// Each presence export: ADL_ERR_NOT_SUPPORTED with its outputs cleared and the input fields kept, the argument
+// errors in the documented sequence, no callback call and no change of a context.
+void CheckPresenceExports()
+{
+    auto lCreate = Get<PFN_LegacyCreate>("ADL_Main_Control_Create");
+    auto lDestroy = Get<PFN_LegacyVoid>("ADL_Main_Control_Destroy");
+    auto liveBlocks = Get<PFN_LiveBlocks>("Bc250AdlTest_LiveBlocks");
+    auto adapterId = Get<PFN_AdapterId>("ADL_Adapter_ID_Get");
+    auto xfCaps = Get<PFN_CrossfireCaps>("ADL_Adapter_Crossfire_Caps");
+    auto xfGet = Get<PFN_CrossfireGet>("ADL_Adapter_Crossfire_Get");
+    auto mvpu = Get<PFN_MvpuStatus>("ADL_Display_MVPUStatus_Get");
+    auto activity = Get<PFN_Activity>("ADL_Overdrive5_CurrentActivity_Get");
+    auto thermal = Get<PFN_ThermalEnum>("ADL_Overdrive5_ThermalDevices_Enum");
+    auto temperature = Get<PFN_Temperature>("ADL_Overdrive5_Temperature_Get");
+    auto fanInfo = Get<PFN_FanInfo>("ADL_Overdrive5_FanSpeedInfo_Get");
+    auto fanSpeed = Get<PFN_FanSpeed>("ADL_Overdrive5_FanSpeed_Get");
+    auto odParams = Get<PFN_OdParameters>("ADL_Overdrive5_ODParameters_Get");
+    auto userLoad = Get<PFN_LegacyVoid>("ADL_ApplicationProfiles_User_Load");
+    auto search = Get<PFN_ProfileSearch>("ADL_ApplicationProfiles_ProfileOfAnApplication_Search");
+    if (!adapterId || !xfCaps || !xfGet || !mvpu || !activity || !thermal || !temperature || !fanInfo || !fanSpeed ||
+        !odParams || !userLoad || !search) {
+        return;
+    }
+
+    // No context: ADL_ERR_NOT_INIT, outputs cleared.
+    int id = 77;
+    CHECK(adapterId(0, &id) == ADL_ERR_NOT_INIT && id == 0);
+    ADLTemperature t = Dirty<ADLTemperature>();
+    CHECK(temperature(0, 0, &t) == ADL_ERR_NOT_INIT && ClearedButSize(t));
+    CHECK(userLoad() == ADL_ERR_NOT_INIT);
+    ADLApplicationProfile* profile = reinterpret_cast<ADLApplicationProfile*>(1);
+    CHECK(search("a.exe", nullptr, nullptr, "D3D", &profile) == ADL_ERR_NOT_INIT && profile == nullptr);
+
+    CHECK(lCreate(CountingAlloc, 1) == ADL_OK && liveBlocks() == 1);
+    LONG allocations = g_allocations;
+
+    // ADL_Adapter_ID_Get: one ID for each GPU, the same for all entries of a GPU, never 0 for an AMD GPU.
+    int id0 = 0, id1 = 0, id2 = 0;
+    CHECK(adapterId(0, &id0) == ADL_OK && id0 != 0);
+    CHECK(adapterId(1, &id1) == ADL_OK && id1 == id0);  // entries 0 and 1 are GPU 0
+    CHECK(adapterId(2, &id2) == ADL_OK && id2 != 0 && id2 != id0);  // entry 2 is GPU 1
+    CHECK(id0 > 0 && id2 > 0);  // 31 bits
+    id = 77;
+    CHECK(adapterId(3, &id) == ADL_ERR_INVALID_ADL_IDX && id == 0);
+    CHECK(adapterId(-1, &id) == ADL_ERR_INVALID_ADL_IDX && id == 0);
+    CHECK(adapterId(0, nullptr) == ADL_ERR_NULL_POINTER);
+
+    int pref = 5, num = 5;
+    ADLCrossfireComb* combs = reinterpret_cast<ADLCrossfireComb*>(1);
+    CHECK(xfCaps(0, &pref, &num, &combs) == ADL_ERR_NOT_SUPPORTED && pref == 0 && num == 0 && combs == nullptr);
+    CHECK(xfCaps(3, &pref, &num, &combs) == ADL_ERR_INVALID_ADL_IDX);
+    num = 5;
+    CHECK(xfCaps(0, &pref, &num, nullptr) == ADL_ERR_NULL_POINTER && num == 0);
+
+    ADLCrossfireComb comb;
+    memset(&comb, 0x11, sizeof(comb));
+    ADLCrossfireInfo xinfo;
+    memset(&xinfo, 0xcd, sizeof(xinfo));
+    CHECK(xfGet(0, &comb, &xinfo) == ADL_ERR_NOT_SUPPORTED && AllZero(&xinfo, sizeof(xinfo)));
+    CHECK(comb.iNumLinkAdapter == 0x11111111);  // an input: not changed
+    CHECK(xfGet(0, &comb, nullptr) == ADL_ERR_NULL_POINTER);
+    memset(&xinfo, 0xcd, sizeof(xinfo));
+    CHECK(xfGet(0, nullptr, &xinfo) == ADL_ERR_NULL_POINTER && AllZero(&xinfo, sizeof(xinfo)));
+
+    ADLMVPUStatus ms = Dirty<ADLMVPUStatus>();
+    CHECK(mvpu(0, &ms) == ADL_ERR_NOT_SUPPORTED && ClearedButSize(ms));
+    ms = Dirty<ADLMVPUStatus>();
+    CHECK(mvpu(9, &ms) == ADL_ERR_INVALID_ADL_IDX && ClearedButSize(ms));
+    CHECK(mvpu(0, nullptr) == ADL_ERR_NULL_POINTER);
+
+    ADLPMActivity act = Dirty<ADLPMActivity>();
+    CHECK(activity(0, &act) == ADL_ERR_NOT_SUPPORTED && ClearedButSize(act));
+    act = Dirty<ADLPMActivity>();
+    CHECK(activity(-1, &act) == ADL_ERR_INVALID_ADL_IDX && ClearedButSize(act));
+    CHECK(activity(0, nullptr) == ADL_ERR_NULL_POINTER);
+
+    ADLThermalControllerInfo tc = Dirty<ADLThermalControllerInfo>();
+    CHECK(thermal(0, 0, &tc) == ADL_ERR_NOT_SUPPORTED && ClearedButSize(tc));
+    CHECK(thermal(0, 0, nullptr) == ADL_ERR_NULL_POINTER);
+
+    t = Dirty<ADLTemperature>();
+    CHECK(temperature(2, 0, &t) == ADL_ERR_NOT_SUPPORTED && ClearedButSize(t));
+    t = Dirty<ADLTemperature>();
+    CHECK(temperature(3, 0, &t) == ADL_ERR_INVALID_ADL_IDX && ClearedButSize(t));
+    CHECK(temperature(0, 0, nullptr) == ADL_ERR_NULL_POINTER);
+
+    ADLFanSpeedInfo fi = Dirty<ADLFanSpeedInfo>();
+    CHECK(fanInfo(0, 0, &fi) == ADL_ERR_NOT_SUPPORTED && ClearedButSize(fi));
+    CHECK(fanInfo(0, 0, nullptr) == ADL_ERR_NULL_POINTER);
+
+    ADLFanSpeedValue fv = Dirty<ADLFanSpeedValue>();
+    fv.iSpeedType = 1;  // ADL_DL_FANCTRL_SPEED_TYPE_PERCENT, an input
+    CHECK(fanSpeed(0, 0, &fv) == ADL_ERR_NOT_SUPPORTED);
+    CHECK(fv.iSize == (int)sizeof(fv) && fv.iSpeedType == 1 && fv.iFanSpeed == 0 && fv.iFlags == 0);
+    CHECK(fanSpeed(0, 0, nullptr) == ADL_ERR_NULL_POINTER);
+
+    ADLODParameters od = Dirty<ADLODParameters>();
+    CHECK(odParams(0, &od) == ADL_ERR_NOT_SUPPORTED && ClearedButSize(od));
+    CHECK(odParams(0, nullptr) == ADL_ERR_NULL_POINTER);
+
+    CHECK(userLoad() == ADL_ERR_NOT_SUPPORTED);
+    profile = reinterpret_cast<ADLApplicationProfile*>(1);
+    CHECK(search("a.exe", nullptr, nullptr, "D3D", &profile) == ADL_ERR_NOT_SUPPORTED && profile == nullptr);
+    profile = reinterpret_cast<ADLApplicationProfile*>(1);
+    CHECK(search(nullptr, nullptr, nullptr, "D3D", &profile) == ADL_ERR_NULL_POINTER && profile == nullptr);
+    CHECK(search("a.exe", nullptr, nullptr, "D3D", nullptr) == ADL_ERR_NULL_POINTER);
+
+    // A caller without a context of its own: the facts functions use the newest context, the functions that
+    // allocate or load in AMD's library get ADL_ERR_NOT_INIT.
+    int anon = 0;
+    CHECK(CallFromAnonymousCode(reinterpret_cast<void*>(adapterId), nullptr, &anon) == ADL_OK && anon == id0);
+    act = Dirty<ADLPMActivity>();
+    CHECK(CallFromAnonymousCode(reinterpret_cast<void*>(activity), nullptr, &act) == ADL_ERR_NOT_SUPPORTED &&
+          ClearedButSize(act));
+    CHECK(CallFromAnonymousCode(reinterpret_cast<void*>(userLoad)) == ADL_ERR_NOT_INIT);
+
+    // No side effect: no callback call, no new context block.
+    CHECK(g_allocations == allocations);
+    CHECK(liveBlocks() == 1);
+
+    // The ID is stable: the same after Refresh, and the same from a new context (a new snapshot).
+    auto lRefresh = Get<PFN_LegacyVoid>("ADL_Main_Control_Refresh");
+    CHECK(lRefresh() == ADL_OK);
+    CHECK(adapterId(0, &id) == ADL_OK && id == id0);
+    CHECK(lDestroy() == ADL_OK && liveBlocks() == 0);
+    CHECK(lCreate(CountingAlloc, 1) == ADL_OK);
+    CHECK(adapterId(2, &id) == ADL_OK && id == id2);
+    CHECK(lDestroy() == ADL_OK && liveBlocks() == 0);
+}
+
+// The adapter ID against other snapshots: a GPU that is not AMD gets 0, and two GPUs with the same instance ID (a
+// hash collision in the extreme) still get different IDs.
+void CheckAdapterIdRules(const AdlSnapshot& base)
+{
+    auto setSnapshot = Get<PFN_SetSnapshot>("Bc250AdlTest_SetSnapshot");
+    auto lCreate = Get<PFN_LegacyCreate>("ADL_Main_Control_Create");
+    auto lDestroy = Get<PFN_LegacyVoid>("ADL_Main_Control_Destroy");
+    auto adapterId = Get<PFN_AdapterId>("ADL_Adapter_ID_Get");
+    if (!adapterId) {
+        return;
+    }
+    static AdlSnapshot s;
+    s = base;
+    s.gpus[1].vendor_id = 0x10de;
+    setSnapshot(&s);
+    int id = 77;
+    CHECK(lCreate(CountingAlloc, 1) == ADL_OK);
+    CHECK(adapterId(2, &id) == ADL_OK && id == 0);
+    CHECK(adapterId(0, &id) == ADL_OK && id != 0);
+    CHECK(lDestroy() == ADL_OK);
+
+    s = base;
+    memcpy(s.gpus[1].instance_id, s.gpus[0].instance_id, sizeof(s.gpus[0].instance_id));
+    setSnapshot(&s);
+    int a = 0, b = 0;
+    CHECK(lCreate(CountingAlloc, 1) == ADL_OK);
+    CHECK(adapterId(0, &a) == ADL_OK && adapterId(2, &b) == ADL_OK && a != 0 && b != 0 && a != b);
+    CHECK(lDestroy() == ADL_OK);
+
+    // The instance ID decides, not the position: GPU 0 keeps its ID when it is the only GPU.
+    s = base;
+    setSnapshot(&s);
+    int full = 0;
+    CHECK(lCreate(CountingAlloc, 1) == ADL_OK && adapterId(0, &full) == ADL_OK);
+    CHECK(lDestroy() == ADL_OK);
+    s.gpu_count = 1;
+    s.entry_count = 2;
+    setSnapshot(&s);
+    CHECK(lCreate(CountingAlloc, 1) == ADL_OK && adapterId(1, &id) == ADL_OK && id == full);
+    CHECK(lDestroy() == ADL_OK);
+    setSnapshot(&base);
+}
+
+// The ADL module of the 3DMark SystemInfo scanner (FMSIScan.exe 5.93, BD-351): it gets 16 addresses and uses the
+// library only if all are not null. Then Create, NumberOfAdapters, AdapterInfo_Get into its own buffer (0x624 bytes
+// for each entry), Adapter_ID_Get for each entry, and Destroy. It clears its copy of a value on an error.
+void CheckScannerShape()
+{
+    static const char* const kNames[16] = {
+        "ADL_Main_Control_Create",
+        "ADL_Main_Control_Destroy",
+        "ADL_Adapter_NumberOfAdapters_Get",
+        "ADL_Adapter_AdapterInfo_Get",
+        "ADL_Overdrive5_CurrentActivity_Get",
+        "ADL_Overdrive5_ThermalDevices_Enum",
+        "ADL_Overdrive5_Temperature_Get",
+        "ADL_Overdrive5_FanSpeedInfo_Get",
+        "ADL_Overdrive5_FanSpeed_Get",
+        "ADL_Adapter_Crossfire_Get",
+        "ADL_Adapter_Crossfire_Caps",
+        "ADL_Adapter_ID_Get",
+        "ADL_Display_MVPUStatus_Get",
+        "ADL_Overdrive5_ODParameters_Get",
+        "ADL_ApplicationProfiles_User_Load",
+        "ADL_ApplicationProfiles_ProfileOfAnApplication_Search",
+    };
+    void* fn[16] = {};
+    bool all = true;
+    for (int i = 0; i < 16; i++) {
+        fn[i] = reinterpret_cast<void*>(GetProcAddress(g_dll, kNames[i]));
+        if (!fn[i]) {
+            printf("FAIL scanner shape: no %s\n", kNames[i]);
+            all = false;
+        }
+    }
+    CHECK(all);
+    if (!all) {
+        return;
+    }
+    auto liveBlocks = Get<PFN_LiveBlocks>("Bc250AdlTest_LiveBlocks");
+    CHECK(reinterpret_cast<PFN_LegacyCreate>(fn[0])(CountingAlloc, 1) == ADL_OK);
+    int n = 0;
+    CHECK(reinterpret_cast<PFN_LegacyCount>(fn[2])(&n) == ADL_OK && n == 3);
+    static AdapterInfo infos[8];
+    static_assert(sizeof(AdapterInfo) == 0x624, "AdapterInfo stride of the scanner");
+    memset(infos, 0, sizeof(infos));
+    CHECK(n > 0 && n <= 8 && reinterpret_cast<PFN_LegacyInfo>(fn[3])(infos, n * (int)sizeof(AdapterInfo)) == ADL_OK);
+    int ids[8] = {};
+    for (int i = 0; i < n && i < 8; i++) {
+        if (reinterpret_cast<PFN_AdapterId>(fn[11])(infos[i].iAdapterIndex, &ids[i]) != ADL_OK) {
+            ids[i] = 0;  // as the scanner does
+        }
+        CHECK(ids[i] != 0);
+        ADLPMActivity act = Dirty<ADLPMActivity>();
+        if (reinterpret_cast<PFN_Activity>(fn[4])(infos[i].iAdapterIndex, &act) != ADL_OK) {
+            memset(&act, 0, sizeof(act));
+        }
+        ADLTemperature t = Dirty<ADLTemperature>();
+        CHECK(reinterpret_cast<PFN_Temperature>(fn[6])(infos[i].iAdapterIndex, 0, &t) == ADL_ERR_NOT_SUPPORTED);
+    }
+    // The entries of one GPU (same bus) share an ID, the GPUs differ.
+    CHECK(infos[0].iBusNumber == infos[1].iBusNumber && ids[0] == ids[1]);
+    CHECK(infos[2].iBusNumber != infos[0].iBusNumber && ids[2] != ids[0]);
+    CHECK(reinterpret_cast<PFN_LegacyVoid>(fn[14])() == ADL_ERR_NOT_SUPPORTED);
+    ADLApplicationProfile* profile = nullptr;
+    CHECK(reinterpret_cast<PFN_ProfileSearch>(fn[15])("3DMark.exe", nullptr, nullptr, "D3D", &profile) ==
+              ADL_ERR_NOT_SUPPORTED &&
+          profile == nullptr);
+    CHECK(reinterpret_cast<PFN_LegacyVoid>(fn[1])() == ADL_OK && liveBlocks() == 0);
+}
+
 int RunUnit()
 {
     auto create = Get<PFN_Create>("ADL2_Main_Control_Create");
@@ -767,6 +1042,10 @@ int RunUnit()
     CHECK(lDestroy() == ADL_ERR_NOT_INIT);
 
     CheckTwoCallerModules();
+    CheckPresenceExports();
+    CheckAdapterIdRules(snap);
+    CheckScannerShape();
+    CHECK(liveBlocks() == 0);
 
     // No adapter of ours: an empty, truthful answer.
     static AdlSnapshot empty;
@@ -798,6 +1077,15 @@ int RunUnit()
     static ADLMemoryInfo mout;
     static ADLVersionsInfoX2 vout;
     static ADLSLSMap sout;
+    static ADLCrossfireComb xcomb;
+    static ADLCrossfireInfo xinfo;
+    static ADLMVPUStatus mvout;
+    static ADLPMActivity actout;
+    static ADLThermalControllerInfo tcout;
+    static ADLTemperature tout;
+    static ADLFanSpeedInfo fiout;
+    static ADLFanSpeedValue fvout;
+    static ADLODParameters odout;
     int h = (int)(intptr_t)live;
     const struct {
         const char* name;
@@ -824,6 +1112,20 @@ int RunUnit()
         {"ADL_Graphics_Versions_Get", {(int)(intptr_t)&vout}, 1},
         {"ADL_Adapter_AdapterInfo_Get", {(int)(intptr_t)abuf, (int)sizeof(abuf)}, 2},
         {"ADL_Main_Control_Refresh", {}, 0},
+        // The presence exports, with the argument count of the SDK prototype.
+        {"ADL_Adapter_ID_Get", {0, (int)(intptr_t)&iout[0]}, 2},
+        {"ADL_Adapter_Crossfire_Caps", {0, (int)(intptr_t)&iout[0], (int)(intptr_t)&iout[1], (int)(intptr_t)&pout[0]}, 4},
+        {"ADL_Adapter_Crossfire_Get", {0, (int)(intptr_t)&xcomb, (int)(intptr_t)&xinfo}, 3},
+        {"ADL_Display_MVPUStatus_Get", {0, (int)(intptr_t)&mvout}, 2},
+        {"ADL_Overdrive5_CurrentActivity_Get", {0, (int)(intptr_t)&actout}, 2},
+        {"ADL_Overdrive5_ThermalDevices_Enum", {0, 0, (int)(intptr_t)&tcout}, 3},
+        {"ADL_Overdrive5_Temperature_Get", {0, 0, (int)(intptr_t)&tout}, 3},
+        {"ADL_Overdrive5_FanSpeedInfo_Get", {0, 0, (int)(intptr_t)&fiout}, 3},
+        {"ADL_Overdrive5_FanSpeed_Get", {0, 0, (int)(intptr_t)&fvout}, 3},
+        {"ADL_Overdrive5_ODParameters_Get", {0, (int)(intptr_t)&odout}, 2},
+        {"ADL_ApplicationProfiles_User_Load", {}, 0},
+        {"ADL_ApplicationProfiles_ProfileOfAnApplication_Search",
+         {(int)(intptr_t)"a.exe", 0, 0, (int)(intptr_t)"D3D", (int)(intptr_t)&pout[1]}, 5},
         {"ADL_Main_Control_Destroy", {}, 0},
     };
     for (const auto& c : calls) {

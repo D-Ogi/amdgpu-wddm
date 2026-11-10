@@ -75,7 +75,8 @@ The facts in this section come from the AGS 6.3.0 binaries: `amd_ags_x64.dll` (t
    `ADL2_Display_DisplayMapConfig_Get`, `ADL2_Display_SLSMapIndex_Get` and `ADL2_Display_Modes_Get`.
 3. It gets the addresses of other functions too. It calls such a function only when the address is not null.
    The subset does not export them, for example `ADL2_Adapter_AdapterInfoX4_Get`, `ADL2_Adapter_MemoryInfo2_Get`,
-   `ADL2_Adapter_Graphic_Core_Info_Get`, the Overdrive functions and `ADL2_FreeSync_Cap`.
+   `ADL2_Adapter_Graphic_Core_Info_Get`, the `ADL2_Overdrive*` functions and `ADL2_FreeSync_Cap`. AGS does not
+   need them, so the presence rule (below) does not apply to them.
 4. It creates an ADL context with `ADL2_Main_ControlX3_Create` when the library has it, else with
    `ADL2_Main_Control_Create`. The allocation callback is its own. A failure gives `AGS_ADL_FAILURE` (8).
 5. It reads the adapter list (`AdapterInfo`, 0x624 bytes for each entry). It keeps the entries with `iExist`
@@ -119,8 +120,67 @@ An adapter of another driver is never reported, and nothing in the library names
 | `ADL2_Display_SLSMapConfig_Get` | `ADL_ERR_NOT_SUPPORTED`. Every output is cleared |
 | `ADL2_Main_Control_Refresh` | A new snapshot of the facts above |
 
-The library exports 31 functions: the 17 `ADL2_*` functions and 14 `ADL_*` functions without a context, for
-older callers (`driver/umd/adl/atiadl.def`). It does not export a function that it cannot answer truthfully.
+| `ADL_Adapter_ID_Get` | A stable ID for each GPU, see "Presence exports" |
+
+The library exports 43 functions (`driver/umd/adl/atiadl.def`): the 17 `ADL2_*` functions, 15 `ADL_*` functions
+without a context for older callers, and the 11 presence exports below. BD-351 added `ADL_Adapter_ID_Get` and the
+11 presence exports for one client.
+
+### Presence exports
+
+The rule: the library exports a function that it cannot answer only when a known client needs the name. A client
+needs the name when it does not use the library at all if the address of the name is null. Each such function:
+
+- Returns `ADL_ERR_NOT_SUPPORTED` (-8) when the arguments are correct. It never invents a value.
+- Clears its outputs on every path. It keeps the input fields of an output structure: `iSize`, and `iSpeedType` of
+  `ADLFanSpeedValue`. A pointer output gets null, a count gets 0.
+- Has no side effect: it allocates nothing, calls no callback and changes no context.
+- Checks its arguments in this sequence: a null output pointer gives `ADL_ERR_NULL_POINTER` (-9), no context gives
+  `ADL_ERR_NOT_INIT` (-2), an adapter index that is not in the snapshot gives `ADL_ERR_INVALID_ADL_IDX` (-5).
+- Uses the context rules of "Contexts and memory". AMD's library allocates the output of
+  `ADL_Adapter_Crossfire_Caps` and `ADL_ApplicationProfiles_ProfileOfAnApplication_Search` through the callback,
+  and `ADL_ApplicationProfiles_User_Load` loads data into the context. Thus these three need a context of the
+  calling module. The others use the newest context when the caller has none.
+
+A function with a backing in the library is not in this list. A new backing moves a function out of the list and
+into the table above. A presence export is never added for a client that only tests a name and continues without it.
+
+The known client is the SystemInfo scanner of 3DMark (`FMSIScan.exe` 5.93, BD-351). Its ADL module gets the
+addresses of 16 `ADL_*` names and calls `ADL_Main_Control_Create` only if all 16 addresses are not null. Without
+the 12 names below (`ADL_Adapter_ID_Get` and the 11 presence exports), the scanner reports no ADL adapter. Each call site in the scanner, in the CPUID library
+(`cpuidsdk.dll`) and in GPU-Z checks the result: on an error it clears its own copy or skips the step.
+
+| Function | Client | Answer |
+|---|---|---|
+| `ADL_Adapter_ID_Get` | FMSIScan | `ADL_OK` and the adapter ID (below) |
+| `ADL_Adapter_Crossfire_Caps` | FMSIScan (address only) | `ADL_ERR_NOT_SUPPORTED`: preferred 0, count 0, array null |
+| `ADL_Adapter_Crossfire_Get` | FMSIScan (address only) | `ADL_ERR_NOT_SUPPORTED`: `ADLCrossfireInfo` cleared |
+| `ADL_Display_MVPUStatus_Get` | FMSIScan | `ADL_ERR_NOT_SUPPORTED`: `ADLMVPUStatus` cleared |
+| `ADL_Overdrive5_CurrentActivity_Get` | FMSIScan, CPUID library | `ADL_ERR_NOT_SUPPORTED`: `ADLPMActivity` cleared |
+| `ADL_Overdrive5_ThermalDevices_Enum` | FMSIScan (address only) | `ADL_ERR_NOT_SUPPORTED`: `ADLThermalControllerInfo` cleared |
+| `ADL_Overdrive5_Temperature_Get` | FMSIScan, CPUID library | `ADL_ERR_NOT_SUPPORTED`: `ADLTemperature` cleared |
+| `ADL_Overdrive5_FanSpeedInfo_Get` | FMSIScan, CPUID library | `ADL_ERR_NOT_SUPPORTED`: `ADLFanSpeedInfo` cleared |
+| `ADL_Overdrive5_FanSpeed_Get` | FMSIScan, CPUID library | `ADL_ERR_NOT_SUPPORTED`: `ADLFanSpeedValue` cleared |
+| `ADL_Overdrive5_ODParameters_Get` | FMSIScan, CPUID library | `ADL_ERR_NOT_SUPPORTED`: `ADLODParameters` cleared |
+| `ADL_ApplicationProfiles_User_Load` | FMSIScan | `ADL_ERR_NOT_SUPPORTED` |
+| `ADL_ApplicationProfiles_ProfileOfAnApplication_Search` | FMSIScan | `ADL_ERR_NOT_SUPPORTED`: profile pointer null |
+
+"Address only" means that the scanner tests the address and never calls the function.
+
+`ADL_Adapter_ID_Get` has a backing, so it gives `ADL_OK`. The SDK says that the adapter ID "is a unique value and
+will be used to determine what other controllers share the same adapter" and that zero means that the adapter is
+not AMD. The library gives:
+
+- The same ID for all entries of one GPU, and a different ID for each GPU. The adapter index is the index that
+  `AdapterInfo` gives.
+- A value from the PnP device instance ID of the GPU (31-bit FNV-1a, never 0). Thus the ID is the same in each
+  process and after `Refresh`. If two GPUs get the same value, the library adds 1 to the value of the later GPU
+  until the value is unique (after 0x7fffffff it continues at 1).
+- 0 for a GPU whose vendor is not AMD.
+
+The library has no Overdrive backing. The kernel-mode driver can report the GPU temperature and the clocks
+(`bc250kmd_cli clock read`). A backing through a private KMD query is a separate change: it needs a query contract
+and its tests.
 
 `radeonSoftwareVersion` in `AGSGPUInfo` is the Crimson version string of `ADL2_Graphics_VersionsX2_Get`. The
 library gives it empty, so `radeonSoftwareVersion` is an empty string. `agsCheckDriverVersion` then returns
@@ -171,7 +231,8 @@ export the functions that give them.
   one block until the library unloads. Only a later copy of the same file at the same address can have the same key.
 - Limit: a caller that jumps to an export with a tail call has the return address of its own caller. The library
   then uses the context of that module, or for a function that returns no memory the newest one. The libraries in
-  the scanner of BD-347 make ordinary calls.- One lock protects context state. Discovery and caller allocation callbacks run outside that lock. Array queries
+  the scanner of BD-347 make ordinary calls.
+- One lock protects context state. Discovery and caller allocation callbacks run outside that lock. Array queries
   copy the snapshot and callback while locked, then use that private copy until the query returns. A callback can
   query, refresh or destroy its context without a recursive lock or use of freed context memory.
 - `DisplayMapConfig_Get` needs two caller allocations. If the second fails, it returns an error with the first
@@ -192,7 +253,7 @@ these failures:
   list, on an empty list and with bad arguments. It counts the callback allocations and the context blocks, and
   it makes 1000 Create and Destroy cycles. On x86 it measures the stack bytes that each export removes, which
   must be 0 (`__cdecl`).
-- The compile-only SDK gate compares 15 structure sizes and alignments, and selected offsets, against the public
+- The compile-only SDK gate compares 26 structure sizes and alignments, and selected offsets, against the public
   `adl_structures.h` (`-AdlSdk` selects its include directory). The callback tests have a five-second bound and
   cover queries, refresh and destruction from an allocator, plus failure of the second map allocation.
 
