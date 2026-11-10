@@ -448,11 +448,13 @@ $setupData = Join-Path $dataRoot 'setup'
 # The self-update folder (docs/design/self-update.md): the update record, the transaction and the release packages
 # that an update handed to their setup window. Nothing in it is the tester's.
 $updateData = Join-Path $dataRoot 'update'
-Invoke-Change "remove the installer state $($script:StateDir) (with the kept repair sets and the running-release witness), $setupData, $updateData, $dataRoot\start-confirm.log and $dataRoot\dwm-baseline.json" {
+Invoke-Change "remove the installer state $($script:StateDir) (with the kept repair sets and the running-release witness), $setupData, $updateData, $dataRoot\start-confirm.log, $dataRoot\start-confirm-run.json and $dataRoot\dwm-baseline.json" {
     Remove-PathOrSchedule $script:StateDir
     if (Test-Path -LiteralPath $setupData) { Remove-PathOrSchedule $setupData }
     if (Test-Path -LiteralPath $updateData) { Remove-PathOrSchedule $updateData }
     Remove-Item -LiteralPath (Join-Path $dataRoot 'start-confirm.log') -Force -ErrorAction SilentlyContinue
+    # The run marker of the logon start-confirm task (BD-335, start-confirm-core.ps1 Get-StartConfirmRunMarkerPath).
+    Remove-Item -LiteralPath (Join-Path $dataRoot 'start-confirm-run.json') -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath (Join-Path $dataRoot 'dwm-baseline.json') -Force -ErrorAction SilentlyContinue
     if ((Test-Path -LiteralPath $dataRoot) -and -not @(Get-ChildItem -LiteralPath $dataRoot -Force).Count) { Remove-Item -LiteralPath $dataRoot -Force }
 } | Out-Null

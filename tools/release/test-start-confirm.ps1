@@ -125,6 +125,53 @@ foreach ($role in @('confirm', 'startup')) {
     Check ($m.Success -and $script:StartConfirmMaxSeconds + 30 -le $minutes * 60) "the latest bound plus 30 s fits the $role task time limit"
 }
 
+'bd335: a clock step after the boot does not hide the run of this boot'
+# The measured case: boot 10:03:31Z, the task's run 28 s before it, the verdict already final.
+$lateRun = [pscustomobject]@{ LastRunTime = [datetime]'2026-11-09T10:03:03Z' }
+$bootUtc = [datetime]'2026-11-09T10:03:31Z'
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker ([pscustomobject]@{ boot_id = 42 }) -ThisBootId 42
+Check ($answer.ran -and $answer.source -eq 'boot id') 'the marker of this boot wins over the misread wall clock'
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker $null -ThisBootId 42
+Check (-not $answer.ran) 'without the marker the wall-clock rule still refuses the misread run'
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo ([pscustomobject]@{ LastRunTime = $bootUtc }) -BootUtc $bootUtc -Marker $null -ThisBootId 42
+Check ($answer.ran -and $answer.source -eq 'wall clock') 'the wall-clock rule is the fallback'
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker ([pscustomobject]@{ boot_id = 41 }) -ThisBootId 42
+Check (-not $answer.ran) 'a marker of another boot does not count'
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo ([pscustomobject]@{ LastRunTime = $bootUtc }) -BootUtc $bootUtc -Marker ([pscustomobject]@{ boot_id = 41 }) -ThisBootId 47
+Check ($answer.ran -and $answer.source -eq 'wall clock') 'a stale marker does not block the wall-clock fallback'
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker ([pscustomobject]@{ boot_id = 42 }) -ThisBootId $null
+Check (-not $answer.ran) 'an unreadable boot id cannot match a marker'
+
+'bd335: the marker the task writes is the one verify reads'
+$oldProgramData = $env:ProgramData
+$oldShared = $env:AMDGPU_WDDM_TEST_SHARED_BOOT_ID
+$temp = Join-Path ([IO.Path]::GetTempPath()) ("bd335-" + [Guid]::NewGuid().ToString('N'))
+try {
+    $env:ProgramData = $temp
+    $env:AMDGPU_WDDM_TEST_SHARED_BOOT_ID = '42'
+    $why = Write-StartConfirmRunMarker -ExitCode 0 -Reason 'test'
+    Check ($null -eq $why) 'the marker writes'
+    $marker = Get-StartConfirmRunMarker
+    Check ($marker -and [int64]$marker.boot_id -eq 42 -and [int]$marker.schema -eq 1 -and [int]$marker.exit -eq 0) 'the marker reads back with the boot id of the run'
+    $env:AMDGPU_WDDM_TEST_SHARED_BOOT_ID = '43'
+    $why = Write-StartConfirmRunMarker -ExitCode 6 -Reason 'second run'
+    $marker = Get-StartConfirmRunMarker
+    Check ($null -eq $why -and $marker -and [int64]$marker.boot_id -eq 43 -and [int]$marker.exit -eq 6) 'a second run replaces the marker'
+    Check (@(Get-ChildItem -LiteralPath (Split-Path (Get-StartConfirmRunMarkerPath)) -Filter '*.tmp').Count -eq 0) 'no temporary file stays after a write'
+    $env:ProgramData = Join-Path $temp 'not-a-folder.txt'
+    [IO.File]::WriteAllText($env:ProgramData, 'a file where the folder must be')
+    $why = Write-StartConfirmRunMarker -ExitCode 0 -Reason 'test'
+    Check ($why -is [string] -and $why.Length -gt 0) 'a folder that cannot be written gives a reason and does not throw'
+    $env:ProgramData = $temp
+    [IO.File]::WriteAllText((Get-StartConfirmRunMarkerPath), 'not json')
+    Check ($null -eq (Get-StartConfirmRunMarker)) 'a corrupt marker is no marker'
+} finally {
+    $env:ProgramData = $oldProgramData
+    if ($null -eq $oldShared) { Remove-Item Env:\AMDGPU_WDDM_TEST_SHARED_BOOT_ID -ErrorAction SilentlyContinue }
+    else { $env:AMDGPU_WDDM_TEST_SHARED_BOOT_ID = $oldShared }
+    if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }
+}
+
 if ($fail) { "FAIL: $fail check(s)"; exit 1 }
 'PASS: all checks'
 exit 0

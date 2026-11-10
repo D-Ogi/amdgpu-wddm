@@ -733,11 +733,15 @@ function Invoke-Verify {
         $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
         $waited = [Diagnostics.Stopwatch]::StartNew()
         $announced = $false
+        $runAnswer = [ordered]@{ ran = $false; source = 'not tested' }
         $noWaitWhy = $(if ($startState.started) { $null } else { $startState.reason })
         while ($null -eq $noWaitWhy) {
             $ti = Get-ScheduledTaskInfo -TaskName $script:TaskName -ErrorAction SilentlyContinue
             $running = (Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue).State -eq 'Running'
-            $ranThisBoot = $ti -and $ti.LastRunTime -and ($ti.LastRunTime -ge $boot)
+            # BD-335: the task's marker of this boot first (no clock), the wall-clock rule as the fallback.
+            $runAnswer = Get-StartConfirmRunOfThisBoot -TaskInfo $ti -BootUtc $boot `
+                -Marker (Get-StartConfirmRunMarker) -ThisBootId (Get-StartRecordBootIdReading).boot_id
+            $ranThisBoot = $runAnswer.ran
             if (($ranThisBoot -and -not $running) -or $script:DryRunMode) { break }
             if (Test-DeadlinePassed) { Write-DeadlineNotice 'verify:start-confirm-wait'; break }
             if ($waited.Elapsed.TotalSeconds -ge $script:StartConfirmMaxSeconds + 15) { break }
@@ -747,7 +751,7 @@ function Invoke-Verify {
         if ($null -ne $noWaitWhy) { $ti = Get-ScheduledTaskInfo -TaskName $script:TaskName -ErrorAction SilentlyContinue }
         $code = $ti.LastTaskResult
         $meaning = switch ($code) { 0 { 'confirmed through the KMD start health' } 6 { 'fallback: boot-loop guard reset only, DPM not confirmed' } 1 { 'bound reached unconfirmed' } 5 { 'no start-health reading' } 267009 { 'still running' } default { 'see C:\ProgramData\amdgpu-wddm\start-confirm.log' } }
-        $taskNote = "start-confirm task: last run $($ti.LastRunTime), result $code ($meaning), waited $([int]$waited.Elapsed.TotalSeconds) s"
+        $taskNote = "start-confirm task: last run $($ti.LastRunTime), result $code ($meaning), waited $([int]$waited.Elapsed.TotalSeconds) s, this-boot test: $($runAnswer.source)"
         if ($null -ne $noWaitWhy) {
             $taskNote = "$taskNote; the wait was skipped because $noWaitWhy, so this logon's task cannot confirm a start that did not happen"
         }

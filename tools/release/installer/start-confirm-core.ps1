@@ -493,3 +493,66 @@ function Format-StopRecord {
     }
     return $text
 }
+
+
+# ---- BD-335: the run of this boot, without a wall clock ------------------------------------------------
+# The logon start-confirm task writes a small marker at the end of every run: this boot's BootId (the shared page, the same
+# reading the KMD records carry), the time and the exit code. Verify reads the marker while it waits for the task.
+# LastRunTime is a wall-clock value and LastBootUpTime is the current time minus the uptime, so a clock step after the
+# boot makes this boot's own run look like an earlier boot's (BD-335: the run 28 s before the computed boot time, and
+# a 317 s wait after the verdict was already final). The wall-clock rule stays as the fallback, and the bound stays
+# the end of the wait.
+# Only the logon task writes the marker (start-confirm.ps1): verify waits for the logon task, and the startup task
+# (BD-271) runs earlier in the same boot. uninstall.ps1 removes the file by this name.
+function Get-StartConfirmRunMarkerPath {
+    return (Join-Path $env:ProgramData 'amdgpu-wddm\start-confirm-run.json')
+}
+function Get-StartConfirmRunMarker {
+    try {
+        $path = Get-StartConfirmRunMarkerPath
+        if (-not (Test-Path -LiteralPath $path)) { return $null }
+        $marker = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        if ($null -eq $marker -or [int]$marker.schema -ne 1) { return $null }
+        return $marker
+    } catch { return $null }
+}
+# Writes the marker of one finished run; returns $null on success or the reason it could not write (one log line).
+# Never fails the task: the marker only shortens verify's wait.
+function Write-StartConfirmRunMarker {
+    param([int]$ExitCode, $Reason)
+    $temporary = $null
+    try {
+        $reading = Get-StartRecordBootIdReading
+        $path = Get-StartConfirmRunMarkerPath
+        [void][IO.Directory]::CreateDirectory((Split-Path $path))
+        $body = [ordered]@{ schema = 1; boot_id = $reading.boot_id; source = $reading.source
+            utc = [DateTime]::UtcNow.ToString('o', [Globalization.CultureInfo]::InvariantCulture)
+            exit = $ExitCode; reason = [string]$Reason } | ConvertTo-Json -Compress
+        # A unique temporary name in the same folder, then one rename: a reader sees the old marker or the new one,
+        # never a part of a file. File.Replace swaps an existing marker in one step; File.Move creates the first one.
+        $temporary = "$path.$([Guid]::NewGuid().ToString('N')).tmp"
+        [IO.File]::WriteAllText($temporary, $body)
+        if ([IO.File]::Exists($path)) { [IO.File]::Replace($temporary, $path, [NullString]::Value) } else { [IO.File]::Move($temporary, $path) }
+        $temporary = $null
+        return $null
+    } catch {
+        $why = [string]$_.Exception.Message
+        if ($temporary) { try { [IO.File]::Delete($temporary) } catch { } }
+        return $why
+    }
+}
+# Did the start-confirm task run in this boot? The marker's BootId answers it with no clock; the TaskInfo's wall-clock
+# rule is the fallback. ran = $false when neither says yes; source names the rule that answered, for the log.
+function Get-StartConfirmRunOfThisBoot {
+    param($TaskInfo, $BootUtc, $Marker, $ThisBootId)
+    if ($null -ne $Marker -and $null -ne $Marker.boot_id -and $null -ne $ThisBootId) {
+        try {
+            if ([int64]$Marker.boot_id -eq [int64]$ThisBootId) { return [ordered]@{ ran = $true; source = 'boot id' } }
+        } catch { }
+    }
+    if ($TaskInfo -and $TaskInfo.LastRunTime -and $BootUtc -and ($TaskInfo.LastRunTime -ge $BootUtc)) {
+        return [ordered]@{ ran = $true; source = 'wall clock' }
+    }
+    $why = $(if ($null -ne $Marker -and $null -ne $Marker.boot_id) { 'marker of another boot, no wall-clock match' } else { 'no marker, no wall-clock match' })
+    return [ordered]@{ ran = $false; source = $why }
+}
