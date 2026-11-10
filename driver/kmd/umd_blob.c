@@ -183,10 +183,15 @@ int UmdBlobAllocCpuVisible(const struct umd_alloc_view* allocation)
 // view at the map (Lock2) instead. The allocation stays CpuVisible, so a Lock2 succeeds as before. Only for the
 // version 2 blob, where the creator's GEM flags are intent, and never for a scan-out request, so the flip path sees
 // the allocation it saw before.
+//   Only for the GTT heap, which UmdBlobPlacement puts in the aperture segment alone. VidMm refuses the create of a
+// CpuVisibleOnDemand allocation whose segment set includes the local segment (unit A, KMD 06AAA450, 2026-11-10: a
+// 32-bit vkAllocateMemory of DEVICE_LOCAL|HOST_VISIBLE failed with VK_ERROR_OUT_OF_DEVICE_MEMORY, the GTT types
+// allocated and mapped, and D3D11CreateDevice failed with E_OUTOFMEMORY; the same KMD without the flag passed all).
+// A VRAM-heap allocation therefore keeps its create-time view, also when shared residency lets it into the aperture.
 int UmdBlobAllocCpuVisibleOnDemand(const struct umd_alloc_view* allocation)
 {
     return allocation != 0 && allocation->cache_policy_valid && !allocation->scanout &&
-        UmdBlobAllocCpuVisible(allocation);
+        allocation->heap == UMD_BLOB_HEAP_GTT && UmdBlobAllocCpuVisible(allocation);
 }
 
 int UmdBlobPlacement(const struct umd_alloc_view* allocation, unsigned long vram, unsigned long aperture,

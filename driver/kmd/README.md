@@ -490,10 +490,16 @@ wddm: scaled plane 0x1 (LabScaledPlane 0x1, handshake 1)
 
 VidMm gives every CpuVisible allocation a CPU view in the process that creates it, also when nothing maps the
 allocation. A 32-bit process runs out of address space on such views. A UMD allocation from a version 2 blob that is
-CpuVisible and asks for no scan-out therefore also gets `DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand`
-(`UmdBlobAllocCpuVisibleOnDemand`, umd_blob.c). VidMm then makes the view at the first Lock2. `CpuVisible` stays
-set, so a Lock2 works as before. A version 1 blob and a scan-out request keep the view at the create. The KMD maps
-allocations only by physical address, so no kernel path needs the VidMm view.
+CpuVisible, is in the GTT heap and asks for no scan-out therefore also gets
+`DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand` (`UmdBlobAllocCpuVisibleOnDemand`, umd_blob.c). VidMm then
+makes the view at the first Lock2. `CpuVisible` stays set, so a Lock2 works as before. A version 1 blob, a scan-out
+request and a VRAM-heap allocation keep the view at the create. The KMD maps allocations only by physical address, so
+no kernel path needs the VidMm view.
+
+The GTT heap is the aperture segment alone (`UmdBlobPlacement`). VidMm refuses the create of a CpuVisibleOnDemand
+allocation whose segment set includes the local segment. On unit A (2026-11-10) a 32-bit DEVICE_LOCAL|HOST_VISIBLE
+`vkAllocateMemory` failed with `VK_ERROR_OUT_OF_DEVICE_MEMORY` and `D3D11CreateDevice` failed with `E_OUTOFMEMORY`
+while the flag was on for VRAM-heap allocations. The same KMD without the flag passed both.
 
 The release flavour always sets the flag. In the lab flavour, `LabCpuVisibleOnDemand` (a REG_DWORD under the
 service's `Parameters` key, read once at `DriverEntry`, not a catalog setting) = 0 turns it off, for an A/B run on one

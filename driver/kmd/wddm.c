@@ -6603,8 +6603,9 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         // this, VidMm gave every DXVK device-local chunk a write-combined view in the creating process,
         // and a 32-bit game ran out of address space on views nothing ever mapped.
         info->FlagsWddm2.CpuVisible = (UINT)UmdBlobAllocCpuVisible(&view);
-        // BD-210 G1: a CPU-visible v2 allocation that is not a scan-out gets its CPU view at the first Lock2, not
-        // here (umd_blob.c). CpuVisible stays set, so the map works as before. The flag is ours to set, both ways.
+        // BD-210 G1: a CPU-visible v2 GTT-heap allocation that is not a scan-out gets its CPU view at the first
+        // Lock2, not here (umd_blob.c). Its placement above is the aperture alone: VidMm refuses the flag on a set
+        // with the local segment. CpuVisible stays set, so the map works as before. The flag is ours to set.
         info->FlagsWddm2.CpuVisibleOnDemand =
             (UINT)((wddm == NULL || wddm->CpuVisibleOnDemand) && UmdBlobAllocCpuVisibleOnDemand(&view));
         // RADV's CPU_GTT_USWC requests write-combined storage; without it,
