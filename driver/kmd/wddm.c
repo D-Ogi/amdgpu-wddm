@@ -4609,7 +4609,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // (guard.c). One lever for both classes of cpu_view_policy.h.
     wddm->CpuVisibleOnDemand = GuardCpuVisibleOnDemand();
     GuardLog("wddm: cpu view on demand %s", wddm->CpuVisibleOnDemand ?
-             "on (VidMm maps a cpu-visible aperture allocation at its first Lock2: umd gtt, lb7a plain)" :
+             "on (umd gtt and lb7a plain: CPU view at the first Lock2)" :
              "off (cpu view at the create)");
     wddm->NotifyDpcInReport = (GuardReadSetting(L"NotifyDpcInReport", 1) != 0);
     GuardLog("wddm: completion report pairs its own notify dpc: %s",
