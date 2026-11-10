@@ -46,6 +46,14 @@ std::size_t read_log(char* out, std::size_t size) {
     HANDLE h = CreateFileA(g_log_name, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) return 0;
+    // Every count reads the whole log from its start, and the log grows across the tests. A log that no longer fits
+    // the buffer would cut its newest lines and make a count wrong without a word: that is a failure of the test.
+    LARGE_INTEGER bytes{};
+    if (!GetFileSizeEx(h, &bytes) || bytes.QuadPart >= static_cast<LONGLONG>(size)) {
+        std::printf("FAIL the log (%lld bytes) does not fit the read buffer (%zu bytes)\n",
+                    static_cast<long long>(bytes.QuadPart), size);
+        ++failures;
+    }
     DWORD n = 0;
     ReadFile(h, out, static_cast<DWORD>(size - 1), &n, nullptr);
     CloseHandle(h);
@@ -53,16 +61,20 @@ std::size_t read_log(char* out, std::size_t size) {
     return n;
 }
 
-int count_fault_lines() {
-    char text[8192];
+int count_lines_with(const char* needle) {
+    char text[16384];
     read_log(text, sizeof(text));
     int count = 0;
-    for (const char* p = text; (p = std::strstr(p, "fault witness: code")) != nullptr; ++p) ++count;
+    for (const char* p = text; (p = std::strstr(p, needle)) != nullptr; ++p) ++count;
     return count;
 }
 
+// "fault witness: code" is not a substring of "exception witness: code", so the two counts never mix.
+int count_fault_lines() { return count_lines_with("fault witness: code"); }
+int count_exception_lines() { return count_lines_with("exception witness: code"); }
+
 bool log_contains(const char* needle) {
-    char text[8192];
+    char text[16384];
     read_log(text, sizeof(text));
     return std::strstr(text, needle) != nullptr;
 }
@@ -233,6 +245,144 @@ void test_handler() {
     CHECK(detail::handler_handle().load() == nullptr);
 }
 
+// BD-344: the class of a code decides whether it gets a line, before any budget.
+void test_never_a_fault() {
+    using amdgpu_wddm_witness::never_a_fault;
+    const unsigned long never[] = {0x40010006ul, 0x4001000Aul, 0x40010005ul, 0x40010008ul, 0x406D1388ul,
+                                   0x80000001ul, 0x80000002ul, 0x80000003ul, 0x80000004ul};
+    for (unsigned long code : never) CHECK(never_a_fault(code));
+    const unsigned long counted[] = {0xC0000005ul, 0xC0000409ul, 0xE06D7363ul, 0xE0434352ul};
+    for (unsigned long code : counted) CHECK(!never_a_fault(code));
+    // A warning code outside the explicit trap list is not dropped.
+    CHECK(!never_a_fault(0x80000005ul));
+}
+
+void test_fault_shaped() {
+    using amdgpu_wddm_witness::fault_shaped;
+    const unsigned long faults[] = {0xC0000005ul, 0xC000001Dul, 0xC000001Eul, 0xC0000094ul, 0xC0000095ul, 0xC0000096ul,
+                                    0xC00000FDul, 0xC0000374ul, 0xC0000409ul, 0xC0000420ul, 0xC0000602ul};
+    for (unsigned long code : faults) CHECK(fault_shaped(code));
+    CHECK(!fault_shaped(0xE06D7363ul));
+    CHECK(!fault_shaped(0x40010006ul));
+    CHECK(!fault_shaped(0xC0000135ul));
+}
+
+PVOID point(unsigned offset) {
+    return reinterpret_cast<PVOID>(reinterpret_cast<char*>(&faulting_point) + offset);
+}
+
+LONG raise_at(unsigned long code, unsigned offset) {
+    EXCEPTION_RECORD record{};
+    record.ExceptionCode = code;
+    record.ExceptionAddress = point(offset);
+    EXCEPTION_POINTERS info{&record, nullptr};
+    return detail::fault_handler(&info);
+}
+
+// The W3 case: DBG_PRINTEXCEPTION_C at ten addresses writes nothing at all.
+void test_handler_noise() {
+    amdgpu_wddm_witness::arm();
+    CHECK(detail::recording().load());
+    const int faults = count_fault_lines(), others = count_exception_lines();
+    for (unsigned i = 0; i < 10; ++i) CHECK(raise_at(0x40010006ul, 100 + i) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_fault_lines() == faults);
+    CHECK(count_exception_lines() == others);
+    CHECK(!log_contains("code 40010006"));
+    amdgpu_wddm_witness::disarm();
+}
+
+// A C++ throw is an "other" exception: its own line and budget, never the fault budget.
+void test_handler_exception_class() {
+    amdgpu_wddm_witness::arm();
+    const int faults = count_fault_lines(), others = count_exception_lines();
+    CHECK(raise_at(0xE06D7363ul, 200) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_fault_lines() == faults);
+    CHECK(count_exception_lines() == others + 1);
+    CHECK(log_contains("exception witness: code e06d7363 continuing"));
+    CHECK(raise_at(0xE06D7363ul, 200) == EXCEPTION_CONTINUE_SEARCH);   // the same address: a repeat
+    CHECK(count_exception_lines() == others + 1);
+    CHECK(raise_at(0xE06D7363ul, 201) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_exception_lines() == others + 2);
+    CHECK(raise_at(0xE06D7363ul, 202) == EXCEPTION_CONTINUE_SEARCH);   // the budget of two is used
+    CHECK(count_exception_lines() == others + 2);
+    // The fault budget is independent: eight distinct access violations still get eight lines.
+    for (unsigned i = 0; i < 8; ++i) CHECK(raise_at(0xC0000005ul, 300 + i) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_fault_lines() == faults + 8);
+    CHECK(count_exception_lines() == others + 2);
+    amdgpu_wddm_witness::disarm();
+}
+
+// A code without a line between two identical faults does not move the fault repeat state.
+void test_handler_dedup_independence() {
+    amdgpu_wddm_witness::arm();
+    const int faults = count_fault_lines(), others = count_exception_lines();
+    CHECK(raise_at(0xC0000005ul, 400) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(raise_at(0x40010006ul, 401) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(raise_at(0xC0000005ul, 400) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_fault_lines() == faults + 1);
+    // An "other" line between them does not move it either: the two classes keep separate repeat states.
+    CHECK(raise_at(0xE0434352ul, 402) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(raise_at(0xC0000005ul, 400) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_fault_lines() == faults + 1);
+    CHECK(count_exception_lines() == others + 1);
+    amdgpu_wddm_witness::disarm();
+}
+
+void test_exception_line() {
+    char line[512];
+    FaultRecord f;
+    f.code = 0xE06D7363ul;
+    f.module = "witcher3.exe";
+    f.module_base = 0x7ff600000000ull;
+    f.address = 0x7ff600012345ull;
+    f.thread = 1234;
+    f.parameter_count = 2;   // parameters are never part of this line
+    f.parameters[0] = 0x19930520ull;
+    f.parameters[1] = 0x1000ull;
+    const std::size_t n = amdgpu_wddm_witness::format_exception(line, sizeof(line), f);
+    const char* const want =
+        "exception witness: code e06d7363 continuing, module witcher3.exe, base 7ff600000000, rva 12345, "
+        "address 7ff600012345, thread 1234\n";
+    CHECK(n == std::strlen(want));
+    CHECK(std::strcmp(line, want) == 0);
+    FaultRecord none;
+    none.code = 0xC0000135ul;
+    none.address = 0x1234;
+    none.thread = 77;
+    CHECK(amdgpu_wddm_witness::format_exception(line, sizeof(line), none) > 0);
+    CHECK(std::strcmp(line,
+                      "exception witness: code c0000135 continuing, module -, base 0, rva 0, address 1234, "
+                      "thread 77\n") == 0);
+    CHECK(amdgpu_wddm_witness::format_exception(line, 8, f) == 0);
+    CHECK(amdgpu_wddm_witness::format_exception(nullptr, 0, f) == 0);
+}
+
+// Loader failures that the loader handles: two lines at most, and the fault budget stays whole.
+void test_exception_budget() {
+    amdgpu_wddm_witness::arm();
+    const int faults = count_fault_lines(), others = count_exception_lines();
+    CHECK(raise_at(0xC0000135ul, 500) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(raise_at(0xC0000142ul, 501) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_exception_lines() == others + 2);
+    CHECK(raise_at(0xC000007Bul, 502) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_exception_lines() == others + 2);
+    for (unsigned i = 0; i < 10; ++i) CHECK(raise_at(0xC0000409ul, 600 + i) == EXCEPTION_CONTINUE_SEARCH);
+    CHECK(count_fault_lines() == faults + 8);
+    amdgpu_wddm_witness::disarm();
+}
+
+// Negative control of the class rule: a handler without the filter writes the W3 line. Shown with the formatter of
+// the fault class, which is what the handler used for every code before BD-344.
+void test_unfiltered_control() {
+    char line[512];
+    FaultRecord f;
+    f.code = 0x40010006ul;
+    f.address = 0x1234;
+    CHECK(amdgpu_wddm_witness::format_fault(line, sizeof(line), f) > 0);
+    CHECK(std::strstr(line, "fault witness: code 40010006") != nullptr);
+    CHECK(amdgpu_wddm_witness::never_a_fault(f.code));   // and the filter is what keeps it out
+}
+
 } // namespace
 
 int main() {
@@ -244,6 +394,14 @@ int main() {
     test_watch_list();
     test_expiry();
     test_handler();
+    test_never_a_fault();
+    test_fault_shaped();
+    test_exception_line();
+    test_unfiltered_control();
+    test_handler_noise();
+    test_handler_exception_class();
+    test_handler_dedup_independence();
+    test_exception_budget();
     std::printf("process-witness: %s (%d failure%s)\n", failures ? "FAIL" : "PASS", failures,
                 failures == 1 ? "" : "s");
     return failures ? 1 : 0;
