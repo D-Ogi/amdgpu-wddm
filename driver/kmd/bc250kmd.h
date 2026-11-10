@@ -765,6 +765,9 @@ void GuardLabReadCpuRevertFault(_In_ PDRIVER_OBJECT DriverObject);
 // per node, at the first call after its delay. Any IRQL.
 void GuardLabReadEngineHang(_In_ PDRIVER_OBJECT DriverObject);
 BOOLEAN GuardLabTakeEngineHang(ULONG Node);
+// Lab flavour only (BD-210 G1): LabCpuVisibleOnDemand (REG_DWORD under Parameters, read only in DriverEntry). 0 turns
+// off DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand for the UMD allocations; absent or any other value keeps it.
+void GuardLabReadCpuVisibleOnDemand(_In_ PDRIVER_OBJECT DriverObject);
 ULONGLONG GuardLabCommitPagingRingStart(void);
 extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
 extern int bc250_ring_boundary_pad;                     // shim/bc250_ring.c, 0 only in a lab control run
@@ -788,6 +791,10 @@ ULONG GuardLabScaledPlane(void);
 #define BC250_LAB_QRESET_ENGINE_OFF 2u
 void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject);
 ULONG GuardLabQueueReset(void);
+// BD-210 G1: TRUE when WddmStart gives the UMD allocations CpuVisibleOnDemand (umd_blob.c
+// UmdBlobAllocCpuVisibleOnDemand). Always TRUE in the release flavour; in the lab flavour FALSE only with
+// LabCpuVisibleOnDemand 0. Any IRQL: a value fixed at DriverEntry.
+BOOLEAN GuardCpuVisibleOnDemand(void);
 // BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
 // one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog
 // must never undercut (submit_watchdog.h). Read-only: nothing in this driver writes that key - the installer

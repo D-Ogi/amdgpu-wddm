@@ -646,6 +646,31 @@ ULONGLONG GuardLabCommitPagingRingStart(void)
              "bring-up", seed, nonce);
     return seed;
 }
+
+// BD-210 G1, lab flavour only, not a catalog setting for the reason of LabScaledPlane above. LabCpuVisibleOnDemand
+// (REG_DWORD, Parameters, read only at DriverEntry): 0 gives the UMD allocations no CpuVisibleOnDemand, which is the
+// create-time CPU view of the drivers before it, for an A/B of the address space of one process on one KMD. Absent,
+// not a REG_DWORD or any other value keeps the flag, as the release flavour does.
+static BOOLEAN g_LabCpuVisibleOnDemand = TRUE;
+
+void GuardLabReadCpuVisibleOnDemand(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status;
+    ULONG value = 0;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("lab: cpu view on demand selector: Parameters key not opened for reading (0x%08X), on", status);
+        return;
+    }
+    status = ParameterDword(key, L"LabCpuVisibleOnDemand", &value);
+    ZwClose(key);
+    if (status == STATUS_OBJECT_NAME_NOT_FOUND) return;     // the default: no line, every start would log it
+    g_LabCpuVisibleOnDemand = !(NT_SUCCESS(status) && value == 0);
+    GuardLog("lab: cpu view on demand selector read (read only; value %lu, 0x%08X): %s", value, status,
+             g_LabCpuVisibleOnDemand ? "on" : "off (create-time cpu view)");
+}
 #endif
 
 // BD-235: the ring boundary rule (bc250_ring.c, gfx.c). The lab flavour takes the arm's selector; the release flavour
@@ -682,6 +707,15 @@ ULONG GuardLabQueueReset(void)
     return g_LabQueueReset;
 #else
     return 0;
+#endif
+}
+
+BOOLEAN GuardCpuVisibleOnDemand(void)
+{
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    return g_LabCpuVisibleOnDemand;
+#else
+    return TRUE;
 #endif
 }
 
