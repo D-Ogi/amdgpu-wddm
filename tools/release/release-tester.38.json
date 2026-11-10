@@ -737,6 +737,18 @@
         "d3d12-x86-lab"
       ],
       "note": "LB7A CpuVisibleOnDemand through the shared cpu view predicate"
+    },
+    {
+      "defect": "BD-349",
+      "repo": "amdgpu-wddm",
+      "commit": "86e780d2e4adfef73eb359537584a788458d1460",
+      "rows": [
+        "control-rel",
+        "control-exe-rel",
+        "control-lab",
+        "control-exe-lab"
+      ],
+      "note": "CPU temperature limit help text and tuner.md: a control target, 2 to 3 C over under mixed load"
     }
   ],
   "rows": [
@@ -3096,7 +3108,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "f92158f423ec485de87ef78939fc398b40636fa0",
+      "commit": "78af602a44ff7d7b66a6d96246e3446964c8f740",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3142,7 +3154,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "f92158f423ec485de87ef78939fc398b40636fa0",
+      "commit": "78af602a44ff7d7b66a6d96246e3446964c8f740",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3242,7 +3254,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "f92158f423ec485de87ef78939fc398b40636fa0",
+      "commit": "78af602a44ff7d7b66a6d96246e3446964c8f740",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3288,7 +3300,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "f92158f423ec485de87ef78939fc398b40636fa0",
+      "commit": "78af602a44ff7d7b66a6d96246e3446964c8f740",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [

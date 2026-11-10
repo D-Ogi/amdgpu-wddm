@@ -3889,6 +3889,40 @@
         }
       ],
       "workspace_from_kits": false
+    },
+    {
+      "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
+      "commit": "78af602a44ff7d7b66a6d96246e3446964c8f740",
+      "bindings": {
+        "tools/win/amdgpu_wddm_control/build.ps1": "cb850855be6a2446351f706b83200cf3680af213",
+        "tools/build": "7ce3b07871a188734e17d7aa1d7a86730bf3ac5c",
+        "tools/quality": "856e89a34a56dc65cab4fc62440711bd87569625",
+        "tools/release/installer": "36c8f1d19c53d60a691a955f1abcebd409de7b10",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004",
+        "driver/kmd/test": "db24292ab6d13808f4613c4e1469b5725f34a3f4",
+        "driver/state": "d11313e11da4e9185e80ac4da9a20a08d94c44a4",
+        "tools/win/bc250kmd_cli": "355a684d1121cc389b6d603d18251b81436a0d7a",
+        "tools/win/amdgpu_wddm_control": "8b2b5d9eacc4092d4648f5a1ff00c6eaaa65186d"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        }
+      ],
+      "workspace_from_kits": true
     }
   ]
 }
