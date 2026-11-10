@@ -120,8 +120,22 @@ $headless = { param($t) New-Reading ([uint64][Math]::Max(0, ($t - 5) * 1000)) -F
 $run = Invoke-Run 120 $headless
 Show $run
 Check ($run.code -eq 0 -and $run.at -ge 65 -and $run.at -le 75) 'confirmed by this task once ready_ms reaches 60 s'
+Check (@($run.log | Where-Object { $_ -match ' confirm eligible by the no-output rule \(flag 32\): flags 35 ' }).Count -eq 1) 'the log names the rule and flag 32'
 $run = Invoke-Run 120 { param($t) New-Reading ([uint64][Math]::Max(0, ($t - 5) * 1000)) -Flags 35 -Completed 0 -Age 0 } -End 60
 Check ($null -eq $run.code) 'not before ready_ms reaches 60 s'
+'case bd343-61s: ready_ms 61000 at the first reading confirms at once'
+$run = Invoke-Run 120 { param($t) New-Reading ([uint64](61000 + $t * 1000)) -Flags 35 -Completed 0 -Age ([uint64]::MaxValue) }
+Check ($run.code -eq 0 -and $run.at -eq 5) 'confirmed at the first poll after the confirm'
+'case bd343-child-change: the child changes at +30 s (a new epoch, ready time from 0 again)'
+$run = Invoke-Run 120 { param($t) if ($t -lt 30) { New-Reading ([uint64]($t * 1000)) -Flags 35 -Completed 0 -Age ([uint64]::MaxValue) }
+    else { New-Reading ([uint64](($t - 30) * 1000)) -Epoch 6 -Flags 35 -Completed 0 -Age ([uint64]::MaxValue) } }
+Show $run
+Check ($run.code -eq 0 -and $run.at -ge 90 -and $run.at -le 100) 'confirmed only after 60 s of the new interval'
+'case bd343-contradiction: VISIBLE and NO_OUTPUT together (flags 39) are never confirmed, by either rule'
+$run = Invoke-Run 120 { param($t) New-Reading 90000 -Flags 39 -Completed 40 -Age 0 }
+Check ($run.code -eq 1 -and $run.at -eq 120) 'exit 1 at the bound'
+Check (@($run.log | Where-Object { $_ -match 'VISIBLE \(4\) and NO_OUTPUT \(32\) together' }).Count -ge 1) 'the log says why'
+Check ($null -eq (Get-StartHealthRule -Flags 39 -ReadyMs 90000) -and $null -eq (Get-StartHealthRule -Flags 47 -ReadyMs 90000)) 'and verify has no rule for it'
 'case bd343-no-output-not-ready: the engines did not come up (flags FULL|NO_OUTPUT): unconfirmed at the bound'
 $run = Invoke-Run 120 { param($t) New-Reading 0 -Flags 33 -Completed 0 -Age ([uint64]::MaxValue) }
 Check ($run.code -eq 1 -and $run.at -eq 120) 'exit 1 at the bound'
@@ -130,7 +144,7 @@ $run = Invoke-Run 120 { param($t) New-Reading 0 -Flags 3 -Completed 0 -Age ([uin
 Check ($run.code -eq 1 -and $run.at -eq 120) 'exit 1 at the bound'
 'negative control bd343: the rules without the NO_OUTPUT line do not confirm the start without output'
 $coreText = [IO.File]::ReadAllText($Core)
-$line = [regex]::Match($coreText, '(?m)^ if \(\(\(\$Reading\.flags -band 35\) -eq 35\).*\r?\n')
+$line = [regex]::Match($coreText, '(?m)^ if \(\(\(\$Reading\.flags -band 39\) -eq 35\).*\r?\n')
 Check $line.Success 'the NO_OUTPUT line is in the rules'
 if ($line.Success) {
     . ([scriptblock]::Create($coreText.Remove($line.Index, $line.Length)))

@@ -800,6 +800,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='power-coordinator-failed-restore-active';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-FailedRestoreActive');Fails=$true}
   @{n='power-coordinator-lost-before-witness';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-LostBeforeWitness');Fails=$true}
   @{n='power-coordinator-no-firmware-hold';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-NoFirmwareHold');Fails=$true}
+@{n='power-coordinator-no-resume-output';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-NoResumeOutput');Fails=$true}
   @{n='power-loss';s='driver\kmd\test\run_power_loss.ps1';a=@('-Root',$Workspace)}
   # ResetEngine without the power-lost refusal, a fence advance in the resume of the forced pause (condition c), an IH
   # called quiet with open interrupt admission, and the display repair after an unsaved way down.
@@ -854,6 +855,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='start-health-no-output-ignores-origin';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoOutputIgnoresOrigin');Fails=$true}
   @{n='start-health-no-output-skips-minute';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoOutputSkipsMinute');Fails=$true}
   @{n='start-health-no-output-without-engines';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoOutputWithoutEngines');Fails=$true}
+@{n='start-health-no-output-releases-requests';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoOutputReleasesRequests');Fails=$true}
   @{n='gfx-pipeline';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly')}
   @{n='vmid-pool';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace)}
   @{n='keep-prune';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace)}

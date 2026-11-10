@@ -86,11 +86,18 @@ function New-StartConfirmState {
 #
 # Flag 32 is NO_OUTPUT (BC250_START_HEALTH_NO_OUTPUT, BD-343): a start without a firmware display whose child the
 # driver reports as disconnected. No mode is committed and nothing flips, so VISIBLE and a completion cannot come;
-# the KMD's rule for it is FULL, READY and a minute of an open witness (start_health.c HealthConfirmable). Before
-# BD-343 such a start was never confirmed, and the guard refused the third start with the monitor off.
+# the KMD's rule for it is FULL, READY and a minute of an open witness (start_health.c HealthConfirmableHeadless).
+# Before BD-343 such a start was never confirmed, and the guard refused the third start with the monitor off.
+# VISIBLE and NO_OUTPUT together is a contradiction (the KMD never publishes both): the probe or the driver is
+# wrong, and such a reading is never eligible (Test-StartHealthContradiction).
+function Test-StartHealthContradiction {
+ param([Parameter(Mandatory)]$Flags)
+ return (([int]$Flags -band 36) -eq 36)
+}
 function Test-StartConfirmEligible {
  param([Parameter(Mandatory)]$Reading)
- if ((($Reading.flags -band 35) -eq 35) -and $Reading.ready_ms -ge $script:StartConfirmMinReadyMs) { return $true }
+ if (Test-StartHealthContradiction $Reading.flags) { return $false }
+ if ((($Reading.flags -band 39) -eq 35) -and $Reading.ready_ms -ge $script:StartConfirmMinReadyMs) { return $true }
  return ((($Reading.flags -band 7) -eq 7) -and $Reading.completed -gt 0 -and
          $Reading.ready_ms -ge $script:StartConfirmMinReadyMs -and
          ($Reading.age_ms -le $script:StartConfirmFreshMs -or ($Reading.flags -band 16) -eq 16))
@@ -107,6 +114,7 @@ function Get-StartHealthRule {
  if ($null -eq $Flags -or [string]$Flags -eq '') { return $null }
  $f = 0
  try { $f = [int]$Flags } catch { return $null }
+ if (($f -band 36) -eq 36) { return $null }   # VISIBLE and NO_OUTPUT together: a wrong reading
  if (($f -band 7) -eq 7) { return [ordered]@{ name = 'display'; stage = 50; flags = $f } }
  if (($f -band 35) -ne 35) { return $null }
  $ms = $null
@@ -160,8 +168,11 @@ function Get-StartConfirmStep {
  }
  if ($Kit -and $Kit.heartbeat) { $State.yielded = $true; return [ordered]@{action='wait'; reason='kit heartbeat running: that run confirms'} }
  if ($moved) { return [ordered]@{action='wait'; reason="${moved}; ready_ms $($Reading.ready_ms)"} }
+ if (Test-StartHealthContradiction $Reading.flags) {
+  return [ordered]@{action='wait'; reason="refused: flags $($Reading.flags) carry VISIBLE (4) and NO_OUTPUT (32) together, which the driver never publishes; not confirmed"}
+ }
  if ((Test-StartConfirmEligible $Reading) -and ($Now - $State.last_confirm) -ge $script:StartConfirmRetrySeconds) {
-  return [ordered]@{action='confirm'; generation=$Reading.generation; epoch=$Reading.epoch; reason="eligible: completed $($Reading.completed) age_ms $($Reading.age_ms) ready_ms $($Reading.ready_ms)"}
+  return [ordered]@{action='confirm'; generation=$Reading.generation; epoch=$Reading.epoch; reason="eligible by the $(if (($Reading.flags -band 32) -eq 32) { 'no-output rule (flag 32)' } else { 'display rule' }): flags $($Reading.flags) completed $($Reading.completed) age_ms $($Reading.age_ms) ready_ms $($Reading.ready_ms)"}
  }
  return [ordered]@{action='wait'; reason="waiting: flags $($Reading.flags) completed $($Reading.completed) age_ms $($Reading.age_ms) ready_ms $($Reading.ready_ms)"}
 }

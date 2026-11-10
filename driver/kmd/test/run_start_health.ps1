@@ -4,7 +4,8 @@ param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\build\health145'
       [switch]$ConfirmHungRequest,[switch]$QuietIgnoresOwedFlip,[switch]$NoQuiet,
       [switch]$AdapterResetIgnoresRefusal,[switch]$FaultKeepsRefusal,[switch]$BeginKeepsRefusal,
       [switch]$ResumeKeepsRefusal,[switch]$RefusalOverFailedEngines,[switch]$RefusalOverClosedWitness,
-      [switch]$NoOutputIgnoresOrigin,[switch]$NoOutputSkipsMinute,[switch]$NoOutputWithoutEngines)
+      [switch]$NoOutputIgnoresOrigin,[switch]$NoOutputSkipsMinute,[switch]$NoOutputWithoutEngines,
+      [switch]$NoOutputReleasesRequests)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -44,9 +45,9 @@ if($RefusalOverClosedWitness){$source=Mutate $source '} else if (Mark>0 && H->Re
 # A recovery that leaves an open witness alone, so a measured interval can span the hang.
 if($RearmSkipsOpenWitness){$source=Mutate $source 'if (!h->Closed) {' 'if (0) {'}
 # A start that hung node 0 confirming its own clock/voltage and CU request as the next boot's default.
-if($ConfirmHungRequest){$source=Mutate $source 'ready=HealthConfirmable(h,&data) && !h->Recovered;' 'ready=HealthConfirmable(h,&data);'
-                        $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered) (void)CuModeConfirm(Device,"start-health");' 'if (NT_SUCCESS(status)) (void)CuModeConfirm(Device,"start-health");'
-                        $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered) (void)DpmConfirm(Device,"start-health");' 'if (NT_SUCCESS(status)) (void)DpmConfirm(Device,"start-health");'}
+if($ConfirmHungRequest){$source=Mutate $source 'ready=HealthConfirmableDisplay(h,&data) && !h->Recovered;' 'ready=HealthConfirmableDisplay(h,&data);'
+                        $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered && display) (void)CuModeConfirm(Device,"start-health");' 'if (NT_SUCCESS(status) && display) (void)CuModeConfirm(Device,"start-health");'
+                        $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered && display) (void)DpmConfirm(Device,"start-health");' 'if (NT_SUCCESS(status) && display) (void)DpmConfirm(Device,"start-health");'}
 # QUIET (0.7.216.104): a flip programmed and never completed taken for nothing owed, so a hung presentation path
 # confirms on a stale completion.
 if($QuietIgnoresOwedFlip){$source=Mutate $source '&& programmed==H->LastSequence;' ';'}
@@ -56,9 +57,14 @@ if($NoQuiet){$source=Mutate $source '(Data->LastCompletionAgeMs<=BC250_START_HEA
 # for a start without output; no minute of an open witness; and the ready time counted without the engines, with
 # READY left out of the rule, so a start whose ring tests failed confirms.
 if($NoOutputIgnoresOrigin){$source=Mutate $source 'BOOLEAN none=DisplayStart==BC250_DISPLAY_START_NO_POST && !Connected;' 'BOOLEAN none=!Connected;(void)DisplayStart;'}
-if($NoOutputSkipsMinute){$source=Mutate $source 'return Data->ReadyAgeMs>=BC250_START_HEALTH_MIN_MS;' 'return TRUE;'}
+if($NoOutputSkipsMinute){$source=Mutate $source 'return (Data->Flags&mask)==want && Data->ReadyAgeMs>=BC250_START_HEALTH_MIN_MS;' 'return (Data->Flags&mask)==want;'}
 if($NoOutputWithoutEngines){$source=Mutate $source 'if (HealthReady(H) && (HealthVisible(H) || HealthHeadless(H)) && H->ReadySince==0)' 'if ((HealthVisible(H) || HealthHeadless(H)) && H->ReadySince==0)'
-                            $source=Mutate $source 'const ULONG headless=BC250_START_HEALTH_FULL|BC250_START_HEALTH_READY|BC250_START_HEALTH_NO_OUTPUT;' 'const ULONG headless=BC250_START_HEALTH_FULL|BC250_START_HEALTH_NO_OUTPUT;'}
+                            $source=Mutate $source 'const ULONG want=BC250_START_HEALTH_FULL|BC250_START_HEALTH_READY|BC250_START_HEALTH_NO_OUTPUT;' 'const ULONG want=BC250_START_HEALTH_FULL|BC250_START_HEALTH_NO_OUTPUT;'}
+# BD-343 (review F1): the CU mode and DPM milestones taking the rule without output, so a start with no workload
+# writes a requested clock/voltage or CU count as the next boot's default.
+if($NoOutputReleasesRequests){$source=Mutate $source 'ready=HealthConfirmableDisplay(h,&data) && !h->Recovered;' 'ready=HealthConfirmableStart(h,&data) && !h->Recovered;'
+                              $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered && display) (void)CuModeConfirm(Device,"start-health");' 'if (NT_SUCCESS(status) && !recovered) (void)CuModeConfirm(Device,"start-health");'
+                              $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered && display) (void)DpmConfirm(Device,"start-health");' 'if (NT_SUCCESS(status) && !recovered) (void)DpmConfirm(Device,"start-health");'}
 # A confirmation that certifies whatever epoch it finds after its registry flush, the new one included.
 if($ConfirmCertifiesNewEpoch){$source=Mutate $source 'if (h->Generation!=generation || h->Epoch!=epoch) status=STATUS_RETRY;' 'if (h->Generation!=generation) status=STATUS_RETRY;'}
 [IO.File]::WriteAllText((Join-Path $Out 'start_health_actual.inc'),$source.Replace('#include "bc250kmd.h"',''))

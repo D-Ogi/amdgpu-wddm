@@ -246,6 +246,9 @@ NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POW
     status=WddmResumeRetained(Device);
     if (!NT_SUCCESS(status)) goto Failed;
     StartHealthResumeReady(Device,Device->ModeActive);
+    // BD-343: the resume cleared the output state with the rest of the pre-sleep witness. It comes back from the
+    // reported child, as QueryChildStatus answers it (ConnectorChildConnected), and a later indication updates it.
+    StartHealthOutput(Device,Device->DisplayStart,ConnectorChildConnected(Device));
     InterlockedExchange(&Device->RetainedPowerPhase,BC250_POWER_ACTIVE);
     if (unsaved)
         GuardLog("power: unsaved way down restored after power loss, failed steps 0x%02lX",Device->RetainedDownFailed);

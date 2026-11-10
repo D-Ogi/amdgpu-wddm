@@ -399,10 +399,20 @@ int main(void)
     advance((unsigned)BC250_START_HEALTH_MIN_MS-1);old=writes;
     r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==old);
     CHECK(!StartHealthIsReady(&d,&generation));
-    advance(1);CHECK(StartHealthIsReady(&d,&generation) && generation==d.StartHealth.Generation);
+    // The CU mode and DPM milestones (StartHealthIsReady) never take the rule without output: a minute of READY with
+    // no workload proves nothing about a requested clock/voltage or CU count. CONFIRM certifies the start for the
+    // guard and leaves both requests pending, so the next start falls back as after any unconfirmed start.
+    advance(1);CHECK(!StartHealthIsReady(&d,&generation));
     cu0=cuConfirms;dpm0=dpmConfirms;r=query(&d,1);
     CHECK(r.Status==0 && r.Flags==(3|BC250_START_HEALTH_NO_OUTPUT|BC250_START_HEALTH_CONFIRMED) &&
-          r.ReadyAgeMs==BC250_START_HEALTH_MIN_MS && writes==old+1 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1);
+          r.ReadyAgeMs==BC250_START_HEALTH_MIN_MS && writes==old+1 && cuConfirms==cu0 && dpmConfirms==dpm0);
+    advance(60000);CHECK(!StartHealthIsReady(&d,&generation) && cuConfirms==cu0 && dpmConfirms==dpm0);
+    // A stop takes the output state with the witness, and so does a resume (power.c sets it again from the child).
+    StartHealthStop(&d,&r);CHECK((r.Flags&BC250_START_HEALTH_NO_OUTPUT) && !d.StartHealth.NoOutput);
+    StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);StartHealthReady(&d,TRUE);
+    StartHealthResumeReady(&d,FALSE);CHECK(!d.StartHealth.NoOutput);r=query(&d,0);CHECK(r.Flags==3);
+    StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);advance(61000);
+    r=query(&d,0);CHECK(r.Flags==(3|BC250_START_HEALTH_NO_OUTPUT) && r.ReadyAgeMs==61000);
     // The order of the connector worker: the output state can come after the engines; the minute counts from both.
     StartHealthBegin(&d,TRUE);StartHealthReady(&d,TRUE);advance(30000);
     r=query(&d,0);CHECK(r.Flags==3 && !r.ReadyAgeMs);

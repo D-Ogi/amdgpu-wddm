@@ -521,7 +521,7 @@ static partial class UnitTests
             var whole = Regex.Match(ps, @"function Test-StartConfirmEligible \{(?<b>.*?)\n\}", RegexOptions.Singleline).Groups["b"].Value;
             // BD-343: the task has a second branch for a start without output, which this window does not offer (a
             // window has a display). The display branch is the return statement; it must stay this window's rule.
-            var noOutput = "if ((($Reading.flags -band " + (StartHealthState.Full | StartHealthState.Ready | StartHealthState.NoOutput) +
+            var noOutput = "if ((($Reading.flags -band " + (StartHealthState.Full | StartHealthState.Ready | StartHealthState.Visible | StartHealthState.NoOutput) +
                 ") -eq " + (StartHealthState.Full | StartHealthState.Ready | StartHealthState.NoOutput) + ") -and $Reading.ready_ms -ge $script:StartConfirmMinReadyMs) { return $true }";
             Check(whole.Contains(noOutput), "Test-StartConfirmEligible has the no-output branch of BD-343");
             Check(Regex.IsMatch(header, @"#define BC250_START_HEALTH_NO_OUTPUT " + StartHealthState.NoOutput + @"u\b"), "no-output flag = BC250_START_HEALTH_NO_OUTPUT");

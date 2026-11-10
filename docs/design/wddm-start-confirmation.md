@@ -95,13 +95,18 @@ nothing flips. The witness stayed at flags 3 (FULL and READY), completed 0 and
 ready_ms 0, so no client could confirm the start. On unit A (2026-11-10, monitor
 asleep) the guard refused the third such start with Code 43. The witness now
 has an output state for each interval (`StartHealthOutput`). The output state is
-"none" only when the display-start state is NO_POST and the connector reports
-the child as disconnected. pnp.c sets it before `StartHealthReady`, and the
-connector sets it again at each child indication. A change starts a new
-interval. With no output the snapshot sets NO_OUTPUT (flag 32) and never
-VISIBLE, the ready time counts from the engines, and `HealthConfirmable` takes
-the rule for no output: FULL, READY and 60 seconds of an open witness, with no
-completed flip. This rule does not need a completed flip. The other parts of the
+"none" only when the display-start state is NO_POST and the reported child is
+disconnected. The authority is the reported child, as QueryChildStatus answers
+it through `ConnectorChildConnected`, not a sink that the connector found. pnp.c
+sets the state before `StartHealthReady`, and the connector sets it again at
+each child indication. The output state is in the witness, under the same
+lock. `StartHealthStop` clears it with the witness, and
+`StartHealthResumeReady` clears it with the pre-sleep interval. Then power.c
+sets it again from the reported child. A change starts a new interval. With no
+output the snapshot sets NO_OUTPUT (flag 32) and never VISIBLE. The ready time
+counts from the engines, and CONFIRM (`HealthConfirmableStart`) takes the rule
+for no output (`HealthConfirmableHeadless`): FULL, READY, not VISIBLE and 60
+seconds of an open witness. This rule does not need a completed flip. The other parts of the
 display rule stay: the engines were admitted after the CP and SDMA ring tests,
 and no fault, fence timeout, reset, power transition or stop closed the witness
 in the minute. A start that crashes or hangs in that minute stays unconfirmed,
@@ -112,7 +117,8 @@ The task (`Test-StartConfirmEligible`) and `Bc250StartHealth` accept the
 NO_OUTPUT reply. A KMD without the flag never sets it. Host tests:
 `driver/kmd/test/start_health_test.c` with three negative controls
 (`run_start_health.ps1` -NoOutputIgnoresOrigin, -NoOutputSkipsMinute,
--NoOutputWithoutEngines), `start_record_test.c` (-NoStartOutput),
+-NoOutputWithoutEngines, -NoOutputReleasesRequests), `start_record_test.c`
+(-NoStartOutput), `power_coordinator_test.c` (-NoResumeOutput),
 `tools/release/test-start-confirm.ps1` and
 `tools/win/bc250kmd_cli/test/start_health_test.c`.
 
@@ -125,6 +131,46 @@ flip works, because none of them ran. The display rule proves these. Thus a
 display fault stays unknown on a start without output. When a monitor comes back,
 the next start is INHERITED or has a connected child, and it uses the display
 rule again. The guard then counts that start as usual.
+
+The CU mode and DPM requests. `StartHealthIsReady` is the milestone of the CU
+mode confirmation (cumode.c) and of the DPM confirmation (dpm.c). It keeps the
+display rule only (`HealthConfirmableDisplay`). A minute of READY with no
+workload proves nothing about a requested clock, voltage or CU count. Thus a
+CONFIRM by the rule for no output confirms the start for the guard and does not
+call `CuModeConfirm` or `DpmConfirm`. The KMD log says "start confirmed
+without output, CU mode and DPM left pending". What a person sees: a CU or DPM
+change that is tried on a start without output is not confirmed. The next start
+finds the pending mark and falls back to 24 CU or to DpmMode 0, as after
+every start that nobody confirmed. It writes the fallback and its reason
+durably. Nothing is applied in part, and the start-confirm task does not lose
+the start itself. To keep such a change, make it on a start with a display,
+for example with a dummy plug.
+
+A reading with VISIBLE and NO_OUTPUT together. The KMD never publishes both.
+The task refuses such a reading, and start-confirm.log names the two flags. The
+installer has no rule for it. The KMD rule for no output requires that VISIBLE
+is clear.
+
+Remote desktop, a KVM switch and a dummy plug:
+
+| Case | Display start and child | Rule |
+| --- | --- | --- |
+| Remote desktop only, no monitor at POST | NO_POST, disconnected | no output |
+| Remote desktop with a monitor | INHERITED, connected | display |
+| KVM switch that gives a sink (EDID, HPD high) | INHERITED, connected | display |
+| KVM switch off, or no HPD | NO_POST, disconnected | no output |
+| Dummy plug (DP or HDMI) | INHERITED, connected | display |
+
+A dummy plug makes each start use the display path, so the guard also sees a
+display fault at each start.
+
+Exposure, for the service notes. A confirmation without output does not prove
+the display path. If a driver breaks only the display path, a start without a
+monitor does not find it. When a monitor is connected again, the next starts
+fail on the display path. After two such starts the guard refuses the third
+start, and Windows uses Microsoft Basic Display. Then the sign-in and the
+one-click recovery of the control application are available. A start without a
+monitor also confirms again and clears the count.
 
 The startup instance of the task. The installer registers two instances of the
 same script. The logon instance runs at the sign-in of any user. The startup

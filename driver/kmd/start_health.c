@@ -132,6 +132,7 @@ void StartHealthResumeReady(BC250_DEVICE* Device, BOOLEAN Mode)
     h->Engines=TRUE;
     h->Visible=FALSE;
     h->Mode=Mode;
+    h->NoOutput=FALSE;      // BD-343: power.c sets it again from the reported child, after this call
     KeReleaseSpinLock(&h->Lock,irql);
     StartHealthLeave(Device);
 }
@@ -322,22 +323,33 @@ static BOOLEAN HealthQuiet(const BC250_DEVICE* Device, const BC250_START_HEALTH_
     if (H->Closed || !H->Completed || H->LastSequence==0) return FALSE;
     return WddmPrimaryProgrammed(Device,&programmed) && programmed==H->LastSequence;
 }
-// The healthy milestone itself, one rule for CONFIRM and for StartHealthIsReady, with one branch per output state.
-// With a visible mode: the required flags, a completed flip in this interval, a minute of it, and a completion within
-// FRESH_MS or nothing owed (QUIET).
-// BD-343, with no output (NO_OUTPUT, never with VISIBLE): FULL and READY, and a minute of an open witness. No flip
-// can complete, and no work is owed to a display. What the minute proves is what the display rule proves besides
-// the flips: the start finished with its engines admitted after the CP and SDMA ring tests (pnp.c,
-// GfxStartupResources), and no engine fault, fence timeout, reset, power transition or stop closed the witness
-// since. A start that crashes or hangs inside that minute stays unconfirmed and keeps its count.
-static BOOLEAN HealthConfirmable(const BC250_START_HEALTH_STATE* H, const BC250_ESCAPE_START_HEALTH* Data)
+// The display milestone: the required flags, a completed flip in this interval, a minute of it, and a completion
+// within FRESH_MS or nothing owed (QUIET). It is the rule of StartHealthIsReady (the CU mode and DPM milestones) and
+// one of the two rules of CONFIRM.
+static BOOLEAN HealthConfirmableDisplay(const BC250_START_HEALTH_STATE* H, const BC250_ESCAPE_START_HEALTH* Data)
 {
-    const ULONG headless=BC250_START_HEALTH_FULL|BC250_START_HEALTH_READY|BC250_START_HEALTH_NO_OUTPUT;
-    if ((Data->Flags&headless)==headless)
-        return Data->ReadyAgeMs>=BC250_START_HEALTH_MIN_MS;
     return (Data->Flags&BC250_START_HEALTH_REQUIRED)==BC250_START_HEALTH_REQUIRED && H->Completed &&
         Data->ReadyAgeMs>=BC250_START_HEALTH_MIN_MS &&
         (Data->LastCompletionAgeMs<=BC250_START_HEALTH_FRESH_MS || (Data->Flags&BC250_START_HEALTH_QUIET));
+}
+// BD-343. The milestone of a start without output: FULL, READY and NO_OUTPUT, never VISIBLE, and a minute of an
+// open witness. No flip can complete, and no work is owed to a display. What the minute proves is what the display
+// rule proves besides the flips: the start finished with its engines admitted after the CP and SDMA ring tests
+// (pnp.c, GfxStartupResources), and no engine fault, fence timeout, reset, power transition or stop closed the
+// witness since. A start that crashes or hangs inside that minute stays unconfirmed and keeps its count. It proves
+// nothing about a display path, and nothing about a requested clock or CU count, because no workload ran: only
+// CONFIRM takes this rule, never StartHealthIsReady.
+static BOOLEAN HealthConfirmableHeadless(const BC250_ESCAPE_START_HEALTH* Data)
+{
+    // VISIBLE with NO_OUTPUT is a contradiction (HealthSnapshot never sets both), so it takes no branch here.
+    const ULONG want=BC250_START_HEALTH_FULL|BC250_START_HEALTH_READY|BC250_START_HEALTH_NO_OUTPUT;
+    const ULONG mask=want|BC250_START_HEALTH_VISIBLE;
+    return (Data->Flags&mask)==want && Data->ReadyAgeMs>=BC250_START_HEALTH_MIN_MS;
+}
+// The rule of CONFIRM, which certifies the start for the boot-loop guard: either milestone.
+static BOOLEAN HealthConfirmableStart(const BC250_START_HEALTH_STATE* H, const BC250_ESCAPE_START_HEALTH* Data)
+{
+    return HealthConfirmableDisplay(H,Data) || HealthConfirmableHeadless(Data);
 }
 static void HealthSnapshot(const BC250_DEVICE* Device, const BC250_START_HEALTH_STATE* H, BC250_ESCAPE_START_HEALTH* Data)
 {
@@ -371,11 +383,15 @@ void StartHealthStop(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Snapshot)
     // BD-120: a stop is a real close of this start, so it goes through the one close with Mark 0 and
     // takes the pending-reset mark away: a node-0 reset can never reopen a witness that a stop closed.
     HealthCloseLocked(h,0);
+    h->NoOutput=FALSE;      // BD-343: the output state goes with the witness; the next start sets it again
     KeReleaseSpinLock(&h->Lock,irql);
     StartHealthLeave(Device);
 }
-// The healthy milestone of a CONFIRM, for the CU mode's own confirmation (cumode.c) and the DPM one (dpm.c):
-// the same flags, completions, age and freshness or QUIET (HealthConfirmable), without the durable start-counter write.
+// The display milestone of a CONFIRM, for the CU mode's own confirmation (cumode.c) and the DPM one (dpm.c):
+// the flags, completions, age and freshness or QUIET (HealthConfirmableDisplay), without the durable start-counter
+// write. BD-343: never the milestone of a start without output (HealthConfirmableHeadless). A minute of READY with no
+// workload proves nothing about the requested clock/voltage or CU count, so those requests stay pending, and the
+// next start falls back as it does after any start that nobody confirmed.
 // BD-120: and never on a start that needed an engine reset (Recovered). The witness re-arms after a recovered
 // reset, so this milestone would hold again a minute later, and these two callers would then write the very
 // clock/voltage or CU request that hung node 0 as the next boot's default. The desktop's own confirmation is
@@ -390,7 +406,7 @@ BOOLEAN StartHealthIsReady(BC250_DEVICE* Device, _Out_ ULONGLONG* Generation)
     RtlZeroMemory(&data,sizeof(data));
     KeAcquireSpinLock(&h->Lock,&irql);
     HealthSnapshot(Device,h,&data);
-    ready=HealthConfirmable(h,&data) && !h->Recovered;
+    ready=HealthConfirmableDisplay(h,&data) && !h->Recovered;
     *Generation=h->Generation;
     KeReleaseSpinLock(&h->Lock,irql);
     return ready;
@@ -403,6 +419,9 @@ void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, B
     ULONGLONG generation=0, epoch=0;
     // BD-120: whether this start needed an engine reset, read with the snapshot after the durable write.
     BOOLEAN recovered=FALSE;
+    // BD-343: whether the confirmed interval met the display milestone. A start confirmed without output leaves
+    // the CU mode and DPM requests pending (StartHealthIsReady).
+    BOOLEAN display=FALSE;
     BOOLEAN confirm=Data->Op==BC250_START_HEALTH_CONFIRM;
     // Both operations take NoAdapterSynchronization=1 and every other flag zero (0.7.213). CONFIRM asked for
     // HardwareAccess up to 0.7.212, which buys the Level Two exclusion: dxgkrnl suspends the GPU scheduler for
@@ -442,9 +461,9 @@ void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, B
     if (confirm) {
         if (Data->ExpectedGeneration!=h->Generation || Data->ExpectedEpoch!=h->Epoch)
             status=STATUS_RETRY;
-        else if (!HealthConfirmable(h,Data))
+        else if (!HealthConfirmableStart(h,Data))
             status=STATUS_DEVICE_NOT_READY;
-        else { generation=h->Generation; epoch=h->Epoch; }
+        else { generation=h->Generation; epoch=h->Epoch; display=HealthConfirmableDisplay(h,Data); }
     }
     // Confirmation linearizes here. No spin lock is held over registry I/O.
     // Passive transitions serialize on Lifecycle; an asynchronous engine fault
@@ -470,9 +489,11 @@ void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, B
         // back to the safe clock/voltage and 24 CU, as it did while the closed witness blocked this path.
         if (NT_SUCCESS(status) && recovered)
             GuardLog("health: start confirmed, CU mode and DPM left pending: this start needed a GPU reset");
-        if (NT_SUCCESS(status) && !recovered) (void)CuModeConfirm(Device,"start-health");
+        else if (NT_SUCCESS(status) && !display)
+            GuardLog("health: start confirmed without output, CU mode and DPM left pending: no display interval");
+        if (NT_SUCCESS(status) && !recovered && display) (void)CuModeConfirm(Device,"start-health");
         // The same for a DPM start (dpm.c).
-        if (NT_SUCCESS(status) && !recovered) (void)DpmConfirm(Device,"start-health");
+        if (NT_SUCCESS(status) && !recovered && display) (void)DpmConfirm(Device,"start-health");
     }
     if (confirm) StartHealthLeave(Device);
     ExReleaseRundownProtection(&h->Readers);

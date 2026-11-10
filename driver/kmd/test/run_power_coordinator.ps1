@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\power-coordinator",[string]$Source='',[switch]$OldDisplayGate,[switch]$OldPostGate,[switch]$ForcedD1,[switch]$WitnessIgnored,[switch]$FailedRestoreActive,[switch]$LostBeforeWitness,[switch]$NoFirmwareHold)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\power-coordinator",[string]$Source='',[switch]$OldDisplayGate,[switch]$OldPostGate,[switch]$ForcedD1,[switch]$WitnessIgnored,[switch]$FailedRestoreActive,[switch]$LostBeforeWitness,[switch]$NoFirmwareHold,[switch]$NoResumeOutput)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 if(-not $Source){$Source="$repo\driver\kmd\power.c"}
@@ -8,6 +8,13 @@ $cl="$($msvc.FullName)\bin\Hostx64\x64\cl.exe"
 $sdk="$Root\toolchain\nuget\microsoft.windows.sdk.cpp\c"
 $libs="$Root\toolchain\nuget\microsoft.windows.sdk.cpp.x64\c"
 New-Item -ItemType Directory -Force $Out | Out-Null
+# BD-343 negative control: the resume does not set the output state again from the reported child.
+if($NoResumeOutput){
+  $text=[IO.File]::ReadAllText($Source)
+  $cut=[regex]::Replace($text,'(?m)^[ \t]*StartHealthOutput\(Device,Device->DisplayStart,ConnectorChildConnected\(Device\)\);\r?\n','')
+  if($cut -eq $text){throw 'NoResumeOutput: the resume output call is not in the source'}
+  $Source=Join-Path $Out 'power_no_resume_output.c';[IO.File]::WriteAllText($Source,$cut)
+}
 $env:TEMP="$Root\scratch\tmp"; $env:TMP=$env:TEMP
 & python "$PSScriptRoot\generate_power_coordinator_test.py" --source $Source --out "$Out\power_coordinator_actual.c" @(if($OldDisplayGate){'--old-display-gate'}) @(if($OldPostGate){'--old-post-gate'}) @(if($ForcedD1){'--forced-d1'}) @(if($WitnessIgnored){'--witness-ignored'}) @(if($FailedRestoreActive){'--failed-restore-active'}) @(if($LostBeforeWitness){'--lost-before-witness'}) @(if($NoFirmwareHold){'--no-firmware-hold'})
 if($LASTEXITCODE -ne 0){throw 'Source extraction failed'}
