@@ -129,18 +129,28 @@ foreach ($role in @('confirm', 'startup')) {
 # The measured case: boot 10:03:31Z, the task's run 28 s before it, the verdict already final.
 $lateRun = [pscustomobject]@{ LastRunTime = [datetime]'2026-11-09T10:03:03Z' }
 $bootUtc = [datetime]'2026-11-09T10:03:31Z'
-$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker ([pscustomobject]@{ boot_id = 42 }) -ThisBootId 42
+# A marker and a reading of the shared page (KUSER_SHARED_DATA), and the lagging registry copy (BD-130).
+function New-Marker([int64]$Id, [string]$Source = 'KUSER_SHARED_DATA') { return [pscustomobject]@{ boot_id = $Id; source = $Source } }
+function New-BootReading($Id, [string]$Source = 'KUSER_SHARED_DATA') { return [ordered]@{ boot_id = $Id; source = $Source } }
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker (New-Marker 42) -ThisBoot (New-BootReading 42)
 Check ($answer.ran -and $answer.source -eq 'boot id') 'the marker of this boot wins over the misread wall clock'
-$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker $null -ThisBootId 42
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker $null -ThisBoot (New-BootReading 42)
 Check (-not $answer.ran) 'without the marker the wall-clock rule still refuses the misread run'
-$answer = Get-StartConfirmRunOfThisBoot -TaskInfo ([pscustomobject]@{ LastRunTime = $bootUtc }) -BootUtc $bootUtc -Marker $null -ThisBootId 42
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo ([pscustomobject]@{ LastRunTime = $bootUtc }) -BootUtc $bootUtc -Marker $null -ThisBoot (New-BootReading 42)
 Check ($answer.ran -and $answer.source -eq 'wall clock') 'the wall-clock rule is the fallback'
-$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker ([pscustomobject]@{ boot_id = 41 }) -ThisBootId 42
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker (New-Marker 41) -ThisBoot (New-BootReading 42)
 Check (-not $answer.ran) 'a marker of another boot does not count'
-$answer = Get-StartConfirmRunOfThisBoot -TaskInfo ([pscustomobject]@{ LastRunTime = $bootUtc }) -BootUtc $bootUtc -Marker ([pscustomobject]@{ boot_id = 41 }) -ThisBootId 47
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo ([pscustomobject]@{ LastRunTime = $bootUtc }) -BootUtc $bootUtc -Marker (New-Marker 41) -ThisBoot (New-BootReading 47)
 Check ($answer.ran -and $answer.source -eq 'wall clock') 'a stale marker does not block the wall-clock fallback'
-$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker ([pscustomobject]@{ boot_id = 42 }) -ThisBootId $null
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker (New-Marker 42) -ThisBoot (New-BootReading $null 'nothing')
 Check (-not $answer.ran) 'an unreadable boot id cannot match a marker'
+# The previous boot's marker 387 and a registry reading that still says 387 in the new boot: only the wall clock.
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker (New-Marker 387) -ThisBoot (New-BootReading 387 'PrefetchParameters registry')
+Check (-not $answer.ran -and $answer.source -ne 'boot id') 'a registry reading of this boot never matches a marker'
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo $lateRun -BootUtc $bootUtc -Marker (New-Marker 42 'PrefetchParameters registry') -ThisBoot (New-BootReading 42)
+Check (-not $answer.ran -and $answer.source -ne 'boot id') 'a marker with a registry BootId never matches'
+$answer = Get-StartConfirmRunOfThisBoot -TaskInfo ([pscustomobject]@{ LastRunTime = $bootUtc }) -BootUtc $bootUtc -Marker (New-Marker 42 'PrefetchParameters registry') -ThisBoot (New-BootReading 42 'PrefetchParameters registry')
+Check ($answer.ran -and $answer.source -eq 'wall clock') 'with a registry reading the wall clock still answers'
 
 'bd335: the marker the task writes is the one verify reads'
 $oldProgramData = $env:ProgramData

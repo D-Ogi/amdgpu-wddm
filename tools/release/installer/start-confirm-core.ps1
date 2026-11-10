@@ -543,11 +543,16 @@ function Write-StartConfirmRunMarker {
 }
 # Did the start-confirm task run in this boot? The marker's BootId answers it with no clock; the TaskInfo's wall-clock
 # rule is the fallback. ran = $false when neither says yes; source names the rule that answered, for the log.
+# $ThisBoot is a reading of Get-StartRecordBootIdReading (boot_id and source). The marker counts only when both its
+# BootId and this boot's BootId come from the shared page: the registry copy can lag by one boot (BD-130), so a
+# registry reading can equal the BootId of the previous boot's marker. Any other source falls back to the wall clock.
 function Get-StartConfirmRunOfThisBoot {
-    param($TaskInfo, $BootUtc, $Marker, $ThisBootId)
-    if ($null -ne $Marker -and $null -ne $Marker.boot_id -and $null -ne $ThisBootId) {
+    param($TaskInfo, $BootUtc, $Marker, $ThisBoot)
+    $shared = 'KUSER_SHARED_DATA'
+    if ($null -ne $Marker -and $null -ne $Marker.boot_id -and $null -ne $ThisBoot -and $null -ne $ThisBoot.boot_id -and
+        [string]$Marker.source -eq $shared -and [string]$ThisBoot.source -eq $shared) {
         try {
-            if ([int64]$Marker.boot_id -eq [int64]$ThisBootId) { return [ordered]@{ ran = $true; source = 'boot id' } }
+            if ([int64]$Marker.boot_id -eq [int64]$ThisBoot.boot_id) { return [ordered]@{ ran = $true; source = 'boot id' } }
         } catch { }
     }
     if ($TaskInfo -and $TaskInfo.LastRunTime -and $BootUtc -and ($TaskInfo.LastRunTime -ge $BootUtc)) {

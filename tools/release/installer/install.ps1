@@ -740,7 +740,7 @@ function Invoke-Verify {
             $running = (Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue).State -eq 'Running'
             # BD-335: the task's marker of this boot first (no clock), the wall-clock rule as the fallback.
             $runAnswer = Get-StartConfirmRunOfThisBoot -TaskInfo $ti -BootUtc $boot `
-                -Marker (Get-StartConfirmRunMarker) -ThisBootId (Get-StartRecordBootIdReading).boot_id
+                -Marker (Get-StartConfirmRunMarker) -ThisBoot (Get-StartRecordBootIdReading)
             $ranThisBoot = $runAnswer.ran
             if (($ranThisBoot -and -not $running) -or $script:DryRunMode) { break }
             if (Test-DeadlinePassed) { Write-DeadlineNotice 'verify:start-confirm-wait'; break }
