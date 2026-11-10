@@ -305,4 +305,12 @@ try {
         if ($line -ne 'update transaction: none') { Write-StartConfirmLog $line }
     }
 } catch { Write-StartConfirmLog "update transaction: $($_.Exception.Message)" }
+# BD-335: the marker of this run, which verify's wait reads by the boot id. As the last act, so that a marker means
+# the run is over. Never changes the exit code; a failure is one log line. Only the logon task writes it: verify waits
+# for the logon task, and the startup task (BD-271) runs earlier in the same boot, so its marker would end that wait
+# before the logon task has run.
+if (-not $AtStartup) {
+    $markerWhy = Write-StartConfirmRunMarker -ExitCode $script:exitCode -Reason $script:lastReason
+    if ($markerWhy) { Write-StartConfirmLog "run marker: not written, $markerWhy" }
+}
 exit $script:exitCode

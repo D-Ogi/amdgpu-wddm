@@ -218,6 +218,17 @@ warning only when it sees another instance than the recorded one, passes when th
 `unknown history` without a record; no time heuristic. The warning helps to attribute a failure, never replaces a bug
 report.
 
+At the end of each run, the logon start-confirm task writes `%ProgramData%\amdgpu-wddm\start-confirm-run.json`: the
+BootId of the boot (the same reading as the KMD records), the time, the exit code and the reason. The file is
+replaced in one rename. While `verify.cmd` waits for the task of this boot, it compares the BootId in that file with
+the BootId of this boot. The comparison counts only when both BootIds come from the shared page
+(KUSER_SHARED_DATA). The registry copy can lag by one boot (BD-130), so a registry reading uses the wall-clock rule.
+The file holds only the last run, so an earlier boot can match only if the new boot has the same BootId as that run.
+The wall-clock rule (`LastRunTime` at or after `LastBootUpTime`) is the fallback when the file
+is missing or names another boot, because a clock step after the boot can make the run of this boot look older than
+the boot (BD-335). The file only ends the wait. The verdict still comes from the task result and the KMD readings. The
+startup task does not write the file. Uninstall removes it.
+
 Registry defaults: `installer/registry-defaults.json` is the one table. `install.ps1` applies it and
 `build-release.ps1` copies its `defaults` object into `manifest.json`, where the control application's reset reads
 it. An upgrade writes a default only where the value is absent or still equal to what the previous installer wrote
