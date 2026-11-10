@@ -1,7 +1,8 @@
 # Decision rules of the logon start-confirm task (start-confirm.ps1), pure functions without I/O, host-tested by
 # tools\release\test-start-confirm.ps1. The task confirms the boot's own KMD start once the KMD's confirmation milestone is
 # met (start_health.c StartHealthRequest: flags FULL|READY|VISIBLE, completions, ready >= 60 s, last completion
-# fresh or nothing owed, QUIET), the same milestone the overlay's auto-confirmation and route.py's dwm-route.ps1 use. It never confirms
+# fresh or nothing owed, QUIET; or, for a start without output, FULL|READY|NO_OUTPUT and ready >= 60 s). The display
+# milestone is the one the overlay's auto-confirmation and route.py's dwm-route.ps1 use. It never confirms
 # another adapter start (a generation change ends it), never while a kit run presents its own heartbeat (that run
 # confirms), and never while a transition task runs.
 #
@@ -82,11 +83,38 @@ function New-StartConfirmState {
 # An idle GPU desktop flips about once a minute (the taskbar clock), so its last completion is mostly older than
 # any freshness bound; QUIET stands in for it, as it does in the KMD's own CONFIRM. A KMD without the bit never
 # sets it, and this task then waits for a fresh flip as before.
+#
+# Flag 32 is NO_OUTPUT (BC250_START_HEALTH_NO_OUTPUT, BD-343): a start without a firmware display whose child the
+# driver reports as disconnected. No mode is committed and nothing flips, so VISIBLE and a completion cannot come;
+# the KMD's rule for it is FULL, READY and a minute of an open witness (start_health.c HealthConfirmable). Before
+# BD-343 such a start was never confirmed, and the guard refused the third start with the monitor off.
 function Test-StartConfirmEligible {
  param([Parameter(Mandatory)]$Reading)
+ if ((($Reading.flags -band 35) -eq 35) -and $Reading.ready_ms -ge $script:StartConfirmMinReadyMs) { return $true }
  return ((($Reading.flags -band 7) -eq 7) -and $Reading.completed -gt 0 -and
          $Reading.ready_ms -ge $script:StartConfirmMinReadyMs -and
          ($Reading.age_ms -le $script:StartConfirmFreshMs -or ($Reading.flags -band 16) -eq 16))
+}
+
+# The verify rule of one start-health reading (install.ps1 'start health' and 'driver start', diagnostics.ps1
+# Get-StartFailureDecision). 'display': FULL, READY and VISIBLE (7), the shape of a start that committed a mode.
+# 'no output': FULL, READY and NO_OUTPUT (35), and the start is confirmed or has the minute of readiness of
+# Test-StartConfirmEligible. $null: neither. The LastStage of a healthy start follows the rule: a display start
+# reaches the first VidPN commit (50); a start without output ends at StageStartDone (39) and commits nothing.
+# A machine with no monitor is a real install case: before BD-343 its verify failed on both checks.
+function Get-StartHealthRule {
+ param([AllowNull()]$Flags, [AllowNull()]$ReadyMs)
+ if ($null -eq $Flags -or [string]$Flags -eq '') { return $null }
+ $f = 0
+ try { $f = [int]$Flags } catch { return $null }
+ if (($f -band 7) -eq 7) { return [ordered]@{ name = 'display'; stage = 50; flags = $f } }
+ if (($f -band 35) -ne 35) { return $null }
+ $ms = $null
+ try { if ($null -ne $ReadyMs -and [string]$ReadyMs -ne '') { $ms = [uint64]$ReadyMs } } catch { }
+ if (($f -band 8) -eq 8 -or ($null -ne $ms -and $ms -ge $script:StartConfirmMinReadyMs)) {
+  return [ordered]@{ name = 'no output'; stage = 39; flags = $f }
+ }
+ return $null
 }
 
 # One poll: action wait | confirm | exit, with the exit code and a reason for the log.

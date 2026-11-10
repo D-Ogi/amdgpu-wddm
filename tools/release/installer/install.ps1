@@ -596,7 +596,7 @@ function Invoke-VerifyDiagnostics {
     try {
         $decision = Get-StartFailureDecision -ProblemCode $DeviceState.problem_code -DevicePresent $DeviceState.present `
             -DeviceStatus ([string]$DeviceState.status) -Record $StartRecord -BootUtc $BootUtc `
-            -HealthFlags $DeviceState.health_flags -LastStage $DeviceState.last_stage
+            -HealthFlags $DeviceState.health_flags -HealthReadyMs $DeviceState.health_ready_ms -LastStage $DeviceState.last_stage
         Write-Log "   diagnostics: $($decision.summary)"
         if (-not $decision.collect) { return }
         if ($script:DryRunMode) { Write-Log '   diagnostics: a dry run collects nothing'; return }
@@ -767,14 +767,22 @@ function Invoke-Verify {
     # driver log lines, which a device with Code 43 can no longer answer for itself. The verdict below is the one
     # it always was: this is the detail a tester sends us, not a new gate.
     $record = $null; if ($probe -match '(?m)^(?!.*start record log: ).*\bstart record: (.+)$') { $record = $Matches[1].Trim() }
+    $health = $null; if ($probe -match '(?m)^(?!.*start record log: ).*probe: start health (.+)$') { $health = $Matches[1].Trim() }
+    $hflags = $null; if ($health -match '\bflags (\d+)') { $hflags = [int]$Matches[1] }
+    $hready = $null; if ($health -match '\bready_ms (\d+)') { $hready = [uint64]$Matches[1] }
+    # BD-343: the health rule (start-confirm-core.ps1 Get-StartHealthRule) also sets the LastStage of a healthy
+    # start: 50 after the first mode set, 39 for a start without output, which commits no mode.
+    $rule = Get-StartHealthRule -Flags $hflags -ReadyMs $hready
+    $wantStage = $(if ($rule) { $rule.stage } else { 50 })
     $want = [string]$script:Manifest.kmd_abi
-    $driverOk = ($null -ne $view) -and ($view -match 'device problem 0,') -and ($view -match 'LastStage 50$') -and ($view -match "driver version $want ")
+    $driverOk = ($null -ne $view) -and ($view -match 'device problem 0,') -and ($view -match "LastStage $wantStage$") -and ($view -match "driver version $want ")
     $detail = $(if ($view) { $view } else { "no reading from $sc" })
     if (-not $driverOk -and $record) { $detail = "$detail; $record" }
     Add-Result 'driver start' $driverOk $detail
-    $health = $null; if ($probe -match '(?m)^(?!.*start record log: ).*probe: start health (.+)$') { $health = $Matches[1].Trim() }
-    $hflags = $null; if ($health -match 'flags (\d+)') { $hflags = [int]$Matches[1] }
-    Add-Result 'start health' (($null -ne $hflags) -and (($hflags -band 7) -eq 7)) $(if ($health) { "$health (15 = confirmed; 7 = full, ready, visible)" } else { 'no reading' })
+    $ruleText = $(if (-not $rule) { 'no rule passed: 7 = full, ready, visible; 35 = full, ready, no output, after 60 s ready' }
+        elseif ($rule.name -eq 'display') { 'display rule passed: 7 = full, ready, visible; 15 = confirmed' }
+        else { 'no-output rule passed: 35 = full, ready, no output (no firmware display, no monitor), 60 s ready; 43 = confirmed' })
+    Add-Result 'start health' ($null -ne $rule) $(if ($health) { "$health ($ruleText)" } else { 'no reading' })
     # Everything the decision of diagnostics.ps1 needs is now read, and nothing of it is read twice: the device and
     # the driver from the checks above, LastStage and the driver's reply from the probe's own view line.
     $lastStage = $null; if ($view -match 'LastStage (\d+)') { $lastStage = [int]$Matches[1] }
@@ -783,7 +791,7 @@ function Invoke-Verify {
             present = $true; instance_id = $id; problem_code = $dev[0].ConfigManagerErrorCode; status = [string]$pnp.Status
             service = $svc; driver_version = $(if ($drv) { [string]$drv.DriverVersion } else { $null }); inf = $inf
             provider = [string]$provider; package_version = (Get-ManifestDriverQuad $script:Manifest)
-            reply_version = $replyVersion; last_stage = $lastStage; health_flags = $hflags
+            reply_version = $replyVersion; last_stage = $lastStage; health_flags = $hflags; health_ready_ms = $hready
         }) -StartRecord (Read-VerifyStartRecord) -BootUtc (Get-StartRecordBootUtc) -BootId (Get-StartRecordBootId) -Context 'verify' -Info ${function:Add-Info}
     $stateReadError=$null;$p=$null
     try {$p=[pscustomobject](Read-DriverStateValues -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe'))}

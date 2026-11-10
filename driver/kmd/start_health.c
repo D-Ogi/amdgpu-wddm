@@ -35,9 +35,19 @@ static BOOLEAN HealthReady(const BC250_START_HEALTH_STATE* H)
 {
     return H->Full && H->Engines && !H->Closed;
 }
+// BD-343. The output side of the interval: a visible mode, or no output at all (NoOutput). A visible mode wins, so
+// the display rule applies as soon as Windows commits one.
+static BOOLEAN HealthVisible(const BC250_START_HEALTH_STATE* H)
+{
+    return H->Visible && H->Mode;
+}
+static BOOLEAN HealthHeadless(const BC250_START_HEALTH_STATE* H)
+{
+    return H->NoOutput && !HealthVisible(H);
+}
 static void HealthClock(BC250_START_HEALTH_STATE* H)
 {
-    if (HealthReady(H) && H->Visible && H->Mode && H->ReadySince==0)
+    if (HealthReady(H) && (HealthVisible(H) || HealthHeadless(H)) && H->ReadySince==0)
         H->ReadySince=KeQueryInterruptTime();
 }
 void StartHealthBegin(BC250_DEVICE* Device, BOOLEAN Full)
@@ -66,10 +76,29 @@ void StartHealthBegin(BC250_DEVICE* Device, BOOLEAN Full)
     h->PendingReset=FALSE;
     h->RefusedReset=FALSE;
     h->Recovered=FALSE;
+    h->NoOutput=FALSE;      // BD-343: StartHealthOutput sets it, from the display-start state of this start
     h->ConfirmedGeneration=0;
     h->ConfirmedEpoch=0;
     KeReleaseSpinLock(&h->Lock,irql);
     StartHealthLeave(Device);
+}
+// BD-343. The output state of the start, by its display-start state (display_start.h) and the child connection
+// that the connector reports to Windows. Only a NO_POST start without a connected child has no output: the firmware
+// found no monitor at POST, and none is connected now. An INHERITED start always keeps the display rule, so a
+// display path that breaks after a lit POST is never confirmed as a start without output. pnp.c calls this before
+// StartHealthReady, and connector.c at every child indication. A change starts a new interval. The spin lock only,
+// like StartHealthFault: the connector worker calls it, and a CONFIRM in flight sees the new epoch and answers
+// STATUS_RETRY.
+void StartHealthOutput(BC250_DEVICE* Device, ULONG DisplayStart, BOOLEAN Connected)
+{
+    BC250_START_HEALTH_STATE* h=&Device->StartHealth;
+    BOOLEAN none=DisplayStart==BC250_DISPLAY_START_NO_POST && !Connected;
+    KIRQL irql;
+    KeAcquireSpinLock(&h->Lock,&irql);
+    if (h->NoOutput!=none) HealthInvalidate(h);
+    h->NoOutput=none;
+    HealthClock(h);
+    KeReleaseSpinLock(&h->Lock,irql);
 }
 void StartHealthReady(BC250_DEVICE* Device, BOOLEAN Ready)
 {
@@ -273,7 +302,7 @@ void StartHealthCompleted(BC250_DEVICE* Device, ULONG Sequence)
     BC250_START_HEALTH_STATE* h=&Device->StartHealth;
     KIRQL irql;
     KeAcquireSpinLock(&h->Lock,&irql);
-    if (HealthReady(h) && h->Visible && h->Mode && Sequence!=0 &&
+    if (HealthReady(h) && HealthVisible(h) && Sequence!=0 &&
         !(Sequence&1) && Sequence!=h->LastSequence) {
         h->LastSequence=Sequence;
         ++h->Completed;
@@ -293,10 +322,19 @@ static BOOLEAN HealthQuiet(const BC250_DEVICE* Device, const BC250_START_HEALTH_
     if (H->Closed || !H->Completed || H->LastSequence==0) return FALSE;
     return WddmPrimaryProgrammed(Device,&programmed) && programmed==H->LastSequence;
 }
-// The healthy milestone itself, one rule for CONFIRM and for StartHealthIsReady: the required flags, a completed
-// flip in this interval, a minute of it, and a completion within FRESH_MS or nothing owed (QUIET).
+// The healthy milestone itself, one rule for CONFIRM and for StartHealthIsReady, with one branch per output state.
+// With a visible mode: the required flags, a completed flip in this interval, a minute of it, and a completion within
+// FRESH_MS or nothing owed (QUIET).
+// BD-343, with no output (NO_OUTPUT, never with VISIBLE): FULL and READY, and a minute of an open witness. No flip
+// can complete, and no work is owed to a display. What the minute proves is what the display rule proves besides
+// the flips: the start finished with its engines admitted after the CP and SDMA ring tests (pnp.c,
+// GfxStartupResources), and no engine fault, fence timeout, reset, power transition or stop closed the witness
+// since. A start that crashes or hangs inside that minute stays unconfirmed and keeps its count.
 static BOOLEAN HealthConfirmable(const BC250_START_HEALTH_STATE* H, const BC250_ESCAPE_START_HEALTH* Data)
 {
+    const ULONG headless=BC250_START_HEALTH_FULL|BC250_START_HEALTH_READY|BC250_START_HEALTH_NO_OUTPUT;
+    if ((Data->Flags&headless)==headless)
+        return Data->ReadyAgeMs>=BC250_START_HEALTH_MIN_MS;
     return (Data->Flags&BC250_START_HEALTH_REQUIRED)==BC250_START_HEALTH_REQUIRED && H->Completed &&
         Data->ReadyAgeMs>=BC250_START_HEALTH_MIN_MS &&
         (Data->LastCompletionAgeMs<=BC250_START_HEALTH_FRESH_MS || (Data->Flags&BC250_START_HEALTH_QUIET));
@@ -306,7 +344,8 @@ static void HealthSnapshot(const BC250_DEVICE* Device, const BC250_START_HEALTH_
     ULONGLONG now=KeQueryInterruptTime();
     Data->Flags=(H->Full ? BC250_START_HEALTH_FULL : 0) |
         (HealthReady(H) ? BC250_START_HEALTH_READY : 0) |
-        (H->Visible && H->Mode && !H->Closed ? BC250_START_HEALTH_VISIBLE : 0) |
+        (HealthVisible(H) && !H->Closed ? BC250_START_HEALTH_VISIBLE : 0) |
+        (HealthHeadless(H) && !H->Closed ? BC250_START_HEALTH_NO_OUTPUT : 0) |
         (HealthQuiet(Device,H) ? BC250_START_HEALTH_QUIET : 0);
     // CONFIRMED reports the start, not the interval (BD-098): a durably confirmed generation stays confirmed through
     // the mode sets and visibility changes that advance Epoch. A fault or a close (Closed) takes it away; a resume and

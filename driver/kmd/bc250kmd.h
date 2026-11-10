@@ -549,6 +549,8 @@ void GfxRetireSignal(_Inout_ BC250_DEVICE* Device);
 void StartHealthInitialize(BC250_DEVICE* Device);
 void StartHealthBegin(BC250_DEVICE* Device, BOOLEAN Full);
 void StartHealthReady(BC250_DEVICE* Device, BOOLEAN Ready);
+// BD-343: the output state of the start (start_health.c). The spin lock only; any IRQL up to DISPATCH_LEVEL.
+void StartHealthOutput(BC250_DEVICE* Device, ULONG DisplayStart, BOOLEAN Connected);
 void StartHealthResumeReady(BC250_DEVICE* Device, BOOLEAN Mode);
 void StartHealthClose(BC250_DEVICE* Device);
 void StartHealthStop(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Snapshot);

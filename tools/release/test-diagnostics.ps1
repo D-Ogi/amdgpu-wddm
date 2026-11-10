@@ -115,6 +115,29 @@ try {
         -BootUtc ([datetime]::UtcNow.AddMinutes(-5)) -HealthFlags 15 -LastStage 50
     Check (-not $noRecord.collect) 'and a driver before 0.7.216.30, which keeps no start record at all, is not one'
     Check ((@($noRecord.notes) -join ' | ') -match 'kept no start record') 'the absent record is a note, not a reason'
+    # BD-343: a start without output (no firmware display, no monitor) commits no mode, so it ends at LastStage 39
+    # with flags FULL|READY|NO_OUTPUT (35), or 43 once confirmed. Before BD-343 such an install collected a file and
+    # failed verify.
+    $headless = Get-StartFailureDecision -ProblemCode 0 -DevicePresent $true -DeviceStatus 'OK' -Record $okRecord `
+        -BootUtc ([datetime]::UtcNow.AddMinutes(-5)) -HealthFlags 43 -HealthReadyMs 65000 -LastStage 39
+    Check (-not $headless.collect) 'BD-343: a confirmed start without output at LastStage 39 collects nothing'
+    Check ((@($headless.notes) -join ' | ') -match 'no-output rule') 'and the note names the no-output rule'
+    $headlessSoon = Get-StartFailureDecision -ProblemCode 0 -DevicePresent $true -DeviceStatus 'OK' -Record $okRecord `
+        -BootUtc ([datetime]::UtcNow.AddMinutes(-5)) -HealthFlags 35 -HealthReadyMs 61000 -LastStage 39
+    Check (-not $headlessSoon.collect) 'BD-343: an unconfirmed start without output after its minute collects nothing'
+    $headlessYoung = Get-StartFailureDecision -ProblemCode 0 -DevicePresent $true -DeviceStatus 'OK' -Record $okRecord `
+        -BootUtc ([datetime]::UtcNow.AddMinutes(-5)) -HealthFlags 35 -HealthReadyMs 59999 -LastStage 39
+    Check ($headlessYoung.collect -and ((@($headlessYoung.reasons) -join ' | ') -match 'not for the minute')) 'BD-343: without its minute it is a reason'
+    Check (-not ((@($headlessYoung.reasons) -join ' | ') -match 'first mode set')) 'and the stage is read against 39, not 50'
+    $headlessShort = Get-StartFailureDecision -ProblemCode 0 -DevicePresent $true -DeviceStatus 'OK' -Record $okRecord `
+        -BootUtc ([datetime]::UtcNow.AddMinutes(-5)) -HealthFlags 43 -HealthReadyMs 65000 -LastStage 35
+    Check ($headlessShort.collect -and ((@($headlessShort.reasons) -join ' | ') -match 'before the end of the start \(39\)')) 'BD-343: a start without output that stopped before 39 collects'
+    $displayAt39 = Get-StartFailureDecision -ProblemCode 0 -DevicePresent $true -DeviceStatus 'OK' -Record $okRecord `
+        -BootUtc ([datetime]::UtcNow.AddMinutes(-5)) -HealthFlags 15 -HealthReadyMs 65000 -LastStage 39
+    Check ($displayAt39.collect -and ((@($displayAt39.reasons) -join ' | ') -match 'first mode set')) 'BD-343 control: a display start at LastStage 39 still collects'
+    $noBits = Get-StartFailureDecision -ProblemCode 0 -DevicePresent $true -DeviceStatus 'OK' -Record $okRecord `
+        -BootUtc ([datetime]::UtcNow.AddMinutes(-5)) -HealthFlags 3 -HealthReadyMs 65000 -LastStage 39
+    Check ($noBits.collect) 'BD-343 control: flags 3 (the BD-343 reading of an old KMD) still collects'
 
     'BD-147: the successful named problem code follows the same path as numeric zero'
     if (-not ('DiagnosticsTest.Problem' -as [type])) { Add-Type 'namespace DiagnosticsTest { public enum Problem { CM_PROB_NONE = 0, CM_PROB_FAILED_POST_START = 43 } }' }

@@ -26,6 +26,10 @@ typedef struct _BC250_START_HEALTH_STATE {
     // default (StartHealthIsReady and the confirmation tail of StartHealthRequest). Only a new device start
     // clears it: a resume invalidates the witness but does not make the hung request safe.
     BOOLEAN Recovered;
+    // BD-343. TRUE while the start has no output: a NO_POST start (display_start.h) whose child the connector
+    // reports as disconnected (StartHealthOutput). The ready time then counts without a visible mode, and the
+    // milestone needs no completed flip. A change starts a new interval, as a visibility change does.
+    BOOLEAN NoOutput;
 } BC250_START_HEALTH_STATE;
 // BD-120. What a recovered engine reset found the witness in, for the caller's log line. The reset itself
 // always succeeded; this says what the witness did about it.

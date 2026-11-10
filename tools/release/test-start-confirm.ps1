@@ -113,6 +113,57 @@ Check ($run.code -eq 1 -and $run.at -eq 300) 'exit 1 at the latest bound of 300 
 $run = Invoke-Run 120 { param($t) if ($t -lt 50) { New-Reading 1000 -Epoch 5 -Flags 3 } else { New-Reading 1000 -Epoch 9 -Flags 15 } }
 Check ($run.code -eq 0 -and $run.at -eq 50) 'exit 0 at the first confirmed reading'
 
+'case bd343-no-output: a start without a firmware display and no monitor (flags FULL|READY|NO_OUTPUT, no completion)'
+# Unit A, 2026-11-10: such a start read flags 3, completed 0, ready_ms 0, and was never confirmed. The KMD with
+# NO_OUTPUT counts its ready time from the engines and sets flag 32.
+$headless = { param($t) New-Reading ([uint64][Math]::Max(0, ($t - 5) * 1000)) -Flags 35 -Completed 0 -Age ([uint64]::MaxValue) }
+$run = Invoke-Run 120 $headless
+Show $run
+Check ($run.code -eq 0 -and $run.at -ge 65 -and $run.at -le 75) 'confirmed by this task once ready_ms reaches 60 s'
+$run = Invoke-Run 120 { param($t) New-Reading ([uint64][Math]::Max(0, ($t - 5) * 1000)) -Flags 35 -Completed 0 -Age 0 } -End 60
+Check ($null -eq $run.code) 'not before ready_ms reaches 60 s'
+'case bd343-no-output-not-ready: the engines did not come up (flags FULL|NO_OUTPUT): unconfirmed at the bound'
+$run = Invoke-Run 120 { param($t) New-Reading 0 -Flags 33 -Completed 0 -Age ([uint64]::MaxValue) }
+Check ($run.code -eq 1 -and $run.at -eq 120) 'exit 1 at the bound'
+'case bd343-lab: the reading of a KMD without NO_OUTPUT (flags 3, ready_ms 0) stays unconfirmed, as on the lab'
+$run = Invoke-Run 120 { param($t) New-Reading 0 -Flags 3 -Completed 0 -Age ([uint64]::MaxValue) }
+Check ($run.code -eq 1 -and $run.at -eq 120) 'exit 1 at the bound'
+'negative control bd343: the rules without the NO_OUTPUT line do not confirm the start without output'
+$coreText = [IO.File]::ReadAllText($Core)
+$line = [regex]::Match($coreText, '(?m)^ if \(\(\(\$Reading\.flags -band 35\) -eq 35\).*\r?\n')
+Check $line.Success 'the NO_OUTPUT line is in the rules'
+if ($line.Success) {
+    . ([scriptblock]::Create($coreText.Remove($line.Index, $line.Length)))
+    $run = Invoke-Run 120 $headless
+    Check ($run.code -eq 1) 'without it the start without output stays unconfirmed (the control fails as it must)'
+    . $Core
+}
+
+'case bd343-verify: the verify rule of install.ps1 and diagnostics.ps1 (Get-StartHealthRule)'
+$cases = @(
+    @{ f = 7;  ms = 0;     want = 'display'; stage = 50; why = 'full, ready, visible' }
+    @{ f = 15; ms = 0;     want = 'display'; stage = 50; why = 'a confirmed display start' }
+    @{ f = 31; ms = 90000; want = 'display'; stage = 50; why = 'a confirmed, quiet display start' }
+    @{ f = 35; ms = 60000; want = 'no output'; stage = 39; why = 'full, ready, no output, the minute reached' }
+    @{ f = 43; ms = 0;     want = 'no output'; stage = 39; why = 'a confirmed start without output' }
+    @{ f = 35; ms = 59999; want = $null; stage = $null; why = 'no output, one millisecond short of the minute' }
+    @{ f = 35; ms = $null; want = $null; stage = $null; why = 'no output, ready time unknown' }
+    @{ f = 33; ms = 90000; want = $null; stage = $null; why = 'no output, the engines not ready' }
+    @{ f = 3;  ms = 90000; want = $null; stage = $null; why = 'flags 3, the BD-343 lab reading of a KMD without NO_OUTPUT' }
+    @{ f = $null; ms = 90000; want = $null; stage = $null; why = 'no reading' }
+)
+foreach ($c in $cases) {
+    $r = Get-StartHealthRule -Flags $c.f -ReadyMs $c.ms
+    $name = $(if ($r) { $r.name } else { $null }); $stage = $(if ($r) { $r.stage } else { $null })
+    Check ($name -eq $c.want -and $stage -eq $c.stage) "flags $($c.f) ready_ms $($c.ms): $(if ($c.want) { "$($c.want) rule, LastStage $($c.stage)" } else { 'no rule' }) ($($c.why))"
+}
+# install.ps1 must read both its checks through the rule: the LastStage it wants and the start-health verdict.
+$inst = [IO.File]::ReadAllText((Join-Path (Split-Path $Core) 'install.ps1'))
+Check ($inst -match '\$rule = Get-StartHealthRule -Flags \$hflags -ReadyMs \$hready') 'install.ps1 verify reads the rule'
+Check ($inst -match '"LastStage \$wantStage\$"') 'install.ps1 driver start wants the LastStage of the rule'
+Check ($inst -match "Add-Result 'start health' \(\`$null -ne \`$rule\)") 'install.ps1 start health passes on the rule'
+Check ($inst -notmatch "'LastStage 50\$'") 'install.ps1 has no fixed LastStage 50 left'
+
 'constants'
 # The time limit of each task that runs the confirmation in the installer's plan (common.ps1 Get-LogonTaskPlan: the
 # logon confirmation and, since BD-271, the startup confirmation) must hold the latest bound, the hard-bound margin of

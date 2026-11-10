@@ -3,7 +3,8 @@ param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\build\health145'
       [switch]$MarkOverFailedEngines,[switch]$RefusalDropsOtherNodeMark,[switch]$RearmSkipsOpenWitness,
       [switch]$ConfirmHungRequest,[switch]$QuietIgnoresOwedFlip,[switch]$NoQuiet,
       [switch]$AdapterResetIgnoresRefusal,[switch]$FaultKeepsRefusal,[switch]$BeginKeepsRefusal,
-      [switch]$ResumeKeepsRefusal,[switch]$RefusalOverFailedEngines,[switch]$RefusalOverClosedWitness)
+      [switch]$ResumeKeepsRefusal,[switch]$RefusalOverFailedEngines,[switch]$RefusalOverClosedWitness,
+      [switch]$NoOutputIgnoresOrigin,[switch]$NoOutputSkipsMinute,[switch]$NoOutputWithoutEngines)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -51,6 +52,13 @@ if($ConfirmHungRequest){$source=Mutate $source 'ready=HealthConfirmable(h,&data)
 if($QuietIgnoresOwedFlip){$source=Mutate $source '&& programmed==H->LastSequence;' ';'}
 # The rule before QUIET: freshness alone, which an idle GPU desktop (one flip a minute) does not meet.
 if($NoQuiet){$source=Mutate $source '(Data->LastCompletionAgeMs<=BC250_START_HEALTH_FRESH_MS || (Data->Flags&BC250_START_HEALTH_QUIET));' '(Data->LastCompletionAgeMs<=BC250_START_HEALTH_FRESH_MS);'}
+# BD-343: the rule for a start without output, one element at a time. A start that had a lit POST (INHERITED) taken
+# for a start without output; no minute of an open witness; and the ready time counted without the engines, with
+# READY left out of the rule, so a start whose ring tests failed confirms.
+if($NoOutputIgnoresOrigin){$source=Mutate $source 'BOOLEAN none=DisplayStart==BC250_DISPLAY_START_NO_POST && !Connected;' 'BOOLEAN none=!Connected;(void)DisplayStart;'}
+if($NoOutputSkipsMinute){$source=Mutate $source 'return Data->ReadyAgeMs>=BC250_START_HEALTH_MIN_MS;' 'return TRUE;'}
+if($NoOutputWithoutEngines){$source=Mutate $source 'if (HealthReady(H) && (HealthVisible(H) || HealthHeadless(H)) && H->ReadySince==0)' 'if ((HealthVisible(H) || HealthHeadless(H)) && H->ReadySince==0)'
+                            $source=Mutate $source 'const ULONG headless=BC250_START_HEALTH_FULL|BC250_START_HEALTH_READY|BC250_START_HEALTH_NO_OUTPUT;' 'const ULONG headless=BC250_START_HEALTH_FULL|BC250_START_HEALTH_NO_OUTPUT;'}
 # A confirmation that certifies whatever epoch it finds after its registry flush, the new one included.
 if($ConfirmCertifiesNewEpoch){$source=Mutate $source 'if (h->Generation!=generation || h->Epoch!=epoch) status=STATUS_RETRY;' 'if (h->Generation!=generation) status=STATUS_RETRY;'}
 [IO.File]::WriteAllText((Join-Path $Out 'start_health_actual.inc'),$source.Replace('#include "bc250kmd.h"',''))

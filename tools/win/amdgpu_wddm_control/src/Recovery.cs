@@ -604,7 +604,8 @@ namespace AmdgpuWddmControl
 
         // ---- the decision rules ----------------------------------------------------------------------------------
 
-        // Test-StartConfirmEligible of start-confirm-core.ps1, field for field.
+        // Test-StartConfirmEligible of start-confirm-core.ps1, field for field, display branch only. The task's
+        // no-output branch (BD-343) is not offered here: a start this window can show on has a display.
         // KMD 0.7.198 (BC250_KMD_VERSION 0x000700C6) fixed BD-059: a normal restart keeps the GPU desktop path open,
         // so a close mark from it means the last session really ended unclean. null: no driver reply gives the version.
         public const uint Bd059FixedVersion = 0x000700C6;
@@ -663,7 +664,10 @@ namespace AmdgpuWddmControl
             if (h == null) return "the driver gave no start reading";
             if ((h.Flags & StartHealthState.Full) == 0) return "this is not a full driver start (flags " + h.Flags + ")";
             if ((h.Flags & StartHealthState.Ready) == 0) return "the driver start has not finished";
-            if ((h.Flags & StartHealthState.Visible) == 0) return "no picture has reached the screen through the driver yet";
+            if ((h.Flags & StartHealthState.Visible) == 0)
+                return (h.Flags & StartHealthState.NoOutput) != 0
+                    ? "this start has no output (no firmware display and no monitor connected); the start-confirm task confirms such a start after 60 seconds of a ready driver"
+                    : "no picture has reached the screen through the driver yet";
             if (h.Completed == 0) return "the GPU has not completed any work yet";
             if (h.ReadyAgeMs < ConfirmMinReadyMs)
                 return "the driver must run for 60 seconds first (" + ((ConfirmMinReadyMs - h.ReadyAgeMs + 999) / 1000) + " s left)";

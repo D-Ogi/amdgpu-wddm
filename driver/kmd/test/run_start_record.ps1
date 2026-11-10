@@ -23,12 +23,14 @@
 #                      the top of VRAM passes silently: the ColdScanoutReserve cases must fail.
 #   -NoChildBegin      BD-341: the start does not begin the child-event ring, so the first child event of a start
 #                      goes into the ring of the start before it: the child ring cases must fail.
+#   -NoStartOutput     BD-343: the start does not give the start-health witness its output state, so a start
+#                      without a display has no rule that can confirm it: the output cases must fail.
 param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
       [string]$Out="$Root\scratch\build\startrecord",
       [string]$Repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path,
       [switch]$GateOnKeepLog,[switch]$NoAttemptRecord,[switch]$RecordBeforeCleanup,[switch]$RecordAtAnyIrql,
       [switch]$LogAfterCleanup,[switch]$NoInitialBlank,[switch]$NoFinalBlank,
-      [switch]$KeepStopVisibilityHold,[switch]$NoColdReserveCheck,[switch]$NoChildBegin)
+      [switch]$KeepStopVisibilityHold,[switch]$NoColdReserveCheck,[switch]$NoChildBegin,[switch]$NoStartOutput)
 $ErrorActionPreference='Stop'
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
@@ -103,6 +105,11 @@ if ($NoColdReserveCheck) {
     $check='status = VramFirmwareRangeBelowTop(device, BC250_VRAM_TOP_RESERVED);'
     if (!$pnp.Contains($check)) { throw 'pnp.c has no cold scan-out reserve check to drop' }
     $pnp=$pnp.Replace($check,'(void)VramFirmwareRangeBelowTop(device, BC250_VRAM_TOP_RESERVED); status=STATUS_SUCCESS; /* negative control */')
+}
+if ($NoStartOutput) {
+    $output='StartHealthOutput(device,device->DisplayStart,ConnectorChildConnected(device));'
+    if (!$pnp.Contains($output)) { throw 'pnp.c has no StartHealthOutput call to drop' }
+    $pnp=$pnp.Replace($output,'/* negative control: no output state */')
 }
 if ($NoChildBegin) {
     $begin='ConnectorChildBegin(device);'

@@ -566,6 +566,12 @@ typedef struct _BC250_ESCAPE_CLOCK {
 // completion is mostly older than FRESH_MS; QUIET stands in for that freshness in CONFIRM and in the CU mode and
 // DPM milestones. A KMD without this bit never sets it, and a client that ignores it waits for a fresh flip.
 #define BC250_START_HEALTH_QUIET 16u
+// NO_OUTPUT (BD-343): a start without a firmware display (display_start.h NO_POST) whose child this driver reports
+// to Windows as disconnected. No mode is committed and nothing flips, so VISIBLE and a completed flip cannot come.
+// The witness then counts its ready time without them, and CONFIRM accepts a minute of an open, ready witness. Never
+// set together with VISIBLE. A monitor that arrives clears it and starts a new interval. A KMD without this bit never
+// sets it, and a client that ignores it never confirms such a start (the boot-loop guard then counts it, as before).
+#define BC250_START_HEALTH_NO_OUTPUT 32u
 #define BC250_START_HEALTH_MIN_MS 60000ull
 #define BC250_START_HEALTH_FRESH_MS 15000ull
 typedef struct _BC250_ESCAPE_START_HEALTH {

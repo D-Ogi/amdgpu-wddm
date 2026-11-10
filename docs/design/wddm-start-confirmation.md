@@ -89,6 +89,81 @@ common.ps1 Get-LogonTaskPlan and Test-LogonTaskPlan. Host tests:
 tools/release/test-session-checks.ps1 (eight negative controls) and
 tools/release/test-start-confirm.ps1.
 
+A start without output (BD-343). A start without a firmware display (BD-341,
+`display_start.h` NO_POST) with no monitor connected commits no mode, and
+nothing flips. The witness stayed at flags 3 (FULL and READY), completed 0 and
+ready_ms 0, so no client could confirm the start. On unit A (2026-11-10, monitor
+asleep) the guard refused the third such start with Code 43. The witness now
+has an output state for each interval (`StartHealthOutput`). The output state is
+"none" only when the display-start state is NO_POST and the connector reports
+the child as disconnected. pnp.c sets it before `StartHealthReady`, and the
+connector sets it again at each child indication. A change starts a new
+interval. With no output the snapshot sets NO_OUTPUT (flag 32) and never
+VISIBLE, the ready time counts from the engines, and `HealthConfirmable` takes
+the rule for no output: FULL, READY and 60 seconds of an open witness, with no
+completed flip. This rule does not need a completed flip. The other parts of the
+display rule stay: the engines were admitted after the CP and SDMA ring tests,
+and no fault, fence timeout, reset, power transition or stop closed the witness
+in the minute. A start that crashes or hangs in that minute stays unconfirmed,
+and the guard keeps its count. An INHERITED start always keeps the display rule,
+also with no monitor. A NO_POST start with a connected monitor also keeps it. A
+monitor that arrives in the minute starts a new interval under the display rule.
+The task (`Test-StartConfirmEligible`) and `Bc250StartHealth` accept the
+NO_OUTPUT reply. A KMD without the flag never sets it. Host tests:
+`driver/kmd/test/start_health_test.c` with three negative controls
+(`run_start_health.ps1` -NoOutputIgnoresOrigin, -NoOutputSkipsMinute,
+-NoOutputWithoutEngines), `start_record_test.c` (-NoStartOutput),
+`tools/release/test-start-confirm.ps1` and
+`tools/win/bc250kmd_cli/test/start_health_test.c`.
+
+What a confirmation without output proves. It proves that the driver started
+fully, that the GFX and SDMA engines passed their ring tests, and that for one
+minute no fault, fence timeout, reset, power transition or stop occurred. That
+is the evidence the guard needs: a driver that loops crashes or hangs, and such
+a start stays unconfirmed. It does not prove that a mode set, a scan-out or a
+flip works, because none of them ran. The display rule proves these. Thus a
+display fault stays unknown on a start without output. When a monitor comes back,
+the next start is INHERITED or has a connected child, and it uses the display
+rule again. The guard then counts that start as usual.
+
+The startup instance of the task. The installer registers two instances of the
+same script. The logon instance runs at the sign-in of any user. The startup
+instance (BD-271, `-AtStartup`) runs at system startup as Local System, before
+any sign-in. A computer with no monitor may never get a sign-in, so the startup
+instance is the one that confirms such a start. Both instances use the same
+rule (`Get-StartConfirmStep` and `Test-StartConfirmEligible`). The switch only
+changes the log prefix and the DWM baseline, so the rule for no output is the
+same for each instance.
+
+Installer result and diagnostics. The last installer step has the same two rules
+(`start-confirm-core.ps1` `Get-StartHealthRule`). The display rule is FULL,
+READY and VISIBLE (7) at LastStage 50, which is the first VidPN commit. The
+rule for no output is FULL, READY and NO_OUTPUT (35) at LastStage 39, which is
+`StageStartDone`, with 60 seconds of readiness or flag CONFIRMED. Its result
+line says which rule passed. Before BD-343, an install on a computer with no
+monitor failed both checks and collected a diagnostics file. The confirm button
+of the control application keeps the display rule only, because a window that
+a person can see needs a display. Its text names the state without output.
+
+Limit: a monitor that the start cannot light. A NO_POST start that reports a
+connected child keeps the display rule. If the driver cannot light that
+monitor, the start stays unconfirmed, and the guard refuses the third such
+start. In the current driver (stage A of BD-341) this case cannot occur. On a
+NO_POST start, the connector arms nothing and writes nothing.
+`ConnectorChildConnected` then answers "not connected", and no hot-plug event
+can report a connected child. Only the cold path of BD-341 (a cold mode set
+after a later hot-plug event) can report the child as connected in a NO_POST
+session. That path reports the child through the same indication, which
+starts a new interval under the display rule. If the cold mode set fails, the
+start stays unconfirmed, and the guard counts it. This is intentional, because
+the failure is a display fault.
+
+A refused start stays refused until a person acts. The count is the evidence
+of the guard, and an automatic reset would undo the guard for a real boot loop.
+At sign-in the control application opens its notice
+(`StartNotice.cs`, case Guard), and one click clears the count and starts the
+device again. The installer also writes the count.
+
 Close health admission before stop, adapter power-down and TDR handling; D0
 alone must not reopen it while full resume is unsupported. Visibility/mode
 changes invalidate the monitor's observation interval. Readiness must include

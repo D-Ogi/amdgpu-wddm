@@ -828,6 +828,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   # the start before it.
   @{n='start-record-no-cold-reserve-check';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-NoColdReserveCheck');Fails=$true}
   @{n='start-record-no-child-begin';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-NoChildBegin');Fails=$true}
+  @{n='start-record-no-start-output';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-NoStartOutput');Fails=$true}
   @{n='guard-start-not-durable';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace,'-IgnoreDurability');Fails=$true}
   @{n='start-health';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace)}
   @{n='start-health-no-flush';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-IgnoreFlush');Fails=$true}
@@ -850,6 +851,9 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   # QUIET (0.7.216.104): an idle GPU desktop confirms with nothing owed, and a flip still owed never confirms.
   @{n='start-health-quiet-ignores-owed-flip';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-QuietIgnoresOwedFlip');Fails=$true}
   @{n='start-health-no-quiet';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoQuiet');Fails=$true}
+  @{n='start-health-no-output-ignores-origin';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoOutputIgnoresOrigin');Fails=$true}
+  @{n='start-health-no-output-skips-minute';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoOutputSkipsMinute');Fails=$true}
+  @{n='start-health-no-output-without-engines';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoOutputWithoutEngines');Fails=$true}
   @{n='gfx-pipeline';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly')}
   @{n='vmid-pool';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace)}
   @{n='keep-prune';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace)}
