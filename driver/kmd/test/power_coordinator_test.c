@@ -72,6 +72,10 @@ static NTSTATUS acquire(void*handle,DXGK_DISPLAY_INFORMATION*p){BC250_DEVICE*d=h
 /* k: the start blank on a pipe that the firmware lit at D0 (BD-341). */
 static NTSTATUS DcnBeginStartVisibility(BC250_DEVICE*d,BOOLEAN*touched){(void)d;*touched=1;return note('k');}
 static BOOLEAN ConnectorIsEnabled(BC250_DEVICE*d){return d->Connector.Enabled;}
+/* BD-343: the reported child (connector.c) and the output state the resume sets from it, after StartHealthResumeReady. */
+static BOOLEAN ConnectorChildConnected(BC250_DEVICE*d){return d->Connector.Enabled?TRUE:d->DisplayStart!=BC250_DISPLAY_START_NO_POST;}
+static int outputCalls,outputAfterReady;static unsigned long outputStart;static BOOLEAN outputConnected;
+static void StartHealthOutput(BC250_DEVICE*d,unsigned long s,BOOLEAN c){(void)d;outputCalls++;outputAfterReady=strchr(trace,'h')!=NULL;outputStart=s;outputConnected=c;}
 static NTSTATUS ConnectorResumeDisplay(BC250_DEVICE*d)
 {CHECK(d->RetainedPowerPhase==3 && strchr(trace,'d')!=NULL);return note('r');}
 static NTSTATUS ConnectorResumeNotifications(BC250_DEVICE*d)
@@ -103,8 +107,11 @@ int main(void){BC250_DEVICE d;
  // BD-341: a start without a firmware display has no inherited mode to compare, validate or blank at D0. A changed
  // or failed POST answer is logged only; every engine comes back.
  setup(&d);d.DisplayStart=BC250_DISPLAY_START_NO_POST;memset(&d.Post,0,sizeof(d.Post));CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();postMismatch=1;
+ outputCalls=outputAfterReady=0;
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0&&d.RetainedPowerPhase==0);
  CHECK(strchr(trace,'d')&&!strchr(trace,'v')&&!strchr(trace,'b')&&strchr(trace,'t')&&strchr(trace,'h'));
+ /* BD-343: the resume sets the output state again from the reported child, after the witness was reset. */
+ CHECK(outputCalls==1&&outputAfterReady&&outputStart==BC250_DISPLAY_START_NO_POST&&!outputConnected);
  setup(&d);d.DisplayStart=BC250_DISPLAY_START_NO_POST;memset(&d.Post,0,sizeof(d.Post));CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='d';
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0&&d.RetainedPowerPhase==0&&!strchr(trace,'v')&&!strchr(trace,'b'));
  CHECK(!strchr(trace,'k')&&d.FirmwarePipesHeld==0);

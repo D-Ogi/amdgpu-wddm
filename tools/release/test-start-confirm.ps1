@@ -113,6 +113,92 @@ Check ($run.code -eq 1 -and $run.at -eq 300) 'exit 1 at the latest bound of 300 
 $run = Invoke-Run 120 { param($t) if ($t -lt 50) { New-Reading 1000 -Epoch 5 -Flags 3 } else { New-Reading 1000 -Epoch 9 -Flags 15 } }
 Check ($run.code -eq 0 -and $run.at -eq 50) 'exit 0 at the first confirmed reading'
 
+'case bd343-no-output: a start without a firmware display and no monitor (flags FULL|READY|NO_OUTPUT, no completion)'
+# Unit A, 2026-11-10: such a start read flags 3, completed 0, ready_ms 0, and was never confirmed. The KMD with
+# NO_OUTPUT counts its ready time from the engines and sets flag 32.
+$headless = { param($t) New-Reading ([uint64][Math]::Max(0, ($t - 5) * 1000)) -Flags 35 -Completed 0 -Age ([uint64]::MaxValue) }
+$run = Invoke-Run 120 $headless
+Show $run
+Check ($run.code -eq 0 -and $run.at -ge 65 -and $run.at -le 75) 'confirmed by this task once ready_ms reaches 60 s'
+Check (@($run.log | Where-Object { $_ -match ' confirm eligible by the no-output rule \(flag 32\): flags 35 ' }).Count -eq 1) 'the log names the rule and flag 32'
+$run = Invoke-Run 120 { param($t) New-Reading ([uint64][Math]::Max(0, ($t - 5) * 1000)) -Flags 35 -Completed 0 -Age 0 } -End 60
+Check ($null -eq $run.code) 'not before ready_ms reaches 60 s'
+'case bd343-61s: ready_ms 61000 at the first reading confirms at once'
+$run = Invoke-Run 120 { param($t) New-Reading ([uint64](61000 + $t * 1000)) -Flags 35 -Completed 0 -Age ([uint64]::MaxValue) }
+Check ($run.code -eq 0 -and $run.at -eq 5) 'confirmed at the first poll after the confirm'
+'case bd343-child-change: the child changes at +30 s (a new epoch, ready time from 0 again)'
+$run = Invoke-Run 120 { param($t) if ($t -lt 30) { New-Reading ([uint64]($t * 1000)) -Flags 35 -Completed 0 -Age ([uint64]::MaxValue) }
+    else { New-Reading ([uint64](($t - 30) * 1000)) -Epoch 6 -Flags 35 -Completed 0 -Age ([uint64]::MaxValue) } }
+Show $run
+Check ($run.code -eq 0 -and $run.at -ge 90 -and $run.at -le 100) 'confirmed only after 60 s of the new interval'
+'case bd343-confirmed-rearmed: another client confirmed the start, and a recovery then opened a new interval'
+# Flags FULL|READY|CONFIRMED|NO_OUTPUT (43) with ready_ms under 60 s: the start is confirmed, so the run ends at the
+# first poll with 0 and does not wait for the minute of the new interval.
+$rearmed = { param($t) New-Reading ([uint64]($t * 1000 + 5000)) -Epoch 9 -Flags 43 -Completed 0 -Age ([uint64]::MaxValue) }
+$run = Invoke-Run 120 $rearmed
+Show $run
+Check ($run.code -eq 0 -and $run.at -eq 0) 'exit 0 at the first poll'
+Check ($run.reason -match '^confirmed by another client: flags 43 ') 'the log says that another client confirmed it'
+$run = Invoke-Run 120 { param($t) if ($t -lt 20) { New-Reading 0 -Epoch 5 -Flags 35 -Completed 0 -Age ([uint64]::MaxValue) }
+    else { New-Reading ([uint64](($t - 20) * 1000)) -Epoch 9 -Flags 43 -Completed 0 -Age ([uint64]::MaxValue) } }
+Check ($run.code -eq 0 -and $run.at -eq 20 -and $run.reason -match '^confirmed by another client') 'exit 0 at the first confirmed reading after the epoch move'
+'negative control bd343-confirmed-rearmed: the rules without the confirmed exit wait to the bound'
+$coreText = [IO.File]::ReadAllText($Core)
+$exitBlock = [regex]::Match($coreText,'(?m)^ if \(\$null -ne \$Reading -and \(\$Reading\.flags -band 9\) -eq 9 .*\r?\n.*\r?\n.*\r?\n \}\r?\n')
+Check $exitBlock.Success 'the confirmed exit is in the rules'
+if ($exitBlock.Success) {
+    . ([scriptblock]::Create($coreText.Remove($exitBlock.Index, $exitBlock.Length)))
+    $run = Invoke-Run 120 $rearmed
+    Check ($run.code -ne 0) 'without it the confirmed start is not ended with 0 (the control fails as it must)'
+    . $Core
+}
+'case bd343-contradiction: VISIBLE and NO_OUTPUT together (flags 39) are never confirmed, by either rule'
+$run = Invoke-Run 120 { param($t) New-Reading 90000 -Flags 39 -Completed 40 -Age 0 }
+Check ($run.code -eq 1 -and $run.at -eq 120) 'exit 1 at the bound'
+Check (@($run.log | Where-Object { $_ -match 'VISIBLE \(4\) and NO_OUTPUT \(32\) together' }).Count -ge 1) 'the log says why'
+Check ($null -eq (Get-StartHealthRule -Flags 39 -ReadyMs 90000) -and $null -eq (Get-StartHealthRule -Flags 47 -ReadyMs 90000)) 'and verify has no rule for it'
+'case bd343-no-output-not-ready: the engines did not come up (flags FULL|NO_OUTPUT): unconfirmed at the bound'
+$run = Invoke-Run 120 { param($t) New-Reading 0 -Flags 33 -Completed 0 -Age ([uint64]::MaxValue) }
+Check ($run.code -eq 1 -and $run.at -eq 120) 'exit 1 at the bound'
+'case bd343-lab: the reading of a KMD without NO_OUTPUT (flags 3, ready_ms 0) stays unconfirmed, as on the lab'
+$run = Invoke-Run 120 { param($t) New-Reading 0 -Flags 3 -Completed 0 -Age ([uint64]::MaxValue) }
+Check ($run.code -eq 1 -and $run.at -eq 120) 'exit 1 at the bound'
+'negative control bd343: the rules without the NO_OUTPUT line do not confirm the start without output'
+$coreText = [IO.File]::ReadAllText($Core)
+$line = [regex]::Match($coreText, '(?m)^ if \(\(\(\$Reading\.flags -band 39\) -eq 35\).*\r?\n')
+Check $line.Success 'the NO_OUTPUT line is in the rules'
+if ($line.Success) {
+    . ([scriptblock]::Create($coreText.Remove($line.Index, $line.Length)))
+    $run = Invoke-Run 120 $headless
+    Check ($run.code -eq 1) 'without it the start without output stays unconfirmed (the control fails as it must)'
+    . $Core
+}
+
+'case bd343-verify: the verify rule of install.ps1 and diagnostics.ps1 (Get-StartHealthRule)'
+$cases = @(
+    @{ f = 7;  ms = 0;     want = 'display'; stage = 50; why = 'full, ready, visible' }
+    @{ f = 15; ms = 0;     want = 'display'; stage = 50; why = 'a confirmed display start' }
+    @{ f = 31; ms = 90000; want = 'display'; stage = 50; why = 'a confirmed, quiet display start' }
+    @{ f = 35; ms = 60000; want = 'no output'; stage = 39; why = 'full, ready, no output, the minute reached' }
+    @{ f = 43; ms = 0;     want = 'no output'; stage = 39; why = 'a confirmed start without output' }
+    @{ f = 35; ms = 59999; want = $null; stage = $null; why = 'no output, one millisecond short of the minute' }
+    @{ f = 35; ms = $null; want = $null; stage = $null; why = 'no output, ready time unknown' }
+    @{ f = 33; ms = 90000; want = $null; stage = $null; why = 'no output, the engines not ready' }
+    @{ f = 3;  ms = 90000; want = $null; stage = $null; why = 'flags 3, the BD-343 lab reading of a KMD without NO_OUTPUT' }
+    @{ f = $null; ms = 90000; want = $null; stage = $null; why = 'no reading' }
+)
+foreach ($c in $cases) {
+    $r = Get-StartHealthRule -Flags $c.f -ReadyMs $c.ms
+    $name = $(if ($r) { $r.name } else { $null }); $stage = $(if ($r) { $r.stage } else { $null })
+    Check ($name -eq $c.want -and $stage -eq $c.stage) "flags $($c.f) ready_ms $($c.ms): $(if ($c.want) { "$($c.want) rule, LastStage $($c.stage)" } else { 'no rule' }) ($($c.why))"
+}
+# install.ps1 must read both its checks through the rule: the LastStage it wants and the start-health verdict.
+$inst = [IO.File]::ReadAllText((Join-Path (Split-Path $Core) 'install.ps1'))
+Check ($inst -match '\$rule = Get-StartHealthRule -Flags \$hflags -ReadyMs \$hready') 'install.ps1 verify reads the rule'
+Check ($inst -match '"LastStage \$wantStage\$"') 'install.ps1 driver start wants the LastStage of the rule'
+Check ($inst -match "Add-Result 'start health' \(\`$null -ne \`$rule\)") 'install.ps1 start health passes on the rule'
+Check ($inst -notmatch "'LastStage 50\$'") 'install.ps1 has no fixed LastStage 50 left'
+
 'constants'
 # The time limit of each task that runs the confirmation in the installer's plan (common.ps1 Get-LogonTaskPlan: the
 # logon confirmation and, since BD-271, the startup confirmation) must hold the latest bound, the hard-bound margin of

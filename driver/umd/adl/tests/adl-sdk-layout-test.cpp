@@ -16,3 +16,8 @@ FIELD(ADLVersionsInfoX2, strCrimsonVersion); FIELD(ADLVersionsInfoX2, strCatalys
 FIELD(ADLMode, iModeValue); FIELD(ADLDisplayInfo, iDisplayInfoValue); FIELD(ADLDisplayMap, iDisplayMapValue);
 FIELD(ADLSLSMap, iSLSMapValue); FIELD(ADLSLSTarget, iSLSTargetValue); FIELD(ADLSLSMode, iSLSNativeModeValue);
 FIELD(ADLBezelTransientMode, iSLSBezelTransientModeValue); FIELD(ADLSLSOffset, iBezelffsetValue);
+SAME(ADLCrossfireComb); SAME(ADLCrossfireInfo); SAME(ADLAdapterLocation); SAME(ADLMVPUStatus); SAME(ADLPMActivity);
+SAME(ADLThermalControllerInfo); SAME(ADLTemperature); SAME(ADLFanSpeedInfo); SAME(ADLFanSpeedValue);
+SAME(ADLODParameterRange); SAME(ADLODParameters);
+FIELD(ADLMVPUStatus, aAdapterLocation); FIELD(ADLPMActivity, iReserved); FIELD(ADLFanSpeedValue, iFlags);
+FIELD(ADLODParameters, sVddc); FIELD(ADLCrossfireComb, iAdaptLink); FIELD(ADLCrossfireInfo, iSupported);

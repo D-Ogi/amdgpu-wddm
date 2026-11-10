@@ -308,6 +308,9 @@ static void Indicate(BC250_DEVICE* Device, BOOLEAN Connected, ULONG Generation)
     GuardLog("connector: indicate generation %lu connected %u status %08lX",
         Generation, Connected, (ULONG)status);
     ConnectorChildRecord(Device, BC250_CHILD_EVENT_INDICATE, Connected, -1, status);
+    // BD-343: the output state of the start-health witness follows what the connector reports, also when Windows
+    // refused the indication: a connected sink then keeps the display rule, which is the strict one.
+    StartHealthOutput(Device, Device->DisplayStart, Connected);
 }
 
 static void ConnectorWorker(PDEVICE_OBJECT Object, PVOID Context);

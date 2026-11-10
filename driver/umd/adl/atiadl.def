@@ -31,3 +31,15 @@ EXPORTS
     ADL_Display_DisplayMapConfig_Get
     ADL_Display_SLSMapIndex_Get
     ADL_Display_SLSMapConfig_Get
+    ADL_Adapter_ID_Get
+    ADL_Adapter_Crossfire_Caps
+    ADL_Adapter_Crossfire_Get
+    ADL_Display_MVPUStatus_Get
+    ADL_Overdrive5_CurrentActivity_Get
+    ADL_Overdrive5_ThermalDevices_Enum
+    ADL_Overdrive5_Temperature_Get
+    ADL_Overdrive5_FanSpeedInfo_Get
+    ADL_Overdrive5_FanSpeed_Get
+    ADL_Overdrive5_ODParameters_Get
+    ADL_ApplicationProfiles_User_Load
+    ADL_ApplicationProfiles_ProfileOfAnApplication_Search

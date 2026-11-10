@@ -164,19 +164,9 @@ Import-Module (Join-Path $PSScriptRoot 'BuildTree.psm1') -Force
 
 function Get-Utc { [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ') }
 
-function Write-Json([string]$Path, $Data) {
-    New-Item -ItemType Directory -Force (Split-Path $Path) | Out-Null
-    # A killed scheduler must leave either the preceding receipt or this complete one.
-    $part = "$Path.$PID.$([Guid]::NewGuid().ToString('N')).part"
-    try {
-        $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($Data | ConvertTo-Json -Depth 40) + "`n")
-        $stream = [IO.File]::Open($part, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-        try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
-        [IO.File]::Move($part, $Path, $true)
-    } finally {
-        if ([IO.File]::Exists($part)) { [IO.File]::Delete($part) }
-    }
-}
+# Write-Json: a killed scheduler leaves either the preceding receipt or the complete new one, and a reader that holds
+# the receipt open only delays the move for a short bound (BD-345).
+Import-Module (Join-Path $PSScriptRoot 'JsonReceipt.psm1') -Force
 
 function Read-Json([string]$Path) { Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json -AsHashtable }
 

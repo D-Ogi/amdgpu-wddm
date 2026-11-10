@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "bc250kmd_escape.h"
+#include "display_start.h"
 typedef long LONG,NTSTATUS,LONG32;
 typedef long long LONG64,LONGLONG;
 typedef unsigned long ULONG;
@@ -53,6 +54,7 @@ static LONGLONG InterlockedCompareExchange64(volatile LONGLONG*p,LONGLONG v,LONG
 void StartHealthFault(BC250_DEVICE*);
 void StartHealthFaultPendingReset(BC250_DEVICE*);
 void StartHealthCloseKeepPendingReset(BC250_DEVICE*);
+void StartHealthOutput(BC250_DEVICE*,ULONG,BOOLEAN);
 BC250_START_HEALTH_RECOVERY StartHealthRecovered(BC250_DEVICE*,ULONGLONG*);
 static NTSTATUS OpenParameters(HANDLE*k){*k=(void*)1;return openStatus;}
 static NTSTATUS WriteDword(HANDLE k,const unsigned short*n,ULONG v){(void)k;(void)n;CHECK(v==0 && spins==0 && mutexes==1);writes++;return writeStatus;}
@@ -71,6 +73,9 @@ static NTSTATUS CuModeConfirm(BC250_DEVICE*d,const char*why){(void)d;(void)why;C
 // dpm.c: the same for a pending DPM start, right after the CU mode, under the same conditions.
 static unsigned dpmConfirms;
 static NTSTATUS DpmConfirm(BC250_DEVICE*d,const char*why){(void)d;(void)why;CHECK(spins==0 && mutexes==1);dpmConfirms++;return STATUS_SUCCESS;}
+// BD-343: the curve half of a confirmation without output (dpm.c); its rule is dpm_curve_mark_test.c's.
+static unsigned knownCurveConfirms;
+static NTSTATUS DpmConfirmKnownCurve(BC250_DEVICE*d,const char*why){(void)d;(void)why;CHECK(spins==0 && mutexes==1);knownCurveConfirms++;return STATUS_SUCCESS;}
 // guard.c (BD-090): a durable confirmation marks the boot confirmed in a volatile key, after its flush and under
 // Lifecycle, with no spin lock held. Also when a fault during the flush makes the request STATUS_RETRY: the
 // interval before it was durably confirmed (start_health.c), so it can outnumber the CU confirmations.
@@ -117,7 +122,7 @@ int main(void)
     // Every flag word this gate is asked about: the two it admits, their union, the bits of the other escapes
     // and nothing at all.
     static const ULONG words[]={0,1,2,3,4,8,9,10,12,16,24};
-    BC250_DEVICE d={0};BC250_ESCAPE_START_HEALTH r;ULONGLONG generation,epoch,count,witness;unsigned old,i,cu0,dpm0;
+    BC250_DEVICE d={0};BC250_ESCAPE_START_HEALTH r;ULONGLONG generation,epoch,count,witness;unsigned old,i,cu0,dpm0,known0;
     live=&d;StartHealthInitialize(&d);CHECK(sizeof(r)==96);
     r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_READY));
     healthy(&d);r=query(&d,0);CHECK(r.Flags==7 && r.Completed==12 && r.ReadyAgeMs==60000 && r.LastCompletionAgeMs==0);
@@ -388,6 +393,84 @@ int main(void)
     // A closed witness is never quiet.
     StartHealthFault(&d);r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
     wddmPresent=0;wddmProgrammed=0;
+    // BD-343: a start without output. The firmware found no monitor at POST (NO_POST) and the connector reports the
+    // child as disconnected, so Windows commits no mode and nothing flips. On the lab (unit A, 2026-11-10) the witness
+    // stayed at flags 3, completed 0, ready_ms 0, and the guard refused the third such start. The rule for it: FULL,
+    // READY and a minute of an open witness, with no completed flip asked for.
+    StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);StartHealthReady(&d,TRUE);
+    r=query(&d,0);CHECK(r.Flags==(3|BC250_START_HEALTH_NO_OUTPUT) && !r.Completed && !r.ReadyAgeMs);
+    advance((unsigned)BC250_START_HEALTH_MIN_MS-1);old=writes;
+    r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==old);
+    CHECK(!StartHealthIsReady(&d,&generation));
+    // The CU mode and DPM milestones (StartHealthIsReady) never take the rule without output: a minute of READY with
+    // no workload proves nothing about a requested clock/voltage or CU count. CONFIRM certifies the start for the
+    // guard and leaves both requests pending, so the next start falls back as after any unconfirmed start.
+    advance(1);CHECK(!StartHealthIsReady(&d,&generation));
+    cu0=cuConfirms;dpm0=dpmConfirms;known0=knownCurveConfirms;r=query(&d,1);
+    CHECK(r.Status==0 && r.Flags==(3|BC250_START_HEALTH_NO_OUTPUT|BC250_START_HEALTH_CONFIRMED) &&
+          r.ReadyAgeMs==BC250_START_HEALTH_MIN_MS && writes==old+1 && cuConfirms==cu0 && dpmConfirms==dpm0);
+    // Only the curve half for an already-confirmed curve runs (DpmConfirmKnownCurve), once.
+    CHECK(knownCurveConfirms==known0+1);
+    advance(60000);CHECK(!StartHealthIsReady(&d,&generation) && cuConfirms==cu0 && dpmConfirms==dpm0);
+    // A stop takes the output state with the witness, and so does a resume (power.c sets it again from the child).
+    StartHealthStop(&d,&r);CHECK((r.Flags&BC250_START_HEALTH_NO_OUTPUT) && !d.StartHealth.NoOutput);
+    StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);StartHealthReady(&d,TRUE);
+    StartHealthResumeReady(&d,FALSE);CHECK(!d.StartHealth.NoOutput);r=query(&d,0);CHECK(r.Flags==3);
+    StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);advance(61000);
+    r=query(&d,0);CHECK(r.Flags==(3|BC250_START_HEALTH_NO_OUTPUT) && r.ReadyAgeMs==61000);
+    // The order of the connector worker: the output state can come after the engines; the minute counts from both.
+    StartHealthBegin(&d,TRUE);StartHealthReady(&d,TRUE);advance(30000);
+    r=query(&d,0);CHECK(r.Flags==3 && !r.ReadyAgeMs);
+    StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);advance(59999);
+    r=query(&d,0);CHECK(r.Flags==(3|BC250_START_HEALTH_NO_OUTPUT) && r.ReadyAgeMs==59999);
+    old=writes;r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==old);
+    advance(1);r=query(&d,1);CHECK(r.Status==0 && writes==old+1);
+    // A start that faults inside the minute (an engine fault, a fence timeout, a stop) stays unconfirmed, and the time
+    // after the fault does not count. A start that crashes never answers at all, and keeps its count in the guard.
+    StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);StartHealthReady(&d,TRUE);
+    advance(30000);StartHealthFault(&d);advance(60000);old=writes;
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL && !r.ReadyAgeMs);
+    r=query(&d,1);CHECK(r.Status==BC250_ESCAPE_STATUS_REFUSED && writes==old && !StartHealthIsReady(&d,&generation));
+    StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);StartHealthReady(&d,TRUE);
+    advance(30000);StartHealthFaultPendingReset(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_REOPENED);
+    advance(59999);old=writes;r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==old);
+    // A start that needed a GPU reset confirms for the guard after a new minute, but not even a known curve.
+    known0=knownCurveConfirms;advance(1);r=query(&d,1);CHECK(r.Status==0 && writes==old+1 && knownCurveConfirms==known0);
+    // A start whose engines did not come up (the ring tests failed) is never confirmed, with or without output.
+    StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);StartHealthReady(&d,FALSE);
+    advance(70000);old=writes;r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_READY) && !r.ReadyAgeMs);
+    r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==old);
+    // The rule is the display-start state's, not the board's: an INHERITED start with no connected child keeps the
+    // display rule (its POST lit a monitor, so a missing desktop is a fault), and so does a NO_POST start whose child
+    // is connected (a monitor that Windows can light must show a desktop).
+    StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_INHERITED,FALSE);StartHealthReady(&d,TRUE);
+    advance(70000);old=writes;r=query(&d,0);CHECK(r.Flags==3 && !r.ReadyAgeMs);
+    r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==old);
+    StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,TRUE);StartHealthReady(&d,TRUE);
+    advance(70000);r=query(&d,0);CHECK(r.Flags==3);r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY);
+    StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_UNKNOWN,FALSE);StartHealthReady(&d,TRUE);
+    advance(70000);r=query(&d,0);CHECK(r.Flags==3);
+    // A monitor arrives inside the minute: a new interval, and from then on the display rule. Without a mode and a
+    // completed flip the start is not confirmed; with them it is, as any visible start.
+    StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);StartHealthReady(&d,TRUE);
+    advance(30000);epoch=d.StartHealth.Epoch;StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,TRUE);
+    r=query(&d,0);CHECK(r.Epoch>epoch && r.Flags==3 && !r.ReadyAgeMs);
+    advance(70000);old=writes;r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==old);
+    StartHealthEnter(&d);StartHealthDisplayLocked(&d,TRUE,TRUE);StartHealthLeave(&d);
+    r=query(&d,0);CHECK(r.Flags==7);
+    for(i=1;i<=12;i++){advance(5000);StartHealthCompleted(&d,2*i);}
+    known0=knownCurveConfirms;r=query(&d,1);CHECK(r.Status==0 && r.Flags==15 && writes==old+1 && knownCurveConfirms==known0);
+    // A visible mode wins over the output state: never NO_OUTPUT and VISIBLE together, and no flip-free rule while a
+    // mode is visible.
+    StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);StartHealthReady(&d,TRUE);
+    StartHealthEnter(&d);StartHealthDisplayLocked(&d,TRUE,TRUE);StartHealthLeave(&d);
+    advance(70000);old=writes;r=query(&d,0);CHECK(r.Flags==7);
+    r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==old);
+    // An unchanged output state moves nothing.
+    StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);StartHealthReady(&d,TRUE);
+    epoch=d.StartHealth.Epoch;advance(30000);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);
+    advance(30000);r=query(&d,1);CHECK(r.Status==0 && r.Epoch==epoch);
     // Port onto BD-124 stage 4 (0.7.216.62): StartHealthStop is a real close of the start. A latch close
     // before the stop leaves no mark for a later reset to undo; the stop still returns the pre-stop snapshot.
     healthy(&d);StartHealthFaultPendingReset(&d);CHECK(d.StartHealth.PendingReset);

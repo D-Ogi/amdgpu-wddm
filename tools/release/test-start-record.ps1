@@ -1,5 +1,5 @@
-# BD-122: the consumer side of the KMD's start record (Parameters\StartRecord). The driver's own half is the host
-# test driver\kmd\test\run_start_record.ps1; this one holds the readers and the words they print:
+# BD-122: the consumer side of the KMD's start record (StartRecord in the state store). The driver's own half is
+# the host test driver\kmd\test\run_start_record.ps1; this one holds the readers and the words they print:
 #
 #   powershell -NoProfile -File tools\release\test-start-record.ps1 [-Installer <package>\installer] [-Out <dir>]
 #

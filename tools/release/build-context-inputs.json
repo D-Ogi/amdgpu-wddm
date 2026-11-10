@@ -2061,6 +2061,46 @@
       "workspace_from_kits": false
     },
     {
+      "recipe": "tools/build/build-umd-adl.ps1",
+      "commit": "6f8ad933bb5e4135405c2ff9237ff49e7f1c42ad",
+      "bindings": {
+        "tools/build/build-umd-adl.ps1": "7efc9d1bff2168112e1bf8d3347992cc33447956",
+        "tools/build": "7ce3b07871a188734e17d7aa1d7a86730bf3ac5c",
+        "tools/quality": "a5f28ea59f239951af4ce584ca2aee6b9719d7f5",
+        "tools/release/installer": "28f92e5b2d2e3fe670a250d371d0aa8bd7cb8245",
+        "tools/firmware": "d31e8b83b3de2113b47fa3c4e6af730868f60004"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/ref/AGS_SDK-v6.3.0",
+          "required": true,
+          "parameter": "AgsSdk"
+        },
+        {
+          "path": "{root}/ref/display-library__WARN-EULA-in-docs-only-headers-MIT/include",
+          "required": true,
+          "parameter": "AdlSdk"
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "commit": "174881cf2918f332c44a85d058d3dc920bad368c",
       "bindings": {

@@ -121,13 +121,16 @@ function Format-DiagnosticsProblemCode {
 #   $Record          the KMD's StartRecord (Read-StartRecordFromKey) or $null for an absent one
 #   $BootUtc         this boot's start time (Get-StartRecordBootUtc), which decides whether the record is this boot's
 #   $HealthFlags     the KMD start-health flags, $null when there was no reading at all
-#   $LastStage       the KMD's LastStage, 50 at the first mode set of a healthy start
+#   $HealthReadyMs   the KMD start-health ready_ms of the same reading, $null when unknown
+#   $LastStage       the KMD's LastStage, 50 at the first mode set of a healthy start, 39 for a healthy start without
+#                    output (BD-343: no firmware display and no monitor, so no mode is committed)
 # Returns collect (true or false), the reasons in plain words, and a one-line summary for the log. The hard signals
 # below each mean the start failed on their own. An absent start record is NOT one of them: a KMD before 0.7.216.30
 # keeps none, and a healthy start of such a driver must not fetch a diagnostics file at every verify.
 function Get-StartFailureDecision {
     param([AllowNull()]$ProblemCode, [AllowNull()]$DevicePresent, [AllowNull()][string]$DeviceStatus,
-          [AllowNull()]$Record, [AllowNull()]$BootUtc, [AllowNull()]$HealthFlags, [AllowNull()]$LastStage)
+          [AllowNull()]$Record, [AllowNull()]$BootUtc, [AllowNull()]$HealthFlags, [AllowNull()]$LastStage,
+          [AllowNull()]$HealthReadyMs)
     $reasons = New-Object Collections.ArrayList
     $soft = New-Object Collections.ArrayList
     if ($null -ne $DevicePresent -and -not [bool]$DevicePresent) {
@@ -160,19 +163,32 @@ function Get-StartFailureDecision {
             default   { [void]$reasons.Add("the start record of this boot is unreadable (result '$([string]$Record.Result)')") }
         }
     }
+    # The health rule of start-confirm-core.ps1 (Get-StartHealthRule): a display start, or a start without output
+    # (BD-343), which also sets the LastStage that a healthy start of that rule has.
+    $rule = $null
+    $wantStage = 50
     if ($null -eq $HealthFlags) { [void]$reasons.Add('the driver answered no start-health reading at all') }
     else {
         $f = 0
         try { $f = [int]$HealthFlags } catch { }
-        if (($f -band 7) -ne 7) { [void]$reasons.Add("the start is not full, ready and visible (start-health flags $f)") }
-        elseif (($f -band 8) -eq 0) { [void]$soft.Add("the start is healthy but nothing has confirmed it yet (start-health flags $f)") }
+        $rule = Get-StartHealthRule -Flags $f -ReadyMs $HealthReadyMs
+        if (($f -band 7) -ne 7 -and ($f -band 35) -eq 35) { $wantStage = 39 }
+        if (-not $rule) {
+            if (($f -band 35) -eq 35) { [void]$reasons.Add("the start has no output and is full and ready, but not for the minute that confirms it (start-health flags $f)") }
+            else { [void]$reasons.Add("the start is not full, ready and visible, and not full, ready and without output (start-health flags $f)") }
+        }
+        elseif (($f -band 8) -eq 0) { [void]$soft.Add("the start is healthy by the $($rule.name) rule but nothing has confirmed it yet (start-health flags $f)") }
+        elseif ($rule.name -eq 'no output') { [void]$soft.Add("the start has no output (no firmware display and no monitor connected) and is confirmed by the no-output rule (start-health flags $f)") }
     }
     $stage = $null
     try { if ($null -ne $LastStage -and [string]$LastStage -ne '') { $stage = [int]$LastStage } } catch { }
     if ($null -eq $LastStage) { [void]$soft.Add('the driver answered no LastStage') }
     elseif ($null -eq $stage) { [void]$soft.Add("the driver's LastStage is unreadable ('$([string]$LastStage)')") }
-    elseif ($stage -lt 50) { [void]$reasons.Add("the start stopped at stage $stage, before the first mode set (50)") }
-    elseif ($stage -gt 50) { [void]$reasons.Add("the device left the started stages (LastStage $stage)") }
+    elseif ($stage -lt $wantStage) {
+        if ($wantStage -eq 50) { [void]$reasons.Add("the start stopped at stage $stage, before the first mode set (50)") }
+        else { [void]$reasons.Add("the start stopped at stage $stage, before the end of the start (39)") }
+    }
+    elseif ($stage -gt $wantStage) { [void]$reasons.Add("the device left the started stages (LastStage $stage)") }
     $collect = [bool]$reasons.Count
     $all = @(@($reasons) + @($soft))
     return [ordered]@{

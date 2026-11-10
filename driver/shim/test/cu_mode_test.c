@@ -236,6 +236,50 @@ static struct bc250_cu_request request(int present, unsigned int mode)
 
 static void test_decide_closed_record(void);
 
+/* BD-343: a 40 request that a start with a display confirmed stays applied over later starts that nobody
+ * confirms by the display milestone (a start without output: CONFIRM by the no-output rule calls no
+ * CuModeConfirm). The registry is modelled as cumode.c CuModePrepare writes it. */
+struct cu_reg { unsigned int mode, pending, confirmed; int fallbacks; };
+
+static struct bc250_cu_decision cu_start(struct cu_reg *g)
+{
+	struct bc250_cu_request r = request(1, g->mode);
+	struct bc250_cu_decision d;
+
+	r.pending = g->pending;
+	r.confirmed = g->confirmed;
+	bc250_cu_decide(&r, &d);
+	if (d.force_stock) { g->mode = 24; g->pending = 0; g->fallbacks++; }
+	else if (d.clear_pending) g->pending = 0;
+	if (d.mark_pending) g->pending = d.encoded;
+	return d;
+}
+
+static void test_confirmed_survives_headless_starts(void)
+{
+	struct cu_reg g = { 40, 0, 0, 0 };
+	struct bc250_cu_decision d;
+	int i;
+
+	/* A start with a display: pending, then confirmed (CuModeConfirm: Pending away, Confirmed written). */
+	d = cu_start(&g);
+	CHECK(d.mark_pending && g.pending == 40);
+	g.pending = 0; g.confirmed = d.encoded;
+	/* Three starts without output: 40 runs, no mark, no fallback. */
+	for (i = 0; i < 3; i++) {
+		d = cu_start(&g);
+		CHECK_EQ(d.mode, 40); CHECK(d.confirmed && !d.mark_pending && !d.force_stock);
+		CHECK(g.pending == 0 && g.mode == 40 && g.fallbacks == 0);
+	}
+	/* Control: a request that no start with a display confirmed yet. A start without output leaves it
+	 * pending, and the next start falls back, as after any unconfirmed start. */
+	g.confirmed = 0;
+	d = cu_start(&g);
+	CHECK(d.mark_pending && g.pending == 40);
+	d = cu_start(&g);
+	CHECK(d.force_stock && g.mode == 24 && g.fallbacks == 1);
+}
+
 static void test_decide(void)
 {
 	struct bc250_cu_request r;
@@ -643,6 +687,7 @@ int main(void)
 	      allowed(g_idx_pg) && allowed(g_idx_aon));
 
 	test_decide();
+	test_confirmed_survives_headless_starts();
 	test_targets();
 	test_info();
 	test_apply();

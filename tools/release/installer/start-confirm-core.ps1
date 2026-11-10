@@ -1,7 +1,8 @@
 # Decision rules of the logon start-confirm task (start-confirm.ps1), pure functions without I/O, host-tested by
 # tools\release\test-start-confirm.ps1. The task confirms the boot's own KMD start once the KMD's confirmation milestone is
 # met (start_health.c StartHealthRequest: flags FULL|READY|VISIBLE, completions, ready >= 60 s, last completion
-# fresh or nothing owed, QUIET), the same milestone the overlay's auto-confirmation and route.py's dwm-route.ps1 use. It never confirms
+# fresh or nothing owed, QUIET; or, for a start without output, FULL|READY|NO_OUTPUT and ready >= 60 s). The display
+# milestone is the one the overlay's auto-confirmation and route.py's dwm-route.ps1 use. It never confirms
 # another adapter start (a generation change ends it), never while a kit run presents its own heartbeat (that run
 # confirms), and never while a transition task runs.
 #
@@ -82,11 +83,46 @@ function New-StartConfirmState {
 # An idle GPU desktop flips about once a minute (the taskbar clock), so its last completion is mostly older than
 # any freshness bound; QUIET stands in for it, as it does in the KMD's own CONFIRM. A KMD without the bit never
 # sets it, and this task then waits for a fresh flip as before.
+#
+# Flag 32 is NO_OUTPUT (BC250_START_HEALTH_NO_OUTPUT, BD-343): a start without a firmware display whose child the
+# driver reports as disconnected. No mode is committed and nothing flips, so VISIBLE and a completion cannot come;
+# the KMD's rule for it is FULL, READY and a minute of an open witness (start_health.c HealthConfirmableHeadless).
+# Before BD-343 such a start was never confirmed, and the guard refused the third start with the monitor off.
+# VISIBLE and NO_OUTPUT together is a contradiction (the KMD never publishes both): the probe or the driver is
+# wrong, and such a reading is never eligible (Test-StartHealthContradiction).
+function Test-StartHealthContradiction {
+ param([Parameter(Mandatory)]$Flags)
+ return (([int]$Flags -band 36) -eq 36)
+}
 function Test-StartConfirmEligible {
  param([Parameter(Mandatory)]$Reading)
+ if (Test-StartHealthContradiction $Reading.flags) { return $false }
+ if ((($Reading.flags -band 39) -eq 35) -and $Reading.ready_ms -ge $script:StartConfirmMinReadyMs) { return $true }
  return ((($Reading.flags -band 7) -eq 7) -and $Reading.completed -gt 0 -and
          $Reading.ready_ms -ge $script:StartConfirmMinReadyMs -and
          ($Reading.age_ms -le $script:StartConfirmFreshMs -or ($Reading.flags -band 16) -eq 16))
+}
+
+# The verify rule of one start-health reading (install.ps1 'start health' and 'driver start', diagnostics.ps1
+# Get-StartFailureDecision). 'display': FULL, READY and VISIBLE (7), the shape of a start that committed a mode.
+# 'no output': FULL, READY and NO_OUTPUT (35), and the start is confirmed or has the minute of readiness of
+# Test-StartConfirmEligible. $null: neither. The LastStage of a healthy start follows the rule: a display start
+# reaches the first VidPN commit (50); a start without output ends at StageStartDone (39) and commits nothing.
+# A machine with no monitor is a real install case: before BD-343 its verify failed on both checks.
+function Get-StartHealthRule {
+ param([AllowNull()]$Flags, [AllowNull()]$ReadyMs)
+ if ($null -eq $Flags -or [string]$Flags -eq '') { return $null }
+ $f = 0
+ try { $f = [int]$Flags } catch { return $null }
+ if (($f -band 36) -eq 36) { return $null }   # VISIBLE and NO_OUTPUT together: a wrong reading
+ if (($f -band 7) -eq 7) { return [ordered]@{ name = 'display'; stage = 50; flags = $f } }
+ if (($f -band 35) -ne 35) { return $null }
+ $ms = $null
+ try { if ($null -ne $ReadyMs -and [string]$ReadyMs -ne '') { $ms = [uint64]$ReadyMs } } catch { }
+ if (($f -band 8) -eq 8 -or ($null -ne $ms -and $ms -ge $script:StartConfirmMinReadyMs)) {
+  return [ordered]@{ name = 'no output'; stage = 39; flags = $f }
+ }
+ return $null
 }
 
 # One poll: action wait | confirm | exit, with the exit code and a reason for the log.
@@ -132,13 +168,16 @@ function Get-StartConfirmStep {
  }
  if ($Kit -and $Kit.heartbeat) { $State.yielded = $true; return [ordered]@{action='wait'; reason='kit heartbeat running: that run confirms'} }
  if ($moved) { return [ordered]@{action='wait'; reason="${moved}; ready_ms $($Reading.ready_ms)"} }
+ if (Test-StartHealthContradiction $Reading.flags) {
+  return [ordered]@{action='wait'; reason="refused: flags $($Reading.flags) carry VISIBLE (4) and NO_OUTPUT (32) together, which the driver never publishes; not confirmed"}
+ }
  if ((Test-StartConfirmEligible $Reading) -and ($Now - $State.last_confirm) -ge $script:StartConfirmRetrySeconds) {
-  return [ordered]@{action='confirm'; generation=$Reading.generation; epoch=$Reading.epoch; reason="eligible: completed $($Reading.completed) age_ms $($Reading.age_ms) ready_ms $($Reading.ready_ms)"}
+  return [ordered]@{action='confirm'; generation=$Reading.generation; epoch=$Reading.epoch; reason="eligible by the $(if (($Reading.flags -band 32) -eq 32) { 'no-output rule (flag 32)' } else { 'display rule' }): flags $($Reading.flags) completed $($Reading.completed) age_ms $($Reading.age_ms) ready_ms $($Reading.ready_ms)"}
  }
  return [ordered]@{action='wait'; reason="waiting: flags $($Reading.flags) completed $($Reading.completed) age_ms $($Reading.age_ms) ready_ms $($Reading.ready_ms)"}
 }
 
-# ---- BD-122: why the KMD's last start failed (Parameters\StartRecord) --------------------------------------------
+# ---- BD-122: why the KMD's last start failed (the state store's StartRecord) ------------------------------------
 # The KMD writes the reason of every start that did not reach a started device into the registry, with no gate
 # (guard.c, the section above GuardRecordStartAttempt). These are the pure functions that turn that record into
 # plain words; the callers that read the registry are start-confirm.ps1 and the installer's verify step.
@@ -148,14 +187,14 @@ function Get-StartConfirmStep {
 #   started          the newest attempt reached a started device; the reason values mean nothing
 #   attempt          the newest attempt neither failed nor finished: the machine stopped inside the start, or the
 #                    write of the record itself was torn. Such a record names NO step: the driver writes it at the
-#                    top of a start, before any step runs. How far that start got is in Parameters\LastStage and
-#                    Parameters\StageHistory, and these words say so instead of inventing a step.
+#                    top of a start, before any step runs. How far that start got is in LastStage and StageHistory
+#                    of the same Data key, and these words say so instead of inventing a step.
 # The driver writes "attempt" and flushes it before any step of a start can fail, so a failure of an earlier boot
 # can never be read as the current one. One case is outside that rule and cannot be inside it: a start refused
 # above the attempt record (a device object the driver does not own) leaves the previous start's record standing.
 # Therefore every reading also compares TimeUtc with this boot's own start time and says when the record is older
 # than this boot. An absent record means a KMD older than 0.7.216.30.
-$script:StartRecordKey = 'StartRecord'      # the subkey of the service's Parameters key
+$script:StartRecordKey = 'StartRecord'      # the record path in the state store: StateV2\Generations\<Active>\Data\StartRecord
 # The stop record (KMD 0.7.216.39 and later, guard.c GuardRecordStopBegin and GuardRecordStopDone). The KMD writes
 # it when dxgkrnl stops a device whose start THIS generation never confirmed, and writes nothing at all for a normal
 # stop of a confirmed generation. It also writes nothing when the driver itself calls its own stop to unwind a start
@@ -378,8 +417,9 @@ function Get-StartRecordLogLines {
     return $lines
 }
 
-# The record's values from an OPEN registry key (the service's Parameters\StartRecord). The caller owns the key,
-# so the real key of a tester PC and the scratch key of the host test go through the same reader. A REG_DWORD with
+# The record's values from an OPEN record view (Open-DriverStateRecordView of the state store's StartRecord, or any
+# object with GetValue). The caller owns the view, so the real record of a tester PC and the fixtures of the host
+# test go through the same reader. A REG_DWORD with
 # the high bit set (every NTSTATUS failure has it) comes back as a negative Int32, which is why the mask is here
 # and not a plain cast. No Result value means no record: a KMD before 0.7.216.30, or a key we cannot read.
 # -AllowNoResult keeps a record whose Result value is missing, for the stop record of a driver that writes the

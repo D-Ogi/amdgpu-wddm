@@ -515,8 +515,13 @@ BC250_CONTROL_API LONG WINAPI Bc250StartHealth(ULONG op,ULONGLONG generation,ULO
     if(data->Magic!=BC250_ESCAPE_MAGIC || data->Command!=BC250_ESCAPE_RUN_START_HEALTH ||
        data->AbiVersion!=BC250_START_HEALTH_ABI || data->Op!=op)
         return (LONG)0xC000000D;
+    // An accepted CONFIRM answers FULL, READY and CONFIRMED, with the output side of the rule that accepted it:
+    // VISIBLE, or NO_OUTPUT for a start without output (BD-343, start_health.c HealthConfirmable).
     if(op==BC250_START_HEALTH_CONFIRM &&
-       (data->Generation!=generation || data->Epoch!=epoch || (data->Flags&(BC250_START_HEALTH_REQUIRED|BC250_START_HEALTH_CONFIRMED))!=(BC250_START_HEALTH_REQUIRED|BC250_START_HEALTH_CONFIRMED)))
+       (data->Generation!=generation || data->Epoch!=epoch ||
+        (data->Flags&(BC250_START_HEALTH_FULL|BC250_START_HEALTH_READY|BC250_START_HEALTH_CONFIRMED))!=
+            (BC250_START_HEALTH_FULL|BC250_START_HEALTH_READY|BC250_START_HEALTH_CONFIRMED) ||
+        !(data->Flags&(BC250_START_HEALTH_VISIBLE|BC250_START_HEALTH_NO_OUTPUT))))
         return (LONG)0xC00000A3;
     return 0;
 }

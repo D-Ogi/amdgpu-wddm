@@ -14,8 +14,9 @@ in each header). The code is our own. The AGS client of the tests uses the AGS S
 | `adl-model.h` | the snapshot: adapters, adapter entries and displays |
 | `adl-discover.cpp` | the snapshot from SetupAPI, D3DKMT, `EnumDisplayDevices` and `QueryDisplayConfig` |
 | `adl-main.cpp` | the exported functions, the contexts and their memory |
-| `atiadl.def` | the 31 exports of the shipped library |
+| `atiadl.def` | the 43 exports of the shipped library, with the 11 presence exports |
 | `tests/adl-unit-test.cpp` | the export contract against the test build (`BC250_ADL_TEST_HOOKS`) |
+| `tests/adl-legacy-client.cpp` | a second caller module of the `ADL_*` functions for the unit test, with its own heap. The build makes it twice (`adl-legacy-client.dll` and the larger `adl-legacy-client-b.dll`) at one fixed base |
 | `tests/test-snapshot.h` | the adapter list that the tests inject |
 | `tests/ags-client.cpp` | the AGS 6.3 client of the host tests and of the lab steps |
 | `tests/atiadl-test.def`, `tests/atiadl-no-modes.def` | the exports of the test build and of the negative control |

@@ -149,6 +149,18 @@ static void range_cases(void)
    CHECK(VramFirmwareRangeBelowTop(&d,tops[t])==old_check(&d,tops[t]));
   }
  }
+ /* Inherited, but the framebuffer map failed (display.c: FramebufferLength 0, Post still known). The check before
+    BD-341 saw a range of 0 bytes and passed every window. The new check uses the range from Post: a framebuffer that
+    ends in a window is a conflict, and one below the windows passes. */
+ for(t=0;t<3;t++) for(bar=0;bar<2;bar++) {
+  const ULONGLONG bytes=7680ull*1200;
+  init(&d,8);CHECK(VramStart(&d)==0);d.DisplayStart=BC250_DISPLAY_START_INHERITED;d.FramebufferLength=0;
+  if(bar) d.Post.PhysicAddress.QuadPart=d.VramPhysical.QuadPart;
+  CHECK(VramFirmwareRangeBelowTop(&d,tops[t])==STATUS_SUCCESS);
+  d.Post.PhysicAddress.QuadPart=d.VramPhysical.QuadPart+(LONGLONG)(d.VramLength-tops[t]+4096-bytes);
+  CHECK(old_check(&d,tops[t])==STATUS_SUCCESS);
+  CHECK(VramFirmwareRangeBelowTop(&d,tops[t])==STATUS_CONFLICTING_ADDRESSES);
+ }
  /* Inherited, the address in no known view: unknown, as before. */
  init(&d,8);missing_bar=1;CHECK(VramStart(&d)==0);d.DisplayStart=BC250_DISPLAY_START_INHERITED;
  d.FramebufferLength=7680ull*1200;

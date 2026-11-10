@@ -224,6 +224,95 @@ typedef struct ADLSLSOffset {
     int iBezelffsetValue;
 } ADLSLSOffset, *LPADLSLSOffset;
 
+// The structures of the functions that the library exports only for presence (docs/design/adl-subset.md, "Presence
+// exports"). The library fills none of them with a value: it clears them.
+typedef struct ADLCrossfireComb {
+    int iNumLinkAdapter;
+    int iAdaptLink[3];
+} ADLCrossfireComb;
+
+typedef struct ADLCrossfireInfo {
+    int iErrorCode;
+    int iState;
+    int iSupported;
+} ADLCrossfireInfo;
+
+typedef struct ADLAdapterLocation {
+    int iBus;
+    int iDevice;
+    int iFunction;
+} ADLAdapterLocation, ADLBdf;
+
+#define ADL_DL_MAX_MVPU_ADAPTERS 4
+
+typedef struct ADLMVPUStatus {
+    int iSize;
+    int iActiveAdapterCount;
+    int iStatus;
+    ADLAdapterLocation aAdapterLocation[ADL_DL_MAX_MVPU_ADAPTERS];
+} ADLMVPUStatus;
+
+typedef struct ADLPMActivity {
+    int iSize;
+    int iEngineClock;
+    int iMemoryClock;
+    int iVddc;
+    int iActivityPercent;
+    int iCurrentPerformanceLevel;
+    int iCurrentBusSpeed;
+    int iCurrentBusLanes;
+    int iMaximumBusLanes;
+    int iReserved;
+} ADLPMActivity;
+
+typedef struct ADLThermalControllerInfo {
+    int iSize;
+    int iThermalDomain;
+    int iDomainIndex;
+    int iFlags;
+} ADLThermalControllerInfo;
+
+typedef struct ADLTemperature {
+    int iSize;
+    int iTemperature;
+} ADLTemperature;
+
+typedef struct ADLFanSpeedInfo {
+    int iSize;
+    int iFlags;
+    int iMinPercent;
+    int iMaxPercent;
+    int iMinRPM;
+    int iMaxRPM;
+} ADLFanSpeedInfo;
+
+typedef struct ADLFanSpeedValue {
+    int iSize;
+    int iSpeedType;  // in: ADL_DL_FANCTRL_SPEED_TYPE_PERCENT or _RPM
+    int iFanSpeed;
+    int iFlags;
+} ADLFanSpeedValue;
+
+typedef struct ADLODParameterRange {
+    int iMin;
+    int iMax;
+    int iStep;
+} ADLODParameterRange;
+
+typedef struct ADLODParameters {
+    int iSize;
+    int iNumberOfPerformanceLevels;
+    int iActivityReportingSupported;
+    int iDiscretePerformanceLevels;
+    int iReserved;
+    ADLODParameterRange sEngineClock;
+    ADLODParameterRange sMemoryClock;
+    ADLODParameterRange sVddc;
+} ADLODParameters;
+
+// The library never makes an application profile: only the pointer type is needed.
+struct ADLApplicationProfile;
+
 // Strides that the AGS 6.3 binary uses (0x624, 0x228, 0x50, 0x70, 0x110, 0x400) and the header sizes of the rest.
 // No pointer member, so x86 and x64 agree.
 static_assert(sizeof(AdapterInfo) == 0x624, "AdapterInfo");
@@ -239,6 +328,16 @@ static_assert(sizeof(ADLSLSTarget) == 0x70, "ADLSLSTarget");
 static_assert(sizeof(ADLSLSMode) == 80, "ADLSLSMode");
 static_assert(sizeof(ADLBezelTransientMode) == 88, "ADLBezelTransientMode");
 static_assert(sizeof(ADLSLSOffset) == 52, "ADLSLSOffset");
+// The sizes that 3DMark SystemInfo (FMSIScan.exe 5.93) and the CPUID library put in iSize before each call.
+static_assert(sizeof(ADLCrossfireComb) == 16, "ADLCrossfireComb");
+static_assert(sizeof(ADLCrossfireInfo) == 12, "ADLCrossfireInfo");
+static_assert(sizeof(ADLMVPUStatus) == 0x3c, "ADLMVPUStatus");
+static_assert(sizeof(ADLPMActivity) == 0x28, "ADLPMActivity");
+static_assert(sizeof(ADLThermalControllerInfo) == 16, "ADLThermalControllerInfo");
+static_assert(sizeof(ADLTemperature) == 8, "ADLTemperature");
+static_assert(sizeof(ADLFanSpeedInfo) == 0x18, "ADLFanSpeedInfo");
+static_assert(sizeof(ADLFanSpeedValue) == 0x10, "ADLFanSpeedValue");
+static_assert(sizeof(ADLODParameters) == 0x38, "ADLODParameters");
 static_assert(offsetof(AdapterInfo, iExist) == 0x31c, "AdapterInfo.iExist");
 static_assert(offsetof(AdapterInfo, strDisplayName) == 0x218, "AdapterInfo.strDisplayName");
 static_assert(offsetof(ADLDisplayInfo, iDisplayInfoValue) == 0x224, "ADLDisplayInfo.iDisplayInfoValue");

@@ -27,6 +27,11 @@ static int SendEscapeFlags(const WCHAR* id,void* p,unsigned size,int softwareOnl
     if(mode==9){d->Flags=0;d->Completed=0;}
     if(mode==10)d->NtStatus=0xC0000185;
     if(mode==11)d->Flags=BC250_START_HEALTH_CONFIRMED;
+    /* BD-343: a start without output, confirmed (accepted), and the same reply without READY or without its output
+       side (refused). */
+    if(mode==13)d->Flags=BC250_START_HEALTH_FULL|BC250_START_HEALTH_READY|BC250_START_HEALTH_NO_OUTPUT|BC250_START_HEALTH_CONFIRMED;
+    if(mode==14)d->Flags=BC250_START_HEALTH_FULL|BC250_START_HEALTH_NO_OUTPUT|BC250_START_HEALTH_CONFIRMED;
+    if(mode==15)d->Flags=BC250_START_HEALTH_FULL|BC250_START_HEALTH_READY|BC250_START_HEALTH_CONFIRMED;
     /* A driver of 0.7.212 or older: it refuses a CONFIRM that does not carry HardwareAccess, with
        STATUS_INVALID_PARAMETER and the build in Version, and answers READ as every driver does. */
     if(mode==12 && softwareOnly && d->Op==BC250_START_HEALTH_CONFIRM){
@@ -51,6 +56,8 @@ int main(void)
     for(mode=1;mode<=8;mode++)CHECK(Bc250StartHealth(1,123,7,&d,sizeof(d))<0);
     mode=9;CHECK(Bc250StartHealth(0,0,0,&d,sizeof(d))==0 && d.Flags==0);
     for(mode=10;mode<=11;mode++)CHECK(Bc250StartHealth(1,123,7,&d,sizeof(d))<0);
+    mode=13;CHECK(Bc250StartHealth(1,123,7,&d,sizeof(d))==0 && (d.Flags&BC250_START_HEALTH_NO_OUTPUT));
+    for(mode=14;mode<=15;mode++)CHECK(Bc250StartHealth(1,123,7,&d,sizeof(d))<0);
     /* Against a driver of 0.7.212 or older the refused CONFIRM goes again with the old flag word, with the request
        rebuilt, and every later CONFIRM of this process goes that way at once. READ keeps the software word. */
     mode=12;calls=0;

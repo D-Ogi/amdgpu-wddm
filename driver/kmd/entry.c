@@ -102,6 +102,7 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING Regi
     GuardLabReadQueueReset(DriverObject);          // stage 2 of the hang recovery: read only (queue-reset.md)
     GuardLabReadCpuRevertFault(DriverObject);      // BD-295 arm: read only, taken by CpuStop and the next start
     GuardLabReadEngineHang(DriverObject);          // queue-reset.md rows Q3/Q5/Q6: read only, one submit per node
+    GuardLabReadCpuVisibleOnDemand(DriverObject);  // BD-210 G1 A/B: read only, latched at WddmStart
 #else
     GuardLog("kmd: BD-167 flavour release (no raw diagnostic escapes)");
 #endif

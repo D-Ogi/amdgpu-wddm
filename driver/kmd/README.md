@@ -132,8 +132,9 @@ no code from Microsoft's MS-PL sample.
   name them; both keep a copy of the `BC250_STAGE` table that a test checks against this driver's header.
 - **Why a start failed** (BD-122, 0.7.216.30). `LastStage` 91 says that a step of `DxgkDdiStartDevice` failed. It
   does not say which step. A device with Code 43 (`CM_PROB_FAILED_POST_START`) answers no escape, so the log ring
-  that holds the reason is unreadable exactly when it is wanted. The subkey `Parameters\StartRecord` therefore
-  keeps the reason, behind no gate at all. Its values are `Result` (`attempt`, `started`, `failed` or `guard`),
+  that holds the reason is unreadable exactly when it is wanted. The subkey `StartRecord` of the driver state
+  store therefore keeps the reason, behind no gate at all. It is `StateV2\Generations\<Active>\Data\StartRecord`
+  in the shared persistent state of the service. KMDs before 0.7.216.102-tester.31 wrote `Parameters\StartRecord`. Its values are `Result` (`attempt`, `started`, `failed` or `guard`),
   `Step` (the step of `Bc250StartDevice` by name), `SubStep` (the phase inside `WddmStart` and
   `GpuStartupInitialize`), `Status` (the NTSTATUS), `Stage`, `UnconfirmedStarts`, `Version`, `TimeUtc` and `Log`.
   `Log` is a `REG_MULTI_SZ` of 64 ring lines, oldest first. They are the lines that ran up to the failure, not the
@@ -485,6 +486,34 @@ is on. The design is in [scaled-flip.md](../../docs/design/scaled-flip.md). The 
 lab: scaled plane selector read (read only; value 0x1, 0x00000000)
 wddm: scaled plane 0x1 (LabScaledPlane 0x1, handshake 1)
 ```
+
+## CPU view on demand (BD-210)
+
+VidMm gives every CpuVisible allocation a CPU view in the process that creates it, also when nothing maps the
+allocation. A 32-bit process runs out of address space on such views. A UMD allocation from a version 2 blob that is
+CpuVisible, is in the GTT heap and asks for no scan-out therefore also gets
+`DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand` (`UmdBlobAllocCpuVisibleOnDemand`, umd_blob.c). VidMm then
+makes the view at the first Lock2. `CpuVisible` stays set, so a Lock2 works as before. A version 1 blob, a scan-out
+request and a VRAM-heap allocation keep the view at the create. The KMD maps allocations only by physical address, so
+no kernel path needs the VidMm view.
+
+The GTT heap is the aperture segment alone (`UmdBlobPlacement`). VidMm refuses the create of a CpuVisibleOnDemand
+allocation whose segment set includes the local segment. On unit A (2026-11-10) a 32-bit DEVICE_LOCAL|HOST_VISIBLE
+`vkAllocateMemory` failed with `VK_ERROR_OUT_OF_DEVICE_MEMORY` and `D3D11CreateDevice` failed with `E_OUTOFMEMORY`
+while the flag was on for VRAM-heap allocations. The same KMD without the flag passed both.
+
+The release flavour always sets the flag. In the lab flavour, `LabCpuVisibleOnDemand` (a REG_DWORD under the
+service's `Parameters` key, read once at `DriverEntry`, not a catalog setting) = 0 turns it off, for an A/B run on one
+KMD. Absent or any other value keeps it on. The start log and the summary say:
+
+```
+wddm: umd cpu view on demand on (VidMm maps a cpu-visible v2 allocation at its first Lock2)
+wddm summary: umd cpu view on demand (on): <allocations> (<MiB> MiB)
+```
+
+The summary count is a part of the `cpu-visible` count of the line `wddm summary: umd cpu view`.
+`driver/kmd/test/check_cpu_view_on_demand.py` (quick gate `cpu-view-on-demand`) checks the KMD side and its
+negative controls.
 
 After each DRIVERCAPS line comes `wddm: DRIVERCAPS mpo <SupportMultiPlaneOverlay> planes <MaxOverlayPlanes>`.
 The log ring keeps the first 256 lines of a start, and the first DRIVERCAPS line comes after them, so a busy start

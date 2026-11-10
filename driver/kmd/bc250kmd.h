@@ -549,6 +549,8 @@ void GfxRetireSignal(_Inout_ BC250_DEVICE* Device);
 void StartHealthInitialize(BC250_DEVICE* Device);
 void StartHealthBegin(BC250_DEVICE* Device, BOOLEAN Full);
 void StartHealthReady(BC250_DEVICE* Device, BOOLEAN Ready);
+// BD-343: the output state of the start (start_health.c). The spin lock only; any IRQL up to DISPATCH_LEVEL.
+void StartHealthOutput(BC250_DEVICE* Device, ULONG DisplayStart, BOOLEAN Connected);
 void StartHealthResumeReady(BC250_DEVICE* Device, BOOLEAN Mode);
 void StartHealthClose(BC250_DEVICE* Device);
 void StartHealthStop(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Snapshot);
@@ -597,6 +599,8 @@ void DpmSetStable(BC250_DEVICE* Device, BOOLEAN Enabled);
 // zero. Delta is +1 or -1 and the count never goes under zero.
 void DpmComputeContextAdd(BC250_DEVICE* Device, LONG Delta);
 NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
+// BD-343: the curve half of a confirmation by the rule without output; clears only a curve a display start confirmed.
+NTSTATUS DpmConfirmKnownCurve(BC250_DEVICE* Device, _In_z_ const char* Why);
 void DpmLogSummary(BC250_DEVICE* Device);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 void DpmTuneRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_TUNE* Data, ULONG Size, BOOLEAN Admin,
@@ -761,6 +765,9 @@ void GuardLabReadCpuRevertFault(_In_ PDRIVER_OBJECT DriverObject);
 // per node, at the first call after its delay. Any IRQL.
 void GuardLabReadEngineHang(_In_ PDRIVER_OBJECT DriverObject);
 BOOLEAN GuardLabTakeEngineHang(ULONG Node);
+// Lab flavour only (BD-210 G1): LabCpuVisibleOnDemand (REG_DWORD under Parameters, read only in DriverEntry). 0 turns
+// off DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand for the UMD allocations; absent or any other value keeps it.
+void GuardLabReadCpuVisibleOnDemand(_In_ PDRIVER_OBJECT DriverObject);
 ULONGLONG GuardLabCommitPagingRingStart(void);
 extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
 extern int bc250_ring_boundary_pad;                     // shim/bc250_ring.c, 0 only in a lab control run
@@ -784,6 +791,10 @@ ULONG GuardLabScaledPlane(void);
 #define BC250_LAB_QRESET_ENGINE_OFF 2u
 void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject);
 ULONG GuardLabQueueReset(void);
+// BD-210 G1: TRUE when WddmStart gives the UMD allocations CpuVisibleOnDemand (umd_blob.c
+// UmdBlobAllocCpuVisibleOnDemand). Always TRUE in the release flavour; in the lab flavour FALSE only with
+// LabCpuVisibleOnDemand 0. Any IRQL: a value fixed at DriverEntry.
+BOOLEAN GuardCpuVisibleOnDemand(void);
 // BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
 // one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog
 // must never undercut (submit_watchdog.h). Read-only: nothing in this driver writes that key - the installer
@@ -793,8 +804,8 @@ NTSTATUS GuardStoreSetting(_In_z_ PCWSTR Name, ULONG Value);        // written a
 NTSTATUS GuardDeleteSetting(_In_z_ PCWSTR Name);                    // deleted and flushed; absent is success
 NTSTATUS GuardVolatileQuery(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, _Out_ ULONG* Value); // gone at reboot
 NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Value);
-// BD-122: why a start failed, in Parameters\StartRecord, with no gate at all - a device with Code 43 answers no
-// escape, so the log ring is unreadable exactly when the reason is wanted. GuardStartStep names the step of
+// BD-122: why a start failed, in the StartRecord subkey of the state store's Data key (guard.c), with no gate at
+// all - a device with Code 43 answers no escape, so the log ring is unreadable exactly when the reason is wanted. GuardStartStep names the step of
 // Bc250StartDevice that is about to run and GuardStartSubStep the step inside WddmStart / GpuStartupInitialize
 // (both take a literal of this image, take no lock and are safe at any IRQL). The four recorders write the record
 // at PASSIVE_LEVEL and never return a failure: see the rule above GuardRecordStartAttempt in guard.c, which also
