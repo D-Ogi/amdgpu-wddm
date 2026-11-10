@@ -23,6 +23,7 @@ import stat
 import struct
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -44,12 +45,24 @@ def sha(data):
     return hashlib.sha256(data).hexdigest().upper()
 
 
-def remove_tree(path):
-    """shutil.rmtree that also removes the read-only object files git writes on Windows."""
+def remove_tree(path, wait=15.0):
+    """shutil.rmtree that also removes the read-only object files git writes on Windows.
+
+    A fixture that stops a process tree with taskkill /F gets control back before Windows closes the handles of the
+    stopped processes, so a log file of a stopped job can still be open for a short time (sharing violation, WinError
+    32). The removal tries again until `wait` seconds have passed. Any other error stops it at once."""
     def writable_again(func, target, _):
         os.chmod(target, stat.S_IWRITE)
         func(target)
-    shutil.rmtree(path, onexc=writable_again)
+    deadline = time.monotonic() + wait
+    while True:
+        try:
+            shutil.rmtree(path, onexc=writable_again)
+            return
+        except PermissionError as error:
+            if getattr(error, "winerror", None) != 32 or time.monotonic() >= deadline:
+                raise
+            time.sleep(0.25)
 
 
 def fake_pe(body, signature=b""):
