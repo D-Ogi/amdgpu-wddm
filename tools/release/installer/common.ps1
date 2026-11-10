@@ -295,6 +295,30 @@ function Get-InstallAction {
     return [ordered]@{ action = 'repair'; message = "repairing $PackageVersion (phase $phase)" }
 }
 
+# BD-359: what the end of a verification records. Pure: the count of failed checks of this attempt, whether the
+# installer's own RunOnce entry started the run at a logon (-LogonContinuation), the attempt number, and whether this
+# boot's start-confirm run had ended when the checks read the driver (-Settled, Invoke-Verify) in; out:
+#   repeat       $true: run every check once more after $script:ContinuationRepeatSeconds before the verdict
+#   phase        the phase to write, or $null to keep the phase that is there
+#   transaction  the verify observation for the update transaction of this boot (nagi-update.ps1), or '' for none
+# A verification that a person started (verify.cmd, install.cmd, the setup window) records its verdict, a pass or a
+# failure, as before. The continuation never writes a phase other than verified: a check at a logon can read a state
+# that is not final yet (a start-confirm wait that ended on its bound, a DWM that Windows replaced at the logon), so a
+# failed first attempt is provisional and the checks run once more. A failure of the second attempt keeps the phase
+# ('installed': installed and not verified yet, which every reader of the phase already knows); its report is a normal
+# failed report, so the person sees it. The transaction gets verify-failed from that second attempt only when the
+# start-confirm run of this boot had ended (-Settled): a driver that starts but fails a check is seen by no other
+# per-boot signal (start-confirm reports the start only), so a settled failure must count. An unsettled one gives no
+# observation: never a pass, never a failure. The transaction never gets verified for a failed attempt.
+$script:ContinuationRepeatSeconds = 60
+function Get-VerifyOutcome {
+    param([int]$Failed, [bool]$LogonContinuation, [int]$Attempt = 1, [bool]$Settled = $true)
+    if ($Failed -le 0) { return [pscustomobject]@{ repeat = $false; phase = 'verified'; transaction = 'verified' } }
+    if (-not $LogonContinuation) { return [pscustomobject]@{ repeat = $false; phase = 'verify-failed'; transaction = 'verify-failed' } }
+    if ($Attempt -lt 2) { return [pscustomobject]@{ repeat = $true; phase = $null; transaction = '' } }
+    return [pscustomobject]@{ repeat = $false; phase = $null; transaction = $(if ($Settled) { 'verify-failed' } else { '' }) }
+}
+
 # GUI plan A2: the one decision whether the restart that a pending phase waits for has happened. Every pending phase
 # (test signing set, driver package waiting, installation complete) records the boot it was saved in
 # (restart_boot_id). It advances only on positive evidence of a new boot: that boot is known, the current BootId is
@@ -3962,16 +3986,22 @@ function Save-ContinuationClosure {
 # The command line path starts Windows PowerShell directly, never cmd.exe: a folder name with &, ^, %, ( or ) cannot
 # split the command, because no command interpreter reads it. The argument contract (RunOnce, docs/gui/
 # interfaces-setup.md section 1): powershell.exe -NoProfile -ExecutionPolicy Bypass -File <dir>\installer\install.ps1
-# -HoldWindow [-Verify], each part quoted by Format-CommandLine and read back by CommandLineToArgvW. -HoldWindow keeps
-# the console open at the end, as the pause of install.cmd and verify.cmd does.
+# -HoldWindow [-Verify [-LogonContinuation]], each part quoted by Format-CommandLine and read back by CommandLineToArgvW.
+# -HoldWindow keeps the console open at the end, as the pause of install.cmd and verify.cmd does. -LogonContinuation tells
+# the verification that the installer's own RunOnce entry started it, not a person (BD-359, Get-VerifyOutcome).
+# -LegacyInstallRoot: the install root holds the engine of a legacy release (after a legacy rollback), which does
+# not know -LogonContinuation, so its verify command has no -LogonContinuation.
 function Get-ContinuationCommand {
-    param([ValidateSet('continue', 'verify')][string]$Kind, [string]$Closure, [string]$InstallRoot, [bool]$Gui)
+    param([ValidateSet('continue', 'verify')][string]$Kind, [string]$Closure, [string]$InstallRoot, [bool]$Gui, [bool]$LegacyInstallRoot)
     if ($Gui -and $Closure -and (Test-Path -LiteralPath (Join-Path $Closure $script:SetupExeName))) {
         return [pscustomobject]@{ exe = (Join-Path $Closure $script:SetupExeName); arguments = @('--continue') }
     }
     $ps = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $common = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File')
-    if ($Kind -eq 'verify') { return [pscustomobject]@{ exe = $ps; arguments = @($common + @((Join-Path $InstallRoot 'installer\install.ps1'), '-HoldWindow', '-Verify')) } }
+    if ($Kind -eq 'verify') {
+        $marker = $(if ($LegacyInstallRoot) { @() } else { @('-LogonContinuation') })
+        return [pscustomobject]@{ exe = $ps; arguments = @($common + @((Join-Path $InstallRoot 'installer\install.ps1'), '-HoldWindow', '-Verify') + $marker) }
+    }
     return [pscustomobject]@{ exe = $ps; arguments = @($common + @((Join-Path $Closure 'installer\install.ps1'), '-HoldWindow')) }
 }
 function Read-RepairSetIndex {

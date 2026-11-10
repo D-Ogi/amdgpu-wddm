@@ -92,6 +92,7 @@ namespace AmdgpuWddmControl
         public string InstalledVersion;         // Release\Version; null when missing
         public string InstalledManifestSha256;  // SHA256 of <InstallDir>\manifest.json; null when unreadable
         public string Phase, StatePackageVersion;   // state.json (the package version only binds the phase; report)
+        public long? StateRestartBootId;        // state.json restart_boot_id: the boot a pending phase was saved in
         public List<VerifyReport> Reports = new List<VerifyReport>();     // the valid reports read, newest first
         public string ReportSearchNote;         // non-null: the search for the installed package's report did not end (report only)
         public string DriverDate;               // INF DriverVer date as Windows stores it (M-D-YYYY)
@@ -228,7 +229,11 @@ namespace AmdgpuWddmControl
 
             v.InstalledVersion = string.IsNullOrEmpty(f.InstalledVersion) ? null : f.InstalledVersion;
             var phase = f.StatePackageVersion != null && f.StatePackageVersion == v.InstalledVersion ? f.Phase : null;
-            v.InstalledPending = v.InstalledVersion != null && (phase == "installed" || phase == "driver-pending-restart");
+            // BD-359: a pending phase waits for a restart only until Windows restarted. When the saved boot and this boot
+            // are both known and differ, the restart is done (the rule of Get-PendingRestart in installer\common.ps1):
+            // phase 'installed' then means "installed, not verified yet", which the verification line says.
+            bool restarted = f.StateRestartBootId.HasValue && f.BootId.HasValue && f.StateRestartBootId.Value != f.BootId.Value;
+            v.InstalledPending = v.InstalledVersion != null && (phase == "installed" || phase == "driver-pending-restart") && !restarted;
             v.InstallStopped = f.Phase == "install-incomplete";
 
             var report = InstalledReport(f);
@@ -346,6 +351,7 @@ namespace AmdgpuWddmControl
             if (d == null) return false;
             f.Phase = S(d, "phase");
             f.StatePackageVersion = S(d, "package_version");
+            f.StateRestartBootId = N(d, "restart_boot_id");
             var boot = N(d, "mutation_boot_id");
             if (boot != null) f.InstallActions.Add(new InstallAction { BootId = boot.Value, BootElapsedMs = Nonnegative(d, "mutation_boot_elapsed_ms"), Utc = S(d, "mutation_utc") });
             return true;

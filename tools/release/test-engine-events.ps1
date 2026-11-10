@@ -186,7 +186,7 @@ $steps = @(Get-Events $r 'step')
 Check (($steps.Count -ge 15) -and -not @($steps | Where-Object { -not $_.dry_run }).Count) "$($steps.Count) step events, each marked dry run"
 $rr = @(Get-Events $r 'restart-required')
 Check (($rr.Count -eq $(if ($tsActive) { 1 } else { 2 })) -and ($rr[-1].reason_id -eq 'restart.complete') -and ($r.result.restart.required) -and ($r.result.restart.reason_id -eq 'restart.complete')) "restart handed to the window: $(@($rr | ForEach-Object { $_.reason_id }) -join ', ')"
-Check (($r.result.restart.continuation.kind -eq 'verify') -and ($r.result.restart.continuation.command -match 'powershell\.exe.* -File .*installer\\install\.ps1"? -HoldWindow -Verify$')) "continuation after the last restart: $($r.result.restart.continuation.command)"
+Check (($r.result.restart.continuation.kind -eq 'verify') -and ($r.result.restart.continuation.command -match 'powershell\.exe.* -File .*installer\\install\.ps1"? -HoldWindow -Verify -LogonContinuation$')) "continuation after the last restart: $($r.result.restart.continuation.command)"
 if (-not $tsActive) {
     $first = $rr[0]
     Check (($first.reason_id -eq 'restart.test-signing') -and ($first.continuation.kind -eq 'continue') -and ($first.continuation.command -match [regex]::Escape("amdgpu-wddm\installer\packages\$pkgVersion\installer\install.ps1"))) "continuation after the test-signing restart runs from the closure: $($first.continuation.command)"
@@ -317,6 +317,26 @@ if ($null -ne $bootId) {
         if ($c.code -eq 2) { $ok = $ok -and -not $ran -and -not (Get-Events $r 'step').Count -and ($kept -eq $c.phase) }
         if ($c.code -in 0, 3) { $ok = $ok -and $ran }
         Check $ok "$($c.name): exit $($r.code), $($r.result.message_id), phase kept $kept ($($r.result.detail))"
+    }
+} else { '  (skipped: BootId not readable on this PC)' }
+
+'[BD-359] the verification at a logon (-LogonContinuation): a failed check gets one more attempt; only the final attempt writes verify-*.json'
+if ($null -ne $bootId) {
+    foreach ($c in @(@{ name = 'Verify at a logon'; args = @('-DryRun', '-Verify', '-LogonContinuation'); reports = 1; attempts = 1 },
+            @{ name = 'Verify by a person (negative control)'; args = @('-DryRun', '-Verify'); reports = 1; attempts = 0 })) {
+        $st = [ordered]@{ schema = 1; phase = 'installed'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2000-01-01T00:00:00.0000000Z'; restart_boot_id = $bootId + 1 }
+        $r = Invoke-Engine $c.name $c.args -State $st -Env @{ AMDGPU_WDDM_TEST_REPEAT_SECONDS = '1' }
+        Test-Stream $r $c.name
+        $rep = @(Get-ChildItem -LiteralPath (Join-Path $r.state_dir 'verify') -Filter 'verify-*.json' -ErrorAction SilentlyContinue)
+        $prov = @(Get-ChildItem -LiteralPath (Join-Path $r.state_dir 'verify') -Filter 'attempt-*.json' -ErrorAction SilentlyContinue)
+        $again = $r.text -match 'runs every check once more in 1 s'
+        $kept = [string](Get-Content -LiteralPath (Join-Path $r.state_dir 'state.json') -Raw | ConvertFrom-Json).phase
+        $vr = $(if ($rep.Count -eq 1) { Get-Content -LiteralPath $rep[0].FullName -Raw | ConvertFrom-Json })
+        $pr = $(if ($prov.Count -eq 1) { Get-Content -LiteralPath $prov[0].FullName -Raw | ConvertFrom-Json })
+        $shape = $vr -and $vr.final -and ($vr.attempt -eq ($c.attempts + 1)) -and ($vr.outcome -eq 'failed') -and ((-not $pr) -or ((-not $pr.final) -and ($pr.attempt -eq 1)))
+        # The person sees the failure of the final attempt in the held window (and the card reads the final report).
+        $seen = ($r.text -match 'Verification: \d+ check\(s\) failed') -and (($r.text -match 'started by itself at the logon') -eq ($c.attempts -eq 1))
+        Check (($r.code -eq 3) -and ($r.result.message_id -eq 'result.verify-failed') -and ($rep.Count -eq $c.reports) -and ($prov.Count -eq $c.attempts) -and $shape -and $seen -and ($again -eq ($c.attempts -eq 1)) -and ($kept -eq 'installed')) "$($c.name): exit $($r.code), $($rep.Count) final and $($prov.Count) provisional report(s), second attempt $again, failure shown $seen, phase $kept"
     }
 } else { '  (skipped: BootId not readable on this PC)' }
 

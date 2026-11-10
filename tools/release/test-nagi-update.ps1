@@ -228,7 +228,9 @@ $txnCases = @(
     @{ n = 'one failed start'; b = @((Boot $new 1 $null)); want = 'wait' },
     @{ n = 'two failed starts'; b = @((Boot $new 1 $null), (Boot $new 3 'verify-failed')); want = 'rollback' },
     @{ n = 'two failed starts by verify alone'; b = @((Boot $new 0 'verify-failed'), (Boot $new $null 'verify-failed')); want = 'rollback' },
-    @{ n = 'two starts left to a kit (exit 2) do not count'; b = @((Boot $new 2 $null), (Boot $new 2 $null)); want = 'wait' },
+    # BD-359: a verification at a logon that failed gives no observation (''): two such boots neither count nor commit.
+    @{ n = 'two confirmed starts whose logon verification failed (no observation) do not count'; b = @((Boot $new 0 ''), (Boot $new 0 '')); want = 'wait' },
+    @{ n = 'two starts left to a kit (exit 2) do not count';b = @((Boot $new 2 $null), (Boot $new 2 $null)); want = 'wait' },
     @{ n = 'another KMD ran'; b = @((Boot $other 0 'verified')); want = 'supersede' },
     @{ n = 'two failed starts, another state catalog'; b = @((Boot $new 1 $null), (Boot $new 1 $null)); t = @{ to = [pscustomobject]@{ release = 'x'; kmd_sha256 = $new; kmd_abi = '0x000700D8'; state_schema = 2; catalog_id = ('d' * 64); apps_kmd_abis = @('0x000700D8') } }; want = 'manual' },
     @{ n = 'two failed starts, another state schema'; b = @((Boot $new 1 $null), (Boot $new 1 $null)); t = @{ to = [pscustomobject]@{ release = 'x'; kmd_sha256 = $new; kmd_abi = '0x000700D8'; state_schema = 3; catalog_id = $cat; apps_kmd_abis = @('0x000700D8') } }; want = 'manual' },

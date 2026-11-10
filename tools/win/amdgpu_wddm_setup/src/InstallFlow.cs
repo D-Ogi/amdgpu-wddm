@@ -96,6 +96,15 @@ namespace AmdgpuWddmSetup
             return bootLogo.HasValue ? new[] { bootLogo.Value ? "-BootLogo" : "-NoBootLogo" } : new string[0];
         }
 
+        // The run that RunOnce starts after a restart (--continue) tells the engine that nobody asked for it (BD-359):
+        // a verification of that run gets a second attempt and records only a pass, so one check that reads a state
+        // of the logon that is not final yet cannot mark the installation as failed. The engine reads the switch only
+        // in a verification, so the window passes it on every --continue run.
+        public static string[] ContinuationArguments(string flow)
+        {
+            return flow == "continue" ? new[] { "-LogonContinuation" } : new string[0];
+        }
+
         // The options the plan screen may carry, as string ids. They are choices between good outcomes, not
         // permissions: each has a default, and the Install button never waits for one (G-CONSENT allows exactly
         // these controls and no other).
