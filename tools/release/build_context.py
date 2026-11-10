@@ -22,7 +22,7 @@ import sys
 SCHEMA = 2
 RUNTIME_HELPERS = (
     "tools/release/build_release_set.py", "tools/release/build-release-set.ps1",
-    "tools/release/BuildTree.psm1", "tools/release/provenance.py",
+    "tools/release/BuildTree.psm1", "tools/release/JsonReceipt.psm1", "tools/release/provenance.py",
     "tools/release/symbols.py", "tools/release/build_context.py",
     "tools/build/versionstamp.py",
 )
