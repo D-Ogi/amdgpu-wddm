@@ -19,12 +19,16 @@
 #                      rest of StartDevice intact: the sequencing cases must fail.
 #   -KeepStopVisibilityHold  leave the startup hold set during stop: the rollback
 #                      cases must fail before the modeled display handoff.
+#   -NoColdReserveCheck  BD-341: the start ignores the answer of the cold scan-out reserve check, so a reserve in
+#                      the top of VRAM passes silently: the ColdScanoutReserve cases must fail.
+#   -NoChildBegin      BD-341: the start does not begin the child-event ring, so the first child event of a start
+#                      goes into the ring of the start before it: the child ring cases must fail.
 param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
       [string]$Out="$Root\scratch\build\startrecord",
       [string]$Repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path,
       [switch]$GateOnKeepLog,[switch]$NoAttemptRecord,[switch]$RecordBeforeCleanup,[switch]$RecordAtAnyIrql,
       [switch]$LogAfterCleanup,[switch]$NoInitialBlank,[switch]$NoFinalBlank,
-      [switch]$KeepStopVisibilityHold)
+      [switch]$KeepStopVisibilityHold,[switch]$NoColdReserveCheck,[switch]$NoChildBegin)
 $ErrorActionPreference='Stop'
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
@@ -48,6 +52,7 @@ void GuardRecordStartAttempt(void){}
 void GuardRecordStartRefused(NTSTATUS Status){(void)Status;}
 void GuardRecordStartFailed(NTSTATUS Status){(void)Status;}
 void GuardRecordStartStarted(void){}
+void GuardStartDisplay(ULONG State){(void)State;}
 '@
 } else {
     $code=$source.Substring($first,$last-$first)
@@ -93,6 +98,16 @@ if ($RecordBeforeCleanup) {
     $pnp=$pnp -replace '(?m)^\s*GuardRecordStartFailed\(status\);',''
     $pnp=$pnp.Replace("failed:`n","failed:`n    GuardRecordStartFailed(status);`n")
     $pnp=$pnp.Replace("failed:`r`n","failed:`r`n    GuardRecordStartFailed(status);`r`n")
+}
+if ($NoColdReserveCheck) {
+    $check='status = VramFirmwareRangeBelowTop(device, BC250_VRAM_TOP_RESERVED);'
+    if (!$pnp.Contains($check)) { throw 'pnp.c has no cold scan-out reserve check to drop' }
+    $pnp=$pnp.Replace($check,'(void)VramFirmwareRangeBelowTop(device, BC250_VRAM_TOP_RESERVED); status=STATUS_SUCCESS; /* negative control */')
+}
+if ($NoChildBegin) {
+    $begin='ConnectorChildBegin(device);'
+    if (!$pnp.Contains($begin)) { throw 'pnp.c has no ConnectorChildBegin call to drop' }
+    $pnp=$pnp.Replace($begin,'/* negative control: no child ring begin */')
 }
 [IO.File]::WriteAllText((Join-Path $Out 'pnp_actual.inc'),$pnp)
 # Execute the real stop admission and startup-hold release before the modeled

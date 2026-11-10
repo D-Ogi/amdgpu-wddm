@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "display_start.h"     /* BD-341: the display-start state */
 #include <string.h>
 #include <wchar.h>
 #include "regs.generated.h"
@@ -18,6 +19,7 @@ typedef int BOOLEAN;
 #define NT_SUCCESS(x) ((x)>=0)
 #define STATUS_SUCCESS 0L
 #define STATUS_DEVICE_CONFIGURATION_ERROR (-10L)
+#define STATUS_CONFLICTING_ADDRESSES (-11L)
 #define MAXULONG 0xffffffffUL
 #define MAXULONGLONG (~0ull)
 #define BC250_VRAM_MAX_LENGTH (16ull<<30)
@@ -38,6 +40,9 @@ typedef struct {
  PHYSICAL_ADDRESS VramPhysical,Bar0Physical;ULONGLONG VramLength,VramMcBase,Bar0Length,DisplayReservationEnd;
  BOOLEAN LargePageLayout;
  struct {ULONG Pitch,Height;PHYSICAL_ADDRESS PhysicAddress;} Post;
+ unsigned long DisplayStart;          /* BD-341: display_start.h */
+ unsigned long ColdScanoutBytes;      /* BD-341: what the firmware can still scan out of at VRAM offset 0 */
+ ULONGLONG FramebufferLength;         /* display.c: Post.Pitch * Post.Height from the map to the stop, else 0 */
  volatile LONG64 UmaActiveBytes;
 } BC250_DEVICE;
 struct fake_adev {void *dev,*backend;struct {ULONGLONG mc_vram_size,real_vram_size,vram_start;} gmc;};
@@ -115,9 +120,71 @@ static void caps_cases(void)
  init(&d,8);CHECK(VramStart(&d)==0);d.VramEnabled=FALSE;check_caps(&d,0);
  init(&d,8);CHECK(VramStart(&d)==0);d.Post.PhysicAddress.QuadPart=1;check_caps(&d,0);
 }
+/* BD-341: the one top-of-VRAM check (VramFirmwareRangeBelowTop) of gart.c, psp.c, gpumem.c and the start. */
+#define TOP_GART (2ull<<20)
+#define TOP_PSP (8ull<<20)
+#define TOP_POOL (32ull<<20)
+/* The check of the three windows before BD-341, with the length that display.c maps. An inherited display must get
+   the same answer from the new check. */
+static NTSTATUS old_check(const BC250_DEVICE* d,ULONGLONG top)
+{
+ ULONGLONG fbOffset;
+ if(!VramFramebufferOffset(d,&fbOffset)) return STATUS_DEVICE_CONFIGURATION_ERROR;
+ return fbOffset+d->FramebufferLength>d->VramLength-top?STATUS_CONFLICTING_ADDRESSES:STATUS_SUCCESS;
+}
+static void range_cases(void)
+{
+ static const ULONGLONG tops[]={TOP_GART,TOP_PSP,TOP_POOL};
+ BC250_DEVICE d;ULONG gib;unsigned t,e,bar;
+ /* Inherited: the framebuffer at the bottom (both views), in the middle, at the edge of each window and in it. */
+ for(gib=4;gib<=16;gib+=4) for(t=0;t<3;t++) {
+  const ULONGLONG vram=(ULONGLONG)gib<<30,bytes=7680ull*1200;
+  const ULONGLONG ends[]={bytes,vram/2,vram-tops[t],vram-tops[t]+1,vram-tops[t]+4096,vram};
+  for(e=0;e<sizeof(ends)/sizeof(ends[0]);e++) for(bar=0;bar<2;bar++) {
+   NTSTATUS expected=ends[e]<=vram-tops[t]?STATUS_SUCCESS:STATUS_CONFLICTING_ADDRESSES;
+   init(&d,gib);CHECK(VramStart(&d)==0);
+   d.DisplayStart=BC250_DISPLAY_START_INHERITED;d.FramebufferLength=bytes;
+   if(e!=0||bar) d.Post.PhysicAddress.QuadPart=d.VramPhysical.QuadPart+(LONGLONG)(ends[e]-bytes);
+   CHECK(VramFirmwareRangeBelowTop(&d,tops[t])==expected);
+   CHECK(VramFirmwareRangeBelowTop(&d,tops[t])==old_check(&d,tops[t]));
+  }
+ }
+ /* Inherited, the address in no known view: unknown, as before. */
+ init(&d,8);missing_bar=1;CHECK(VramStart(&d)==0);d.DisplayStart=BC250_DISPLAY_START_INHERITED;
+ d.FramebufferLength=7680ull*1200;
+ CHECK(VramFirmwareRangeBelowTop(&d,TOP_POOL)==STATUS_DEVICE_CONFIGURATION_ERROR);
+ CHECK(old_check(&d,TOP_POOL)==STATUS_DEVICE_CONFIGURATION_ERROR);
+ /* A present display of no size has no range: refused, as the memory layout refuses it. */
+ init(&d,8);CHECK(VramStart(&d)==0);d.DisplayStart=BC250_DISPLAY_START_INHERITED;d.Post.Height=0;
+ CHECK(VramFirmwareRangeBelowTop(&d,TOP_POOL)==STATUS_DEVICE_CONFIGURATION_ERROR);
+ /* No firmware display, on the small carve-out (431 MiB): the cold reserve at offset 0 is the range. FramebufferLength
+    is 0 here, so the check before BD-341 passed every one of these. */
+ {
+  static const struct {ULONGLONG cold;NTSTATUS gart,psp,pool;} cases[]={
+   {0,STATUS_SUCCESS,STATUS_SUCCESS,STATUS_SUCCESS},
+   {9ull<<20,STATUS_SUCCESS,STATUS_SUCCESS,STATUS_SUCCESS},                       /* the VGA allocation */
+   {(431ull-32)<<20,STATUS_SUCCESS,STATUS_SUCCESS,STATUS_SUCCESS},                /* ends at the pool window */
+   {((431ull-32)<<20)+4096,STATUS_SUCCESS,STATUS_SUCCESS,STATUS_CONFLICTING_ADDRESSES},
+   {(431ull-8)<<20,STATUS_SUCCESS,STATUS_SUCCESS,STATUS_CONFLICTING_ADDRESSES},   /* ends at the PSP window */
+   {((431ull-8)<<20)+4096,STATUS_SUCCESS,STATUS_SUCCESS,STATUS_SUCCESS},          /* under 8 MiB left: no reserve */
+  };
+  unsigned i;
+  for(i=0;i<sizeof(cases)/sizeof(cases[0]);i++) for(bar=0;bar<2;bar++) {
+   init(&d,8);missing_bar=(int)bar;CHECK(VramStart(&d)==0);
+   d.VramLength=431ull<<20;d.DisplayStart=BC250_DISPLAY_START_NO_POST;memset(&d.Post,0,sizeof(d.Post));
+   d.FramebufferLength=0;d.ColdScanoutBytes=(unsigned long)cases[i].cold;
+   CHECK(VramFirmwareRangeBelowTop(&d,TOP_GART)==cases[i].gart);
+   CHECK(VramFirmwareRangeBelowTop(&d,TOP_PSP)==cases[i].psp);
+   CHECK(VramFirmwareRangeBelowTop(&d,TOP_POOL)==cases[i].pool);
+  }
+  /* A window larger than VRAM is a conflict, not an unsigned wrap. */
+  CHECK(VramFirmwareRangeBelowTop(&d,d.VramLength+1)==STATUS_CONFLICTING_ADDRESSES);
+ }
+}
 int main(void){
  ULONG gib;
  caps_cases();
+ range_cases();
  for(gib=8;gib<=16;gib+=4){
   BC250_DEVICE d;BC250_GART g;ULONGLONG off,len,table,tablelen;int mismatch;
   init(&d,gib);CHECK(VramStart(&d)==0);CHECK(d.VramEnabled && d.VramWriteEnabled && d.VramLength==((ULONGLONG)gib<<30));
@@ -167,6 +234,46 @@ int main(void){
   CHECK(!off && !len && !table && !tablelen);
   d.Post.PhysicAddress=d.VramPhysical;CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
   d.Post.Height=0;CHECK(!WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+  // BD-341: a start without a firmware display. The framebuffer range is at offset 0, in both views and without
+  // BAR0. With nothing that the firmware can scan out of it is empty, so the segment starts at the bottom of VRAM, or
+  // above the display reservation when there is one. A present display with a zero size stays refused (above).
+  {
+   ULONGLONG fbOffset=1,fbBytes=1;
+   int bar;
+   for(bar=0;bar<2;bar++){
+    init(&d,gib);missing_bar=bar;CHECK(VramStart(&d)==0 && d.VramEnabled);
+    d.DisplayStart=BC250_DISPLAY_START_NO_POST;memset(&d.Post,0,sizeof(d.Post));
+    CHECK(VramFramebufferOffset(&d,&fbOffset) && fbOffset==0);
+    CHECK(VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbOffset==0 && fbBytes==0);
+    CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+    CHECK(off==0 && len>0 && table==off+len && table+tablelen<=d.VramLength-BC250_VRAM_TOP_RESERVED);
+    d.DisplayReservationEnd=4096ull*2160*4;
+    CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+    CHECK(off==((4096ull*2160*4+65535ull)&~65535ull) && len>0 && table==off+len);
+    // amdgpu's firmware reservation (gmc_v10_0_get_vbios_fb_size): the segment starts above it, 64 KiB rounded.
+    d.DisplayReservationEnd=0;d.ColdScanoutBytes=BC250_DISPLAY_START_VGA_ALLOCATION;
+    CHECK(VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbOffset==0 && fbBytes==BC250_DISPLAY_START_VGA_ALLOCATION);
+    CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen) && off==BC250_DISPLAY_START_VGA_ALLOCATION);
+    d.ColdScanoutBytes=1080ul*1920ul*4ul+4;
+    CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen) && off==((1080ull*1920*4+4+65535ull)&~65535ull));
+    // None when less than 8 MiB of VRAM would remain (amdgpu_gmc_get_vbios_allocations).
+    {
+     ULONGLONG length=d.VramLength;
+     d.VramLength=64ull<<20;d.ColdScanoutBytes=(56ul<<20)+1;
+     CHECK(VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbBytes==0);
+     d.ColdScanoutBytes=56ul<<20;
+     CHECK(VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbBytes==(56ull<<20));
+     d.VramLength=length;d.ColdScanoutBytes=0;
+    }
+   }
+   // The flag clear with the same zero geometry is a present display of no size: refused, as before BD-341.
+   init(&d,gib);CHECK(VramStart(&d)==0);memset(&d.Post,0,sizeof(d.Post));
+   CHECK(!VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbBytes==0);
+   CHECK(!WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+   // A present display keeps its offset and size.
+   init(&d,gib);CHECK(VramStart(&d)==0);
+   CHECK(VramFramebufferExtent(&d,&fbOffset,&fbBytes) && fbOffset==0 && fbBytes==7680ull*1200);
+  }
  }
  printf("VRAM geometry: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

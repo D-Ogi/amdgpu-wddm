@@ -4328,6 +4328,7 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
     Bd289ProbeSummary();            // BD-289: the counters and the bd289 ring first, before the block fills
 #endif
     ConnectorLinkLogOpen(Device);
+    ConnectorLogChildSummary(Device);   // BD-341: what Windows was told about the child, after the ring wrapped
     DcnLogVsyncSnapshot(Device);
     DpmLogSummary(Device);
     InteropLogSummary(Device);
@@ -5190,10 +5191,10 @@ static BOOLEAN WddmMemoryLayout(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG
     limit=Device->VramLength-BC250_VRAM_TOP_RESERVED;
     // A missing BAR0 identity is not proof that the displayed POST buffer lies
     // outside VRAM. Resolve it through either verified view before admitting VidMm.
-    if (!VramFramebufferOffset(Device,&fbOffset)) return FALSE;
+    // BD-341: a start without a firmware display has the firmware's possible scan-out range at offset 0.
     {
-        ULONGLONG bytes=(ULONGLONG)Device->Post.Pitch*Device->Post.Height;
-        if (!bytes || fbOffset>limit || bytes>limit-fbOffset) return FALSE;
+        ULONGLONG bytes;
+        if (!VramFramebufferExtent(Device,&fbOffset,&bytes) || fbOffset>limit || bytes>limit-fbOffset) return FALSE;
         framebufferEnd=fbOffset+bytes;
     }
     if (framebufferEnd>MAXULONGLONG-65535ull) return FALSE;

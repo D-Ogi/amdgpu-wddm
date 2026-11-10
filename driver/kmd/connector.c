@@ -3,6 +3,7 @@
 #include "bc250kmd.h"
 #include "connector.h"
 #include "../shim/bc250_dp_train.h"
+#include "regs.generated.h"     // BD-341: HPD0 control, read by the child diagnostics
 
 #define CONNECTOR_TAG 'cC2B'
 #define CONNECTOR_DEBOUNCE_100NS (-500000LL) // one 50 ms settling interval
@@ -138,6 +139,124 @@ BOOLEAN ConnectorIsEnabled(BC250_DEVICE* Device)
     return ReadAtomic(&Device->Connector.Enabled) != 0;
 }
 
+ULONG ConnectorChildHpd(BC250_DEVICE* Device)
+{
+    return Bc250ChildHpd(Device->DisplayStart, ConnectorIsEnabled(Device) ? 1 : 0);
+}
+
+BOOLEAN ConnectorChildConnected(BC250_DEVICE* Device)
+{
+    if (ConnectorIsEnabled(Device)) return ConnectorIsConnected(Device);
+    return (Device->DisplayStart == BC250_DISPLAY_START_NO_POST) ? FALSE : TRUE;
+}
+
+// BD-341: HPD0 as it is, read only. The sense is DC_HPD_SENSE_DELAYED through the shim's own reader, and the control
+// register says whether sensing is enabled at all (DC_HPD_EN). Nothing is armed or acknowledged. A copy of the I/O
+// block, so that its counters stay the hotplug owner's.
+static NTSTATUS ConnectorHpdProbe(BC250_DEVICE* Device, int* Sense, unsigned long* Control)
+{
+    BC250_DISP_IO io = Device->Connector.HpdIo;
+    BC250_HPD probe;
+    long status;
+    *Sense = 0;
+    *Control = 0;
+    if (!Device->Mmio || io.Read == NULL) return STATUS_DEVICE_NOT_READY;
+    RtlZeroMemory(&probe, sizeof(probe));
+    probe.Io = &io;
+    status = Bc250HpdSense(&probe, Sense);
+    if (status >= 0) status = Bc250DispRead(&io, BC250_REG_DMU_HPD0_DC_HPD_CONTROL, Control);
+    return (NTSTATUS)status;
+}
+
+static const char* ChildEventText(ULONG Kind)
+{
+    switch (Kind) {
+    case BC250_CHILD_EVENT_RELATIONS: return "relations";
+    case BC250_CHILD_EVENT_STATUS: return "status";
+    case BC250_CHILD_EVENT_INDICATE: return "indicate";
+    case BC250_CHILD_EVENT_WORKER: return "worker";
+    default: return "?";
+    }
+}
+
+static void ChildEventLog(const char* Label, ULONG Index, const BC250_CONNECTOR_CHILD_EVENT* E)
+{
+    GuardLog("connector: child %s %lu %s enabled %u connected %u suspended %u",
+        Label, Index, ChildEventText(E->Kind), (UINT)E->Enabled, (UINT)E->Connected, (UINT)E->Suspended);
+    GuardLog("connector: child %s %lu %lu ms gen %lu published %lu sense %ld status %08lX",
+        Label, Index, E->Ms, E->Generation, E->Published, E->Sense, (ULONG)E->Status);
+}
+
+// BD-341: the child events of one start begin here. StartDevice calls this at its top, before any step that can
+// fail, so that dxgkrnl cannot ask for the child relations of this start while the ring still holds the events and
+// the epoch of the previous start. PASSIVE_LEVEL, no lock: no child DDI of this start can run yet.
+void ConnectorChildBegin(BC250_DEVICE* Device)
+{
+    BC250_CONNECTOR* c = &Device->Connector;
+    c->ChildEpoch = KeQueryInterruptTime();
+    RtlZeroMemory(c->ChildEvents, sizeof(c->ChildEvents));
+    RtlZeroMemory(&c->ChildLast, sizeof(c->ChildLast));
+    InterlockedExchange(&c->ChildEventCount, 0);
+    InterlockedExchange(&c->ChildStatusCalls, 0);
+    InterlockedExchange(&c->ChildStatusDisconnected, 0);
+}
+
+void ConnectorChildRecord(BC250_DEVICE* Device, ULONG Kind, BOOLEAN Connected, LONG Sense, NTSTATUS Status)
+{
+    BC250_CONNECTOR* c = &Device->Connector;
+    BC250_CONNECTOR_SNAPSHOT* s;
+    BC250_CONNECTOR_CHILD_EVENT e;
+    LONG slot;
+    RtlZeroMemory(&e, sizeof(e));
+    e.Ms = (ULONG)((KeQueryInterruptTime() - c->ChildEpoch) / 10000ull);
+    e.Kind = (UCHAR)Kind;
+    e.Enabled = ConnectorIsEnabled(Device) ? 1 : 0;
+    e.Connected = Connected ? 1 : 0;
+    e.Suspended = ReadAtomic(&c->Suspended) ? 1 : 0;
+    e.Generation = (ULONG)ReadAtomic(&c->Generation);
+    s = ConnectorSnapshotAcquire(Device);
+    e.Published = s ? s->Generation : 0;
+    ConnectorSnapshotRelease(s);
+    e.Sense = Sense;
+    e.Status = Status;
+    if (Kind == BC250_CHILD_EVENT_STATUS) {
+        InterlockedIncrement(&c->ChildStatusCalls);
+        if (!Connected) InterlockedIncrement(&c->ChildStatusDisconnected);
+    }
+    // Torn reads of ChildLast by a summary on another processor cost one diagnostic line, never a decision.
+    c->ChildLast = e;
+    slot = InterlockedIncrement(&c->ChildEventCount) - 1;
+    if (slot >= (LONG)BC250_CONNECTOR_CHILD_EVENTS) return;
+    c->ChildEvents[slot] = e;
+    ChildEventLog("event", (ULONG)slot, &e);
+}
+
+void ConnectorLogChildSummary(BC250_DEVICE* Device)
+{
+    BC250_CONNECTOR* c = &Device->Connector;
+    BC250_CONNECTOR_CHILD_EVENT last = c->ChildLast;
+    LONG count = ReadAtomic(&c->ChildEventCount);
+    LONG kept = count < (LONG)BC250_CONNECTOR_CHILD_EVENTS ? count : (LONG)BC250_CONNECTOR_CHILD_EVENTS;
+    unsigned long control = 0;
+    int sense = 0;
+    NTSTATUS probe = STATUS_DEVICE_NOT_READY;
+    LONG i;
+    // A live read only while the display block is powered: a retained D3 is not the time to touch DCN.
+    if (InterlockedCompareExchange(&Device->RetainedPowerPhase, 0, 0) == BC250_POWER_ACTIVE)
+        probe = ConnectorHpdProbe(Device, &sense, &control);
+    GuardLog("connector: child summary display-start %s enabled %u events %ld firmware pipes held %ld",
+        Bc250DisplayStartText(Device->DisplayStart), (UINT)ConnectorIsEnabled(Device), count,
+        ReadAtomic(&Device->FirmwarePipesHeld));
+    GuardLog("connector: child summary status %ld disconnected %ld indicate %ld failed %ld",
+        ReadAtomic(&c->ChildStatusCalls), ReadAtomic(&c->ChildStatusDisconnected), ReadAtomic(&c->Notifications),
+        ReadAtomic(&c->NotifyFailures));
+    GuardLog("connector: child summary hpd sense %d control %08lX status %08lX armed %d irq %ld work %ld refused %ld",
+        sense, control, (ULONG)probe, c->Hpd.Armed, ReadAtomic(&c->Interrupts), ReadAtomic(&c->Workers),
+        ReadAtomic(&c->Refusals));
+    for (i = 0; i < kept; i++) ChildEventLog("kept", (ULONG)i, &c->ChildEvents[i]);
+    if (count > kept) ChildEventLog("last", (ULONG)(count - 1), &last);
+}
+
 BOOLEAN ConnectorIsConnected(BC250_DEVICE* Device)
 {
     BC250_CONNECTOR_SNAPSHOT* s = ConnectorSnapshotAcquire(Device);
@@ -188,6 +307,7 @@ static void Indicate(BC250_DEVICE* Device, BOOLEAN Connected, ULONG Generation)
     if (!NT_SUCCESS(status)) InterlockedIncrement(&Device->Connector.NotifyFailures);
     GuardLog("connector: indicate generation %lu connected %u status %08lX",
         Generation, Connected, (ULONG)status);
+    ConnectorChildRecord(Device, BC250_CHILD_EVENT_INDICATE, Connected, -1, status);
 }
 
 static void ConnectorWorker(PDEVICE_OBJECT Object, PVOID Context);
@@ -429,6 +549,9 @@ done:
     ConnectorSnapshotRelease(next);
     ConnectorSnapshotRelease(old);
     ConnectorOperationRelease(device);
+    // BD-341: every worker end, also the ones that tell Windows nothing. A run that disabled the link and published
+    // no sink after a failed discovery leaves Windows with "disconnected", and this event is where that shows.
+    ConnectorChildRecord(device, BC250_CHILD_EVENT_WORKER, connected, (LONG)sense, status);
     if (notify) Indicate(device, connected, generation);
     // Finish under the queue lock. Stop takes this lock after waiting on Idle,
     // ensuring no worker touches the embedded state after its final release.
@@ -561,9 +684,24 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
     c->StartPreserved=0;        // earned per return path below (BD-169)
     Device->ConnectorLinkCleanup=STATUS_SUCCESS;     // no earlier attempt's cleanup is this start's
     c->StartStatus=STATUS_NOT_SUPPORTED;
+    // BD-341: the child events of this start began at the top of the start (ConnectorChildBegin).
     if (!Device->FullWddm) {
         // Display-only does not own a hardware connector.
         c->StartPreserved=1;
+        return c->LastStatus=c->StartStatus=STATUS_SUCCESS;
+    }
+    if (Device->DisplayStart == BC250_DISPLAY_START_NO_POST) {
+        // BD-341: no firmware display, so no inherited pipe to keep, no timing to plan from and nothing on the wire.
+        // The connector writes nothing and arms nothing: a sink found now could only be lit by a cold mode set, which
+        // this driver does not have yet (docs/design/wddm-startup.md, "Start without a firmware display"). The child
+        // reports a polled child with no monitor (ConnectorChildHpd, ConnectorChildConnected). The
+        // HPD line is logged as it is, read only, as the evidence for that later stage.
+        int sense=0;
+        unsigned long control=0;
+        NTSTATUS probe=ConnectorHpdProbe(Device,&sense,&control);
+        c->StartPreserved=1;
+        GuardLog("connector: start without a firmware display; nothing armed or written; hpd sense %d control %08lX status %08lX",
+            sense,control,(ULONG)probe);
         return c->LastStatus=c->StartStatus=STATUS_SUCCESS;
     }
     if (ConnectorNeedsInherited(Device)) {
@@ -617,6 +755,15 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
     if (NT_SUCCESS(status)) c->StartAccepted=snapshot->Sink.TargetCount;
     if (NT_SUCCESS(status) && !snapshot->Sink.TargetCount) status = STATUS_NOT_SUPPORTED;
     if (NT_SUCCESS(status)) status = SynchronizeHpd(Device, TRUE);
+    if (NT_SUCCESS(status)) {
+        // BD-341: the line as the arm found it, read only. A start whose sink then reads "disconnected" in Windows
+        // shows here whether HPD was low already, or went low after the arm (the child events say when).
+        int sense=0;
+        unsigned long control=0;
+        NTSTATUS probe=ConnectorHpdProbe(Device,&sense,&control);
+        GuardLog("connector: start armed generation %lu hpd sense %d control %08lX status %08lX",
+            generation,sense,control,(ULONG)probe);
+    }
     if (NT_SUCCESS(status) && !Publish(Device, snapshot)) status = STATUS_RETRY;
     if (NT_SUCCESS(status)) {
         snapshot = NULL;
@@ -675,6 +822,7 @@ static NTSTATUS ConnectorDrain(BC250_DEVICE* Device, BOOLEAN Suspend)
     GuardLog("connector: retained start status %08lX kind %lu adapter %lu limit %lu targets %lu accepted %lu",
         (ULONG)c->StartStatus,c->StartKind,c->StartAdapter,c->StartLimit,c->StartTargets,c->StartAccepted);
     ConnectorLinkLogOpen(Device);
+    ConnectorLogChildSummary(Device);   // BD-341: what Windows was told, before the link goes
     if (Suspend) {
         NTSTATUS linkStatus=ConnectorLinkSuspend(Device);
         if (NT_SUCCESS(status)) status=linkStatus;

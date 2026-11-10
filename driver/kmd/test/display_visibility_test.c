@@ -4,6 +4,7 @@
 #include <string.h>
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"
+#include "display_start.h"
 typedef unsigned long ULONG;
 typedef long LONG;
 typedef int32_t NTSTATUS;
@@ -26,6 +27,8 @@ typedef struct {
     void *Mmio,*Framebuffer;size_t FramebufferLength;
     BOOLEAN DcnWriteEnabled,DcnBlanked,SourceVisible,VidPnFlipEnabled;
     volatile LONG StartVisibilityPending;
+    unsigned long DisplayStart;
+    volatile LONG RuntimeDisplayChanged;
     volatile LONG VisibilityCalls,CommitPowerCalls,VisibilityLinkOff;
     ULONG VisibilityLastSource;
     BOOLEAN VisibilityLastRequested,CommitLastPowerTransition,CommitLastPoweredOff;
@@ -234,6 +237,20 @@ int main(void)
     CHECK(memcmp(fb,before,sizeof(fb))==0);
     // Already-visible positive path samples hardware and avoids redundant writes.
     writes=model.writes;CHECK(DcnSetVisibility(&d,TRUE)==STATUS_SUCCESS);CHECK(model.writes==writes);
+    // BD-341: a start without a firmware display has no pipe of its own until a runtime mode exists. The OS request
+    // touches no register: a firmware pipe held black at a D0 stays black, and TRUE still ends the startup hold.
+    d.DisplayStart=BC250_DISPLAY_START_NO_POST;d.StartVisibilityPending=1;
+    model.blank|=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK|OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
+    writes=model.writes;visible.Visible=TRUE;
+    CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_SUCCESS && d.SourceVisible && d.StartVisibilityPending==0);
+    CHECK(model.writes==writes && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK));
+    visible.Visible=FALSE;
+    CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_SUCCESS && !d.SourceVisible && model.writes==writes);
+    // With a runtime mode the pipe is this driver's, and the request reaches the hardware as on an inherited start.
+    d.RuntimeDisplayChanged=1;visible.Visible=TRUE;
+    CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_SUCCESS && model.writes==writes+1 && !d.DcnBlanked);
+    CHECK(!(model.blank&(OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK|OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)));
+    d.DisplayStart=BC250_DISPLAY_START_INHERITED;d.RuntimeDisplayChanged=0;
     // Current state can still be blank with the request bit cleared.
     model.blank|=OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
     CHECK(DcnSetVisibility(&d,TRUE)==STATUS_SUCCESS);

@@ -79,6 +79,7 @@
 #include "cpu.h"
 #include "interop.h"
 #include "dpaudio.h"
+#include "display_start.h"   // BD-341: the display-start state
 #include "modeset.h"
 #include "connector.h"
 #include "board_memory_service.h"
@@ -271,6 +272,16 @@ typedef struct _BC250_DEVICE {
 
     // The mode the firmware left. M3 offers exactly this one.
     DXGK_DISPLAY_INFORMATION Post;
+    // BD-341: the display-start state of this start (display_start.h, BC250_DISPLAY_START_*). NO_POST: the firmware
+    // handed over no display, for example a monitor in standby at power-on or a unit with no monitor. Post is then
+    // all zero, nothing is mapped, no inherited timing exists and the child reports no monitor
+    // (docs/design/wddm-startup.md, "Start without a firmware display"). Set by StartDevice, constant until stop.
+    ULONG DisplayStart;
+    // BD-341, NO_POST only: the bytes at VRAM offset 0 that the firmware can still scan out of, by amdgpu's rule
+    // (modeset.c ModesetReadColdPipe). VramFramebufferExtent gives them as the firmware range. 0 otherwise.
+    ULONG ColdScanoutBytes;
+    // BD-341, NO_POST only: the D0 transitions that found a pipe lit by the firmware and held it black (power.c).
+    volatile LONG FirmwarePipesHeld;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;
     BOOLEAN InheritedSignalValid;     // immutable from successful start until stop
     BOOLEAN InheritedTmds;            // validated OTG0 TMDS route; DP operations stay off on this start
@@ -799,6 +810,8 @@ void GuardRecordStartAttempt(void);
 void GuardRecordStartRefused(NTSTATUS Status);
 void GuardRecordStartFailed(NTSTATUS Status);
 void GuardRecordStartStarted(void);
+// BD-341: the display-start state of this start (display_start.h), written into every start record as DisplayStart.
+void GuardStartDisplay(ULONG State);
 void GuardRecordStopBegin(BC250_DEVICE* Device);
 void GuardRecordStopDone(void);
 // M15.12: one ResetEngine verdict (hang_recovery.h) into the HangRecovery state records, counters and Last*, flushed
@@ -1130,6 +1143,14 @@ void VramEscape(_In_ const BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_ME
 PVOID VramMapCpuRange(_In_ const BC250_DEVICE* Device, PHYSICAL_ADDRESS Physical, SIZE_T Length, ULONG Access);
 ULONG VramMappingProtection(_In_ const BC250_DEVICE* Device, ULONGLONG Physical, SIZE_T Length, ULONG Access);
 BOOLEAN VramFramebufferOffset(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset);
+// The VRAM range the firmware framebuffer occupies: its offset and its byte count (Post.Pitch * Post.Height).
+// BD-341: a start without a firmware display has an empty range at offset 0. FALSE when the offset is unknown or a
+// present display has a zero size; every placement above the framebuffer (wddm.c, connector_buffer.c) uses this.
+BOOLEAN VramFramebufferExtent(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset, _Out_ ULONGLONG* Bytes);
+// The one check of the top of VRAM against that range: STATUS_SUCCESS when the range ends at or below
+// VramLength - TopBytes, STATUS_CONFLICTING_ADDRESSES when it reaches into the window, and
+// STATUS_DEVICE_CONFIGURATION_ERROR when the range is unknown. gart.c, psp.c, gpumem.c and the start use it.
+NTSTATUS VramFirmwareRangeBelowTop(_In_ const BC250_DEVICE* Device, ULONGLONG TopBytes);
 
 // gart.c
 struct _BC250_ESCAPE_GART;
