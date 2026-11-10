@@ -1518,5 +1518,109 @@ class ReportReaderRetry(unittest.TestCase):
         self.assertLess(time.monotonic() - start, 1)
 
 
+@unittest.skipUnless(os.name == "nt", "a move over a held file is a Windows behaviour")
+@unittest.skipUnless(shutil.which("pwsh"), "pwsh 7 is not on PATH")
+class JsonReceiptMove(unittest.TestCase):
+    """BD-345, the writer side: Write-Json of JsonReceipt.psm1 (the function build-release-set.ps1 imports) moves its
+    part file over a receipt that a reader holds open without delete sharing. The move is retried until the reader
+    closes the file, and only for its bound; a failed write leaves the preceding receipt and no part file."""
+
+    MODULE = Path(__file__).resolve().parent / "JsonReceipt.psm1"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="bc250-receipt-move-", dir=OUT)
+        self.path = Path(self.tmp) / "release-report.json"
+        self.path.write_text(json.dumps({"status": "running"}), encoding="utf-8")
+
+    def tearDown(self):
+        remove_tree(self.tmp)
+
+    def parts(self):
+        return sorted(p.name for p in Path(self.tmp).glob("*.part"))
+
+    def start_write(self, retry_seconds):
+        command = ("$ErrorActionPreference = 'Stop'; Import-Module -Force $env:BC250_RECEIPT_MODULE;"
+                   "try { Write-Json -Path $env:BC250_RECEIPT_PATH -Data @{ status = 'done' } "
+                   "-RetrySeconds ([double]$env:BC250_RECEIPT_BOUND) -RetryStepMs 20; 'RECEIPT MOVED' } "
+                   "catch { $e = $_.Exception; while ($e.InnerException) { $e = $e.InnerException }; "
+                   "'RECEIPT FAILED 0x{0:X8}' -f $e.HResult; exit 3 }")
+        env = dict(os.environ, BC250_RECEIPT_MODULE=str(self.MODULE), BC250_RECEIPT_PATH=str(self.path),
+                   BC250_RECEIPT_BOUND=str(retry_seconds))
+        return subprocess.Popen(["pwsh", "-NoProfile", "-NonInteractive", "-Command", command], env=env,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+    def hold_while(self, process, release):
+        """Hold the receipt open for read with read and write sharing but no delete sharing (as Python's open() and
+        most readers do) until release() is true or process has ended. Returns the process output and whether the
+        part file was seen while the receipt was held (the writer met the held receipt)."""
+        met = False
+        with open(self.path, "rb"):
+            deadline = time.monotonic() + 60
+            while process.poll() is None and time.monotonic() < deadline:
+                met = met or bool(self.parts())
+                if release(met):
+                    break
+                time.sleep(0.01)
+        try:
+            output, _ = process.communicate(timeout=60)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            raise
+        return output, met
+
+    def test_the_move_waits_for_the_reader_and_then_replaces_the_receipt(self):
+        process = self.start_write(10)
+        held_since = []
+
+        def release(met):
+            # Keep the receipt held 0.5 s after the writer has its part file, so that the move meets the held file.
+            if met and not held_since:
+                held_since.append(time.monotonic())
+            return bool(held_since) and time.monotonic() - held_since[0] >= 0.5
+
+        output, met = self.hold_while(process, release)
+        self.assertTrue(met, "the writer did not reach its move while the receipt was held: " + output)
+        self.assertEqual(process.returncode, 0, output)
+        self.assertIn("RECEIPT MOVED", output)
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), {"status": "done"})
+        self.assertEqual(self.parts(), [])
+
+    def test_without_a_retry_the_held_receipt_fails_the_write(self):
+        # Negative control: the writer before BD-345 (one move, no bound) fails on the same held receipt.
+        process = self.start_write(0)
+        output, _ = self.hold_while(process, lambda met: False)
+        self.assertEqual(process.returncode, 3, output)
+        self.assertRegex(output, r"RECEIPT FAILED 0x800700(05|20)")
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), {"status": "running"})
+        self.assertEqual(self.parts(), [], "a failed write left its part file")
+
+    def test_a_receipt_held_past_the_bound_fails_with_the_last_error(self):
+        process = self.start_write(0.5)
+        start = time.monotonic()
+        output, met = self.hold_while(process, lambda met: False)
+        self.assertTrue(met, output)
+        self.assertEqual(process.returncode, 3, output)
+        self.assertRegex(output, r"RECEIPT FAILED 0x800700(05|20)")
+        self.assertGreaterEqual(time.monotonic() - start, 0.5)
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), {"status": "running"})
+        self.assertEqual(self.parts(), [], "a failed write left its part file")
+
+    def test_only_the_errors_of_a_held_receipt_are_retried(self):
+        # The filter in the module's scope: access denied and the sharing violation, also when a method call wraps
+        # them; no other error (a missing file, a full disk).
+        command = ("Import-Module -Force $env:BC250_RECEIPT_MODULE; & (Get-Module JsonReceipt) { "
+                   "function wrap($e) { [Management.Automation.MethodInvocationException]::new('move', $e) }; "
+                   "function io($h) { $x = [IO.IOException]::new('io'); $x.HResult = $h; $x }; "
+                   "@((Test-JsonReceiptRetryable (wrap ([UnauthorizedAccessException]::new()))), "
+                   "(Test-JsonReceiptRetryable (wrap (io 0x80070020))), "
+                   "(Test-JsonReceiptRetryable (wrap ([IO.FileNotFoundException]::new()))), "
+                   "(Test-JsonReceiptRetryable (io 0x80070070))) -join ' ' }")
+        env = dict(os.environ, BC250_RECEIPT_MODULE=str(self.MODULE))
+        r = subprocess.run(["pwsh", "-NoProfile", "-NonInteractive", "-Command", command], env=env,
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(r.stdout.strip(), "True True False False", r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
