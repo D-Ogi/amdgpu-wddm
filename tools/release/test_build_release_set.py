@@ -22,6 +22,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 
 import build_release_set
@@ -220,7 +222,30 @@ class Workspace:
         return out
 
     def report(self):
-        return json.loads((self.out / "release-report.json").read_text(encoding="utf-8-sig"))
+        return read_report(self.out / "release-report.json")
+
+
+# BD-345: the tool writes release-report.json to a part file and moves it over the report (Write-Json in
+# build-release-set.ps1). While Windows replaces the file, an open of it fails with a sharing violation, which Python
+# raises as PermissionError. A test that polls the report while the scheduler runs (test_build_set_checkpoint) then
+# failed with an error that says nothing about the tool. The reader tries again for a short bound; past the bound the
+# last error goes to the caller, so a file that stays locked still fails the test. A FileNotFoundError and a partial
+# document are not retried here: the callers decide about those.
+REPORT_RETRY_SECONDS = 5.0
+REPORT_RETRY_STEP = 0.05
+
+
+def read_report(path, bound=REPORT_RETRY_SECONDS, step=REPORT_RETRY_STEP, on_refused=None):
+    deadline = time.monotonic() + bound
+    while True:
+        try:
+            return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                raise
+            if on_refused:
+                on_refused()
+            time.sleep(step)
 
 
 def most_at_once(intervals):
@@ -1413,6 +1438,84 @@ class ReleaseSetRuns(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn(f"sub differ between the recipe commits {c1[:8]} and {c3[:8]}", out)
         self.assertTreesGone()
+
+
+@unittest.skipUnless(os.name == "nt", "a sharing violation is a Windows behaviour")
+class ReportReaderRetry(unittest.TestCase):
+    """BD-345: read_report retries an open that Windows refuses while the file is held, and only for its bound."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="bc250-report-reader-", dir=OUT)
+        self.path = Path(self.tmp) / "release-report.json"
+        self.path.write_text(json.dumps({"status": "running"}), encoding="utf-8")
+
+    def tearDown(self):
+        remove_tree(self.tmp)
+
+    def hold(self, seconds):
+        """Open the report with no sharing (as a replace in progress does) for seconds, in a thread. Returns the
+        thread after the handle is open."""
+        import ctypes
+        from ctypes import wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateFileW.restype = wintypes.HANDLE
+        kernel32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+                                         wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        opened = threading.Event()
+        failure = []
+
+        def run():
+            handle = kernel32.CreateFileW(str(self.path), 0x80000000, 0, None, 3, 0x80, None)   # GENERIC_READ, share 0
+            if handle in (None, wintypes.HANDLE(-1).value):
+                failure.append(ctypes.get_last_error())
+                opened.set()
+                return
+            opened.set()
+            time.sleep(seconds)
+            kernel32.CloseHandle(handle)
+
+        thread = threading.Thread(target=run)
+        thread.start()
+        self.assertTrue(opened.wait(5))
+        self.assertEqual(failure, [], "the fixture could not hold the file")
+        return thread
+
+    def test_a_refused_open_is_retried_until_the_file_is_free(self):
+        refused = []
+        thread = self.hold(0.4)
+        try:
+            report = read_report(self.path, bound=5, on_refused=lambda: refused.append(1))
+        finally:
+            thread.join()
+        self.assertEqual(report, {"status": "running"})
+        self.assertGreater(len(refused), 1, "the reader did not meet the held file")
+
+    def test_without_a_retry_the_held_file_is_an_error(self):
+        # Negative control: the reader before BD-345 (no bound) fails on the same held file.
+        thread = self.hold(0.4)
+        try:
+            with self.assertRaises(PermissionError):
+                read_report(self.path, bound=0)
+        finally:
+            thread.join()
+
+    def test_a_file_held_past_the_bound_still_fails(self):
+        thread = self.hold(1.5)
+        try:
+            start = time.monotonic()
+            with self.assertRaises(PermissionError):
+                read_report(self.path, bound=0.3)
+            self.assertGreaterEqual(time.monotonic() - start, 0.3)
+        finally:
+            thread.join()
+
+    def test_a_missing_file_is_not_retried(self):
+        self.path.unlink()
+        start = time.monotonic()
+        with self.assertRaises(FileNotFoundError):
+            read_report(self.path, bound=5)
+        self.assertLess(time.monotonic() - start, 1)
 
 
 if __name__ == "__main__":
