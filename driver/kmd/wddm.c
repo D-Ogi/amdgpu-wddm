@@ -6481,10 +6481,11 @@ static void WddmLabAllocLine(const char* Kind, const DXGK_ALLOCATIONINFO* Info, 
 {
     const ULONG mib = GuardLabAllocLogMiB();
     if (mib == 0 || Info->Size < ((SIZE_T)mib << 20)) return;
-    GuardLog("alloc %s pid %lu %llu KiB a 0x%lX b 0x%llX seg 0x%lX cpu %u od %u c %u", Kind,
+    // The three bits print as %c: a %u counts 10 characters in the worst-case width of guardlog_width.py.
+    GuardLog("alloc %s pid %lu %llu KiB a 0x%lX b 0x%llX seg 0x%lX cpu %c od %c c %c", Kind,
              HandleToULong(PsGetCurrentProcessId()), (unsigned long long)Info->Size >> 10, A, B,
-             (ULONG)Info->SupportedReadSegmentSet, (UINT)Info->FlagsWddm2.CpuVisible,
-             (UINT)Info->FlagsWddm2.CpuVisibleOnDemand, (UINT)Info->FlagsWddm2.Cached);
+             (ULONG)Info->SupportedReadSegmentSet, Info->FlagsWddm2.CpuVisible ? '1' : '0',
+             Info->FlagsWddm2.CpuVisibleOnDemand ? '1' : '0', Info->FlagsWddm2.Cached ? '1' : '0');
 }
 #endif
 
