@@ -1428,4 +1428,4 @@ tuner.limit.in-force.default|mt|0bbe6cf5|{0} °C(기본값)
 tuner.limit.off|mt|04306f74|프로세서 튜닝이 꺼져 있으므로 프로세서 자체 제한인 {0} °C가 적용됩니다.
 search.graphics.cpu-limit|mt|c90220a5|프로세서 온도 제한
 search.graphics.cpu-limit.terms|mt|8aa04853|CPU 온도|온도|스로틀링|열 제한|Tctl|뜨거움|과열
-help.setting.cpu-limit|mt|34c700af|프로세서가 스스로 속도를 낮추는 온도입니다. 기본값은 길고 무거운 부하에서도 프로세서 자체의 최고 제한과 거리를 둡니다. 변경은 유지할 때까지 스스로 되돌아오는 테스트로 실행됩니다.
+help.setting.cpu-limit|mt|e792ee1c|프로세서가 스스로 속도를 낮추는 온도입니다. 그래픽 칩도 함께 작동하면 온도가 이 값보다 2에서 3 °C 이상 높아지고 계속 오를 수 있으므로, 허용할 수 있는 최고 온도보다 최소 3 °C 낮은 제한을 고르세요. 변경은 유지할 때까지 스스로 되돌아오는 테스트로 실행됩니다.

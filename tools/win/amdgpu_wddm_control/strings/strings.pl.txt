@@ -1430,4 +1430,4 @@ tuner.limit.in-force.default|mt|0bbe6cf5|{0} °C (domyślnie)
 tuner.limit.off|mt|04306f74|Strojenie procesora jest wyłączone, więc obowiązuje fabryczny limit procesora: {0} °C.
 search.graphics.cpu-limit|mt|c90220a5|Limit temperatury procesora
 search.graphics.cpu-limit.terms|mt|8aa04853|temperatura procesora|temperatura CPU|throttling|dławienie|limit termiczny|Tctl|gorący|przegrzewanie
-help.setting.cpu-limit|mt|34c700af|Temperatura, przy której procesor sam zwalnia. Wartość domyślna trzyma procesor pod długim, dużym obciążeniem z dala od jego fabrycznego limitu. Zmiana działa jako test, który sam się wycofuje, dopóki jej nie zachowasz.
+help.setting.cpu-limit|mt|e792ee1c|Temperatura, przy której procesor sam zwalnia. Gdy pracuje też układ graficzny, temperatura może przekroczyć ten limit o 2 do 3 °C lub więcej i dalej rosnąć, dlatego wybierz limit co najmniej o 3 °C niższy od najwyższej temperatury, jaką akceptujesz. Zmiana działa jako test, który sam się wycofuje, dopóki jej nie zachowasz.

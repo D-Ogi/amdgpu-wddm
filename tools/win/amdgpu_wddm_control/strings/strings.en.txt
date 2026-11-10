@@ -1447,4 +1447,4 @@ tuner.limit.in-force.default|src|-|{0} °C (default)
 tuner.limit.off|src|-|Processor tuning is off, so the processor’s own limit of {0} °C is in force.
 search.graphics.cpu-limit|src|-|Processor temperature limit
 search.graphics.cpu-limit.terms|src|-|CPU temperature|CPU temp|throttling|thermal limit|Tctl|hot|overheating
-help.setting.cpu-limit|src|-|The temperature at which the processor slows itself down. The default keeps a long, heavy load away from the processor’s own highest limit. A change runs as a test that comes back by itself until you keep it.
+help.setting.cpu-limit|src|-|The temperature at which the processor slows itself down. With the graphics chip also at work, the temperature can go 2 to 3 °C or more above it and keep rising, so choose a limit at least 3 °C below the highest temperature you accept. A change runs as a test that comes back by itself until you keep it.
