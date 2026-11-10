@@ -14,8 +14,9 @@ NTSTATUS ConnectorBufferPrepare(BC250_DEVICE* Device)
         !Device->VramWriteEnabled || !VramFramebufferOffset(Device,&offset) ||
         Device->VramLength<=BC250_VRAM_TOP_RESERVED) return STATUS_NOT_SUPPORTED;
     limit=Device->VramLength-BC250_VRAM_TOP_RESERVED;
-    bytes=(ULONGLONG)Device->Post.Pitch*Device->Post.Height;
-    if (!bytes || offset>limit || bytes>limit-offset) return STATUS_INVALID_PARAMETER;
+    // BD-341: without a firmware display the range is what the firmware can still scan out of at the bottom of VRAM.
+    if (!VramFramebufferExtent(Device,&offset,&bytes) || offset>limit || bytes>limit-offset)
+        return STATUS_INVALID_PARAMETER;
     end=offset+bytes;
     if (end>MAXULONGLONG-65535ull) return STATUS_INVALID_PARAMETER;
     offset=(end+65535ull)&~65535ull;

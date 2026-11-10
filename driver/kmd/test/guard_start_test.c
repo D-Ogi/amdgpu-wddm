@@ -1,6 +1,7 @@
 // Executes the actual settingGate, budget and initial PnP admission functions with a
 // registry model that distinguishes cached writes from durable flushes.
 #include <stdio.h>
+#include "display_start.h"     /* BD-341: the display-start state */
 #include <string.h>
 #include <stdarg.h>
 #include <wchar.h>
@@ -29,7 +30,7 @@ typedef const wchar_t* PCWSTR;
 #define StageStartGuardPassed 31u
 #define StageRefusedByGuard 90u
 #define StageStartFailed 91u    /* BD-122: an unconfirmed previous stop fails the start and leaves this stage */
-typedef struct {BOOLEAN InheritedSignalValid,GpuStopUnconfirmed,StopDone,SourceVisible;void* PhysicalDeviceObject;unsigned long long DisplayReservationEnd,RuntimeFramebufferLength;long RuntimePostValid,RuntimeDisplayChanged,StartVisibilityPending;} BC250_DEVICE;
+typedef struct {BOOLEAN InheritedSignalValid,GpuStopUnconfirmed,StopDone,SourceVisible;void* PhysicalDeviceObject;unsigned long long DisplayReservationEnd,RuntimeFramebufferLength;long RuntimePostValid,RuntimeDisplayChanged,StartVisibilityPending;unsigned long DisplayStart,ColdScanoutBytes;long FirmwarePipesHeld;} BC250_DEVICE;
 typedef void* PDXGK_START_INFO;
 typedef void* PDXGKRNL_INTERFACE;
 static ULONG settingGate,cached,durable;
@@ -89,6 +90,7 @@ static void GuardRecordStartFailed(NTSTATUS s){(void)s;records++;recordFailures+
 // this test is about.
 static void StartHealthBegin(BC250_DEVICE* d,BOOLEAN full){(void)d;(void)full;}
 static void CuModeBegin(BC250_DEVICE* d){(void)d;}
+static void ConnectorChildBegin(BC250_DEVICE* d){(void)d;}   /* BD-341: start_record_test.c checks its place */
 static void WddmLevelStart(BC250_DEVICE* d){(void)d;}
 static void BoardMemoryIdentityClear(BC250_DEVICE* d){(void)d;}
 static void BoardMemoryIdentityCapture(BC250_DEVICE* d){(void)d;}

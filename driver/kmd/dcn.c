@@ -1184,7 +1184,16 @@ NTSTATUS DcnBeginStartVisibility(_Inout_ BC250_DEVICE* Device, _Out_ BOOLEAN* To
 // Only a confirmed OS TRUE ends startup blanking; a flip is not that request.
 NTSTATUS DcnSetSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
 {
-    NTSTATUS status=DcnSetVisibilityCore(Device,Visible,TRUE,NULL);
+    NTSTATUS status;
+    // BD-341: a start without a firmware display has no pipe of its own until a runtime mode exists. The OS request
+    // then has nothing to show or hide, and it touches no register: a pipe that the firmware lit at a D0 stays black
+    // (power.c PowerHoldFirmwarePipe), and a pipe that nobody lit stays as it is.
+    if (Device->DisplayStart == BC250_DISPLAY_START_NO_POST &&
+        !InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) {
+        if (Visible) InterlockedExchange(&Device->StartVisibilityPending,0);
+        return STATUS_SUCCESS;
+    }
+    status=DcnSetVisibilityCore(Device,Visible,TRUE,NULL);
     if (NT_SUCCESS(status) && Visible) InterlockedExchange(&Device->StartVisibilityPending,0);
     return status;
 }
@@ -1956,6 +1965,13 @@ NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
     // The hardware pointer first: the next owner of the firmware surface reads no cursor of ours (dcn_cursor.c).
     DcnCursorStop(Device);
     DcnUnmapScanout(Device);
+    // BD-341: a start without a firmware display captured no firmware surface and changed no native shape, so there
+    // is nothing of the firmware's to put back. A runtime mode, when one was committed, still goes through the
+    // restore below: that surface is ours and valid.
+    if (Device->DisplayStart == BC250_DISPLAY_START_NO_POST && !changed) {
+        GuardLog("dcnflip: stop: no firmware display to restore");
+        return STATUS_SUCCESS;
+    }
     // BD-090: the inputs of the restore below, so that a failed display handoff names its branch and the reason:
     // the runtime branch needs a valid RuntimePost on the reserved buffer, the firmware branch the captured surface.
     // hubp is HUBP0_DCHUBP_CNTL before the restore: HUBP_BLANK_EN (bit 0) set means this driver's blank, which the

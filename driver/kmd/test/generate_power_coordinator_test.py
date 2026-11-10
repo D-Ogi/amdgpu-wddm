@@ -9,6 +9,8 @@ p.add_argument('--forced-d1',action='store_true',help='the forced way down also 
 p.add_argument('--witness-ignored',action='store_true',help='the restore after an unsaved way down ignores the witness')
 p.add_argument('--failed-restore-active',action='store_true',help='a failed restore ends in ACTIVE')
 p.add_argument('--lost-before-witness',action='store_true',help='the blocks take the power-lost state before the witness proves it')
+# BD-341 negative control: a firmware pipe lit at D0 on a start without a firmware display keeps showing.
+p.add_argument('--no-firmware-hold',action='store_true',help='a firmware display found at D0 on a NO_POST start is not held black')
 a=p.parse_args()
 s=a.source.read_text()
 def function(sig):
@@ -16,7 +18,7 @@ def function(sig):
 def mutate(text,old,new):
  if text.count(old)!=1:raise SystemExit('Mutation anchor missing or ambiguous: '+old)
  return text.replace(old,new)
-body='\n'.join(function(sig) for sig in ['static void PowerWitnessArm(', 'static ULONG PowerWitnessTake(', 'static BOOLEAN PowerDownStepFailed(', 'static NTSTATUS PowerRestoreDisplay(', 'NTSTATUS GpuSetPowerRetained(', 'NTSTATUS PowerAdapterDown('])
+body='\n'.join(function(sig) for sig in ['static void PowerWitnessArm(', 'static ULONG PowerWitnessTake(', 'static BOOLEAN PowerDownStepFailed(', 'static void PowerHoldFirmwarePipe(', 'static NTSTATUS PowerRestoreDisplay(', 'NTSTATUS GpuSetPowerRetained(', 'NTSTATUS PowerAdapterDown('])
 if a.forced_d1:
  body=mutate(body,'BOOLEAN lossExpected=Bc250PowerLossExpected((unsigned)State,(unsigned)Action) ? TRUE : FALSE;','BOOLEAN lossExpected=TRUE;')
 if a.witness_ignored:
@@ -26,6 +28,8 @@ if a.failed_restore_active:
 if a.lost_before_witness:
  anchor='    if (PowerWitnessTake(Device,unsaved)!=BC250_POWER_WITNESS_LOST && unsaved) {'
  body=mutate(body,anchor,'    if (unsaved) {IhPowerLost(Device);GfxPowerLost(Device);PspPowerLost(Device);GartPowerLost(Device);}\n'+anchor)
+if a.no_firmware_hold:
+ body=mutate(body,'    blank=DcnBeginStartVisibility(Device,&touched);\n','    blank=STATUS_SUCCESS;\n')
 if a.old_display_gate:
  body=mutate(body,'    return GpuSetPowerRetained(Device,State,Action);\n','    if (!NT_SUCCESS(display)) return display;\n    return GpuSetPowerRetained(Device,State,Action);\n')
 if a.old_post_gate:

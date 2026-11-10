@@ -30,6 +30,8 @@ git -C <linux checkout> show v6.18:drivers/gpu/drm/amd/<path> | sha256sum
 | `nbio_2_3_offset.h` | `drivers/gpu/drm/amd/include/asic_reg/nbio/` | `93f51579e7df` | yes (verified) |
 | `dcn_2_0_1_offset.h` | `drivers/gpu/drm/amd/include/asic_reg/dcn/` | `93f51579e7df` | yes (verified) |
 | `dpcs_2_0_3_offset.h` | `drivers/gpu/drm/amd/include/asic_reg/dpcs/` | `93f51579e7df` | yes (verified) |
+| `dcn_2_0_0_offset.h` | `drivers/gpu/drm/amd/include/asic_reg/dcn/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
+| `dcn_2_0_0_sh_mask.h` | `drivers/gpu/drm/amd/include/asic_reg/dcn/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 | `dcn_2_0_1_sh_mask.h` | `drivers/gpu/drm/amd/include/asic_reg/dcn/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 | `gc_10_1_0_sh_mask.h` | `drivers/gpu/drm/amd/include/asic_reg/gc/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 | `gc_10_1_0_default.h` | `drivers/gpu/drm/amd/include/asic_reg/gc/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
@@ -93,3 +95,5 @@ Who uses what:
 - `thm_10_0_offset.h`, `thm_10_0_sh_mask.h`: AMD MIT headers from Linux v6.18 `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`; THM_TCON_CUR_TMP register and fields, combined with Cyan Skillfish THM base. Native BAR read still requires comparison with measured SMN temperature before activation.
 
 - `clk_11_0_1_offset.h`: AMD MIT, Linux v6.18 `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`, exact copy; DCN201 DP reference clock counter used by inherited timing readback.
+
+- `dcn_2_0_0_offset.h`, `dcn_2_0_0_sh_mask.h`: AMD MIT, Linux v6.18 `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`, exact copies (BD-341). `gmc_v10_0.c` includes these two headers, not the DCN 2.0.1 ones, and reads `D1VGA_CONTROL` through them in `gmc_v10_0_get_vbios_fb_size()` on this part too. The DCN 2.0.1 header has no VGA block. `driver/kmd/gen_regs.py` takes only `mmD1VGA_CONTROL` (ip key `DCN200`, the DMU base of `cyan_skillfish_ip_offset.h`) and the field `D1VGA_CONTROL__D1VGA_MODE_ENABLE_MASK` from them, so that a start without a firmware display reserves what amdgpu reserves. No source file includes them.
