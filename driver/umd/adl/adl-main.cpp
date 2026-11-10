@@ -10,7 +10,35 @@
 // the ADL contract says. Context memory is ours: Destroy frees it. One lock serializes every call, so the
 // threading model of ADL2_Main_ControlX3_Create needs no other handling. Caller allocation callbacks run outside
 // that lock, against a private snapshot, so they can query, refresh or destroy their context.
+//
+// The ADL_* functions without a handle (and the ADL2_* functions with a null handle) use an implicit context. More
+// than one module of a process can use them, each with its own allocation callback and its own deallocator: for
+// example a GPU library and a CPU library in one hardware scanner. Thus the implicit context is per calling module,
+// found from the return address of the export. The key of a module is its base address, its SizeOfImage and the
+// TimeDateStamp of its PE header. All code outside an image (generated code) is one caller, with the key zero.
+//
+// The rule for memory: an export that returns memory either fills a caller buffer of a size that the caller gives,
+// or allocates through an allocation callback that the same caller gave for itself. Thus every function that
+// allocates through the callback (AdapterInfoX2, DisplayInfo, Modes, DisplayMapConfig and the SLS pair, also through
+// ADL2 with a null handle) uses only the context of the calling module: a module without its own
+// ADL_Main_Control_Create gets ADL_ERR_NOT_INIT. Refresh and Destroy also act only on the context of the calling
+// module. The functions that return no memory (NumberOfAdapters, AdapterInfo into a caller buffer, Active,
+// MemoryInfo, Versions) use the newest implicit context when the caller has none: a call through a helper module
+// still gets the facts. Each module has its own snapshot: a Refresh of one module does not change what another
+// module reads.
+//
+// The SDK documentation says only that ADL_Main_Control_Create "initializes global pointers", that the callback
+// allocates the output arrays that the user frees, and that the ADL2 functions exist "to assure that there is no
+// interference with other ADL clients that are running in the same process". It does not say what a second
+// ADL_Main_Control_Create does. One context per module gives each caller the result that it can get from one
+// process-wide context in the cases where that is correct, and is also correct when two modules use the functions.
+//
+// When a module unloads, its implicit context goes with it (a loader notification). If the notification is not
+// available, the key still keeps a module that loads later at the same address from the context and the callback of
+// the earlier one: its size or time stamp is different, so it gets a new context, and the old one stays as a leak
+// of one block until this library unloads.
 #include <windows.h>
+#include <intrin.h>
 #include <string.h>
 
 #include "adl-abi.h"
@@ -20,20 +48,73 @@ namespace {
 
 const uint32_t kContextMagic = 0x41444c32;  // 'ADL2'
 
+// The identity of a calling module. A module that unloads and a different module that loads at the same base have
+// different keys unless the two files have the same size and the same time stamp.
+struct CallerId {
+    const void* base;  // null for code outside an image
+    DWORD size;        // SizeOfImage
+    DWORD stamp;       // TimeDateStamp of the PE file header
+
+    bool operator==(const CallerId& other) const
+    {
+        return base == other.base && size == other.size && stamp == other.stamp;
+    }
+};
+
 struct AdlContext {
     uint32_t magic;
     AdlContext* next;
     ADL_MAIN_MALLOC_CALLBACK alloc;
     int enum_connected;
     int threading;
+    CallerId owner;   // implicit contexts only: the calling module
+    int legacy_refs;  // implicit contexts only: ADL_Main_Control_Create calls not yet destroyed
     AdlSnapshot snap;
 };
 
 SRWLOCK g_lock = SRWLOCK_INIT;
 AdlContext* g_contexts;     // ADL2 contexts, by handle
-AdlContext* g_legacy;       // the context of the ADL_* functions without a handle
-int g_legacy_refs;
+AdlContext* g_legacy;       // implicit contexts, one per calling module, newest first
 LONG g_live_blocks;         // context blocks not yet freed (read by the test build)
+
+// The key of the module that contains a code address; zero for code outside an image. RtlPcToFileHeader reads the
+// inverted function table under its own shared lock and does not take the loader lock, so a caller can be in a
+// DllMain. The module reference count does not change. The headers are readable: the caller runs code of that module.
+CallerId CallerOf(void* address)
+{
+    CallerId id = {};
+    void* base = nullptr;
+    RtlPcToFileHeader(address, &base);
+    if (!base) {
+        return id;
+    }
+    const IMAGE_DOS_HEADER* dos = static_cast<const IMAGE_DOS_HEADER*>(base);
+    const IMAGE_NT_HEADERS* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(static_cast<const char*>(base) + dos->e_lfanew);
+    id.base = base;
+    id.size = nt->OptionalHeader.SizeOfImage;
+    id.stamp = nt->FileHeader.TimeDateStamp;
+    return id;
+}
+
+// The context that a call names: an ADL2 handle, or for a null handle the implicit context of the calling module.
+struct Ref {
+    ADL_CONTEXT_HANDLE handle;
+    CallerId caller;
+};
+
+Ref MakeRef(ADL_CONTEXT_HANDLE handle, void* return_address)
+{
+    return Ref{handle, handle ? CallerId{} : CallerOf(return_address)};
+}
+
+// Which implicit context a call without a handle may use when the calling module has none of its own.
+enum class Scope {
+    kOwnOnly,      // the call allocates through the callback, or changes the context: the caller's context only
+    kOwnOrNewest,  // the call returns facts and no memory: else the newest implicit context
+};
+
+// Use only in the body of an export: the return address must be the one into the calling module.
+#define CALLER_REF(handle) MakeRef((handle), _ReturnAddress())
 
 #if defined(BC250_ADL_TEST_HOOKS)
 AdlSnapshot* g_injected;    // test build only: replaces the discovery
@@ -98,13 +179,27 @@ void* CallerBlock(ADL_MAIN_MALLOC_CALLBACK alloc, size_t count, size_t size)
     return p;
 }
 
-AdlContext* Resolve(ADL_CONTEXT_HANDLE handle)
+// Under the lock. The implicit context of exactly this module, or null.
+AdlContext* OwnImplicitContext(const CallerId& caller)
 {
-    if (!handle) {
-        return g_legacy;
+    for (AdlContext* c = g_legacy; c; c = c->next) {
+        if (c->owner == caller) {
+            return c;
+        }
+    }
+    return nullptr;
+}
+
+// Under the lock. The context of an ADL2 handle; for a null handle the implicit context of the calling module, else
+// with kOwnOrNewest the newest implicit context.
+AdlContext* Resolve(Ref ref, Scope scope)
+{
+    if (!ref.handle) {
+        AdlContext* own = OwnImplicitContext(ref.caller);
+        return own || scope == Scope::kOwnOnly ? own : g_legacy;
     }
     for (AdlContext* c = g_contexts; c; c = c->next) {
-        if (c == handle && c->magic == kContextMagic) {
+        if (c == ref.handle && c->magic == kContextMagic) {
             return c;
         }
     }
@@ -113,20 +208,21 @@ AdlContext* Resolve(ADL_CONTEXT_HANDLE handle)
 
 // Do not retain a context pointer across an application callback. The callback may re-enter ADL, including
 // Destroy or Refresh. Copy the snapshot under the context lock, then release the lock before any callback.
-// The snapshot is on our heap, not the caller's stack or allocation callback.
+// The snapshot is on our heap, not the caller's stack or allocation callback. The callback is the caller's own:
+// a call without a handle from a module without its own context gets ADL_ERR_NOT_INIT.
 struct CallSnapshot {
     AdlSnapshot* snap = nullptr;
     ADL_MAIN_MALLOC_CALLBACK alloc = nullptr;
     int status = ADL_ERR;
 
-    explicit CallSnapshot(ADL_CONTEXT_HANDLE handle)
+    explicit CallSnapshot(Ref ref)
     {
         snap = (AdlSnapshot*)HeapBlock(sizeof(*snap));
         if (!snap) {
             return;
         }
         Lock lock;
-        AdlContext* context = Resolve(handle);
+        AdlContext* context = Resolve(ref, Scope::kOwnOnly);
         if (!context) {
             status = ADL_ERR_NOT_INIT;
             return;
@@ -158,6 +254,15 @@ void DeleteContext(AdlContext* c)
 {
     c->magic = 0;
     FreeBlock(c);
+}
+
+void DeleteAll(AdlContext** list)
+{
+    while (*list) {
+        AdlContext* c = *list;
+        *list = c->next;
+        DeleteContext(c);
+    }
 }
 
 int Create(ADL_MAIN_MALLOC_CALLBACK alloc, int enum_connected, ADL_CONTEXT_HANDLE* out, int threading)
@@ -203,7 +308,7 @@ int Destroy(ADL_CONTEXT_HANDLE handle)
     return ADL_OK;
 }
 
-int Refresh(ADL_CONTEXT_HANDLE handle)
+int Refresh(Ref ref)
 {
     AdlSnapshot* fresh = (AdlSnapshot*)HeapBlock(sizeof(AdlSnapshot));
     if (!fresh) {
@@ -213,7 +318,7 @@ int Refresh(ADL_CONTEXT_HANDLE handle)
     int result = ADL_ERR_NOT_INIT;
     {
         Lock lock;
-        AdlContext* c = Resolve(handle);
+        AdlContext* c = Resolve(ref, Scope::kOwnOnly);  // the snapshot of the calling module only
         if (c) {
             c->snap = *fresh;
             result = ADL_OK;
@@ -221,6 +326,147 @@ int Refresh(ADL_CONTEXT_HANDLE handle)
     }
     FreeBlock(fresh);
     return result;
+}
+
+// The loader notification of ntdll (LdrRegisterDllNotification, documented in the Windows SDK reference). The
+// notification data of a load and of an unload have the same layout; this library reads only DllBase.
+struct LoaderNotificationData {
+    ULONG flags;
+    const void* full_dll_name;
+    const void* base_dll_name;
+    void* dll_base;
+    ULONG size_of_image;
+};
+const ULONG kLoaderNotificationUnloaded = 2;
+typedef VOID(CALLBACK* LoaderNotificationFunction)(ULONG reason, const LoaderNotificationData* data, PVOID context);
+typedef LONG(NTAPI* PFN_LdrRegisterDllNotification)(ULONG, LoaderNotificationFunction, PVOID, PVOID*);
+typedef LONG(NTAPI* PFN_LdrUnregisterDllNotification)(PVOID);
+
+INIT_ONCE g_unload_watch_once = INIT_ONCE_STATIC_INIT;
+PVOID g_unload_watch_cookie;
+
+#if defined(BC250_ADL_TEST_HOOKS)
+bool g_test_ignore_unload;  // test build only: tests the key without the notification
+#endif
+
+// Called by the loader, with the loader lock, when a module unloads: the implicit contexts at that base go, also
+// a context that an earlier module at the same base left. The library never holds g_lock while it waits for the
+// loader lock, so this cannot deadlock.
+VOID CALLBACK OnLoaderNotification(ULONG reason, const LoaderNotificationData* data, PVOID)
+{
+    if (reason != kLoaderNotificationUnloaded || !data || !data->dll_base) {
+        return;
+    }
+    AdlContext* gone = nullptr;
+    {
+        Lock lock;
+#if defined(BC250_ADL_TEST_HOOKS)
+        if (g_test_ignore_unload) {
+            return;
+        }
+#endif
+        for (AdlContext** link = &g_legacy; *link;) {
+            AdlContext* c = *link;
+            if (c->owner.base == data->dll_base) {
+                *link = c->next;
+                c->next = gone;
+                gone = c;
+            } else {
+                link = &c->next;
+            }
+        }
+    }
+    DeleteAll(&gone);
+}
+
+BOOL CALLBACK StartUnloadWatch(PINIT_ONCE, PVOID, PVOID*)
+{
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    auto reg = ntdll ? reinterpret_cast<PFN_LdrRegisterDllNotification>(
+                           reinterpret_cast<void*>(GetProcAddress(ntdll, "LdrRegisterDllNotification")))
+                     : nullptr;
+    if (reg) {
+        reg(0, OnLoaderNotification, nullptr, &g_unload_watch_cookie);
+    }
+    return TRUE;
+}
+
+void StopUnloadWatch()
+{
+    if (!g_unload_watch_cookie) {
+        return;
+    }
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    auto unreg = ntdll ? reinterpret_cast<PFN_LdrUnregisterDllNotification>(
+                             reinterpret_cast<void*>(GetProcAddress(ntdll, "LdrUnregisterDllNotification")))
+                       : nullptr;
+    if (unreg) {
+        unreg(g_unload_watch_cookie);
+    }
+    g_unload_watch_cookie = nullptr;
+}
+
+// ADL_Main_Control_Create: counted per calling module. A second Create of the same module keeps its context and
+// takes the new callback: the callback of the latest Create is the one that the module can call now.
+int LegacyCreate(ADL_MAIN_MALLOC_CALLBACK alloc, int enum_connected, const CallerId& caller)
+{
+    if (!alloc) {
+        return ADL_ERR_INVALID_CALLBACK;
+    }
+    InitOnceExecuteOnce(&g_unload_watch_once, StartUnloadWatch, nullptr, nullptr);
+    {
+        Lock lock;
+        if (AdlContext* own = OwnImplicitContext(caller)) {
+            own->alloc = alloc;
+            own->legacy_refs++;
+            return ADL_OK;
+        }
+    }
+    AdlContext* c = NewContext(alloc, enum_connected, ADL_THREADING_UNLOCKED);
+    if (!c) {
+        return ADL_ERR;
+    }
+    c->owner = caller;
+    c->legacy_refs = 1;
+    Lock lock;
+    if (AdlContext* own = OwnImplicitContext(caller)) {  // another thread of the same module was first
+        own->alloc = alloc;
+        own->legacy_refs++;
+        DeleteContext(c);
+        return ADL_OK;
+    }
+    c->next = g_legacy;
+    g_legacy = c;
+    return ADL_OK;
+}
+
+// ADL_Main_Control_Destroy: releases one Create of the implicit context of the calling module. A caller without its
+// own context gets ADL_ERR_NOT_INIT and no context is released: the context of another module stays valid. (A caller
+// can jump to the export with a tail call; then the return address is in the module that called that caller, and the
+// library cannot know which context the caller used.)
+int LegacyDestroy(const CallerId& caller)
+{
+    AdlContext* gone = nullptr;
+    {
+        Lock lock;
+        AdlContext* c = OwnImplicitContext(caller);
+        if (!c) {
+            return ADL_ERR_NOT_INIT;
+        }
+        if (--c->legacy_refs == 0) {
+            for (AdlContext** link = &g_legacy; *link; link = &(*link)->next) {
+                if (*link == c) {
+                    *link = c->next;
+                    break;
+                }
+            }
+            gone = c;
+        }
+    }
+    if (gone) {
+        DeleteContext(gone);
+    }
+    return ADL_OK;
 }
 
 bool ValidAdapter(const AdlSnapshot* s, int index)
@@ -294,14 +540,14 @@ int GpuOf(const AdlSnapshot* s, int index)
     return ValidAdapter(s, index) ? s->entries[index].gpu : -2;
 }
 
-int NumberOfAdapters(ADL_CONTEXT_HANDLE handle, int* count)
+int NumberOfAdapters(Ref ref, int* count)
 {
     if (!count) {
         return ADL_ERR_NULL_POINTER;
     }
     *count = 0;
     Lock lock;
-    AdlContext* c = Resolve(handle);
+    AdlContext* c = Resolve(ref, Scope::kOwnOrNewest);
     if (!c) {
         return ADL_ERR_NOT_INIT;
     }
@@ -309,13 +555,13 @@ int NumberOfAdapters(ADL_CONTEXT_HANDLE handle, int* count)
     return ADL_OK;
 }
 
-int AdapterInfoArray(ADL_CONTEXT_HANDLE handle, AdapterInfo** out)
+int AdapterInfoArray(Ref ref, AdapterInfo** out)
 {
     if (!out) {
         return ADL_ERR_NULL_POINTER;
     }
     *out = nullptr;
-    CallSnapshot call(handle);
+    CallSnapshot call(ref);
     if (call.status != ADL_OK) {
         return call.status;
     }
@@ -333,13 +579,13 @@ int AdapterInfoArray(ADL_CONTEXT_HANDLE handle, AdapterInfo** out)
     return ADL_OK;
 }
 
-int AdapterInfoBuffer(ADL_CONTEXT_HANDLE handle, AdapterInfo* info, int bytes)
+int AdapterInfoBuffer(Ref ref, AdapterInfo* info, int bytes)
 {
     if (!info) {
         return ADL_ERR_NULL_POINTER;
     }
     Lock lock;
-    AdlContext* c = Resolve(handle);
+    AdlContext* c = Resolve(ref, Scope::kOwnOrNewest);
     if (!c) {
         return ADL_ERR_NOT_INIT;
     }
@@ -353,14 +599,14 @@ int AdapterInfoBuffer(ADL_CONTEXT_HANDLE handle, AdapterInfo* info, int bytes)
     return ADL_OK;
 }
 
-int AdapterActive(ADL_CONTEXT_HANDLE handle, int index, int* status)
+int AdapterActive(Ref ref, int index, int* status)
 {
     if (!status) {
         return ADL_ERR_NULL_POINTER;
     }
     *status = 0;
     Lock lock;
-    AdlContext* c = Resolve(handle);
+    AdlContext* c = Resolve(ref, Scope::kOwnOrNewest);
     if (!c) {
         return ADL_ERR_NOT_INIT;
     }
@@ -371,14 +617,14 @@ int AdapterActive(ADL_CONTEXT_HANDLE handle, int index, int* status)
     return ADL_OK;
 }
 
-int MemoryInfo(ADL_CONTEXT_HANDLE handle, int index, ADLMemoryInfo* info)
+int MemoryInfo(Ref ref, int index, ADLMemoryInfo* info)
 {
     if (!info) {
         return ADL_ERR_NULL_POINTER;
     }
     memset(info, 0, sizeof(*info));
     Lock lock;
-    AdlContext* c = Resolve(handle);
+    AdlContext* c = Resolve(ref, Scope::kOwnOrNewest);
     if (!c) {
         return ADL_ERR_NOT_INIT;
     }
@@ -393,10 +639,10 @@ int MemoryInfo(ADL_CONTEXT_HANDLE handle, int index, ADLMemoryInfo* info)
 
 // The driver version of one GPU. The Catalyst, Crimson (Radeon Software) and web link fields stay empty: our
 // driver is no AMD software release.
-int Versions(ADL_CONTEXT_HANDLE handle, int index, char* driver_version)
+int Versions(Ref ref, int index, char* driver_version)
 {
     Lock lock;
-    AdlContext* c = Resolve(handle);
+    AdlContext* c = Resolve(ref, Scope::kOwnOrNewest);
     if (!c) {
         return ADL_ERR_NOT_INIT;
     }
@@ -414,14 +660,14 @@ int Versions(ADL_CONTEXT_HANDLE handle, int index, char* driver_version)
     return ADL_OK;
 }
 
-int DisplayInfo(ADL_CONTEXT_HANDLE handle, int index, int* count, ADLDisplayInfo** out)
+int DisplayInfo(Ref ref, int index, int* count, ADLDisplayInfo** out)
 {
     if (!count || !out) {
         return ADL_ERR_NULL_POINTER;
     }
     *count = 0;
     *out = nullptr;
-    CallSnapshot call(handle);
+    CallSnapshot call(ref);
     if (call.status != ADL_OK) {
         return call.status;
     }
@@ -465,14 +711,14 @@ int DisplayInfo(ADL_CONTEXT_HANDLE handle, int index, int* count, ADLDisplayInfo
 }
 
 // The current mode of each selected display. Display index -1 selects the displays of the given adapter (source).
-int Modes(ADL_CONTEXT_HANDLE handle, int index, int display, int* count, ADLMode** out)
+int Modes(Ref ref, int index, int display, int* count, ADLMode** out)
 {
     if (!count || !out) {
         return ADL_ERR_NULL_POINTER;
     }
     *count = 0;
     *out = nullptr;
-    CallSnapshot call(handle);
+    CallSnapshot call(ref);
     if (call.status != ADL_OK) {
         return call.status;
     }
@@ -517,7 +763,7 @@ int Modes(ADL_CONTEXT_HANDLE handle, int index, int display, int* count, ADLMode
 
 // One display map per source with active displays; its targets are those displays (more than one only in a clone
 // configuration). No map is an SLS map.
-int DisplayMapConfig(ADL_CONTEXT_HANDLE handle, int index, int* map_count, ADLDisplayMap** maps, int* target_count,
+int DisplayMapConfig(Ref ref, int index, int* map_count, ADLDisplayMap** maps, int* target_count,
                      ADLDisplayTarget** targets)
 {
     if (!map_count || !maps || !target_count || !targets) {
@@ -527,7 +773,7 @@ int DisplayMapConfig(ADL_CONTEXT_HANDLE handle, int index, int* map_count, ADLDi
     *maps = nullptr;
     *target_count = 0;
     *targets = nullptr;
-    CallSnapshot call(handle);
+    CallSnapshot call(ref);
     if (call.status != ADL_OK) {
         return call.status;
     }
@@ -592,13 +838,13 @@ int DisplayMapConfig(ADL_CONTEXT_HANDLE handle, int index, int* map_count, ADLDi
     return ADL_OK;
 }
 
-int SlsMapIndex(ADL_CONTEXT_HANDLE handle, int* sls_index)
+int SlsMapIndex(Ref ref, int* sls_index)
 {
     if (sls_index) {
         *sls_index = -1;  // no SLS group
     }
     Lock lock;
-    return Resolve(handle) ? ADL_ERR_NOT_SUPPORTED : ADL_ERR_NOT_INIT;
+    return Resolve(ref, Scope::kOwnOnly) ? ADL_ERR_NOT_SUPPORTED : ADL_ERR_NOT_INIT;
 }
 
 template <typename T>
@@ -610,6 +856,33 @@ void ClearArray(int* count, T** array)
     if (array) {
         *array = nullptr;
     }
+}
+
+int VersionsInfo(Ref ref, LPADLVersionsInfo info)
+{
+    if (!info) {
+        return ADL_ERR_NULL_POINTER;
+    }
+    memset(info, 0, sizeof(*info));
+    return Versions(ref, -1, info->strDriverVer);
+}
+
+// No SLS group: clears every output and returns ADL_ERR_NOT_SUPPORTED. The call returns arrays in AMD's library, so
+// it takes the same context rule as the other array functions: ADL_ERR_NOT_INIT without a context of the caller.
+int NoSlsConfig(Ref ref, ADLSLSMap* map, int* num_target, ADLSLSTarget** target, int* num_native, ADLSLSMode** native,
+                int* num_bezel, ADLBezelTransientMode** bezel, int* num_transient, ADLBezelTransientMode** transient,
+                int* num_offset, ADLSLSOffset** offset)
+{
+    if (map) {
+        memset(map, 0, sizeof(*map));
+    }
+    ClearArray(num_target, target);
+    ClearArray(num_native, native);
+    ClearArray(num_bezel, bezel);
+    ClearArray(num_transient, transient);
+    ClearArray(num_offset, offset);
+    Lock lock;
+    return Resolve(ref, Scope::kOwnOnly) ? ADL_ERR_NOT_SUPPORTED : ADL_ERR_NOT_INIT;
 }
 
 }  // namespace
@@ -634,41 +907,37 @@ int ADL_API ADL2_Main_Control_Destroy(ADL_CONTEXT_HANDLE context) { return Destr
 
 int ADL_API ADL2_Main_Control_Refresh(ADL_CONTEXT_HANDLE context)
 {
-    return context ? Refresh(context) : ADL_ERR_INVALID_PARAM;
+    return context ? Refresh(CALLER_REF(context)) : ADL_ERR_INVALID_PARAM;
 }
 
 int ADL_API ADL2_Adapter_NumberOfAdapters_Get(ADL_CONTEXT_HANDLE context, int* lpNumAdapters)
 {
-    return NumberOfAdapters(context, lpNumAdapters);
+    return NumberOfAdapters(CALLER_REF(context), lpNumAdapters);
 }
 
 int ADL_API ADL2_Adapter_AdapterInfoX2_Get(ADL_CONTEXT_HANDLE context, AdapterInfo** lppAdapterInfo)
 {
-    return AdapterInfoArray(context, lppAdapterInfo);
+    return AdapterInfoArray(CALLER_REF(context), lppAdapterInfo);
 }
 
 int ADL_API ADL2_Adapter_AdapterInfo_Get(ADL_CONTEXT_HANDLE context, LPAdapterInfo lpInfo, int iInputSize)
 {
-    return AdapterInfoBuffer(context, lpInfo, iInputSize);
+    return AdapterInfoBuffer(CALLER_REF(context), lpInfo, iInputSize);
 }
 
 int ADL_API ADL2_Adapter_Active_Get(ADL_CONTEXT_HANDLE context, int iAdapterIndex, int* lpStatus)
 {
-    return AdapterActive(context, iAdapterIndex, lpStatus);
+    return AdapterActive(CALLER_REF(context), iAdapterIndex, lpStatus);
 }
 
 int ADL_API ADL2_Adapter_MemoryInfo_Get(ADL_CONTEXT_HANDLE context, int iAdapterIndex, LPADLMemoryInfo lpMemoryInfo)
 {
-    return MemoryInfo(context, iAdapterIndex, lpMemoryInfo);
+    return MemoryInfo(CALLER_REF(context), iAdapterIndex, lpMemoryInfo);
 }
 
 int ADL_API ADL2_Graphics_Versions_Get(ADL_CONTEXT_HANDLE context, LPADLVersionsInfo lpVersionsInfo)
 {
-    if (!lpVersionsInfo) {
-        return ADL_ERR_NULL_POINTER;
-    }
-    memset(lpVersionsInfo, 0, sizeof(*lpVersionsInfo));
-    return Versions(context, -1, lpVersionsInfo->strDriverVer);
+    return VersionsInfo(CALLER_REF(context), lpVersionsInfo);
 }
 
 int ADL_API ADL2_Graphics_VersionsX2_Get(ADL_CONTEXT_HANDLE context, LPADLVersionsInfoX2 lpVersionsInfo)
@@ -677,7 +946,7 @@ int ADL_API ADL2_Graphics_VersionsX2_Get(ADL_CONTEXT_HANDLE context, LPADLVersio
         return ADL_ERR_NULL_POINTER;
     }
     memset(lpVersionsInfo, 0, sizeof(*lpVersionsInfo));
-    return Versions(context, -1, lpVersionsInfo->strDriverVer);
+    return Versions(CALLER_REF(context), -1, lpVersionsInfo->strDriverVer);
 }
 
 int ADL_API ADL2_Graphics_VersionsX3_Get(ADL_CONTEXT_HANDLE context, int iAdapterIndex,
@@ -690,20 +959,20 @@ int ADL_API ADL2_Graphics_VersionsX3_Get(ADL_CONTEXT_HANDLE context, int iAdapte
     if (iAdapterIndex == -1) {
         return ADL_ERR_INVALID_ADL_IDX;
     }
-    return Versions(context, iAdapterIndex, lpVersionsInfo->strDriverVer);
+    return Versions(CALLER_REF(context), iAdapterIndex, lpVersionsInfo->strDriverVer);
 }
 
 int ADL_API ADL2_Display_DisplayInfo_Get(ADL_CONTEXT_HANDLE context, int iAdapterIndex, int* lpNumDisplays,
                                          ADLDisplayInfo** lppInfo, int iForceDetect)
 {
     (void)iForceDetect;
-    return DisplayInfo(context, iAdapterIndex, lpNumDisplays, lppInfo);
+    return DisplayInfo(CALLER_REF(context), iAdapterIndex, lpNumDisplays, lppInfo);
 }
 
 int ADL_API ADL2_Display_Modes_Get(ADL_CONTEXT_HANDLE context, int iAdapterIndex, int iDisplayIndex, int* lpNumModes,
                                    ADLMode** lppModes)
 {
-    return Modes(context, iAdapterIndex, iDisplayIndex, lpNumModes, lppModes);
+    return Modes(CALLER_REF(context), iAdapterIndex, iDisplayIndex, lpNumModes, lppModes);
 }
 
 int ADL_API ADL2_Display_DisplayMapConfig_Get(ADL_CONTEXT_HANDLE context, int iAdapterIndex, int* lpNumDisplayMap,
@@ -711,7 +980,7 @@ int ADL_API ADL2_Display_DisplayMapConfig_Get(ADL_CONTEXT_HANDLE context, int iA
                                               ADLDisplayTarget** lppDisplayTarget, int iOptions)
 {
     (void)iOptions;
-    return DisplayMapConfig(context, iAdapterIndex, lpNumDisplayMap, lppDisplayMap, lpNumDisplayTarget,
+    return DisplayMapConfig(CALLER_REF(context), iAdapterIndex, lpNumDisplayMap, lppDisplayMap, lpNumDisplayTarget,
                             lppDisplayTarget);
 }
 
@@ -721,7 +990,7 @@ int ADL_API ADL2_Display_SLSMapIndex_Get(ADL_CONTEXT_HANDLE context, int iAdapte
     (void)iAdapterIndex;
     (void)iADLNumDisplayTarget;
     (void)lpDisplayTarget;
-    return SlsMapIndex(context, lpSLSMapIndex);
+    return SlsMapIndex(CALLER_REF(context), lpSLSMapIndex);
 }
 
 int ADL_API ADL2_Display_SLSMapConfig_Get(ADL_CONTEXT_HANDLE context, int iAdapterIndex, int iSLSMapIndex,
@@ -731,121 +1000,83 @@ int ADL_API ADL2_Display_SLSMapConfig_Get(ADL_CONTEXT_HANDLE context, int iAdapt
                                           ADLBezelTransientMode** lppTransientMode, int* lpNumSLSOffset,
                                           ADLSLSOffset** lppSLSOffset, int iOption)
 {
-    (void)context;
     (void)iAdapterIndex;
     (void)iSLSMapIndex;
     (void)iOption;
-    if (lpSLSMap) {
-        memset(lpSLSMap, 0, sizeof(*lpSLSMap));
-    }
-    ClearArray(lpNumSLSTarget, lppSLSTarget);
-    ClearArray(lpNumNativeMode, lppNativeMode);
-    ClearArray(lpNumBezelMode, lppBezelMode);
-    ClearArray(lpNumTransientMode, lppTransientMode);
-    ClearArray(lpNumSLSOffset, lppSLSOffset);
-    return ADL_ERR_NOT_SUPPORTED;
+    return NoSlsConfig(CALLER_REF(context), lpSLSMap, lpNumSLSTarget, lppSLSTarget, lpNumNativeMode, lppNativeMode, lpNumBezelMode,
+                       lppBezelMode, lpNumTransientMode, lppTransientMode, lpNumSLSOffset, lppSLSOffset);
 }
 
-// The ADL_* functions without a handle work on one process-wide context, counted: each Create needs a Destroy.
+// The ADL_* functions without a handle work on the implicit context of the calling module (see the top of this
+// file), counted: each Create needs a Destroy. Each export finds its caller itself, from its own return address:
+// do not call one export from another.
 int ADL_API ADL_Main_Control_Create(ADL_MAIN_MALLOC_CALLBACK callback, int iEnumConnectedAdapters)
 {
-    if (!callback) {
-        return ADL_ERR_INVALID_CALLBACK;
-    }
-    {
-        Lock lock;
-        if (g_legacy) {
-            g_legacy_refs++;
-            return ADL_OK;
-        }
-    }
-    AdlContext* c = NewContext(callback, iEnumConnectedAdapters, ADL_THREADING_UNLOCKED);
-    if (!c) {
-        return ADL_ERR;
-    }
-    Lock lock;
-    if (g_legacy) {  // another thread was first
-        g_legacy_refs++;
-        DeleteContext(c);
-        return ADL_OK;
-    }
-    g_legacy = c;
-    g_legacy_refs = 1;
-    return ADL_OK;
+    return LegacyCreate(callback, iEnumConnectedAdapters, CALLER_REF(nullptr).caller);
 }
 
-int ADL_API ADL_Main_Control_Destroy()
+int ADL_API ADL_Main_Control_Destroy() { return LegacyDestroy(CALLER_REF(nullptr).caller); }
+
+int ADL_API ADL_Main_Control_Refresh() { return Refresh(CALLER_REF(nullptr)); }
+
+int ADL_API ADL_Adapter_NumberOfAdapters_Get(int* lpNumAdapters)
 {
-    AdlContext* gone = nullptr;
-    {
-        Lock lock;
-        if (!g_legacy) {
-            return ADL_ERR_NOT_INIT;
-        }
-        if (--g_legacy_refs == 0) {
-            gone = g_legacy;
-            g_legacy = nullptr;
-        }
-    }
-    if (gone) {
-        DeleteContext(gone);
-    }
-    return ADL_OK;
+    return NumberOfAdapters(CALLER_REF(nullptr), lpNumAdapters);
 }
-
-int ADL_API ADL_Main_Control_Refresh() { return Refresh(nullptr); }
-
-int ADL_API ADL_Adapter_NumberOfAdapters_Get(int* lpNumAdapters) { return NumberOfAdapters(nullptr, lpNumAdapters); }
 
 int ADL_API ADL_Adapter_AdapterInfoX2_Get(AdapterInfo** lppAdapterInfo)
 {
-    return AdapterInfoArray(nullptr, lppAdapterInfo);
+    return AdapterInfoArray(CALLER_REF(nullptr), lppAdapterInfo);
 }
 
 int ADL_API ADL_Adapter_AdapterInfo_Get(LPAdapterInfo lpInfo, int iInputSize)
 {
-    return AdapterInfoBuffer(nullptr, lpInfo, iInputSize);
+    return AdapterInfoBuffer(CALLER_REF(nullptr), lpInfo, iInputSize);
 }
 
 int ADL_API ADL_Adapter_Active_Get(int iAdapterIndex, int* lpStatus)
 {
-    return AdapterActive(nullptr, iAdapterIndex, lpStatus);
+    return AdapterActive(CALLER_REF(nullptr), iAdapterIndex, lpStatus);
 }
 
 int ADL_API ADL_Adapter_MemoryInfo_Get(int iAdapterIndex, LPADLMemoryInfo lpMemoryInfo)
 {
-    return MemoryInfo(nullptr, iAdapterIndex, lpMemoryInfo);
+    return MemoryInfo(CALLER_REF(nullptr), iAdapterIndex, lpMemoryInfo);
 }
 
 int ADL_API ADL_Graphics_Versions_Get(LPADLVersionsInfo lpVersionsInfo)
 {
-    return ADL2_Graphics_Versions_Get(nullptr, lpVersionsInfo);
+    return VersionsInfo(CALLER_REF(nullptr), lpVersionsInfo);
 }
 
 int ADL_API ADL_Display_DisplayInfo_Get(int iAdapterIndex, int* lpNumDisplays, ADLDisplayInfo** lppInfo,
                                         int iForceDetect)
 {
-    return ADL2_Display_DisplayInfo_Get(nullptr, iAdapterIndex, lpNumDisplays, lppInfo, iForceDetect);
+    (void)iForceDetect;
+    return DisplayInfo(CALLER_REF(nullptr), iAdapterIndex, lpNumDisplays, lppInfo);
 }
 
 int ADL_API ADL_Display_Modes_Get(int iAdapterIndex, int iDisplayIndex, int* lpNumModes, ADLMode** lppModes)
 {
-    return Modes(nullptr, iAdapterIndex, iDisplayIndex, lpNumModes, lppModes);
+    return Modes(CALLER_REF(nullptr), iAdapterIndex, iDisplayIndex, lpNumModes, lppModes);
 }
 
 int ADL_API ADL_Display_DisplayMapConfig_Get(int iAdapterIndex, int* lpNumDisplayMap, ADLDisplayMap** lppDisplayMap,
                                              int* lpNumDisplayTarget, ADLDisplayTarget** lppDisplayTarget,
                                              int iOptions)
 {
-    return ADL2_Display_DisplayMapConfig_Get(nullptr, iAdapterIndex, lpNumDisplayMap, lppDisplayMap,
-                                             lpNumDisplayTarget, lppDisplayTarget, iOptions);
+    (void)iOptions;
+    return DisplayMapConfig(CALLER_REF(nullptr), iAdapterIndex, lpNumDisplayMap, lppDisplayMap, lpNumDisplayTarget,
+                            lppDisplayTarget);
 }
 
 int ADL_API ADL_Display_SLSMapIndex_Get(int iAdapterIndex, int iADLNumDisplayTarget,
                                         ADLDisplayTarget* lpDisplayTarget, int* lpSLSMapIndex)
 {
-    return ADL2_Display_SLSMapIndex_Get(nullptr, iAdapterIndex, iADLNumDisplayTarget, lpDisplayTarget,
-                                        lpSLSMapIndex);
+    (void)iAdapterIndex;
+    (void)iADLNumDisplayTarget;
+    (void)lpDisplayTarget;
+    return SlsMapIndex(CALLER_REF(nullptr), lpSLSMapIndex);
 }
 
 int ADL_API ADL_Display_SLSMapConfig_Get(int iAdapterIndex, int iSLSMapIndex, ADLSLSMap* lpSLSMap,
@@ -855,10 +1086,11 @@ int ADL_API ADL_Display_SLSMapConfig_Get(int iAdapterIndex, int iSLSMapIndex, AD
                                          ADLBezelTransientMode** lppTransientMode, int* lpNumSLSOffset,
                                          ADLSLSOffset** lppSLSOffset, int iOption)
 {
-    return ADL2_Display_SLSMapConfig_Get(nullptr, iAdapterIndex, iSLSMapIndex, lpSLSMap, lpNumSLSTarget,
-                                         lppSLSTarget, lpNumNativeMode, lppNativeMode, lpNumBezelMode, lppBezelMode,
-                                         lpNumTransientMode, lppTransientMode, lpNumSLSOffset, lppSLSOffset,
-                                         iOption);
+    (void)iAdapterIndex;
+    (void)iSLSMapIndex;
+    (void)iOption;
+    return NoSlsConfig(CALLER_REF(nullptr), lpSLSMap, lpNumSLSTarget, lppSLSTarget, lpNumNativeMode, lppNativeMode, lpNumBezelMode,
+                       lppBezelMode, lpNumTransientMode, lppTransientMode, lpNumSLSOffset, lppSLSOffset);
 }
 
 #if defined(BC250_ADL_TEST_HOOKS)
@@ -883,6 +1115,13 @@ __declspec(dllexport) void ADL_API Bc250AdlTest_SetSnapshot(const AdlSnapshot* s
 
 __declspec(dllexport) int ADL_API Bc250AdlTest_LiveBlocks() { return (int)g_live_blocks; }
 
+// Nonzero: the unload notification removes nothing, so that a test sees what the key alone does.
+__declspec(dllexport) void ADL_API Bc250AdlTest_IgnoreUnload(int ignore)
+{
+    Lock lock;
+    g_test_ignore_unload = ignore != 0;
+}
+
 __declspec(dllexport) void ADL_API Bc250AdlTest_Discover(AdlSnapshot* out) { AdlDiscover(out); }
 #endif
 
@@ -895,16 +1134,9 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
     } else if (reason == DLL_PROCESS_DETACH && !reserved) {
         // FreeLibrary with contexts still open: they belong to this image, free them. At process exit
         // (reserved != null) the heap goes away with the process.
-        while (g_contexts) {
-            AdlContext* c = g_contexts;
-            g_contexts = c->next;
-            DeleteContext(c);
-        }
-        if (g_legacy) {
-            DeleteContext(g_legacy);
-            g_legacy = nullptr;
-            g_legacy_refs = 0;
-        }
+        StopUnloadWatch();
+        DeleteAll(&g_contexts);
+        DeleteAll(&g_legacy);
     }
     return TRUE;
 }

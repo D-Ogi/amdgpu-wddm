@@ -34,3 +34,4 @@ EXPORTS
     Bc250AdlTest_SetSnapshot
     Bc250AdlTest_LiveBlocks
     Bc250AdlTest_Discover
+    Bc250AdlTest_IgnoreUnload
