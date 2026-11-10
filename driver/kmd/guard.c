@@ -648,8 +648,9 @@ ULONGLONG GuardLabCommitPagingRingStart(void)
 }
 
 // BD-210 G1, lab flavour only, not a catalog setting for the reason of LabScaledPlane above. LabCpuVisibleOnDemand
-// (REG_DWORD, Parameters, read only at DriverEntry): 0 gives the UMD allocations no CpuVisibleOnDemand, which is the
-// create-time CPU view of the drivers before it, for an A/B of the address space of one process on one KMD. Absent,
+// (REG_DWORD, Parameters, read only at DriverEntry): 0 gives the UMD and the type-0 LB7A allocations (BD-352) no
+// CpuVisibleOnDemand, which is the create-time CPU view of the drivers before it, for an A/B of the address space of
+// one process on one KMD. Absent,
 // not a REG_DWORD or any other value keeps the flag, as the release flavour does.
 static BOOLEAN g_LabCpuVisibleOnDemand = TRUE;
 
@@ -670,6 +671,35 @@ void GuardLabReadCpuVisibleOnDemand(_In_ PDRIVER_OBJECT DriverObject)
     g_LabCpuVisibleOnDemand = !(NT_SUCCESS(status) && value == 0);
     GuardLog("lab: cpu view on demand selector read (read only; value %lu, 0x%08X): %s", value, status,
              g_LabCpuVisibleOnDemand ? "on" : "off (create-time cpu view)");
+}
+
+// BD-352, lab flavour only, not a catalog setting for the reason of LabScaledPlane above. LabAllocLogMiB (REG_DWORD,
+// Parameters, read only at DriverEntry): N from 1 to 4096 makes WddmCreateAllocation write one guard-log line for each
+// UMD allocation and each type-0 LB7A allocation of at least N MiB, with the creating process, the size, the segment
+// set and the CPU view bits (wddm.c). It attributes the CPU views of one process to their creates. The log ring keeps
+// its first BC250_LOG_HEAD_LINES lines and wraps the rest, so a large N keeps a game load inside it. Absent, 0, not a
+// REG_DWORD or out of range: no line.
+static ULONG g_LabAllocLogMiB;
+
+void GuardLabReadAllocLog(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status;
+    ULONG value = 0;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (!NT_SUCCESS(status)) return;
+    status = ParameterDword(key, L"LabAllocLogMiB", &value);
+    ZwClose(key);
+    if (status == STATUS_OBJECT_NAME_NOT_FOUND) return;     // the default: no line, every start would log it
+    g_LabAllocLogMiB = NT_SUCCESS(status) && value >= 1 && value <= 4096 ? value : 0;
+    GuardLog("lab: allocation log selector read (read only; value %lu, 0x%08X): %s %lu MiB", value, status,
+             g_LabAllocLogMiB ? "creates of at least" : "off, out of range:", g_LabAllocLogMiB ? g_LabAllocLogMiB : value);
+}
+
+ULONG GuardLabAllocLogMiB(void)
+{
+    return g_LabAllocLogMiB;
 }
 #endif
 

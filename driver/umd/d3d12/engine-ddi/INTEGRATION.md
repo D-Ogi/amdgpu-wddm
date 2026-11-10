@@ -640,22 +640,27 @@ The shared surface (boundary r5, BD-075, the same engine ABI 1.3 V13 image). A s
 linear surface, and nothing in the DDI says that a create is one: `D3D12DDIARG_CREATEHEAP_0001`,
 `..._CREATERESOURCE_0088`, `D3D12DDICB_ALLOCATE_0022` and `D3D12DDI_ALLOCATION_INFO_0022` carry no sharing field
 and no sharing flag, and the heap flags a shared committed texture arrives with (0x26, all three categories, pool
-L1, no CPU access) are an ordinary committed texture's. What does say it is the runtime's own refusal of the
-ordinary allocation shape, measured in the lab trial of 2026-10-05: `pfnAllocateCb` answers `E_INVALIDARG` for
-a shared resource whose allocation publishes no resource-level private data, and for nothing else of the 691
-callbacks of that run. So the create makes at most two attempts:
+L1, no CPU access) are an ordinary committed texture's. The runtime does not identify one either. The lab trial
+of 2026-10-05 saw `pfnAllocateCb` answer `E_INVALIDARG` for a shared resource without resource-level private
+data, but that was a measurement of the old allocation shape, not a DDI promise: since BD-210 made GPU-only BC2A
+allocations CPU-invisible, the runtime accepts the ordinary allocation for a shared texture too. So the shell
+does not wait for a refusal (BD-217). It selects the representation before it allocates:
 
-1. the ordinary create, with `kMemoryShareable` (`0x8`) added to `kMemoryDedicated` when, and only when, the
-   description is inside the shareable envelope (the linear surface's shape on a GPU-only L1 heap without
-   `PRIMARY` and without `COHERENT_SYSTEMWIDE`). The flag changes nothing about the request; it is permission to
-   retry. A shape outside the envelope never carries it and can never be retried;
-2. the retry, only when `allocate_memory` answers the shell-internal `kShareRequired` (`0xA0BC2075`), which it
-   may answer only for a request that carried `kMemoryShareable` and whose runtime callback refused with
-   `E_INVALIDARG` without allocating anything. engine-ddi then asks the engine for the linear image, replaces the
-   heap's `ByteSize` with the backing size and its `Alignment` with 0, and calls `allocate_memory` again with
+1. the first request carries `kMemoryShareable` (`0x8`) next to `kMemoryDedicated` when, and only when, the
+   description is inside the shareable envelope (`shared_surface_shape`: the linear surface's shape on a GPU-only
+   L1 heap without `PRIMARY` and without `COHERENT_SYSTEMWIDE`). A shape outside the envelope never carries it.
+2. `allocate_memory` answers the shell-internal `kShareRequired` (`0xA0BC2075`) to every request that carries
+   `kMemoryShareable` and no surface fields, before any runtime callback and before any Vulkan import. engine-ddi
+   then asks the engine for the linear image, replaces the heap's `ByteSize` with the backing size and its
+   `Alignment` with 0, and calls `allocate_memory` again with
    `kMemoryDedicated | kMemoryShareable | kMemoryLinearSurface` and the surface fields, exactly as for a primary.
+   That request is the one that allocates, with the surface record (LB7A).
 
-An ordinary create therefore pays nothing: no engine query, one callback, no retry. `admitted_create_failure`
+Every description inside the envelope therefore gets the LB7A surface record, shared or private: the DDI cannot
+tell the two apart. Every other allocation keeps the BC2A record and its no-CPU-view intent, with one callback and
+no engine query. Every second request is counted and named on the debugger channel. The shell's experiment
+switch `shared-create-retry-off` removes the early `kShareRequired` answer, so the envelope's first request
+allocates as BC2A (an aid for a bisect, not a product path). `admitted_create_failure`
 maps `kShareRequired` to `E_OUTOFMEMORY`, so a path that ever returned it to the runtime would report a refusal
 rather than a strange status, and a header test pins that.
 

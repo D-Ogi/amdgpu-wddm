@@ -133,11 +133,15 @@ int UmdBlobAllocCpuCached(const struct umd_alloc_view* allocation);
 // Everything else stays CPU-visible, as before. UmdBlobAllocCpuCached is never 1 where this is 0.
 int UmdBlobAllocCpuVisible(const struct umd_alloc_view* allocation);
 
-// BD-210 G1: DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand, on top of CpuVisible. 1 only for a GTT-heap blob
-// of version 2 or later that is CpuVisible (UmdBlobAllocCpuVisible) and asks for no scan-out. VidMm then makes the CPU
-// view at the first Lock2, not at the create. A scan-out request, a VRAM-heap blob (VidMm refuses the flag when the
-// segment set includes the local segment) and a version 1 blob keep the create-time view.
-int UmdBlobAllocCpuVisibleOnDemand(const struct umd_alloc_view* allocation);
+// BD-210 G1: the CPU view class of a UMD blob for the shared rule of cpu_view_policy.h: UMD_MAPPABLE for a blob of
+// version 2 or later that is CpuVisible and asks for no scan-out, GPU_ONLY for a NO_CPU_ACCESS one, LEGACY otherwise.
+unsigned long UmdBlobCpuViewClass(const struct umd_alloc_view* allocation);
+// DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand, on top of CpuVisible: Bc250CpuViewOnDemandAllowed with the
+// blob's class and its supported segment set (UmdBlobPlacement's). VidMm then makes the CPU view at the first Lock2.
+// aperture_set is the set bit of the aperture segment. A scan-out request, a VRAM-heap blob (its set has the local
+// segment) and a version 1 blob keep the create-time view.
+int UmdBlobAllocCpuVisibleOnDemand(const struct umd_alloc_view* allocation, unsigned long supported,
+                                   unsigned long aperture_set);
 
 // On any refusal *out is zeroed when out is not NULL. bytes may be NULL.
 int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* out);

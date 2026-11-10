@@ -236,6 +236,7 @@ typedef struct _BC250_WDDM_KIND {
 #define BC250_ADMISSION_COUNT(p) ((void)InterlockedIncrement(p))
 #include "gdi_admission.h"
 #include "surface_resource_private.h"
+#include "cpu_view_policy.h"         // BD-352: the one CpuVisibleOnDemand rule of the UMD and the type-0 allocations
 #include "present_range.h"
 #include "present_snapshot.h"        // BD-065: the refusal reasons of the GPU Present allocation snapshot
 #include "scanout_admit.h"           // M15.14: which allocation SetVidPnSourceAddress may scan out
@@ -776,11 +777,14 @@ typedef struct _BC250_WDDM {
     volatile LONG UmdAllocsGpuOnly;
     volatile LONG64 UmdGpuOnlyBytes;
     volatile LONG64 UmdCpuVisibleBytes;
-    // BD-210 G1: CpuVisibleOnDemand for the UMD allocations (GuardCpuVisibleOnDemand, latched at WddmStart), and the
-    // CPU-visible allocations created with it, a part of the cpu-visible count above.
+    // BD-210 G1 and BD-352: CpuVisibleOnDemand for the UMD and the type-0 LB7A allocations (GuardCpuVisibleOnDemand,
+    // latched at WddmStart, cpu_view_policy.h), and the CPU-visible allocations created with it, a part of the
+    // cpu-visible counts.
     BOOLEAN CpuVisibleOnDemand;
     volatile LONG UmdAllocsOnDemand;
     volatile LONG64 UmdOnDemandBytes;
+    volatile LONG Lb7aAllocsOnDemand;
+    volatile LONG64 Lb7aOnDemandBytes;
     // BD-210: cumulative type-0 create-step counters, separate from BC2A and standard GDI types.
     volatile LONG Lb7aAllocs, Lb7aAllocsGpuOnly, Lb7aNoCpuAccess;
     volatile LONG64 Lb7aGpuOnlyBytes, Lb7aCpuVisibleBytes;
@@ -3635,9 +3639,12 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: umd cpu view: gpu-only %ld (%lld MiB), cpu-visible %ld (%lld MiB)",
              Wddm->UmdAllocsGpuOnly, (long long)(Wddm->UmdGpuOnlyBytes >> 20),
              Wddm->UmdAllocs - Wddm->UmdAllocsGpuOnly, (long long)(Wddm->UmdCpuVisibleBytes >> 20));
-    // BD-210 G1, a line of its own for the same reason: the part of cpu-visible that VidMm maps at the first Lock2.
-    GuardLog("wddm summary: umd cpu view on demand (%s): %ld (%lld MiB)", Wddm->CpuVisibleOnDemand ? "on" : "off",
-             Wddm->UmdAllocsOnDemand, (long long)(Wddm->UmdOnDemandBytes >> 20));
+    // BD-210 G1 and BD-352, a line of its own for the same reason: the part of cpu-visible that VidMm maps at the
+    // first Lock2, the UMD (GTT heap) allocations and the type-0 LB7A allocations apart.
+    GuardLog("wddm summary: cpu view on demand (%s): gtt %ld (%lld MiB), lb7a %ld (%lld MiB)",
+             Wddm->CpuVisibleOnDemand ? "on" : "off",
+             Wddm->UmdAllocsOnDemand, (long long)(Wddm->UmdOnDemandBytes >> 20),
+             Wddm->Lb7aAllocsOnDemand, (long long)(Wddm->Lb7aOnDemandBytes >> 20));
     GuardLog("wddm summary: lb7a cpu view: gpu-only %ld (%lld MiB), cpu-visible %ld (%lld MiB), private %ld",
              Wddm->Lb7aAllocsGpuOnly, (long long)(Wddm->Lb7aGpuOnlyBytes >> 20),
              Wddm->Lb7aAllocs-Wddm->Lb7aAllocsGpuOnly, (long long)(Wddm->Lb7aCpuVisibleBytes >> 20),
@@ -4598,10 +4605,12 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     wddm->SharedResidency = (GuardReadSetting(L"EnableSharedResidency", 1) != 0);
     GuardLog("wddm: shared residency %s", wddm->SharedResidency ?
              "on (UMD VRAM allocations may be demoted to the aperture)" : "off (0.7.216.1 placement)");
-    // BD-210 G1: on in the release flavour; the lab flavour turns it off with LabCpuVisibleOnDemand 0 (guard.c).
+    // BD-210 G1 and BD-352: on in the release flavour; the lab flavour turns it off with LabCpuVisibleOnDemand 0
+    // (guard.c). One lever for both classes of cpu_view_policy.h.
     wddm->CpuVisibleOnDemand = GuardCpuVisibleOnDemand();
-    GuardLog("wddm: umd cpu view on demand %s", wddm->CpuVisibleOnDemand ?
-             "on (VidMm maps a cpu-visible v2 allocation at its first Lock2)" : "off (cpu view at the create)");
+    GuardLog("wddm: cpu view on demand %s", wddm->CpuVisibleOnDemand ?
+             "on (umd gtt and lb7a plain: CPU view at the first Lock2)" :
+             "off (cpu view at the create)");
     wddm->NotifyDpcInReport = (GuardReadSetting(L"NotifyDpcInReport", 1) != 0);
     GuardLog("wddm: completion report pairs its own notify dpc: %s",
              wddm->NotifyDpcInReport ? "yes" : "no (0.7.208.1 behaviour, one dxgkrnl DPC later)");
@@ -6463,6 +6472,23 @@ static void WddmCpuVisibleAllocationFlags(DXGK_ALLOCATIONINFOFLAGS_WDDM2_0* Flag
     Flags->HardwareProtected = 0;
 }
 
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// BD-352: the attribution line of LabAllocLogMiB (guard.c), one per create of at least that size. Kind "umd": A is
+// the winsys heap, B the GEM flags. Kind "lb7a": A is the E26R record version, B its access word. seg is the
+// supported read set, cpu/od/c the CpuVisible, CpuVisibleOnDemand and Cached bits as this create gives them.
+// A guard-log text has at most 160 bytes: the line stays short.
+static void WddmLabAllocLine(const char* Kind, const DXGK_ALLOCATIONINFO* Info, unsigned long A, unsigned long long B)
+{
+    const ULONG mib = GuardLabAllocLogMiB();
+    if (mib == 0 || Info->Size < ((SIZE_T)mib << 20)) return;
+    // The three bits print as %c: a %u counts 10 characters in the worst-case width of guardlog_width.py.
+    GuardLog("alloc %s pid %lu %llu KiB a 0x%lX b 0x%llX seg 0x%lX cpu %c od %c c %c", Kind,
+             HandleToULong(PsGetCurrentProcessId()), (unsigned long long)Info->Size >> 10, A, B,
+             (ULONG)Info->SupportedReadSegmentSet, Info->FlagsWddm2.CpuVisible ? '1' : '0',
+             Info->FlagsWddm2.CpuVisibleOnDemand ? '1' : '0', Info->FlagsWddm2.Cached ? '1' : '0');
+}
+#endif
+
 // E26R v1: magic, version, shared (12 bytes). V2 adds CPU access intent
 // (16 bytes): PRIMARY=1, CPU_READ=2. Primary is not a public input bit in
 // DXGK_ALLOCATIONINFOFLAGS_WDDM2_0; never infer it from reserved OS flags.
@@ -6495,6 +6521,8 @@ typedef struct _BC250_CREATE_CALL {
     // for the create-time witness, which must be able to name what the creator actually asked for.
     BC250_GDI_ALLOCATION_POLICY RecordPolicy;
     unsigned long RecordVersion, RecordAccess;
+    // BD-352: the record class of cpu_view_policy.h, from the same record, for the CpuVisibleOnDemand rule.
+    unsigned long CpuViewClass;
 } BC250_CREATE_CALL;
 
 static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Slot)
@@ -6582,8 +6610,8 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         // aperture endpoint and an MDL endpoint resolve to the same host physical page (gfx.c
         // PagingResolvePhysical), so staging through the aperture would add a map, a GART write and a TLB flush
         // per eviction and accelerate nothing.
+        struct umd_placement placement;
         {
-            struct umd_placement placement;
             const int shared = UmdBlobPlacement(&view, BC250_WDDM_SEGMENT_VRAM, BC250_WDDM_SEGMENT_APERTURE,
                                                 wddm != NULL && wddm->SharedResidency, &placement);
             info->PreferredSegment.Value = 0;
@@ -6603,11 +6631,14 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         // this, VidMm gave every DXVK device-local chunk a write-combined view in the creating process,
         // and a 32-bit game ran out of address space on views nothing ever mapped.
         info->FlagsWddm2.CpuVisible = (UINT)UmdBlobAllocCpuVisible(&view);
-        // BD-210 G1: a CPU-visible v2 GTT-heap allocation that is not a scan-out gets its CPU view at the first
-        // Lock2, not here (umd_blob.c). Its placement above is the aperture alone: VidMm refuses the flag on a set
-        // with the local segment. CpuVisible stays set, so the map works as before. The flag is ours to set.
+        // BD-210 G1: a CPU-visible v2 blob that is not a scan-out gets its CPU view at the first Lock2, not here,
+        // when its placement above is the aperture alone: VidMm refuses the flag on a set with the local segment.
+        // The rule is the one of cpu_view_policy.h, which the type-0 LB7A allocations below share (BD-352).
+        // CpuVisible stays set, so the map works as before. The flag is ours to set.
         info->FlagsWddm2.CpuVisibleOnDemand =
-            (UINT)((wddm == NULL || wddm->CpuVisibleOnDemand) && UmdBlobAllocCpuVisibleOnDemand(&view));
+            (UINT)((wddm == NULL || wddm->CpuVisibleOnDemand) &&
+                   UmdBlobAllocCpuVisibleOnDemand(&view, placement.supported,
+                                                  BC250_WDDM_SEGMENT_SET(BC250_WDDM_SEGMENT_APERTURE)));
         // RADV's CPU_GTT_USWC requests write-combined storage; without it,
         // CPU-accessible GTT requires cached backing store. VidMm supplies
         // CacheCoherent PTEs, which the encoder maps to AMDGPU_PTE_SNOOPED.
@@ -6627,6 +6658,9 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
             GuardLog("wddm: umd alloc %llu heap 0x%lX align %u va 0x%llX gem 0x%llX cached %u cpu %u", view.bytes,
                      view.heap, align, view.requested_va, view.gem_flags, info->FlagsWddm2.Cached,
                      info->FlagsWddm2.CpuVisible);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        WddmLabAllocLine("umd", info, view.heap, view.gem_flags);
+#endif
         return BC250_CREATE_STEP_ADMITTED;
     }
 
@@ -6713,6 +6747,22 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     info->FlagsWddm2.CpuVisible = policy.CpuVisible;
     info->FlagsWddm2.AccessedPhysically = policy.AccessedPhysically;
     info->FlagsWddm2.Cached = policy.Cached;
+    // BD-352: a type-0 allocation of a plain E26R record (no CPU_READ, no display intent) whose placement is the
+    // aperture alone gets its CPU view at the first Lock2, by the same rule as the UMD blobs above. The CDD shadow
+    // and the BD-156 staging surface (CPU_READ), the display surfaces and every local placement keep the view at
+    // the create. Same lever as BD-210 G1 (LabCpuVisibleOnDemand in the lab flavour).
+    if (!gdiType && (wddm == NULL || wddm->CpuVisibleOnDemand) &&
+        Bc250CpuViewOnDemandAllowed(call->CpuViewClass, (int)policy.CpuVisible, info->SupportedReadSegmentSet,
+                                    BC250_WDDM_SEGMENT_SET(BC250_WDDM_SEGMENT_APERTURE))) {
+        info->FlagsWddm2.CpuVisibleOnDemand = 1;
+        if (wddm != NULL) {
+            InterlockedIncrement(&wddm->Lb7aAllocsOnDemand);
+            InterlockedAdd64(&wddm->Lb7aOnDemandBytes, (LONG64)info->Size);
+        }
+    }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    if (!gdiType) WddmLabAllocLine("lb7a", info, call->RecordVersion, call->RecordAccess);
+#endif
     info->AllocationPriority = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
     // M15.14 increment 2, the create-time answer. ScanoutRequests is counted at flip time, so a zero
     // there cannot tell "the client never marked its buffers" from "the request never reached
@@ -6812,6 +6862,8 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
         if (wddm != NULL) BC250_ADMISSION_COUNT(&wddm->StdAlloc.CreateCalls[BC250_CREATE_RESOURCE_DATA]);
         return STATUS_INVALID_PARAMETER;
     }
+    call.CpuViewClass = Bc250CpuViewClassOfRecord(pCreateAllocation->pPrivateDriverData,
+                                                  pCreateAllocation->PrivateDriverDataSize);
     outcome = Bc250CreateRun(wddm != NULL ? &wddm->StdAlloc : NULL, &g_WddmCreateOps, &call,
                              pCreateAllocation->NumAllocations);
     if (outcome == BC250_CREATE_NO_MEMORY) return STATUS_INSUFFICIENT_RESOURCES;
