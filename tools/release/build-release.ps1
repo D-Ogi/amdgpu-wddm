@@ -663,6 +663,23 @@ foreach ($f in $toSign.driver) { Invoke-Sign $f }
 foreach ($f in $toSign.user) { Invoke-UserModeSign $f }
 '  signed {0} more PE file(s) of the driver package with the test certificate: {1}' -f $toSign.driver.Count, (($toSign.driver | ForEach-Object { Split-Path $_ -Leaf }) -join ', ')
 '  signed {0} PE file(s) outside the driver package ({1}): {2}' -f $toSign.user.Count, $userSigner.mode, (($toSign.user | ForEach-Object { Split-Path $_ -Leaf }) -join ', ')
+# BD-342: the registered release-sources hashes are the image hashes of the built artifacts; the package carries those
+# images signed. Every payload file must be the registered image under the release or user-mode signer, or byte-equal
+# to its source. The gate prints one REFUSE line per file that fails and throws.
+. (Join-Path $PSScriptRoot 'package-identity.ps1')
+# A driver package member whose bytes differ from its registered source is an assembly edit (INF stamp, the two
+# D3D11 records, the two ICD JSON files): it is declared to the gate, which refuses any other changed data file.
+$srcByDriverPath = @{}
+foreach ($sf in $sources.files) { $srcByDriverPath[(([string]$sf.path) -replace '/', '\')] = $sf }
+$editedPaths = @($driverPackage.members | Where-Object { [string]$_.path -notmatch '\.(sys|dll|exe)$' } | Where-Object {
+    $m = $_; $row = $srcByDriverPath[(([string]$m.source) -replace '/', '\')]
+    $row -and ([string]$m.sha256).ToUpperInvariant() -ne ([string]$row.sha256).ToUpperInvariant()
+} | ForEach-Object { [string]$_.path })
+$editedInf = @($driverPackage.members | Where-Object { [string]$_.path -match 'bc250kmd\.inf$' } | ForEach-Object { [string]$_.path })
+
+'  packaging edits declared to the identity gate: {0}' -f $(if ($editedPaths.Count) { (@($editedPaths + $editedInf) -join ', ') } else { 'none' })
+Test-PackageIdentity -PackageRoot $pkg -Sources @($sources.files) -SignerThumbprints @($release.Thumbprint, $userSigner.thumbprint) `
+    -DriverMembers $driverPackage.members -EditedPaths @($editedPaths + $editedInf) -Python $pythonExe -Root $Root
 # The setup window was hashed when it was copied in, which is before its signature: manifest.json records what
 # ships, and the installer verifies the package against it.
 $setupHash = (Get-FileHash -LiteralPath $setupPkg -Algorithm SHA256).Hash
@@ -888,7 +905,10 @@ if ($compat.no_live_rebind.method -ne 'di-install-as-set' -or $compat.no_live_re
 $files = @()
 foreach ($f in Get-ChildItem -LiteralPath $pkg -Recurse -File | Sort-Object FullName) {
     $rel = $f.FullName.Substring($pkg.Length + 1) -replace '\\', '/'
-    $files += [ordered]@{ path = $rel; sha256 = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash; size = $f.Length }
+    # BD-342: signing changes a file's SHA-256 and not its image. A reader that does not know the field ignores it.
+    $image = if ($rel -match '\.(sys|dll|exe)$') { Get-PeImageHash $f.FullName $pythonExe } else { $null }
+    $files += [ordered]@{ path = $rel; sha256 = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash; size = $f.Length
+                          image_sha256 = $image }
 }
 # The registry defaults: one table (installer\registry-defaults.json) that install.ps1 applies and the control
 # application's reset reads from here.
@@ -1039,6 +1059,9 @@ $manifest = [ordered]@{
     licenses = @($sources.licenses | ForEach-Object { [ordered]@{ file = "licenses/$($_.file)"; repository = $_.repository; path = $_.path; ref = $_.ref; sha256 = $_.sha256 } })
     update_components = $updateComponents   # the update identity of each kind (docs/design/self-update.md)
     components = $components
+    # BD-342: where the image identities of the payload are written (beside the zip, like the submission CAB):
+    # a signature changes a file's SHA-256, not its image hash.
+    source_identity = [ordered]@{ file = 'driver-image-identities.json'; location = 'the package output folder, beside the zip'; scope = 'driver package' }
     files = $files
 }
 [IO.File]::WriteAllText((Join-Path $pkg 'manifest.json'), ($manifest | ConvertTo-Json -Depth 8))

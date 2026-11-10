@@ -378,3 +378,20 @@ Each of those two worktree diffs is byte-equal to the diff from the recorded hea
 same fork branch, so each build read the tree of a published commit, and the record names that commit. Each
 file becomes verifiable the first time a train builds it with the recipes of this branch, from a clean tree of
 that commit.
+
+## The registered hashes and the shipped files (BD-342)
+
+The release-sources rows record the hashes of the build artifacts. The package does not ship those files as they
+left the build. The packaging step signs every PE file, so its SHA-256 changes while its image stays the same. The
+two hashes describe one image. They are different. Three facts keep the chain closed:
+
+- `manifest.json` lists every shipped file with its SHA-256 and, for a PE file, the image hash in `image_sha256`.
+  `driver-image-identities.json` beside the package holds the image hashes of the driver package.
+- The gate `Test-PackageIdentity` in `build-release.ps1` refuses a payload file whose image hash is not the image
+  hash of the registered artifact. It also refuses a file that is not signed by the release or the user-mode
+  certificate, a signature whose blob does not match its image, a data file that is not byte-equal to the source, and
+  a PE of the package that no source row or driver package member names.
+- A third-party row (a vendor program carried unchanged) is the vendor's own file: the whole SHA-256 equals the
+  registered one, the image hash equals the source's, and the package signer is the source's signer. No pinned
+  certificate applies to it.
+- A kit pin that must equal an installed file takes its value from the package, never from the registered rows.

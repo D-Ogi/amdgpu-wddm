@@ -54,11 +54,21 @@ def image_digest(path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--directory', type=Path, required=True)
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--write', type=Path)
-    group.add_argument('--check', type=Path)
+    parser.add_argument('--directory', type=Path, help='a directory tree of PE files, with --write or --check')
+    parser.add_argument('--file', type=Path, help='one PE image: print its image hash')
+    parser.add_argument('--write', type=Path)
+    parser.add_argument('--check', type=Path)
     args = parser.parse_args()
+    if args.file:
+        if args.directory or args.write or args.check:
+            parser.exit(2, 'image identity failed: --file does not combine with --directory, --write or --check' + chr(10))
+        try:
+            print(image_digest(args.file))
+        except (OSError, ValueError) as exc:
+            parser.exit(1, 'image identity failed: %s' % exc)
+        raise SystemExit(0)
+    if not args.directory or not (args.write or args.check):
+        parser.exit(2, 'image identity failed: give --directory with one of --write and --check, or --file' + chr(10))
     try:
         root = args.directory.resolve(strict=True)
         images = sorted(p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in ('.dll', '.exe', '.sys'))
@@ -71,4 +81,4 @@ if __name__ == '__main__':
             raise ValueError('signing changed an image or the image set')
         print(f'PASS {len(images)} PE image identities')
     except (OSError, ValueError) as exc:
-        parser.exit(1, f'image identity failed: {exc}\n')
+        parser.exit(1, 'image identity failed: %s' % exc)
