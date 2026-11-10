@@ -617,20 +617,26 @@ foreach ($ph in 'testsigning-pending', 'driver-pending-restart', 'installed') {
 }
 Check ($null -eq (Get-PendingRestart ([pscustomobject]@{ phase = 'verified'; restart_boot_id = 41 }) ([ordered]@{ boot_id = 41 }))) 'a phase that waits for nothing is never pending'
 
-'[BD-359] the end of a verification: a person''s run records its verdict; the continuation at a logon records only a pass'
+'[BD-359] the end of a verification: a person''s run records its verdict; the continuation at a logon writes no failed phase'
 foreach ($c in @(
-        @{ n = 'person, pass'; f = 0; k = $false; a = 1; repeat = $false; phase = 'verified'; txn = 'verified' }
-        @{ n = 'person, failure'; f = 2; k = $false; a = 1; repeat = $false; phase = 'verify-failed'; txn = 'verify-failed' }
-        @{ n = 'continuation, pass at the first attempt'; f = 0; k = $true; a = 1; repeat = $false; phase = 'verified'; txn = 'verified' }
-        @{ n = 'continuation, failure at the first attempt: once more'; f = 1; k = $true; a = 1; repeat = $true; phase = $null; txn = '' }
-        @{ n = 'continuation, pass at the second attempt'; f = 0; k = $true; a = 2; repeat = $false; phase = 'verified'; txn = 'verified' }
-        @{ n = 'continuation, failure at the second attempt: phase kept, no observation'; f = 3; k = $true; a = 2; repeat = $false; phase = $null; txn = '' })) {
-    $o = Get-VerifyOutcome -Failed $c.f -LogonContinuation $c.k -Attempt $c.a
+        @{ n = 'person (verify.cmd), pass'; f = 0; k = $false; a = 1; s = $true; repeat = $false; phase = 'verified'; txn = 'verified' }
+        @{ n = 'person (verify.cmd), failure: unchanged, verify-failed to the phase and the transaction'; f = 2; k = $false; a = 1; s = $true; repeat = $false; phase = 'verify-failed'; txn = 'verify-failed' }
+        @{ n = 'person, failure while start-confirm still runs: unchanged too'; f = 2; k = $false; a = 1; s = $false; repeat = $false; phase = 'verify-failed'; txn = 'verify-failed' }
+        @{ n = 'continuation, pass at the first attempt'; f = 0; k = $true; a = 1; s = $true; repeat = $false; phase = 'verified'; txn = 'verified' }
+        @{ n = 'continuation, failure at the first attempt: once more, nothing recorded'; f = 1; k = $true; a = 1; s = $true; repeat = $true; phase = $null; txn = '' }
+        @{ n = 'continuation, first fail then pass'; f = 0; k = $true; a = 2; s = $true; repeat = $false; phase = 'verified'; txn = 'verified' }
+        @{ n = 'continuation, fail twice, start-confirm of this boot ended: phase kept, the transaction counts the failure'; f = 3; k = $true; a = 2; s = $true; repeat = $false; phase = $null; txn = 'verify-failed' }
+        @{ n = 'continuation, fail twice, start-confirm still running: phase kept, no observation'; f = 3; k = $true; a = 2; s = $false; repeat = $false; phase = $null; txn = '' })) {
+    $o = Get-VerifyOutcome -Failed $c.f -LogonContinuation $c.k -Attempt $c.a -Settled $c.s
     Check (($o.repeat -eq $c.repeat) -and ($o.phase -eq $c.phase) -and ([string]$o.transaction -eq $c.txn)) "$($c.n): repeat $($o.repeat), phase '$($o.phase)', transaction '$($o.transaction)'"
 }
-# Negative control over every case: the continuation never writes verify-failed, to the phase or to the transaction.
-$never = @(foreach ($f in 0..3) { foreach ($a in 1..3) { $o = Get-VerifyOutcome -Failed $f -LogonContinuation $true -Attempt $a; if ($o.phase -eq 'verify-failed' -or $o.transaction -eq 'verify-failed' -or ($f -gt 0 -and $o.phase -eq 'verified')) { "$f/$a" } } })
-Check ($never.Count -eq 0) "continuation: no failed count at any attempt writes verify-failed or verified for a failure ($($never -join ', '))"
+# Over every case of the continuation: no failed phase, never a pass for a failure (to the phase or to the
+# transaction), and verify-failed to the transaction only from a final, settled attempt.
+$never = @(foreach ($f in 0..3) { foreach ($a in 1..3) { foreach ($s in $true, $false) {
+    $o = Get-VerifyOutcome -Failed $f -LogonContinuation $true -Attempt $a -Settled $s
+    if ($o.phase -eq 'verify-failed' -or ($f -gt 0 -and ($o.phase -eq 'verified' -or $o.transaction -eq 'verified')) -or
+        ($o.transaction -eq 'verify-failed' -and ($a -lt 2 -or -not $s))) { "$f/$a/$s" } } } })
+Check ($never.Count -eq 0) "continuation: no case writes a failed phase, a pass for a failure, or an unsettled or provisional failure ($($never -join ', '))"
 # The phase it keeps is one that every reader already handles: install.cmd and verify.cmd verify again.
 Check ((Get-InstallAction -State ([pscustomobject]@{ phase = 'installed' }) -PackageVersion '1.0' -InstalledVersion '1.0' -Repair $false).action -eq 'verify') 'the kept phase installed: a later install.cmd of the same version verifies again'
 # The wiring in install.ps1: the parameter, the decision feeds the phase and the transaction, the legacy guard.
@@ -639,11 +645,23 @@ Check ($isrc -match '\[switch\]\$LogonContinuation,') 'install.ps1 has the -Logo
 # A parameter is a script variable: $script:Continuation (the RunOnce record of Set-ResumeAtLogon) once took the
 # first name of this switch, and every run that armed RunOnce stopped on the type of the switch.
 Check (-not ($isrc -match '\$script:LogonContinuation\b')) 'no script variable shares the name of the switch'
-Check ($isrc -match 'Get-VerifyOutcome -Failed \$bad\.Count -LogonContinuation \(\[bool\]\$LogonContinuation\) -Attempt \$attempt') 'the verification asks Get-VerifyOutcome with its failed count, -LogonContinuation and the attempt'
+Check ($isrc -match 'Get-VerifyOutcome -Failed \$bad\.Count -LogonContinuation \(\[bool\]\$LogonContinuation\) -Attempt \$attempt -Settled \(\[bool\]\$script:VerifyStartConfirmSettled\)') 'the verification asks Get-VerifyOutcome with its failed count, the switch, the attempt and the start-confirm state'
+Check ($isrc -match 'else \{ \$script:VerifyStartConfirmSettled = \[bool\]\(\$runAnswer\.ran -and -not \$running\) \}') 'settled only when the start-confirm run of this boot has ended'
 Check ($isrc -match 'if \(-not \$DryRun -and \$outcome\.phase\) \{ Save-Phase \$outcome\.phase \}') 'the phase comes from the decision, and none is written when it says keep'
-Check ($isrc -match '-Verify \$outcome\.transaction') 'the update transaction gets the observation of the decision'
+Check ($isrc -match '-Verify \$outcome\.transaction') 'the update transaction gets the observation of the final decision only (after the attempts)'
 Check (-not ($isrc -match "Save-Phase \`$\(if \(\`$bad\.Count\) \{ 'verify-failed' \}")) 'no direct write of verify-failed from the failed count is left'
 Check ($isrc -match 'Get-ContinuationCommand -Kind \$Kind .* -LegacyInstallRoot \$legacyRollback') 'RunOnce verify after a legacy rollback has no -LogonContinuation'
+Check ($isrc -match "\`$\(if \(\`$final\) \{ 'verify-' \} else \{ 'attempt-' \}\)") 'a provisional report is attempt-*.json, which the driver card and the support file (verify-*.json) do not read'
+# Marker leak: the switch belongs to one process. Only the two RunOnce builders write it, nothing stores it, and a
+# verification that a person starts cannot get it.
+Check ($script:InstallSwitches -notcontains 'LogonContinuation') 'the saved install switches do not include -LogonContinuation'
+$inLeak = Get-InstallInputs @{ LogonContinuation = [Management.Automation.SwitchParameter]$true; Verify = [Management.Automation.SwitchParameter]$true } ([pscustomobject]@{ phase = 'driver-pending-restart'; package_version = '1.0' }) '1.0'
+Check (-not (@($inLeak.switches) -match 'Continuation')) "the install inputs that a resumed run reads back do not carry it ($(@($inLeak.switches) -join ' '))"
+$writers = @(Get-ChildItem -LiteralPath $Installer -Filter *.ps1 | Where-Object { [IO.File]::ReadAllText($_.FullName) -match "'-LogonContinuation'" } | ForEach-Object Name)
+Check (($writers -join ',') -eq 'common.ps1') "the only installer script that writes the switch is common.ps1 (Get-ContinuationCommand): $($writers -join ', ')"
+$verifyCmd = Join-Path (Split-Path $Installer) 'verify.cmd'
+if (-not (Test-Path -LiteralPath $verifyCmd)) { $verifyCmd = Join-Path $Installer 'verify.cmd' }
+Check ((Test-Path -LiteralPath $verifyCmd) -and -not ([IO.File]::ReadAllText($verifyCmd) -match 'Continuation')) "verify.cmd starts a person's verification without the switch ($verifyCmd)"
 
 '[K3] a native program under a deadline: the budget covers the program, not only the waiting after it'
 # Audit finding K3. Restart-GpuAudioDevice promised one budget for pnputil and the status polling, but the

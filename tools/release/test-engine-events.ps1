@@ -320,17 +320,23 @@ if ($null -ne $bootId) {
     }
 } else { '  (skipped: BootId not readable on this PC)' }
 
-'[BD-359] the verification at a logon (-LogonContinuation): a failed check gets one more attempt, each attempt has its report'
+'[BD-359] the verification at a logon (-LogonContinuation): a failed check gets one more attempt; only the final attempt writes verify-*.json'
 if ($null -ne $bootId) {
-    foreach ($c in @(@{ name = 'Verify at a logon'; args = @('-DryRun', '-Verify', '-LogonContinuation'); reports = 2 },
-            @{ name = 'Verify by a person (negative control)'; args = @('-DryRun', '-Verify'); reports = 1 })) {
+    foreach ($c in @(@{ name = 'Verify at a logon'; args = @('-DryRun', '-Verify', '-LogonContinuation'); reports = 1; attempts = 1 },
+            @{ name = 'Verify by a person (negative control)'; args = @('-DryRun', '-Verify'); reports = 1; attempts = 0 })) {
         $st = [ordered]@{ schema = 1; phase = 'installed'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2000-01-01T00:00:00.0000000Z'; restart_boot_id = $bootId + 1 }
         $r = Invoke-Engine $c.name $c.args -State $st -Env @{ AMDGPU_WDDM_TEST_REPEAT_SECONDS = '1' }
         Test-Stream $r $c.name
         $rep = @(Get-ChildItem -LiteralPath (Join-Path $r.state_dir 'verify') -Filter 'verify-*.json' -ErrorAction SilentlyContinue)
+        $prov = @(Get-ChildItem -LiteralPath (Join-Path $r.state_dir 'verify') -Filter 'attempt-*.json' -ErrorAction SilentlyContinue)
         $again = $r.text -match 'runs every check once more in 1 s'
         $kept = [string](Get-Content -LiteralPath (Join-Path $r.state_dir 'state.json') -Raw | ConvertFrom-Json).phase
-        Check (($r.code -eq 3) -and ($r.result.message_id -eq 'result.verify-failed') -and ($rep.Count -eq $c.reports) -and ($again -eq ($c.reports -eq 2)) -and ($kept -eq 'installed')) "$($c.name): exit $($r.code), $($rep.Count) report(s), second attempt $again, phase $kept"
+        $vr = $(if ($rep.Count -eq 1) { Get-Content -LiteralPath $rep[0].FullName -Raw | ConvertFrom-Json })
+        $pr = $(if ($prov.Count -eq 1) { Get-Content -LiteralPath $prov[0].FullName -Raw | ConvertFrom-Json })
+        $shape = $vr -and $vr.final -and ($vr.attempt -eq ($c.attempts + 1)) -and ($vr.outcome -eq 'failed') -and ((-not $pr) -or ((-not $pr.final) -and ($pr.attempt -eq 1)))
+        # The person sees the failure of the final attempt in the held window (and the card reads the final report).
+        $seen = ($r.text -match 'Verification: \d+ check\(s\) failed') -and (($r.text -match 'started by itself at the logon') -eq ($c.attempts -eq 1))
+        Check (($r.code -eq 3) -and ($r.result.message_id -eq 'result.verify-failed') -and ($rep.Count -eq $c.reports) -and ($prov.Count -eq $c.attempts) -and $shape -and $seen -and ($again -eq ($c.attempts -eq 1)) -and ($kept -eq 'installed')) "$($c.name): exit $($r.code), $($rep.Count) final and $($prov.Count) provisional report(s), second attempt $again, failure shown $seen, phase $kept"
     }
 } else { '  (skipped: BootId not readable on this PC)' }
 

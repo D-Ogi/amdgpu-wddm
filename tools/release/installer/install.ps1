@@ -731,6 +731,10 @@ function Invoke-Verify {
     # would spend its whole bound before saying so (GitHub #38: 110 s of a 2 min 43 s verification). Its last result
     # is read at once instead, and the line below says why nothing was waited for.
     $taskNote = 'start-confirm task: not registered'
+    # BD-359: whether the readings below are final for this boot: true when no task is registered, when the device did
+    # not start (nothing to confirm), or when this boot's run of the task has ended; false when the wait ended on its
+    # bound or the deadline with the task still running or not yet run. Get-VerifyOutcome reads it.
+    $script:VerifyStartConfirmSettled = $true
     $task = Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue
     if ($task) {
         $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
@@ -752,6 +756,7 @@ function Invoke-Verify {
             Start-Sleep -Seconds 2
         }
         if ($null -ne $noWaitWhy) { $ti = Get-ScheduledTaskInfo -TaskName $script:TaskName -ErrorAction SilentlyContinue }
+        else { $script:VerifyStartConfirmSettled = [bool]($runAnswer.ran -and -not $running) }
         $code = $ti.LastTaskResult
         $meaning = switch ($code) { 0 { 'confirmed through the KMD start health' } 6 { 'fallback: boot-loop guard reset only, DPM not confirmed' } 1 { 'bound reached unconfirmed' } 5 { 'no start-health reading' } 267009 { 'still running' } default { 'see C:\ProgramData\amdgpu-wddm\start-confirm.log' } }
         $taskNote = "start-confirm task: last run $($ti.LastRunTime), result $code ($meaning), waited $([int]$waited.Elapsed.TotalSeconds) s, this-boot test: $($runAnswer.source)"
@@ -1029,6 +1034,9 @@ function Invoke-Verify {
 # section 9): bound to one installed package by release, version and the SHA256 of <install root>\manifest.json, with
 # the boot and a non-empty result list (results[].check, .pass, .detail). outcome 'failed' when any result fails, the
 # list is empty or the run stopped before its last check. Written through a temporary file; never throws.
+# BD-359: the first attempt of a logon continuation ($script:VerifyProvisional) that fails is not the verdict of the
+# boot: it gets the name attempt-<utc>.json and final = false, so neither the driver card nor the support file
+# (both read verify-*.json) takes it as the result while the second attempt waits. Every other report is final.
 function Write-VerifyReport($Results) {
     try {
         $list = @($Results)
@@ -1055,9 +1063,12 @@ function Write-VerifyReport($Results) {
             failed = $failed
             results = $list
         }
+        $final = -not ([bool]$script:VerifyProvisional -and $report.outcome -eq 'failed')
+        $report.attempt = [int]$script:VerifyAttempt
+        $report.final = $final
         $vdir = Join-Path $script:StateDir 'verify'
         # UTC may repeat after time sync. Keep each report instead of overwriting a previous run's evidence.
-        Write-FileAtomic (Join-Path $vdir ('verify-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + [guid]::NewGuid().ToString('N') + '.json')) ($report | ConvertTo-Json -Depth 5)
+        Write-FileAtomic (Join-Path $vdir ($(if ($final) { 'verify-' } else { 'attempt-' }) +[DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + [guid]::NewGuid().ToString('N') + '.json')) ($report | ConvertTo-Json -Depth 5)
     } catch { Write-Log "   verify report not written: $($_.Exception.Message)" }
 }
 
@@ -1072,15 +1083,25 @@ if ($script:VerifyOnly) {
     $attempt = 1
     while ($true) {
         $script:VerifyComplete = $false
+        $script:VerifyAttempt = $attempt
+        # Only an attempt that can be followed by another one is provisional (its failed report is attempt-*.json).
+        $script:VerifyProvisional = [bool]$LogonContinuation -and ($attempt -lt 2) -and -not (Test-DeadlinePassed)
         $r = Invoke-Verify
         $bad = @($r | Where-Object { -not $_.pass })
-        $outcome = Get-VerifyOutcome -Failed $bad.Count -LogonContinuation ([bool]$LogonContinuation) -Attempt $attempt
-        if (-not $outcome.repeat -or (Test-DeadlinePassed)) { break }
+        $outcome = Get-VerifyOutcome -Failed $bad.Count -LogonContinuation ([bool]$LogonContinuation) -Attempt $attempt -Settled ([bool]$script:VerifyStartConfirmSettled)
+        if (-not $outcome.repeat) { break }
+        if (Test-DeadlinePassed) {
+            # No second attempt: this one is the verdict after all, so its report is written again as the final one.
+            $outcome = Get-VerifyOutcome -Failed $bad.Count -LogonContinuation $true -Attempt 2 -Settled ([bool]$script:VerifyStartConfirmSettled)
+            $script:VerifyProvisional = $false
+            Write-VerifyReport $r
+            break
+        }
         Write-Info "the verification at this logon found $($bad.Count) failed check(s); it runs every check once more in $repeatSeconds s, because a check at a logon can read a state that is not final yet"
         Start-Sleep -Seconds $repeatSeconds
         $attempt++
     }
-    if ($LogonContinuation -and $bad.Count) { Write-Log "   verify at logon (-LogonContinuation), attempt ${attempt}: $($bad.Count) failed; the phase stays $($state.phase) and the update transaction gets no verify observation" }
+    if ($LogonContinuation -and $bad.Count) { Write-Log "   verify at logon (-LogonContinuation), attempt ${attempt}: $($bad.Count) failed, start-confirm of this boot settled: $([bool]$script:VerifyStartConfirmSettled); the phase stays $($state.phase); update transaction observation: '$($outcome.transaction)'" }
     if (-not $DryRun -and $outcome.phase) { Save-Phase $outcome.phase }
     # The verify result of this boot is an observation of a self-update's driver transaction (nagi-update.ps1): a
     # start that the confirmation passed commits only with a passing verify in the same boot.

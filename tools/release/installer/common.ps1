@@ -296,23 +296,27 @@ function Get-InstallAction {
 }
 
 # BD-359: what the end of a verification records. Pure: the count of failed checks of this attempt, whether the
-# installer's own RunOnce entry started the run at a logon (-LogonContinuation), and the attempt number in; out:
+# installer's own RunOnce entry started the run at a logon (-LogonContinuation), the attempt number, and whether this
+# boot's start-confirm run had ended when the checks read the driver (-Settled, Invoke-Verify) in; out:
 #   repeat       $true: run every check once more after $script:ContinuationRepeatSeconds before the verdict
 #   phase        the phase to write, or $null to keep the phase that is there
 #   transaction  the verify observation for the update transaction of this boot (nagi-update.ps1), or '' for none
 # A verification that a person started (verify.cmd, install.cmd, the setup window) records its verdict, a pass or a
-# failure. The continuation records a pass only. A check at a logon can read a state that is not final yet (a
-# start-confirm wait that ended on its bound, a DWM that Windows replaced at the logon), so the continuation runs the
-# checks once more, and a failure of the second attempt keeps the phase ('installed': installed and not verified yet,
-# which every reader of the phase already knows) and gives the transaction no observation. It never writes
-# verify-failed: one false failure must not count as a failed boot of a self-update (Get-NagiTxnDecision). The report
-# of each attempt is written all the same (Write-VerifyReport); the control application shows the newest.
+# failure, as before. The continuation never writes a phase other than verified: a check at a logon can read a state
+# that is not final yet (a start-confirm wait that ended on its bound, a DWM that Windows replaced at the logon), so a
+# failed first attempt is provisional and the checks run once more. A failure of the second attempt keeps the phase
+# ('installed': installed and not verified yet, which every reader of the phase already knows); its report is a normal
+# failed report, so the person sees it. The transaction gets verify-failed from that second attempt only when the
+# start-confirm run of this boot had ended (-Settled): a driver that starts but fails a check is seen by no other
+# per-boot signal (start-confirm reports the start only), so a settled failure must count. An unsettled one gives no
+# observation: never a pass, never a failure. The transaction never gets verified for a failed attempt.
 $script:ContinuationRepeatSeconds = 60
 function Get-VerifyOutcome {
-    param([int]$Failed, [bool]$LogonContinuation, [int]$Attempt = 1)
+    param([int]$Failed, [bool]$LogonContinuation, [int]$Attempt = 1, [bool]$Settled = $true)
     if ($Failed -le 0) { return [pscustomobject]@{ repeat = $false; phase = 'verified'; transaction = 'verified' } }
     if (-not $LogonContinuation) { return [pscustomobject]@{ repeat = $false; phase = 'verify-failed'; transaction = 'verify-failed' } }
-    return [pscustomobject]@{ repeat = ($Attempt -lt 2); phase = $null; transaction = '' }
+    if ($Attempt -lt 2) { return [pscustomobject]@{ repeat = $true; phase = $null; transaction = '' } }
+    return [pscustomobject]@{ repeat = $false; phase = $null; transaction = $(if ($Settled) { 'verify-failed' } else { '' }) }
 }
 
 # GUI plan A2: the one decision whether the restart that a pending phase waits for has happened. Every pending phase

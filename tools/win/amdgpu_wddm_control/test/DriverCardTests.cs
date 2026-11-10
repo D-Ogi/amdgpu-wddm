@@ -63,6 +63,18 @@ static partial class UnitTests
         Check(v.InstalledPending && v.InstalledText == "Installed: 0.7.200.100-tester.12, waiting for the restart of Windows.", "G-VER installed pending: " + v.InstalledText);
         Equal("0.7.199.100-tester.11", v.RunningVersion, "G-VER running stays from the witness");
         Equal(VerifyKind.Unknown, v.Verification, "G-VER a report of the running package does not verify the pending one");
+        // BD-359: the restart the phase waited for is done when the saved boot and this boot differ; phase 'installed'
+        // then means "not verified yet" and the card no longer says that it waits for the restart.
+        var fb = Facts(); fb.InstalledVersion = "0.7.200.100-tester.12"; fb.Phase = "installed"; fb.StatePackageVersion = "0.7.200.100-tester.12";
+        fb.StateRestartBootId = fb.BootId;
+        Check(fb.BootId.HasValue && DriverCard.Decide(fb).InstalledPending, "BD-359 installed, saved in this boot: still waits for the restart");
+        fb.StateRestartBootId = fb.BootId - 1;
+        v = DriverCard.Decide(fb);
+        Check(!v.InstalledPending && v.InstalledText == "Installed: 0.7.200.100-tester.12", "BD-359 installed, saved in an earlier boot: no restart claim: " + v.InstalledText);
+        fb.BootId = null;
+        Check(DriverCard.Decide(fb).InstalledPending, "BD-359 this boot unknown: the restart is not proven, still pending");
+        fb = Facts(); fb.InstalledVersion = "0.7.200.100-tester.12"; fb.Phase = "installed"; fb.StatePackageVersion = "0.7.200.100-tester.12";
+        Check(DriverCard.Decide(fb).InstalledPending, "BD-359 no saved boot (an older state): still pending, as before");
         f.Witness = null; v = DriverCard.Decide(f);
         Check(v.Running != RunningKind.Exact && !v.RunningText.Contains("0.7.200"), "G-VER Release\\Version never used as running");
 
@@ -172,6 +184,9 @@ static partial class UnitTests
         var fs = new DriverFacts();
         DriverCard.ParseState("{\"phase\":\"installed\",\"package_version\":\"x\",\"mutation_boot_id\":53,\"mutation_utc\":\"2026-10-04T09:00:00Z\"}", fs);
         Check(fs.Phase == "installed" && fs.StatePackageVersion == "x" && fs.InstallActions.Count == 1 && fs.InstallActions[0].BootId == 53, "state.json with the mutation fields");
+        Check(fs.StateRestartBootId == null, "BD-359 state.json without restart_boot_id: no saved boot");
+        DriverCard.ParseState("{\"phase\":\"installed\",\"package_version\":\"x\",\"restart_boot_id\":41}", fs);
+        Check(fs.StateRestartBootId == 41, "BD-359 state.json restart_boot_id is read");
         var manifest = "{\"name\":\"n\",\"version\":\"0.7.199.100-tester.11\",\"kmd_build\":\"0.7.199.1\",\"kmd_abi\":\"0x000700C7\",\"kmd_version\":\"0.7.199.100\",\"components\":[{\"package_path\":\"payload/kmd/bc250kmd.sys\",\"sha256\":\"" + ShaI + "\"}]}";
         var pk = DriverCard.ParsePackage(manifest, ShaM, "m");
         Check(pk != null && pk.Name == "n" && pk.ImageSha256 == ShaI && pk.KmdBuild == "0.7.199.1", "manifest parsed as a known package");
@@ -310,6 +325,20 @@ static partial class UnitTests
         DriverFacts f;
         var v = Probe(Installed(out sha), out f);
         Check(v.Running == RunningKind.Exact && v.Verification == VerifyKind.Verified && f.Mapping == MappingStatus.Complete, "probe: a whole installer reads exact and verified: " + v.ReportText);
+
+        // BD-359: the provisional report of a logon continuation (attempt-*.json, final false) is never the result.
+        // A newer failed attempt beside a passed report leaves the passed one; an attempt alone (the console closed
+        // during the 60 s wait) leaves the verification unknown, not failed, and phase 'installed' of an earlier boot
+        // makes no restart claim.
+        var bd = Installed(out sha);
+        bd.Put(Inst + @"\verify\attempt-20261004T090000000Z.json", VerifyJson(B, sha, "failed").Replace("\"complete\":true", "\"complete\":true,\"attempt\":1,\"final\":false"));
+        v = Probe(bd, out f);
+        Check(v.Verification == VerifyKind.Verified, "BD-359 a newer failed attempt report does not replace the passed report: " + v.Verification);
+        bd.Content.Remove(Inst + @"\verify\verify-20261004T080000000Z.json");
+        bd.Put(Inst + @"\state.json", "{\"phase\":\"installed\",\"package_version\":\"" + B + "\",\"restart_boot_id\":52}");
+        v = Probe(bd, out f);
+        Check(v.Verification == VerifyKind.Unknown && v.VerificationText == "Verification: could not be checked." && !v.InstalledPending && v.InstalledText == "Installed: " + B,
+            "BD-359 an attempt report alone: " + v.InstalledText + " / " + v.VerificationText);
 
         // A2
         var files = Installed(out sha); files.Unlistable.Add(Inst + @"\packages");
