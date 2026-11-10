@@ -16,6 +16,7 @@ in each header). The code is our own. The AGS client of the tests uses the AGS S
 | `adl-main.cpp` | the exported functions, the contexts and their memory |
 | `atiadl.def` | the 31 exports of the shipped library |
 | `tests/adl-unit-test.cpp` | the export contract against the test build (`BC250_ADL_TEST_HOOKS`) |
+| `tests/adl-legacy-client.cpp` | a second caller module of the `ADL_*` functions for the unit test, with its own heap |
 | `tests/test-snapshot.h` | the adapter list that the tests inject |
 | `tests/ags-client.cpp` | the AGS 6.3 client of the host tests and of the lab steps |
 | `tests/atiadl-test.def`, `tests/atiadl-no-modes.def` | the exports of the test build and of the negative control |

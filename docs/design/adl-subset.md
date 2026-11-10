@@ -133,8 +133,16 @@ export the functions that give them.
 - Each context holds its own snapshot. `ADL2_Main_Control_Destroy` frees the context and the snapshot.
 - Every array that a function returns comes from the allocation callback of the context, and the caller frees it.
   This is the ADL contract.
-- The `ADL_*` functions use one shared context with a reference count. `ADL_Main_Control_Create` and
-  `ADL_Main_Control_Destroy` change the count.
+- The `ADL_*` functions (and the `ADL2_*` functions with a null handle) use an implicit context. There is one
+  implicit context for each calling module, with a reference count. The library finds the calling module from the
+  return address of the export. `ADL_Main_Control_Create` and `ADL_Main_Control_Destroy` change the count of the
+  context of that module. Thus each module gets the arrays of the callback that it gave, and can free them with its
+  own deallocator (BD-347). A module without its own `ADL_Main_Control_Create` uses the newest implicit context.
+  Its `ADL_Main_Control_Destroy` releases the only implicit context, or none when there is more than one. The
+  library frees the remaining contexts at unload.
+- Limit: a caller that jumps to an export with a tail call has the return address of its own caller. The library
+  then uses the context of that module, or the newest one. The libraries in the scanner of BD-347 make ordinary
+  calls.
 - One lock protects context state. Discovery and caller allocation callbacks run outside that lock. Array queries
   copy the snapshot and callback while locked, then use that private copy until the query returns. A callback can
   query, refresh or destroy its context without a recursive lock or use of freed context memory.

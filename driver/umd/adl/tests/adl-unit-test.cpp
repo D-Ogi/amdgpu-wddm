@@ -1,11 +1,13 @@
 // Host test of the open ADL subset: every export of the test build (atiadl-test.def) against an injected snapshot,
 // and the discovery against the host's real adapters. No GPU work.
 //
-//   adl-unit-test.exe <test atiadlxx.dll or atiadlxy.dll> [unit|discover]
+//   adl-unit-test.exe <test atiadlxx.dll or atiadlxy.dll> [unit|discover] [<adl-legacy-client.dll>]
 //
 // unit      the export contract: return codes, cleared outputs, allocation through the caller's callback, the
 //           AGS 6.3 strides, context ownership (1000 Create/Destroy cycles, no live block left), the legacy
-//           context, Refresh, and on x86 that every export leaves its arguments to the caller (cdecl).
+//           context, Refresh, and on x86 that every export leaves its arguments to the caller (cdecl). With a
+//           second caller module (adl-legacy-client.dll, by default next to this program): each module that uses
+//           the context without a handle gets the arrays of its own callback (BD-347).
 // discover  prints the snapshot that the discovery takes on this machine (for the build with BC250_ADL_TEST_SERVICE,
 //           a host adapter's service stands for ours).
 // Exit code 0 when every check passes.
@@ -59,6 +61,35 @@ void CallerFree(void* p)
 
 void* __stdcall FailingAlloc(int) { return nullptr; }
 
+// The allocator of this module in the two-module test: a private heap, and a record of every block that it gave.
+HANDLE g_tracked_heap;
+void* g_tracked[64];
+
+void* __stdcall TrackedAlloc(int bytes)
+{
+    void* p = HeapAlloc(g_tracked_heap, 0, bytes > 0 ? (SIZE_T)bytes : 1);
+    for (void*& slot : g_tracked) {
+        if (p && !slot) {
+            slot = p;
+            break;
+        }
+    }
+    return p;
+}
+
+// True when p came from TrackedAlloc; then it is freed. Any other block stays allocated (a leak in a failed test).
+bool FreeTracked(void* p)
+{
+    for (void*& slot : g_tracked) {
+        if (p && slot == p) {
+            slot = nullptr;
+            HeapFree(g_tracked_heap, 0, p);
+            return true;
+        }
+    }
+    return false;
+}
+
 typedef int(ADL_API* PFN_Create)(ADL_MAIN_MALLOC_CALLBACK, int, ADL_CONTEXT_HANDLE*);
 typedef int(ADL_API* PFN_CreateX3)(ADL_MAIN_MALLOC_CALLBACK, int, ADL_CONTEXT_HANDLE*, ADLThreadingModel, int);
 typedef int(ADL_API* PFN_Destroy)(ADL_CONTEXT_HANDLE);
@@ -98,6 +129,7 @@ typedef int(ADL_API* PFN_LiveBlocks)();
 typedef void(ADL_API* PFN_Discover)(AdlSnapshot*);
 
 HMODULE g_dll;
+const char* g_client_path;
 
 template <typename T>
 T Get(const char* name)
@@ -263,6 +295,112 @@ int g_failure_call;
 void* __stdcall FailSecondAlloc(int bytes)
 {
     return ++g_failure_call == 2 ? nullptr : CountingAlloc(bytes);
+}
+
+typedef int(__cdecl* PFN_ClientCall)(HMODULE);
+typedef int(__cdecl* PFN_ClientCount)();
+
+template <typename T>
+T GetFrom(HMODULE module, const char* name)
+{
+    return reinterpret_cast<T>(reinterpret_cast<void*>(GetProcAddress(module, name)));
+}
+
+// Calls fn (no arguments) from code outside any module: a caller that the library cannot name.
+int CallFromAnonymousCode(PFN_LegacyVoid fn)
+{
+#if defined(_M_IX86)
+    unsigned char code[] = {0xB8, 0, 0, 0, 0, 0xFF, 0xD0, 0xC3};  // mov eax, fn; call eax; ret
+    memcpy(code + 1, &fn, sizeof(fn));
+#elif defined(_M_X64)
+    // sub rsp, 28h; mov rax, fn; call rax; add rsp, 28h; ret
+    unsigned char code[] = {0x48, 0x83, 0xEC, 0x28, 0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xD0, 0x48, 0x83, 0xC4, 0x28, 0xC3};
+    memcpy(code + 6, &fn, sizeof(fn));
+#else
+#error "CallFromAnonymousCode supports x86 and x64"
+#endif
+    void* page = VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (!page) {
+        return ADL_ERR;
+    }
+    memcpy(page, code, sizeof(code));
+    DWORD old = 0;
+    VirtualProtect(page, 4096, PAGE_EXECUTE_READ, &old);
+    FlushInstructionCache(GetCurrentProcess(), page, sizeof(code));
+    int rc = reinterpret_cast<int(__cdecl*)()>(page)();
+    VirtualFree(page, 0, MEM_RELEASE);
+    return rc;
+}
+
+// BD-347: two modules of one process use the context without a handle, each with its own allocator and its own
+// deallocator. This program is the first (the GPU-Z library of 3DMark SystemInfo calls ADL_Main_Control_Create
+// first); adl-legacy-client.dll is the second (the CPUID library: a private heap, and the free of that heap after
+// ADL_Display_DisplayInfo_Get). Each module must get the arrays of its own callback.
+void CheckTwoCallerModules()
+{
+    HMODULE client = LoadLibraryA(g_client_path);
+    if (!client) {
+        printf("FAIL cannot load the second caller module %s (error %lu)\n", g_client_path, GetLastError());
+        g_failures++;
+        return;
+    }
+    auto clientCreate = GetFrom<PFN_ClientCall>(client, "LegacyClientCreate");
+    auto clientScan = GetFrom<PFN_ClientCall>(client, "LegacyClientScan");
+    auto clientDestroy = GetFrom<PFN_ClientCall>(client, "LegacyClientDestroy");
+    auto clientAllocations = GetFrom<PFN_ClientCount>(client, "LegacyClientAllocations");
+    CHECK(clientCreate && clientScan && clientDestroy && clientAllocations);
+    if (!clientCreate || !clientScan || !clientDestroy || !clientAllocations) {
+        FreeLibrary(client);
+        return;
+    }
+    auto lCreate = Get<PFN_LegacyCreate>("ADL_Main_Control_Create");
+    auto lDestroy = Get<PFN_LegacyVoid>("ADL_Main_Control_Destroy");
+    auto lCount = Get<PFN_LegacyCount>("ADL_Adapter_NumberOfAdapters_Get");
+    auto lInfoX2 = Get<PFN_LegacyInfoX2>("ADL_Adapter_AdapterInfoX2_Get");
+    auto lDisplayInfo = Get<PFN_LegacyDisplayInfo>("ADL_Display_DisplayInfo_Get");
+    auto liveBlocks = Get<PFN_LiveBlocks>("Bc250AdlTest_LiveBlocks");
+    g_tracked_heap = HeapCreate(0, 0, 0);
+    CHECK(g_tracked_heap != nullptr);
+
+    // The order of the scanner: this module creates first, the second module creates and scans.
+    CHECK(lCreate(TrackedAlloc, 1) == ADL_OK);
+    CHECK(clientCreate(g_dll) == ADL_OK);
+    CHECK(liveBlocks() == 2);  // one implicit context per module
+    int before = clientAllocations();
+    CHECK(clientScan(g_dll) == 0);
+    CHECK(clientAllocations() > before);
+    // A Destroy from a caller that the library cannot name, with two implicit contexts: it releases neither.
+    CHECK(CallFromAnonymousCode(lDestroy) == ADL_OK && liveBlocks() == 2);
+    // The arrays of this module still come from its own callback.
+    int n = 0;
+    ADLDisplayInfo* di = nullptr;
+    CHECK(lDisplayInfo(0, &n, &di, 0) == ADL_OK && n == 3);
+    CHECK(FreeTracked(di));
+    AdapterInfo* ai = nullptr;
+    CHECK(lInfoX2(&ai) == ADL_OK);
+    CHECK(FreeTracked(ai));
+    // The second module creates again (counted) and scans again; then it releases both of its Creates.
+    CHECK(clientCreate(g_dll) == ADL_OK && liveBlocks() == 2);
+    CHECK(clientScan(g_dll) == 0);
+    CHECK(clientDestroy(g_dll) == ADL_OK && liveBlocks() == 2);
+    CHECK(clientDestroy(g_dll) == ADL_OK && liveBlocks() == 1);
+    // The context of this module stays, with its callback.
+    di = nullptr;
+    CHECK(lDisplayInfo(1, &n, &di, 0) == ADL_OK && n == 3);
+    CHECK(FreeTracked(di));
+    CHECK(lDestroy() == ADL_OK && liveBlocks() == 0);
+    // A module without its own Create (a call through a helper module) uses the newest implicit context.
+    CHECK(clientCreate(g_dll) == ADL_OK);
+    n = -1;
+    CHECK(lCount(&n) == ADL_OK && n == 3);
+    CHECK(lDestroy() == ADL_OK && liveBlocks() == 0);
+    CHECK(clientDestroy(g_dll) == ADL_ERR_NOT_INIT);
+    for (void* p : g_tracked) {
+        CHECK(p == nullptr);
+    }
+    HeapDestroy(g_tracked_heap);
+    g_tracked_heap = nullptr;
+    FreeLibrary(client);
 }
 
 int RunUnit()
@@ -542,6 +680,8 @@ int RunUnit()
     CHECK(lDestroy() == ADL_OK && liveBlocks() == 0);
     CHECK(lDestroy() == ADL_ERR_NOT_INIT);
 
+    CheckTwoCallerModules();
+
     // No adapter of ours: an empty, truthful answer.
     static AdlSnapshot empty;
     memset(&empty, 0, sizeof(empty));
@@ -704,7 +844,7 @@ int RunDiscover()
 int main(int argc, char** argv)
 {
     if (argc < 2) {
-        printf("usage: adl-unit-test <test atiadl dll> [unit|discover]\n");
+        printf("usage: adl-unit-test <test atiadl dll> [unit|discover] [<adl-legacy-client.dll>]\n");
         return 2;
     }
     g_dll = LoadLibraryA(argv[1]);
@@ -713,6 +853,19 @@ int main(int argc, char** argv)
         return 1;
     }
     const char* mode = argc > 2 ? argv[2] : "unit";
+    static char client[MAX_PATH];
+    if (argc > 3) {
+        g_client_path = argv[3];
+    } else {
+        // By default the second caller module is next to this program.
+        DWORD len = GetModuleFileNameA(nullptr, client, MAX_PATH);
+        char* slash = len && len < MAX_PATH ? strrchr(client, '\\') : nullptr;
+        size_t used = slash ? (size_t)(slash + 1 - client) : 0;
+        if (slash && used + sizeof("adl-legacy-client.dll") <= sizeof(client)) {
+            strcpy_s(slash + 1, sizeof(client) - used, "adl-legacy-client.dll");
+        }
+        g_client_path = client;
+    }
     int rc = strcmp(mode, "discover") == 0 ? RunDiscover() : RunUnit();
     FreeLibrary(g_dll);
     printf("%s %s\n", rc == 0 ? "PASS" : "FAIL", mode);
