@@ -46,6 +46,14 @@ std::size_t read_log(char* out, std::size_t size) {
     HANDLE h = CreateFileA(g_log_name, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) return 0;
+    // Every count reads the whole log from its start, and the log grows across the tests. A log that no longer fits
+    // the buffer would cut its newest lines and make a count wrong without a word: that is a failure of the test.
+    LARGE_INTEGER bytes{};
+    if (!GetFileSizeEx(h, &bytes) || bytes.QuadPart >= static_cast<LONGLONG>(size)) {
+        std::printf("FAIL the log (%lld bytes) does not fit the read buffer (%zu bytes)\n",
+                    static_cast<long long>(bytes.QuadPart), size);
+        ++failures;
+    }
     DWORD n = 0;
     ReadFile(h, out, static_cast<DWORD>(size - 1), &n, nullptr);
     CloseHandle(h);
