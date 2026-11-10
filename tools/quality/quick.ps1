@@ -147,6 +147,10 @@ try {
  Check 'quality-controls' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\quality-controls").FullName; & python -m unittest discover -s "$repo\tools\quality" }
  Check 'gate-cache-controls' { & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_gate_cache.py' }
  # The run's own inputs: refused without the user-mode tree variables, the developer environment imported (quality-env.ps1).
+ # Its deadline is 600 s in gate-inputs.json: the gate starts several child pwsh processes and one quick.ps1 refusal run.
+ # 15.5 s alone beside a release-set build, 65 s to 102 s in 11 full quick suites (2026-11-10), 121.4 s in the kmd-lab
+ # row of the rc4.2 set build, and a stop at the old 180 s in the kmd-rel row of that build with no output. A stop at the
+ # deadline is only a lower bound of the loaded time; 600 s is 4.9x the longest completed run (121.4 s).
  Check 'quality-env' { & pwsh -NoProfile -File "$repo\tools\quality\test-quality-env.ps1" -Out (New-Item -ItemType Directory -Force "$Out\quality-env").FullName }
  Check 'wininstall-locale' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\wininstall\test-locale.ps1" -Out "$Out\wininstall-locale" }
  Check 'kd-dump-triage' { & pwsh -NoProfile -File "$repo\tools\win\kd\analyze-kernel-dump.ps1" -SelfTest }

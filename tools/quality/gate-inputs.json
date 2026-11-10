@@ -282,6 +282,9 @@
         "documents"
       ]
     },
+    "quality-env": {
+      "timeout": 600
+    },
     "spawn-loop": {
       "timeout": 600
     },
