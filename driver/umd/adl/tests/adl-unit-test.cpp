@@ -332,29 +332,53 @@ int CallFromAnonymousCode(PFN_LegacyVoid fn)
     return rc;
 }
 
+// The second caller module: adl-legacy-client.dll and its exports.
+struct LegacyClient {
+    HMODULE module = nullptr;
+    PFN_ClientCall create = nullptr;
+    PFN_ClientCall scan = nullptr;
+    PFN_ClientCall destroy = nullptr;
+    PFN_ClientCount allocations = nullptr;
+
+    bool Load()
+    {
+        module = LoadLibraryA(g_client_path);
+        if (!module) {
+            printf("FAIL cannot load the second caller module %s (error %lu)\n", g_client_path, GetLastError());
+            g_failures++;
+            return false;
+        }
+        create = GetFrom<PFN_ClientCall>(module, "LegacyClientCreate");
+        scan = GetFrom<PFN_ClientCall>(module, "LegacyClientScan");
+        destroy = GetFrom<PFN_ClientCall>(module, "LegacyClientDestroy");
+        allocations = GetFrom<PFN_ClientCount>(module, "LegacyClientAllocations");
+        CHECK(create && scan && destroy && allocations);
+        return create && scan && destroy && allocations;
+    }
+
+    void Unload()
+    {
+        if (module) {
+            FreeLibrary(module);
+        }
+        *this = LegacyClient();
+    }
+};
+
 // BD-347: two modules of one process use the context without a handle, each with its own allocator and its own
 // deallocator. This program is the first (the GPU-Z library of 3DMark SystemInfo calls ADL_Main_Control_Create
 // first); adl-legacy-client.dll is the second (the CPUID library: a private heap, and the free of that heap after
 // ADL_Display_DisplayInfo_Get). Each module must get the arrays of its own callback.
 void CheckTwoCallerModules()
 {
-    HMODULE client = LoadLibraryA(g_client_path);
-    if (!client) {
-        printf("FAIL cannot load the second caller module %s (error %lu)\n", g_client_path, GetLastError());
-        g_failures++;
-        return;
-    }
-    auto clientCreate = GetFrom<PFN_ClientCall>(client, "LegacyClientCreate");
-    auto clientScan = GetFrom<PFN_ClientCall>(client, "LegacyClientScan");
-    auto clientDestroy = GetFrom<PFN_ClientCall>(client, "LegacyClientDestroy");
-    auto clientAllocations = GetFrom<PFN_ClientCount>(client, "LegacyClientAllocations");
-    CHECK(clientCreate && clientScan && clientDestroy && clientAllocations);
-    if (!clientCreate || !clientScan || !clientDestroy || !clientAllocations) {
-        FreeLibrary(client);
+    LegacyClient client;
+    if (!client.Load()) {
+        client.Unload();
         return;
     }
     auto lCreate = Get<PFN_LegacyCreate>("ADL_Main_Control_Create");
     auto lDestroy = Get<PFN_LegacyVoid>("ADL_Main_Control_Destroy");
+    auto lRefresh = Get<PFN_LegacyVoid>("ADL_Main_Control_Refresh");
     auto lCount = Get<PFN_LegacyCount>("ADL_Adapter_NumberOfAdapters_Get");
     auto lInfoX2 = Get<PFN_LegacyInfoX2>("ADL_Adapter_AdapterInfoX2_Get");
     auto lDisplayInfo = Get<PFN_LegacyDisplayInfo>("ADL_Display_DisplayInfo_Get");
@@ -364,12 +388,14 @@ void CheckTwoCallerModules()
 
     // The order of the scanner: this module creates first, the second module creates and scans.
     CHECK(lCreate(TrackedAlloc, 1) == ADL_OK);
-    CHECK(clientCreate(g_dll) == ADL_OK);
+    CHECK(client.create(g_dll) == ADL_OK);
     CHECK(liveBlocks() == 2);  // one implicit context per module
-    int before = clientAllocations();
-    CHECK(clientScan(g_dll) == 0);
-    CHECK(clientAllocations() > before);
-    // A Destroy from a caller that the library cannot name, with two implicit contexts: it releases neither.
+    int before = client.allocations();
+    CHECK(client.scan(g_dll) == 0);
+    CHECK(client.allocations() > before);
+    // A caller outside any image (generated code) uses the newest implicit context. Its Destroy, with two implicit
+    // contexts, releases neither.
+    CHECK(CallFromAnonymousCode(lRefresh) == ADL_OK);
     CHECK(CallFromAnonymousCode(lDestroy) == ADL_OK && liveBlocks() == 2);
     // The arrays of this module still come from its own callback.
     int n = 0;
@@ -379,30 +405,44 @@ void CheckTwoCallerModules()
     AdapterInfo* ai = nullptr;
     CHECK(lInfoX2(&ai) == ADL_OK);
     CHECK(FreeTracked(ai));
-    // The second module creates again (counted) and scans again; then it releases both of its Creates.
-    CHECK(clientCreate(g_dll) == ADL_OK && liveBlocks() == 2);
-    CHECK(clientScan(g_dll) == 0);
-    CHECK(clientDestroy(g_dll) == ADL_OK && liveBlocks() == 2);
-    CHECK(clientDestroy(g_dll) == ADL_OK && liveBlocks() == 1);
+    // Counted per module: the second module creates again and scans again; then it releases both of its Creates.
+    CHECK(client.create(g_dll) == ADL_OK && liveBlocks() == 2);
+    CHECK(client.scan(g_dll) == 0);
+    CHECK(client.destroy(g_dll) == ADL_OK && liveBlocks() == 2);
+    CHECK(client.destroy(g_dll) == ADL_OK && liveBlocks() == 1);
     // The context of this module stays, with its callback.
     di = nullptr;
     CHECK(lDisplayInfo(1, &n, &di, 0) == ADL_OK && n == 3);
     CHECK(FreeTracked(di));
     CHECK(lDestroy() == ADL_OK && liveBlocks() == 0);
-    // A module without its own Create (a call through a helper module) uses the newest implicit context.
-    CHECK(clientCreate(g_dll) == ADL_OK);
+    CHECK(lDestroy() == ADL_ERR_NOT_INIT);
+    CHECK(CallFromAnonymousCode(lRefresh) == ADL_ERR_NOT_INIT);
+    // A module without its own Create (a call through a helper module) uses the newest implicit context, and its
+    // Destroy releases the only one.
+    CHECK(client.create(g_dll) == ADL_OK);
     n = -1;
     CHECK(lCount(&n) == ADL_OK && n == 3);
     CHECK(lDestroy() == ADL_OK && liveBlocks() == 0);
-    CHECK(clientDestroy(g_dll) == ADL_ERR_NOT_INIT);
+    CHECK(client.destroy(g_dll) == ADL_ERR_NOT_INIT);
+    // A module that unloads without Destroy: its context goes at the unload. A module that loads later (here at
+    // the same address, most probably) starts with no context and does not get the callback of the earlier one.
+    CHECK(lCreate(TrackedAlloc, 1) == ADL_OK);
+    CHECK(client.create(g_dll) == ADL_OK && liveBlocks() == 2);
+    client.Unload();
+    CHECK(liveBlocks() == 1);
+    if (client.Load()) {
+        CHECK(client.create(g_dll) == ADL_OK && liveBlocks() == 2);
+        CHECK(client.scan(g_dll) == 0);
+        CHECK(client.destroy(g_dll) == ADL_OK && liveBlocks() == 1);
+    }
+    CHECK(lDestroy() == ADL_OK && liveBlocks() == 0);
     for (void* p : g_tracked) {
         CHECK(p == nullptr);
     }
     HeapDestroy(g_tracked_heap);
     g_tracked_heap = nullptr;
-    FreeLibrary(client);
+    client.Unload();
 }
-
 int RunUnit()
 {
     auto create = Get<PFN_Create>("ADL2_Main_Control_Create");

@@ -16,7 +16,17 @@
 // example a GPU library and a CPU library in one hardware scanner. Thus the implicit context is per calling module,
 // found from the return address of the export. Each module gets its arrays from the callback that it gave to
 // ADL_Main_Control_Create, and can free them with its own deallocator. A module that did not call
-// ADL_Main_Control_Create itself (a call through a helper module) uses the newest implicit context.
+// ADL_Main_Control_Create itself (a call through a helper module) uses the newest implicit context. All code outside
+// an image (generated code) is one caller, with the key null.
+//
+// The SDK documentation says only that ADL_Main_Control_Create "initializes global pointers", that the callback
+// allocates the output arrays that the user frees, and that the ADL2 functions exist "to assure that there is no
+// interference with other ADL clients that are running in the same process". It does not say what a second
+// ADL_Main_Control_Create does. One context per module gives each caller the result that it can get from one
+// process-wide context in the cases where that is correct, and is also correct when two modules use the functions.
+//
+// When a module unloads, its implicit context goes with it (a loader notification), so that a module that loads
+// later at the same address does not get the context and the callback of the earlier one.
 #include <windows.h>
 #include <intrin.h>
 #include <string.h>
@@ -44,16 +54,14 @@ AdlContext* g_contexts;     // ADL2 contexts, by handle
 AdlContext* g_legacy;       // implicit contexts, one per calling module, newest first
 LONG g_live_blocks;         // context blocks not yet freed (read by the test build)
 
-// The module that contains a code address, or null for code outside an image. The module reference count does not
-// change: the result is a key for comparison only.
+// The module that contains a code address, or null for code outside an image. RtlPcToFileHeader reads the inverted
+// function table under its own shared lock and does not take the loader lock, so a caller can be in a DllMain. The
+// result is a key for comparison only: the module reference count does not change.
 HMODULE ModuleOf(void* address)
 {
-    HMODULE module = nullptr;
-    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                            static_cast<LPCWSTR>(address), &module)) {
-        return nullptr;
-    }
-    return module;
+    void* base = nullptr;
+    RtlPcToFileHeader(address, &base);
+    return static_cast<HMODULE>(base);
 }
 
 // The context that a call names: an ADL2 handle, or for a null handle the implicit context of the calling module.
@@ -285,14 +293,82 @@ int Refresh(Ref ref)
     return result;
 }
 
+// The loader notification of ntdll (LdrRegisterDllNotification, documented in the Windows SDK reference). The
+// notification data of a load and of an unload have the same layout; this library reads only DllBase.
+struct LoaderNotificationData {
+    ULONG flags;
+    const void* full_dll_name;
+    const void* base_dll_name;
+    void* dll_base;
+    ULONG size_of_image;
+};
+const ULONG kLoaderNotificationUnloaded = 2;
+typedef VOID(CALLBACK* LoaderNotificationFunction)(ULONG reason, const LoaderNotificationData* data, PVOID context);
+typedef LONG(NTAPI* PFN_LdrRegisterDllNotification)(ULONG, LoaderNotificationFunction, PVOID, PVOID*);
+typedef LONG(NTAPI* PFN_LdrUnregisterDllNotification)(PVOID);
+
+INIT_ONCE g_unload_watch_once = INIT_ONCE_STATIC_INIT;
+PVOID g_unload_watch_cookie;
+
+// Called by the loader, with the loader lock, when a module unloads: the implicit contexts of that module go. The
+// library never holds g_lock while it waits for the loader lock, so this cannot deadlock.
+VOID CALLBACK OnLoaderNotification(ULONG reason, const LoaderNotificationData* data, PVOID)
+{
+    if (reason != kLoaderNotificationUnloaded || !data || !data->dll_base) {
+        return;
+    }
+    AdlContext* gone = nullptr;
+    {
+        Lock lock;
+        for (AdlContext** link = &g_legacy; *link;) {
+            AdlContext* c = *link;
+            if (c->owner == static_cast<HMODULE>(data->dll_base)) {
+                *link = c->next;
+                c->next = gone;
+                gone = c;
+            } else {
+                link = &c->next;
+            }
+        }
+    }
+    DeleteAll(&gone);
+}
+
+BOOL CALLBACK StartUnloadWatch(PINIT_ONCE, PVOID, PVOID*)
+{
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    auto reg = ntdll ? reinterpret_cast<PFN_LdrRegisterDllNotification>(
+                           reinterpret_cast<void*>(GetProcAddress(ntdll, "LdrRegisterDllNotification")))
+                     : nullptr;
+    if (reg) {
+        reg(0, OnLoaderNotification, nullptr, &g_unload_watch_cookie);
+    }
+    return TRUE;
+}
+
+void StopUnloadWatch()
+{
+    if (!g_unload_watch_cookie) {
+        return;
+    }
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    auto unreg = ntdll ? reinterpret_cast<PFN_LdrUnregisterDllNotification>(
+                             reinterpret_cast<void*>(GetProcAddress(ntdll, "LdrUnregisterDllNotification")))
+                       : nullptr;
+    if (unreg) {
+        unreg(g_unload_watch_cookie);
+    }
+    g_unload_watch_cookie = nullptr;
+}
+
 // ADL_Main_Control_Create: counted per calling module. A second Create of the same module keeps its context and
-// takes the new callback. The callback of the latest Create is the one that the module can call now; an earlier
-// one can be in a module that was unloaded and loaded again at the same address.
+// takes the new callback: the callback of the latest Create is the one that the module can call now.
 int LegacyCreate(ADL_MAIN_MALLOC_CALLBACK alloc, int enum_connected, HMODULE caller)
 {
     if (!alloc) {
         return ADL_ERR_INVALID_CALLBACK;
     }
+    InitOnceExecuteOnce(&g_unload_watch_once, StartUnloadWatch, nullptr, nullptr);
     {
         Lock lock;
         if (AdlContext* own = OwnImplicitContext(caller)) {
@@ -1012,6 +1088,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
     } else if (reason == DLL_PROCESS_DETACH && !reserved) {
         // FreeLibrary with contexts still open: they belong to this image, free them. At process exit
         // (reserved != null) the heap goes away with the process.
+        StopUnloadWatch();
         DeleteAll(&g_contexts);
         DeleteAll(&g_legacy);
     }

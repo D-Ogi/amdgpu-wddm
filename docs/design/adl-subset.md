@@ -140,6 +140,21 @@ export the functions that give them.
   own deallocator (BD-347). A module without its own `ADL_Main_Control_Create` uses the newest implicit context.
   Its `ADL_Main_Control_Destroy` releases the only implicit context, or none when there is more than one. The
   library frees the remaining contexts at unload.
+- The vendor contract. The SDK documentation (`ADL_SDK.html` and the reference pages of `adl.h`) says that
+  `ADL_Main_Control_Create` "initializes global pointers". It says that the library allocates output arrays with the
+  callback and that the user frees them. It also says that the `ADL2_*` functions exist "to assure that there is no
+  interference with other ADL clients that are running in the same process". It does not say what a second
+  `ADL_Main_Control_Create` does, or which callback a call uses after two of them. The 3DMark scanner works on vendor
+  drivers with two such modules. Thus each of the two modules gets arrays that its own deallocator can free. One
+  context per module gives that result, and it gives the result of one process-wide context to a single module.
+- The library finds the module of the return address with `RtlPcToFileHeader`. That function reads the inverted
+  function table under a shared lock of its own and does not take the loader lock, so a caller in a `DllMain` cannot
+  cause a deadlock here. Code outside an image (generated code) has no module: all such callers share the key null,
+  and without a context of their own they use the newest implicit context.
+- When a module unloads, the library removes the implicit contexts of that module. A loader notification
+  (`LdrRegisterDllNotification`) tells the library about the unload. A module that loads later at the same address
+  thus starts without a context and never gets the callback of the earlier module. The notification runs with the
+  loader lock. The library never waits for the loader lock while it holds its own lock.
 - Limit: a caller that jumps to an export with a tail call has the return address of its own caller. The library
   then uses the context of that module, or the newest one. The libraries in the scanner of BD-347 make ordinary
   calls.
