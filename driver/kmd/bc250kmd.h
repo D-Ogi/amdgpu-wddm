@@ -549,6 +549,8 @@ void GfxRetireSignal(_Inout_ BC250_DEVICE* Device);
 void StartHealthInitialize(BC250_DEVICE* Device);
 void StartHealthBegin(BC250_DEVICE* Device, BOOLEAN Full);
 void StartHealthReady(BC250_DEVICE* Device, BOOLEAN Ready);
+// BD-343: the output state of the start (start_health.c). The spin lock only; any IRQL up to DISPATCH_LEVEL.
+void StartHealthOutput(BC250_DEVICE* Device, ULONG DisplayStart, BOOLEAN Connected);
 void StartHealthResumeReady(BC250_DEVICE* Device, BOOLEAN Mode);
 void StartHealthClose(BC250_DEVICE* Device);
 void StartHealthStop(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Snapshot);
@@ -597,6 +599,8 @@ void DpmSetStable(BC250_DEVICE* Device, BOOLEAN Enabled);
 // zero. Delta is +1 or -1 and the count never goes under zero.
 void DpmComputeContextAdd(BC250_DEVICE* Device, LONG Delta);
 NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
+// BD-343: the curve half of a confirmation by the rule without output; clears only a curve a display start confirmed.
+NTSTATUS DpmConfirmKnownCurve(BC250_DEVICE* Device, _In_z_ const char* Why);
 void DpmLogSummary(BC250_DEVICE* Device);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 void DpmTuneRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_TUNE* Data, ULONG Size, BOOLEAN Admin,
@@ -793,8 +797,8 @@ NTSTATUS GuardStoreSetting(_In_z_ PCWSTR Name, ULONG Value);        // written a
 NTSTATUS GuardDeleteSetting(_In_z_ PCWSTR Name);                    // deleted and flushed; absent is success
 NTSTATUS GuardVolatileQuery(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, _Out_ ULONG* Value); // gone at reboot
 NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Value);
-// BD-122: why a start failed, in Parameters\StartRecord, with no gate at all - a device with Code 43 answers no
-// escape, so the log ring is unreadable exactly when the reason is wanted. GuardStartStep names the step of
+// BD-122: why a start failed, in the StartRecord subkey of the state store's Data key (guard.c), with no gate at
+// all - a device with Code 43 answers no escape, so the log ring is unreadable exactly when the reason is wanted. GuardStartStep names the step of
 // Bc250StartDevice that is about to run and GuardStartSubStep the step inside WddmStart / GpuStartupInitialize
 // (both take a literal of this image, take no lock and are safe at any IRQL). The four recorders write the record
 // at PASSIVE_LEVEL and never return a failure: see the rule above GuardRecordStartAttempt in guard.c, which also

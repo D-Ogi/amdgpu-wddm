@@ -102,8 +102,8 @@ function Read-Parameter([string]$Name) {
         return [string]$values[$Name]
     } catch { return "unreadable: $($_.Exception.Message)" }
 }
-# BD-122: the KMD's record of the last start that did not reach a started device (Parameters\StartRecord,
-# guard.c). Read with no gate and without the driver, which is the point: a device with Code 43 answers no escape.
+# BD-122: the KMD's record of the last start that did not reach a started device (StartRecord in the
+# state store, guard.c). Read with no gate and without the driver, which is the point: a device with Code 43 answers no escape.
 # The record's own values only; the rule that makes them current is in start-confirm-core.ps1.
 function Read-StartRecord {
     $k = Open-DriverStateRecordView -Cli $cli -Path $script:StartRecordKey

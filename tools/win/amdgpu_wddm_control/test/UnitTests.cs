@@ -518,7 +518,14 @@ static partial class UnitTests
             var ps = File.ReadAllText(startConfirmCore);
             Check(Regex.IsMatch(ps, @"\$script:StartConfirmMinReadyMs = " + Recovery.ConfirmMinReadyMs + @"\b"), "start-confirm-core ready bound");
             Check(Regex.IsMatch(ps, @"\$script:StartConfirmFreshMs = " + Recovery.ConfirmFreshMs + @"\b"), "start-confirm-core fresh bound");
-            var rule = Regex.Match(ps, @"function Test-StartConfirmEligible \{(?<b>.*?)\n\}", RegexOptions.Singleline).Groups["b"].Value;
+            var whole = Regex.Match(ps, @"function Test-StartConfirmEligible \{(?<b>.*?)\n\}", RegexOptions.Singleline).Groups["b"].Value;
+            // BD-343: the task has a second branch for a start without output, which this window does not offer (a
+            // window has a display). The display branch is the return statement; it must stay this window's rule.
+            var noOutput = "if ((($Reading.flags -band " + (StartHealthState.Full | StartHealthState.Ready | StartHealthState.Visible | StartHealthState.NoOutput) +
+                ") -eq " + (StartHealthState.Full | StartHealthState.Ready | StartHealthState.NoOutput) + ") -and $Reading.ready_ms -ge $script:StartConfirmMinReadyMs) { return $true }";
+            Check(whole.Contains(noOutput), "Test-StartConfirmEligible has the no-output branch of BD-343");
+            Check(Regex.IsMatch(header, @"#define BC250_START_HEALTH_NO_OUTPUT " + StartHealthState.NoOutput + @"u\b"), "no-output flag = BC250_START_HEALTH_NO_OUTPUT");
+            var rule = Regex.Match(whole, @"\n return (?<r>.*)", RegexOptions.Singleline).Groups["r"].Value;
             foreach (var part in new[] { @"($Reading.flags -band 7) -eq 7", "$Reading.completed -gt 0", "$Reading.ready_ms -ge $script:StartConfirmMinReadyMs", "($Reading.age_ms -le $script:StartConfirmFreshMs -or ($Reading.flags -band " + StartHealthState.Quiet + ") -eq " + StartHealthState.Quiet + ")" })
                 Check(rule.Contains(part), "Test-StartConfirmEligible has " + part);
             Equal(4, Regex.Matches(rule, @"-and").Count + 1, "Test-StartConfirmEligible has exactly four terms");
@@ -532,6 +539,9 @@ static partial class UnitTests
         h = Eligible(); h.Flags = 6; Check(!Recovery.ConfirmEligible(h) && Recovery.ConfirmBlocker(h, false).Contains("not a full"), "not full: refused");
         h = Eligible(); h.Flags = 5; Check(Recovery.ConfirmBlocker(h, false).Contains("not finished"), "not ready: refused");
         h = Eligible(); h.Flags = 3; Check(Recovery.ConfirmBlocker(h, false).Contains("screen"), "not visible: refused");
+        // BD-343: a start without output says so; the window's own confirm rule does not change (it still refuses).
+        h = Eligible(); h.Flags = 35; Check(!Recovery.ConfirmEligible(h) && Recovery.ConfirmBlocker(h, false).Contains("no output") &&
+            !Recovery.ConfirmBlocker(h, false).Contains("screen"), "no output: the text names it, still refused here");
         h = Eligible(); h.Completed = 0; Check(!Recovery.ConfirmEligible(h) && Recovery.ConfirmBlocker(h, false).Contains("any work"), "no completions: refused");
         h = Eligible(); h.ReadyAgeMs = 59999; Check(!Recovery.ConfirmEligible(h) && Recovery.ConfirmBlocker(h, false).Contains("1 s left"), "ready 59.999 s: refused");
         h = Eligible(); h.LastCompletionAgeMs = 5001;

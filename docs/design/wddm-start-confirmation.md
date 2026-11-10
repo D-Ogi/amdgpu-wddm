@@ -89,6 +89,152 @@ common.ps1 Get-LogonTaskPlan and Test-LogonTaskPlan. Host tests:
 tools/release/test-session-checks.ps1 (eight negative controls) and
 tools/release/test-start-confirm.ps1.
 
+A start without output (BD-343). A start without a firmware display (BD-341,
+`display_start.h` NO_POST) with no monitor connected commits no mode, and
+nothing flips. The witness stayed at flags 3 (FULL and READY), completed 0 and
+ready_ms 0, so no client could confirm the start. On unit A (2026-11-10, monitor
+asleep) the guard refused the third such start with Code 43. The witness now
+has an output state for each interval (`StartHealthOutput`). The output state is
+"none" only when the display-start state is NO_POST and the reported child is
+disconnected. The authority is the reported child, as QueryChildStatus answers
+it through `ConnectorChildConnected`, not a sink that the connector found. pnp.c
+sets the state before `StartHealthReady`, and the connector sets it again at
+each child indication. The output state is in the witness, under the same
+lock. `StartHealthStop` clears it with the witness, and
+`StartHealthResumeReady` clears it with the pre-sleep interval. Then power.c
+sets it again from the reported child. A change starts a new interval. With no
+output the snapshot sets NO_OUTPUT (flag 32) and never VISIBLE. The ready time
+counts from the engines, and CONFIRM (`HealthConfirmableStart`) takes the rule
+for no output (`HealthConfirmableHeadless`): FULL, READY, not VISIBLE and 60
+seconds of an open witness. This rule does not need a completed flip. The other parts of the
+display rule stay: the engines were admitted after the CP and SDMA ring tests,
+and no fault, fence timeout, reset, power transition or stop closed the witness
+in the minute. A start that crashes or hangs in that minute stays unconfirmed,
+and the guard keeps its count. An INHERITED start always keeps the display rule,
+also with no monitor. A NO_POST start with a connected monitor also keeps it. A
+monitor that arrives in the minute starts a new interval under the display rule.
+The task (`Test-StartConfirmEligible`) and `Bc250StartHealth` accept the
+NO_OUTPUT reply. A KMD without the flag never sets it. Host tests:
+`driver/kmd/test/start_health_test.c` with three negative controls
+(`run_start_health.ps1` -NoOutputIgnoresOrigin, -NoOutputSkipsMinute,
+-NoOutputWithoutEngines, -NoOutputReleasesRequests), `start_record_test.c`
+(-NoStartOutput), `power_coordinator_test.c` (-NoResumeOutput),
+`tools/release/test-start-confirm.ps1` and
+`tools/win/bc250kmd_cli/test/start_health_test.c`.
+
+What a confirmation without output proves. It proves that the driver started
+fully, that the GFX and SDMA engines passed their ring tests, and that for one
+minute no fault, fence timeout, reset, power transition or stop occurred. That
+is the evidence the guard needs: a driver that loops crashes or hangs, and such
+a start stays unconfirmed. It does not prove that a mode set, a scan-out or a
+flip works, because none of them ran. The display rule proves these. Thus a
+display fault stays unknown on a start without output. When a monitor comes back,
+the next start is INHERITED or has a connected child, and it uses the display
+rule again. The guard then counts that start as usual.
+
+The CU mode and DPM requests. `StartHealthIsReady` is the milestone of the CU
+mode confirmation (cumode.c) and of the DPM confirmation (dpm.c). It keeps the
+display rule only (`HealthConfirmableDisplay`). A minute of READY with no
+workload proves nothing about a requested clock, voltage or CU count. Thus a
+CONFIRM by the rule for no output confirms the start for the guard and does not
+call `CuModeConfirm` or `DpmConfirm`. The KMD log says "start confirmed
+without output, CU mode and DPM left pending". What a person sees: a CU or DPM
+change that is tried on a start without output is not confirmed. The next start
+finds the pending mark and falls back to 24 CU or to DpmMode 0, as after
+every start that nobody confirmed. It writes the fallback and its reason
+durably. Nothing is applied in part, and the start-confirm task does not lose
+the start itself. To keep such a change, make it on a start with a display,
+for example with a dummy plug.
+
+The stored V/F curve. A curve that the tuner kept runs only behind a pending
+mark, which each start that applies the curve writes again. A start that finds
+a mark drops the curve. A confirmation by the display milestone clears the
+mark (`DpmConfirm`). A confirmation by the rule for no output clears it only
+when a start with a display already confirmed the same curve, so
+DpmCurveConfirmed holds its seal (`DpmConfirmKnownCurve`,
+`dpm_curve_mark.h`). The minute without output is the same witness for such a
+curve as a display minute, and neither proves an hour of load. A curve that no
+start with a display confirmed stays pending, and the next start drops it. A
+start without output that nobody confirms also keeps the mark. The KMD log
+names the rule ("cleared by start-health, no-output rule" or "left pending").
+The seal is a 32-bit mix of the curve values, not the 16-bit checksum of the
+pending mark: two curves with the same checksum are easy to make. Two
+different curves have the same seal with a chance of about 1 in 2^32 for an
+edit that does not search for it, so a curve that an edit outside the driver
+changed does not pass as confirmed. The curve is sealed, and the boundary is
+the state store. A writer of the state store can write DpmCurveConfirmed
+itself. The mix has no key, so such a writer can also search for another
+curve with the same seal (about 2^32 tries). A store of an older driver holds
+the checksum in DpmCurveConfirmed, and a seal is never equal to it: after an
+update, a start without output clears no mark until a start with a display
+confirms the curve again. Host test: `driver/kmd/test/dpm_curve_mark_test.c`
+with the negative controls -ClearAnyPending and -SumSeal. Already confirmed CU mode and DPM requests need no new
+confirmation, and they stay over starts without output (the shim tests
+`test_confirmed_survives_headless_starts`).
+A reading with VISIBLE and NO_OUTPUT together. The KMD never publishes both.
+The task refuses such a reading, and start-confirm.log names the two flags. The
+installer has no rule for it. The KMD rule for no output requires that VISIBLE
+is clear.
+
+Remote desktop, a KVM switch and a dummy plug:
+
+| Case | Display start and child | Rule |
+| --- | --- | --- |
+| Remote desktop only, no monitor at POST | NO_POST, disconnected | no output |
+| Remote desktop with a monitor | INHERITED, connected | display |
+| KVM switch that gives a sink (EDID, HPD high) | INHERITED, connected | display |
+| KVM switch off, or no HPD | NO_POST, disconnected | no output |
+| Dummy plug (DP or HDMI) | INHERITED, connected | display |
+
+A dummy plug makes each start use the display path, so the guard also sees a
+display fault at each start.
+
+Exposure, for the service notes. A confirmation without output does not prove
+the display path. If a driver breaks only the display path, a start without a
+monitor does not find it. When a monitor is connected again, the next starts
+fail on the display path. After two such starts the guard refuses the third
+start, and Windows uses Microsoft Basic Display. Then the sign-in and the
+one-click recovery of the control application are available. A start without a
+monitor also confirms again and clears the count.
+
+The startup instance of the task. The installer registers two instances of the
+same script. The logon instance runs at the sign-in of any user. The startup
+instance (BD-271, `-AtStartup`) runs at system startup as Local System, before
+any sign-in. A computer with no monitor may never get a sign-in, so the startup
+instance is the one that confirms such a start. Both instances use the same
+rule (`Get-StartConfirmStep` and `Test-StartConfirmEligible`). The switch only
+changes the log prefix and the DWM baseline, so the rule for no output is the
+same for each instance.
+
+Installer result and diagnostics. The last installer step has the same two rules
+(`start-confirm-core.ps1` `Get-StartHealthRule`). The display rule is FULL,
+READY and VISIBLE (7) at LastStage 50, which is the first VidPN commit. The
+rule for no output is FULL, READY and NO_OUTPUT (35) at LastStage 39, which is
+`StageStartDone`, with 60 seconds of readiness or flag CONFIRMED. Its result
+line says which rule passed. Before BD-343, an install on a computer with no
+monitor failed both checks and collected a diagnostics file. The confirm button
+of the control application keeps the display rule only, because a window that
+a person can see needs a display. Its text names the state without output.
+
+Limit: a monitor that the start cannot light. A NO_POST start that reports a
+connected child keeps the display rule. If the driver cannot light that
+monitor, the start stays unconfirmed, and the guard refuses the third such
+start. In the current driver (stage A of BD-341) this case cannot occur. On a
+NO_POST start, the connector arms nothing and writes nothing.
+`ConnectorChildConnected` then answers "not connected", and no hot-plug event
+can report a connected child. Only the cold path of BD-341 (a cold mode set
+after a later hot-plug event) can report the child as connected in a NO_POST
+session. That path reports the child through the same indication, which
+starts a new interval under the display rule. If the cold mode set fails, the
+start stays unconfirmed, and the guard counts it. This is intentional, because
+the failure is a display fault.
+
+A refused start stays refused until a person acts. The count is the evidence
+of the guard, and an automatic reset would undo the guard for a real boot loop.
+At sign-in the control application opens its notice
+(`StartNotice.cs`, case Guard), and one click clears the count and starts the
+device again. The installer also writes the count.
+
 Close health admission before stop, adapter power-down and TDR handling; D0
 alone must not reopen it while full resume is unsupported. Visibility/mode
 changes invalidate the monitor's observation interval. Readiness must include

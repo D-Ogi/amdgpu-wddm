@@ -1,5 +1,5 @@
-// BD-122: the start record of guard.c (Parameters\StartRecord) and the start path that writes it, compiled on the
-// host against a registry model, a log-ring model and a pool that can refuse.
+// BD-122: the start record of guard.c (StartRecord in the state store's Data key) and the start path that writes
+// it, compiled on the host against a registry model, a log-ring model and a pool that can refuse.
 //
 // What it holds the driver to, requirement by requirement (the defect's text is in DEFECTS.md BD-122):
 //   1. every start attempt that does not reach a started device leaves a record, with no gate: each step of
@@ -161,7 +161,7 @@ static ULONG lastStage;
 static ULONG GuardLastStage(void) { return lastStage; }
 
 // ---- the registry model ---------------------------------------------------------------------------------------
-// Handle 1 is Parameters, handle 2 is Parameters\StartRecord. Every write is counted so a failure can be injected
+// Handle 1 is the Data key (OpenParameters), handle 2 is its StartRecord subkey. Every write is counted so a failure can be injected
 // at exactly the n-th one, and the order of the writes is kept as a trace: the rule of requirement 2 is an order.
 #define MAXVAL 16
 #define MAXDATA 21000
@@ -383,6 +383,14 @@ static void CuModeBegin(BC250_DEVICE* d) { (void)d; }
 /* BD-341: the child-event ring of the start (connector.c). Its place in the start is what this test checks. */
 static unsigned childBegins;
 static void ConnectorChildBegin(BC250_DEVICE* d) { (void)d; childBegins++; StartEvent(EVENT_CHILD_BEGIN); }
+/* BD-343: the output state of the start-health witness, which the start sets once, before StartHealthReady, from its
+   display-start state and the child connection the connector reports (start_health.c StartHealthOutput). */
+static unsigned outputCalls, readyAtOutput;
+static ULONG outputDisplayStart;
+static BOOLEAN outputConnected, childConnected;
+static BOOLEAN ConnectorChildConnected(BC250_DEVICE* d) { (void)d; return childConnected; }
+static void StartHealthOutput(BC250_DEVICE* d, ULONG displayStart, BOOLEAN connected)
+{ (void)d; outputCalls++; readyAtOutput = readyCalls; outputDisplayStart = displayStart; outputConnected = connected; }
 static void WddmLevelStart(BC250_DEVICE* d) { (void)d; }
 static void BoardMemoryIdentityClear(BC250_DEVICE* d) { (void)d; if (lastStage) Trace("bmclear"); }
 static void BoardMemoryIdentityCapture(BC250_DEVICE* d) { (void)d; }
@@ -597,6 +605,7 @@ static void Reset(void)
     cursorPrepares = cursorStops = cursorBufferSeen = 0;
     fbMaps = timingCalls = modesetCalls = audioCalls = coldPipeLogs = 0;
     childBegins = rangeCalls = 0; rangeTop = 0; rangeStatus = STATUS_SUCCESS; vramOpen = FALSE;
+    outputCalls = readyAtOutput = 0; outputDisplayStart = 99; outputConnected = childConnected = FALSE;
     blankStatus[0] = blankStatus[1] = restoreStatus = STATUS_SUCCESS;
     admissionStatus = STATUS_SUCCESS;
     mmioAvailable = hardwareVisible = restoreAttempt = TRUE;
@@ -860,6 +869,9 @@ int main(void)
                 CHECK(dev.ColdScanoutBytes == (mmio ? COLD_SCANOUT_BYTES : BC250_DISPLAY_START_VGA_ALLOCATION));
                 CHECK(connectorStarts == starts + 1 && readyCalls == 1 && stops == 0);
                 CHECK(outputSources == 1 && outputChildren == 1 && dev.StartVisibilityPending == 1);
+                /* BD-343: the witness learns the start's own display-start state, before its engines are ready. */
+                CHECK(outputCalls == 1 && readyAtOutput == 0 && outputDisplayStart == BC250_DISPLAY_START_NO_POST &&
+                      !outputConnected);
                 CHECK(LoggedTimes("post display: none") == 1 && LoggedTimes("start failed") == 0);
                 if (failures) { printf("  (no-display case %u, mmio %u)\n", i, mmio); break; }
             }
@@ -868,9 +880,14 @@ int main(void)
         Reset(); iface.DxgkCbAcquirePostDisplayOwnership = AcquirePostEmpty;
         CHECK(Start() == STATUS_SUCCESS && dev.DisplayStart == BC250_DISPLAY_START_NO_POST);
         dev.Started = FALSE; dev.StopDone = TRUE;
-        iface.DxgkCbAcquirePostDisplayOwnership = AcquirePost;
+        iface.DxgkCbAcquirePostDisplayOwnership = AcquirePost; childConnected = TRUE;
         CHECK(Start() == STATUS_SUCCESS && dev.DisplayStart == BC250_DISPLAY_START_INHERITED && dev.Post.Width == 1920);
         CHECK(dev.ColdScanoutBytes == 0 && dev.FirmwarePipesHeld == 0);
+        CHECK(outputCalls == 2 && outputDisplayStart == BC250_DISPLAY_START_INHERITED && outputConnected);
+        /* A start that fails before it is started tells the witness nothing: no output state, no readiness. */
+        Reset(); iface.DxgkCbAcquirePostDisplayOwnership = AcquirePostEmpty; vramOpen = TRUE;
+        rangeStatus = STATUS_CONFLICTING_ADDRESSES;
+        CHECK(Start() == STATUS_CONFLICTING_ADDRESSES && outputCalls == 0 && readyCalls == 0);
     }
     // ---- BD-341: the cold scan-out reserve against the top of VRAM -----------------------------------------
     // With the VRAM carve-out known, a start without a firmware display asks vram.c whether its cold reserve stays

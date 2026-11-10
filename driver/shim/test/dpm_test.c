@@ -166,6 +166,54 @@ static struct bc250_dpm_request req(void)
 
 static void test_decide_closed_record(void);
 
+/* BD-343: DpmMode 1 at the 2000 MHz ceiling, confirmed on a start with a display, stays on over later starts
+ * that nobody confirms by the display milestone (a start without output: CONFIRM by the no-output rule calls
+ * no DpmConfirm). The registry is modelled as dpm.c DpmStart writes it; each start ends with a clean stop, which
+ * deletes DpmSession. */
+struct dpm_reg { unsigned int mode, max; int pending_present; unsigned int pending; int confirmed_present;
+	unsigned int confirmed; int fallbacks; };
+
+static struct bc250_dpm_decision dpm_start(struct dpm_reg *g)
+{
+	struct bc250_dpm_request r = req();
+	struct bc250_dpm_decision d;
+
+	r.mode_present = 1; r.mode = g->mode;
+	r.max_present = 1; r.max_mhz = g->max;
+	r.pending_present = g->pending_present; r.pending = g->pending;
+	r.confirmed_present = g->confirmed_present; r.confirmed = g->confirmed;
+	bc250_dpm_decide(&r, &d);
+	if (d.force_fixed) { g->mode = BC250_DPM_MODE_FIXED; g->pending_present = 0; g->fallbacks++; }
+	else if (d.clear_pending) g->pending_present = 0;
+	if (d.mark_pending) { g->pending_present = 1; g->pending = d.encoded; }
+	return d;
+}
+
+static void test_confirmed_survives_headless_starts(void)
+{
+	struct dpm_reg g = { BC250_DPM_MODE_DPM, 2000u, 0, 0, 0, 0, 0 };
+	struct bc250_dpm_decision d;
+	int i;
+
+	/* A start with a display: pending, then confirmed (DpmConfirm: DpmPending away, DpmConfirmed written). */
+	d = dpm_start(&g);
+	CHECK(d.mark_pending && g.pending_present);
+	g.pending_present = 0; g.confirmed_present = 1; g.confirmed = d.encoded;
+	/* Three starts without output: DPM at 2000 MHz, no mark, no fallback. */
+	for (i = 0; i < 3; i++) {
+		d = dpm_start(&g);
+		CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 2000u && d.confirmed);
+		CHECK(!d.mark_pending && !d.force_fixed && !g.pending_present && g.fallbacks == 0);
+	}
+	/* Control: a ceiling that no start with a display confirmed yet. A start without output leaves it pending,
+	 * and the next start falls back to fixed-lab, as after any unconfirmed start. */
+	g.max = 1800u;
+	d = dpm_start(&g);
+	CHECK(d.mark_pending && g.pending_present);
+	d = dpm_start(&g);
+	CHECK(d.force_fixed && g.mode == BC250_DPM_MODE_FIXED && g.fallbacks == 1);
+}
+
 static void test_decide(void)
 {
 	struct bc250_dpm_request r;
@@ -4741,6 +4789,7 @@ int main(void)
 	test_table();
 	test_allowlist();
 	test_decide();
+	test_confirmed_survives_headless_starts();
 	test_oc_tiers();
 	test_load_steps();
 	test_no_oscillation();

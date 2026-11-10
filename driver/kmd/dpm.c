@@ -96,6 +96,7 @@
 #include "bc250kmd_escape.h"
 #include "state_kernel.h"
 #include "log_rate.h"               // BD-127: the compute set's transition line, which a client could make hot
+#include "dpm_curve_mark.h"         // BD-343: the curve's pending mark over starts with and without output
 #include "regs.generated.h"
 #include "gc_10_1_0_sh_mask.h"      // GRBM_STATUS and SDMA0_STATUS_REG field masks; the offsets come from regcalc
 
@@ -1491,6 +1492,12 @@ static void DpmConfigureSustain(BC250_DPM_STATE* S, BOOLEAN Dpm)
 // the curve from the disk and runs the table's own line: one bad KEEP costs the curve, never the machine.
 // A start that does not govern never applies a level, so it leaves the state at the table's line.
 // PASSIVE_LEVEL, under Lock, before the governor thread exists.
+// The seal that DpmCurveConfirmed holds for a curve (dpm_curve_mark.h): not the 16-bit checksum of the pending mark.
+static unsigned int DpmCurveSeal(const struct bc250_clock_curve* Curve)
+{
+    return Bc250DpmCurveSeal(Curve->mv, BC250_CURVE_POINTS);
+}
+
 static void DpmInstallCurve(BC250_DPM_STATE* S, const struct bc250_clock_curve* Curve)
 {
     KIRQL irql;
@@ -1524,7 +1531,7 @@ static void DpmConfigureCurve(BC250_DPM_STATE* S, BOOLEAN Dpm)
     (void)QueryPresent(DPM_SETTING_CURVE_CONFIRMED, &confirmed);
     DpmReadCurve(S, &curve, &any, &refused);
     if (!DriverStateGroupEnabled(AMDGPU_STATE_GROUP_DPM)) return;
-    if (any && pendingPresent) {
+    if (Bc250DpmCurveDropAtStart(any, pendingPresent)) {
         GuardLog("dpm: the stored curve (mark 0x%04X) ran a start that never became healthy: the curve is "
                  "deleted and the table's own line runs", pending);
         any = FALSE;
@@ -2012,22 +2019,65 @@ NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why)
     }
     // The stored curve of this start, the same two steps in the same order (0.7.210). Its own failure costs the
     // curve at the next start and never this confirmation, so the result is logged and not returned.
-    if (s->CurvePending) {
+    if (Bc250DpmCurveClearOnConfirm(s->CurvePending, 1, 0, 0u, 0u)) {
         struct bc250_clock_curve stored;
-        unsigned int sum;
+        unsigned int sum, seal;
         KIRQL irql;
         NTSTATUS curveStatus;
         KeAcquireSpinLock(&s->SnapLock, &irql);
         stored = s->Curve.stored;
         KeReleaseSpinLock(&s->SnapLock, irql);
         sum = bc250_clock_curve_checksum(&stored);
+        seal = DpmCurveSeal(&stored);
         curveStatus = GuardDeleteSetting(DPM_SETTING_CURVE_PENDING);
         if (NT_SUCCESS(curveStatus)) {
             s->CurvePending = FALSE;
-            curveStatus = GuardStoreSetting(DPM_SETTING_CURVE_CONFIRMED, sum);
+            curveStatus = GuardStoreSetting(DPM_SETTING_CURVE_CONFIRMED, seal);
             if (NT_SUCCESS(curveStatus)) s->CurveConfirmed = TRUE;
         }
-        GuardLog("dpm: the stored curve (mark 0x%04X) confirmed by %s: 0x%08X", sum, Why, curveStatus);
+        GuardLog("dpm: the stored curve (mark 0x%04X, seal 0x%08X) confirmed by %s: 0x%08X", sum, seal, Why,
+                 curveStatus);
+    }
+    DpmUnlock(s);
+    return status;
+}
+
+// BD-343. The curve half of a confirmation by the rule without output (start_health.c, CONFIRM of a start with no
+// display). It clears the pending mark of the curve this start applied only when a start with a display confirmed
+// the same curve earlier (DpmCurveConfirmed equals its seal, dpm_curve_mark.h). Nothing else of DpmConfirm: the
+// DPM request itself stays pending when it is new. A curve that no display start confirmed keeps its mark, and the
+// next start drops it. PASSIVE_LEVEL. Nothing to do is success.
+NTSTATUS DpmConfirmKnownCurve(BC250_DEVICE* Device, _In_z_ const char* Why)
+{
+    BC250_DPM_STATE* s = &Device->Dpm;
+    NTSTATUS status = STATUS_SUCCESS;
+    DpmLock(s);
+    if (s->CurvePending) {
+        struct bc250_clock_curve stored;
+        unsigned int sum, seal, confirmed = 0;
+        BOOLEAN present;
+        KIRQL irql;
+        KeAcquireSpinLock(&s->SnapLock, &irql);
+        stored = s->Curve.stored;
+        KeReleaseSpinLock(&s->SnapLock, irql);
+        sum = bc250_clock_curve_checksum(&stored);
+        seal = DpmCurveSeal(&stored);
+        present = QueryPresent(DPM_SETTING_CURVE_CONFIRMED, &confirmed);
+        if (Bc250DpmCurveClearOnConfirm(1, 0, present, confirmed, seal)) {
+            status = GuardDeleteSetting(DPM_SETTING_CURVE_PENDING);
+            if (NT_SUCCESS(status)) {
+                s->CurvePending = FALSE;
+                s->CurveConfirmed = TRUE;
+                GuardLog("dpm: curve mark 0x%04X cleared by %s, no-output rule: the same curve a display start "
+                         "confirmed (0x%08X)", sum, Why, confirmed);
+            } else {
+                GuardLog("dpm: curve mark 0x%04X not cleared by %s (delete failed 0x%08X): the next start drops "
+                         "the curve", sum, Why, status);
+            }
+        } else {
+            GuardLog("dpm: curve mark 0x%04X left pending by %s, no-output rule: no display start confirmed it "
+                     "(0x%08X, seal 0x%08X)", sum, Why, present ? confirmed : 0u, seal);
+        }
     }
     DpmUnlock(s);
     return status;
@@ -2472,15 +2522,15 @@ void DpmCurveRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_CURVE* Data, ULONG S
                 // start drops it: one reconfirmation at worst, never a curve nobody chose. The next start marks
                 // this curve pending again by itself (DpmConfigureCurve), so a boot it does not survive still
                 // costs the curve and not the machine.
-                unsigned int sum = bc250_clock_curve_checksum(&stored);
+                unsigned int sum = bc250_clock_curve_checksum(&stored), seal = DpmCurveSeal(&stored);
                 persisted = DpmStoreCurve(&stored);
                 DeleteLogged(DPM_SETTING_CURVE_PENDING);
                 s->CurvePending = FALSE;
-                StoreLogged(DPM_SETTING_CURVE_CONFIRMED, sum);
+                StoreLogged(DPM_SETTING_CURVE_CONFIRMED, seal);
                 StoreLogged(DPM_SETTING_CURVE_REASON, DPM_CURVE_REASON_OK);
                 s->CurveConfirmed = TRUE;
                 DpmLogCurve("kept", &stored);
-                GuardLog("dpm: the curve is kept, mark 0x%04X, on disk %s", sum,
+                GuardLog("dpm: the curve is kept, mark 0x%04X, seal 0x%08X, on disk %s", sum, seal,
                          persisted ? "complete" : "INCOMPLETE (the next start refuses it as a whole)");
                 if (!persisted) status = STATUS_UNSUCCESSFUL;
             }

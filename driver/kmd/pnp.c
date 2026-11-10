@@ -363,6 +363,9 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     device->Started = TRUE;
     *NumberOfVideoPresentSources = 1;
     *NumberOfChildren = 1;
+    // BD-343: the output state before the engines, so that the ready time of a start without output counts from
+    // StartHealthReady, as a visible start's counts from its first visible mode.
+    StartHealthOutput(device,device->DisplayStart,ConnectorChildConnected(device));
     StartHealthReady(device,device->FullWddm && GfxStartupResources(device,TRUE));
     // Last: it watches a started device, and it never fails the start (EnableHangBugcheck, hang.c).
     HangDetectorStart(device);
