@@ -6463,6 +6463,22 @@ static void WddmCpuVisibleAllocationFlags(DXGK_ALLOCATIONINFOFLAGS_WDDM2_0* Flag
     Flags->HardwareProtected = 0;
 }
 
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// BD-352: the attribution line of LabAllocLogMiB (guard.c), one per create of at least that size. Kind "umd": A is
+// the winsys heap, B the GEM flags. Kind "lb7a": A is the E26R record version, B its access word. seg is the
+// supported read set, cpu/od/c the CpuVisible, CpuVisibleOnDemand and Cached bits as this create gives them.
+// A guard-log text has at most 160 bytes: the line stays short.
+static void WddmLabAllocLine(const char* Kind, const DXGK_ALLOCATIONINFO* Info, unsigned long A, unsigned long long B)
+{
+    const ULONG mib = GuardLabAllocLogMiB();
+    if (mib == 0 || Info->Size < ((SIZE_T)mib << 20)) return;
+    GuardLog("alloc %s pid %lu %llu KiB a 0x%lX b 0x%llX seg 0x%lX cpu %u od %u c %u", Kind,
+             HandleToULong(PsGetCurrentProcessId()), (unsigned long long)Info->Size >> 10, A, B,
+             (ULONG)Info->SupportedReadSegmentSet, (UINT)Info->FlagsWddm2.CpuVisible,
+             (UINT)Info->FlagsWddm2.CpuVisibleOnDemand, (UINT)Info->FlagsWddm2.Cached);
+}
+#endif
+
 // E26R v1: magic, version, shared (12 bytes). V2 adds CPU access intent
 // (16 bytes): PRIMARY=1, CPU_READ=2. Primary is not a public input bit in
 // DXGK_ALLOCATIONINFOFLAGS_WDDM2_0; never infer it from reserved OS flags.
@@ -6627,6 +6643,9 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
             GuardLog("wddm: umd alloc %llu heap 0x%lX align %u va 0x%llX gem 0x%llX cached %u cpu %u", view.bytes,
                      view.heap, align, view.requested_va, view.gem_flags, info->FlagsWddm2.Cached,
                      info->FlagsWddm2.CpuVisible);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        WddmLabAllocLine("umd", info, view.heap, view.gem_flags);
+#endif
         return BC250_CREATE_STEP_ADMITTED;
     }
 
@@ -6713,6 +6732,9 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     info->FlagsWddm2.CpuVisible = policy.CpuVisible;
     info->FlagsWddm2.AccessedPhysically = policy.AccessedPhysically;
     info->FlagsWddm2.Cached = policy.Cached;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    if (!gdiType) WddmLabAllocLine("lb7a", info, call->RecordVersion, call->RecordAccess);
+#endif
     info->AllocationPriority = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
     // M15.14 increment 2, the create-time answer. ScanoutRequests is counted at flip time, so a zero
     // there cannot tell "the client never marked its buffers" from "the request never reached

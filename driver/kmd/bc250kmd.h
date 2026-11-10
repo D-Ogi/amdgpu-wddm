@@ -768,6 +768,11 @@ BOOLEAN GuardLabTakeEngineHang(ULONG Node);
 // Lab flavour only (BD-210 G1): LabCpuVisibleOnDemand (REG_DWORD under Parameters, read only in DriverEntry). 0 turns
 // off DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand for the UMD allocations; absent or any other value keeps it.
 void GuardLabReadCpuVisibleOnDemand(_In_ PDRIVER_OBJECT DriverObject);
+// Lab flavour only (BD-352): LabAllocLogMiB (REG_DWORD under Parameters, read only in DriverEntry), 1 to 4096. Each UMD
+// and type-0 LB7A allocation create of at least that many MiB writes one guard-log line (wddm.c). GuardLabAllocLogMiB
+// returns the value, 0 for no line. Any IRQL: a value fixed at DriverEntry. The release flavour has neither function.
+void GuardLabReadAllocLog(_In_ PDRIVER_OBJECT DriverObject);
+ULONG GuardLabAllocLogMiB(void);
 ULONGLONG GuardLabCommitPagingRingStart(void);
 extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
 extern int bc250_ring_boundary_pad;                     // shim/bc250_ring.c, 0 only in a lab control run

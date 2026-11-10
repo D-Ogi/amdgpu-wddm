@@ -671,6 +671,35 @@ void GuardLabReadCpuVisibleOnDemand(_In_ PDRIVER_OBJECT DriverObject)
     GuardLog("lab: cpu view on demand selector read (read only; value %lu, 0x%08X): %s", value, status,
              g_LabCpuVisibleOnDemand ? "on" : "off (create-time cpu view)");
 }
+
+// BD-352, lab flavour only, not a catalog setting for the reason of LabScaledPlane above. LabAllocLogMiB (REG_DWORD,
+// Parameters, read only at DriverEntry): N from 1 to 4096 makes WddmCreateAllocation write one guard-log line for each
+// UMD allocation and each type-0 LB7A allocation of at least N MiB, with the creating process, the size, the segment
+// set and the CPU view bits (wddm.c). It attributes the CPU views of one process to their creates. The log ring keeps
+// its first BC250_LOG_HEAD_LINES lines and wraps the rest, so a large N keeps a game load inside it. Absent, 0, not a
+// REG_DWORD or out of range: no line.
+static ULONG g_LabAllocLogMiB;
+
+void GuardLabReadAllocLog(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status;
+    ULONG value = 0;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (!NT_SUCCESS(status)) return;
+    status = ParameterDword(key, L"LabAllocLogMiB", &value);
+    ZwClose(key);
+    if (status == STATUS_OBJECT_NAME_NOT_FOUND) return;     // the default: no line, every start would log it
+    g_LabAllocLogMiB = NT_SUCCESS(status) && value >= 1 && value <= 4096 ? value : 0;
+    GuardLog("lab: allocation log selector read (read only; value %lu, 0x%08X): %s %lu MiB", value, status,
+             g_LabAllocLogMiB ? "creates of at least" : "off, out of range:", g_LabAllocLogMiB ? g_LabAllocLogMiB : value);
+}
+
+ULONG GuardLabAllocLogMiB(void)
+{
+    return g_LabAllocLogMiB;
+}
 #endif
 
 // BD-235: the ring boundary rule (bc250_ring.c, gfx.c). The lab flavour takes the arm's selector; the release flavour
