@@ -780,6 +780,12 @@ static partial class UnitTests
         Check(Regex.IsMatch(formSource, @"bool\?\s+_bootLogo;") && Regex.IsMatch(formSource, @"_bootLogo\s*\?\?\s*\(d == null \|\| d\.BootLogo\)") &&
               formSource.Contains("InstallFlow.BootLogoArguments(_bootLogo)"),
             "start screen: the box holds \"not stated yet\", opens on the engine's answer and reaches the engine");
+        // BD-359: the run that RunOnce starts tells the engine so; a run that a person starts does not.
+        Check(InstallFlow.ContinuationArguments("continue").SequenceEqual(new[] { "-LogonContinuation" }), "continuation: the --continue run passes -LogonContinuation");
+        foreach (var flow in new[] { "install", "repair", "prepare" })
+            Check(InstallFlow.ContinuationArguments(flow).Length == 0, "continuation: a " + flow + " run that a person starts passes no -LogonContinuation");
+        Check(SetupArgs.Parse(new[] { "--continue" }).Mode == "continue", "continuation: --continue is the continue flow");
+        Check(formSource.Contains("InstallFlow.ContinuationArguments(_flow)"), "continuation: the switch reaches the engine of the install run");
         // The words of the removed controls are gone from every table, so neither can come back by itself.
         foreach (var id in InstallFlow.RemovedConsentIds)
             Check(!Strings.Has(id), "no confirmations: " + id + " is gone from the string tables");

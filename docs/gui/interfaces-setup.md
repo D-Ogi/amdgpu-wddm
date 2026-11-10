@@ -28,7 +28,7 @@ The window starts `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy By
 | `-Repair`, `-FirmwareDir <dir>`, `-Verify` | as on the command line |
 | `-DeadlineUtc <ISO 8601 UTC>` | stop at the first stop point after this time (section 10) |
 | `-HoldWindow` | command line only (the RunOnce continuation, section 4): wait for Enter before the console window closes; ignored with `-Gui` |
-| `-LogonContinuation` | the installer's own RunOnce entry started the run at a logon (section 4). Only a verification reads it. A failed check then gets one more attempt after 60 s. When that attempt also fails, the phase stays `installed` and the update transaction gets no record of the result (BD-359) |
+| `-LogonContinuation` | the installer's own RunOnce entry started the run at a logon (section 4). The window passes it on every `--continue` run (`InstallFlow.ContinuationArguments`). Only a verification reads it. A failed check then gets one more attempt after 60 s. When that attempt also fails, the phase stays `installed` and the update transaction gets no record of the result (BD-359) |
 
 **Nothing is asked of the user**. The plan
 screen carries no permission control, and its Install button is never off. Pressing it is

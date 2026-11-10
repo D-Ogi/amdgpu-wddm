@@ -1351,6 +1351,7 @@ namespace AmdgpuWddmSetup
             args.AddRange(InstallFlow.WallpaperArguments(_wallpaper));
             args.AddRange(InstallFlow.BootLogoArguments(_bootLogo));
             if (_flow == "repair") args.Add("-Repair");
+            args.AddRange(InstallFlow.ContinuationArguments(_flow));
             // Pressing Install is the consent, so the switches that used to carry a user's answer
             // are given on every run. The engine of this package no longer needs them; an engine of an older release,
             // which a kept repair set may still hold, reads them and asks nothing either.
