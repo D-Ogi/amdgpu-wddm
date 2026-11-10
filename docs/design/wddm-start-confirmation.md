@@ -158,10 +158,13 @@ start with a display confirmed stays pending, and the next start drops it. A
 start without output that nobody confirms also keeps the mark. The KMD log
 names the rule ("cleared by start-health, no-output rule" or "left pending").
 The seal is a 32-bit mix of the curve values, not the 16-bit checksum of the
-pending mark: two curves with the same checksum are easy to make, and their
-seals differ. A curve that an edit outside the driver changed thus does not
-pass as confirmed. The seal is no defence against a writer of the state
-store, who can also write DpmCurveConfirmed. A store of an older driver holds
+pending mark: two curves with the same checksum are easy to make. Two
+different curves have the same seal with a chance of about 1 in 2^32 for an
+edit that does not search for it, so a curve that an edit outside the driver
+changed does not pass as confirmed. The curve is sealed, and the boundary is
+the state store. A writer of the state store can write DpmCurveConfirmed
+itself. The mix has no key, so such a writer can also search for another
+curve with the same seal (about 2^32 tries). A store of an older driver holds
 the checksum in DpmCurveConfirmed, and a seal is never equal to it: after an
 update, a start without output clears no mark until a start with a display
 confirms the curve again. Host test: `driver/kmd/test/dpm_curve_mark_test.c`

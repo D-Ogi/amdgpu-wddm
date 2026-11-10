@@ -20,12 +20,15 @@
  * are easy to find, and the rule without output must not take a curve that nobody confirmed for the confirmed one.
  * The seal is a 32-bit mix of the eleven values in their order. Each step of the mix is a bijection, so before the
  * last line two curves that differ in one value never have the same mix. Two different curves have the same seal
- * with a chance of about 1 in 2^32. The last line keeps the seal at or above 0x10000. A store of an older driver (0.7.210 to BD-343)
- * holds the 16-bit checksum in DpmCurveConfirmed, and no seal is equal to such a value. Thus at the first start
- * after an update, a start without output clears no mark: the curve stays pending, and the next start drops it,
- * unless a start with a display confirms it first and writes its seal.
- * The seal is not a defence against a writer of the state store: whoever can write the curve values can write
- * DpmCurveConfirmed as well. It keeps a curve that an edit outside the driver changed from passing as confirmed.
+ * with a chance of about 1 in 2^32 for an edit that does not search for it. The last line keeps the seal at or
+ * above 0x10000. A store of an older driver (0.7.210 to BD-343) holds the 16-bit checksum in DpmCurveConfirmed,
+ * and no seal is equal to such a value. Thus at the first start after an update, a start without output clears no
+ * mark: the curve stays pending, and the next start drops it, unless a start with a display confirms it first and
+ * writes its seal.
+ * The limit: the curve is sealed, and the boundary is the state store. The seal is not a defence against a writer
+ * of the state store. Such a writer can write DpmCurveConfirmed itself, and the mix has no key, so a writer can
+ * also search for another curve with the same seal (about 2^32 tries) and write that curve. The seal keeps a curve
+ * that an edit outside the driver changed, without such a search, from passing as confirmed.
  * The value stays a DWORD record of the same name, so the state catalog does not change.
  *
  * Plain C with no kernel call, so the host test (driver/kmd/test/dpm_curve_mark_test.c) runs every sequence of
