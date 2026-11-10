@@ -763,7 +763,7 @@ function Invoke-Verify {
     # could otherwise take its answer from a line the driver wrote (start-confirm.ps1 Write-StartRecordLog).
     $view = $null; if ($probe -match '(?m)^(?!.*start record log: ).*probe: fallback view: (.+)$') { $view = $Matches[1].Trim() }
     # BD-122: the KMD's own reason for a start that did not reach a started device, which the probe reads from
-    # Parameters\StartRecord with no gate and without the driver. It names the step, the NTSTATUS and the last
+    # the state store (StartRecord) with no gate and without the driver. It names the step, the NTSTATUS and the last
     # driver log lines, which a device with Code 43 can no longer answer for itself. The verdict below is the one
     # it always was: this is the detail a tester sends us, not a new gate.
     $record = $null; if ($probe -match '(?m)^(?!.*start record log: ).*\bstart record: (.+)$') { $record = $Matches[1].Trim() }

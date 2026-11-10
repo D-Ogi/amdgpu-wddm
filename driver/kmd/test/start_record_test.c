@@ -1,5 +1,5 @@
-// BD-122: the start record of guard.c (Parameters\StartRecord) and the start path that writes it, compiled on the
-// host against a registry model, a log-ring model and a pool that can refuse.
+// BD-122: the start record of guard.c (StartRecord in the state store's Data key) and the start path that writes
+// it, compiled on the host against a registry model, a log-ring model and a pool that can refuse.
 //
 // What it holds the driver to, requirement by requirement (the defect's text is in DEFECTS.md BD-122):
 //   1. every start attempt that does not reach a started device leaves a record, with no gate: each step of
@@ -161,7 +161,7 @@ static ULONG lastStage;
 static ULONG GuardLastStage(void) { return lastStage; }
 
 // ---- the registry model ---------------------------------------------------------------------------------------
-// Handle 1 is Parameters, handle 2 is Parameters\StartRecord. Every write is counted so a failure can be injected
+// Handle 1 is the Data key (OpenParameters), handle 2 is its StartRecord subkey. Every write is counted so a failure can be injected
 // at exactly the n-th one, and the order of the writes is kept as a trace: the rule of requirement 2 is an order.
 #define MAXVAL 16
 #define MAXDATA 21000

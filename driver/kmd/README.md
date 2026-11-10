@@ -132,8 +132,9 @@ no code from Microsoft's MS-PL sample.
   name them; both keep a copy of the `BC250_STAGE` table that a test checks against this driver's header.
 - **Why a start failed** (BD-122, 0.7.216.30). `LastStage` 91 says that a step of `DxgkDdiStartDevice` failed. It
   does not say which step. A device with Code 43 (`CM_PROB_FAILED_POST_START`) answers no escape, so the log ring
-  that holds the reason is unreadable exactly when it is wanted. The subkey `Parameters\StartRecord` therefore
-  keeps the reason, behind no gate at all. Its values are `Result` (`attempt`, `started`, `failed` or `guard`),
+  that holds the reason is unreadable exactly when it is wanted. The subkey `StartRecord` of the driver state
+  store therefore keeps the reason, behind no gate at all. It is `StateV2\Generations\<Active>\Data\StartRecord`
+  in the shared persistent state of the service. KMDs before 0.7.216.102-tester.31 wrote `Parameters\StartRecord`. Its values are `Result` (`attempt`, `started`, `failed` or `guard`),
   `Step` (the step of `Bc250StartDevice` by name), `SubStep` (the phase inside `WddmStart` and
   `GpuStartupInitialize`), `Status` (the NTSTATUS), `Stage`, `UnconfirmedStarts`, `Version`, `TimeUtc` and `Log`.
   `Log` is a `REG_MULTI_SZ` of 64 ring lines, oldest first. They are the lines that ran up to the failure, not the

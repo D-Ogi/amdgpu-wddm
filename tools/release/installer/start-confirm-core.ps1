@@ -138,7 +138,7 @@ function Get-StartConfirmStep {
  return [ordered]@{action='wait'; reason="waiting: flags $($Reading.flags) completed $($Reading.completed) age_ms $($Reading.age_ms) ready_ms $($Reading.ready_ms)"}
 }
 
-# ---- BD-122: why the KMD's last start failed (Parameters\StartRecord) --------------------------------------------
+# ---- BD-122: why the KMD's last start failed (the state store's StartRecord) ------------------------------------
 # The KMD writes the reason of every start that did not reach a started device into the registry, with no gate
 # (guard.c, the section above GuardRecordStartAttempt). These are the pure functions that turn that record into
 # plain words; the callers that read the registry are start-confirm.ps1 and the installer's verify step.
@@ -148,14 +148,14 @@ function Get-StartConfirmStep {
 #   started          the newest attempt reached a started device; the reason values mean nothing
 #   attempt          the newest attempt neither failed nor finished: the machine stopped inside the start, or the
 #                    write of the record itself was torn. Such a record names NO step: the driver writes it at the
-#                    top of a start, before any step runs. How far that start got is in Parameters\LastStage and
-#                    Parameters\StageHistory, and these words say so instead of inventing a step.
+#                    top of a start, before any step runs. How far that start got is in LastStage and StageHistory
+#                    of the same Data key, and these words say so instead of inventing a step.
 # The driver writes "attempt" and flushes it before any step of a start can fail, so a failure of an earlier boot
 # can never be read as the current one. One case is outside that rule and cannot be inside it: a start refused
 # above the attempt record (a device object the driver does not own) leaves the previous start's record standing.
 # Therefore every reading also compares TimeUtc with this boot's own start time and says when the record is older
 # than this boot. An absent record means a KMD older than 0.7.216.30.
-$script:StartRecordKey = 'StartRecord'      # the subkey of the service's Parameters key
+$script:StartRecordKey = 'StartRecord'      # the record path in the state store: StateV2\Generations\<Active>\Data\StartRecord
 # The stop record (KMD 0.7.216.39 and later, guard.c GuardRecordStopBegin and GuardRecordStopDone). The KMD writes
 # it when dxgkrnl stops a device whose start THIS generation never confirmed, and writes nothing at all for a normal
 # stop of a confirmed generation. It also writes nothing when the driver itself calls its own stop to unwind a start
@@ -378,8 +378,9 @@ function Get-StartRecordLogLines {
     return $lines
 }
 
-# The record's values from an OPEN registry key (the service's Parameters\StartRecord). The caller owns the key,
-# so the real key of a tester PC and the scratch key of the host test go through the same reader. A REG_DWORD with
+# The record's values from an OPEN record view (Open-DriverStateRecordView of the state store's StartRecord, or any
+# object with GetValue). The caller owns the view, so the real record of a tester PC and the fixtures of the host
+# test go through the same reader. A REG_DWORD with
 # the high bit set (every NTSTATUS failure has it) comes back as a negative Int32, which is why the mask is here
 # and not a plain cast. No Result value means no record: a KMD before 0.7.216.30, or a key we cannot read.
 # -AllowNoResult keeps a record whose Result value is missing, for the stop record of a driver that writes the

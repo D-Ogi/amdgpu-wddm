@@ -1478,22 +1478,25 @@ NTSTATUS GuardRecordWaveSnapshot(const BC250_WAVE_HEADER* Header)
 // LastStage 91" at every logon. Stage 91 is StageStartFailed, which Bc250StartDevice reaches from any of its
 // `goto failed` steps, and the NTSTATUS went to the log ring alone ("start failed 0x%08X"). A device with Code 43
 // answers no escape, so nothing could read that ring: the tester could not name the step and neither could we.
-// GuardLogKeep would have kept it in a file, but it is gated on Parameters\KeepLog (0 in every release) and is
+// GuardLogKeep would have kept it in a file, but it is gated on the KeepLog setting (0 in every release) and is
 // not called on that path anyway.
 //
 // So every start attempt that does not end with a started device now leaves its reason in the registry, with no
-// gate at all. A subkey of Parameters, for the reason GuardRecordHangRecovery gives above: the kmd-deploy kit
-// compares the VALUE NAMES of Parameters against its capture and recover-after-boot.ps1 writes captured values
-// back, and neither walks subkeys, so this record is neither a postflight difference nor overwritten by a
-// recovery.
+// gate at all. The record is a subkey of the Data key of the active state generation, the key that OpenParameters
+// opens (DriverStateOpenData, state_kernel.c). That key is in the shared persistent state of the service
+// (DriverRegKeySharedPersistentState), under StateV2: the Active value names the generation, and the record is
+// Generations\<Active>\Data\StartRecord. It is not in <service key>\Parameters\StartRecord, and the code has no
+// fallback to that key. Before DriverStateActivate makes the store ready, or when the Data key does not open, no
+// record is written, and one GuardLog line says so. Readers use the state reader of the installation
+// (Open-DriverStateRecordView, tools/release/installer/state-reader.ps1), not a registry path.
 //
-//   <service key>\Parameters\StartRecord
+//   StateV2\Generations\<Active>\Data\StartRecord
 //     Result             REG_SZ     attempt | started | failed | guard   (the only value a reader may trust)
 //     Step               REG_SZ     the step of Bc250StartDevice, "-" when none was named
 //     SubStep            REG_SZ     the step inside WddmStart / GpuStartupInitialize, "-" when none
 //     Status             REG_DWORD  the NTSTATUS of the failure (0 for attempt and started)
 //     Stage              REG_DWORD  BC250_STAGE at the record: 91 for a failure, 90 for the guard's refusal
-//     UnconfirmedStarts  REG_DWORD  the boot-loop count read from Parameters at the record
+//     UnconfirmedStarts  REG_DWORD  the boot-loop count read from the same Data key at the record
 //     Version            REG_DWORD  BC250_KMD_VERSION, so a reader knows which driver wrote this
 //     TimeUtc            REG_SZ     UTC, yyyy-mm-ddThh:mm:ss.fffZ
 //     Detail             REG_SZ     measured values of the refusing step (GuardStartDetail), failures only
@@ -1510,7 +1513,7 @@ NTSTATUS GuardRecordWaveSnapshot(const BC250_WAVE_HEADER* Header)
 //   * Result "attempt" means the newest attempt neither failed nor finished - the machine stopped inside the
 //     start (a bugcheck, a hang, AC loss), which is itself the answer. Such a record names NO step: it is written
 //     once, at the top of the start, before any step runs, so Step is "-" and Stage is StageStartEnter. How far
-//     that start got is in Parameters\LastStage and Parameters\StageHistory, which every stage flushes; the
+//     that start got is in LastStage and StageHistory of the same Data key, which every stage flushes; the
 //     consumers point a reader there. "attempt" also stands where a write of the record itself was torn (below).
 // A stale failure can never be read as the current one, because the current attempt overwrote Result before it
 // could fail, every value of the record is written again beside it, and a value that cannot be written is deleted

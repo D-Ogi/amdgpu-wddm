@@ -1,4 +1,4 @@
-# BD-122: the start record (guard.c Parameters\StartRecord) and the start path that writes it, on the host.
+# BD-122: the start record (guard.c, StartRecord in the state store) and the start path that writes it, on the host.
 #
 #   pwsh -NoProfile -File driver\kmd\test\run_start_record.ps1 [-Root P:\BC-250] [-Out <dir>] [-Repo <tree>]
 #
