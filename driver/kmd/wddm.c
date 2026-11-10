@@ -776,6 +776,11 @@ typedef struct _BC250_WDDM {
     volatile LONG UmdAllocsGpuOnly;
     volatile LONG64 UmdGpuOnlyBytes;
     volatile LONG64 UmdCpuVisibleBytes;
+    // BD-210 G1: CpuVisibleOnDemand for the UMD allocations (GuardCpuVisibleOnDemand, latched at WddmStart), and the
+    // CPU-visible allocations created with it, a part of the cpu-visible count above.
+    BOOLEAN CpuVisibleOnDemand;
+    volatile LONG UmdAllocsOnDemand;
+    volatile LONG64 UmdOnDemandBytes;
     // BD-210: cumulative type-0 create-step counters, separate from BC2A and standard GDI types.
     volatile LONG Lb7aAllocs, Lb7aAllocsGpuOnly, Lb7aNoCpuAccess;
     volatile LONG64 Lb7aGpuOnlyBytes, Lb7aCpuVisibleBytes;
@@ -3630,6 +3635,9 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: umd cpu view: gpu-only %ld (%lld MiB), cpu-visible %ld (%lld MiB)",
              Wddm->UmdAllocsGpuOnly, (long long)(Wddm->UmdGpuOnlyBytes >> 20),
              Wddm->UmdAllocs - Wddm->UmdAllocsGpuOnly, (long long)(Wddm->UmdCpuVisibleBytes >> 20));
+    // BD-210 G1, a line of its own for the same reason: the part of cpu-visible that VidMm maps at the first Lock2.
+    GuardLog("wddm summary: umd cpu view on demand (%s): %ld (%lld MiB)", Wddm->CpuVisibleOnDemand ? "on" : "off",
+             Wddm->UmdAllocsOnDemand, (long long)(Wddm->UmdOnDemandBytes >> 20));
     GuardLog("wddm summary: lb7a cpu view: gpu-only %ld (%lld MiB), cpu-visible %ld (%lld MiB), private %ld",
              Wddm->Lb7aAllocsGpuOnly, (long long)(Wddm->Lb7aGpuOnlyBytes >> 20),
              Wddm->Lb7aAllocs-Wddm->Lb7aAllocsGpuOnly, (long long)(Wddm->Lb7aCpuVisibleBytes >> 20),
@@ -4590,6 +4598,10 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     wddm->SharedResidency = (GuardReadSetting(L"EnableSharedResidency", 1) != 0);
     GuardLog("wddm: shared residency %s", wddm->SharedResidency ?
              "on (UMD VRAM allocations may be demoted to the aperture)" : "off (0.7.216.1 placement)");
+    // BD-210 G1: on in the release flavour; the lab flavour turns it off with LabCpuVisibleOnDemand 0 (guard.c).
+    wddm->CpuVisibleOnDemand = GuardCpuVisibleOnDemand();
+    GuardLog("wddm: umd cpu view on demand %s", wddm->CpuVisibleOnDemand ?
+             "on (VidMm maps a cpu-visible v2 allocation at its first Lock2)" : "off (cpu view at the create)");
     wddm->NotifyDpcInReport = (GuardReadSetting(L"NotifyDpcInReport", 1) != 0);
     GuardLog("wddm: completion report pairs its own notify dpc: %s",
              wddm->NotifyDpcInReport ? "yes" : "no (0.7.208.1 behaviour, one dxgkrnl DPC later)");
@@ -6591,6 +6603,10 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         // this, VidMm gave every DXVK device-local chunk a write-combined view in the creating process,
         // and a 32-bit game ran out of address space on views nothing ever mapped.
         info->FlagsWddm2.CpuVisible = (UINT)UmdBlobAllocCpuVisible(&view);
+        // BD-210 G1: a CPU-visible v2 allocation that is not a scan-out gets its CPU view at the first Lock2, not
+        // here (umd_blob.c). CpuVisible stays set, so the map works as before. The flag is ours to set, both ways.
+        info->FlagsWddm2.CpuVisibleOnDemand =
+            (UINT)((wddm == NULL || wddm->CpuVisibleOnDemand) && UmdBlobAllocCpuVisibleOnDemand(&view));
         // RADV's CPU_GTT_USWC requests write-combined storage; without it,
         // CPU-accessible GTT requires cached backing store. VidMm supplies
         // CacheCoherent PTEs, which the encoder maps to AMDGPU_PTE_SNOOPED.
@@ -6599,8 +6615,13 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         if (wddm != NULL && !info->FlagsWddm2.CpuVisible) {
             InterlockedIncrement(&wddm->UmdAllocsGpuOnly);
             InterlockedAdd64(&wddm->UmdGpuOnlyBytes, (LONG64)info->Size);
-        } else if (wddm != NULL)
+        } else if (wddm != NULL) {
             InterlockedAdd64(&wddm->UmdCpuVisibleBytes, (LONG64)info->Size);
+            if (info->FlagsWddm2.CpuVisibleOnDemand) {
+                InterlockedIncrement(&wddm->UmdAllocsOnDemand);
+                InterlockedAdd64(&wddm->UmdOnDemandBytes, (LONG64)info->Size);
+            }
+        }
         if (wddm != NULL && InterlockedIncrement(&wddm->UmdAllocs) <= BC250_WDDM_LOG_CALLS)
             GuardLog("wddm: umd alloc %llu heap 0x%lX align %u va 0x%llX gem 0x%llX cached %u cpu %u", view.bytes,
                      view.heap, align, view.requested_va, view.gem_flags, info->FlagsWddm2.Cached,

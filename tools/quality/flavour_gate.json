@@ -3985,6 +3985,16 @@
      "bc250kmd.sys"
     ]
    }
+  },
+  {
+   "name": "LABCPUVISIBLEONDEMAND",
+   "where": "bc250-win driver/kmd/guard.c GuardLabReadCpuVisibleOnDemand (lab flavour only), a REG_DWORD value under the driver's Parameters key; the KMD holds the CamelCase name as a UTF-16LE string",
+   "does": "BD-210 G1 A/B arm: 0 gives the UMD allocations no CpuVisibleOnDemand, so VidMm makes their CPU view at the create; the release flavour always sets the flag (driver/kmd/test/check_cpu_view_on_demand.py)",
+   "lab": {
+    "every": [
+     "bc250kmd.sys"
+    ]
+   }
   }
  ],
  "allowed": [

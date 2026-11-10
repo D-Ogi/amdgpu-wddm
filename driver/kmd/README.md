@@ -486,6 +486,28 @@ lab: scaled plane selector read (read only; value 0x1, 0x00000000)
 wddm: scaled plane 0x1 (LabScaledPlane 0x1, handshake 1)
 ```
 
+## CPU view on demand (BD-210)
+
+VidMm gives every CpuVisible allocation a CPU view in the process that creates it, also when nothing maps the
+allocation. A 32-bit process runs out of address space on such views. A UMD allocation from a version 2 blob that is
+CpuVisible and asks for no scan-out therefore also gets `DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand`
+(`UmdBlobAllocCpuVisibleOnDemand`, umd_blob.c). VidMm then makes the view at the first Lock2. `CpuVisible` stays
+set, so a Lock2 works as before. A version 1 blob and a scan-out request keep the view at the create. The KMD maps
+allocations only by physical address, so no kernel path needs the VidMm view.
+
+The release flavour always sets the flag. In the lab flavour, `LabCpuVisibleOnDemand` (a REG_DWORD under the
+service's `Parameters` key, read once at `DriverEntry`, not a catalog setting) = 0 turns it off, for an A/B run on one
+KMD. Absent or any other value keeps it on. The start log and the summary say:
+
+```
+wddm: umd cpu view on demand on (VidMm maps a cpu-visible v2 allocation at its first Lock2)
+wddm summary: umd cpu view on demand (on): <allocations> (<MiB> MiB)
+```
+
+The summary count is a part of the `cpu-visible` count of the line `wddm summary: umd cpu view`.
+`driver/kmd/test/check_cpu_view_on_demand.py` (quick gate `cpu-view-on-demand`) checks the KMD side and its
+negative controls.
+
 After each DRIVERCAPS line comes `wddm: DRIVERCAPS mpo <SupportMultiPlaneOverlay> planes <MaxOverlayPlanes>`.
 The log ring keeps the first 256 lines of a start, and the first DRIVERCAPS line comes after them, so a busy start
 can lose it (BD-324). The KMD keeps the first reply of the start, and `bc250kmd_cli log summary` prints it:

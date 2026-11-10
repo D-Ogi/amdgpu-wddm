@@ -162,17 +162,22 @@ int main(void)
             // BD-210: no CPU view only where the creator said NO_CPU_ACCESS; Cached never without one.
             CHECK(UmdBlobAllocCpuVisible(&av)==!(flags&AMDGPU_GEM_CREATE_NO_CPU_ACCESS));
             CHECK(!cached || UmdBlobAllocCpuVisible(&av));
+            // BD-210 G1: a v2 CPU-visible allocation gets its view on demand, a GPU-only one has no view to defer.
+            CHECK(UmdBlobAllocCpuVisibleOnDemand(&av)==UmdBlobAllocCpuVisible(&av));
+            CHECK(!UmdBlobAllocCpuVisibleOnDemand(&av) || UmdBlobAllocCpuVisible(&av));
             alloc.version=BC250_UMD_ALLOC_VERSION;
             memcpy(wire+offset,&alloc,sizeof(alloc));
             CHECK(UmdBlobParseAlloc(wire+offset,sizeof(alloc),&av)==UMD_BLOB_OK);
             CHECK(!av.cache_policy_valid && !UmdBlobAllocCpuCached(&av));
-            // A version 1 GEM word is not intent: the view stays.
+            // A version 1 GEM word is not intent: the view stays, and it is made at the create, as before.
             CHECK(UmdBlobAllocCpuVisible(&av));
+            CHECK(!UmdBlobAllocCpuVisibleOnDemand(&av));
         }
         CHECK(UmdBlobParseAlloc(wire,sizeof(alloc)-1,&av)==UMD_BLOB_TOO_SMALL);
         CHECK(!av.gem_flags && !av.cache_policy_valid && !UmdBlobAllocCpuCached(&av));
         CHECK(!UmdBlobAllocCpuCached(NULL));
         CHECK(UmdBlobAllocCpuVisible(NULL));
+        CHECK(!UmdBlobAllocCpuVisibleOnDemand(NULL));
         printf("cache policy:4096 heap/flag/alignment cases passed if final verdict passes\n");
     }
 
@@ -496,11 +501,19 @@ int main(void)
         alloc.gem_flags = AMDGPU_GEM_CREATE_NO_CPU_ACCESS;
         CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 1);
         CHECK(UmdBlobAllocCpuVisible(&av) && !UmdBlobAllocCpuCached(&av));
+        // BD-210 G1: a scan-out request keeps the create-time view, with or without NO_CPU_ACCESS.
+        CHECK(!UmdBlobAllocCpuVisibleOnDemand(&av));
+        alloc.gem_flags = 0;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 1);
+        CHECK(UmdBlobAllocCpuVisible(&av) && !UmdBlobAllocCpuVisibleOnDemand(&av));
+        alloc.gem_flags = AMDGPU_GEM_CREATE_NO_CPU_ACCESS;
         alloc.flags = 0;
         CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 0);
-        CHECK(!UmdBlobAllocCpuVisible(&av));
+        CHECK(!UmdBlobAllocCpuVisible(&av) && !UmdBlobAllocCpuVisibleOnDemand(&av));
         alloc.gem_flags = 0;
         CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 0);
+        // The same v3 blob without the scan-out request: CPU-visible, its view on demand.
+        CHECK(UmdBlobAllocCpuVisible(&av) && UmdBlobAllocCpuVisibleOnDemand(&av));
         CHECK(UmdBlobPlacement(&av, 1, 2, 1, &pl) == 1 && pl.supported == 0x3 && pl.preferred[1] == 2);
         // No view: the local segment only. Ids this driver does not have: nothing at all.
         CHECK(UmdBlobPlacement(NULL, 1, 2, 1, &pl) == 0 && pl.preferred[0] == 1 && pl.supported == 0x1);

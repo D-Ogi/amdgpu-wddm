@@ -644,6 +644,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
  # radv-contract above went down. So they are separate now: the contract half always runs, and the producer half
  # runs wherever the tree is (BC250_RADV_SOURCE names another one) and records why it did not when it is absent.
  Check 'blob-abi' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_blob.ps1" -Out "$Out\blob-abi" -Kits "$Kits" }
+ # BD-210 G1: the KMD half of CpuVisibleOnDemand (the rule itself is in blob-abi), with its negative controls.
+ Check 'cpu-view-on-demand' { & python "$repo\driver\kmd\test\check_cpu_view_on_demand.py" --repo "$repo" --negative-control }
  CheckIf 'blob-abi-producer' "$icd\src\amd\vulkan\winsys\wddm2\radv_wddm2_bc250.h" `
    { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_blob.ps1" -Out "$Out\blob-abi-producer" -Kits "$Kits" -ProducerRoot $icd }
  CheckUmd 'surface-control' @("$umdSource\src\gallium\auxiliary\util\u_inlines.h") { & python "$PSScriptRoot\check_surface.py" --mesa "$umdSource" --out "$Out\surface-control" }

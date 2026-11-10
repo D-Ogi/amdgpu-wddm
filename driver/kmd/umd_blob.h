@@ -133,6 +133,11 @@ int UmdBlobAllocCpuCached(const struct umd_alloc_view* allocation);
 // Everything else stays CPU-visible, as before. UmdBlobAllocCpuCached is never 1 where this is 0.
 int UmdBlobAllocCpuVisible(const struct umd_alloc_view* allocation);
 
+// BD-210 G1: DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand, on top of CpuVisible. 1 only for a blob of
+// version 2 or later that is CpuVisible (UmdBlobAllocCpuVisible) and asks for no scan-out. VidMm then makes the CPU
+// view at the first Lock2, not at the create. A scan-out request and a version 1 blob keep the create-time view.
+int UmdBlobAllocCpuVisibleOnDemand(const struct umd_alloc_view* allocation);
+
 // On any refusal *out is zeroed when out is not NULL. bytes may be NULL.
 int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* out);
 

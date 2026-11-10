@@ -1242,6 +1242,11 @@
         "host"
       ]
     },
+    "cpu-view-on-demand": {
+      "inputs": [
+        "host"
+      ]
+    },
     "wddm-level-no-clamp": {
       "inputs": [
         "host"
