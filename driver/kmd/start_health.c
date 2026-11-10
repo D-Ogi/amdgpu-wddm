@@ -491,9 +491,13 @@ void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, B
             GuardLog("health: start confirmed, CU mode and DPM left pending: this start needed a GPU reset");
         else if (NT_SUCCESS(status) && !display)
             GuardLog("health: start confirmed without output, CU mode and DPM left pending: no display interval");
+        // The log line of the curve, if one runs, is DpmConfirmKnownCurve's own.
         if (NT_SUCCESS(status) && !recovered && display) (void)CuModeConfirm(Device,"start-health");
         // The same for a DPM start (dpm.c).
         if (NT_SUCCESS(status) && !recovered && display) (void)DpmConfirm(Device,"start-health");
+        // BD-343: without output only a stored curve that a display start already confirmed keeps running; the
+        // minute is the same witness for it as a display minute (dpm_curve_mark.h). Nothing new is confirmed.
+        if (NT_SUCCESS(status) && !recovered && !display) (void)DpmConfirmKnownCurve(Device,"start-health");
     }
     if (confirm) StartHealthLeave(Device);
     ExReleaseRundownProtection(&h->Readers);

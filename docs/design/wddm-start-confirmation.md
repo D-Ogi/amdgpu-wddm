@@ -146,6 +146,21 @@ durably. Nothing is applied in part, and the start-confirm task does not lose
 the start itself. To keep such a change, make it on a start with a display,
 for example with a dummy plug.
 
+The stored V/F curve. A curve that the tuner kept runs only behind a pending
+mark, which each start that applies the curve writes again. A start that finds
+a mark drops the curve. A confirmation by the display milestone clears the
+mark (`DpmConfirm`). A confirmation by the rule for no output clears it only
+when a start with a display already confirmed the same curve, so
+DpmCurveConfirmed holds its checksum (`DpmConfirmKnownCurve`,
+`dpm_curve_mark.h`). The minute without output is the same witness for such a
+curve as a display minute, and neither proves an hour of load. A curve that no
+start with a display confirmed stays pending, and the next start drops it. A
+start without output that nobody confirms also keeps the mark. The KMD log
+names the rule ("kept by start-health, no-output rule" or "left pending").
+Host test: `driver/kmd/test/dpm_curve_mark_test.c` with the negative control
+-ClearAnyPending. Already confirmed CU mode and DPM requests need no new
+confirmation, and they stay over starts without output (the shim tests
+`test_confirmed_survives_headless_starts`).
 A reading with VISIBLE and NO_OUTPUT together. The KMD never publishes both.
 The task refuses such a reading, and start-confirm.log names the two flags. The
 installer has no rule for it. The KMD rule for no output requires that VISIBLE

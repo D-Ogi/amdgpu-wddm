@@ -73,6 +73,9 @@ static NTSTATUS CuModeConfirm(BC250_DEVICE*d,const char*why){(void)d;(void)why;C
 // dpm.c: the same for a pending DPM start, right after the CU mode, under the same conditions.
 static unsigned dpmConfirms;
 static NTSTATUS DpmConfirm(BC250_DEVICE*d,const char*why){(void)d;(void)why;CHECK(spins==0 && mutexes==1);dpmConfirms++;return STATUS_SUCCESS;}
+// BD-343: the curve half of a confirmation without output (dpm.c); its rule is dpm_curve_mark_test.c's.
+static unsigned knownCurveConfirms;
+static NTSTATUS DpmConfirmKnownCurve(BC250_DEVICE*d,const char*why){(void)d;(void)why;CHECK(spins==0 && mutexes==1);knownCurveConfirms++;return STATUS_SUCCESS;}
 // guard.c (BD-090): a durable confirmation marks the boot confirmed in a volatile key, after its flush and under
 // Lifecycle, with no spin lock held. Also when a fault during the flush makes the request STATUS_RETRY: the
 // interval before it was durably confirmed (start_health.c), so it can outnumber the CU confirmations.
@@ -119,7 +122,7 @@ int main(void)
     // Every flag word this gate is asked about: the two it admits, their union, the bits of the other escapes
     // and nothing at all.
     static const ULONG words[]={0,1,2,3,4,8,9,10,12,16,24};
-    BC250_DEVICE d={0};BC250_ESCAPE_START_HEALTH r;ULONGLONG generation,epoch,count,witness;unsigned old,i,cu0,dpm0;
+    BC250_DEVICE d={0};BC250_ESCAPE_START_HEALTH r;ULONGLONG generation,epoch,count,witness;unsigned old,i,cu0,dpm0,known0;
     live=&d;StartHealthInitialize(&d);CHECK(sizeof(r)==96);
     r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_READY));
     healthy(&d);r=query(&d,0);CHECK(r.Flags==7 && r.Completed==12 && r.ReadyAgeMs==60000 && r.LastCompletionAgeMs==0);
@@ -403,9 +406,11 @@ int main(void)
     // no workload proves nothing about a requested clock/voltage or CU count. CONFIRM certifies the start for the
     // guard and leaves both requests pending, so the next start falls back as after any unconfirmed start.
     advance(1);CHECK(!StartHealthIsReady(&d,&generation));
-    cu0=cuConfirms;dpm0=dpmConfirms;r=query(&d,1);
+    cu0=cuConfirms;dpm0=dpmConfirms;known0=knownCurveConfirms;r=query(&d,1);
     CHECK(r.Status==0 && r.Flags==(3|BC250_START_HEALTH_NO_OUTPUT|BC250_START_HEALTH_CONFIRMED) &&
           r.ReadyAgeMs==BC250_START_HEALTH_MIN_MS && writes==old+1 && cuConfirms==cu0 && dpmConfirms==dpm0);
+    // Only the curve half for an already-confirmed curve runs (DpmConfirmKnownCurve), once.
+    CHECK(knownCurveConfirms==known0+1);
     advance(60000);CHECK(!StartHealthIsReady(&d,&generation) && cuConfirms==cu0 && dpmConfirms==dpm0);
     // A stop takes the output state with the witness, and so does a resume (power.c sets it again from the child).
     StartHealthStop(&d,&r);CHECK((r.Flags&BC250_START_HEALTH_NO_OUTPUT) && !d.StartHealth.NoOutput);
@@ -430,6 +435,8 @@ int main(void)
     advance(30000);StartHealthFaultPendingReset(&d);
     CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_REOPENED);
     advance(59999);old=writes;r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==old);
+    // A start that needed a GPU reset confirms for the guard after a new minute, but not even a known curve.
+    known0=knownCurveConfirms;advance(1);r=query(&d,1);CHECK(r.Status==0 && writes==old+1 && knownCurveConfirms==known0);
     // A start whose engines did not come up (the ring tests failed) is never confirmed, with or without output.
     StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);StartHealthReady(&d,FALSE);
     advance(70000);old=writes;r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_READY) && !r.ReadyAgeMs);
@@ -453,7 +460,7 @@ int main(void)
     StartHealthEnter(&d);StartHealthDisplayLocked(&d,TRUE,TRUE);StartHealthLeave(&d);
     r=query(&d,0);CHECK(r.Flags==7);
     for(i=1;i<=12;i++){advance(5000);StartHealthCompleted(&d,2*i);}
-    r=query(&d,1);CHECK(r.Status==0 && r.Flags==15 && writes==old+1);
+    known0=knownCurveConfirms;r=query(&d,1);CHECK(r.Status==0 && r.Flags==15 && writes==old+1 && knownCurveConfirms==known0);
     // A visible mode wins over the output state: never NO_OUTPUT and VISIBLE together, and no flip-free rule while a
     // mode is visible.
     StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);StartHealthReady(&d,TRUE);

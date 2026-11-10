@@ -96,6 +96,7 @@
 #include "bc250kmd_escape.h"
 #include "state_kernel.h"
 #include "log_rate.h"               // BD-127: the compute set's transition line, which a client could make hot
+#include "dpm_curve_mark.h"         // BD-343: the curve's pending mark over starts with and without output
 #include "regs.generated.h"
 #include "gc_10_1_0_sh_mask.h"      // GRBM_STATUS and SDMA0_STATUS_REG field masks; the offsets come from regcalc
 
@@ -1524,7 +1525,7 @@ static void DpmConfigureCurve(BC250_DPM_STATE* S, BOOLEAN Dpm)
     (void)QueryPresent(DPM_SETTING_CURVE_CONFIRMED, &confirmed);
     DpmReadCurve(S, &curve, &any, &refused);
     if (!DriverStateGroupEnabled(AMDGPU_STATE_GROUP_DPM)) return;
-    if (any && pendingPresent) {
+    if (Bc250DpmCurveDropAtStart(any, pendingPresent)) {
         GuardLog("dpm: the stored curve (mark 0x%04X) ran a start that never became healthy: the curve is "
                  "deleted and the table's own line runs", pending);
         any = FALSE;
@@ -2012,7 +2013,7 @@ NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why)
     }
     // The stored curve of this start, the same two steps in the same order (0.7.210). Its own failure costs the
     // curve at the next start and never this confirmation, so the result is logged and not returned.
-    if (s->CurvePending) {
+    if (Bc250DpmCurveClearOnConfirm(s->CurvePending, 1, 0, 0u, 0u)) {
         struct bc250_clock_curve stored;
         unsigned int sum;
         KIRQL irql;
@@ -2028,6 +2029,43 @@ NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why)
             if (NT_SUCCESS(curveStatus)) s->CurveConfirmed = TRUE;
         }
         GuardLog("dpm: the stored curve (mark 0x%04X) confirmed by %s: 0x%08X", sum, Why, curveStatus);
+    }
+    DpmUnlock(s);
+    return status;
+}
+
+// BD-343. The curve half of a confirmation by the rule without output (start_health.c, CONFIRM of a start with no
+// display). It clears the pending mark of the curve this start applied only when a start with a display confirmed
+// the same curve earlier (DpmCurveConfirmed equals its checksum, dpm_curve_mark.h). Nothing else of DpmConfirm: the
+// DPM request itself stays pending when it is new. A curve that no display start confirmed keeps its mark, and the
+// next start drops it. PASSIVE_LEVEL. Nothing to do is success.
+NTSTATUS DpmConfirmKnownCurve(BC250_DEVICE* Device, _In_z_ const char* Why)
+{
+    BC250_DPM_STATE* s = &Device->Dpm;
+    NTSTATUS status = STATUS_SUCCESS;
+    DpmLock(s);
+    if (s->CurvePending) {
+        struct bc250_clock_curve stored;
+        unsigned int sum, confirmed = 0;
+        BOOLEAN present;
+        KIRQL irql;
+        KeAcquireSpinLock(&s->SnapLock, &irql);
+        stored = s->Curve.stored;
+        KeReleaseSpinLock(&s->SnapLock, irql);
+        sum = bc250_clock_curve_checksum(&stored);
+        present = QueryPresent(DPM_SETTING_CURVE_CONFIRMED, &confirmed);
+        if (Bc250DpmCurveClearOnConfirm(1, 0, present, confirmed, sum)) {
+            status = GuardDeleteSetting(DPM_SETTING_CURVE_PENDING);
+            if (NT_SUCCESS(status)) {
+                s->CurvePending = FALSE;
+                s->CurveConfirmed = TRUE;
+            }
+            GuardLog("dpm: curve mark 0x%04X kept by %s, no-output rule: a display start confirmed it: 0x%08X", sum, Why,
+                     status);
+        } else {
+            GuardLog("dpm: curve mark 0x%04X left pending by %s, no-output rule: no display start confirmed it (0x%04X)",
+                     sum, Why, present ? confirmed : 0u);
+        }
     }
     DpmUnlock(s);
     return status;
