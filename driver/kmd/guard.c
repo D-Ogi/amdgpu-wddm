@@ -648,8 +648,9 @@ ULONGLONG GuardLabCommitPagingRingStart(void)
 }
 
 // BD-210 G1, lab flavour only, not a catalog setting for the reason of LabScaledPlane above. LabCpuVisibleOnDemand
-// (REG_DWORD, Parameters, read only at DriverEntry): 0 gives the UMD allocations no CpuVisibleOnDemand, which is the
-// create-time CPU view of the drivers before it, for an A/B of the address space of one process on one KMD. Absent,
+// (REG_DWORD, Parameters, read only at DriverEntry): 0 gives the UMD and the type-0 LB7A allocations (BD-352) no
+// CpuVisibleOnDemand, which is the create-time CPU view of the drivers before it, for an A/B of the address space of
+// one process on one KMD. Absent,
 // not a REG_DWORD or any other value keeps the flag, as the release flavour does.
 static BOOLEAN g_LabCpuVisibleOnDemand = TRUE;
 

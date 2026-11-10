@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "../umd_blob.h"
+#include "../cpu_view_policy.h"
 #include "../../contract/bc250_umd_submit.h"
 #include "../../amdgpu-import/nvd.h"
 
@@ -148,6 +149,7 @@ int main(void)
     // intent, not unrelated allocation flags or truncated upper GEM bits.
     {
         unsigned heap,flags,offset;
+        struct umd_placement pl;
         unsigned char wire[sizeof(alloc)+8];
         for(heap=0;heap<2;heap++)for(flags=0;flags<256;flags++)for(offset=0;offset<8;offset++) {
             int cached;
@@ -164,21 +166,26 @@ int main(void)
             CHECK(!cached || UmdBlobAllocCpuVisible(&av));
             // BD-210 G1: a v2 CPU-visible GTT allocation gets its view on demand, a GPU-only one has no view to
             // defer, and a VRAM one keeps the create-time view (VidMm refuses the flag with the local segment).
-            CHECK(UmdBlobAllocCpuVisibleOnDemand(&av)==(!heap && UmdBlobAllocCpuVisible(&av)));
-            CHECK(!UmdBlobAllocCpuVisibleOnDemand(&av) || UmdBlobAllocCpuVisible(&av));
+            // The supported set is the one UmdBlobPlacement gives this blob (GTT: the aperture alone).
+            CHECK(UmdBlobPlacement(&av,1,2,1,&pl)==(int)heap);
+            CHECK(UmdBlobAllocCpuVisibleOnDemand(&av,pl.supported,0x2ul)==(!heap && UmdBlobAllocCpuVisible(&av)));
+            CHECK(!UmdBlobAllocCpuVisibleOnDemand(&av,pl.supported,0x2ul) || UmdBlobAllocCpuVisible(&av));
+            CHECK(UmdBlobCpuViewClass(&av)==(UmdBlobAllocCpuVisible(&av)?BC250_CPU_VIEW_UMD_MAPPABLE:BC250_CPU_VIEW_GPU_ONLY));
+            // No aperture offered: never on demand.
+            CHECK(!UmdBlobAllocCpuVisibleOnDemand(&av,pl.supported,0ul));
             alloc.version=BC250_UMD_ALLOC_VERSION;
             memcpy(wire+offset,&alloc,sizeof(alloc));
             CHECK(UmdBlobParseAlloc(wire+offset,sizeof(alloc),&av)==UMD_BLOB_OK);
             CHECK(!av.cache_policy_valid && !UmdBlobAllocCpuCached(&av));
             // A version 1 GEM word is not intent: the view stays, and it is made at the create, as before.
             CHECK(UmdBlobAllocCpuVisible(&av));
-            CHECK(!UmdBlobAllocCpuVisibleOnDemand(&av));
+            CHECK(UmdBlobCpuViewClass(&av)==BC250_CPU_VIEW_LEGACY && !UmdBlobAllocCpuVisibleOnDemand(&av,0x2ul,0x2ul));
         }
         CHECK(UmdBlobParseAlloc(wire,sizeof(alloc)-1,&av)==UMD_BLOB_TOO_SMALL);
         CHECK(!av.gem_flags && !av.cache_policy_valid && !UmdBlobAllocCpuCached(&av));
         CHECK(!UmdBlobAllocCpuCached(NULL));
         CHECK(UmdBlobAllocCpuVisible(NULL));
-        CHECK(!UmdBlobAllocCpuVisibleOnDemand(NULL));
+        CHECK(!UmdBlobAllocCpuVisibleOnDemand(NULL,0x2ul,0x2ul) && UmdBlobCpuViewClass(NULL)==BC250_CPU_VIEW_LEGACY);
         printf("cache policy:4096 heap/flag/alignment cases passed if final verdict passes\n");
     }
 
@@ -503,20 +510,24 @@ int main(void)
         CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 1);
         CHECK(UmdBlobAllocCpuVisible(&av) && !UmdBlobAllocCpuCached(&av));
         // BD-210 G1: a scan-out request keeps the create-time view, with or without NO_CPU_ACCESS.
-        CHECK(!UmdBlobAllocCpuVisibleOnDemand(&av));
+        CHECK(!UmdBlobAllocCpuVisibleOnDemand(&av, 0x1ul, 0x2ul) && UmdBlobCpuViewClass(&av) == BC250_CPU_VIEW_LEGACY);
         alloc.gem_flags = 0;
         CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 1);
-        CHECK(UmdBlobAllocCpuVisible(&av) && !UmdBlobAllocCpuVisibleOnDemand(&av));
+        CHECK(UmdBlobAllocCpuVisible(&av) && !UmdBlobAllocCpuVisibleOnDemand(&av, 0x1ul, 0x2ul));
+        // A scan-out request is LEGACY whatever its set: also an aperture-only set would not defer its view.
+        CHECK(!UmdBlobAllocCpuVisibleOnDemand(&av, 0x2ul, 0x2ul));
         alloc.gem_flags = AMDGPU_GEM_CREATE_NO_CPU_ACCESS;
         alloc.flags = 0;
         CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 0);
-        CHECK(!UmdBlobAllocCpuVisible(&av) && !UmdBlobAllocCpuVisibleOnDemand(&av));
+        CHECK(!UmdBlobAllocCpuVisible(&av) && !UmdBlobAllocCpuVisibleOnDemand(&av, 0x2ul, 0x2ul));
+        CHECK(UmdBlobCpuViewClass(&av) == BC250_CPU_VIEW_GPU_ONLY);
         alloc.gem_flags = 0;
         CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 0);
         // The same v3 blob without the scan-out request: CPU-visible, and a VRAM blob, so its view is still made at
         // the create, also where shared residency adds the aperture (BD-210 G1, unit A 2026-11-10).
-        CHECK(UmdBlobAllocCpuVisible(&av) && !UmdBlobAllocCpuVisibleOnDemand(&av));
         CHECK(UmdBlobPlacement(&av, 1, 2, 1, &pl) == 1 && pl.supported == 0x3 && pl.preferred[1] == 2);
+        CHECK(UmdBlobAllocCpuVisible(&av) && !UmdBlobAllocCpuVisibleOnDemand(&av, pl.supported, 0x2ul));
+        CHECK(UmdBlobCpuViewClass(&av) == BC250_CPU_VIEW_UMD_MAPPABLE);   // the set, not the class, keeps the view
         CHECK(UmdBlobPlacement(&av, 1, 2, 0, &pl) == 0 && pl.supported == 0x1);
         // No view: the local segment only. Ids this driver does not have: nothing at all.
         CHECK(UmdBlobPlacement(NULL, 1, 2, 1, &pl) == 0 && pl.preferred[0] == 1 && pl.supported == 0x1);
@@ -529,10 +540,10 @@ int main(void)
         alloc.version = BC250_UMD_ALLOC_VERSION_SCANOUT;
         alloc.gem_flags = AMDGPU_GEM_CREATE_CPU_GTT_USWC;
         CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 0);
-        CHECK(UmdBlobAllocCpuVisible(&av) && UmdBlobAllocCpuVisibleOnDemand(&av));
         CHECK(UmdBlobPlacement(&av, 1, 2, 1, &pl) == 0 && pl.supported == 0x2 && pl.preferred[0] == 2);
+        CHECK(UmdBlobAllocCpuVisible(&av) && UmdBlobAllocCpuVisibleOnDemand(&av, pl.supported, 0x2ul));
         // Every on-demand allocation lives in the aperture alone: the flag never meets the local segment.
-        CHECK(!UmdBlobAllocCpuVisibleOnDemand(&av) || (pl.supported & 0x1ul) == 0);
+        CHECK(!UmdBlobAllocCpuVisibleOnDemand(&av, 0x3ul, 0x2ul) && !UmdBlobAllocCpuVisibleOnDemand(&av, 0x1ul, 0x2ul));
         printf("placement: 16 heap/scan-out/discardable/switch cases and the parser-fed ones\n");
     }
 

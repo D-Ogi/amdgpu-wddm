@@ -487,31 +487,44 @@ lab: scaled plane selector read (read only; value 0x1, 0x00000000)
 wddm: scaled plane 0x1 (LabScaledPlane 0x1, handshake 1)
 ```
 
-## CPU view on demand (BD-210)
+## CPU view on demand (BD-210, BD-352)
 
 VidMm gives every CpuVisible allocation a CPU view in the process that creates it, also when nothing maps the
-allocation. A 32-bit process runs out of address space on such views. A UMD allocation from a version 2 blob that is
-CpuVisible, is in the GTT heap and asks for no scan-out therefore also gets
-`DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand` (`UmdBlobAllocCpuVisibleOnDemand`, umd_blob.c). VidMm then
-makes the view at the first Lock2. `CpuVisible` stays set, so a Lock2 works as before. A version 1 blob, a scan-out
-request and a VRAM-heap allocation keep the view at the create. The KMD maps allocations only by physical address, so
-no kernel path needs the VidMm view.
+allocation. A 32-bit process runs out of address space on such views. Some CpuVisible allocations therefore also get
+`DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand`. VidMm then makes the view at the first Lock2. `CpuVisible`
+stays set, so a Lock2 works as before. The KMD maps allocations only by physical address, so no kernel path needs the
+VidMm view.
 
-The GTT heap is the aperture segment alone (`UmdBlobPlacement`). VidMm refuses the create of a CpuVisibleOnDemand
-allocation whose segment set includes the local segment. On unit A (2026-11-10) a 32-bit DEVICE_LOCAL|HOST_VISIBLE
-`vkAllocateMemory` failed with `VK_ERROR_OUT_OF_DEVICE_MEMORY` and `D3D11CreateDevice` failed with `E_OUTOFMEMORY`
-while the flag was on for VRAM-heap allocations. The same KMD without the flag passed both.
+One rule decides for every allocation (`Bc250CpuViewOnDemandAllowed`, cpu_view_policy.h). Its inputs are the record
+class and the supported segment set. Only two classes get the flag:
+
+- a UMD allocation from a version 2 blob that is CpuVisible and asks for no scan-out (`UmdBlobCpuViewClass`,
+  umd_blob.c). BD-210 G1.
+- a type-0 LB7A allocation whose E26R record (version 2 or 3) asks for none of CPU_READ, PRIMARY, SCANOUT and
+  DISPLAYABLE (`Bc250CpuViewClassOfRecord`). This is a shared surface of a UMD, for example the D3D12 shell's
+  shareable envelope. BD-352.
+
+The CDD shadow and the BD-156 staging surface (CPU_READ records), the surfaces of the display path, a GPU-only record,
+a version 1 blob or record and a standard GDI surface keep the view at the create.
+
+The segment set must be the aperture segment alone: the GTT heap of a UMD blob (`UmdBlobPlacement`), or a shared
+type-0 record (`WddmGdiRecordPolicy`). VidMm refuses the create of a CpuVisibleOnDemand allocation whose segment set
+includes the local segment. On unit A (2026-11-10) a 32-bit DEVICE_LOCAL|HOST_VISIBLE `vkAllocateMemory` failed with
+`VK_ERROR_OUT_OF_DEVICE_MEMORY` and `D3D11CreateDevice` failed with `E_OUTOFMEMORY` while the flag was on for
+VRAM-heap allocations. The same KMD without the flag passed both.
 
 The release flavour always sets the flag. In the lab flavour, `LabCpuVisibleOnDemand` (a REG_DWORD under the
 service's `Parameters` key, read once at `DriverEntry`, not a catalog setting) = 0 turns it off, for an A/B run on one
 KMD. Absent or any other value keeps it on. The start log and the summary say:
 
 ```
-wddm: umd cpu view on demand on (VidMm maps a cpu-visible v2 allocation at its first Lock2)
-wddm summary: umd cpu view on demand (on): <allocations> (<MiB> MiB)
+wddm: cpu view on demand on (VidMm maps a cpu-visible aperture allocation at its first Lock2: umd gtt, lb7a plain)
+wddm summary: cpu view on demand (on): gtt <allocations> (<MiB> MiB), lb7a <allocations> (<MiB> MiB)
 ```
 
-The summary count is a part of the `cpu-visible` count of the line `wddm summary: umd cpu view`.
+The `gtt` count is a part of the `cpu-visible` count of the line `wddm summary: umd cpu view`. The `lb7a` count is a
+part of the `cpu-visible` count of the line `wddm summary: lb7a cpu view`. `cpu_view_policy_test.c` (run by
+`run_umd_blob.ps1`) tests the rule with every record class and the placement that `WddmGdiRecordPolicy` gives it.
 `driver/kmd/test/check_cpu_view_on_demand.py` (quick gate `cpu-view-on-demand`) checks the KMD side and its
 negative controls.
 

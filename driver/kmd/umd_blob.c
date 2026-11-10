@@ -1,6 +1,7 @@
 // See umd_blob.h. Little-endian reads, explicit, so a short or odd buffer cannot be a torn word and
 // this file needs no header beyond its own.
 #include "umd_blob.h"
+#include "cpu_view_policy.h"
 
 static unsigned long Rd32(const unsigned char* p)
 {
@@ -179,19 +180,24 @@ int UmdBlobAllocCpuVisible(const struct umd_alloc_view* allocation)
 
 // BD-210 G1: the CPU view that UmdBlobAllocCpuVisible keeps is still made at the create, for every allocation that
 // may be mapped, also when nothing maps it (a host-visible DXVK or vkd3d-proton chunk that the application never
-// writes). CpuVisibleOnDemand (d3dkmddi.h DXGK_ALLOCATIONINFOFLAGS_WDDM2_0, 0x00040000) makes VidMm assign the CPU
-// view at the map (Lock2) instead. The allocation stays CpuVisible, so a Lock2 succeeds as before. Only for the
-// version 2 blob, where the creator's GEM flags are intent, and never for a scan-out request, so the flip path sees
-// the allocation it saw before.
-//   Only for the GTT heap, which UmdBlobPlacement puts in the aperture segment alone. VidMm refuses the create of a
-// CpuVisibleOnDemand allocation whose segment set includes the local segment (unit A, KMD 06AAA450, 2026-11-10: a
-// 32-bit vkAllocateMemory of DEVICE_LOCAL|HOST_VISIBLE failed with VK_ERROR_OUT_OF_DEVICE_MEMORY, the GTT types
-// allocated and mapped, and D3D11CreateDevice failed with E_OUTOFMEMORY; the same KMD without the flag passed all).
-// A VRAM-heap allocation therefore keeps its create-time view, also when shared residency lets it into the aperture.
-int UmdBlobAllocCpuVisibleOnDemand(const struct umd_alloc_view* allocation)
+// writes). CpuVisibleOnDemand moves that view to the first Lock2 (cpu_view_policy.h, the one rule for UMD and LB7A
+// allocations). The class of a UMD blob: a version 2 blob (the creator's GEM flags are intent) that may be mapped and
+// asks for no scan-out is UMD_MAPPABLE, so the flip path sees the allocation it saw before; a NO_CPU_ACCESS blob has
+// no view to defer; everything else is LEGACY and keeps the create-time view.
+unsigned long UmdBlobCpuViewClass(const struct umd_alloc_view* allocation)
 {
-    return allocation != 0 && allocation->cache_policy_valid && !allocation->scanout &&
-        allocation->heap == UMD_BLOB_HEAP_GTT && UmdBlobAllocCpuVisible(allocation);
+    if (allocation == 0 || !allocation->cache_policy_valid || allocation->scanout) return BC250_CPU_VIEW_LEGACY;
+    return UmdBlobAllocCpuVisible(allocation) ? BC250_CPU_VIEW_UMD_MAPPABLE : BC250_CPU_VIEW_GPU_ONLY;
+}
+
+// The shared rule with this blob's class and its placement. Only a GTT-heap blob is placed in the aperture alone
+// (UmdBlobPlacement), so a VRAM-heap blob keeps its create-time view, also when shared residency lets it into the
+// aperture: VidMm refuses the flag on a set with the local segment (cpu_view_policy.h).
+int UmdBlobAllocCpuVisibleOnDemand(const struct umd_alloc_view* allocation, unsigned long supported,
+                                   unsigned long aperture_set)
+{
+    return Bc250CpuViewOnDemandAllowed(UmdBlobCpuViewClass(allocation), UmdBlobAllocCpuVisible(allocation), supported,
+                                       aperture_set);
 }
 
 int UmdBlobPlacement(const struct umd_alloc_view* allocation, unsigned long vram, unsigned long aperture,

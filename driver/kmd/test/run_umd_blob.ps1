@@ -68,6 +68,18 @@ Write-Host 'run'
 & "$Out\umd_blob_test.exe"
 $code = $LASTEXITCODE
 
+# BD-352: the CpuVisibleOnDemand rule that the UMD blobs above and the type-0 LB7A records share (cpu_view_policy.h),
+# with every record class and the placement WddmGdiRecordPolicy gives it. Skipped for the producer mutation run.
+if (-not $ProducerRoot) {
+    Write-Host 'compile, link and run the cpu view policy test (host)'
+    Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/TC', '/std:c11', '/W4', '/WX', '/Od', '/Zi', '/Zp8') + $incUser +
+        @("/Fo$obj\", "/Fd$obj\clpolicy.pdb", "/Fe$Out\cpu_view_policy_test.exe") +
+        @((Join-Path $kmd 'dcn_translate.c'), (Join-Path $here 'cpu_view_policy_test.c')) +
+        @("/link", "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64", "/LIBPATH:$($msvc.FullName)\lib\x64"))
+    & "$Out\cpu_view_policy_test.exe"
+    if ($LASTEXITCODE -ne 0 -and $code -eq 0) { $code = $LASTEXITCODE }
+}
+
 Write-Host 'compile-check (kernel flags, reader only, no contract header, no link)'
 $kernFlags = @('/nologo', '/c', '/TC', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DWINNT=1', '/DNTDDI_VERSION=0x0A00000C', '/D_WIN32_WINNT=0x0A00', '/DNDEBUG',

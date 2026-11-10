@@ -766,7 +766,8 @@ void GuardLabReadCpuRevertFault(_In_ PDRIVER_OBJECT DriverObject);
 void GuardLabReadEngineHang(_In_ PDRIVER_OBJECT DriverObject);
 BOOLEAN GuardLabTakeEngineHang(ULONG Node);
 // Lab flavour only (BD-210 G1): LabCpuVisibleOnDemand (REG_DWORD under Parameters, read only in DriverEntry). 0 turns
-// off DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand for the UMD allocations; absent or any other value keeps it.
+// off DXGK_ALLOCATIONINFOFLAGS_WDDM2_0.CpuVisibleOnDemand for the UMD and the type-0 LB7A allocations (BD-352);
+// absent or any other value keeps it.
 void GuardLabReadCpuVisibleOnDemand(_In_ PDRIVER_OBJECT DriverObject);
 // Lab flavour only (BD-352): LabAllocLogMiB (REG_DWORD under Parameters, read only in DriverEntry), 1 to 4096. Each UMD
 // and type-0 LB7A allocation create of at least that many MiB writes one guard-log line (wddm.c). GuardLabAllocLogMiB
@@ -796,8 +797,8 @@ ULONG GuardLabScaledPlane(void);
 #define BC250_LAB_QRESET_ENGINE_OFF 2u
 void GuardLabReadQueueReset(_In_ PDRIVER_OBJECT DriverObject);
 ULONG GuardLabQueueReset(void);
-// BD-210 G1: TRUE when WddmStart gives the UMD allocations CpuVisibleOnDemand (umd_blob.c
-// UmdBlobAllocCpuVisibleOnDemand). Always TRUE in the release flavour; in the lab flavour FALSE only with
+// BD-210 G1 and BD-352: TRUE when WddmStart gives the UMD and the type-0 LB7A allocations CpuVisibleOnDemand
+// (cpu_view_policy.h Bc250CpuViewOnDemandAllowed). Always TRUE in the release flavour; in the lab flavour FALSE only with
 // LabCpuVisibleOnDemand 0. Any IRQL: a value fixed at DriverEntry.
 BOOLEAN GuardCpuVisibleOnDemand(void);
 // BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
