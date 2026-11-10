@@ -647,6 +647,13 @@ Check ($isrc -match '\[switch\]\$LogonContinuation,') 'install.ps1 has the -Logo
 Check (-not ($isrc -match '\$script:LogonContinuation\b')) 'no script variable shares the name of the switch'
 Check ($isrc -match 'Get-VerifyOutcome -Failed \$bad\.Count -LogonContinuation \(\[bool\]\$LogonContinuation\) -Attempt \$attempt -Settled \(\[bool\]\$script:VerifyStartConfirmSettled\)') 'the verification asks Get-VerifyOutcome with its failed count, the switch, the attempt and the start-confirm state'
 Check ($isrc -match 'else \{ \$script:VerifyStartConfirmSettled = \[bool\]\(\$runAnswer\.ran -and -not \$running\) \}') 'settled only when the start-confirm run of this boot has ended'
+# A deadline that cuts the repeat: no second attempt, so no verdict for the transaction even when start-confirm had
+# ended; the first attempt's report is written again as the final one, and the phase rule stays.
+$cut = [regex]::Match($isrc, '(?s)if \(Test-DeadlinePassed\) \{\s*#.*?break\s*\}').Value
+Check (($cut -match 'Get-VerifyOutcome -Failed \$bad\.Count -LogonContinuation \$true -Attempt 2 -Settled \$false') -and
+    ($cut -match '\$script:VerifyProvisional = \$false\s+Write-VerifyReport \$r')) 'deadline cut: Settled false and the final report written again'
+$o = Get-VerifyOutcome -Failed 2 -LogonContinuation $true -Attempt 2 -Settled $false
+Check (($null -eq $o.phase) -and ([string]$o.transaction -eq '') -and -not $o.repeat) "deadline cut with start-confirm ended: phase kept, no observation (phase '$($o.phase)', transaction '$($o.transaction)')"
 Check ($isrc -match 'if \(-not \$DryRun -and \$outcome\.phase\) \{ Save-Phase \$outcome\.phase \}') 'the phase comes from the decision, and none is written when it says keep'
 Check ($isrc -match '-Verify \$outcome\.transaction') 'the update transaction gets the observation of the final decision only (after the attempts)'
 Check (-not ($isrc -match "Save-Phase \`$\(if \(\`$bad\.Count\) \{ 'verify-failed' \}")) 'no direct write of verify-failed from the failed count is left'

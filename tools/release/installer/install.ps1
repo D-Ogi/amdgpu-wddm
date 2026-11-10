@@ -1068,7 +1068,7 @@ function Write-VerifyReport($Results) {
         $report.final = $final
         $vdir = Join-Path $script:StateDir 'verify'
         # UTC may repeat after time sync. Keep each report instead of overwriting a previous run's evidence.
-        Write-FileAtomic (Join-Path $vdir ($(if ($final) { 'verify-' } else { 'attempt-' }) +[DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + [guid]::NewGuid().ToString('N') + '.json')) ($report | ConvertTo-Json -Depth 5)
+        Write-FileAtomic (Join-Path $vdir ($(if ($final) { 'verify-' } else { 'attempt-' }) + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + [guid]::NewGuid().ToString('N') + '.json')) ($report | ConvertTo-Json -Depth 5)
     } catch { Write-Log "   verify report not written: $($_.Exception.Message)" }
 }
 
@@ -1091,8 +1091,10 @@ if ($script:VerifyOnly) {
         $outcome = Get-VerifyOutcome -Failed $bad.Count -LogonContinuation ([bool]$LogonContinuation) -Attempt $attempt -Settled ([bool]$script:VerifyStartConfirmSettled)
         if (-not $outcome.repeat) { break }
         if (Test-DeadlinePassed) {
-            # No second attempt: this one is the verdict after all, so its report is written again as the final one.
-            $outcome = Get-VerifyOutcome -Failed $bad.Count -LogonContinuation $true -Attempt 2 -Settled ([bool]$script:VerifyStartConfirmSettled)
+            # No second attempt: its report is written again as the final one, so the person sees the failure. The
+            # repeat did not happen, so the update transaction gets no verdict (-Settled $false), whatever start-confirm
+            # says; the phase rule stays.
+            $outcome = Get-VerifyOutcome -Failed $bad.Count -LogonContinuation $true -Attempt 2 -Settled $false
             $script:VerifyProvisional = $false
             Write-VerifyReport $r
             break
