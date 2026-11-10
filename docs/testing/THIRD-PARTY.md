@@ -21,14 +21,14 @@ and NOTICE in the package root).
 | `wow64\desktop\bc250d3d_router.dll` | amdgpu-wddm `f92158f423ec485de87ef78939fc398b40636fa0` (`driver/umd/router`), x86 build |
 | `wow64\d3d11\amdgpu_wddm_d3d11.dll`, `wow64\d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `ad7b90d9dbb831e1112a0570114679877f88262b` (`driver/umd/dxvk`), x86 build with the `-Arch x86` recipe and the `.def` export of the same commit. The config is the record from `tools/build/write-umd-config.py` at `97b0f39ebc04f8c23c1b2110b9ee0d15034713f6` |
 | `wow64\d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `2b6865e6d6d4fe0ce81a6c3c0bd96b5f335e71e6` (`driver/umd/d3d12`), x86 build with the `-Arch x86` recipe and the `.def` export of the same commit, against the `src/util` host contract of Mesa `68fc203599c1ce0b7143fee6e41f9a552b2dacf9` |
-| `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `78af602a44ff7d7b66a6d96246e3446964c8f740` (the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`) |
+| `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `284e900538b3b2925f5b2b0f49b62dbe9420b999` (the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`) |
 | `mft\amdgpu_wddm_mft_h264.dll` | amdgpu-wddm `8b93ad86ce61e80821a385741687448ace9dd3e4` (`driver/umd/mft-h264`) |
 | `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `8b93ad86ce61e80821a385741687448ace9dd3e4` (`tools/win/d3d12caps`) |
 | `kmd\amdgpu-state.bin`, `tools\amdgpu-state-installer.exe`, `tools\state-reader.ps1` | amdgpu-wddm `driver/state` and `tools/release/installer`: the state file from the kernel driver build at `2b6865e6d6d4fe0ce81a6c3c0bd96b5f335e71e6`, the state installer at `ad7b90d9dbb831e1112a0570114679877f88262b` |
 | `tools\d3d11bench.exe` | amdgpu-wddm `8b93ad86ce61e80821a385741687448ace9dd3e4` (`tools/win/d3d11bench`) |
 | `tools\hip\amdhip64.dll`, `tools\hip\vadd.exe`, `tools\hip\bc250hipblas.dll` | amdgpu-wddm `6115ab3527d2e79ae0287dd91d003e9def8dc375` (`compute/hip`: the runtime and the sample, and `compute/hipblas`), experimental |
 | `tools\hip\rocm\amdhip64_7.dll`, `tools\hip\rocm\libhipblaslt.dll`, `tools\hip\rocm\attach-rocm-venv.ps1`, `tools\hip\rocm\rocm-files.ps1`, `tools\hip\rocm\payload.json` | amdgpu-wddm `c434348f41daa358e896483116b486b5bbf9e271` (`compute/hip`, `tools/release/installer`: the AMD ABI face, hipBLASLt front and venv attach step), experimental |
-| `control\amdgpu_wddm_control.exe` | amdgpu-wddm `78af602a44ff7d7b66a6d96246e3446964c8f740` (`tools/win/amdgpu_wddm_control`) |
+| `control\amdgpu_wddm_control.exe` | amdgpu-wddm `284e900538b3b2925f5b2b0f49b62dbe9420b999` (`tools/win/amdgpu_wddm_control`) |
 | `tools\start-confirm.ps1`, `tools\start-confirm-core.ps1`, `tools\dwm-session.ps1`, `tools\release-witness.ps1`, `installer\*`, `*.cmd`, `cert\amdgpu-wddm-release.cer`, `kmd\bc250kmd.cat` | amdgpu-wddm (this release) |
 
 ## Third-party code in the package
