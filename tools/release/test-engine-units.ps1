@@ -180,7 +180,11 @@ Check ((@($c.arguments) -join ' ') -eq "-NoProfile -ExecutionPolicy Bypass -File
 $c = Get-ContinuationCommand -Kind verify -Closure $closure -InstallRoot 'C:\Program Files\amdgpu-wddm' -Gui $false
 $line = Format-CommandLine $c.exe $c.arguments
 $argv = [EngineUnits.Argv]::Split($line)
-Check (($argv[0] -eq $psExe) -and ($argv[5] -eq 'C:\Program Files\amdgpu-wddm\installer\install.ps1') -and (($argv[6..7] -join ' ') -eq '-HoldWindow -Verify')) "verify: $line"
+Check (($argv[0] -eq $psExe) -and ($argv[5] -eq 'C:\Program Files\amdgpu-wddm\installer\install.ps1') -and (($argv[6..($argv.Count - 1)] -join ' ') -eq '-HoldWindow -Verify -LogonContinuation')) "verify, marked as the continuation at a logon (BD-359): $line"
+$c = Get-ContinuationCommand -Kind verify -Closure $closure -InstallRoot 'C:\Program Files\amdgpu-wddm' -Gui $false -LegacyInstallRoot $true
+Check ((@($c.arguments) -join ' ') -eq '-NoProfile -ExecutionPolicy Bypass -File C:\Program Files\amdgpu-wddm\installer\install.ps1 -HoldWindow -Verify') 'verify after a legacy rollback: no -LogonContinuation for the legacy engine in the install root'
+$c = Get-ContinuationCommand -Kind continue -Closure $closure -InstallRoot 'C:\Program Files\amdgpu-wddm' -Gui $false -LegacyInstallRoot $true
+Check (-not (@($c.arguments) -contains '-LogonContinuation')) 'continue: no -LogonContinuation (only a verification reads it)'
 Remove-Item -LiteralPath (Join-Path $closure $script:SetupExeName) -Force
 
 '[G-STAGE] RunOnce continuation run for real from folders with spaces and command metacharacters (R7)'
@@ -188,7 +192,7 @@ Remove-Item -LiteralPath (Join-Path $closure $script:SetupExeName) -Force
 # the path and the switches it received. No console window: CreateNoWindow.
 foreach ($name in 'AMD&GPU', 'a b (x) 100%PATH%^!y', 'semi;colon,comma=eq') {
     $root = Join-Path $work "runonce\$name"
-    Write-Text (Join-Path $root 'installer\install.ps1') "param([switch]`$HoldWindow, [switch]`$Verify)`r`n[IO.File]::WriteAllText((Join-Path `$PSScriptRoot 'ran.json'), ([ordered]@{ path = `$PSCommandPath; hold = [bool]`$HoldWindow; verify = [bool]`$Verify } | ConvertTo-Json))`r`n"
+    Write-Text (Join-Path $root 'installer\install.ps1') "param([switch]`$HoldWindow, [switch]`$Verify, [switch]`$LogonContinuation)`r`n[IO.File]::WriteAllText((Join-Path `$PSScriptRoot 'ran.json'), ([ordered]@{ path = `$PSCommandPath; hold = [bool]`$HoldWindow; verify = [bool]`$Verify; continuation = [bool]`$LogonContinuation } | ConvertTo-Json))`r`n"
     foreach ($kind in 'continue', 'verify') {
         $ran = Join-Path $root 'installer\ran.json'
         Remove-Item -LiteralPath $ran -Force -ErrorAction SilentlyContinue
@@ -200,7 +204,7 @@ foreach ($name in 'AMD&GPU', 'a b (x) 100%PATH%^!y', 'semi;colon,comma=eq') {
         $p = [Diagnostics.Process]::Start($psi)
         [void]$p.WaitForExit(60000)
         $got = $(if (Test-Path -LiteralPath $ran) { Get-Content -LiteralPath $ran -Raw | ConvertFrom-Json })
-        Check ($got -and ($got.path -eq (Join-Path $root 'installer\install.ps1')) -and $got.hold -and ($got.verify -eq ($kind -eq 'verify'))) "${kind} from '$name': the script ran with its own path and switches ($line)"
+        Check ($got -and ($got.path -eq (Join-Path $root 'installer\install.ps1')) -and $got.hold -and ($got.verify -eq ($kind -eq 'verify')) -and ($got.continuation -eq ($kind -eq 'verify'))) "${kind} from '$name': the script ran with its own path and switches ($line)"
     }
 }
 
@@ -612,6 +616,34 @@ foreach ($ph in 'testsigning-pending', 'driver-pending-restart', 'installed') {
     Check ($null -eq (Get-PendingRestart $st ([ordered]@{ boot_id = 42 }))) "${ph}: another boot lets it advance"
 }
 Check ($null -eq (Get-PendingRestart ([pscustomobject]@{ phase = 'verified'; restart_boot_id = 41 }) ([ordered]@{ boot_id = 41 }))) 'a phase that waits for nothing is never pending'
+
+'[BD-359] the end of a verification: a person''s run records its verdict; the continuation at a logon records only a pass'
+foreach ($c in @(
+        @{ n = 'person, pass'; f = 0; k = $false; a = 1; repeat = $false; phase = 'verified'; txn = 'verified' }
+        @{ n = 'person, failure'; f = 2; k = $false; a = 1; repeat = $false; phase = 'verify-failed'; txn = 'verify-failed' }
+        @{ n = 'continuation, pass at the first attempt'; f = 0; k = $true; a = 1; repeat = $false; phase = 'verified'; txn = 'verified' }
+        @{ n = 'continuation, failure at the first attempt: once more'; f = 1; k = $true; a = 1; repeat = $true; phase = $null; txn = '' }
+        @{ n = 'continuation, pass at the second attempt'; f = 0; k = $true; a = 2; repeat = $false; phase = 'verified'; txn = 'verified' }
+        @{ n = 'continuation, failure at the second attempt: phase kept, no observation'; f = 3; k = $true; a = 2; repeat = $false; phase = $null; txn = '' })) {
+    $o = Get-VerifyOutcome -Failed $c.f -LogonContinuation $c.k -Attempt $c.a
+    Check (($o.repeat -eq $c.repeat) -and ($o.phase -eq $c.phase) -and ([string]$o.transaction -eq $c.txn)) "$($c.n): repeat $($o.repeat), phase '$($o.phase)', transaction '$($o.transaction)'"
+}
+# Negative control over every case: the continuation never writes verify-failed, to the phase or to the transaction.
+$never = @(foreach ($f in 0..3) { foreach ($a in 1..3) { $o = Get-VerifyOutcome -Failed $f -LogonContinuation $true -Attempt $a; if ($o.phase -eq 'verify-failed' -or $o.transaction -eq 'verify-failed' -or ($f -gt 0 -and $o.phase -eq 'verified')) { "$f/$a" } } })
+Check ($never.Count -eq 0) "continuation: no failed count at any attempt writes verify-failed or verified for a failure ($($never -join ', '))"
+# The phase it keeps is one that every reader already handles: install.cmd and verify.cmd verify again.
+Check ((Get-InstallAction -State ([pscustomobject]@{ phase = 'installed' }) -PackageVersion '1.0' -InstalledVersion '1.0' -Repair $false).action -eq 'verify') 'the kept phase installed: a later install.cmd of the same version verifies again'
+# The wiring in install.ps1: the parameter, the decision feeds the phase and the transaction, the legacy guard.
+$isrc = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+Check ($isrc -match '\[switch\]\$LogonContinuation,') 'install.ps1 has the -LogonContinuation switch'
+# A parameter is a script variable: $script:Continuation (the RunOnce record of Set-ResumeAtLogon) once took the
+# first name of this switch, and every run that armed RunOnce stopped on the type of the switch.
+Check (-not ($isrc -match '\$script:LogonContinuation\b')) 'no script variable shares the name of the switch'
+Check ($isrc -match 'Get-VerifyOutcome -Failed \$bad\.Count -LogonContinuation \(\[bool\]\$LogonContinuation\) -Attempt \$attempt') 'the verification asks Get-VerifyOutcome with its failed count, -LogonContinuation and the attempt'
+Check ($isrc -match 'if \(-not \$DryRun -and \$outcome\.phase\) \{ Save-Phase \$outcome\.phase \}') 'the phase comes from the decision, and none is written when it says keep'
+Check ($isrc -match '-Verify \$outcome\.transaction') 'the update transaction gets the observation of the decision'
+Check (-not ($isrc -match "Save-Phase \`$\(if \(\`$bad\.Count\) \{ 'verify-failed' \}")) 'no direct write of verify-failed from the failed count is left'
+Check ($isrc -match 'Get-ContinuationCommand -Kind \$Kind .* -LegacyInstallRoot \$legacyRollback') 'RunOnce verify after a legacy rollback has no -LogonContinuation'
 
 '[K3] a native program under a deadline: the budget covers the program, not only the waiting after it'
 # Audit finding K3. Restart-GpuAudioDevice promised one budget for pnputil and the status polling, but the

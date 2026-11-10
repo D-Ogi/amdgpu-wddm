@@ -37,6 +37,9 @@ param(
     [string]$DeadlineUtc,                   # ISO 8601 UTC: stop at the first stop point after this time (interfaces-setup.md 10)
     [switch]$HoldWindow,                    # the RunOnce continuation: keep the console open at the end (no install.cmd pause)
     [switch]$Verify,
+    # The installer's own RunOnce entry started this run at a logon, not a person (BD-359): a verification runs its
+    # checks once more before the verdict and records only a pass (Get-VerifyOutcome). Nothing else reads it.
+    [switch]$LogonContinuation,
     [switch]$Force,                         # install even over a development-lab installation (not supported)
     [switch]$NoReboot,                      # never restart; tell the tester to do it
     [switch]$AcceptTestSigning,             # accepted and not needed any more: no test-signing question is asked
@@ -342,7 +345,7 @@ function Test-DriverSetRank($InstallState) {
 $script:Closure = $null
 $script:Continuation = $null
 function Set-ResumeAtLogon([ValidateSet('continue', 'verify')][string]$Kind) {
-    $c = Get-ContinuationCommand -Kind $Kind -Closure $script:Closure -InstallRoot $InstallRoot -Gui ([bool]$script:GuiMode)
+    $c = Get-ContinuationCommand -Kind $Kind -Closure $script:Closure -InstallRoot $InstallRoot -Gui ([bool]$script:GuiMode) -LegacyInstallRoot $legacyRollback
     if($legacyRollback -and $Kind -eq 'continue') {
         if(-not $script:BridgeClosure){throw 'rollback continuation has no retained current engine'}
         $c=[pscustomobject]@{exe=(Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe');arguments=@(
@@ -1062,16 +1065,30 @@ if ($script:VerifyOnly) {
     # A verification in the boot that completed the installation was stopped above (Get-PendingRestart): the driver
     # runs with the old settings until the restart.
     Enter-Stage 'verify' 'Verify'
-    $r = Invoke-Verify
-    $bad = @($r | Where-Object { -not $_.pass })
-    if (-not $DryRun) { Save-Phase $(if ($bad.Count) { 'verify-failed' } else { 'verified' }) }
+    # BD-359: the continuation at a logon gets a second attempt and records a pass only (Get-VerifyOutcome). Host tests
+    # can shorten the wait between the attempts of a dry run.
+    $repeatSeconds = $script:ContinuationRepeatSeconds
+    if ($DryRun -and $env:AMDGPU_WDDM_TEST_REPEAT_SECONDS) { $repeatSeconds = [int]$env:AMDGPU_WDDM_TEST_REPEAT_SECONDS }
+    $attempt = 1
+    while ($true) {
+        $script:VerifyComplete = $false
+        $r = Invoke-Verify
+        $bad = @($r | Where-Object { -not $_.pass })
+        $outcome = Get-VerifyOutcome -Failed $bad.Count -LogonContinuation ([bool]$LogonContinuation) -Attempt $attempt
+        if (-not $outcome.repeat -or (Test-DeadlinePassed)) { break }
+        Write-Info "the verification at this logon found $($bad.Count) failed check(s); it runs every check once more in $repeatSeconds s, because a check at a logon can read a state that is not final yet"
+        Start-Sleep -Seconds $repeatSeconds
+        $attempt++
+    }
+    if ($LogonContinuation -and $bad.Count) { Write-Log "   verify at logon (-LogonContinuation), attempt ${attempt}: $($bad.Count) failed; the phase stays $($state.phase) and the update transaction gets no verify observation" }
+    if (-not $DryRun -and $outcome.phase) { Save-Phase $outcome.phase }
     # The verify result of this boot is an observation of a self-update's driver transaction (nagi-update.ps1): a
     # start that the confirmation passed commits only with a passing verify in the same boot.
     if (-not $DryRun) {
         try {
             $kmdNow = $null; try { $kmdNow = [string](Get-RunningKmdReading -Cli $null).image.sha256 } catch { }
             $line = Invoke-NagiUpdateStepHere -InstallRoot $InstallRoot -Boot ([string](Get-BootIdentity).boot_id) -KmdSha256 $kmdNow `
-                -Verify $(if ($bad.Count) { 'verify-failed' } else { 'verified' })
+                -Verify $outcome.transaction
             if ($line -ne 'update transaction: none') { Write-Log "   $line" }
         } catch { Write-Log "   update transaction: $($_.Exception.Message)" }
     }
@@ -1084,6 +1101,9 @@ if ($script:VerifyOnly) {
     }
     if ($bad.Count) {
         Write-Host "Verification: $($bad.Count) check(s) failed. See INSTALL.md, section 'If something fails'." -ForegroundColor Red
+        if ($LogonContinuation) {
+            Write-Host "This verification started by itself at the logon after the installation, so the installation stays recorded as not verified. When the desktop is ready, run verify.cmd in $InstallRoot." -ForegroundColor Yellow
+        }
         # The automatic diagnostics of this run, when the driver did not start: the console route has no support
         # file, so the last thing a tester reads is the path of the file to send.
         if ($script:EngineDiagnostics) {
