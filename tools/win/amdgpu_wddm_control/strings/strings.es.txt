@@ -1445,4 +1445,4 @@ tuner.limit.in-force.default|mt|0bbe6cf5|{0} °C (predeterminado)
 tuner.limit.off|mt|04306f74|El ajuste del procesador está desactivado, así que rige el límite propio del procesador de {0} °C.
 search.graphics.cpu-limit|mt|c90220a5|Límite de temperatura del procesador
 search.graphics.cpu-limit.terms|mt|8aa04853|temperatura de la CPU|temperatura CPU|CPU temp|throttling|límite térmico|Tctl|caliente|sobrecalentamiento
-help.setting.cpu-limit|mt|34c700af|La temperatura a la que el procesador se ralentiza solo. El valor predeterminado mantiene una carga larga y pesada lejos del límite máximo propio del procesador. Un cambio se ejecuta como una prueba que se revierte sola hasta que usted lo conserve.
+help.setting.cpu-limit|mt|e792ee1c|La temperatura a la que el procesador se ralentiza solo. Si el chip gráfico también trabaja, la temperatura puede superarla en 2 a 3 °C o más y seguir subiendo, así que elija un límite al menos 3 °C por debajo de la temperatura más alta que acepte. Un cambio se ejecuta como una prueba que se revierte sola hasta que usted lo conserve.

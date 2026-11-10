@@ -1444,4 +1444,4 @@ tuner.limit.in-force.default|mt|0bbe6cf5|{0} °C (padrão)
 tuner.limit.off|mt|04306f74|O ajuste do processador está desligado, então vale o limite próprio do processador de {0} °C.
 search.graphics.cpu-limit|mt|c90220a5|Limite de temperatura do processador
 search.graphics.cpu-limit.terms|mt|8aa04853|temperatura da CPU|temp da CPU|throttling|limite térmico|Tctl|quente|superaquecimento|temperatura do processador
-help.setting.cpu-limit|mt|34c700af|A temperatura em que o processador reduz a própria velocidade. O padrão mantém uma carga longa e pesada longe do limite máximo do próprio processador. Uma alteração roda como um teste que volta sozinho até você mantê-la.
+help.setting.cpu-limit|mt|e792ee1c|A temperatura em que o processador reduz a própria velocidade. Com o chip gráfico também trabalhando, a temperatura pode passar dela em 2 a 3 °C ou mais e continuar subindo, então escolha um limite pelo menos 3 °C abaixo da temperatura mais alta que você aceita. Uma alteração roda como um teste que volta sozinho até você mantê-la.
