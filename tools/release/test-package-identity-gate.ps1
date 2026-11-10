@@ -90,25 +90,25 @@ for ($i = 4096; $i -lt $edit.Length - 512; $i++) { if ($edit[$i] -ne 0) { $edit[
 Assert $edited 'a non-zero byte of the image was found to change'
 Write-Bytes (Join-Path $pkg 'payload\app.exe') $edit
 Invoke-RunSign (Join-Path $pkg 'payload\app.exe') $publisher
-$out = Invoke-Gate
-Assert ($out -match 'is not the built image' -and $out -match 'THREW') 'a changed image is refused'
+$gateText = Invoke-Gate
+Assert ($gateText -match 'is not the built image' -and $gateText -match 'THREW') 'a changed image is refused'
 
 # 3. A PE with the right image but another signer.
 Copy-Item -LiteralPath (Join-Path $build 'payload\app.exe') -Destination (Join-Path $pkg 'payload\app.exe')
 Invoke-RunSign (Join-Path $pkg 'payload\app.exe') $stranger
-$out = Invoke-Gate
-Assert ($out -match 'signed by ' -and $out -match 'THREW') 'a stranger signer is refused'
+$gateText = Invoke-Gate
+Assert ($gateText -match 'signed by ' -and $gateText -match 'THREW') 'a stranger signer is refused'
 
 # 4. The negative controls: a changed data file, and a PE that is not signed.
 Copy-Item -LiteralPath (Join-Path $build 'payload\app.exe') -Destination (Join-Path $pkg 'payload\app.exe')
 Invoke-RunSign (Join-Path $pkg 'payload\app.exe') $publisher
 $d = [IO.File]::ReadAllBytes((Join-Path $pkg 'payload\data.bin')); $d[3] = [byte](($d[3] + 1) % 256); Write-Bytes (Join-Path $pkg 'payload\data.bin') $d
-$out = Invoke-Gate
-Assert ($out -match 'REFUSE package identity: payload\\data\.bin: data file' -and $out -match 'THREW') 'a changed data file is refused (negative control)'
+$gateText = Invoke-Gate
+Assert ($gateText -match 'REFUSE package identity: payload\\data\.bin: data file' -and $gateText -match 'THREW') 'a changed data file is refused (negative control)'
 Copy-Item -LiteralPath (Join-Path $build 'payload\data.bin') -Destination (Join-Path $pkg 'payload\data.bin')
 Copy-Item -LiteralPath (Join-Path $build 'payload\app.exe') -Destination (Join-Path $pkg 'payload\app.exe')
-$out = Invoke-Gate
-Assert ($out -match 'unsigned' -and $out -match 'THREW') 'an unsigned PE is refused (negative control)'
+$gateText = Invoke-Gate
+Assert ($gateText -match 'unsigned' -and $gateText -match 'THREW') 'an unsigned PE is refused (negative control)'
 
 # 5. A third-party row: the vendor's own file carried unchanged (its own signer, no pin).
 $tpsrc = Join-Path $base 'vendor'
@@ -127,8 +127,8 @@ Assert ($line -match '1 third-party') "a third-party row keeps its vendor signer
 # 6. The same vendor file exchanged for one our publisher signed (a swap between files) is refused.
 Copy-Item -LiteralPath $vendor -Destination (Join-Path $tpPkg 'payload\vendor-app.exe') -Force
 Invoke-RunSign (Join-Path $tpPkg 'payload\vendor-app.exe') $publisher
-$out = Invoke-Gate -Src $tpSources -Pkg $tpPkg
-Assert (($out -match 'byte-equal to the registered' -or $out -match 'keeps its vendor signature') -and $out -match 'THREW') 'a swapped third-party file is refused'
+$gateText = Invoke-Gate -Src $tpSources -Pkg $tpPkg
+Assert (($gateText -match 'byte-equal to the registered' -or $gateText -match 'keeps its vendor signature') -and $gateText -match 'THREW') 'a swapped third-party file is refused'
 
 # 7. The right image with a re-cut signature blob (HashMismatch) is refused.
 $recutSrc = Join-Path $base 'recut'
@@ -152,13 +152,13 @@ $sig = Get-AuthenticodeSignature -LiteralPath (Join-Path $recutSrc 'payload\app.
 # re-cut file is refused at all; the reason is printed.
 "note the re-cut blob reads $($sig.Status) on this host"
 $recutSources = @([pscustomobject]@{ path = 'payload/app.exe'; source = 'recut/payload/app.exe'; sha256 = (Get-Hash (Join-Path $recutSrc 'payload\app.exe')) })
-$out = Invoke-Gate -Src $recutSources -Pkg $recutSrc
-"the re-cut refusal: $(($out -split [Environment]::NewLine | Where-Object { $_ -match 'REFUSE' }) -join ' | ')"
-Assert ($out -match 'THREW') 'a re-cut signature blob is refused'
+$gateText = Invoke-Gate -Src $recutSources -Pkg $recutSrc
+"the re-cut refusal: $(($gateText -split [Environment]::NewLine | Where-Object { $_ -match 'REFUSE' }) -join ' | ')"
+Assert ($gateText -match 'THREW') 'a re-cut signature blob is refused'
 
 # 8. A PE of the package that no row names (with -DriverMembers empty) is refused.
 Copy-Item -LiteralPath $stub -Destination (Join-Path $pkg 'payload\extra.exe') -Force
-$out = Invoke-Gate -Members @([pscustomobject]@{ source = 'payload/data.bin'; path = 'payload/data.bin' })
-Assert ($out -match 'no source row or driver package member' -and $out -match 'THREW') 'a stray PE is refused (L2 sweep)'
+$gateText = Invoke-Gate -Members @([pscustomobject]@{ source = 'payload/data.bin'; path = 'payload/data.bin' })
+Assert ($gateText -match 'no source row or driver package member' -and $gateText -match 'THREW') 'a stray PE is refused (L2 sweep)'
 Remove-Item -LiteralPath (Join-Path $pkg 'payload\extra.exe') -Force
 "PASS package-identity gate: $passed checks"
