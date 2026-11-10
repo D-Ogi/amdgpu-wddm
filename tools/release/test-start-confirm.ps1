@@ -131,6 +131,27 @@ $run = Invoke-Run 120 { param($t) if ($t -lt 30) { New-Reading ([uint64]($t * 10
     else { New-Reading ([uint64](($t - 30) * 1000)) -Epoch 6 -Flags 35 -Completed 0 -Age ([uint64]::MaxValue) } }
 Show $run
 Check ($run.code -eq 0 -and $run.at -ge 90 -and $run.at -le 100) 'confirmed only after 60 s of the new interval'
+'case bd343-confirmed-rearmed: another client confirmed the start, and a recovery then opened a new interval'
+# Flags FULL|READY|CONFIRMED|NO_OUTPUT (43) with ready_ms under 60 s: the start is confirmed, so the run ends at the
+# first poll with 0 and does not wait for the minute of the new interval.
+$rearmed = { param($t) New-Reading ([uint64]($t * 1000 + 5000)) -Epoch 9 -Flags 43 -Completed 0 -Age ([uint64]::MaxValue) }
+$run = Invoke-Run 120 $rearmed
+Show $run
+Check ($run.code -eq 0 -and $run.at -eq 0) 'exit 0 at the first poll'
+Check ($run.reason -match '^confirmed by another client: flags 43 ') 'the log says that another client confirmed it'
+$run = Invoke-Run 120 { param($t) if ($t -lt 20) { New-Reading 0 -Epoch 5 -Flags 35 -Completed 0 -Age ([uint64]::MaxValue) }
+    else { New-Reading ([uint64](($t - 20) * 1000)) -Epoch 9 -Flags 43 -Completed 0 -Age ([uint64]::MaxValue) } }
+Check ($run.code -eq 0 -and $run.at -eq 20 -and $run.reason -match '^confirmed by another client') 'exit 0 at the first confirmed reading after the epoch move'
+'negative control bd343-confirmed-rearmed: the rules without the confirmed exit wait to the bound'
+$coreText = [IO.File]::ReadAllText($Core)
+$exitBlock = [regex]::Match($coreText,'(?m)^ if \(\$null -ne \$Reading -and \(\$Reading\.flags -band 9\) -eq 9 .*\r?\n.*\r?\n.*\r?\n \}\r?\n')
+Check $exitBlock.Success 'the confirmed exit is in the rules'
+if ($exitBlock.Success) {
+    . ([scriptblock]::Create($coreText.Remove($exitBlock.Index, $exitBlock.Length)))
+    $run = Invoke-Run 120 $rearmed
+    Check ($run.code -ne 0) 'without it the confirmed start is not ended with 0 (the control fails as it must)'
+    . $Core
+}
 'case bd343-contradiction: VISIBLE and NO_OUTPUT together (flags 39) are never confirmed, by either rule'
 $run = Invoke-Run 120 { param($t) New-Reading 90000 -Flags 39 -Completed 40 -Age 0 }
 Check ($run.code -eq 1 -and $run.at -eq 120) 'exit 1 at the bound'
