@@ -228,8 +228,8 @@ game.group.cpu|mt|45883a65|フレームあたりのプロセッサ負荷を軽�
 game.group.cpu.explain|mt|61eb2481|ドライバーの処理をより多くのプロセッサ コアに分散します。プロセッサが性能を制限している場合、フレーム レートが向上することがあります。
 game.group.cpu.cost|mt|3f836d24|より多くのプロセッサ スレッドを使用します。ゲームがカクついたり終了したりする場合は、オフにしてください。
 game.group.diag|mt-safe|1a394bb7|診断用スイッチ
-game.group.diag.explain|mt|62e65139|安定性の修正をオフにします。開発者から依頼された場合にのみ使用してください。
-game.group.diag.cost|mt|9bd2b1e2|ゲームが不安定になる場合があります。
+game.group.diag.explain|mt|0d3c40f6|追加の診断記録を書き込みます。開発者から依頼された場合にのみ使用してください。
+game.group.diag.cost|mt|ca8ca2e8|ゲームが遅くなる場合があります。
 game.origin.driver|mt-safe|95d5095e|ドライバーの既定値
 game.origin.recommended|mt-safe|3c243c3e|インストーラーの推奨
 game.origin.game|mt-safe|0d27941d|このゲーム用に設定

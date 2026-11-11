@@ -188,7 +188,7 @@ class RuntimeHeapImports final {
     // callback is ever made under lock_ and the leaf rule above still holds. Unconditional: no gate, no
     // progress source may leave a heap resident when the creation DDI returns, which is the whole
     // requirement (DirectX-Specs ResourceHeaps.md, Residency DDIs, line 1011). It runs only in the arm
-    // import-residency-release-on, which a lab build only can turn on (BD-361); by default ImportReleasePolicy::residency_hold keeps the reference until the
+    // import-residency-release-on, a lab switch that a release build drops; by default ImportReleasePolicy::residency_hold keeps the reference until the
     // first runtime residency operation of the allocation (BD-313, end_residency_hold).
     HRESULT release_import_residency(Record&) noexcept;
 public:

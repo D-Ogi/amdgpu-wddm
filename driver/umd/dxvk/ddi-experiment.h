@@ -17,12 +17,21 @@
 //                   by vertical-blank waits (vblank-pacer.h).
 //   present-status-off  PresentDXGI returns its own result again, a refused present callback included, in place
 //                   of S_OK or device removal (present-contract.h). The runtime then removes the device for any
-//                   status but S_OK and device removal (BD-170, BD-253). For a lab comparison only.
+//                   status but S_OK and device removal (BD-170, BD-253). For a lab comparison only (class Lab).
 //   host-identity-off   the hosted ICD knows a device by the runtime's device handle again, in place of the
-//                   owner's own address (RuntimeDevice::host_identity, BD-253). For a lab comparison only.
+//                   owner's own address (RuntimeDevice::host_identity, BD-253). For a lab comparison only (class Lab).
+//
+// Every name has a row in kD3D11Switches, and the row gives the class of the switch
+// (../d3d12/experiment-class.h). A release build drops a Lab name and a name with no row from the list.
 #pragma once
 #include "../d3d12/ddi-trace.h"
 namespace bc250::umd {
+// Every switch name that this shell reads, with its class. One row on one line.
+inline constexpr native12::SwitchRow kD3D11Switches[]={
+    {"wddm22-ddi-off",native12::SwitchClass::Feature},
+    {"present-status-off",native12::SwitchClass::Lab},
+    {"host-identity-off",native12::SwitchClass::Lab},
+};
 namespace experiment_detail {
 // The profile key of an image path: the file name after the last separator, under the D3D11 Applications key.
 inline bool profile_key(const wchar_t *image,wchar_t *key,size_t capacity) noexcept {
@@ -42,8 +51,13 @@ inline int image_profile(char *text,size_t capacity) noexcept {
     if (!n || n>=MAX_PATH || !profile_key(image,key,sizeof(key)/sizeof(wchar_t))) return 0;
     return native12::ddi_detail::registry_experiment(key,text,capacity);
 }
-struct Value { char text[256]{}; };
-inline Value resolve() noexcept {
+struct Value {
+    char text[256]{};
+    // The names that this build did not honour (native12::admit_switches).
+    char dropped[256]{};
+};
+// The list as the sources give it, before the classes of the names are applied.
+inline Value read() noexcept {
     Value v{};
     bool valid=true;
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
@@ -62,12 +76,21 @@ inline Value resolve() noexcept {
     if (!std::strcmp(v.text,"none")) v.text[0]=0;
     return v;
 }
+// The list that this build honours.
+inline Value resolve(bool labBuild=native12::kLabBuild) noexcept {
+    Value v=read();
+    native12::admit_switches(v.text,kD3D11Switches,labBuild,v.dropped);
+    return v;
 }
-// The list as given, for the log: lower-case letters, digits, hyphens and commas only, else empty.
-inline const char *d3d11_experiment_name() noexcept {
-    static const experiment_detail::Value value=experiment_detail::resolve();
-    return value.text;
+inline const Value &value() noexcept {
+    static const Value value=resolve();
+    return value;
 }
+}
+// The list that this build honours, for the log: lower-case letters, digits, hyphens and commas only, else empty.
+inline const char *d3d11_experiment_name() noexcept { return experiment_detail::value().text; }
+// The names of the sources that this build did not honour, for the log. Empty when it honoured each name.
+inline const char *d3d11_experiment_dropped() noexcept { return experiment_detail::value().dropped; }
 // Whether the list names the switch exactly.
 inline bool d3d11_experiment(const char *name) noexcept {
     return native12::ddi_experiment_listed(d3d11_experiment_name(),name);

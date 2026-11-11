@@ -232,8 +232,8 @@ game.group.cpu|src|-|Less processor work per frame
 game.group.cpu.explain|src|-|Spreads the driver's work over more processor cores. This can raise the frame rate when the processor is the limit.
 game.group.cpu.cost|src|-|Uses more processor threads. Turn it off if the game stutters or closes.
 game.group.diag|src|-|Diagnostic switches
-game.group.diag.explain|src|-|Turn off stability fixes. Use them only when the developers ask you to.
-game.group.diag.cost|src|-|The game can become unstable.
+game.group.diag.explain|src|-|Write extra diagnostic records. Use them only when the developers ask you to.
+game.group.diag.cost|src|-|The game can run slower.
 game.origin.driver|src|-|Driver default
 game.origin.recommended|src|-|Recommended by the installer
 game.origin.game|src|-|Set for this game

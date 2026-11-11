@@ -130,7 +130,8 @@ the GTT aperture with no error anywhere. Two things make that visible and revers
 - every retry is counted (`engine_ddi::shared_surface_retries`) and names itself through `log_refusal`, which
   reaches the debugger channel with no trace build and under the refusal budget. The lab trial scores those
   counts per cell, and its controls must show zero.
-- `AMDGPU_WDDM_D3D12_EXPERIMENT=shared-create-retry-off` turns the whole behaviour off: the shell answers the
+- `AMDGPU_WDDM_D3D12_EXPERIMENT=shared-create-retry-off` turns the whole behaviour off in a lab build (the switch
+  has the class Lab, and a release build drops it): the shell answers the
   runtime's own status instead of `kShareRequired`, so nothing is ever retried. The fail-fast part - a refusal
   that does not remove the device - has no switch and is not meant to have one.
 
@@ -252,7 +253,7 @@ submission:
   kit counts both slots per row, so the next pass answers this with a number instead of an absence. `pfnWaitForFence`
   used to call `queue_failure` unconditionally, so the first wait the runtime sent removed the device; it now
   answers as the signal does, on by default, and `AMDGPU_WDDM_D3D12_EXPERIMENT=fence-wait-accept-off` restores that
-  older refusal for a bisect. The accept is the default because the alternative default is the device loss, and
+  older refusal for a bisect, in a lab build only (the switch has the class Lab). The accept is the default because the alternative default is the device loss, and
   because the cross-process case is untested in **both** directions: the switch does not make it tested, it only
   says which of the two untested answers a row got;
 - `pfnSignalFence`'s own comment states the precondition it depends on - "Execute must already have submitted all

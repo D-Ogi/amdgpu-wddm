@@ -35,8 +35,11 @@ namespace AmdgpuWddmControl
         public const string ValueName = "Experiment";
         public const int MaxLength = 255;
 
-        // The switches the shell reads (the ddi_experiment and ddi_experiment_off call sites in
-        // driver/umd/d3d12; the gate is ShellTokens in test/UnitTests.cs). Keep in catalog order.
+        // The switches of the shell that this application offers. The shell declares every name that it reads in
+        // one table with a class per name (driver/umd/d3d12/ddi-trace.h, kD3D12Switches, and experiment-class.h).
+        // This catalog holds Feature names only: with such a switch set the driver still obeys its contracts. A
+        // Lab name is never here, because it turns off a protection and only a lab build of the shell honours it.
+        // The gate is ShellTokens in test/UnitTests.cs. Keep in catalog order.
         //
         // Every behaviour the lab validated is the driver's default, so most of these names end in "-off" and
         // only ever subtract from the default (driver/umd/d3d12/ddi-trace.h). A group of GameGroups.cs that
@@ -45,10 +48,10 @@ namespace AmdgpuWddmControl
         // by the shell and do nothing, so they are not in this catalog: an older value that names them keeps
         // them as unknown names, which the support view shows and no edit drops.
         //
-        // The lab-only switches of the shell (ddi-trace.h: raytracing-tier12-off, import-residency-release-on) are
-        // not in this catalog in either flavour: a release shell has no switch for them. BD-361 removed
-        // import-residency-release-on, because with it on 3DMark Time Spy faults the GPU and the system stops with
-        // 0x116. A stored value that still names it keeps it as an unknown name, which a release shell ignores.
+        // import-residency-release-on was in this catalog. With it on, 3DMark Time Spy faults the GPU and the
+        // system stops with 0x116. The other Lab names were here also: release-two-phase-off,
+        // import-progress-gate-off, import-quarantine-off, shared-create-retry-off and fence-wait-accept-off. A
+        // stored value that still names one keeps it as an unknown name, which a release shell drops.
         public static readonly ProfileSwitch[] Catalog =
         {
             new ProfileSwitch("raytracing-tier-off", "Do not report ray tracing support",
@@ -67,16 +70,6 @@ namespace AmdgpuWddmControl
                 "Shaders are compiled when the game asks for them, one at a time. The default compiles them on every core, which shortens the pauses when a scene is drawn for the first time."),
             new ProfileSwitch("direct-entry-off", "Do not let the engine record value-only calls",
                 "The shell keeps its own entry for the value-only recording calls. The default gives it to the engine, which writes their queue entries itself."),
-            new ProfileSwitch("release-two-phase-off", "Turn off the two-phase release (diagnostic)",
-                "Turns off a stability fix. Use only when the developers ask for it."),
-            new ProfileSwitch("import-progress-gate-off", "Turn off the import progress gate (diagnostic)",
-                "Turns off a stability fix. Use only when the developers ask for it."),
-            new ProfileSwitch("import-quarantine-off", "Turn off the import quarantine (diagnostic)",
-                "Turns off a stability fix. Use only when the developers ask for it."),
-            new ProfileSwitch("shared-create-retry-off", "Turn off shared textures (diagnostic)",
-                "The driver refuses a texture that two programs share, as it did before this release. Use only when the developers ask for it."),
-            new ProfileSwitch("fence-wait-accept-off", "Turn off the queue wait answer (diagnostic)",
-                "The driver stops answering when the system asks a command queue to wait, which ends the game. Use only when the developers ask for it."),
             new ProfileSwitch("replay-log", "Write a replay log (diagnostic)",
                 "The replay lines also go to a file of their own. This changes no behaviour; it costs the writes."),
             // The shader model ceiling (GameGroups.cs ShaderModelCeiling): one choice of three, not a check box.
@@ -90,6 +83,13 @@ namespace AmdgpuWddmControl
         // fails once the shell reads it, so the entry goes away with the merge. Empty since the b23 train merged
         // m15/shader-model-68, whose shell reads shader-model-68-off and shader-model-67-off.
         public static readonly string[] AwaitingShell = { };
+
+        // Feature names of the shell that this application does not offer, each with its reason. ShellTokens fails
+        // for a Feature name that is neither in the catalog nor here, so a new one needs a decision.
+        public static readonly string[] NotOffered =
+        {
+            "scanout-flip-off",   // a display route for a lab comparison, with no use for one game
+        };
 
         static readonly Regex Syntax = new Regex("^[a-z0-9,-]*$", RegexOptions.CultureInvariant);
         static readonly Regex ImageSyntax = new Regex(@"^[A-Za-z0-9 _.()+-]{1,96}\.exe$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);

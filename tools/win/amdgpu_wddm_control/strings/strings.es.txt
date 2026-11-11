@@ -231,8 +231,8 @@ game.group.cpu|mt|45883a65|Menos trabajo del procesador por fotograma
 game.group.cpu.explain|mt|61eb2481|Reparte el trabajo del controlador entre más núcleos del procesador. Esto puede subir la cantidad de fotogramas por segundo cuando el procesador es el límite.
 game.group.cpu.cost|mt|3f836d24|Usa más hilos del procesador. Desactívelo si el juego tiene tirones o se cierra.
 game.group.diag|mt|1a394bb7|Interruptores de diagnóstico
-game.group.diag.explain|mt|62e65139|Desactivan correcciones de estabilidad. Úselos solo cuando los desarrolladores se lo pidan.
-game.group.diag.cost|mt|9bd2b1e2|El juego puede volverse inestable.
+game.group.diag.explain|mt|0d3c40f6|Escriben registros de diagnóstico adicionales. Úselos solo cuando los desarrolladores se lo pidan.
+game.group.diag.cost|mt|ca8ca2e8|El juego puede ir más lento.
 game.origin.driver|mt|95d5095e|Predeterminado del controlador
 game.origin.recommended|mt|3c243c3e|Recomendado por el instalador
 game.origin.game|mt|0d27941d|Configurado para este juego

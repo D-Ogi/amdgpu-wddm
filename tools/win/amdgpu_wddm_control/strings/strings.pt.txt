@@ -231,8 +231,8 @@ game.group.cpu|mt|45883a65|Menos trabalho do processador por quadro
 game.group.cpu.explain|mt|61eb2481|Distribui o trabalho do driver por mais núcleos do processador. Isso pode aumentar a taxa de quadros quando o processador é o limite.
 game.group.cpu.cost|mt|3f836d24|Usa mais threads do processador. Desative se o jogo engasgar ou fechar.
 game.group.diag|mt|1a394bb7|Opções de diagnóstico
-game.group.diag.explain|mt|62e65139|Desativam correções de estabilidade. Use-as apenas quando os desenvolvedores pedirem.
-game.group.diag.cost|mt|9bd2b1e2|O jogo pode ficar instável.
+game.group.diag.explain|mt|0d3c40f6|Gravam registros de diagnóstico adicionais. Use-as apenas quando os desenvolvedores pedirem.
+game.group.diag.cost|mt|ca8ca2e8|O jogo pode ficar mais lento.
 game.origin.driver|mt|95d5095e|Padrão do driver
 game.origin.recommended|mt|3c243c3e|Recomendado pelo instalador
 game.origin.game|mt|0d27941d|Definido para este jogo

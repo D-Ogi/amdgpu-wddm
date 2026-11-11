@@ -6,6 +6,8 @@
 // machine-wide value does not exist on a build machine, and both resolve to None without the variable.
 // The test runs in the flavour of the shell it is built with (build-umd-d3d12.ps1, -Lab or not): a lab build
 // checks that the variable wins, a release build that it changes nothing (BD-167).
+// The class of each switch name (experiment-class.h, kD3D12Switches): both flavours check the rule of both builds,
+// because admit_switches takes the flavour as a parameter.
 #include "ddi-trace.h"
 #include <cassert>
 #include <cstdio>
@@ -18,7 +20,22 @@ static const char kVariable[] = "AMDGPU_WDDM_D3D12_EXPERIMENT";
 
 static native12::DdiExperimentValue with_variable(const char* value) {
     assert(SetEnvironmentVariableA(kVariable, value));
-    return detail::resolve_experiment();
+    return detail::read_experiment();
+}
+
+// The list that a build of one flavour honours, and the names that it drops.
+struct Admitted {
+    std::string kept, dropped;
+    native12::SwitchAdmission count;
+};
+static Admitted admit(const char* list, bool lab_build) {
+    char text[256]{}, dropped[256]{};
+    std::snprintf(text, sizeof(text), "%s", list);
+    Admitted out;
+    out.count = native12::admit_switches(text, native12::kD3D12Switches, lab_build, dropped);
+    out.kept = text;
+    out.dropped = dropped;
+    return out;
 }
 
 int main() {
@@ -138,10 +155,10 @@ int main() {
     v = with_variable("deferred-replay-off,raytracing-tier12-off,import-residency-release-on");
     assert(v.source == DdiExperimentSource::Environment);
     assert(native12::ddi_experiment_off("deferred-replay"));
-    // Raytracing tier 1.2 has an off switch in a lab build only.
-    assert(native12::ddi_raytracing_tier12_off());
-    // The import residency hand-back (BD-361) is an arm of a lab build only.
-    assert(native12::ddi_import_residency_release_on());
+    // A lab build honours the lab switches.
+    assert(native12::ddi_experiment("raytracing-tier12-off"));
+    assert(native12::ddi_experiment("import-residency-release-on"));
+    assert(!native12::ddi_experiment_value().dropped[0]);
 #else
     // Release build (BD-167): the shell has no lookup of the variable, so no value of it is a source, and the
     // first read of the process (ddi_experiment_value) finds no list either.
@@ -151,12 +168,8 @@ int main() {
     }
     assert(!native12::ddi_experiment_off("deferred-replay"));
     assert(native12::ddi_experiment_listed("deferred-replay-off", "deferred-replay-off"));
-    // A release shell has no off switch for raytracing tier 1.2, whatever the variable says.
-    with_variable("raytracing-tier12-off");
-    assert(!native12::ddi_raytracing_tier12_off());
-    // A release shell keeps the import residency hold, whatever the variable says (BD-361).
-    with_variable("import-residency-release-on");
-    assert(!native12::ddi_import_residency_release_on());
+    assert(!native12::ddi_experiment("raytracing-tier12-off"));
+    assert(!native12::ddi_experiment("import-residency-release-on"));
 #endif
     assert(!native12::ddi_experiment_off("deferred-repla"));
     assert(!native12::ddi_experiment_off("replay"));
@@ -172,6 +185,48 @@ int main() {
     // A name too long for the "-off" buffer is no switch, never an accidental off.
     assert(!native12::ddi_experiment_off(std::string(60, 'a').c_str()));
 
+    // The table: each name is in the syntax of the list, and no name has two rows.
+    for (const native12::SwitchRow& row : native12::kD3D12Switches) {
+        assert(row.name[0] && detail::experiment_syntax(row.name) && !std::strchr(row.name, ','));
+        unsigned rows = 0;
+        for (const native12::SwitchRow& other : native12::kD3D12Switches)
+            if (!std::strcmp(row.name, other.name)) ++rows;
+        assert(rows == 1);
+        // A release build drops each lab name and keeps each other name. A lab build keeps each name.
+        const std::string token = row.parameter ? std::string(row.name) + "1920x1200" : std::string(row.name);
+        const Admitted release = admit(token.c_str(), false), lab = admit(token.c_str(), true);
+        const bool lab_only = row.cls == native12::SwitchClass::Lab;
+        assert(release.kept == (lab_only ? "" : token) && release.dropped == (lab_only ? token : ""));
+        assert(release.count.lab == (lab_only ? 1u : 0u) && !release.count.unknown);
+        assert(lab.kept == token && lab.dropped.empty() && lab.count.kept == 1);
+    }
+    // The switches that can stop the GPU or lose the device are lab names. This list is the reason for the rule.
+    for (const char* name : {"import-residency-release-on", "release-two-phase-off", "import-progress-gate-off",
+                             "import-quarantine-off", "fence-wait-accept-off", "shared-create-retry-off",
+                             "raytracing-tier12-off"}) {
+        const native12::SwitchRow* row = native12::switch_row(native12::kD3D12Switches, name);
+        assert(row && row->cls == native12::SwitchClass::Lab);
+        assert(admit(name, false).kept.empty());
+    }
+    // A mixed list keeps its order. A name with no row is dropped in each flavour, and so is a name that only
+    // starts as a row does.
+    Admitted mixed = admit("present-cached,import-quarantine-off,x-future,deferred-replay-off,scanout-flip-1280x720", false);
+    assert(mixed.kept == "present-cached,deferred-replay-off,scanout-flip-1280x720");
+    assert(mixed.dropped == "import-quarantine-off,x-future");
+    assert(mixed.count.kept == 3 && mixed.count.lab == 1 && mixed.count.unknown == 1);
+    mixed = admit("present-cached,import-quarantine-off,x-future,deferred-replay-off", true);
+    assert(mixed.kept == "present-cached,import-quarantine-off,deferred-replay-off" && mixed.dropped == "x-future");
+    assert(admit("deferred-replay-offx,deferred-repla,replay", true).kept.empty());
+    assert(admit("", false).kept.empty() && admit(",,", false).kept.empty());
+    // The old names of the defaults stay, so a stored profile that names them still resolves.
+    assert(admit("raytracing-tier,recording-bind,retire-handoff,deferred-replay,scanout-flip", false).count.kept == 5);
+    // The longest list fits the record of the dropped names.
+    assert(admit(std::string(255, 'a').c_str(), false).dropped.size() == 255);
+    // The whole name of a parameter row is a row of its own, and the bare start of a parameter is no name.
+    assert(native12::switch_row(native12::kD3D12Switches, "scanout-flip-off")->cls == native12::SwitchClass::Feature);
+    assert(!native12::switch_row(native12::kD3D12Switches, "scanout-flip-"));
+    assert(!native12::switch_row(native12::kD3D12Switches, nullptr));
+
     // Without the variable: this image has no profile and the build machine has no machine-wide value.
     assert(SetEnvironmentVariableA(kVariable, nullptr));
     v = detail::resolve_experiment();
@@ -182,10 +237,10 @@ int main() {
 
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
     std::puts("PASS ddi experiment sources (lab build): syntax, matching, profile key, machine-wide value, profile and "
-              "machine-wide lists joined, variable precedence, none, refusals, the -off form of every default");
+              "machine-wide lists joined, variable precedence, none, refusals, the -off form of every default, switch classes");
 #else
     std::puts("PASS ddi experiment sources (release build): syntax, matching, profile key, machine-wide value, profile "
-              "and machine-wide lists joined, no variable source, the -off form of every default");
+              "and machine-wide lists joined, no variable source, the -off form of every default, switch classes");
 #endif
     return 0;
 }
