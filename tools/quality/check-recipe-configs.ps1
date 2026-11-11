@@ -35,6 +35,9 @@ param([Parameter(Mandatory)][string]$Out,
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
+# The problem lines quote the error text of PowerShell. PowerShell translates that text to the display language of
+# the user. Set English here, so that a report and its test read the same on each computer.
+[Threading.Thread]::CurrentThread.CurrentUICulture = [Globalization.CultureInfo]::GetCultureInfo('en-US')
 if (-not $Repo) { $Repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path }
 $buildDir = Join-Path $Repo 'tools\build'
 if (-not (Test-Path -LiteralPath $buildDir)) { Write-Host "check-recipe-configs: no $buildDir"; exit 2 }
