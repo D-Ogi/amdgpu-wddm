@@ -68,7 +68,8 @@ struct ImportReleasePolicy {
     bool holds() const noexcept {return progress_gate || quarantine_depth;}
     static ImportReleasePolicy off() noexcept {return {};}
     // The driver's defaults, with the experiment switches of ddi-trace.h applied: import-progress-gate-off
-    // and import-quarantine-off (both default on), and import-residency-release-on (default off: the hold is on).
+    // and import-quarantine-off (both default on), and import-residency-release-on (default off: the hold is on;
+    // lab builds only, BD-361: a release build always keeps the hold).
     static ImportReleasePolicy from_switches() noexcept;
 };
 // A linear primary's release reached the shell outside the DDI of its runtime resource. No runtime
@@ -187,7 +188,7 @@ class RuntimeHeapImports final {
     // callback is ever made under lock_ and the leaf rule above still holds. Unconditional: no gate, no
     // progress source may leave a heap resident when the creation DDI returns, which is the whole
     // requirement (DirectX-Specs ResourceHeaps.md, Residency DDIs, line 1011). It runs only in the arm
-    // import-residency-release-on; by default ImportReleasePolicy::residency_hold keeps the reference until the
+    // import-residency-release-on, which a lab build only can turn on (BD-361); by default ImportReleasePolicy::residency_hold keeps the reference until the
     // first runtime residency operation of the allocation (BD-313, end_residency_hold).
     HRESULT release_import_residency(Record&) noexcept;
 public:

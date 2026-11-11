@@ -648,6 +648,21 @@ static partial class UnitTests
         Equal(ProfileWriteKind.Delete, w.Kind, "G-PROF: no names left removes the key (settings rule)");
         Equal(ProfileWriteKind.None, GameGroups.Plan("g.exe", "present-cached,present-noprimary", new Dictionary<string, bool> { { "present", true } }).Kind, "G-PROF: the same set in another order is no change");
         Throws<ArgumentException>(() => GameGroups.Apply("", new Dictionary<string, bool> { { "nope", true } }), "G-PROF: unknown group refused");
+        // BD-361: import-residency-release-on is a lab-only arm of the shell and no longer a switch of this app. A value
+        // stored by an earlier release that still names it parses without an error, as an unknown name: the support
+        // view shows it, an edit keeps it and a save accepts it, and a release shell ignores it.
+        const string removedArm = "import-residency-release-on";
+        Check(Profiles.Find(removedArm) == null, "BD-361: the lab-only arm is not a catalog switch");
+        Check(GameGroups.All.All(g => !g.Tokens.Contains(removedArm)), "BD-361: no group offers the lab-only arm");
+        var old = Profiles.Parse("import-quarantine-off," + removedArm);
+        Check(old.Known.SequenceEqual(new[] { "import-quarantine-off" }) && old.Unknown.SequenceEqual(new[] { removedArm }), "BD-361: a stored arm is an unknown name");
+        Equal("import-quarantine-off," + removedArm, Profiles.Compose(old.Known, old.Unknown), "BD-361: a save keeps the stored arm as it was");
+        var diag = GameGroups.Find("diag");
+        Equal(GroupState.Off, GameGroups.State(diag, removedArm), "BD-361: the stored arm alone does not turn the diagnostic group on");
+        Equal(ProfileWriteKind.None, GameGroups.Plan("g.exe", removedArm, new Dictionary<string, bool>()).Kind, "BD-361: no change, no write");
+        w = GameGroups.Plan("g.exe", removedArm, new Dictionary<string, bool> { { "rt", false } });
+        Check(w.Kind == ProfileWriteKind.Set && w.Value == "raytracing-tier-off," + removedArm, "BD-361: an edit keeps the stored arm: " + w.Value);
+        Check(GameGroups.Hidden(removedArm).SequenceEqual(new[] { removedArm }), "BD-361: the support view shows the stored arm");
         // WU-015 origins.
         Equal(GroupState.On, GameGroups.Default(rt), "an Invert group's default state is on");
         Equal(GroupState.Off, GameGroups.Default(present), "an opt-in group's default state is off");

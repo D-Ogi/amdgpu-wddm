@@ -98,7 +98,9 @@ inline void ddi_chain_failure(const char* site,HRESULT code,unsigned operation=0
 //   import-residency-release-on: an imported heap gives the driver's own residency reference back, the
 //     BD-052 change of 00e8e0fc (heap-import.cpp, release_import_residency). The default keeps the hold,
 //     because with the release on, internal engine memory was paged out under the GFX CP (3DMark start,
-//     tester.36). This arm is for lab trials of the tester.37 rework only.
+//     tester.36). This arm is for lab trials of the tester.37 rework only. Lab builds only
+//     (ddi_import_residency_release_on, BD-361): with the arm on, 3DMark Time Spy faults the GPU and the system
+//     stops with 0x116, so a release shell has no switch for it and always keeps the hold.
 //   import-residency-hold-on: still accepted, changes nothing (the hold is the default).
 //   shader-model-68-off: the adapter reports shader model 6.7 at most, and no 1091 answer (adapter-caps.cpp,
 //     engine-ddi set_shader_model_ceiling, M840).
@@ -270,6 +272,16 @@ inline bool ddi_experiment(const char* name) noexcept {return ddi_experiment_lis
 inline bool ddi_raytracing_tier12_off() noexcept {
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
     return ddi_experiment("raytracing-tier12-off");
+#else
+    return false;
+#endif
+}
+// import-residency-release-on is a lab switch only (BD-361): the arm is known to fault the GPU in a real
+// application (3DMark Time Spy, bugcheck 0x116), so a release shell always keeps the residency hold of an import,
+// and no source of the list (environment, profile, machine value) turns the hold off.
+inline bool ddi_import_residency_release_on() noexcept {
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    return ddi_experiment("import-residency-release-on");
 #else
     return false;
 #endif

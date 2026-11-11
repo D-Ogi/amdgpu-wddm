@@ -122,8 +122,8 @@ ImportReleasePolicy ImportReleasePolicy::from_switches() noexcept {
     // 23798-23811 of boot-20261102T232052Z). The hand-back at creation stays the opt-in arm. BD-313 limits the
     // hold instead: it ends at the first runtime MakeResident or Evict of the allocation (end_residency_hold), so
     // only engine memory, which no runtime object names, keeps it for life. import-residency-hold-on is still
-    // accepted (a no-op).
-    policy.residency_hold=!ddi_experiment("import-residency-release-on");
+    // accepted (a no-op). BD-361: the opt-in arm exists in a lab build only (ddi_import_residency_release_on).
+    policy.residency_hold=!ddi_import_residency_release_on();
     return policy;
 }
 RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& domain,
@@ -321,8 +321,9 @@ void RuntimeHeapImports::drain(bool all) noexcept {
 // before the VA leaves this module. After the DDI the residency of an application's heap is the runtime's,
 // which is what the residency DDIs are for, and a heap the runtime never makes resident is a heap the
 // application asked not to have committed.
-//   This hand-back is the arm import-residency-release-on (ddi-trace.h). The default is the hold, which the first
-// runtime MakeResident or Evict of the allocation ends (BD-313, end_residency_hold).
+//   This hand-back is the arm import-residency-release-on (ddi-trace.h), in lab builds only (BD-361). The default
+// and the only release behaviour is the hold, which the first runtime MakeResident or Evict of the allocation ends
+// (BD-313, end_residency_hold).
 HRESULT RuntimeHeapImports::release_import_residency(Record& record) noexcept {
     if(policy_.residency_hold)return S_OK;
     // This runs inside allocate/adopt, before the creation/open DDI returns. Even
