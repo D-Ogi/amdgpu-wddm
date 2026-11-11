@@ -228,8 +228,8 @@ game.group.cpu|mt|45883a65|프레임당 프로세서 작업 줄이기
 game.group.cpu.explain|mt|61eb2481|드라이버 작업을 더 많은 프로세서 코어에 나눕니다. 프로세서 때문에 성능이 제한될 때 프레임 속도가 올라갈 수 있습니다.
 game.group.cpu.cost|mt|3f836d24|프로세서 스레드를 더 많이 사용합니다. 게임이 끊기거나 종료되면 끄세요.
 game.group.diag|mt-safe|1a394bb7|진단 스위치
-game.group.diag.explain|mt|62e65139|안정성 수정을 끕니다. 개발자가 요청할 때만 사용하세요.
-game.group.diag.cost|mt|9bd2b1e2|게임이 불안정해질 수 있습니다.
+game.group.diag.explain|mt|0d3c40f6|추가 진단 기록을 씁니다. 개발자가 요청할 때만 사용하세요.
+game.group.diag.cost|mt|ca8ca2e8|게임이 느려질 수 있습니다.
 game.origin.driver|mt-safe|95d5095e|드라이버 기본값
 game.origin.recommended|mt-safe|3c243c3e|설치 프로그램 권장값
 game.origin.game|mt-safe|0d27941d|이 게임용 설정

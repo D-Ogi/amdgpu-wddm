@@ -246,13 +246,45 @@ static partial class UnitTests
 
     static void ShellTokens(string root)
     {
-        // Every catalog switch is a name the shell asks for; every name the shell asks for is in the catalog.
-        // ddi_experiment_off("x") asks for "x-off" (driver/umd/d3d12/ddi-trace.h): the default is on and the
-        // switch subtracts from it, so the name in the value, and in the catalog, is the off form.
+        // The shell declares every switch name with a class (driver/umd/d3d12/ddi-trace.h, kD3D12Switches). The
+        // rule of this application: it offers Feature names only. A Lab name turns off a protection of
+        // the driver, so it is never in the catalog, in a group or in NotOffered.
+        var trace = File.ReadAllText(Path.Combine(root, @"driver\umd\d3d12\ddi-trace.h"));
+        var classes = new Dictionary<string, string>();
+        foreach (Match m in Regex.Matches(trace, "^\\s*\\{\"([a-z0-9-]+)\",SwitchClass::(Feature|Lab|Accepted)(,true)?\\},\\s*$", RegexOptions.Multiline))
+        {
+            Check(!classes.ContainsKey(m.Groups[1].Value), "shell switch " + m.Groups[1].Value + " has one row");
+            classes[m.Groups[1].Value] = m.Groups[2].Value;
+        }
+        Check(classes.Count >= 20 && classes.Values.Contains("Lab") && classes.Values.Contains("Feature"), "the shell's switch table is read: " + classes.Count + " rows");
+        Check(Regex.Matches(trace, "SwitchClass::(Feature|Lab|Accepted)").Count == classes.Count, "every row of the shell's switch table is on one line");
+        foreach (var s in Profiles.Catalog)
+            if (!Profiles.AwaitingShell.Contains(s.Token))
+                Check(classes.ContainsKey(s.Token) && classes[s.Token] == "Feature", "catalog switch " + s.Token + " is a Feature name of the shell");
+        foreach (var t in Profiles.NotOffered)
+            Check(classes.ContainsKey(t) && classes[t] == "Feature" && Profiles.Find(t) == null, "not-offered switch " + t + " is a Feature name outside the catalog");
+        foreach (var row in classes)
+        {
+            bool offered = Profiles.Find(row.Key) != null, grouped = GameGroups.All.Any(g => g.Tokens.Contains(row.Key));
+            if (row.Value == "Feature") Check(offered || Profiles.NotOffered.Contains(row.Key), "Feature switch " + row.Key + " is in the catalog or in NotOffered");
+            else Check(!offered && !grouped && !Profiles.NotOffered.Contains(row.Key), row.Value + " switch " + row.Key + " is not offered");
+        }
+        // Every name that the shell asks for has a row, because the shell drops a name with no row.
+        // ddi_experiment_off("x") asks for "x-off": the default is on and the switch subtracts from it, so the
+        // name in the value, and in the catalog, is the off form.
         var asked = new HashSet<string>();
-        foreach (var file in Directory.GetFiles(Path.Combine(root, @"driver\umd\d3d12"), "*.cpp").Where(f => !f.EndsWith("-test.cpp")))
-            foreach (Match m in Regex.Matches(File.ReadAllText(file), "ddi_experiment(_off)?\\(\"([a-z0-9-]+)\"\\)"))
+        foreach (var file in Directory.GetFiles(Path.Combine(root, @"driver\umd\d3d12")).Where(f => (f.EndsWith(".cpp") || f.EndsWith(".h")) && !f.EndsWith("-test.cpp")))
+        {
+            var text = File.ReadAllText(file);
+            foreach (Match m in Regex.Matches(text, "ddi_experiment(_off)?\\(\"([a-z0-9-]+)\"\\)"))
                 asked.Add(m.Groups[2].Value + (m.Groups[1].Success ? "-off" : ""));
+            foreach (Match m in Regex.Matches(text, "ddi_experiment_listed\\([^,()]+,\"([a-z0-9-]+)\"\\)"))
+                asked.Add(m.Groups[1].Value);
+        }
+        Check(asked.Count >= 15, "the shell's call sites are read: " + asked.Count + " names");
+        foreach (var t in asked) Check(classes.ContainsKey(t), "shell switch " + t + " has a row in kD3D12Switches");
+        foreach (var row in classes.Where(r => r.Value != "Accepted"))
+            Check(asked.Contains(row.Key), row.Value + " row " + row.Key + " is read by the shell");
         foreach (var s in Profiles.Catalog)
         {
             // A switch of a shell branch that is not on main yet may be missing; once the shell reads it, the entry
@@ -261,8 +293,6 @@ static partial class UnitTests
             else Check(asked.Contains(s.Token), "catalog switch " + s.Token + " is read by the shell");
         }
         foreach (var t in Profiles.AwaitingShell) Check(Profiles.Find(t) != null, "awaiting switch " + t + " is in the catalog");
-        foreach (var t in asked) Check(Profiles.Find(t) != null, "shell switch " + t + " is in the catalog");
-        var trace = File.ReadAllText(Path.Combine(root, @"driver\umd\d3d12\ddi-trace.h"));
         Check(trace.Contains(@"SOFTWARE\\amdgpu-wddm\\D3D12\\Applications\\"), "profile key path matches the shell");
         Check(trace.Contains("\"Experiment\""), "profile value name matches the shell");
     }

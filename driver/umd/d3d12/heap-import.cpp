@@ -122,8 +122,8 @@ ImportReleasePolicy ImportReleasePolicy::from_switches() noexcept {
     // 23798-23811 of boot-20261102T232052Z). The hand-back at creation stays the opt-in arm. BD-313 limits the
     // hold instead: it ends at the first runtime MakeResident or Evict of the allocation (end_residency_hold), so
     // only engine memory, which no runtime object names, keeps it for life. import-residency-hold-on is still
-    // accepted (a no-op). BD-361: the opt-in arm exists in a lab build only (ddi_import_residency_release_on).
-    policy.residency_hold=!ddi_import_residency_release_on();
+    // accepted (a no-op). The opt-in arm is a lab switch, so a release build drops the name.
+    policy.residency_hold=!ddi_experiment("import-residency-release-on");
     return policy;
 }
 RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& domain,

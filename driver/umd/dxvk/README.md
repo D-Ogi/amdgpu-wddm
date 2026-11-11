@@ -425,6 +425,9 @@ application profile or the machine-wide value, and in a lab build also from
 `AMDGPU_WDDM_D3D11_EXPERIMENT` (BD-167: a release shell has no lookup of that name). The name ends in `-off` because the shells share one
 rule: a validated behaviour is the default, and a switch only ever turns one off again. The
 recommended default is the WDDM 2.2 offer, which is what the shell does with no switch named.
+Each name has a row in `kD3D11Switches` with a class (`../d3d12/experiment-class.h`).
+`wddm22-ddi-off` is a Feature switch. `present-status-off` and `host-identity-off` are Lab
+switches, so a release build drops them.
 
 The sibling modules are named `amdgpu_wddm_dxvk.dll` and `amdgpu_wddm_radv.dll`. Zero hashes,
 unknown record versions, invalid Boolean/precision values and inconsistent capability

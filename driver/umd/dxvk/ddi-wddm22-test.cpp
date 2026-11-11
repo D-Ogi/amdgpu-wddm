@@ -145,6 +145,20 @@ void negotiation() {
     // No switch withholds the optional offer; the adapter must still establish the KMD version.
     if (!d3d11_experiment_name()[0]) CHECK(wddm2_2_offered());
     CHECK(wddm2_2_offered()!=d3d11_experiment_off("wddm22-ddi"));
+    // The class of each switch: a release build drops the lab names and the names with no row, a lab build drops
+    // only the names with no row.
+    {
+        char list[96]="present-status-off,wddm22-ddi-off,x-none,host-identity-off",dropped[96]{};
+        const native12::SwitchAdmission release=native12::admit_switches(list,kD3D11Switches,false,dropped);
+        CHECK(!std::strcmp(list,"wddm22-ddi-off"));
+        CHECK(!std::strcmp(dropped,"present-status-off,x-none,host-identity-off"));
+        CHECK(release.kept==1 && release.lab==2 && release.unknown==1);
+        char all[96]="present-status-off,wddm22-ddi-off,x-none,host-identity-off";
+        const native12::SwitchAdmission lab=native12::admit_switches(all,kD3D11Switches,true,dropped);
+        CHECK(!std::strcmp(all,"present-status-off,wddm22-ddi-off,host-identity-off"));
+        CHECK(!std::strcmp(dropped,"x-none"));
+        CHECK(lab.kept==3 && lab.lab==0 && lab.unknown==1);
+    }
     // The version names of the log, which must name the set the shell really offered.
     CHECK(!std::strcmp(ddi_version_name(D3D11_1_DDI_SUPPORTED),"11_1") &&
           !std::strcmp(ddi_version_name(D3DWDDM2_0_DDI_SUPPORTED),"WDDM2_0") &&

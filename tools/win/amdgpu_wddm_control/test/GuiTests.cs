@@ -632,7 +632,7 @@ static partial class UnitTests
         var rt = GameGroups.Find("rt"); var present = GameGroups.Find("present"); var cpu = GameGroups.Find("cpu");
         // The rt and cpu groups are Invert groups: the box is checked while the value names none of their off
         // switches, so "rt off" is the value that names raytracing-tier-off.
-        string stored = "raytracing-tier-off,present-noprimary,x-future,release-two-phase-off";
+        string stored = "raytracing-tier-off,present-noprimary,x-future,replay-log";
         Equal(GroupState.Partial, GameGroups.State(present, stored), "G-PROF: one of two present switches is partial");
         Equal(GroupState.Off, GameGroups.State(rt, stored), "G-PROF: rt off, the value names its off switch");
         Equal(GroupState.On, GameGroups.State(rt, "present-cached"), "G-PROF: rt on without its off switch");
@@ -641,7 +641,7 @@ static partial class UnitTests
         var w = GameGroups.Plan("g.exe", stored, new Dictionary<string, bool> { { "cpu", false } });
         Equal(ProfileWriteKind.Set, w.Kind, "G-PROF: a group change writes");
         Check(w.Value.Contains("present-noprimary") && !w.Value.Contains("present-cached"), "G-PROF: the untouched partial group keeps its exact tokens");
-        Check(w.Value.Contains("x-future") && w.Value.Contains("release-two-phase-off"), "G-PROF: unknown and diagnostic names are kept");
+        Check(w.Value.Contains("x-future") && w.Value.Contains("replay-log"), "G-PROF: unknown and diagnostic names are kept");
         Check(w.Value.Contains("recording-bind-off") && w.Value.Contains("retire-handoff-off") && w.Value.Contains("deferred-replay-off")
             && w.Value.Contains("direct-entry-off"), "G-PROF: the changed group fully off");
         w = GameGroups.Plan("g.exe", "raytracing-tier-off", new Dictionary<string, bool> { { "rt", true } });
@@ -654,9 +654,9 @@ static partial class UnitTests
         const string removedArm = "import-residency-release-on";
         Check(Profiles.Find(removedArm) == null, "BD-361: the lab-only arm is not a catalog switch");
         Check(GameGroups.All.All(g => !g.Tokens.Contains(removedArm)), "BD-361: no group offers the lab-only arm");
-        var old = Profiles.Parse("import-quarantine-off," + removedArm);
-        Check(old.Known.SequenceEqual(new[] { "import-quarantine-off" }) && old.Unknown.SequenceEqual(new[] { removedArm }), "BD-361: a stored arm is an unknown name");
-        Equal("import-quarantine-off," + removedArm, Profiles.Compose(old.Known, old.Unknown), "BD-361: a save keeps the stored arm as it was");
+        var old = Profiles.Parse("replay-log," + removedArm);
+        Check(old.Known.SequenceEqual(new[] { "replay-log" }) && old.Unknown.SequenceEqual(new[] { removedArm }), "BD-361: a stored arm is an unknown name");
+        Equal("replay-log," + removedArm, Profiles.Compose(old.Known, old.Unknown), "BD-361: a save keeps the stored arm as it was");
         var diag = GameGroups.Find("diag");
         Equal(GroupState.Off, GameGroups.State(diag, removedArm), "BD-361: the stored arm alone does not turn the diagnostic group on");
         Equal(ProfileWriteKind.None, GameGroups.Plan("g.exe", removedArm, new Dictionary<string, bool>()).Kind, "BD-361: no change, no write");
@@ -670,7 +670,7 @@ static partial class UnitTests
         Equal(ValueOrigin.Recommended, GameGroups.Origin(rt, "raytracing-tier-off", "raytracing-tier-off"), "origin: as the installer recommends");
         Equal(ValueOrigin.ThisGame, GameGroups.Origin(cpu, "deferred-replay-off,recording-bind-off,retire-handoff-off,direct-entry-off", "raytracing-tier-off"), "origin: set for this game");
         Equal(ValueOrigin.DriverDefault, GameGroups.Origin(cpu, "raytracing-tier-off", "raytracing-tier-off"), "origin: the group's default state is the driver default");
-        Check(GameGroups.Hidden(stored).SequenceEqual(new[] { "release-two-phase-off", "x-future" }), "G-PROF: the support-only names: " + string.Join(",", GameGroups.Hidden(stored)));
+        Check(GameGroups.Hidden(stored).SequenceEqual(new[] { "replay-log", "x-future" }), "G-PROF: the support-only names: " + string.Join(",", GameGroups.Hidden(stored)));
         foreach (var g in GameGroups.All) foreach (var t in g.Tokens) Check(Profiles.Find(t) != null, "group token " + t + " is a catalog switch");
         Check(Profiles.Catalog.All(c => GameGroups.All.Count(g => g.Tokens.Contains(c.Token)) + (c.Token == ShaderModelCeiling.Off68 || c.Token == ShaderModelCeiling.Off67 ? 1 : 0) == 1),
             "every catalog switch is in exactly one group or the shader model choice");

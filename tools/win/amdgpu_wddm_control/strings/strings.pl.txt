@@ -230,8 +230,8 @@ game.group.cpu|rev|45883a65|Mniej pracy procesora na klatkę
 game.group.cpu.explain|rev|61eb2481|Rozkłada pracę sterownika na więcej rdzeni procesora. Może to zwiększyć liczbę klatek na sekundę, gdy ograniczeniem jest procesor.
 game.group.cpu.cost|rev|3f836d24|Używa więcej wątków procesora. Wyłącz to, jeśli gra się przycina lub zamyka.
 game.group.diag|rev|1a394bb7|Przełączniki diagnostyczne
-game.group.diag.explain|rev|62e65139|Wyłączają poprawki stabilności. Używaj ich tylko na prośbę twórców.
-game.group.diag.cost|rev|9bd2b1e2|Gra może działać niestabilnie.
+game.group.diag.explain|mt|0d3c40f6|Zapisują dodatkowe dane diagnostyczne. Używaj ich tylko na prośbę twórców.
+game.group.diag.cost|mt|ca8ca2e8|Gra może działać wolniej.
 game.origin.driver|rev|95d5095e|Ustawienie domyślne sterownika
 game.origin.recommended|rev|3c243c3e|Zalecane przez instalator
 game.origin.game|rev|0d27941d|Ustawione dla tej gry

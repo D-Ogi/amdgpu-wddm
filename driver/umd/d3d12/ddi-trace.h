@@ -7,6 +7,7 @@
 #include <cstring>
 #include <cwchar>
 #include "stdio-log.h"
+#include "experiment-class.h"
 #pragma comment(lib,"advapi32.lib") // RegGetValueW: the application profile below
 
 namespace native12 {
@@ -77,6 +78,10 @@ inline void ddi_chain_failure(const char* site,HRESULT code,unsigned operation=0
 // them: one name or several separated by commas. Empty, "none" or unknown names mean none. Read once per
 // process.
 //
+// Every name that the shell reads has a row in kD3D12Switches below, and the row gives the class of the switch
+// (experiment-class.h). A release build honours the Feature and Accepted rows only. It drops a Lab name and a
+// name with no row from the list, whichever source named it. The text below marks each Lab switch.
+//
 // **Every validated behaviour is the driver's default and needs no switch, no profile and no variable.** A
 // switch is only ever how an operator turns one OFF again, for a bisect or a rollback without a new binary,
 // and every such name ends in "-off". The defaults and their off switches:
@@ -91,16 +96,19 @@ inline void ddi_chain_failure(const char* site,HRESULT code,unsigned operation=0
 //     instead of engine-ddi's direct entry, which writes their ring entries itself (native-tables.cpp; trial 327:
 //     +3.8 % at Witcher 3 LOW). recording-bind-off or deferred-replay-off implies it.
 //   release-two-phase-off: engine-ddi waits for one snapshot per release, not two (device-engine.cpp, F1 of
-//     the trial 245 report, M15.8).
+//     the trial 245 report, M15.8). Lab: it turns off a protection against the release of memory in use.
 //   import-progress-gate-off: a released import is not held for the device-wide progress of its release
-//     (heap-import.cpp, ImportReleasePolicy, F2).
-//   import-quarantine-off: no release delay, no caps (heap-import.cpp, F3).
+//     (heap-import.cpp, ImportReleasePolicy, F2). Lab, for the same reason.
+//   import-quarantine-off: no release delay, no caps (heap-import.cpp, F3). Lab, for the same reason.
+//   fence-wait-accept-off: a queue wait on a fence of another device loses the device, the answer of earlier
+//     builds (native-queue-ddi.cpp). Lab: the application loses its device.
+//   shared-create-retry-off: a shareable allocation does not ask the runtime for the shared form first
+//     (heap-import.cpp). Lab: the path without the request is not a product path.
 //   import-residency-release-on: an imported heap gives the driver's own residency reference back, the
 //     BD-052 change of 00e8e0fc (heap-import.cpp, release_import_residency). The default keeps the hold,
 //     because with the release on, internal engine memory was paged out under the GFX CP (3DMark start,
-//     tester.36). This arm is for lab trials of the tester.37 rework only. Lab builds only
-//     (ddi_import_residency_release_on, BD-361): with the arm on, 3DMark Time Spy faults the GPU and the system
-//     stops with 0x116, so a release shell has no switch for it and always keeps the hold.
+//     tester.36). This arm is for lab trials of the tester.37 rework only. Lab: with the arm on, 3DMark Time
+//     Spy faults the GPU and the system stops with 0x116. A release shell thus always keeps the hold.
 //   import-residency-hold-on: still accepted, changes nothing (the hold is the default).
 //   shader-model-68-off: the adapter reports shader model 6.7 at most, and no 1091 answer (adapter-caps.cpp,
 //     engine-ddi set_shader_model_ceiling, M840).
@@ -111,9 +119,7 @@ inline void ddi_chain_failure(const char* site,HRESULT code,unsigned operation=0
 //   raytracing-tier12-off: the adapter reports RaytracingTier 1.1 and shader model 6.8 at most, and the
 //     acceleration structure and state object slots refuse opacity micromaps, SERIALIZE and DESERIALIZE
 //     (adapter-caps.cpp, device-engine.cpp, engine-ddi set_raytracing_tier12_reporting and
-//     set_raytracing_tier12_commands). Lab builds only (ddi_raytracing_tier12_off): a release shell has no
-//     switch for it.
-// All twelve off is the release and reporting behaviour of adapter106 with no ray tracing.
+//     set_raytracing_tier12_commands). Lab: a release shell always reports the tier that the engine has.
 //
 // Two names are still opt-in, because no measurement admits them as defaults under the GPU compositor:
 //   present-cached: the swap-chain surface is placed in the Cached aperture (heap-import.cpp). dxgkrnl
@@ -150,6 +156,40 @@ enum class DdiExperimentSource : unsigned {
 struct DdiExperimentValue {
     char text[256]{};
     DdiExperimentSource source{DdiExperimentSource::None};
+    // The names that this build did not honour, and their counts (admit_switches).
+    char dropped[256]{};
+    SwitchAdmission admission{};
+};
+// Every switch name that this shell reads, with its class. One row on one line: the control application's test
+// reads these rows from this file. Add the row before the first read of a new name, because a name with no row
+// is dropped.
+inline constexpr SwitchRow kD3D12Switches[]={
+    {"raytracing-tier-off",SwitchClass::Feature},
+    {"raytracing-tier12-off",SwitchClass::Lab},
+    {"shader-model-68-off",SwitchClass::Feature},
+    {"shader-model-67-off",SwitchClass::Feature},
+    {"recording-bind-off",SwitchClass::Feature},
+    {"retire-handoff-off",SwitchClass::Feature},
+    {"deferred-replay-off",SwitchClass::Feature},
+    {"direct-entry-off",SwitchClass::Feature},
+    {"async-pso-off",SwitchClass::Feature},
+    {"scanout-flip-off",SwitchClass::Feature},
+    {"present-cached",SwitchClass::Feature},
+    {"present-noprimary",SwitchClass::Feature},
+    {"replay-log",SwitchClass::Feature},
+    {"release-two-phase-off",SwitchClass::Lab},
+    {"import-progress-gate-off",SwitchClass::Lab},
+    {"import-quarantine-off",SwitchClass::Lab},
+    {"import-residency-release-on",SwitchClass::Lab},
+    {"fence-wait-accept-off",SwitchClass::Lab},
+    {"shared-create-retry-off",SwitchClass::Lab},
+    {"raytracing-tier",SwitchClass::Accepted},
+    {"recording-bind",SwitchClass::Accepted},
+    {"retire-handoff",SwitchClass::Accepted},
+    {"deferred-replay",SwitchClass::Accepted},
+    {"import-residency-hold-on",SwitchClass::Accepted},
+    {"scanout-flip",SwitchClass::Accepted},
+    {"scanout-flip-",SwitchClass::Accepted,true},
 };
 namespace ddi_detail {
 inline bool experiment_syntax(const char* text) noexcept {
@@ -224,8 +264,9 @@ inline DdiExperimentValue combine_experiment(int profile_found,const char* profi
 }
 // BD-167: the environment variable is a source in a lab build only (AMDGPU_WDDM_LAB_FLAVOUR, build-umd-d3d12.ps1 -Lab). A
 // release shell has no lookup of it, so the name is not in the DLL, and the profile and the machine-wide value,
-// which only an administrator writes, are its sources.
-inline DdiExperimentValue resolve_experiment() noexcept {
+// which only an administrator writes, are its sources. This is the list as the sources give it, before the classes
+// of the names are applied.
+inline DdiExperimentValue read_experiment() noexcept {
     DdiExperimentValue v{};
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
     SetLastError(ERROR_SUCCESS);
@@ -244,6 +285,12 @@ inline DdiExperimentValue resolve_experiment() noexcept {
         v.text[0]=0;v.source=DdiExperimentSource::Invalid;
     }
     if(!std::strcmp(v.text,"none"))v.text[0]=0;
+    return v;
+}
+// The list that this build honours: the list of the sources without the names that the class rule drops.
+inline DdiExperimentValue resolve_experiment(bool lab_build=kLabBuild) noexcept {
+    DdiExperimentValue v=read_experiment();
+    v.admission=admit_switches(v.text,kD3D12Switches,lab_build,v.dropped);
     return v;
 }
 }
@@ -267,24 +314,15 @@ inline bool ddi_experiment_listed(const char* list,const char* name) noexcept {
     return false;
 }
 inline bool ddi_experiment(const char* name) noexcept {return ddi_experiment_listed(ddi_experiment_name(),name);}
-// raytracing-tier12-off is a lab switch only: a release shell always reports tier 1.2 and shader model 6.9 where
-// the engine has them, and no source of the list (environment, profile, machine value) turns that off.
-inline bool ddi_raytracing_tier12_off() noexcept {
-#ifdef AMDGPU_WDDM_LAB_FLAVOUR
-    return ddi_experiment("raytracing-tier12-off");
-#else
-    return false;
-#endif
-}
-// import-residency-release-on is a lab switch only (BD-361): the arm is known to fault the GPU in a real
-// application (3DMark Time Spy, bugcheck 0x116), so a release shell always keeps the residency hold of an import,
-// and no source of the list (environment, profile, machine value) turns the hold off.
-inline bool ddi_import_residency_release_on() noexcept {
-#ifdef AMDGPU_WDDM_LAB_FLAVOUR
-    return ddi_experiment("import-residency-release-on");
-#else
-    return false;
-#endif
+// One line per process for the names that this build did not honour. A switch that does nothing is thus visible
+// in the log. The device creation calls this.
+inline void ddi_experiment_report() noexcept {
+    static std::atomic_flag reported;
+    const DdiExperimentValue& value=ddi_experiment_value();
+    if(!value.dropped[0] || reported.test_and_set(std::memory_order_relaxed))return;
+    amdgpu_wddm_log::print(
+        "amdgpu_wddm_d3d12: experiment names not honoured by this build: %s (lab-only %u, unknown %u)\n",
+        value.dropped,value.admission.lab,value.admission.unknown);
 }
 // M15.14 increment 2 spelled the scan-out mode with the geometry it was for, as one token -
 // "scanout-flip-1920x1200" - because the kernel driver then admitted a flip at the POST geometry only.

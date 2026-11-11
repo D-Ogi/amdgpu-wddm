@@ -380,6 +380,7 @@ public:
                 static_cast<unsigned long long>(policy.quarantine_byte_cap));
             ddi_mode2_note(line);
         }
+        ddi_experiment_report();
         engine_ddi::ContextCreateInfo context{};
         context.size=sizeof(context);context.boundary_revision=engine_ddi::kBoundaryRevision;
         context.memory_mode=engine_ddi::MemoryMode::RuntimeBacked;
@@ -392,8 +393,8 @@ public:
         result=configure_overlay_formats(context_);stage("OverlayFormats",result);
         if(result!=S_OK)return result;
         // Raytracing tier 1.2 in the slots, where the engine device has it; the caps half is in adapter-caps.cpp, and
-        // in a lab build the experiment raytracing-tier12-off turns both off (a release build has no switch).
-        result=engine_ddi::set_raytracing_tier12_commands(context_,!ddi_raytracing_tier12_off());
+        // the lab switch raytracing-tier12-off turns both off (a release build drops the name).
+        result=engine_ddi::set_raytracing_tier12_commands(context_,!ddi_experiment("raytracing-tier12-off"));
         stage("RaytracingTier12",result);
         if(result!=S_OK)return result;
         // The engine-ddi half of the release gate (M15.8, F1): two-phase retirement, on unless the

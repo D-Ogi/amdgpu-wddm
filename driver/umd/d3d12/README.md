@@ -264,7 +264,8 @@ the same paging batch that created it, and a CP write to it faulted (the 3DMark
 0x116 of 2026-11-02, paging journal records 23798-23811). The switch
 `import-residency-release-on` turns the hand-back on for a lab arm, in lab builds
 only (BD-361). With the hand-back on, 3DMark Time Spy causes a GPU fault and a
-0x116 stop, so a release build has no switch for it and always keeps the hold.
+0x116 stop, so the switch has the class Lab and a release build always keeps the
+hold.
 `import-residency-hold-on` is still accepted and changes nothing.
 
 **BD-313:** the hold ends at the first runtime residency operation that names the
@@ -319,6 +320,17 @@ it. The device's teardown drains the FIFO in full and counts what was still
 unretired there. Both halves of the gate are switchable
 (`import-progress-gate-off`, `import-quarantine-off`, and
 `release-two-phase-off` for engine-ddi's half; `ddi-trace.h`), all on by default.
+These three switches have the class Lab, so only a lab build honours them.
+
+**Switch classes.** Each switch name that the shell reads has a row in
+`kD3D12Switches` (`ddi-trace.h`), and each row has a class
+(`experiment-class.h`). A Feature switch turns a feature or an optimisation off,
+or turns an opt-in on, and the driver still obeys its contracts. Each build
+honours it. A Lab switch is each other switch: it turns off a protection, or it
+starts a path that is known to fault. Only a lab build honours it. A release
+build drops the name from the list, whichever source named it, and writes one
+log line with the dropped names. A name with no row is dropped in each build.
+To bisect a protection, install the lab flavour of the same release.
 
 Contract sources are the WDK/SDK 10.0.26100 `d3d12umddi.h` callbacks and
 `d3dukmdt.h` structures, plus the local Microsoft documentation checkout:

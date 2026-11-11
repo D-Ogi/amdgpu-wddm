@@ -131,6 +131,8 @@ HRESULT APIENTRY versions(D3D10DDI_HADAPTER handle,UINT32 *entries,UINT64 *value
             list,unsigned(d3d11_experiment_off("wddm22-ddi")));
         OutputDebugStringA(text);
         amdgpu_wddm_log::print("%s",text);
+        if (d3d11_experiment_dropped()[0])
+            amdgpu_wddm_log::print("M14 experiment names not honoured by this build: %s\n",d3d11_experiment_dropped());
     }
     return hr;
 }

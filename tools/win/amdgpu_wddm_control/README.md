@@ -130,6 +130,13 @@ The highest shader model of a game is two switches of its D3D12 profile. `shader
 `shader-model-67-off` gives 6.6 and wins when both are named. 6.8 removes both. Until the shell that reads them is
 merged, `Profiles.AwaitingShell` names them. The ShellTokens test then checks that the shell does not read them yet.
 
+The app offers a switch of the shell only when the shell gives it the class Feature
+(`driver/umd/d3d12/experiment-class.h`, and the table `kD3D12Switches` in `ddi-trace.h`). With a Feature switch set,
+the driver still obeys its contracts. A Lab switch turns off a protection of the driver. The app does not offer it, and
+a release build of the shell drops it. The ShellTokens test reads the table and fails if the catalog, a group or
+`Profiles.NotOffered` names a Lab switch. A value that an earlier release stored with such a name stays as it is. The
+support view shows the name.
+
 ## Display modes
 
 The Display page offers only the modes that `EnumDisplaySettingsEx` lists for a monitor at its current colour depth,
@@ -462,7 +469,7 @@ carry. clang-cl of LLVM 23.1.4 builds the DLL and the CLI (`-Compiler clang-cl`,
 same LLVM links them. `-Compiler msvc` builds them with `cl` and needs `-MsvcReason`. Headers and import
 libraries come from the SDK NuGet packages. Deterministic output. The gates, each of
 which stops the build: `test/UnitTests.cs` (reply offsets computed from the text of `driver/kmd/bc250kmd_escape.h`,
-the profile catalog against every `ddi_experiment("...")` call in `driver/umd/d3d12`, profile editing, DPM ranges
+the profile catalog against the switch table of the D3D12 shell and its `ddi_experiment("...")` calls, profile editing, DPM ranges
 against `docs/design/dpm.md`, redaction, the manifest, and every Recovery rule and refusal, with its constants checked
 against `bc250kmd_escape.h`, `bc250kmd.h`, `interop_policy.h`, `interop.c` and `dpm.c`; with
 `-StartConfirmCore <path>` also against the installer's `start-confirm-core.ps1`), the compiles with warnings as
