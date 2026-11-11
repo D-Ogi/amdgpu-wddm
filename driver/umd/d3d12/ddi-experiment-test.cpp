@@ -135,11 +135,13 @@ int main() {
 
     // The "-off" form: every driver default is read through it, and it matches whole entries only. This is the
     // first read of the process (ddi_experiment_value), so the list stays in force for the checks below.
-    v = with_variable("deferred-replay-off,raytracing-tier12-off");
+    v = with_variable("deferred-replay-off,raytracing-tier12-off,import-residency-release-on");
     assert(v.source == DdiExperimentSource::Environment);
     assert(native12::ddi_experiment_off("deferred-replay"));
     // Raytracing tier 1.2 has an off switch in a lab build only.
     assert(native12::ddi_raytracing_tier12_off());
+    // The import residency hand-back (BD-361) is an arm of a lab build only.
+    assert(native12::ddi_import_residency_release_on());
 #else
     // Release build (BD-167): the shell has no lookup of the variable, so no value of it is a source, and the
     // first read of the process (ddi_experiment_value) finds no list either.
@@ -152,6 +154,9 @@ int main() {
     // A release shell has no off switch for raytracing tier 1.2, whatever the variable says.
     with_variable("raytracing-tier12-off");
     assert(!native12::ddi_raytracing_tier12_off());
+    // A release shell keeps the import residency hold, whatever the variable says (BD-361).
+    with_variable("import-residency-release-on");
+    assert(!native12::ddi_import_residency_release_on());
 #endif
     assert(!native12::ddi_experiment_off("deferred-repla"));
     assert(!native12::ddi_experiment_off("replay"));

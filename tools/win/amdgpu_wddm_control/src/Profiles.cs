@@ -44,6 +44,11 @@ namespace AmdgpuWddmControl
         // positive names raytracing-tier, recording-bind, retire-handoff and deferred-replay are still accepted
         // by the shell and do nothing, so they are not in this catalog: an older value that names them keeps
         // them as unknown names, which the support view shows and no edit drops.
+        //
+        // The lab-only switches of the shell (ddi-trace.h: raytracing-tier12-off, import-residency-release-on) are
+        // not in this catalog in either flavour: a release shell has no switch for them. BD-361 removed
+        // import-residency-release-on, because with it on 3DMark Time Spy faults the GPU and the system stops with
+        // 0x116. A stored value that still names it keeps it as an unknown name, which a release shell ignores.
         public static readonly ProfileSwitch[] Catalog =
         {
             new ProfileSwitch("raytracing-tier-off", "Do not report ray tracing support",
@@ -68,8 +73,6 @@ namespace AmdgpuWddmControl
                 "Turns off a stability fix. Use only when the developers ask for it."),
             new ProfileSwitch("import-quarantine-off", "Turn off the import quarantine (diagnostic)",
                 "Turns off a stability fix. Use only when the developers ask for it."),
-            new ProfileSwitch("import-residency-release-on", "Release imported memory residency (diagnostic)",
-                "Turns on a memory management change that can stop the GPU. Use only when the developers ask for it."),
             new ProfileSwitch("shared-create-retry-off", "Turn off shared textures (diagnostic)",
                 "The driver refuses a texture that two programs share, as it did before this release. Use only when the developers ask for it."),
             new ProfileSwitch("fence-wait-accept-off", "Turn off the queue wait answer (diagnostic)",

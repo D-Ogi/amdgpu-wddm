@@ -262,7 +262,9 @@ reference for the heap's whole life, and the kernel driver sets
 `DriverManagesResidency` to 0. With the hand-back, VidMm paged out an import in
 the same paging batch that created it, and a CP write to it faulted (the 3DMark
 0x116 of 2026-11-02, paging journal records 23798-23811). The switch
-`import-residency-release-on` turns the hand-back on for a lab arm.
+`import-residency-release-on` turns the hand-back on for a lab arm, in lab builds
+only (BD-361). With the hand-back on, 3DMark Time Spy causes a GPU fault and a
+0x116 stop, so a release build has no switch for it and always keeps the hold.
 `import-residency-hold-on` is still accepted and changes nothing.
 
 **BD-313:** the hold ends at the first runtime residency operation that names the
