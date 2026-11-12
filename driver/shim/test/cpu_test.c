@@ -68,8 +68,14 @@ static void test_allowlist(void)
 		CHECK(!bc250_cpu_message_allowed(1u, m, 0) && !bc250_cpu_message_allowed(1u, m, 1));
 		CHECK(!bc250_cpu_message_allowed(4u, m, 0) && !bc250_cpu_message_allowed(4u, m, 1));
 	}
-	/* Queue 3: six getters and the three setters that are the whole write surface of the CPU rail. */
-	CHECK(getters == 6u && setters == 3u);
+	/* Queue 3: six getters, the three setters that are the whole write surface of the CPU rail, and the
+	 * eight-core unlock (BD-368). */
+	CHECK(getters == 6u && setters == 4u);
+	CHECK(bc250_cpu_message_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_STORE_FF, 1));
+	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_STORE_FF, 0));
+	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_STORE_FF, 0));
+	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_STORE_FF, 1));
+	CHECK(!bc250_clock_message_allowed(BC250_CPU_MSG_STORE_FF));
 	CHECK(bc250_cpu_message_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 0));
 	CHECK(bc250_cpu_message_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_GPU_MV, 0));
 	CHECK(bc250_cpu_message_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_PSTATE_MHZ, 0));
@@ -125,10 +131,11 @@ static void test_allowlist(void)
 	}
 	/* The rejected messages of docs/design/rejected-options.md, every one of them, both directions:
 	 * the absolute CPU VID writes, the two unknown pairs, the SoC voltage pair, the LCLK pair, 0x77, 0x8E,
-	 * the generic SMN write that hangs on argument 0, and the guarded block 0x28..0x30. */
+	 * and the guarded block 0x28..0x30. 0x98 left this list with BD-368; its checks are above and in
+	 * test_arguments. */
 	{
 		static const unsigned int rejected[] = { 0x0Fu, 0x10u, 0x4Du, 0x4Eu, 0x49u, 0x4Au, 0x52u, 0x53u,
-							 0x6Du, 0x25u, 0x26u, 0x77u, 0x8Eu, 0x8Cu, 0x20u, 0x9Au, 0x98u };
+							 0x6Du, 0x25u, 0x26u, 0x77u, 0x8Eu, 0x8Cu, 0x20u, 0x9Au };
 		unsigned int i;
 		for (i = 0; i < sizeof(rejected) / sizeof(rejected[0]); i++) {
 			CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_CPU, rejected[i], 0));
@@ -148,12 +155,25 @@ static void test_allowlist(void)
 typedef char oc_max_check[(BC250_CPU_OC_MAX_MHZ >= BC250_CPU_MAX_MHZ_LAB &&
 			    BC250_CPU_OC_MAX_MHZ == BC250_OC_AIO_CPU_MAX_MHZ) ? 1 : -1];
 
+/* The one register that the store of 0xFF may name, as the firmware's own address view gives it. */
+typedef char core_mask_register_check[(BC250_CPU_SMN_CORE_ENABLE_MASK == 0x0115A870u) ? 1 : -1];
+
 static void test_arguments(void)
 {
 	unsigned int p;
 	/* A message that is not on the list has no admitted argument at all. */
-	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, 0x98u, 0));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, 0x9Au, 0));
 	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, 0x0Fu, 1200u));
+	/* The store of 0xFF: the core-enable mask register and no other address. Zero hangs the firmware, the
+	 * short form of the same address is another argument, and the neighbours are other registers. */
+	CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_STORE_FF, BC250_CPU_SMN_CORE_ENABLE_MASK));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_STORE_FF, 0u));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_STORE_FF, 0x5A870u));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_STORE_FF, BC250_CPU_SMN_CORE_ENABLE_MASK + 4u));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_STORE_FF, BC250_CPU_SMN_CORE_ENABLE_MASK - 4u));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_STORE_FF, 0xFFu));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_STORE_FF, 0xFFFFFFFFu));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_STORE_FF, BC250_CPU_SMN_CORE_ENABLE_MASK));
 	/* The single-value getters take 0 and nothing else: a stray argument is a different question than the one
 	 * the driver means to ask. */
 	CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 0));

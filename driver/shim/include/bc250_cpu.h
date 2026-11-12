@@ -80,6 +80,12 @@ void bc250_cpu_queue3(struct bc250_cpu_queue *queue);
 #define BC250_CPU_MSG_SET_CURVE_SCALE		0x50u	/* in: a signed 16-bit scale, packed low. Undervolt only */
 #define BC250_CPU_MSG_SET_CAP_C			0x8Bu	/* in: whole Celsius */
 #define BC250_CPU_MSG_SET_MAX_MHZ		0x8Fu	/* in: plain MHz. The maximum boost clock */
+/* The handler stores the constant 0xFF at the SMN address its argument names, and it takes no value. Argument 0
+ * hangs the firmware in a panic lock, so bc250_cpu_argument_allowed admits named registers only and never 0. */
+#define BC250_CPU_MSG_STORE_FF			0x98u	/* in: an SMN address. The eight-core unlock (BD-368) */
+/* The core-enable mask of the two core complexes, in the firmware's own address view: 0x77 from the factory, one
+ * bit per core. A cold boot gives 0x77 back; a warm reset keeps the value and brings the cores up (REPORTED). */
+#define BC250_CPU_SMN_CORE_ENABLE_MASK		0x0115A870u
 
 #define BC250_CPU_CORES		8u	/* the part is sold with 6 of these 8 enabled; QueryCorePstate refuses above 7 */
 #define BC250_CPU_PSTATES	8u

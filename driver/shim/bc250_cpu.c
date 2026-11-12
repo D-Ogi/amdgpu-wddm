@@ -77,14 +77,17 @@ int bc250_cpu_message_allowed(unsigned int queue, unsigned int message, int writ
 	 * readback or a recorded baseline. Everything that forces an absolute voltage identifier (0x0F, 0x10, 0x4D,
 	 * 0x4E), every voltage offset without a getter (0x49, 0x4A), clock stretching (0x52, 0x53, 0x6D), the
 	 * per-core clock (0x25, 0x26), the protection limits (0x77, 0x8E), the GPU temperature cap (0x8C, 0x20),
-	 * the extra-voltage flag (0x9A) and the generic SMN write (0x98) stay out, each for the reason recorded in
+	 * and the extra-voltage flag (0x9A) stay out, each for the reason recorded in
 	 * docs/design/rejected-options.md. The guarded block 0x28..0x30 is out as well: its nine entries carry a
 	 * different configuration word in the firmware's own table, and the community reads that as a boot flag
-	 * nobody has. */
+	 * nobody has.
+	 * BC250_CPU_MSG_STORE_FF (0x98) is admitted since BD-368: it is the eight-core unlock. Its handler checks
+	 * no address, so the argument check below is the whole bound: a named register and nothing else. */
 	switch (message) {
 	case BC250_CPU_MSG_SET_CURVE_SCALE:
 	case BC250_CPU_MSG_SET_CAP_C:
 	case BC250_CPU_MSG_SET_MAX_MHZ:
+	case BC250_CPU_MSG_STORE_FF:
 		return 1;
 	default:
 		return 0;
@@ -125,6 +128,9 @@ int bc250_cpu_argument_allowed(unsigned int queue, unsigned int message, unsigne
 		return (parameter & 0xFFFFu) == 0u && (parameter >> 16) < BC250_CPU_SOC_CLOCKS;
 	case BC250_CPU_MSG_SET_CAP_C:
 		return parameter >= BC250_CPU_TEMP_MIN_C && parameter <= BC250_CPU_TEMP_MAX_C;
+	case BC250_CPU_MSG_STORE_FF:
+		/* The table of registers that may take the constant: one entry. Zero is never an entry. */
+		return parameter == BC250_CPU_SMN_CORE_ENABLE_MASK;
 	case BC250_CPU_MSG_SET_MAX_MHZ:
 		/* The widest bound any start can admit: the lab's own, or the highest overclock tier's. Which of
 		 * them this start admits is bc250_cpu_settings_check_tier's decision, made before a plan exists. */

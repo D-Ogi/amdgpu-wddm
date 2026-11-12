@@ -261,6 +261,17 @@ static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULO
     return CpuMessageEx(Device, Queue, Message, Parameter, Write, AllowHot, FALSE, Value);
 }
 
+// The core mask into the chip, inside the caller's SmuCpuBegin bracket (BD-368). The full mask goes by queue 3's
+// store of 0xFF at the core-enable mask register: SetCoreEnableMask 0x2C with 0xFF is accepted and brings no core
+// up (unit A, n = 3). The store takes no value, so the stock mask still goes by 0x2C.
+static NTSTATUS CpuSendCoreMask(BC250_DEVICE* Device, ULONG Mask)
+{
+    if (Mask == BC250_CPU_MASK_FULL)
+        return CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_STORE_FF, BC250_CPU_SMN_CORE_ENABLE_MASK,
+                          TRUE, FALSE, NULL);
+    return CpuMessage(Device, BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, Mask, TRUE, FALSE, NULL);
+}
+
 // ---- the boot record and the leftover mark (BD-295) -------------------------------------------------------------
 // A driver stop and start inside one boot (a device disable and enable, a driver update) zeroes everything this
 // surface knows, and the chip keeps what it had: a kept clock limit, or the settings of a revert that the firmware
@@ -1162,8 +1173,7 @@ static void CpuThread(_In_ PVOID Context)
                 // The core mask is the CU mode's shape: sent now, visible after the next restart.
                 if (s->CoreMask && s->CoreMask != BC250_CPU_MASK_STOCK) {
                     if (SmuCpuBegin(&device->Smu)) {
-                        status = CpuMessage(device, BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK,
-                                            s->CoreMask, TRUE, FALSE, NULL);
+                        status = CpuSendCoreMask(device, s->CoreMask);
                         SmuCpuEnd(&device->Smu);
                         GuardLog("cpu: core mask 0x%02X (%lu cores) sent: 0x%08X; the count changes at the next "
                                  "restart", s->CoreMask, bc250_cpu_mask_cores(s->CoreMask), status);
@@ -1811,8 +1821,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                     s->CorePending = s->CoreConfirmed = FALSE;
                 }
                 if (SmuCpuBegin(&Device->Smu)) {
-                    status = CpuMessage(Device, BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, mask,
-                                        TRUE, FALSE, NULL);
+                    status = CpuSendCoreMask(Device, mask);
                     SmuCpuEnd(&Device->Smu);
                 } else status = STATUS_DEVICE_BUSY;
                 if (NT_SUCCESS(status)) s->CoreMask = mask;

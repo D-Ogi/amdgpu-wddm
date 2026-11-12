@@ -873,15 +873,26 @@ static void CoresEscape(BC250_ESCAPE_CPU *d, ULONG mask)
     CpuRequest(&device, d, sizeof(*d), TRUE, flags.Value);
 }
 
-/* How many times the core mask message went out with this mask. */
+/* How many times this mask went out by its own route (BD-368): the full mask is queue 3's store of 0xFF at the
+ * core-enable mask register, the stock mask is queue 0's SetCoreEnableMask. The full mask by SetCoreEnableMask is
+ * the route that brought no core up, and any send of it is a failure of this test. */
 static unsigned int MaskSends(ULONG mask)
 {
     unsigned int i, n = 0;
 
-    for (i = 0; i < (unsigned int)native_firmware.writes && i < NATIVE_SETS; i++)
-        if (native_firmware.set[i].queue == BC250_CPU_QUEUE_GFX &&
-            native_firmware.set[i].message == BC250_CPU_MSG_SET_CORE_ENABLE_MASK &&
-            native_firmware.set[i].parameter == mask) n++;
+    for (i = 0; i < (unsigned int)native_firmware.writes && i < NATIVE_SETS; i++) {
+        unsigned int queue = native_firmware.set[i].queue, message = native_firmware.set[i].message;
+        unsigned int parameter = native_firmware.set[i].parameter;
+
+        CHECK(!(queue == BC250_CPU_QUEUE_GFX && message == BC250_CPU_MSG_SET_CORE_ENABLE_MASK &&
+                parameter == BC250_CPU_MASK_FULL));
+        if (message == BC250_CPU_MSG_STORE_FF)
+            CHECK(queue == BC250_CPU_QUEUE_CPU && parameter == BC250_CPU_SMN_CORE_ENABLE_MASK);
+        if (mask == BC250_CPU_MASK_FULL) {
+            if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_STORE_FF) n++;
+        } else if (queue == BC250_CPU_QUEUE_GFX && message == BC250_CPU_MSG_SET_CORE_ENABLE_MASK &&
+                   parameter == mask) n++;
+    }
     return n;
 }
 
