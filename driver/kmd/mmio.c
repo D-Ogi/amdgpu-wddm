@@ -24,9 +24,8 @@
 #include "bc250kmd.h"
 #define BC250_REGS_WITH_TABLES
 #include "regs.generated.h"
+#include "bc250_mmio_bar.h"
 
-#define BC250_BAR5_INDEX 5
-#define BC250_BAR5_LENGTH 0x80000ul
 #define PCI_BAR0_OFFSET 0x10
 
 static BOOLEAN InTable(_In_reads_(Count) const unsigned long* Table, ULONG Count, ULONG Offset)
