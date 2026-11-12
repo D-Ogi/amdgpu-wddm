@@ -92,7 +92,7 @@
 1	driver/kmd/gfx-copy-provenance.md
 6	driver/kmd/test/ih_consume_test.md
 1	driver/kmd/test/vsync_vector_test.md
-56	driver/shim/README.md
+3	driver/shim/README.md
 6	driver/shim/test/README.md
 26	driver/shim/test/sdma_faults_report.md
 23	driver/umd/d3d12/README.md
