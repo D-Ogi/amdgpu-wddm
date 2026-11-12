@@ -5,7 +5,7 @@ releases called it "amdgpu-wddm Control". The executable keeps its name, `amdgpu
 by hand, like the vendor's control panel: a normal window, no service, no autostart, no network, no lab tools.
 
 The window speaks to ordinary users (GUI-PLAN-v7, phase 1): plain words, no driver internals, error codes or internal
-versions. A unit test and the render gate check every visible text against `PlainWords.Internals`; technical detail
+versions. A unit test and the render gate check every visible text against `PlainWords.Internals`. Technical detail
 goes only into the support report and the Support page (shown when "Show support options" is on). Texts come from
 `strings/strings.<lang>.txt` (English is the source). A Polish speaker read every Polish line against one
 terminology, where one English term keeps one Polish word, so each line carries the status `rev` (2026-10-12). Brazilian
@@ -24,7 +24,7 @@ choice is the `Language` value that Nagi Setup also reads and writes (docs/gui/i
 | Games | One entry per game file name: recent games, stored profiles, graphics settings, the release's defaults and added games. Per game: the D3D12 application profile as grouped check boxes with origin and cost, and the highest shader model. Also the game's own graphics and Vulkan settings (below), Apply/Discard, Undo/Redo and "Recommended" |
 | Graphics | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid) and the compute unit choice (section 7 of the plan). The number of cores runs from 24 to 40 in twos. Behind "Choose the pairs of cores yourself" sits a map of the four groups of five pairs. There a person turns on the pairs the firmware leaves off, one at a time (a board with one or two broken units). "Processor temperature limit (throttling)", outside the tuning cards: the processor temperature now, the cap in force, and a picker for 85-100 C. The default is 87 C, which the driver applies when no cap is stored (`docs/design/tuner.md`). "Advanced tuning", closed by default: the graphics voltage curve, the processor's clock limit, undervolt and temperature cap, and the processor core count (`docs/design/tuner.md`). Each tuning change is a trial that the driver takes back by itself unless kept. The settings for all games (below). Restore defaults (keep or reset the games) with undo. Sharpening and anti-aliasing as "Coming later" |
 | Display | The monitors Windows reports. Per monitor: the resolution, refresh rate and GPU scaling from the modes Windows lists. A change stays only when the person keeps it within 15 s (below). Identify and a link to the Windows display settings. HDR and VRR as "Coming later" |
-| Performance | Live load, temperature, clock, video memory, power and fan (every 2 s, only while shown and not minimized), the shader cache sizes. Each row says "No reading" when the driver gives no fresh value: power needs KMD 0.7.215 (the SMU metrics table, RUN_DPM ABI 3), the fan KMD 0.7.213.1. Voltage goes only into the support report. The ray tracing benchmark (below) |
+| Performance | Live load, temperature, clock, VRAM, power and fan (every 2 s, only while shown and not minimized), the shader cache sizes. Each row says "No reading" when the driver gives no fresh value. Power needs KMD 0.7.215 (the SMU metrics table, RUN_DPM ABI 3), the fan KMD 0.7.213.1. Voltage goes only into the support report. The ray tracing benchmark (below) |
 | Driver | The installed release, whether Windows runs it, the update check (Settings can turn the check at start off) |
 | Settings | Language (also the globe in the header), update check at start, recent launches, Nagi, tips, animations, support options, what data the app keeps |
 | Help | Four symptom guides, one explanation per setting (through search), Repair, Restart Windows, the support report, About |
@@ -72,7 +72,7 @@ never on a schedule. DPM settings are
 `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`, which the KMD reads at device start
 (`docs/design/dpm.md`, "Settings and boot guard"): the page says to restart Windows. The runtime tuning escapes
 (`dpm tune`, `dpm floor`) are lab tools and not offered. The boot guard can set `DpmMode` back to 0 after an unclean
-or unconfirmed start; the page shows the last start's reason.
+or unconfirmed start. The page shows the last start's reason.
 
 The window runs as the invoking user. A change starts an elevated copy of the program (one UAC prompt) with one verb,
 `--action <name>`. The copy checks its arguments with the same functions as the window and reads the value back. A
@@ -231,18 +231,18 @@ without a game, a driver or a process (`test/BenchmarkTests.cs`). `src/Benchmark
 
 ## Settings rule
 
-Every settings page follows one rule. A box is checked only when its value is written; nothing is
-written for an unchecked box; unchecking removes the value (all switches of an application unchecked removes its key),
+Every settings page follows one rule. A box is checked only when its value is written. Nothing is
+written for an unchecked box. Unchecking removes the value (all switches of an application unchecked removes its key),
 so no empty value and no implicit default is left behind. A driver's built-in default is described in text ("driver
 default when unchecked: ..."), never shown as a checked box. Values the installer wrote (the `witcher3.exe` profile)
-show as checked because they are written. Changes stay on the page, marked "Unsaved changes", until Apply; Revert
+show as checked because they are written. Changes stay on the page, marked "Unsaved changes", until Apply. Revert
 reads the stored values again. `Profiles.PlanWrite` and `DpmSettings.PlanWrites` hold the rule and the unit tests
-check it (unchecked: nothing written; checked, saved, unchecked: removed; the exact set written, in any stored order).
+check it (unchecked: nothing written. Checked, saved, unchecked: removed. The exact set written, in any stored order).
 A `DpmMode` 0 the driver stores after a fallback means the same as no value and is left alone.
 
 The window scales every pixel size and font by one factor (system DPI / 96). Check boxes are never disabled: a
 disabled check box draws its text etched in system colours, which on the dark theme gave the faded, doubled switch
-titles seen at 120/144 DPI on the lab; the Applications page hides the switches until an application is selected.
+titles seen at 120/144 DPI on the lab. The Applications page hides the switches until an application is selected.
 
 ## Recovery
 
@@ -269,7 +269,7 @@ before. The same action is in "Support: actions" as "Reopen what the driver clos
 
 No action restarts, stops or signals DWM (BD-060): on this Windows 11 build a forced DWM restart in a session leaves
 WinUI 3 content (the Explorer command bar, Task Manager) without mouse input until a new boot, and restarting Explorer
-does not help. Every change is written and takes effect at the next restart of Windows; the window then offers
+does not help. Every change is written and takes effect at the next restart of Windows. The window then offers
 "Restart now", a normal restart through `ExitWindowsEx` (`EWX_REBOOT`, planned) after a confirmation, so programs can
 keep unsaved work. The helper reports such a change as "written, pending until the next restart of Windows", never as
 a completed switch. A unit test reads every source file and fails on `Kill()` outside the bug report's own child tool,
@@ -278,18 +278,18 @@ use of the `dwm` process other than reading it, on a sign-out remedy, and when t
 
 The desktop composition state keeps the selected route and the active route apart. The helper removes
 `route-written.json` (control directory, owned by Administrators) before it writes `DwmForceCpu` and writes it again,
-with the time and the value, only after the value reads back; a failed or rolled-back attempt leaves no record, and a
+with the time and the value, only after the value reads back. A failed or rolled-back attempt leaves no record, and a
 backup alone is never taken as a write. When that record holds the value selected now and is newer than the running
 DWM, the route is "pending until Windows restarts". When the DWM that started after the write loaded the selected
-route, the state says so ("the DWM that started after the change loaded it"); when it loaded the other route, the
+route, the state says so ("the DWM that started after the change loaded it"). When it loaded the other route, the
 state is a warning that asks for a bug report. Without such a record the timing is unknown and neither is said. The
 active route comes from the modules of the one DWM the state names (process id, session and creation time checked
-through the same process handle before and after the module list; a change during the read gives "unknown"), never
+through the same process handle before and after the module list. A change during the read gives "unknown"), never
 from another session's DWM. The module list counts only when it is complete: the buffer grows to the size the system
 reports (at most 4 tries, at most 16384 modules), and a failed enumeration or a module name that cannot be read
-gives "unknown", because a list without the Zink library would read as the CPU route. Reading it needs administrator; without it the state says that the active route cannot
+gives "unknown", because a list without the Zink library would read as the CPU route. Reading it needs administrator. Without it the state says that the active route cannot
 be read, and never calls a route active. A healthy GPU route recommends nothing (the CPU route stays available on the
-Actions page); `desktop-cpu` is recommended only when the GPU route may be failing, that is when a DWM replacement was
+Actions page). `desktop-cpu` is recommended only when the GPU route may be failing, that is when a DWM replacement was
 observed in this session while the GPU route is selected.
 
 The kill switch `DwmForceCpu` has two copies (BD-296): the router's copy in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`,
@@ -303,24 +303,24 @@ choice into both. The manual recovery with `reg add` is in `docs/testing/INSTALL
 
 | Action (`--action`) | Writes | Takes effect | Refused when |
 |---|---|---|---|
-| `reopen-gpu-path` | `EnableGpuPresentBlit` 1, `EnableCddDwmInterop` 1, delete `InteropClosedReason` | next restart (offered) | open already, or reopened and waiting for the restart |
-| `reopen-closed` | every value the driver closed by itself, back to the installed release's default, then the desktop record the driver left. The values are `EnableGpuPresentBlit` and `EnableCddDwmInterop`, whose record `InteropClosedReason` is deleted after them, and `DpmMode`. Its record `DpmClosedReason` stays: the state catalog lets only the driver write or delete it. The driver deletes it at the next start that reads a `DpmMode` other than 0. The rule is `Get-DriverClosure` of the release installer, value for value (`ClosureNotice.cs`). The value must be the one the driver writes when it closes (0). The installed release must name a default for it that is in range and is not that value. A record of the driver's own must sit next to it. That is the durable record with any reason, or `DpmLastReason` with 3, 4 or 8 for a driver before 0.7.208.1. The legacy record belongs to the last start and is not deleted. A 0 that a person wrote by hand has no such record. Such a value is never touched. The graphics cores are not here. Their release default is 24. That is also the value the driver closes with, so a repair install reopens nothing there either (`CuMode` in `common.ps1`) | next restart (offered) | the driver closed nothing by itself. The installed release has no list of defaults |
-| `desktop-gpu` | `DwmForceCpu` 0 in both copies (router and driver, BD-296) | next restart (offered) | the driver is not running; the effective switches (escape and `InteropLastState` & 3) are not both on (points to `reopen-gpu-path`); the GPU desktop files are missing; DWM is on the GPU route already; the GPU route is selected already (restart Windows) |
-| `desktop-cpu` | `DwmForceCpu` 1 in both copies (router and driver, BD-296) | next restart (offered) | DWM is on the CPU route already; the CPU route is selected already (restart Windows) |
-| `confirm-start` | start-health CONFIRM (clears `UnconfirmedStarts` and `DpmPending` in the KMD); not undoable | at once | the driver is not running; confirmed already; not eligible by `Test-StartConfirmEligible` of the installer's `start-confirm-core.ps1` (flags 7, completions, ready >= 60 s, last completion <= 5 s; the helper retries the reading for 10 s) |
-| `enable-dpm [--ceiling N]` | `DpmMode` 1, and `DpmMaxMHz` N only when a ceiling is chosen | next restart (offered) | N is not 1000-2000 on the 100 MHz grid; stored already |
+| `reopen-gpu-path` | `EnableGpuPresentBlit` 1, `EnableCddDwmInterop` 1, remove `InteropClosedReason` | next restart (offered) | open already, or reopened and waiting for the restart |
+| `reopen-closed` | every value the driver closed by itself, back to the installed release's default, then the desktop record the driver left. The values are `EnableGpuPresentBlit` and `EnableCddDwmInterop`, whose record `InteropClosedReason` is removed after them, and `DpmMode`. Its record `DpmClosedReason` stays: the state catalog lets only the driver write or remove it. The driver removes it at the next start that reads a `DpmMode` other than 0. The rule is `Get-DriverClosure` of the release installer, value for value (`ClosureNotice.cs`). The value must be the one the driver writes when it closes (0). The installed release must name a default for it that is in range and is not that value. A record of the driver's own must sit next to it. That is the durable record with any reason, or `DpmLastReason` with 3, 4 or 8 for a driver before 0.7.208.1. The legacy record belongs to the last start and is not removed. A 0 that a person wrote by hand has no such record. Such a value is never touched. The graphics cores are not here. Their release default is 24. That is also the value the driver closes with, so a repair install reopens nothing there either (`CuMode` in `common.ps1`) | next restart (offered) | the driver closed nothing by itself. The installed release has no list of defaults |
+| `desktop-gpu` | `DwmForceCpu` 0 in both copies (router and driver, BD-296) | next restart (offered) | the driver is not running. The effective switches (escape and `InteropLastState` & 3) are not both on (points to `reopen-gpu-path`). The GPU desktop files are missing. DWM is on the GPU route already. The GPU route is selected already (restart Windows) |
+| `desktop-cpu` | `DwmForceCpu` 1 in both copies (router and driver, BD-296) | next restart (offered) | DWM is on the CPU route already. The CPU route is selected already (restart Windows) |
+| `confirm-start` | start-health CONFIRM (clears `UnconfirmedStarts` and `DpmPending` in the KMD). Not undoable | at once | the driver is not running. Confirmed already. Not eligible by `Test-StartConfirmEligible` of the installer's `start-confirm-core.ps1` (flags 7, completions, ready >= 60 s, last completion <= 5 s. The helper retries the reading for 10 s) |
+| `enable-dpm [--ceiling N]` | `DpmMode` 1, and `DpmMaxMHz` N only when a ceiling is chosen | next restart (offered) | N is not 1000-2000 on the 100 MHz grid. Stored already |
 | `set-clocks --mode 1\|unset --ceiling N\|unset` | `DpmMode` 1 or removed, `DpmMaxMHz` N or removed (the Performance page) | next restart (offered) | as above, or a mode other than 1 (the fixed clock is the unchecked default) |
-| `reset-defaults [--games keep\|reset]` | the manifest's defaults of `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `DpmMode`, `DpmMaxMHz` and `DwmForceCpu` (both copies); delete `InteropClosedReason`; the release's graphics cores. The release's `CpuTune` when the stored value is another one or absent, and `CpuTune` deleted when the release names none. Every graphics setting for all games removed. With `--games reset`, every game profile set to the release's recommendation or removed, and every game's graphics settings removed with their empty keys | next restart (offered) | the manifest has no `"defaults"`, or one is missing or out of range; `--games reset` without the release's game list; all at their defaults already |
-| `undo` | the values the newest undoable backup found (not per-game changes, not the graphics-core part) | next restart (offered), or the next game start when it puts back only graphics settings | nothing to undo; the backup names a value outside the list; it would put DWM on the GPU route with the switches closed |
-| `cu-mode --cu 24\|26\|...\|40 [--cu-map <hex>]` | the graphics-core values through `CuMode.Plan` (plan section 7). The number of cores is 24 to 40 in twos, because the hardware switches them on in pairs. 24 is the stock path. Every number above it is `CuMode` 40 with a `CuDisableWgp` mask: the documented default set of that number, or the set `--cu-map` names (docs/design/cu-mode.md). `CuMode` is written as 24 or 40, and never deleted (BD-077). A deleted value is a key the release installer never configured, so it writes the release default over it. An earlier confirmation goes. `CuModeChosen` records the whole request, so the next upgrade keeps the number a person asked for. A chosen 24 takes the driver's own `CuModeClosedReason` with it. Not undoable: the old values are kept for diagnosis | next restart (offered) | no choice. The stored state cannot be read. The mask names cores the firmware of the board keeps on, or leaves another number of cores than `--cu`. A chosen set without a reading of the board. The choice is there already: the same request with its record already on the key |
-| `cu-confirm` | the start-health confirmation of a 40-core start | at once | the driver is not running; no 40-core start waits |
+| `reset-defaults [--games keep\|reset]` | the manifest's defaults of `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `DpmMode`, `DpmMaxMHz` and `DwmForceCpu` (both copies). Remove `InteropClosedReason`. The release's graphics cores. The release's `CpuTune` when the stored value is another one or absent, and `CpuTune` removed when the release names none. Every graphics setting for all games removed. With `--games reset`, every game profile set to the release's recommendation or removed, and every game's graphics settings removed with their empty keys | next restart (offered) | the manifest has no `"defaults"`, or one is missing or out of range. `--games reset` without the release's game list. All at their defaults already |
+| `undo` | the values the newest undoable backup found (not per-game changes, not the graphics-core part) | next restart (offered), or the next game start when it puts back only graphics settings | nothing to undo. The backup names a value outside the list. It would put DWM on the GPU route with the switches closed |
+| `cu-mode --cu 24\|26\|...\|40 [--cu-map <hex>]` | the graphics-core values through `CuMode.Plan` (plan section 7). The number of cores is 24 to 40 in twos, because the hardware switches them on in pairs. 24 is the stock path. Every number above it is `CuMode` 40 with a `CuDisableWgp` mask: the documented default set of that number, or the set `--cu-map` names (docs/design/cu-mode.md). `CuMode` is written as 24 or 40, and never removed (BD-077). A removed value is a key the release installer never configured, so it writes the release default over it. An earlier confirmation goes. `CuModeChosen` records the whole request, so the next upgrade keeps the number a person asked for. A chosen 24 takes the driver's own `CuModeClosedReason` with it. Not undoable: the old values are kept for diagnosis | next restart (offered) | no choice. The stored state cannot be read. The mask names cores the firmware of the board keeps on, or leaves another number of cores than `--cu`. A chosen set without a reading of the board. The choice is there already: the same request with its record already on the key |
+| `cu-confirm` | the start-health confirmation of a 40-core start | at once | the driver is not running. No 40-core start waits |
 | `game-profile --image <exe> [--value <list>] [--gfx <settings>]` | `Experiment` of `HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<exe>` (an empty list removes the key), and the game's graphics settings (`Name=value` or `Name=unset`, comma-separated) | next start of the game | not a file name, not a catalog list, not a list of settings in the contract, the settings cannot be read, or stored already |
 | `game-undo\|game-redo --image <exe>` | the game's values before its newest change (undo) or before its newest undo (redo), its graphics settings included | next start of the game | nothing to undo or redo for that game |
 | `graphics-defaults --gfx <settings>` | the graphics settings for all games under `Graphics` and `Vulkan` (as `--gfx` above) | next game start | not a list of settings in the contract, the settings cannot be read, or stored already |
 | `game-log-on --minutes N` | `GameLogUntil` of `HKLM\SOFTWARE\amdgpu-wddm\Diagnostics` (REG_QWORD, the UTC FILETIME at which recording stops), and the folder `%ProgramData%\amdgpu-wddm\logs\games` with its access list, pruned to 512 MiB | next game start | N is not 1-60, or the value cannot be read |
-| `game-log-off` | delete `GameLogUntil` | next game start | nothing is recording, or the value cannot be read |
+| `game-log-off` | remove `GameLogUntil` | next game start | nothing is recording, or the value cannot be read |
 | `full-resolution-start` | `bcdedit /set {globalsettings} highestmode on`, and `bcdedit /deletevalue {globalsettings} graphicsresolution` when that element is set. The backup keeps the old values (`on`, `off`, absent, or the resolution), so `undo` sets them again with bcdedit. No other BCD object or element changes. The action is not board-specific and is shown wherever the driver is installed (`src/ScaledStart.cs`) | next restart (offered) | the store cannot be read, a boolean word of bcdedit is not known, or the stored resolution is not `<width>x<height>`. `highestmode` is on already and no `graphicsresolution` is set |
-| `restart-compositor --accept-bd060` | nothing; stops the active session's DWM, Windows starts a new one (operator escape, not in the window, not undoable) | at once | `--accept-bd060` is missing |
+| `restart-compositor --accept-bd060` | nothing. Stops the active session's DWM, Windows starts a new one (operator escape, not in the window, not undoable) | at once | `--accept-bd060` is missing |
 
 The only values any action or undo may write are those in the table (`Recovery.Allowed`): never the temperature
 limits, firmware paths, other KMD service values, BIOS or firmware settings, or test signing. The reset takes no
@@ -330,7 +330,7 @@ start. It is not a firmware variable, and the action changes no boot entry.
 
 bcdedit prints a boolean in the language of Windows. Before it reads `highestmode`, the helper learns the two words of
 this Windows from a store file of its own in the temporary folder. It sets the element on and then off on one entry of
-that store and reads what bcdedit prints. Then it deletes the store file. When the calibration fails, the helper uses the
+that store and reads what bcdedit prints. Then it removes the store file. When the calibration fails, the helper uses the
 English words. A word that matches neither is "unknown", and the plan is refused, because an undo must be able to put
 back the old value.
 
@@ -371,7 +371,7 @@ amdgpu_wddm_control.exe --action restart-compositor --accept-bd060 --out escape.
 Without `--accept-bd060` the action is refused (exit 3). It changes no setting: for the CPU route after the restart,
 run `desktop-cpu` first. The helper records the running DWM and opens one handle to it (query, terminate and
 synchronize access), checks the process id, session, creation time and that it still runs through that handle, and
-terminates that same handle; any mismatch refuses and stops nothing. It then waits up to 20 s for a DWM in the same
+terminates that same handle. Any mismatch refuses and stops nothing. It then waits up to 20 s for a DWM in the same
 session created after the stopped one, records it for that session and logs both. Warning:
 after a DWM restart some Windows 11 apps, for example the Explorer command bar and Task Manager, can ignore mouse
 clicks until Windows restarts (BD-060). Restart Windows as soon as you can. The window never offers this action.
@@ -386,35 +386,35 @@ its log lines and `exit N` to `--out` as well.
 
 A close mark (`InteropClosedReason` 4) means different things by driver version. From KMD 0.7.198
 (`BC250_KMD_VERSION` 0x000700C6) BD-059 is fixed and a normal restart keeps the path open, so the page says the last
-session ended without a clean shutdown (power loss, crash or reset); on 0.7.197 and earlier it names BD-059. The
-version comes from the driver's interop, start health or DPM reply; without one, both causes are named.
+session ended without a clean shutdown (power loss, crash or reset). On 0.7.197 and earlier it names BD-059. The
+version comes from the driver's interop, start health or DPM reply. Without one, both causes are named.
 
 ## Desktop compositor replaced (BD-060)
 
 The Overview's "Desktop compositor" row, the first Recovery state, `--status` and the bug report's
 `recovery-states.txt` report only a DWM replacement that an observer saw. Each observer reads the active interactive
-session's DWM (process id and creation time, from the system's process list; from session 0 the console session),
+session's DWM (process id and creation time, from the system's process list. From session 0 the console session),
 the boot (`BootId` under `Session Manager\Memory Management\PrefetchParameters`) and the session start (creation time
 of the session's first `winlogon.exe`), and records it in `dwm-observations.json` (schema 2, one record per session
 epoch, the newest 8): the user's copy in `%LOCALAPPDATA%\amdgpu-wddm`, the administrator's copy in
 `%ProgramData%\amdgpu-wddm\control` (owned by Administrators). Each write re-reads the copy, merges and replaces it
-(a unique temporary file and `File.Replace`) under one named mutex per copy; a lock not taken within 2 s skips that
-write and the file keeps its history. Both copies are merged; only the record of this boot, session and session start
-counts, so a new session starts a new baseline. Every entry is validated before it counts: a process id above 0, a
-session above 0, creation, first-seen and session-start times that parse; a damaged entry is dropped and a live reading
+(a unique temporary file and `File.Replace`) under one named mutex per copy. A lock not taken within 2 s skips that
+write and the file keeps its history. Both copies are merged. Only the record of this boot, session and session start
+counts, so a new session starts a new baseline. Every entry is checked before it counts: a process id above 0, a
+session above 0, creation, first-seen and session-start times that parse. A damaged entry is dropped and a live reading
 with a damaged field records nothing, so neither can make a replacement. Every stored epoch and instance is checked
 before the epochs are ordered and kept, so a damaged one is dropped (and the file rewritten without it) instead of
 stopping later writes. The installer's record, `%ProgramData%\amdgpu-wddm\dwm-baseline.json` (written by its
 start-confirm task at each administrator logon, format in `tools/release/installer/dwm-session.ps1`), is merged too and
 never written: its record of this epoch (the same session, boot time and logon time within 2 s) counts as an
-observation by "the installer's start-confirm task at logon" at its `recorded_utc`; a record of another epoch is not a
+observation by "the installer's start-confirm task at logon" at its `recorded_utc`. A record of another epoch is not a
 replacement, and a damaged file or record is ignored. Two readings name the same DWM when the process ids match and
 the creation times are at most 1 s apart. The observers: the window (every 2 s while it is open), `--status`, the bug report,
 the elevated helper and the operator escape. The dry run reads but records nothing.
 
 | Verdict | When | Text |
 |---|---|---|
-| `observed` (warning, "Restart Windows") | more than one DWM seen in this session | "The desktop compositor (DWM) was replaced in this session: N replacement(s) seen; the DWM now running (process P) started T. After a DWM restart some Windows 11 apps, for example the Explorer command bar and Task Manager, can ignore mouse clicks until Windows restarts (BD-060): restart Windows. If nobody restarted DWM on purpose, create a bug report: a DWM crash can be a driver defect." |
+| `observed` (warning, "Restart Windows") | more than one DWM seen in this session | "The desktop compositor (DWM) was replaced in this session: N replacement(s) seen. The DWM now running (process P) started T. After a DWM restart some Windows 11 apps, for example the Explorer command bar and Task Manager, can ignore mouse clicks until Windows restarts (BD-060): restart Windows. If nobody restarted DWM on purpose, create a bug report: a DWM crash can be a driver defect." |
 | `unknown-history` (information) | one DWM seen so far | "No replacement of the desktop compositor (DWM) seen since T (first seen by O, D after the session began). A replacement before that would not be seen." |
 | `unknown` (information) | the session's DWM, winlogon or the boot cannot be read | "The desktop compositor (DWM) of the active session cannot be read." |
 
@@ -426,7 +426,7 @@ named. The release's start-confirm task can run `--status` at logon to start the
 amdgpu_wddm_control.exe --status --out status.txt    # no window, no UAC; records the session's DWM
 ```
 
-The second line of the file is for scripts such as the installer's verify:
+The second line of the file is for scripts such as the installer's `verify`:
 `dwm-restart: observed|unknown-history|unknown (boot B, session N, session start <utc>, DWM process P started <utc>,
 instances seen K, watched since <utc> by <observer>)`, with `-` for a value that cannot be read, followed by every
 Recovery state. `AMDGPU_WDDM_CONTROL_STATE=<dir>` moves both copies of the record to one directory (the build's
@@ -471,14 +471,14 @@ libraries come from the SDK NuGet packages. Deterministic output. The gates, eac
 which stops the build: `test/UnitTests.cs` (reply offsets computed from the text of `driver/kmd/bc250kmd_escape.h`,
 the profile catalog against the switch table of the D3D12 shell and its `ddi_experiment("...")` calls, profile editing, DPM ranges
 against `docs/design/dpm.md`, redaction, the manifest, and every Recovery rule and refusal, with its constants checked
-against `bc250kmd_escape.h`, `bc250kmd.h`, `interop_policy.h`, `interop.c` and `dpm.c`; with
+against `bc250kmd_escape.h`, `bc250kmd.h`, `interop_policy.h`, `interop.c` and `dpm.c`. With
 `-StartConfirmCore <path>` also against the installer's `start-confirm-core.ps1`), the compiles with warnings as
 errors, `--smoke` (the pages built and refreshed once without a window, which on a PC without a BC-250 must say
 "Driver not found"), `--smoke-report` (a report without dxdiag, capability tools and events, checked for its files and
 for this PC's user and computer name) and the Recovery dry runs (every action planned from `test/snapshot-bd059.json`,
-the state BD-059 leaves behind on KMD 0.7.197, against its expected writes or refusal; a snapshot without `--dry-run`
-refused; one dry run of this PC; where the build is not elevated, one real run that must stop with exit 5 and still
-write `--out`), `--smoke-recovery <file>` (the recovery view built without a window; fails when `bc250control.dll`
+the state BD-059 leaves behind on KMD 0.7.197, against its expected writes or refusal. A snapshot without `--dry-run`
+refused. One dry run of this PC. Where the build is not elevated, one real run that must stop with exit 5 and still
+write `--out`), `--smoke-recovery <file>` (the recovery view built without a window. Fails when `bc250control.dll`
 is loaded), `--smoke-perf <file>` (the window built hidden: no live timer, no ticks, no animation frame, start under
 5 s, private memory under 300 MB), `--smoke-loading <file>` (the loading window in both its states, six
 languages, four scales, text at 100, 150 and 225 %, a 1024x768 and a large screen, with the checks of the sign-in
@@ -564,7 +564,7 @@ G-ORDER holds that order: the page is built first and the client clamped afterwa
 page wider than the column it ends up in is a finding.
 
 The output folder holds `amdgpu_wddm_control.exe`, `bc250control.dll` and `bc250kmd_cli.exe` (the same translation unit
-as the DLL, without `BC250_CONTROL_DLL`, so the CLI and the DLL of a release come from one build); the release
+as the DLL, without `BC250_CONTROL_DLL`, so the CLI and the DLL of a release come from one build). The release
 installer puts the first two, and `amdgpu_wddm_d3d12caps.exe`, in one directory, and the CLI and a copy of the DLL in
 `tools`.
 
