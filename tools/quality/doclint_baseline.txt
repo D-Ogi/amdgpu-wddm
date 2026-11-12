@@ -121,7 +121,6 @@
 2	tools/win/d3d11mt/README.md
 20	tools/win/d3d12caps/README.md
 1	tools/win/dxgimodes/README.md
-53	tools/win/frameloop/README.md
 3	tools/win/gpu-timeline/README.md
 12	tools/win/gpuload/README.md
 27	tools/win/gui-trials/T2.md

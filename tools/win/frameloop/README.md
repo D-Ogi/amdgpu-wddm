@@ -16,7 +16,7 @@ gpu idle per frame ms     the windows in which the graphics pipe had nothing run
 ```
 
 On this development PC's RTX 4090 the second number is 0.115 ms per frame with 7 lists. If the lab shows
-several milliseconds there, the cost is in our submission path; if it shows up under "awaiting submit", it is
+several milliseconds there, the cost is in our submission path. If it shows up under "awaiting submit", it is
 the CPU half of the loop (fence wake, recording, Present).
 
 ## Where it lives
@@ -24,23 +24,23 @@ the CPU half of the loop (fence wake, recording, Present).
 This directory holds the sources and the harness. Nothing built or measured is kept here: `src\build.ps1`
 writes the client to `<BC250_ROOT>\scratch\m15\frameloop\build`, and `lab\run-frameloop.py` writes the
 plan of a trial and the pulled results under `<BC250_ROOT>\scratch\m15\frameloop\lab`.
-`BC250_FRAMELOOP_WORK` moves that work directory; `BC250_ROOT` is the workspace root, by default the parent
+`BC250_FRAMELOOP_WORK` moves that work directory. `BC250_ROOT` is the workspace root, by default the parent
 directory of this repository.
 
 ## What the loop does
 
 Per frame, in order:
 
-1. optional wait on the swap chain's frame-latency waitable object (`--frame-latency-waitable N`);
+1. optional wait on the swap chain's frame-latency waitable object (`--frame-latency-waitable N`).
 2. wait until frame `N - L` finished on the GPU: `SetEventOnCompletion` + `WaitForSingleObject` on that
-   frame's fence, as a game does, never a `GetCompletedValue` poll that would hide the wake latency;
-3. read back the retired frame's GPU timestamps;
-4. optional CPU busy work (`--cpu-ms X`);
+   frame's fence, as a game does, never a `GetCompletedValue` poll that would hide the wake latency.
+3. read back the retired frame's GPU timestamps.
+4. optional CPU busy work (`--cpu-ms X`).
 5. for each of `K` command lists (`--lists K`): reset it, record it, close it, and submit it in **its own**
    `ExecuteCommandLists` call, like the game's ~7 submissions per frame. Each list brackets itself with two
-   timestamp queries. Lists `0..K-1` each run one calibrated compute dispatch; the last list additionally
+   timestamp queries. Lists `0..K-1` each run one calibrated compute dispatch. The last list additionally
    clears the back buffer, draws one fullscreen triangle that reads the buffer the dispatches wrote, and
-   resolves the frame's queries;
+   resolves the frame's queries.
 6. `Signal` the frame's fence, then `Present`.
 
 The draw reads what the compute wrote, so a presented frame cannot be produced without that frame's GPU work:
@@ -62,16 +62,16 @@ of a back buffer, the clear takes a `float4` and the pixel shader writes a `floa
 
 1. **Isolated**: one dispatch at a time on an idle queue. A two-point fit (64 and 1024 iterations) gives the
    slope and the fixed intercept, then up to six refinement rounds.
-2. **Sustained**: up to three short (0.5 s) passes of the *real* frame loop, each correcting the iteration
+2. **Sustained**: up to three short (0.5 s) passes of the *real* frame loop, each adjusting the iteration
    count against the GPU busy time the loop actually produced. This matters on a GPU that boosts: on the 4090
    the isolated fit was 14 % low because the sustained load drops the clock. The lab boosts too since the KMD
    DPM shipped (load-driven clock, a 1500 MHz ceiling, a 500 MHz idle state and a thermal step under 1000 MHz),
    so these rounds do move there, and two arms run back to back are two operating points. Each run therefore
    records its own: `index.json` carries `point_before` and `point_after` per run (`clock read`: MHz, VID,
    temperature) and the set carries the `cu_record` from the driver's Parameters key. Read them before any
-   comparison; K178 is the precedent, where every game rate of sessions 347-403 was silently a 24 CU number.
+   comparison. K178 is the precedent, where every game rate of sessions 347-403 was silently a 24 CU number.
 
-The dispatch shape stays fixed for a whole run (`--groups G`, 64 threads per group); only the iteration count
+The dispatch shape stays fixed for a whole run (`--groups G`, 64 threads per group). Only the iteration count
 is calibrated. `calibration.gpu_busy_error_pct` in the JSON is the measured miss against what was asked, and
 the client prints `OUTSIDE 10 %` when it misses by more than that.
 
@@ -126,10 +126,10 @@ amdgpu_wddm_frameloop [options]
 
 Default window: borderless (`WS_POPUP`) over the whole primary output of the chosen adapter, per-monitor DPI
 aware so the client area matches the output's pixels and DXGI does not quietly stretch. `Esc` ends the run
-early; so does closing the window.
+early. So does closing the window.
 
 Exit codes: `0` ran and self-consistent, `1` a failure (device removed, fence timeout, invalid timestamps,
-output file not written), `2` usage, `3` no adapter or no device, `5` the watchdog terminated the process.
+output file not written), `2` usage, `3` no adapter or no device, `5` the watchdog killed the process.
 
 **Watchdog.** The client must never be left running on the lab. A thread asks the loop to stop at
 `--seconds + 15` (the budget covers device creation and the calibration passes) and, if the process is still
@@ -152,7 +152,7 @@ GPU-side value was 10x and the `--gpu-ms` calibration converged on a tenth of th
 - **Origin** (the cross-clock latencies `submit_to_gpu_start` and `gpu_end_to_wake*`). The driver's calibration
   point pairs a GPU tick with a CPU tick, and with the wrong frequency that pairing is useless (the lab's
   offset came out as 2.24e13 ticks, which is why those two columns read as +2240331332 ms and -2240331334 ms).
-  The client therefore fits the origin itself, from physics: a dispatch cannot begin before the
+  The client therefore fits the origin itself, from physics: a dispatch cannot start before the
   `ExecuteCommandLists` that submitted it, and cannot end after the CPU woke from the fence that it signalled.
   A short dedicated pass of 18 bracketed dispatches runs immediately before the loop, and the loop keeps
   refitting from its own frames, clamped to +-200 ppm of drift against the first fit.
@@ -160,7 +160,7 @@ GPU-side value was 10x and the `--gpu-ms` calibration converged on a tenth of th
 The fit's accuracy is the width of its bracket (`clock_fit.bracket_ms`, 0.076 ms on this machine) and it is
 recorded with the result, not hidden: the GPU-side durations are exact, the two latency columns and the
 `await`/`after` split carry that uncertainty. When the loop is Present-bound the submission-side bound is loose
-by a whole frame and every refit hits the clamp; the client detects that and sets
+by a whole frame and every refit hits the clamp. The client detects that and sets
 `summary.consistency.cross_clock_usable` false, which means read the durations and the `cpu_ms` columns and
 ignore the latencies. `src\tsfit-runs.ps1` is the host matrix that proves all of this: without the override,
 with the right frequency (the fit then agrees with the host driver's own calibration to 0.1 ms), with a
@@ -170,25 +170,25 @@ deliberately wrong one (ratio 10.0005, `cross_clock_usable` false), and the Pres
 
 ## JSON schema
 
-One object; `"schema": 4`. Every duration is in milliseconds unless the key says `ticks` or `qpc`.
+One object. `"schema": 4`. Every duration is in milliseconds unless the key says `ticks` or `qpc`.
 
 | key | meaning |
 | --- | --- |
 | `command_line`, `config` | every option as it was applied after validation, including `ts_hz` (0 = the driver is believed) |
-| `host` | `qpc_frequency`, `first_qpc`, `gpu_timestamp_frequency` (the one used), `gpu_timestamp_frequency_reported` (the driver's), `timestamp_frequency_overridden`, `dpi_awareness`, `clock_points`, `clock_drift_ppm` (GPU clock against QPC over the run; null when the origin was fitted) |
+| `host` | `qpc_frequency`, `first_qpc`, `gpu_timestamp_frequency` (the one used), `gpu_timestamp_frequency_reported` (the driver's), `timestamp_frequency_overridden`, `dpi_awareness`, `clock_points`, `clock_drift_ppm` (GPU clock against QPC over the run. Null when the origin was fitted) |
 | `clock_fit` | `applied`, `samples`, `bracket_ms`, `origin_qpc`, `lower_qpc`, `upper_qpc`, `applied_from_clock_point`, `driver_point_offset_ms` (how far the driver's own point sits from the fit), `refits`, `refits_clamped`, `drift_allowance_ppm`, `all_time_bounds_crossed`, `driver_gpu_ticks`, `driver_cpu_ticks` |
 | `timeline[]` | where the wall time went: `phase` (start, runtime, adapter, device, window, swap chain, pipeline, frames, recorders, calibration, sustained calibration, clock fit, loop, teardown), `ms`, `at_ms`. This is what the lab budgets are sized from. |
 | `adapter` | description, vendor/device id, LUID, memory, `software`, `feature_level` (hex) |
 | `swapchain` | `format`, `buffers`, `width`, `height`, `swap_effect`, `flags`, `present_flags`, `tearing_supported` |
 | `calibration` | `groups`, `iterations`, `target_ms_per_dispatch`, `measured_ms_per_dispatch`, `slope_ms_per_iteration`, `intercept_ms`, `rounds[]` (each `kind` = `isolated` or `sustained`), `sustained_passes`, `dispatch_floor_ms`, `frame_floor_ms`, `gpu_busy_error_pct` |
 | `summary.frames_submitted` / `frames_measured` | frames run, and the steady-state subset the distributions cover (warm-up and the drained tail excluded) |
-| `summary.invalid_timestamp_frames` | frames whose resolved timestamps were zero or not monotonic; any of these fails the run |
+| `summary.invalid_timestamp_frames` | frames whose resolved timestamps were zero or not monotonic. Any of these fails the run |
 | `summary.consistency` | `gpu_accounted_ms` (mean `busy` + mean `idle_per_frame`: one frame on the GPU timeline), `interval_ms`, `gpu_over_interval`, `timestamp_scale_ok` (see below), `negative_submit_latency`, `negative_wake_latency`, `negative_tolerance_ms` (0.01 ms plus the fit's bracket), `cross_clock_usable` |
 | `summary.cpu_ms` | `frame_interval`, `fence_wait`, `waitable_wait`, `cpu_work`, `record` (wall time of the record phase), `record_cpu_total` (summed over the recording threads), `execute_total`, `signal`, `present`, `frame_cpu_total` |
 | `summary.gpu_ms` | `busy` (sum of list durations), `span_first_to_last_list`, `intra_frame_gap_total`, `intra_frame_gap_each`, `inter_frame_gap`, `idle_per_frame`, `idle_awaiting_submission_per_frame`, `idle_after_submission_per_frame` |
 | `summary.latency_ms` | `submit_to_gpu_start`, `gpu_end_to_wake`, `gpu_end_to_wake_blocking` |
-| `gaps` | where each GPU gap ends against the display's refresh grid (needs `--frame-statistics`): `idle_ms` and `after_submission_ms` (the distributions of every gap and of its part after the submission), then for gaps `>= 1 ms` and `< 1 ms` a `count`, an `aligned` count and an aligned `share`, with `phase_window_us`, `uniform_share` (the share the same window would collect if nothing waited for a vblank), `phase_bracket_ms` and `aligned_share_usable` (below), `frame_statistics_calls` and `frame_statistics_failures`, and the nested `vblank` fit (`fitted`, `samples`, `hz`, `period_ms`, `origin_qpc`, `residual_us`) |
-| `icd` | what the winsys reported in its own log over the same run: `log` (the file read), `header`, `submit_line` (the two lines kept verbatim), then the fields parsed out of them: `self_wait` (the arm of `BC250_SELF_WAIT`), `coalesce`, `wait_self_seen`, `wait_self_dropped`, `wait_self_busy`, `wait_objects`, `wait_dropped`, `wait_map_dropped`, `wait_calls`. Null when no log was found, so an arm whose counters did not move cannot be mistaken for one that ran. `wait_dropped` is the sum of both drops, so only `wait_map_dropped` compares with a log from before `BC250_SELF_WAIT`; a nonzero `wait_self_busy` means one queue's self-signal record had more than one user, and the arm is then not what it says. |
+| `gaps` | where each GPU gap ends against the output's refresh grid (needs `--frame-statistics`). Fields: `idle_ms` and `after_submission_ms` (the distributions of every gap and of its part after the submission). Then, for gaps `>= 1 ms` and `< 1 ms` a `count`, an `aligned` count and an aligned `share`, with `phase_window_us` and `uniform_share`. `uniform_share` is the share that the same window would collect if nothing waited for a vblank. Then `phase_bracket_ms` and `aligned_share_usable` (below), `frame_statistics_calls` and `frame_statistics_failures`, and the nested `vblank` fit (`fitted`, `samples`, `hz`, `period_ms`, `origin_qpc`, `residual_us`) |
+| `icd` | what the winsys reported in its own log over the same run. First `log` (the file read), `header` and `submit_line` (the two lines kept verbatim). Then the fields parsed out of them: `self_wait` (the arm of `BC250_SELF_WAIT`), `coalesce`, `wait_self_seen`, `wait_self_dropped`, `wait_self_busy`, `wait_objects`, `wait_dropped`, `wait_map_dropped`, `wait_calls`. Null when no log was found, so an arm whose counters did not move cannot be mistaken for one that ran. `wait_dropped` is the sum of both drops, so only `wait_map_dropped` compares with a log from before `BC250_SELF_WAIT`. A nonzero `wait_self_busy` means one queue's self-signal record had more than one user, and the arm is then not what it says. |
 | `clock_calibration[]` | every `GetClockCalibration` point: `qpc`, `gpu_ticks`, `cpu_ticks`, `cost_ms` |
 | `frames[]` | the raw records, one per line |
 | `result` | `status` PASS/FAIL, `failure`, `failure_where`, `device_removed_reason`, `escape`, `wait_timed_out`, `stop_requested` |
@@ -212,10 +212,9 @@ them gives the refresh period and an origin, and that turns any QPC into a phase
 The grid is reported in `gaps.vblank` and is believed only between 20 and 400 Hz and within a 1 ms worst
 residual, so a mode change in the middle of a run disables the shares instead of inventing them.
 
-`wait` is the wait **this** frame performed, which retires frame `retired`; so the wake latency of frame `M`
+`wait` is the wait **this** frame performed, which retires frame `retired`. So the wake latency of frame `M`
 is `frames[M+L].wait[1]` against frame `M`'s last `gpu_end`. `clock_point` indexes `clock_calibration[]`:
-GPU ticks are mapped onto the QPC timeline with that point, `qpc = cpu_ticks + (gpu - gpu_ticks) *
-qpc_frequency / gpu_frequency`. With `qpc_frequency` and `first_qpc` printed, the records align directly with
+GPU ticks are mapped onto the QPC timeline with that point, `qpc = cpu_ticks + (gpu - gpu_ticks) * qpc_frequency / gpu_frequency`. With `qpc_frequency` and `first_qpc` printed, the records align directly with
 an ETW trace or a register timeline taken over the same run.
 
 ### Reading the numbers
@@ -227,7 +226,7 @@ an ETW trace or a register timeline taken over the same run.
   then every value in `gpu_ms` and `latency_ms` is scaled by that ratio: the `cpu_ms` block is still sound, the
   GPU block is not. Worth watching on a new driver stack - our own KMD answers `CalibrateGpuClock` with the
   CPU's performance counter (`driver/kmd/wddm.c`, `Bc250WddmCalibrateGpuClock`), which is not what the command
-  processor writes into a timestamp query. The exit code does not change; the gate is in the result line
+  processor writes into a timestamp query. The exit code does not change. The gate is in the result line
   (`ts_scale=`, `scale_ok=`) and in `summary.consistency`. That is exactly what happened on unit A: see
   `--ts-hz` above for the interim measure and what it does and does not fix.
 - **Then check `summary.consistency.cross_clock_usable`.** False means the two latency columns and the
@@ -235,7 +234,7 @@ an ETW trace or a register timeline taken over the same run.
   had no tight bound to work with. The durations (`busy`, the gaps, `idle_per_frame`) and the whole `cpu_ms`
   block are unaffected.
 - `frame_interval` should be about `max(CPU path, gpu_busy + idle_per_frame)`. On the 4090, 12.06 ms interval
-  against 11.99 busy + 0.12 idle; where the loop is Present-bound instead, 5.92 ms interval with
+  against 11.99 busy + 0.12 idle. Where the loop is Present-bound instead, 5.92 ms interval with
   `present` at 5.84 ms.
 - `submit_to_gpu_start` is `ExecuteCommandLists` to that list actually starting on the GPU. With `L > 1` the
   queue is deliberately backlogged, so this is dominated by earlier frames still running (17 ms at
@@ -254,8 +253,8 @@ an ETW trace or a register timeline taken over the same run.
 - **`gaps.frame_statistics_failures` tells a failed call from a grid that did not fit.** A nonzero count means
   the driver refused `GetFrameStatistics`, which is a different fault from samples that no line fits.
 - **`icd.self_wait` plus its counters are the witness of the arm that ran.** An `elide` run whose
-  `wait_self_dropped` stayed at zero elided nothing, whatever the frame rate did; a `keep` run whose counter
-  moved is not the control it claims to be; a `count` run must see matches and drop none; and any run with
+  `wait_self_dropped` stayed at zero elided nothing, whatever the frame rate did. A `keep` run whose counter
+  moved is not the control it claims to be. A `count` run must see matches and drop none. Also, any run with
   `wait_self_busy` above zero had a second user of the record. `run-frameloop.py` checks all of that itself and
   prints `COMPARISON WITHHELD` with the reason instead of a comparison. Session 322 is why: there the
   mechanism counters all moved, the kernel wait calls fell to 17, and the frame rate fell 1.7 % (K142).
@@ -296,7 +295,7 @@ software rasterizer:
 | gpu-ms 6, interval 1 | 100.0 | 6 | 5.80 | -2.0 | 8.34 | 2.60 | 0.00 | 2.60 | 11.46 | 0.02 | 0.03 |
 | gpu-ms 6, waitable 2 | 159.5 | 6 | 5.93 | +1.9 | 6.08 | 0.14 | 0.00 | 0.14 | 8.75 | 0.04 | 0.07 |
 
-The one bold row is the dispatch floor described above, not a defect; the client warned about it on stderr.
+The one bold row is the dispatch floor described above, not a defect. The client warned about it on stderr.
 
 Reference reading of these two hosts: a healthy stack puts **essentially nothing** under
 `idle_after_submission` - 0.115 ms per frame over 7 lists on the 4090 (0.016 ms per list boundary), 0.16 ms on
@@ -319,8 +318,8 @@ it. Two independent axes:
   fan-out costs a few microseconds, not a thread creation. `effective_record_threads` in the JSON is `N` capped
   at `--lists`.
 - `--submit MODE`: `interleaved` (default) records a list and submits it before recording the next, which is
-  what every number in the host reference above was taken with; `sequential` records all K and then submits
-  each in its own call; `batch` records all K and submits them in one `ExecuteCommandLists`. Parallel recording
+  what every number in the host reference above was taken with. `sequential` records all K and then submits
+  each in its own call. `batch` records all K and submits them in one `ExecuteCommandLists`. Parallel recording
   needs `sequential` or `batch` - interleaving would serialise the recording again, so
   `--record-threads 2 --submit interleaved` is a usage error.
 
@@ -414,7 +413,7 @@ WARP's own rasterizer is a thread pool on the same CPUs, which produces the one 
 lab: at 7 lists, four recording threads pushed WARP's "GPU busy" from 6.46 to 7.35 ms and fps from 148 to 114.
 **Recording threads can take CPU away from work that only looks like GPU work.** On the BC-250 that caution is
 not academic while DWM composites on the CPU. WARP's calibration is also coarse and noisy here (errors from
--13 % to +43 % at iteration counts of 25-46, where WARP's own scheduling variance dominates); the matrix is a
+-13 % to +43 % at iteration counts of 25-46, where WARP's own scheduling variance dominates). The matrix is a
 correctness and shape check there, not a measurement.
 
 Reproduce: `src\mt-runs.ps1` (`-Warp` for the software rows), outputs `runs\mt-gpu-*.json`,
@@ -445,27 +444,27 @@ polling from here, so nothing provokes the lab's sshd penalties), pulls one arch
 registered triplet, which is the point of the measurement.
 
 Bounds and refusals, all before anything starts: a set whose runs plus their expected overhead would exceed
-170 s is refused here (one trial stays inside the lab's three minutes); the lab side refuses a wrong directory,
+170 s is refused here (one trial stays inside the lab's three minutes). The lab side refuses a wrong directory,
 a client whose hash is not the plan's, an existing result directory, a competing `BC250|DWM|G0|WSI` task that is
 running (the resident overlay and net watchdog are allowed by name), a machine with nobody logged on, and Tctl
 at or above 87 C.
 
 **Four timeouts, in this order**, which `lab\host-checks.ps1` enforces across the files that hold them: the
 client's watchdog asks the loop to stop at `seconds + 15` and kills the process at `seconds + 20`, writing what
-it has either way; Task Scheduler's `ExecutionTimeLimit` is `seconds + 25`; the poll gives up at `seconds + 30`.
+it has either way. Task Scheduler's `ExecutionTimeLimit` is `seconds + 25`. The poll gives up at `seconds + 30`.
 The point of the order is that a run which goes wrong ends with the client's own evidence rather than with
 `SCHED_S_TASK_TERMINATED` and nothing to read. The set's deadline is the lab's 170 s, and before each run the
-lab side asks whether that run's **worst case** (`seconds + 30`) still fits; if not the run is recorded as
+lab side asks whether that run's **worst case** (`seconds + 30`) still fits. If not the run is recorded as
 skipped rather than overrunning.
 
 The sets are in `lab\sets.json` (`quick` about 53 s, `mt-gpu` and `mt-present` 103 s, `gap` 93 s, `gap-queue`
 73 s, `self-wait` 69 s, `c48-handoff` 153 s, each with 170 s available), one `what` line per set saying what
-it is for; `--dry-run` prints the plan and the commands and touches nothing.
+it is for. `--dry-run` prints the plan and the commands and touches nothing.
 
 A run may also carry **driver knobs of its own**, as an `env` object next to its `args`, and `self-wait` is the
 set that uses it: the same configuration twice, once with `BC250_SELF_WAIT=keep` and once with `elide`, so the
 two arms of the ICD's self-wait elision are one trial. Only `BC250_*` names are accepted, checked here and
-again on the lab, and a value that carries a quote or a `%` is refused; the knobs become `set "NAME=VALUE"`
+again on the lab, and a value that carries a quote or a `%` is refused. The knobs become `set "NAME=VALUE"`
 lines in that run's wrapper, so they reach the client's process alone and never the desktop's own ICD, which a
 machine-wide cfg file would also move. Each run's knobs are written into its record. The lab side also points
 `BC250_DEFERRED_LOG` at `<run>-icd.log` in the result directory, which is the file the client reads back for
@@ -480,7 +479,7 @@ and checks the four timeouts and the plan fields the two halves share. Both of t
 the expensive way:
 
 - An operator-precedence mistake (`'...' + $log + '"',` without parentheses) put the log path on a line of its
-  own; `cmd` executed the path, **Notepad opened on the lab's console desktop**, the wrapper blocked on it and
+  own. `cmd` executed the path, **Notepad opened on the lab's console desktop**, the wrapper blocked on it and
   the task ran to its time limit. The client had already written its JSON, so the measurement survived, but the
   wall time of every run became the time limit.
 - `echo exit %ERRORLEVEL%>> "log"` expands to `echo exit 0>> "log"`, and `cmd` reads the digit before `>>` as a
@@ -490,12 +489,12 @@ the expensive way:
 ### First unit A trial, `quick-20261002T225506Z`
 
 Client C6029B1A (before `--ts-hz`), KMD 0.7.196.1, desktop on GPU DWM, 1920x1200, Tctl 66.8 -> 69.0 C. Two runs
-of three; `g0-l7` was skipped out of budget because both tasks ran to their time limit on the Notepad defect
+of three. `g0-l7` was skipped out of budget because both tasks ran to their time limit on the Notepad defect
 above. Both runs exited PASS with `invalid_ts=0`, and both reported the scale mismatch, which is what the
 consistency gate is for. Dividing the GPU columns by the measured 9.9708 gives the first real numbers from our
 stack, next to the 4090 at the same shape (`--gpu-ms 12 --lists 7 --latency 2`):
 
-| p50 ms | unit A (corrected) | 4090 |
+| p50 ms | unit A (adjusted) | 4090 |
 | --- | --- | --- |
 | GPU busy | 1.217 (12 asked: the calibration believed the 10x clock) | 12.373 |
 | GPU idle per frame | 0.524 | 0.115 |
@@ -523,9 +522,8 @@ The exe goes to `<BC250_ROOT>\scratch\m15\frameloop\build` unless `-Out` says ot
 never writes a binary into this repository.
 
 `cl.exe` from the portable MSVC under `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools` (found
-with `vswhere`), headers and `dxc.exe` from `<BC250_ROOT>\toolchain\nuget` (SDK 10.0.26100.0), `/W4 /WX /O2 /MT
-/std:c++17 /Brepro`, temporaries forced onto `P:`. The three shaders are precompiled to DXIL headers under
-`src\gen\` at shader model 6.0; the exact dxc identity and command lines are recorded in `src\gen\dxc.txt`. The
+with `vswhere`), headers and `dxc.exe` from `<BC250_ROOT>\toolchain\nuget` (SDK 10.0.26100.0), `/W4 /WX /O2 /MT /std:c++17 /Brepro`, temporaries forced onto `P:`. The three shaders are precompiled to DXIL headers under
+`src\gen\` at shader model 6.0. The exact dxc identity and command lines are recorded in `src\gen\dxc.txt`. The
 build then runs three CPU-only gates - `--help` must exit 0, an invalid option must exit 2, `--selftest` must
 exit 0 (41 checks: percentiles, the GPU-to-QPC mapping, the timestamp-scale gate, the `--ts-hz` boundaries,
 every other option boundary, JSON escaping) - and keeps the previous exe under `build\retained\` by its hash.
@@ -537,7 +535,7 @@ prints its usage to stderr, and PowerShell turns a native command's stderr into 
 time of the build into the image and two builds of the same code hash differently, so a SHA-256 in a trial
 record would name a build rather than a revision. Two consecutive builds now produce the same hash.
 
-Nothing links `d3d12.lib` or `dxgi.lib`; only `user32.lib` and `kernel32.lib`.
+Nothing links `d3d12.lib` or `dxgi.lib`. Only `user32.lib` and `kernel32.lib`.
 
 ## Known limits
 
@@ -548,7 +546,7 @@ Nothing links `d3d12.lib` or `dxgi.lib`; only `user32.lib` and `kernel32.lib`.
   `N` buffers allows `N-1` outstanding Presents, so Present throttles first. The lab command for latency 3
   below therefore also passes `--buffers 3`.
 - **GPU work floor**: `--gpu-ms` below `lists x dispatch_floor_ms` cannot be met (see Calibration).
-- **Coarse calibration when the iteration count is small.** One iteration costs `slope_ms_per_iteration`; when
+- **Coarse calibration when the iteration count is small.** One iteration costs `slope_ms_per_iteration`. When
   the calibrated count falls to a few tens (WARP, or any slow adapter at a small per-dispatch target) a single
   step is a large fraction of the target and the calibration quantises. The knob is a *lower* `--groups`: fewer
   thread groups means a cheaper iteration, so more of them fit in the target and the steps get finer.
@@ -556,14 +554,14 @@ Nothing links `d3d12.lib` or `dxgi.lib`; only `user32.lib` and `kernel32.lib`.
   precedes every list, so the whole of any gap is attributed after submission by construction. Compare
   `idle_per_frame` across modes and the split only within one mode.
 - **Recording threads compete with CPU-side "GPU" work.** Measured on WARP (fps 148 -> 114 with four recording
-  threads); the same applies wherever composition or the driver's own threads share the CPUs.
+  threads). The same applies wherever composition or the driver's own threads share the CPUs.
 - **The clock mapping is piecewise**, one `GetClockCalibration` point every `--calibrate-every` frames
   (default 32), so a GPU timestamp is mapped with a point up to half a second old. Measured drift on the host
-  was under 1 ppm; `host.clock_drift_ppm` reports it per run and `--calibrate-every 1` tightens it at the cost
+  was under 1 ppm. `host.clock_drift_ppm` reports it per run and `--calibrate-every 1` tightens it at the cost
   of one kernel call per frame.
 - **Timestamp placement** is the runtime's: `EndQuery(TIMESTAMP)` is a bottom-of-pipe write on AMD, so a list's
   "start" timestamp is itself a pipelined event. A UAV barrier after each dispatch keeps consecutive dispatches
-  from overlapping, which is what makes the per-list durations and the gaps between them separable; without it
+  from overlapping, which is what makes the per-list durations and the gaps between them separable. Without it
   the GPU would overlap them and the gaps would be meaningless. That barrier is also a cost the numbers
   include.
 - **The draw reads the compute output through an SRV**, not through a UAV in the pixel shader. The dependency
@@ -571,16 +569,16 @@ Nothing links `d3d12.lib` or `dxgi.lib`; only `user32.lib` and `kernel32.lib`.
   already exercised on the lab.
 - **`--gpu-ms 0` runs no dispatch at all** inside the loop (the "clear and draw only" case). The buffer is
   still defined: one priming dispatch at startup writes every slot.
-- **No readback or pixel check.** This client measures time; it does not prove what reached the screen. The
+- **No readback or pixel check.** This client measures time. It does not prove what reached the screen. The
   image is a moving noise pattern derived from the compute output, which is enough for an operator to see that
   frames are advancing, but a correctness witness is `d3d12queue`'s business.
-- **WARP has no output**, so the window falls back to the primary monitor rectangle; WARP's own
+- **WARP has no output**, so the window falls back to the primary monitor rectangle. WARP's own
   `submit_to_gpu_start` and `idle_after_submission` are a software scheduler's, useful only as an order of
   magnitude.
 - **Seven lists are not a game.** A Witcher 3 frame carries about 160 barrier drains and some 5 waits per
-  frame; this loop has K dispatches, one fence and one Present. What it measures is the *floor* of our chain's
+  frame. This loop has K dispatches, one fence and one Present. What it measures is the *floor* of our chain's
   per-frame latency with a known amount of work, not the game's frame. A floor far below the game's gap says
-  the gap is in the game's pattern (barriers, waits, descriptor work); a floor near it says the gap is in the
+  the gap is in the game's pattern (barriers, waits, descriptor work). A floor near it says the gap is in the
   loop itself and is reproducible without a game session.
 - **The numbers assume the GPU timestamp and the reported frequency belong together.** They need not:
   `summary.consistency.gpu_over_interval` is the check, and on our own stack the KMD answers
@@ -588,10 +586,10 @@ Nothing links `d3d12.lib` or `dxgi.lib`; only `user32.lib` and `kernel32.lib`.
   pass `--ts-hz` for the real frequency.
 - **A fitted clock origin is a bracket, not a point.** With `--ts-hz` the client knows the scale exactly and the
   offset only to within `clock_fit.bracket_ms` (0.076 ms on this machine, one fence wake and one submission
-  apart). Durations are unaffected; `submit_to_gpu_start`, `gpu_end_to_wake*` and the `await`/`after` split carry
+  apart). Durations are unaffected. `submit_to_gpu_start`, `gpu_end_to_wake*` and the `await`/`after` split carry
   it, and the negative-value gate widens by that much
   (`summary.consistency.negative_tolerance_ms`). The fit also assumes the two clocks drift by less than 200 ppm
-  (host: 46 ppm over 8 s); `clock_fit.refits_clamped` counts how often that clamp bound a refit, and when every
+  (host: 46 ppm over 8 s). `clock_fit.refits_clamped` counts how often that clamp bound a refit, and when every
   refit is clamped the fit is declared unusable rather than quietly wrong.
 - **`host.clock_drift_ppm` is null when the origin was fitted**: it is a measurement of the driver's calibration
   points against QPC, and with `--ts-hz` those points are not what the mapping uses.
