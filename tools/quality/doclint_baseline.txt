@@ -107,7 +107,7 @@
 3	tools/firmware/README.md
 4	tools/fwinfo/README.md
 15	tools/packagecheck/README.md
-47	tools/release/README.md
+2	tools/release/README.md
 18	tools/runcompare/README.md
 25	tools/win/README.md
 6	tools/win/amdgpu_wddm_control/README.md

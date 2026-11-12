@@ -34,9 +34,9 @@ the x64 and the x86 Vulkan loader in place. A loader of the same or a newer vers
 loader, as it leaves the Visual C++ runtime. That installer is an x64 program (`test-wow64.ps1`).
 
 Builds the folder and zip that external testers run on their own ASRock BC-250 (Windows 11 x64). The tester guide
-is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The package's own third-party list is
+is `docs/testing/INSTALL.md`. It is copied into the package as `INSTALL.md`. The package's own third-party list is
 `docs/testing/THIRD-PARTY.md` (one row per bundled component with its exact commit), with the licence texts in
-`docs/testing/licenses/`; when a bundled binary changes, its row changes in the same commit.
+`docs/testing/licenses/`. When a bundled binary changes, its row changes in the same commit.
 
 | File | Purpose |
 |---|---|
@@ -52,28 +52,28 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `release-manifest.schema.json`, `release-tester.32.json` | The contract of a release manifest, and the manifest of tester.32 as an example. |
 | `test_build_release_set.py` | Host test of the release set build with stub recipes in temporary repositories. It is the `release-build-set` check of `tools\quality\quick.ps1`. |
 | `build-release.ps1` | Copies the sources, re-signs the KMD (.sys signature, new catalog via Inf2Cat), writes `manifest.json`, zips. Gates: source hashes, signer, no key material, scripts parse under PowerShell 5.1, every licence file named in `THIRD-PARTY.md` present and none of them a web page. |
-| `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd` (package root) and the PowerShell 5.1 scripts, and the setup window `setup.exe` in the unpacked release's top folder (`tools/win/amdgpu_wddm_setup`), the default entry of an ordinary user. `build-release.ps1` refuses to build without `-SetupApp` (from 0.7.216.100-tester.28 on). |
+| `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd` (package root) and the PowerShell 5.1 scripts. Also the setup window `setup.exe` in the unpacked release's top folder (`tools/win/amdgpu_wddm_setup`), the default entry of an ordinary user. `build-release.ps1` refuses to build without `-SetupApp` (from 0.7.216.100-tester.28 on). |
 | `make-setup-exe.ps1` | Writes the single-file installer from an unpacked release: `[setup.exe][the package as a zip][the file list][padding to 8 bytes][a 120-byte trailer]`, deterministic (sorted entries, one constant timestamp). `-Check` reads the exe back and compares every file of the payload with the file of the package, byte for byte. `-ReleaseZip <zip>` compares it with the entries of the published archive as well. `build-release.ps1` always passes both. The program image is `setup.exe` without its own signature, because a certificate table is valid only at the end of a file (BD-160). `build-release.ps1` then signs the whole single file, and `-CheckSigned` proves that the signed file is the checked file plus one certificate table. |
 | `user-mode-signing.ps1` | The signer of the files outside the driver package, of the single-file setup and of the submission CAB (BD-160). By default it is the test certificate. `-UserModeSignerThumbprint <thumbprint> -TimestampUrl <url>` on `build-release.ps1` selects a code-signing certificate of `CurrentUser\My` or `LocalMachine\My`, such as the EV certificate, with an RFC 3161 time stamp. The release flavour only. The driver package itself goes to Microsoft attestation, so this route never signs a file of it. Host test `test-user-mode-signing.ps1`, gate `release-user-mode-signing`. |
 | `nagi_update.py` | The release side of self-update (`docs/design/self-update.md`). `identity` gives the update identity of each component kind, which `build-release.ps1` writes into `manifest.json` as `update_components`. `packs` writes the apps pack `nagi-apps-<version>.zip`. `manifest` writes `nagi-update.json`. For the release flavour, `build-release.ps1` runs all three and signs the manifest with the user-mode signer (`signtool /p7`). Then it checks the signature against the pinned list of `installer\nagi-update.ps1`. Host test `test_nagi_update.py`, gate `nagi-update-writer`. |
 | `installer\nagi-update.ps1`, `installer\apply.ps1` | The installed side of self-update. It holds the manifest and signature checks, the apply plan, the atomic switch of the `control` folder and the data packs. It also holds the driver transaction and its rollback decision. `apply.ps1` is the engine of `setup.exe --apply`. Host tests `test-nagi-update.ps1` (gate `nagi-update-apply`), `test-nagi-update-apply.ps1` (gate `nagi-update-apply-e2e`) and `test-nagi-update-release.ps1` (gate `nagi-update-release`). |
 | `test-setup-exe.ps1` | Gate, run by `tools\win\amdgpu_wddm_setup\build.ps1`. It packs a small package of its own. It reads that package back through the window's `--smoke-payload` mode and compares every unpacked file. Then it offers the reader seven exes it must refuse. Four of them are a changed payload byte, a changed list byte, a file replaced and a file removed. The other three are a broken magic, a payload length that does not fit, and a window with no payload. It also signs copies with a certificate that it makes in memory for the run. The signed files must read their payload and pass `-CheckSigned` and the pinned digest check. A payload byte changed after signing must fail all three. 49 checks, nothing installed, no certificate store opened. |
 | `test-parse51.ps1` | Gate: every script parses under Windows PowerShell 5.1. |
-| `test-cli-commands.ps1` | Gate (build and `test-dryrun.ps1`): the packaged `bc250kmd_cli.exe`, run without arguments, lists every form of `cli-commands.json` (what the installer and the lab kits call), and it and both copies of `bc250control.dll` come from one control-app build folder. |
-| `test-dryrun.ps1` | Host test on a PC without a BC-250: install and uninstall dry runs refuse cleanly and change nothing; `-DryRunIgnoreBoard` walks every phase; an install over an older release names the files of that release that this package does not install and removes nothing else, and the uninstall takes every item of ours and ends with the list of what is left (BD-089). Never run the real install on a development PC. |
-| `test-firmware.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: both download hosts answer, a real download of the 8 firmware files and `LICENSE.amdgpu` with each SHA256 checked, the same from a folder (`-FirmwareDir`), and the refusal of a file whose SHA256 is not the pinned one. Installs nothing. |
-| `test-registry-defaults.ps1` | Called by `test-dryrun.ps1` under 5.1: the upgrade rule for the registry defaults (new, unchanged, new default over a value the previous installer wrote, a tester's value kept, command line, installer-owned), the driver's own safety closures (BD-069: a repair reopens them and clears the record after the write, another install keeps them and reports them, a reason the table does not name still counts in a durable record, a value the tester set by hand stays kept), the `Release\AppliedDefaults` round trip, and a write and read-back in the scratch key `HKCU:\Software\amdgpu-wddm-installer-test`, removed at the end. |
-| `test-session-checks.ps1` | Called by `test-dryrun.ps1` and by `tools/quality/quick.ps1` under 5.1 (BD-060): the driver-set staging call and restart receipt (BD-152), refusal of `Reboot` in new display INFs, reading of old rollback records, the pnputil outcomes 3010 / 0 / 259 (only what the exit code establishes; no installer function for the KMD's BD-059 session marker), the install inputs that the argument-free run after a restart takes from the state (an offline fresh install and an upgrade, both resume phases, the resumed run's own arguments, another package version, cleared at completion, a tester.10 state), the `resume` action, and the DWM baseline (`dwm-session.ps1`, files under `-WorkRoot` only): one whole record per boot, session and logon (a record with a missing or malformed field is ignored and replaced by the next recording), a replacement only when another instance than the recorded one runs, unknown history without a record, the upgrade's before/after observation; plus a read-only reading of this computer's own session. BD-080: the plan of the two logon tasks (`common.ps1` `Get-LogonTaskPlan`) against its rules (`Test-LogonTaskPlan`), with eleven negative controls. The installer's registration is read from the source. The two scripts behind the tasks hold one poll function for the headless and the windowed run. The window script touches neither the driver nor the registry. |
+| `test-cli-commands.ps1` | Gate (build and `test-dryrun.ps1`): the packaged `bc250kmd_cli.exe`, run without arguments, lists every form of `cli-commands.json` (what the installer and the lab kits call). It and both copies of `bc250control.dll` come from one control-app build folder. |
+| `test-dryrun.ps1` | Host test on a PC without a BC-250: install and uninstall dry runs refuse cleanly and change nothing. `-DryRunIgnoreBoard` walks every phase. An install over an older release names the files of that release that this package does not install and removes nothing else. The uninstall takes every item of ours and ends with the list of what is left (BD-089). Never run the real install on a development PC. |
+| `test-firmware.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder. Both download hosts answer. A real download of the 8 firmware files and `LICENSE.amdgpu`, with each SHA256 checked. The same from a folder (`-FirmwareDir`), and the refusal of a file whose SHA256 is not the pinned one. Installs nothing. |
+| `test-registry-defaults.ps1` | Called by `test-dryrun.ps1` under 5.1. The upgrade rule for the registry defaults (new, unchanged, new default over a value the previous installer wrote, a tester's value kept, command line, installer-owned). The driver's own safety closures (BD-069). A repair reopens them and clears the record after the write, and another install keeps them and reports them. A reason the table does not name still counts in a durable record, and a value the tester set by hand stays kept. The `Release\AppliedDefaults` round trip, and a write and read-back in the scratch key `HKCU:\Software\amdgpu-wddm-installer-test`, removed at the end. |
+| `test-session-checks.ps1` | Called by `test-dryrun.ps1` and by `tools/quality/quick.ps1` under 5.1 (BD-060). The driver-set staging call and restart receipt (BD-152), refusal of `Reboot` in new display INFs and reading of old rollback records. The pnputil outcomes 3010 / 0 / 259 (only what the exit code establishes, and no installer function for the KMD's BD-059 session marker). The install inputs that the argument-free run after a restart takes from the state. The cases are an offline fresh install, an upgrade and both resume phases. Also the resumed run's own arguments, another package version, the clear at completion and a tester.10 state. The `resume` action. The DWM baseline (`dwm-session.ps1`, files under `-WorkRoot` only): one whole record per boot, session and logon. A record with a missing or malformed field is ignored and replaced by the next recording. A replacement only when another instance than the recorded one runs, unknown history without a record, the upgrade's before/after observation. Also a read-only reading of this computer's own session. BD-080: the plan of the two logon tasks (`common.ps1` `Get-LogonTaskPlan`) against its rules (`Test-LogonTaskPlan`), with eleven negative controls. The installer's registration is read from the source. The two scripts behind the tasks hold one poll function for the headless and the windowed run. The window script touches neither the driver nor the registry. |
 | `test-start-record.ps1` | Called by `test-dryrun.ps1` under 5.1 and by `tools/quality/quick.ps1`. It runs the readers of the KMD's start record (BD-122, `StartRecord` in the driver state store, `StateV2\Generations\<Active>\Data\StartRecord`) over its fixtures. Each fixture is written in an in-memory typed record store and read back through the reader that `start-confirm.ps1` and the installer use. Two fixtures are a step failure and the boot-loop guard's refusal. The others are a start that reached a started device after a failure, a record an earlier boot left, and one written now. One more is the record of the field report 20261011T222253Z. This boot's own start time must not disown it. The last two are a stop record of the same layout, and no record at all (a KMD before 0.7.216.30). The test also runs the extraction that the installer's `verify` step performs on the probe's output. Its last section holds both readers to their source rules. The driver's own half of BD-122 is `driver/kmd/test/run_start_record.ps1`. |
 | `test-diagnostics.ps1` | Called by `test-dryrun.ps1` under 5.1 and by `tools/quality/quick.ps1`. It runs the installer's automatic diagnostics of a driver start that did not pass (`installer/diagnostics.ps1`). The field report 20261011T222253Z is the first fixture. Its readings must come out as "start failure, collect": problem code `CM_PROB_FAILED_POST_START`, status `Error`, the start record of that boot, no start-health reading, `LastStage` 79. A started driver must come out as no failure. Then every hard signal on its own. Then the `setupapi.dev.log` section picker, the driver's log folder, and the 20 s and 4 MiB bounds. Then the whole file, written from records in a scratch key of `HKCU` that the test removes again. The last section holds `install.ps1`, `engine.ps1` and the console route to their part of the contract. |
-| `test-engine-units.ps1` | Called by `test-dryrun.ps1` under 5.1: the RunOnce command line, the continuation closure and its command (setup window, or Windows PowerShell with `install.ps1 -HoldWindow`, run for real from folders with spaces and cmd metacharacters), the kept repair set (each set against its own manifest's firmware), the running-release witness writer under the engine lock, the compatibility record, the restart-boundary decision, the mutation record, the job object's child closure, the removal plans of BD-089 (where each file of a manifest lands, the files of the installed release that a new one does not install, and which of our driver-store packages an install deletes), and the Microsoft Visual C++ runtime step: the version decision over readings of the three `System32` files, the SHA-256 and signature check of Microsoft's own installer with stand-in signature readings (a changed hash, a signature that is not Valid, an unsigned file and another signer are each refused), and the meaning of every exit code with 1603, 1618, 5 and a crash as negative controls. |
+| `test-engine-units.ps1` | Called by `test-dryrun.ps1` under 5.1. The RunOnce command line, and the continuation closure and its command (setup window, or Windows PowerShell with `install.ps1 -HoldWindow`). The command is run for real from folders with spaces and cmd metacharacters. The kept repair set (each set against its own manifest's firmware). The running-release witness writer under the engine lock, the compatibility record, the restart-boundary decision, the mutation record and the job object's child closure. The removal plans of BD-089: where each file of a manifest lands. Also the files of the installed release that a new one does not install, and which of our driver-store packages an install removes. The Microsoft Visual C++ runtime step: the version decision over readings of the three `System32` files. The SHA-256 and signature check of Microsoft's own installer, with stand-in signature readings. A changed hash, a signature that is not Valid, an unsigned file and another signer are each refused. The meaning of every exit code with 1603, 1618, 5 and a crash as negative controls. |
 | `test-driver-store-locale.ps1` | Tests driver inventory, removal and failed reads with synthetic responses in five cultures. Called by `test-dryrun.ps1`. |
 | `test-boot-locale.ps1` | Tests numeric BCD and BitLocker queries and the boot change with fake providers in five cultures. The first part is the BitLocker plan the installer makes for itself. It suspends BitLocker for the restarts it needs. It does nothing when BitLocker is off or already suspended, and it proceeds when the state cannot be read. A suspension that cannot be verified must stop the run before the boot options are touched. The last part holds `install.ps1` to the rule that it asks no confirmation question at all. Called by `test-dryrun.ps1`. |
-| `test-engine-events.ps1` | G-EVT and G-STAGE: plan and dry runs with `-Gui`, every event line and the terminal result against the contract (`docs/gui/interfaces-setup.md`), the deadline and the child-process closure (section 10), the footprint unchanged. |
-| `test-offline.ps1` | G-OFF: `prepare-offline.ps1` builds a prepared folder; install dry runs from it and from a kept repair set with every download failing as if offline; a missing or changed firmware file is refused before any change. |
-| `test-wow64.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-064): every image under `payload\wow64` and `payload\syswow64` is x86 and every other payload image x64, the x86 entry points are exported undecorated, the `manifest.json` install paths, and verify's 32-bit registration check (`Test-WowRegistration`) against the scratch key `HKCU:\Software\amdgpu-wddm-installer-test-wow` and files under `-WorkRoot`, both removed at the end. |
+| `test-engine-events.ps1` | G-EVT and G-STAGE: plan and dry runs with `-Gui`, and every event line and the terminal result against the contract (`docs/gui/interfaces-setup.md`). Also the deadline and the child-process closure (section 10), and the footprint unchanged. |
+| `test-offline.ps1` | G-OFF: `prepare-offline.ps1` builds a prepared folder. Install dry runs from it and from a kept repair set with every download failing as if offline. A missing or changed firmware file is refused before any change. |
+| `test-wow64.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-064). Every image under `payload\wow64` and `payload\syswow64` is x86 and every other payload image x64, and the x86 entry points are exported undecorated. The `manifest.json` install paths. The 32-bit registration check of `verify` (`Test-WowRegistration`) against the scratch key `HKCU:\Software\amdgpu-wddm-installer-test-wow` and files under `-WorkRoot`, both removed at the end. |
 | `test-opengl-icd.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-076). It checks the release switch `opengl_icd` of `manifest.json`. That includes the architecture list and the refusals of a malformed list. It checks the values the installer writes into the GPU software key. There are three per architecture of the list. For x64 they are `OpenGLDriverName`, `OpenGLVersion` and `OpenGLFlags`. For x86 they are the three `Wow` names. This release lists x64 alone, so the test holds both lists. It checks that an x64 list writes the three x64 values and no `Wow` value. It checks that a list of both writes all six. It checks the ICD file of each architecture of the list: the machine and the `Drv` entry points. It checks the restore plan of the uninstaller: restore, remove and keep. It checks the step of an install whose list is shorter than the registration on the computer. The scratch key `HKCU:\Software\amdgpu-wddm-installer-test-gl` and a folder under `%TEMP%` are removed at the end. With `-Package` it also checks the ICD files of that package. |
-| `test-filesafe.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: equal-SHA256 skip, replacement of a file in use by rename, a re-run over a partial install, and the failed-step message with its re-run hint. |
+| `test-filesafe.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder. Cases: equal-SHA256 skip, replacement of a file in use by rename, a re-run over a partial install, and the failed-step message with its re-run hint. |
 | `test-mesa-temp-cleanup-installer.ps1` | Called by `tools/quality/quick.ps1` under 5.1 (BD-211), inside a scratch folder. It checks which `MEMxxxx.TMP` files `installer\mesa-temp-cleanup.ps1` removes: the right name and older than a day. A file that is open or read-only stays. |
 | `test-marker-guard.ps1`, `marker_guard.py`, `marker-guard-sources.json` | Gate (build): no fix lost its comment on the way into this release. See "Marker guard" below. |
 | `test-winsys-lines.ps1`, `marker_guard.py lines`, `winsys-lines.json`, `test_winsys_lines.py` | Gate (build, quick): no fix marker is on one RADV WDDM line and not on the other (BD-204). See "Both lines" below. |
@@ -96,7 +96,7 @@ that the gates read.
 to, as above, or the package root `files\` under it: each script takes the one that holds `manifest.json`. Their
 scratch folder lands beside the unpacked release, never inside it.
 
-v0 ships the binaries as they run on the lab (tester.11: KMD 0.7.200.1 re-signed, code unchanged, INF DriverVer 0.7.200.100 so that it outranks every lab build of 0.7.200 and the bound package is identifiable, plus the INF `Reboot` directive; desktop on the GPU route, DwmForceCpu 0, gated by RequireKmdSwitches); a rebuild from
+v0 ships the binaries as they run on the lab. For tester.11 that is KMD 0.7.200.1 re-signed with the code unchanged, and INF DriverVer 0.7.200.100 plus the INF `Reboot` directive. That DriverVer outranks every lab build of 0.7.200 and makes the bound package identifiable. The desktop is on the GPU route with DwmForceCpu 0, gated by RequireKmdSwitches. A rebuild from
 the exact commits with `/Brepro` is planned for v1. Install paths differ from the lab's: everything under
 `%ProgramFiles%\amdgpu-wddm`. Legacy releases read firmware from `C:\BC250\firmware`.
 
@@ -105,15 +105,15 @@ the INF and catalog but omits the binaries. Before staging, the installer checks
 their sizes, hashes and catalog membership in a protected private directory.
 Offline installs use `-FirmwareDir`. Old repair sets retain their old load path.
 
-v1 items: reproducible rebuild of every component; the control application edits the D3D11 allowlist; the
+v1 items: reproducible rebuild of every component. The control application edits the D3D11 allowlist. The
 .sys file version matches the INF DriverVer (the release re-stamps only the INF: 0.7.200.100 against the file's
-0.7.200.1). Done for tester.11 (KMD 5116c058 = 0aec4c58 + the DPM warm zone, with the INF strings of 1fccb978): the adapter string is "BC-250 GPU (amdgpu-wddm)" (it was
+0.7.200.1). Done for tester.11 (KMD 5116c058 = 0aec4c58 + the DPM warm zone, with the INF strings of 1fccb978). The adapter string is "BC-250 GPU (amdgpu-wddm)" (it was
 "BC-250 GPU (bc250kmd, display-only, lab build)") and the INF Provider is "amdgpu-wddm" (it was "BC-250 lab (D-Ogi)").
 
 Release identity of the driver package (BD-150). Windows names a driver package by its INF. If a new INF is byte for
 byte the INF of an installed package, pnputil keeps the installed package and its bc250kmd.sys. If two packages have
 the same DriverVer date and version, PnP keeps the installed one. 29v2 hit both cases and ran the old KMD, and its
-verify passed on the version alone. The build now prevents this:
+`verify` passed on the version alone. The build now prevents this:
 
 - `release-sources.json` gives the DriverVer date (`driver_date`) and the release it replaces (`supersedes`). The
   build stops when the new DriverVer does not rank above it: a later date, or a higher version on the same date.
@@ -121,7 +121,7 @@ verify passed on the version alone. The build now prevents this:
   So two different KMDs never have the same INF.
 - After pnputil, the installer reads the disk. The driver store must have the bc250kmd.sys of the package, and the
   service image of the next start must be that file. If not, the install stops and gives the reason.
-- Verify has the check `driver image`: the loaded bc250kmd.sys against the SHA256 in the manifest.
+- `verify` has the check `driver image`: the loaded bc250kmd.sys against the SHA256 in the manifest.
 
 Driver-store queries use `Get-WindowsDriver -Online` objects, including staged packages.
 No removal decision uses translated `pnputil` labels (issue #35).
@@ -134,11 +134,11 @@ They do not replace acceptance on Windows installations with those languages.
 
 No device restart and no DWM restart under a running desktop (BD-060): WinUI pointer-input loss after the desktop
 compositor (DWM) is stopped and restarted reproduces on this Windows build (22631) also with Microsoft Basic
-Display; restarting Windows recovers (sign-out is not verified).
+Display. Restarting Windows recovers (sign-out is not verified).
 New packages use `DiInstallDriverW` with `DIIRFLAG_INSTALL_AS_SET` (BD-152). The build and installer refuse
 `Reboot` in the display INF. The API stages the directory's single KMD package, then Windows activates it at
 shutdown. The installer saves the INF hash and boot identity before its automatic restart. A continuation in
-the same boot requests that restart; after a new boot it checks the service and Driver Store image hashes before
+the same boot requests that restart. After a new boot it checks the service and Driver Store image hashes before
 writing the GPU software key. A failed binding stops installation instead of restarting again.
 Windows installs the activated set only on a device that it is the best match for, and `DIIRFLAG_FORCE_INF` has
 no effect together with `DIIRFLAG_INSTALL_AS_SET`. Our packages have the same signer and hardware ID, so the
@@ -151,12 +151,12 @@ not skip this check. The installer does not force the binding: that changes the 
 
 The current sequence requires two automatic restarts: driver activation, then configuration. Test signing adds
 one when it is not active. The GUI plan and BitLocker suspension count these restarts. After each sign-in the
-saved continuation resumes without another install decision. `-NoReboot` explicitly defers the restart; dry runs
+saved continuation resumes without another install decision. `-NoReboot` explicitly defers the restart. Dry runs
 never request one. Migrating graphics registrations into the signed INF is separate work needed to remove the
 configuration restart. The inputs (`-FirmwareDir`, `-DpmMaxMHz`, `-CuMode`, `-NoControlApp`, `-NoReboot`, `-Force`)
-stay in the install state until configuration completes. The final verify also checks the loaded KMD image.
+stay in the install state until configuration completes. The final `verify` also checks the loaded KMD image.
 The transport follows [DiInstallDriverW](https://learn.microsoft.com/en-us/windows/win32/api/newdev/nf-newdev-diinstalldriverw)
-and SDK 10.0.26100 `newdev.h`; API success alone does not establish which driver is bound.
+and SDK 10.0.26100 `newdev.h`. API success alone does not establish which driver is bound.
 
 A newer package started over an older one's unfinished phase 1 takes the installation over: the state
 names it from then on (its inputs come back after its own restarts), test signing is still finished first, and the
@@ -204,22 +204,22 @@ switch is their word about that very value, so the driver's record of its own fa
 only closure with a switch that can write the closed value: without this rule `install.cmd -CuMode 24` over a
 closure left the record behind, and every install after it reported the tester's own 24 as a step back of the
 driver and offered a repair that takes it away. The Graphics page of the control application does the same for
-its own choice of "Standard (24)": it writes `CuMode = 24` and deletes the record.
+its own choice of "Standard (24)": it writes `CuMode = 24` and removes the record.
 
 The KMD's own INF stays without `Reboot`, because the lab's deployment kits
 restart the device in place. Uninstall still moves the GPU to Microsoft Basic Display Adapter at once and asks for a
 restart. Install records the session's DWM (process ID and creation time) before the driver package, right after it
 (before the restart-pending branch) and at the end of phase 2, each with its boot, in `dwm_observations` in
-`state.json` (last 12); the device outcome after the package is a separate field: a device-loss event and a DWM
-process restart are separate observations. The start-confirm task records the session's DWM once per logon in
-`%ProgramData%\amdgpu-wddm\dwm-baseline.json` (boot, session and logon time; last 16 records; a record with a missing
-or malformed field does not count and the next recording replaces it; `installer/dwm-session.ps1`, also in
+`state.json` (last 12). The device outcome after the package is a separate field: a device-loss event and a DWM
+process restart are separate observations. The `start-confirm` task records the session's DWM once per logon in
+`%ProgramData%\amdgpu-wddm\dwm-baseline.json` (boot, session and logon time. Last 16 records. A record with a missing
+or malformed field does not count and the next recording replaces it. `installer/dwm-session.ps1`, also in
 `payload\tools`). `verify.cmd` reports `DWM restarted in this session` as a
 warning only when it sees another instance than the recorded one, passes when the recorded one runs, and says
-`unknown history` without a record; no time heuristic. The warning helps to attribute a failure, never replaces a bug
+`unknown history` without a record. No time heuristic. The warning helps to attribute a failure, never replaces a bug
 report.
 
-At the end of each run, the logon start-confirm task writes `%ProgramData%\amdgpu-wddm\start-confirm-run.json`: the
+At the end of each run, the logon `start-confirm` task writes `%ProgramData%\amdgpu-wddm\start-confirm-run.json`: the
 BootId of the boot (the same reading as the KMD records), the time, the exit code and the reason. The file is
 replaced in one rename. While `verify.cmd` waits for the task of this boot, it compares the BootId in that file with
 the BootId of this boot. The comparison counts only when both BootIds come from the shared page
@@ -233,33 +233,33 @@ startup task does not write the file. Uninstall removes it.
 Registry defaults: `installer/registry-defaults.json` is the one table. `install.ps1` applies it and
 `build-release.ps1` copies its `defaults` object into `manifest.json`, where the control application's reset reads
 it. An upgrade writes a default only where the value is absent or still equal to what the previous installer wrote
-(`Release\AppliedDefaults`; `legacy_applied` for tester.1 to tester.7, which kept no record), so a tester's own
+(`Release\AppliedDefaults`. `legacy_applied` for tester.1 to tester.7, which kept no record), so a tester's own
 settings stay. Installer-owned and always written: the paths into the install root (`CpuUmdPath`, `GpuUmdPath` and the
 x86 router's `CpuUmdPathWow`, `GpuUmdPathWow`), the graphics registration (`UserModeDriverName`, `VulkanDriverName`, the
 Khronos entry, and their 32-bit counterparts `UserModeDriverNameWow`, `VulkanDriverNameWow`, the WOW6432Node Khronos entry), `UnconfirmedStarts` and the
-`Release` key. When a default changes, edit `defaults` only; `legacy_applied` stays as tester.7 wrote it.
+`Release` key. When a default changes, edit `defaults` only. `legacy_applied` stays as tester.7 wrote it.
 
 install.ps1 exit codes: 0 done (or already installed and verified, or a restart asked for), 2 refused (preflight, or
 no administrator rights in a setup-window run), 3 verification failed, 4 not confirmed, 5 test signing not active,
-6 a step failed (run again), 7 verify before the pending restart, 8 stopped at a safe point (cancelled, or past `-DeadlineUtc`),
+6 a step failed (run again), 7 `verify` before the pending restart, 8 stopped at a safe point (cancelled, or past `-DeadlineUtc`),
 9 another install action holds the engine lock, 10 handed to an elevated window.
 
 Setup window and engine (`docs/gui/interfaces-setup.md`): the setup window runs `install.ps1` with `-Gui` (events
 and a terminal result bound to its invocation id, cancel at safe points, no prompts) and `-Plan` (read only: checks,
 decision, settings-impact plan). Restarts are planned, never forced: on the command line `install.ps1` asks "Restart
-now?" and then asks Windows for a normal restart (ExitWindowsEx with a planned reason; programs may keep unsaved
-work); the setup window asks the same in its own words. Each install stages a continuation closure (the whole package
-and its firmware folder) in the installer's state folder; RunOnce runs the closure's setup window with `--continue`,
+now?" and then asks Windows for a normal restart (ExitWindowsEx with a planned reason. Programs may keep unsaved
+work). The setup window asks the same in its own words. Each install stages a continuation closure (the whole package
+and its firmware folder) in the installer's state folder. RunOnce runs the closure's setup window with `--continue`,
 or, for a command-line run, Windows PowerShell directly with the closure's `installer\install.ps1 -HoldWindow` (no
 cmd.exe, so a folder such as `C:\AMD&GPU` is safe). After completion the closure stays as the repair set (this release and
 the previous one) and `Release\RepairSetup` names its setup window. `prepare-offline.cmd` makes a folder with the
 package and the firmware for a BC-250 without internet. `build-release.ps1` writes `compatibility.json` (engine
 contract, the INF `Reboot` directive, firmware list, settings table schema, the continuation) and refuses a package
-whose record does not verify; it takes the release notes from `docs/testing/release-notes/<version>.md` (sections New,
+whose record does not pass the check. It takes the release notes from `docs/testing/release-notes/<version>.md` (sections New,
 Fixed, Known issues, Settings affected required) as `RELEASE-NOTES.md`. Lines written before the release that
 carries them wait in `docs/testing/release-notes/pending/`, under those same four headings. Fold each file into
-`<version>.md` and delete the file before a release build: nothing else reads that folder, so lines left there
-reach no tester. `build-release.ps1` names every file still waiting. Verify and the start-confirm task write the
+`<version>.md` and remove the file before a release build: nothing else reads that folder, so lines left there
+reach no tester. `build-release.ps1` names every file still waiting. `verify` and the `start-confirm` task write the
 running-release witness `%ProgramData%\amdgpu-wddm\installer\running-release.json` (the loaded KMD image, its reply
 and the boot).
 
@@ -276,14 +276,14 @@ the release head:
 
 | Finding | Meaning | Effect |
 |---|---|---|
-| `GONE` | an id occurs fewer times in a file of the head than in that file of a source, and the file did not just move: a fix or its explanation was dropped (a merge took the other side, a rebase lost a hunk) | fails the gate and the release build |
-| `REWORDED` | the anchored comment line is not in the head verbatim, but the id is still in the file as often as before: usually a rewrap or a deliberate update | printed |
+| `GONE` | an id occurs fewer times in a file of the head than in that file of a source, and the file did not just move. Thus a fix or its explanation was dropped (a merge took the other side, a rebase lost a hunk) | fails the gate and the release build |
+| `REWORDED` | the anchored comment line is not in the head verbatim, but the id is still in the file as often as before. This is usually a rewrap or a deliberate update | printed |
 | `CHANGED` | the comment is there, and the code right after it matches no source's version: a merge result nobody wrote | printed, and the release review reads it |
 
-`marker-guard-sources.json` names each source by its commit, never by a branch: another workflow deletes a branch and
+`marker-guard-sources.json` names each source by its commit, never by a branch: another workflow removes a branch and
 would take the gate with it, and the commit is what was merged. A wagon gets its row in the commit that merges it into
 the release set. An id the head drops on purpose goes into `marker-guard-accept.txt`, one line per decision
-(`<id> <path> <reason>`); without that file the gate runs with no exceptions. The fork repositories take the same run
+(`<id> <path> <reason>`). Without that file the gate runs with no exceptions. The fork repositories take the same run
 with `--paths src`. One run over `driver` and `tools` takes about 15 s.
 
 ## Both lines
