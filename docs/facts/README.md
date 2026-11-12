@@ -14,24 +14,24 @@ hand.
 
 A fact goes to the area of the component whose behaviour it establishes, not of the tool or the OS that
 observed it: a register value read under Linux is `hardware`, what amdgpu or Mesa do under Linux is `linux`.
-`games` and `tooling` take precedence over the component areas; between the others, the borders are:
+`games` and `tooling` take precedence over the component areas. Between the others, the borders are:
 
-- `kmd` / `display`: the kernel driver's Present, Blt, flip, VidPN and scanout code is `display`; its memory,
+- `kmd` / `display`: the kernel driver's Present, Blt, flip, VidPN and scanout code is `display`. Its memory,
   paging, submission and start/stop are `kmd`.
-- `display` / `d3d`: a DWM or desktop trial (does the desktop compose, what is on the screen) is `display`;
+- `display` / `d3d`: a DWM or desktop trial (does the desktop compose, what is on the screen) is `display`.
   the D3D user-mode driver measured with test clients is `d3d`.
-- `d3d` / `icd`: a RADV change measured through Vulkan (CTS, a standalone ICD control) is `icd`; measured through
+- `d3d` / `icd`: a RADV change measured through Vulkan (CTS, a standalone ICD control) is `icd`. Measured through
   the D3D runtime or the DXVK/vkd3d-proton engines it is `d3d`.
 - `icd` / `kmd`: the user-mode half of a winsys or allocation contract is `icd`, the kernel half `kmd`.
 
-The one-line definition of each area is the `description` in its data file; [`../facts.md`](../facts.md) lists
+The one-line definition of each area is the `description` in its data file. [`../facts.md`](../facts.md) lists
 them.
 
 ## How to add a fact
 
 1. Get the ID: `python tools/facts/gen_facts.py next-id` prints the next free `M` number (say `M790`).
-2. Append the fact to the end of its area file, e.g. `docs/facts/data/kmd.yaml`. Text values are double-quoted
-   and on one line; links are relative to `docs/`:
+2. Append the fact to the end of its area file, for example `docs/facts/data/kmd.yaml`. Text values are double-quoted
+   and on one line. Links are relative to `docs/`:
 
    ```yaml
      - id: M790
@@ -40,21 +40,21 @@ them.
        claim: "What holds, in one sentence"
        status_text: "MEASURED (n = 1 run)"
        detail: "How it was measured, the numbers, what it does not show"
-       evidence: "[E51](../evidence/windows/2026-10-03-E51-name/RESULT.md)"
+       evidence: "[E51](../evidence/windows/2026-10-02-E51-kmd196-hold-and-replay-wake/RESULT.md)"
        edges:
          - {"type": "uses", "to": "M780"}
    ```
 
-   `status_text`, `detail`, `evidence` and `edges` are optional; `status_text` only when it says more than `status`.
+   `status_text`, `detail`, `evidence` and `edges` are optional. `status_text` only when it says more than `status`.
 3. Run `python tools/facts/gen_facts.py --write`. It regenerates the pages and rewrites the data file in canonical
-   form (sorted by ID). Commit the data and the pages together with the evidence; `--check` (in
+   form (sorted by ID). Commit the data and the pages together with the evidence. `--check` (in
    `tools/quality/quick.ps1` and the `facts` CI workflow) fails if the pages were not regenerated.
 
 ## Correcting, moving, checking
 
 - A fact that corrects or overturns an older one gets an edge to it (`supersedes` or `refutes`), and the older
-  entry is fixed in place: its status and text say what holds now and why. Never append a second version.
-- Moving a fact to another area means moving its entry to the other file; its ID stays. Links elsewhere in the
+  entry is corrected in place: its status and text say what holds now and why. Never append a second version.
+- Moving a fact to another area means moving its entry to the other file. Its ID stays. Links elsewhere in the
   repository to its old page (`facts/<area>.md#m123`) then fail the gate until they are updated.
 - A share is the share of the counts next to it, and a rate normalised to another clock says which of its
   numbers the model made. `python tools/quality/claim_shares.py` is that gate (`claim-shares` in
@@ -69,7 +69,7 @@ them.
   (`mechanism-label`). It also came out of the audit of 2026-10-10, over [M849](icd.md#m849), which counted five
   disassemblies and then named the pass that it says did not fire. The counts show the difference. They do not
   show which pass makes it, so the evidence of such a row gets a correction file next to it
-  (`evidence/m16/gfx1013-dp4a-barrier-2026-10-09/CORRECTION.md`) and the row itself is fixed in place.
+  (`evidence/m16/gfx1013-dp4a-barrier-2026-10-09/CORRECTION.md`) and the row itself is corrected in place.
 - `python tools/facts/gen_facts.py --check` is the gate (also run by `tools/quality/quick.ps1`): IDs unique and
   well formed, statuses valid, every edge resolves, every cited `evidence/` path and every relative link exists
   in the tree, links to fact anchors name the right page, data files canonical, generated pages up to date.
@@ -101,9 +101,9 @@ Keys of a fact, in this order (the generator writes them so):
 | `id` | required | `M<n>` measured or derived by us, `S<n>` read from source code, `R<n>` refuted prior art |
 | `status` | required | `HYPOTHESIS`, `MEASURED`, `CONFIRMED` or `REFUTED` |
 | `date` | required | `YYYY-MM-DD` |
-| `date_from` | optional | set when the date was not written with the fact: `evidence-path` or `text` (first date in its evidence or text) or `git` (date of the commit that added the row); migration only |
+| `date_from` | optional | set when the date was not written with the fact. Values: `evidence-path` or `text` (first date in its evidence or text) or `git` (date of the commit that added the row). Migration only |
 | `claim` | required | what is claimed, one line |
-| `status_text` | optional | the full status when it qualifies the status word, e.g. `MEASURED (n = 1 run)`; must start with `status` |
+| `status_text` | optional | the full status when it qualifies the status word, for example `MEASURED (n = 1 run)`. Must start with `status` |
 | `detail` | optional | how it was measured, numbers, limits |
 | `evidence` | optional | evidence paths and links |
 | `source` | optional | `S` facts: the source read |
@@ -111,7 +111,7 @@ Keys of a fact, in this order (the generator writes them so):
 | `edges` | optional | relations to other facts, one JSON object per line |
 
 Text values are double-quoted JSON strings on one line. Links inside them are relative to `docs/`, as in the
-old single-file table; the generator rewrites them for pages one directory down.
+old single-file table. The generator rewrites them for pages one directory down.
 
 ## Edges
 
@@ -120,20 +120,20 @@ An edge sits on the fact that does the supporting, refuting, superseding or citi
 | `type` | Meaning |
 |---|---|
 | `uses` | this fact cites or builds on the other one |
-| `supports` | this fact confirms the other one |
+| `supports` | this fact is evidence for the other one |
 | `refutes` | this fact contradicts the other one |
 | `supersedes` | this fact replaces the other one (a correction) |
 
 `"scope": "partial"` limits a `supersedes` or `refutes` to part of the other fact (a cause, an inference, one
-clause); without it a `supersedes` removes the other fact from [`current.md`](current.md). `REFUTED` facts are
-never in it. `"auto": true` marks an edge derived from wording when the old table was migrated; `cue` keeps that
+clause). Without it a `supersedes` removes the other fact from [`current.md`](current.md). `REFUTED` facts are
+never in it. `"auto": true` marks an edge derived from wording when the old table was migrated. `cue` keeps that
 wording, and `cue_in` names the fact whose text it is in when that is the other end of the edge.
 
 ## Unsupported prior-art claims
 
-Claims such as "registers are SOS-locked" or "NBIO is locked at EFI boot" are neither confirmed nor refuted as
+Claims such as "registers are SOS-locked" or "NBIO is locked at EFI boot" are neither proved nor refuted as
 hardware behaviour: they were measured at wrong offsets and are simply unsupported. Under Linux nothing is locked
-before the driver loads ([M2](hardware.md#m2), [M3](hardware.md#m3)); the same reads under Windows are experiment
+before the driver loads ([M2](hardware.md#m2), [M3](hardware.md#m3)). The same reads under Windows are experiment
 E02. Prior art, claim by claim: [`../prior-art-vs-hardware.md`](../archive/prior-art-vs-hardware.md).
 
 This note stood under the refuted-claims table of the old `facts.md`. It is kept here, not as a fact, because
@@ -142,7 +142,7 @@ This note stood under the refuted-claims table of the old `facts.md`. It is kept
 ## Migration (2026-10-03)
 
 The table-based `docs/facts.md` of `43f186b3` (780 `M`, 4 `S`, 3 `R` rows) was converted by
-[`tools/facts/migrate_facts_md.py`](../../tools/facts/migrate_facts_md.py);
+[`tools/facts/migrate_facts_md.py`](../../tools/facts/migrate_facts_md.py).
 [`tools/facts/verify_migration.py`](../../tools/facts/verify_migration.py) shows that every row's text is in
 the data unchanged. Areas were assigned by keyword scoring and are meant to be corrected by hand where they
 are wrong. Edges were derived only from explicit wording ("see M10", "corrected by M112", "REFUTED in part by
