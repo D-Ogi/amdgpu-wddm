@@ -571,7 +571,7 @@ descriptors and the same six-field payload, and its host test compiles the heade
 - The log keeps a table of live mappings under an SRW lock. The table is always kept, because a capture-state
   request needs a rundown of every live mapping. The lock is taken only when a resource receives or releases memory:
   CreateResource and OpenResource of a runtime surface, DestroyResource, and RotateResourceIdentities. A blt-model
-  swap chain rotates at each Present, so that Present takes the lock; no draw or Map takes it. The table changes also
+  swap chain rotates at each Present, so that Present takes the lock. No draw or Map takes it. The table changes also
   when no session has enabled the provider: it cannot be built again at an enable, because a rotation moves the
   surface of each resource on the device thread without a lock that the callback thread could take. Then a table
   change writes no event (one relaxed load), and a rotation of a swap chain of at most 16 buffers does no heap
