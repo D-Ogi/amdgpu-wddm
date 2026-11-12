@@ -68,10 +68,11 @@ if (-not (Test-Path -LiteralPath $oldZip -PathType Leaf)) { throw "no zip $oldZi
 $oldManifestText = [IO.File]::ReadAllText((Join-Path $oldTop 'files\manifest.json'))
 $oldManifest = $oldManifestText | ConvertFrom-Json
 $version = [string]$oldManifest.version
-if (-not $version -or $name -ne "amdgpu-wddm-tester-$version") { throw "the package folder $name does not name the manifest version '$version'" }
+# The lab flavour has the suffix -lab in the names of its folder, zip and single exe (build-release.ps1).
+$suffix = if ($oldManifest.flavour -eq 'lab') { '-lab' } else { '' }
+if (-not $version -or $name -ne "amdgpu-wddm-tester-$version$suffix") { throw "the package folder $name does not name the manifest version '$version' of the $($oldManifest.flavour) flavour" }
 $exes = @(Get-ChildItem -LiteralPath $Package -File -Filter "amdgpu-wddm-setup-$version*.exe")
 if ($exes.Count -gt 1) { throw "$Package holds $($exes.Count) single exes of $version" }
-$suffix = if ($oldManifest.flavour -eq 'lab') { '-lab' } else { '' }
 $exeName = if ($exes.Count) { $exes[0].Name } else { "amdgpu-wddm-setup-$version$suffix.exe" }
 if ((Test-Path -LiteralPath $Out) -and @(Get-ChildItem -LiteralPath $Out -Force).Count) { throw "$Out is not empty" }
 

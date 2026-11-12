@@ -61,12 +61,12 @@ function Write-Notes([string]$Dir, [string]$Tag) {
     [IO.File]::WriteAllText((Join-Path $Dir "$version.md"), $notesBody.Replace('- a', "- a ($Tag)"))
     [IO.File]::WriteAllText((Join-Path $Dir "$version.pl.md"), $notesBody.Replace('- a', "- a ($Tag, po polsku)"))
 }
-function Write-Manifest([string]$Files, [string]$Top, [hashtable]$Extra = @{}) {
+function Write-Manifest([string]$Files, [string]$Top, [hashtable]$Extra = @{}, [string]$Flavour = 'release') {
     $list = @(foreach ($f in Get-ChildItem -LiteralPath $Files -Recurse -File | Where-Object Name -ne 'manifest.json' | Sort-Object FullName) {
         [ordered]@{ path = $f.FullName.Substring($Files.Length + 1) -replace '\\', '/'; sha256 = (Get-Hash $f.FullName); size = $f.Length }
     })
     $setup = Join-Path $Top 'setup.exe'
-    $manifest = [ordered]@{ schema = 1; flavour = 'release'; name = $name; release = $version; version = $version
+    $manifest = [ordered]@{ schema = 1; flavour = $Flavour; name = $name; release = $version; version = $version
         driver_signing = [ordered]@{ submitted_payload_sha256 = ('AB' * 32) }
         setup = [ordered]@{ file = 'setup.exe'; sha256 = (Get-Hash $setup); size = (Get-Item $setup).Length } }
     foreach ($k in $Extra.Keys) { $manifest[$k] = $Extra[$k] }
@@ -74,16 +74,18 @@ function Write-Manifest([string]$Files, [string]$Top, [hashtable]$Extra = @{}) {
     [IO.File]::WriteAllText((Join-Path $Files 'manifest.json'), ($manifest | ConvertTo-Json -Depth 8))
 }
 # The zip and the signed single exe of a package folder, as build-release.ps1 makes them.
-function Complete-Package([string]$Dir, [string]$Top, $Secrets) {
+function Complete-Package([string]$Dir, [string]$Top, $Secrets, [string]$Suffix = '') {
     Compress-Archive -Path $Top -DestinationPath "$Top.zip"
-    $exe = Join-Path $Dir "amdgpu-wddm-setup-$version.exe"
+    $exe = Join-Path $Dir "amdgpu-wddm-setup-$version$Suffix.exe"
     & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $Top -Out $exe -Check -ReleaseZip "$Top.zip" *> $null
     if ($Secrets) { Invoke-RunSign $exe $Secrets }
 }
 # The package as build-release.ps1 lays it out, with its zip and single exe in $Dir. -Update adds the files of the
 # self-update (payload/control, the state catalog, installer\nagi-update.ps1 pinning -Pin) and update_components.
-function New-Package([string]$Dir, $Secrets = $publisher, [switch]$Update, [string]$Pin) {
-    $top = Join-Path $Dir $name
+function New-Package([string]$Dir, $Secrets = $publisher, [switch]$Update, [string]$Pin, [string]$Flavour = 'release') {
+    # The lab flavour has the suffix -lab in the names of its folder, zip and single exe.
+    $suffix = if ($Flavour -eq 'lab') { '-lab' } else { '' }
+    $top = Join-Path $Dir "$name$suffix"
     $files = Join-Path $top 'files'
     $rng = [Random]::new(265)
     New-Item -ItemType Directory -Force $top | Out-Null
@@ -110,8 +112,8 @@ function New-Package([string]$Dir, $Secrets = $publisher, [switch]$Update, [stri
         $extra = @{ kmd_abi = '0x000700D8'; kmd_version = '40.7.216.999'; built_utc = '2026-11-04T12:00:00Z'
             update_components = [ordered]@{ driver = [ordered]@{ content_id = ('D' * 64); files = 3 }; apps = [ordered]@{ content_id = ('A' * 64); files = 1 } } }
     }
-    Write-Manifest $files $top $extra
-    Complete-Package $Dir $top $Secrets
+    Write-Manifest $files $top $extra $Flavour
+    Complete-Package $Dir $top $Secrets $suffix
     if ($Update) {
         $py = (Get-Command python -CommandType Application | Select-Object -First 1).Source
         $r = & $py -I (Join-Path $PSScriptRoot 'nagi_update.py') packs --package $files --release $version --out $Dir 2>&1 | Out-String
@@ -240,6 +242,23 @@ Assert ($r.code -ne 0 -and $r.text -match 'does not verify as the installed rele
 Remove-Item -LiteralPath (Join-Path $pinDir 'nagi-update.json')
 $r = Invoke-Repack $pinDir (Join-Path $base 'r-noupdate') $newNotes
 Assert ($r.code -ne 0 -and $r.text -match 'ships the self-update but .* has no nagi-update.json') "a release package without its update assets: $($r.text)"
+
+# The lab flavour (BD-366): its folder, zip and single exe have the suffix -lab, and the repack keeps these names.
+$labDir = Join-Path $base 'package\lab'
+$null = New-Package $labDir -Flavour lab
+$r = Invoke-Repack $labDir (Join-Path $base 'r-lab') $newNotes
+Assert ($r.code -eq 0) "the repack of a lab package passes: $($r.text)"
+foreach ($f in "$name-lab\files\manifest.json", "$name-lab.zip", "amdgpu-wddm-setup-$version-lab.exe") {
+    Assert (Test-Path -LiteralPath (Join-Path $base "r-lab\$f")) "the lab repack has $f"
+}
+Assert ((Get-Hash (Join-Path $base "r-lab\$name-lab\files\RELEASE-NOTES.md")) -eq (Get-Hash (Join-Path $newNotes "$version.md"))) 'the lab repack has the new notes'
+# A lab package in a folder without the suffix is refused.
+$labBad = Join-Path $base 'package\lab-badname'
+Copy-Item -LiteralPath $labDir -Destination $labBad -Recurse
+Rename-Item -LiteralPath (Join-Path $labBad "$name-lab") $name
+Rename-Item -LiteralPath (Join-Path $labBad "$name-lab.zip") "$name.zip"
+$r = Invoke-Repack $labBad (Join-Path $base 'r-lab-badname') $newNotes
+Assert ($r.code -ne 0 -and $r.text -match 'does not name the manifest version .* of the lab flavour') "a lab package folder without -lab: $($r.code) $($r.text)"
 
 # build-release-set.ps1 -RepackNotes: the repack of each flavour with this tree's committed notes, then the gates of a
 # package. The fixture takes the version of the newest notes file of the tree, so the repack passes; its payload has
