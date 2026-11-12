@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-surface-allocation.h"
 #include "runtime-surface-format.h"
+#include "../../contract/bc250_shared_resource_alloc.h"
 #include <cstring>
 namespace bc250::umd {
 // E26R v2 resource-group ABI, consumed by KMD wddm.c resource-private parser.
@@ -70,6 +71,33 @@ HRESULT allocate_runtime_surface(RuntimeDevice &device,const RuntimeSurfaceReque
     // Preserve any successful callback output for explicit cleanup, including
     // malformed success. Never claim an allocation is ready without its handle.
     return out.allocation ? S_OK : E_FAIL;
+}
+HRESULT allocate_engine_surface(RuntimeDevice &device,HANDLE runtime_resource,const BC250_SHARED_RESOURCE &record,
+    RuntimeSurfaceAllocation &out,UINT64 &bytes) {
+    bytes=0;
+    if (out.allocation || out.kernel_resource || out.runtime_resource) return E_UNEXPECTED;
+    if (!device.domain.entered() || !device.hDevice || !device.KTCallbacks.pfnAllocateCb ||
+        !device.KTCallbacks.pfnDeallocate2Cb || !runtime_resource ||
+        !Bc250SharedResourceWhyOk(Bc250SharedResourceRecordWhy(&record))) return E_INVALIDARG;
+    bc250_umd_alloc_private blob{};
+    if (!Bc250SharedResourceAllocInit(&blob,&record)) return E_INVALIDARG;
+    auto resource=record;
+    D3DDDI_ALLOCATIONINFO2 info{};
+    info.pPrivateDriverData=&blob; info.PrivateDriverDataSize=sizeof(blob);
+    D3DDDICB_ALLOCATE allocate{};
+    allocate.hResource=runtime_resource;
+    allocate.pPrivateDriverData=&resource; allocate.PrivateDriverDataSize=sizeof(resource);
+    allocate.NumAllocations=1; allocate.pAllocationInfo2=&info;
+    HRESULT hr=device.KTCallbacks.pfnAllocateCb(device.hDevice,&allocate);
+    if (FAILED(hr)) return hr;
+    out={runtime_resource,info.hAllocation,allocate.hKMResource};
+    bytes=blob.alloc_size;
+    return out.allocation ? S_OK : E_FAIL;
+}
+HRESULT engine_surface_blob(const void *blob,UINT blobBytes,const BC250_SHARED_RESOURCE &record,UINT64 &bytes,const char **why) {
+    const char *ignored=nullptr; if (!why) why=&ignored;
+    *why=Bc250SharedResourceAllocWhy(blob,blobBytes,&record,&bytes);
+    return Bc250SharedResourceWhyOk(*why) ? S_OK : E_INVALIDARG;
 }
 HRESULT deallocate_runtime_surface(RuntimeDevice &device,RuntimeSurfaceAllocation &surface) {
     if (!device.domain.entered()) return E_INVALIDARG;

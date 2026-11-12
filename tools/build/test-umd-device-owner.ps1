@@ -18,11 +18,11 @@ try {
     $null=Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir
     $cc=Resolve-Bc250UmdCompiler $root $Compiler $MsvcReason $OutputDir 'x64'
     $wdk=Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
-    $headers=@("$wdk", "$wdk\..\shared", "$DxvkSource\src", "$DxvkSource\include\vulkan\include", "$DxvkSource\include\spirv\include", "$DxvkSource\subprojects\dxbc-spirv")
+    $headers=@("$wdk", "$wdk\..\shared", "$DxvkSource\src", "$DxvkSource\include\vulkan\include", "$DxvkSource\include\spirv\include", "$DxvkSource\subprojects\dxbc-spirv", "$repo\driver\contract\third_party", "$repo\driver\contract\uapi-shim")
     $flags=Get-Bc250HostTestFlags $Compiler @('/nologo', '/std:c++20', '/EHsc', '/W4', '/WX', '/MD', '/DNOMINMAX', '/DWIN32_LEAN_AND_MEAN', '/DVK_USE_PLATFORM_WIN32_KHR') $headers 'x64' @($repo)
     Push-Location $OutputDir
     try {
-        Invoke-Bc250UmdCompiler $cc @flags /Fe:device-owner-test.exe "$repo\driver\umd\dxvk\engine-session.cpp" "$repo\driver\umd\dxvk\engine-memory-log.cpp" "$repo\driver\umd\dxvk\umd-etw.cpp" "$repo\driver\umd\dxvk\hosted-instance.cpp" "$repo\driver\umd\dxvk\runtime-bridge.cpp" "$repo\driver\umd\dxvk\device-owner.cpp" "$repo\driver\umd\dxvk\runtime-surface.cpp" "$repo\driver\umd\dxvk\runtime-surface-allocation.cpp" "$repo\driver\umd\dxvk\runtime-texture.cpp" "$repo\driver\umd\dxvk\runtime-image-memory.cpp" "/Tp$repo\driver\kmd\dcn_translate.c" "$repo\driver\umd\dxvk\device-owner-test.cpp"
+        Invoke-Bc250UmdCompiler $cc @flags /Fe:device-owner-test.exe "$repo\driver\umd\dxvk\engine-session.cpp" "$repo\driver\umd\dxvk\engine-memory-log.cpp" "$repo\driver\umd\dxvk\umd-etw.cpp" "$repo\driver\umd\dxvk\hosted-instance.cpp" "$repo\driver\umd\dxvk\runtime-bridge.cpp" "$repo\driver\umd\dxvk\device-owner.cpp" "$repo\driver\umd\dxvk\runtime-surface.cpp" "$repo\driver\umd\dxvk\runtime-engine-resource.cpp" "$repo\driver\umd\dxvk\runtime-surface-allocation.cpp" "$repo\driver\umd\dxvk\runtime-texture.cpp" "$repo\driver\umd\dxvk\runtime-image-memory.cpp" "/Tp$repo\driver\kmd\dcn_translate.c" "$repo\driver\umd\dxvk\device-owner-test.cpp"
         if ($LASTEXITCODE -ne 0) { throw 'Engine-session compilation failed' }
         & .\device-owner-test.exe
         if ($LASTEXITCODE -ne 0) { throw 'Engine-session test failed' }

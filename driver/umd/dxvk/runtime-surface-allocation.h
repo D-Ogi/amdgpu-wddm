@@ -3,6 +3,7 @@
 #include "runtime-bridge.h"
 #include "../../kmd/gdi_private.h"
 #include "../../kmd/surface_resource_private.h"
+#include "../../contract/bc250_shared_resource.h"
 namespace bc250::umd {
 struct RuntimeSurfaceAllocation {
     HANDLE runtime_resource=nullptr;
@@ -22,6 +23,14 @@ struct RuntimeSurfaceRequest {
     bool no_cpu_access=false;
 };
 HRESULT allocate_runtime_surface(RuntimeDevice &,const RuntimeSurfaceRequest &,RuntimeSurfaceAllocation &);
+// BD-373: the one allocation of a shared resource in the ENGINE LAYOUT form, for the runtime resource: the BC2A blob
+// that Bc250SharedResourceAllocInit writes for the record, and the S26R record as the resource's private data
+// (driver/contract/bc250_shared_resource.h). *bytes is the allocation's size.
+HRESULT allocate_engine_surface(RuntimeDevice &,HANDLE runtime_resource,const BC250_SHARED_RESOURCE &,
+    RuntimeSurfaceAllocation &,UINT64 &bytes);
+// The opener's check of a received BC2A blob: exactly what allocate_engine_surface writes for the record. *bytes is the
+// allocation's size; *why names a refusal (BC250_SR_WHY_*).
+HRESULT engine_surface_blob(const void *blob,UINT blobBytes,const BC250_SHARED_RESOURCE &,UINT64 &bytes,const char **why);
 // Caller must retire engine/Present use and destroy image wrappers first.
 // Deallocate2 flags zero retires all allocation VAs, including pending mappings.
 HRESULT deallocate_runtime_surface(RuntimeDevice &,RuntimeSurfaceAllocation &);
