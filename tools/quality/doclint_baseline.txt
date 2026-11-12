@@ -71,7 +71,6 @@
 39	docs/design/vsync-interrupt-route.md
 20	docs/design/wddm-start-confirmation.md
 2	docs/design/wddm-startup.md
-36	docs/design/wsi-engine-present.md
 2	docs/dxvk-engine-commit-map.md
 21	docs/facts/README.md
 65	docs/gui/interfaces-setup.md
