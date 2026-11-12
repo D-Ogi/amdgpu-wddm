@@ -3,7 +3,7 @@
 What our miniport declares to dxgkrnl, what each declaration obliges it to supply, and where that obligation
 is written down. It exists because the four refusals of E16 runs 001-004 were all of the same shape: a cap
 or a version we set, and an element it silently required, found only after the adapter refused to start and
-another trip to the lab. This file is the inventory; `tools/wddm_contract_check/` is the same table as code,
+another trip to the lab. This file is the inventory. `tools/wddm_contract_check/` is the same table as code,
 so that the next one is found by a build and not by a reboot.
 
 Every rule in section (e) names a source. Three kinds, and nothing else:
@@ -12,7 +12,7 @@ Every rule in section (e) names a source. Three kinds, and nothing else:
 |---|---|
 | `DXGKRNL` | a reading of unit A's own `dxgkrnl.sys` 10.0.22621.6199, offline, `cdb -z` with public symbols: `evidence/windows/2026-09-21-E16-run-002/dxgkrnl-static-reading.txt` and the longer scratch note it summarises |
 | `LEARN` | a Microsoft documentation page, quoted with its section in the research note under `scratch\m7\` |
-| `SAMPLE` | Microsoft's sample drivers, file:line (microsoft/graphics-driver-samples, MIT; instruments only, none of their code is in ours) |
+| `SAMPLE` | Microsoft's sample drivers, file:line (microsoft/graphics-driver-samples, MIT. Instruments only, none of their code is in ours) |
 
 Nothing here is from memory. A rule whose source would be "everyone knows" is a rule that does not belong.
 
@@ -23,11 +23,11 @@ moved three times while this section was being written, so the line numbers belo
 with every change. Regenerate them with
 `python tools\wddm_contract_check\check.py --inventory` rather than trusting them after any change to
 `WddmDriverCaps`, `WddmQuerySegment4`, `Bc250WddmQueryAdapterInfo`, `Bc250WddmCreateContext` or
-`WddmBuildTable`. The member names, the values and the rules do not drift; only the line numbers do.
+`WddmBuildTable`. The member names, the values and the rules do not drift. Only the line numbers do.
 
 ## (a) DXGK_QUERYADAPTERINFOTYPE: handled, refused, sizes
 
-Answered. The size column is the exact buffer the compiled driver accepts; `<` is the guard it applies
+Answered. The size column is the exact buffer the compiled driver accepts. `<` is the guard it applies
 before it writes anything. Every one of these was called on the host with the buffer shapes in section (f).
 
 | # | Type | Handler | Size guard | Buffer | Answer |
@@ -35,20 +35,20 @@ before it writes anything. Every one of these was called on the host with the bu
 | 1 | `DRIVERCAPS` | `WddmDriverCaps()` `wddm.c:1168` | `OutputDataSize < sizeof(*caps)`, `caps == NULL` | 576 | fills section (b), zeroes `OutputDataSize` first |
 | 6 | `NUMPOWERCOMPONENTS` | inline `wddm.c:1180` | `OutputDataSize < sizeof(UINT)` **only** | 4 | `0` components |
 | 10 | `HISTORYBUFFERPRECISION` | inline `wddm.c:1187` | `OutputDataSize < sizeof(DXGKARG_HISTORYBUFFERPRECISION)` **only** | 4 | `PrecisionBits = 0` |
-| 11 | `QUERYSEGMENT4` | `WddmQuerySegment4()` `wddm.c:1171` | `OutputDataSize < sizeof(*out)`, `out == NULL`; pass 2 also `NbSegment < count`, `pSegmentDescriptor == NULL`, `SegmentDescriptorStride < sizeof(descriptor)` | 40 (+96/descriptor) | section (c) |
+| 11 | `QUERYSEGMENT4` | `WddmQuerySegment4()` `wddm.c:1171` | `OutputDataSize < sizeof(*out)`, `out == NULL`. Pass 2 also `NbSegment < count`, `pSegmentDescriptor == NULL`, `SegmentDescriptorStride < sizeof(descriptor)` | 40 (+96/descriptor) | section (c) |
 | 13 | `GPUMMUCAPS` | `WddmGpuMmuCaps()` `wddm.c:1174` | `OutputDataSize < sizeof(*caps)`, `caps == NULL` | 24 | section (d) |
-| 14 | `PAGETABLELEVELDESC` | `WddmPageTableLevelDesc()` `wddm.c:1177` | `OutputDataSize < sizeof(*desc)`, `desc == NULL` | 20 | per level; `STATUS_INVALID_PARAMETER` above level 3 |
+| 14 | `PAGETABLELEVELDESC` | `WddmPageTableLevelDesc()` `wddm.c:1177` | `OutputDataSize < sizeof(*desc)`, `desc == NULL` | 20 | per level. `STATUS_INVALID_PARAMETER` above level 3 |
 | 15 | `PHYSICALADAPTERCAPS` | `WddmPhysicalAdapterCaps()` | `InputDataSize < sizeof(*in)`, `in == NULL`, `OutputDataSize < sizeof(*caps)`, `caps == NULL`, index not 0, no `DeviceHandle` yet | 32 | the DRIVERCAPS node count and paging node, `GpuMmuSupported`, the StartDevice handle. Zeroes `OutputDataSize` first (since 0.7.216.62) |
 | 47 | `64BITONLYCAPS` | inline | `pOutputData == NULL`, `OutputDataSize < sizeof(UINT)` | 4 | four zero bytes: not 64-bit only (since 0.7.216.62) |
 | 16 | `DISPLAY_DRIVERCAPS_EXTENSION` | inline | `pOutputData == NULL`, `OutputDataSize < sizeof(DXGK_DISPLAY_DRIVERCAPS_EXTENSION)` | 4 | every bit zero: no virtual modes, no HDR, no virtual refresh rate. Refused (tolerated, M65) until ADR 0019 stage B4. From WDDMVersion 2.2, a refusal makes dxgkrnl set `VirtualModeSupport` (R45) |
 
-The two inline arms check the size and not the pointer. That is defect D1; see section (g).
+The two inline arms check the size and not the pointer. That is defect D1. See section (g).
 
 Refused, all through one `default:` arm at `wddm.c:1195` with `STATUS_NOT_SUPPORTED`:
 
 | # | Type | Why it must be refused |
 |---|---|---|
-| 0 | `UMDRIVERPRIVATE` | no UMD of ours yet; the stub package carries a name, not a driver |
+| 0 | `UMDRIVERPRIVATE` | no UMD of ours yet. The stub package carries a name, not a driver |
 | 2, 4, 5 | `QUERYSEGMENT`, `QUERYSEGMENT2`, `QUERYSEGMENT3` | a WDDM 2 driver must not answer the pre-WDDM2 segment queries (R15) |
 | 7 | `POWERCOMPONENTINFO` | never asked once type 6 answers zero components |
 
@@ -59,11 +59,11 @@ answers with every buffer shape, but that harness no longer builds against the c
 rule is the gate that runs.
 
 The lab-observed set is 1, 10, 11, 13, 14, 15, 16, 47 (M65). Type 6 is in our switch but has not been seen
-asked for; it is answered because Learn lists it among the four a WDDM 2.x miniport must answer (R14).
+asked for. It is answered because Learn lists it among the four a WDDM 2.x miniport must answer (R14).
 
 ## (b) DXGK_DRIVERCAPS: every member we set
 
-Extracted from `WddmDriverCaps()` and confirmed against the compiled structure by the host harness, which
+Extracted from `WddmDriverCaps()` and checked against the compiled structure by the host harness, which
 calls the real handler and prints what lands in the buffer. Members not listed are left at the zero the
 handler writes over the whole `OutputDataSize` first.
 
@@ -111,7 +111,7 @@ dxgkrnl sized the buffer to (M63), which is the check that our interface version
 
 `PresentationCaps.NoCacheCoherentApertureMemory` was set until stage B and is not set now, which is why the
 word is `0x030008FB` and no longer `0x230008FB`. Stage B declares an aperture segment with
-`Flags.CacheCoherent = 1` (section (c)); keeping the cap would have told dxgkrnl the opposite of what the
+`Flags.CacheCoherent = 1` (section (c)). Keeping the cap would have told dxgkrnl the opposite of what the
 segment says.
 
 ## (c) The segments
@@ -169,13 +169,13 @@ home, which is rules R34 and R35 and the reason `DmaBufferSegmentSet = 0x2` is l
 The geometry of segment 1 matches what the lab's dxgkrnl read back in E16 run 004: "one CPU-visible local
 segment over the carve-out, 0x1FD736000 bytes at GPU 0xF4008CA000" (M65). The host harness reproduces it
 from the same code with unit A's geometry compiled in, which is why the numbers here are not hand-typed.
-Segment 2 has not been seen by a lab dxgkrnl yet; it is here as the compiled driver declares it.
+Segment 2 has not been seen by a lab dxgkrnl yet. It is here as the compiled driver declares it.
 
 ## (d) DRIVER_INITIALIZATION_DATA
 
 1376 bytes (832 before ADR 0019 B1), 60 DDI pointers set plus `Version` (`wddm.c` `WddmBuildTable`).
 `Version = DXGKDDI_INTERFACE_VERSION_WDDM3_1`, the binary compiled at `DXGKDDI_INTERFACE_VERSION 0x10004`
-(`bc250kmd.h`); every member after the WDDM 2.0 block (offset 832 on) is NULL and checked so at run time, except
+(`bc250kmd.h`). Every member after the WDDM 2.0 block (offset 832 on) is NULL and checked so at run time, except
 `UpdateMonitorLinkInfo`. Since ADR 0019 stage B4 (BD-307) `WDDMVersion` is the level of the start: the `WddmVersionCap` setting,
 default 2.9, at most `DXGKDDI_WDDMv2_9`. The checker evaluates every rule at each level of
 `Bc250WddmLevels`. The static reading
@@ -221,58 +221,58 @@ reserved members NULL.
 ## (e) The dependency table
 
 Generated by `python tools\wddm_contract_check\check.py --markdown`. Status is against the tree named at the
-top. `n/a` means the declaration is not made, so the obligation does not arise; those rules exist so that
+top. `n/a` means the declaration is not made, so the obligation does not arise. Those rules exist so that
 making the declaration later is not free.
 
 | Rule | Declaration | Requires | Source | Status |
 |---|---|---|---|---|
-| R01 | `SupportPerEngineTDR = 1` | `QueryDependentEngineGroup`, `QueryEngineStatus`, `ResetEngine`, `CollectDbgInfo` (Level Zero) | DXGKRNL `DXGADAPTER::Initialize+0x1505` "does not fill in all of the required DDIs"; LEARN; SAMPLE RosKmdAdapter.cpp:1136 | OK |
-| R02 | `SupportDirectFlip = 1` | the scanned-out segment declares `Flags.DirectFlip`; `Present` + `SetVidPnSourceAddress` | DXGKRNL `+0x1e82`, byte +0xAC3 behind the enforcement gate; LEARN wddm-v1-2-driver-enforcement; SAMPLE :1146 with :1243 | OK |
-| R03 | `FlipCaps.FlipIndependent = 1` | `SetVidPnSourceAddress` accepts an address DWM did not present; `Present` | DXGKRNL `+0x20b4` "WDDM 1.3 driver must support independent flip."; SAMPLE :1057 | OK |
-| R04 | `FlipCaps.FlipOnVSyncMmIo = 1` | `ControlInterrupt` (CRTC_VSYNC) + `GetScanLine` | LEARN wddm-driver-and-feature-caps; a queued flip retires only on a reported VSync (`wddm.c:138-146`); SAMPLE RosKmdGlobal.cpp:285, :341 | OK |
-| R05 | a full WDDM table (`DxgkInitialize`) | the installed package writes `UserModeDriverName` | DXGKRNL `DpiGetAdapterInfo` sets adapter+0x621, `Initialize+0x762` returns `STATUS_OBJECT_NAME_NOT_FOUND`; facts M64; SAMPLE Ros.inf:54-58 | OK |
-| R06 | interface >= 0x5008 with a render core | `CalibrateGpuClock` **and** `SetStablePowerState`, both non-NULL | DXGKRNL `+0x1e1e`, table pointers at adapter+0x388/+0x3E8; facts M64 | OK |
-| R07 | `PreemptionAware = 1` | `MultiEngineAware = 1` | LEARN `_DXGK_VIDSCHCAPS` "the OS will halt the driver initialization process"; DXGKRNL matching message | OK |
-| R08 | `CancelCommandAware = 1` | `MultiEngineAware = 1` and `DxgkDdiCancelCommand` | LEARN `_DXGK_VIDSCHCAPS`; SAMPLE RosKmdGlobal.cpp:302 | n/a |
+| R01 | `SupportPerEngineTDR = 1` | `QueryDependentEngineGroup`, `QueryEngineStatus`, `ResetEngine`, `CollectDbgInfo` (Level Zero) | DXGKRNL `DXGADAPTER::Initialize+0x1505` "does not fill in all of the required DDIs". LEARN. SAMPLE RosKmdAdapter.cpp:1136 | OK |
+| R02 | `SupportDirectFlip = 1` | the scanned-out segment declares `Flags.DirectFlip`. `Present` + `SetVidPnSourceAddress` | DXGKRNL `+0x1e82`, byte +0xAC3 behind the enforcement gate. LEARN wddm-v1-2-driver-enforcement. SAMPLE :1146 with :1243 | OK |
+| R03 | `FlipCaps.FlipIndependent = 1` | `SetVidPnSourceAddress` accepts an address DWM did not present. `Present` | DXGKRNL `+0x20b4` "WDDM 1.3 driver must support independent flip.". SAMPLE :1057 | OK |
+| R04 | `FlipCaps.FlipOnVSyncMmIo = 1` | `ControlInterrupt` (CRTC_VSYNC) + `GetScanLine` | LEARN wddm-driver-and-feature-caps. A queued flip retires only on a reported VSync (`wddm.c:138-146`). SAMPLE RosKmdGlobal.cpp:285, :341 | OK |
+| R05 | a full WDDM table (`DxgkInitialize`) | the installed package writes `UserModeDriverName` | DXGKRNL `DpiGetAdapterInfo` sets adapter+0x621, `Initialize+0x762` returns `STATUS_OBJECT_NAME_NOT_FOUND`. Facts M64. SAMPLE Ros.inf:54-58 | OK |
+| R06 | interface >= 0x5008 with a render core | `CalibrateGpuClock` **and** `SetStablePowerState`, both non-NULL | DXGKRNL `+0x1e1e`, table pointers at adapter+0x388/+0x3E8. Facts M64 | OK |
+| R07 | `PreemptionAware = 1` | `MultiEngineAware = 1` | LEARN `_DXGK_VIDSCHCAPS` "the OS will halt the driver initialization process". DXGKRNL matching message | OK |
+| R08 | `CancelCommandAware = 1` | `MultiEngineAware = 1` and `DxgkDdiCancelCommand` | LEARN `_DXGK_VIDSCHCAPS`. SAMPLE RosKmdGlobal.cpp:302 | n/a |
 | R09 | `NoDmaPatching = 1` | `PreemptionAware` and `MultiEngineAware` | LEARN `_DXGK_VIDSCHCAPS` | n/a |
 | R10 | `MultiEngineAware = 1` | `CreateContext`, `DestroyContext` | LEARN `_DXGK_VIDSCHCAPS` on handle replacement when contexts are unsupported | OK |
-| R11 | `GpuMmuSupported = 1` | `GPUMMUCAPS` (13), `PAGETABLELEVELDESC` (14), `GetRootPageTableSize`, `SetRootPageTable`, `CreateProcess`, `DestroyProcess`, `SubmitCommandVirtual`, `GetNodeMetadata` | LEARN mcdm-implementation-guidelines; SAMPLE CosKmdAdapter.cpp:1486, :1502, CosKmdGlobal.cpp:322-329 | OK |
+| R11 | `GpuMmuSupported = 1` | `GPUMMUCAPS` (13), `PAGETABLELEVELDESC` (14), `GetRootPageTableSize`, `SetRootPageTable`, `CreateProcess`, `DestroyProcess`, `SubmitCommandVirtual`, `GetNodeMetadata` | LEARN mcdm-implementation-guidelines. SAMPLE CosKmdAdapter.cpp:1486, :1502, CosKmdGlobal.cpp:322-329 | OK |
 | R12 | `GpuMmuSupported = 1` | `IoMmuSupported` stays 0 | LEARN `_DXGK_VIDMMCAPS` "cannot be set at the same time" | OK |
 | R13 | either MMU cap set | `VirtualAddressingSupported = 1` | LEARN `_DXGK_VIDMMCAPS` | OK |
-| R14 | a full WDDM 2.x miniport | answers types 1, 6, 10, 11 | LEARN mcdm-implementation-guidelines; DXGKRNL asked 1, 11, 13, 14 in that order | OK |
-| R15 | a WDDM 2.x driver | types 2, 4, 5 not answered; `default:` refuses with `STATUS_NOT_SUPPORTED` | LEARN mcdm table "must not be supported" | OK |
-| R16 | dxgkrnl asks a started adapter for 15 and 47 | both answered: 15 repeats DRIVERCAPS, 47 four zero bytes | DXGKRNL `+0x967` "a refusal is tolerated"; static reading of 26100.9549 (BD-134), facts M64, E16 run 003 | OK |
-| R17 | answers `HISTORYBUFFERPRECISION` (10) | `FormatHistoryBuffer` | LEARN mcdm table; SAMPLE CosKmdGlobal.cpp:332 | OK |
-| R18 | `NumberOfSwizzlingRanges = 0` | `AcquireSwizzlingRange`, `ReleaseSwizzlingRange` stay NULL | LEARN what-s-new-for-prior-wddm-2-x-versions "Support for swizzling ranges has been removed."; SAMPLE RosKmdGlobal.cpp:265-266 | OK |
-| R19 | any table | the ten reserved members stay NULL | LEARN; the WDDM 1.x page-table trap | OK |
-| R20 | `WDDMVersion >= DXGKDDI_WDDMv2` | `Version` equals the compiled interface and interface >= 0x5000, so `DXGK_DRIVERCAPS` has the shape dxgkrnl sizes for that version (0x250 at 0xE003) | DXGKRNL `GetDriverCapsSizeFromDdiVersion` ">= 0x5011 -> 0x240", ">= 0xE003 -> 0x250"; facts M63 measured 576 at 0x5023 | OK |
+| R14 | a full WDDM 2.x miniport | answers types 1, 6, 10, 11 | LEARN mcdm-implementation-guidelines. DXGKRNL asked 1, 11, 13, 14 in that order | OK |
+| R15 | a WDDM 2.x driver | types 2, 4, 5 not answered. `default:` refuses with `STATUS_NOT_SUPPORTED` | LEARN mcdm table "must not be supported" | OK |
+| R16 | dxgkrnl asks a started adapter for 15 and 47 | both answered: 15 repeats DRIVERCAPS, 47 four zero bytes | DXGKRNL `+0x967` "a refusal is tolerated". Static reading of 26100.9549 (BD-134), facts M64, E16 run 003 | OK |
+| R17 | answers `HISTORYBUFFERPRECISION` (10) | `FormatHistoryBuffer` | LEARN mcdm table. SAMPLE CosKmdGlobal.cpp:332 | OK |
+| R18 | `NumberOfSwizzlingRanges = 0` | `AcquireSwizzlingRange`, `ReleaseSwizzlingRange` stay NULL | LEARN what-s-new-for-prior-wddm-2-x-versions "Support for swizzling ranges has been removed.". SAMPLE RosKmdGlobal.cpp:265-266 | OK |
+| R19 | any table | the ten reserved members stay NULL | LEARN. The WDDM 1.x page-table trap | OK |
+| R20 | `WDDMVersion >= DXGKDDI_WDDMv2` | `Version` equals the compiled interface and interface >= 0x5000, so `DXGK_DRIVERCAPS` has the shape dxgkrnl sizes for that version (0x250 at 0xE003) | DXGKRNL `GetDriverCapsSizeFromDdiVersion` ">= 0x5011 -> 0x240", ">= 0xE003 -> 0x250". Facts M63 measured 576 at 0x5023 | OK |
 | R43 | a full adapter reports `WDDMVersion` | one of 0x1200, 0x1300, 0x2000, 0x2100 ... 0x2900, 0x3000, 0x3100 (the set that both 22621 and 26100 accept. Only 26100 accepts 0x3200, and neither accepts 0x2105 or 0x2106) | DXGKRNL `DXGADAPTER::Initialize` "Miniport returned unknown WDDM version", 22621.6199 and 26100.9549 (BD-307) | OK |
 | R44 | `WDDMVersion` >= 2.6 | interface > 0xA00B | DXGKRNL `DXGADAPTER::Initialize` 22621.6197 VA 0x1c01fd2f1 (BD-307) | OK |
 | R45 | `WDDMVersion` >= 2.2 | type 16 (`DISPLAY_DRIVERCAPS_EXTENSION`) answered. A refusal makes dxgkrnl set `VirtualModeSupport` | DXGKRNL `ADAPTER_DISPLAY::Initialize` 22621.6197 VA 0x1c02a09e0 (BD-307) | OK |
 | R46 | `WDDMVersion` >= 2.4 | `DxgkDdiUpdateMonitorLinkInfo` in the table. dxgkrnl's default for a NULL member returns `STATUS_NOT_SUPPORTED`, and from D3DKMT version 2400 the monitor arrival keeps it: `StartDevice` fails, Code 43 | DXGKRNL `DXGMONITOR::_UpdateLinkInfo` 22621.6199 VA 0x1c02a4728 (`cmp eax,0x960` then `jge`), 26100.9549 0x140290ebf, lab arm 1 of 352c4210 | OK |
 | R47 | `WDDMVersion` >= 2.1 | `CheckMultiPlaneOverlaySupport3`, `SetVidPnSourceAddressWithMultiPlaneOverlay3` and `PostMultiPlaneOverlayPresent` in the table, also with no MPO cap. A NULL flip member is a bugcheck in the disable-planes flip of `CddDisable` | DXGKRNL lab minidump, 2.9 image B46D3A9A on 22631: `VidSchiExecuteMmIoFlipMultiPlaneOverlayAtISR` to `DdiSetVidPnSourceAddressWithMultiPlaneOverlay+0x1c4` to `guard_icall_bugcheck` (BD-307), and WDK km/dispmprt.h 2891-2900 | OK |
 | R48 | the MPO3 flip member in the table | each MPO3 request hands its PresentId on, and the VSync report in the MPO3 mode is type 10 (`CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2`) with the PresentId. Type 18 is the hardware flip queue report | LEARN hardware-flip-queue.md:242, WDK shared/d3dkmddi.h 709, 780, 1090 | OK |
-| R21 | any full miniport | `HighestAcceptableAddress` not left low (-1) | LEARN mcdm; SAMPLE RosKmdAdapter.cpp:959 | OK |
+| R21 | any full miniport | `HighestAcceptableAddress` not left low (-1) | LEARN mcdm. SAMPLE RosKmdAdapter.cpp:959 | OK |
 | R22 | a declared segment | `Flags.Agp` stays 0 | LEARN "Flags.Agp on a non-AGP aperture -> the adapter fails to initialize" | OK |
 | R23 | `PreemptionAware = 1` | granularity above NONE | LEARN gpu-preemption, NONE "may cause the TDR process to repeatedly reset the GPU" | OK (warning rule) |
-| R24 | a GpuMmu driver receiving paging buffers | `SubmitCommand` as well as `SubmitCommandVirtual` | LEARN; a paging buffer arrives on `SubmitCommand` with a NULL context | OK |
-| R25 | any scheduled miniport | `BuildPagingBuffer`, `PreemptCommand`, `ResetFromTimeout`, `RestartFromTimeout` | LEARN mcdm minimum; a failure costs bugcheck 0x119 | OK |
-| R26 | `PageTableLevelCount` | 2..6, and the index/size members described | LEARN `_DXGK_GPUMMUCAPS` "The minimum value is 2"; WDK d3dukmdt.h:212-213 | OK (4) |
+| R24 | a GpuMmu driver receiving paging buffers | `SubmitCommand` as well as `SubmitCommandVirtual` | LEARN. A paging buffer arrives on `SubmitCommand` with a NULL context | OK |
+| R25 | any scheduled miniport | `BuildPagingBuffer`, `PreemptCommand`, `ResetFromTimeout`, `RestartFromTimeout` | LEARN mcdm minimum. A failure costs bugcheck 0x119 | OK |
+| R26 | `PageTableLevelCount` | 2..6, and the index/size members described | LEARN `_DXGK_GPUMMUCAPS` "The minimum value is 2". WDK d3dukmdt.h:212-213 | OK (4) |
 | R27 | page directories in local memory | update mode not `CPU_VIRTUAL` | LEARN `_DXGK_PAGETABLEUPDATEMODE` | OK (`GPU_PHYSICAL`) |
-| R28 | >= 1 processing node | `GetNodeMetadata`, refusing ordinals above the count | LEARN enumerating-gpu-nodes; SAMPLE RosKmdAdapter.cpp:1350 | OK |
-| R29 | `Flags.SupportsCpuHostAperture = 1` | `MapCpuHostAperture`, `UnmapCpuHostAperture` | LEARN; the WDK union `CpuTranslatedAddress \| CpuHostAperture` | n/a |
+| R28 | >= 1 processing node | `GetNodeMetadata`, refusing ordinals above the count | LEARN enumerating-gpu-nodes. SAMPLE RosKmdAdapter.cpp:1350 | OK |
+| R29 | `Flags.SupportsCpuHostAperture = 1` | `MapCpuHostAperture`, `UnmapCpuHostAperture` | LEARN. The WDK union `CpuTranslatedAddress \| CpuHostAperture` | n/a |
 | R30 | `SupportSmoothRotation = 1` | `UpdateActiveVidPnPresentPath` | SAMPLE RosKmdAdapter.cpp:1130 with its comment | OK |
 | R31 | `SupportNonVGA = 1` | `StopDeviceAndReleasePostDisplayOwnership` | SAMPLE RosKmdAdapter.cpp:1125 with its comment | OK |
-| R32 | a display+render KMD | the nine VidPN DDIs plus `Present`, `SetVidPnSourceAddress` | LEARN driverentry-of-display-miniport-driver; SAMPLE RosKmdGlobal.cpp:326-344 | OK |
+| R32 | a display+render KMD | the nine VidPN DDIs plus `Present`, `SetVidPnSourceAddress` | LEARN driverentry-of-display-miniport-driver. SAMPLE RosKmdGlobal.cpp:326-344 | OK |
 | R33 | `MaxQueuedFlipOnVSync` non-zero | a flip cap that says how the flip is programmed | SAMPLE RosKmdAdapter.cpp:1023-1030 | OK |
-| R34 | `PagingBufferSegmentId` names a segment (not 0) | that segment carries `Flags.Aperture` | DXGKRNL (dxgmms2) `VIDMM_GLOBAL::InitDmaPools` turns the id into a set, `VIDMM_DMA_POOL::Init` calls `VerifySegmentSet` with required flags = `Aperture`, else `STATUS_INVALID_PARAMETER` "DMA buffer can only be allocated from an aperture segment."; facts M66 | n/a |
-| R35 | CreateContext answers `DmaBufferSegmentSet` | the set is 0, or every bit N-1 names a declared segment N carrying `Flags.Aperture` | DXGKRNL the same `VerifySegmentSet` rule, applied to context DMA buffers; facts M66; SAMPLE CosKmd "Use physical contiguos memory" | OK (`0x2`) |
-| R36 | CreateContext answers `AllocationListSize` | the answer depends on `Flags.GdiContext`, because a GDI context needs `AllocationListSize = 256` | LEARN `_DXGK_CONTEXTINFO`; WDK d3dkmddi.h:1546 (`DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT`), :1519 | OK |
-| R37 | CreateContext may answer `Caps.NoPatchingRequired = 0` | either the answer is unconditionally 1, or `DxgkDdiPatch` is in the table with non-zero list sizes | LEARN `_DXGK_CONTEXTINFO_CAPS`, dxgkddipatch; DXGKRNL the three `m_bUseGpuVa \|\| ...` asserts at `DXGCONTEXT::Initialize+0x3eb` | **VIOLATION** |
-| R38 | at least one node is declared | CreateContext bounds-checks `NodeOrdinal` | LEARN enumerating-gpu-nodes; the same ordinal space as `GetNodeMetadata` | OK |
+| R34 | `PagingBufferSegmentId` names a segment (not 0) | that segment carries `Flags.Aperture` | DXGKRNL (dxgmms2) `VIDMM_GLOBAL::InitDmaPools` turns the id into a set, `VIDMM_DMA_POOL::Init` calls `VerifySegmentSet` with required flags = `Aperture`, else `STATUS_INVALID_PARAMETER` "DMA buffer can only be allocated from an aperture segment.". Facts M66 | n/a |
+| R35 | CreateContext answers `DmaBufferSegmentSet` | the set is 0, or every bit N-1 names a declared segment N carrying `Flags.Aperture` | DXGKRNL the same `VerifySegmentSet` rule, applied to context DMA buffers. Facts M66. SAMPLE CosKmd "Use physical contiguos memory" | OK (`0x2`) |
+| R36 | CreateContext answers `AllocationListSize` | the answer depends on `Flags.GdiContext`, because a GDI context needs `AllocationListSize = 256` | LEARN `_DXGK_CONTEXTINFO`. WDK d3dkmddi.h:1546 (`DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT`), :1519 | OK |
+| R37 | CreateContext may answer `Caps.NoPatchingRequired = 0` | either the answer is unconditionally 1, or `DxgkDdiPatch` is in the table with non-zero list sizes | LEARN `_DXGK_CONTEXTINFO_CAPS`, dxgkddipatch. DXGKRNL the three `m_bUseGpuVa \|\| ...` asserts at `DXGCONTEXT::Initialize+0x3eb` | **VIOLATION** |
+| R38 | at least one node is declared | CreateContext bounds-checks `NodeOrdinal` | LEARN enumerating-gpu-nodes. The same ordinal space as `GetNodeMetadata` | OK |
 
 38 rules, 33 OK, 1 VIOLATION, 4 n/a. The violation is defect D2 in section (g). R36 was the second
-violation until 0.7.14 gave the GDI context its allocation list; its unit-test fixture stays, so the fix
+violation until 0.7.14 gave the GDI context its allocation list. Its unit-test fixture stays, so the fix
 cannot quietly come undone.
 
 R35 reads `0x2` rather than `0`: since stage B, `DmaBufferSegmentSet` names segment 2, and segment 2 carries
@@ -281,13 +281,13 @@ R35 reads `0x2` rather than `0`: since stage B, `DmaBufferSegmentSet` names segm
 
 R34 went `n/a` on 2026-09-21 when `PagingBufferSegmentId` was changed from the local segment to 0, which is
 the fix for the refusal that ended E16 run 004. It was a warning until the dxgmms2 reading turned the
-"both samples do it differently" hunch into a named refusal with a status and a message (facts M66); it is
+"both samples do it differently" hunch into a named refusal with a status and a message (facts M66). It is
 now a violation rule, and 0.7.4's answer is one of its unit-test fixtures. The rule stays although it is
 `n/a` today, because reverting that one line brings the obligation back.
 
 ### The CreateContext answer
 
-`DXGK_CONTEXTINFO`, as `Bc250WddmCreateContext` fills it. Confirmed by the host matrix, which calls the real
+`DXGK_CONTEXTINFO`, as `Bc250WddmCreateContext` fills it. Checked by the host matrix, which calls the real
 DDI with every flag combination and reads the whole structure back.
 
 | Member | Source text | Value | Line |
@@ -305,7 +305,7 @@ bounds-checked, `hDevice` is checked for NULL and for the wrong object type.
 
 Measured on the lab in E16 run 004: input flags 0x5 (`SystemContext | VirtualAddressing`), answer caps 0x1,
 dma 4096, segment set 0, lists 0/0 (M65). The host matrix reproduces that for the same input except for the
-segment set, which is `0x2` since stage B gave the driver an aperture segment to name; everything else is
+segment set, which is `0x2` since stage B gave the driver an aperture segment to name. Everything else is
 byte for byte what the lab saw, which is what makes the other eleven input combinations worth believing.
 
 ## (f) How this is checked
@@ -377,7 +377,7 @@ Stage B and stage C brought three more matrices, all on the same handles the con
   packet, the fence that has not arrived yet, `GfxSubmitIb` answering `STATUS_DEVICE_BUSY` and
   `STATUS_INSUFFICIENT_RESOURCES`, `GfxSubmitReady` answering FALSE, `DmaBufferSize = 0`, a context that
   never saw `SetRootPageTable`, `hContext` NULL as a paging submission arrives, size 0 and no root at once,
-  and a megabyte at a high virtual address. Every one must return `STATUS_SUCCESS`; each is also asserted
+  and a megabyte at a high virtual address. Every one must return `STATUS_SUCCESS`. Each is also asserted
   for whether the ring was entered at all, and, when it was, that vmid, root, address and size reached it
   unchanged. All ten pass.
 
@@ -395,8 +395,8 @@ Neither suite touches the lab, C:, or anything with a window. Build output goes 
 **D1. `QueryAdapterInfo` dereferences a NULL `pOutputData` in its two inline arms.**
 The `case DXGKQAITYPE_NUMPOWERCOMPONENTS:` arm (`wddm.c:1184-1185`) and the
 `case DXGKQAITYPE_HISTORYBUFFERPRECISION:` arm (`wddm.c:1191-1192`) check `OutputDataSize` and then write
-through `pOutputData` without testing it. The four out-of-line handlers all check `|| X == NULL`; these two
-do not. Reproduced by the harness as an access violation at IRQL PASSIVE on the host; in the driver it is a
+through `pOutputData` without testing it. The four out-of-line handlers all check `|| X == NULL`. These two
+do not. Reproduced by the harness as an access violation at IRQL PASSIVE on the host. In the driver it is a
 bugcheck inside `DxgkDdiQueryAdapterInfo` during adapter start. Not observed on the lab, because dxgkrnl has
 always passed a real buffer.
 
@@ -413,7 +413,7 @@ asked for so far carried `VirtualAddressing`, because our `GetNodeMetadata` repo
 
 **D3. `Flags.GdiContext` was never read. Fixed in 0.7.14.** `AllocationListSize` was answered as a constant
 0, where a GDI context must be given `AllocationListSize = DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT` (256, WDK
-`d3dkmddi.h:1546`). Found by both suites (R36, and three cases of the host matrix) while it was open; it is
+`d3dkmddi.h:1546`). Found by both suites (R36, and three cases of the host matrix) while it was open. It is
 listed here because the fixture that caught it is still in the unit tests and the matrix case is still in
 the harness, so a regression would be caught rather than rediscovered.
 
@@ -423,7 +423,7 @@ Nothing else, and in particular nothing in the stage B and stage C code. `BuildP
 `STATUS_SUCCESS` on all six operations including the unknown one and the zero-size buffer, touched the
 paging buffer in none of them, and called `VidMmUpdatePageTable` for operation 11 and no other.
 `SubmitCommandVirtual` returned `STATUS_SUCCESS` on all ten cases, including `GfxSubmitIb` failing twice
-over, `GfxSubmitReady` answering FALSE, a zero-size buffer and a context with no page directory; where it
+over, `GfxSubmitReady` answering FALSE, a zero-size buffer and a context with no page directory. Where it
 did reach the ring it carried vmid, root, address and size unchanged, and where it did not it wrote nothing
 to the ring at all. `SetRootPageTable` recorded the root the next submission used and dropped a root
 `VidMmRootPhysical` refused. The pool balanced at 32 allocations and 32 frees once `WddmStop` had run, with
@@ -440,14 +440,14 @@ refusal, and the stride and NULL-descriptor variants of `QUERYSEGMENT4` behaved 
   `CreateProcess`, `CreateContext`, `GetRootPageTableSize`, `SetRootPageTable`, `BuildPagingBuffer` and
   `SubmitCommandVirtual`, plus the destroy counterparts. `CreateAllocation`, `DescribeAllocation`,
   `OpenAllocation`, `Present`, `SetVidPnSourceAddress`, the interrupt path and the timeout path are not
-  called; they are where the lab has never reached (M65).
+  called. They are where the lab has never reached (M65).
 - **The ring itself.** `GfxSubmitIb` and its three neighbours are stubs here, so what is checked is that the
   driver hands the ring the right packet and survives every answer the ring can give - not that the packet
   means anything to the GPU. Whether the hardware runs it is a lab question, and the reason the timeout path
   exists is that on this part there is no GPU reset to fall back on (M53).
 - **Why E16 run 004 stopped.** That was answered elsewhere, by a static reading of the lab's own dxgmms2:
   `PagingBufferSegmentId = 1` named a non-aperture segment and `VIDMM_DMA_POOL::Init` refused it (M66). R34
-  is that reading turned into a rule. The fix is in the working tree; whether the next step passes is a lab
+  is that reading turned into a rule. The fix is in the working tree. Whether the next step passes is a lab
   question.
 - **Values against hardware.** That the segment geometry is the right geometry, that 4 page-table levels of
   9 bits is what the GPU's MMU does, that `AlignmentShift = 2` matches the display controller: all of that
