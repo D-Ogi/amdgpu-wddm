@@ -495,6 +495,11 @@ void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, B
         if (NT_SUCCESS(status) && !recovered && display) (void)CuModeConfirm(Device,"start-health");
         // The same for a DPM start (dpm.c).
         if (NT_SUCCESS(status) && !recovered && display) (void)DpmConfirm(Device,"start-health");
+        // BD-368: the CPU clock limit, undervolt and core mask. CpuConfirm clears the pending mark of each
+        // (CpuPending for the settings, CoreMaskPending for the mask), so the next start keeps them. Without
+        // this call the core mask's boot guard sees a pending mark at every start and reverts to stock, which
+        // is why cpu cores 8 never produced eight cores.
+        if (NT_SUCCESS(status) && !recovered && display) (void)CpuConfirm(Device,"start-health");
         // BD-343: without output only a stored curve that a display start already confirmed keeps running; the
         // minute is the same witness for it as a display minute (dpm_curve_mark.h). Nothing new is confirmed.
         if (NT_SUCCESS(status) && !recovered && !display) (void)DpmConfirmKnownCurve(Device,"start-health");

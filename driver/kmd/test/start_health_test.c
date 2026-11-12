@@ -73,6 +73,9 @@ static NTSTATUS CuModeConfirm(BC250_DEVICE*d,const char*why){(void)d;(void)why;C
 // dpm.c: the same for a pending DPM start, right after the CU mode, under the same conditions.
 static unsigned dpmConfirms;
 static NTSTATUS DpmConfirm(BC250_DEVICE*d,const char*why){(void)d;(void)why;CHECK(spins==0 && mutexes==1);dpmConfirms++;return STATUS_SUCCESS;}
+// BD-368: the CPU clock limit, undervolt and core mask (cpu.c).
+static unsigned cpuConfirms;
+static NTSTATUS CpuConfirm(BC250_DEVICE*d,const char*why){(void)d;(void)why;CHECK(spins==0 && mutexes==1);cpuConfirms++;return STATUS_SUCCESS;}
 // BD-343: the curve half of a confirmation without output (dpm.c); its rule is dpm_curve_mark_test.c's.
 static unsigned knownCurveConfirms;
 static NTSTATUS DpmConfirmKnownCurve(BC250_DEVICE*d,const char*why){(void)d;(void)why;CHECK(spins==0 && mutexes==1);knownCurveConfirms++;return STATUS_SUCCESS;}
@@ -122,11 +125,11 @@ int main(void)
     // Every flag word this gate is asked about: the two it admits, their union, the bits of the other escapes
     // and nothing at all.
     static const ULONG words[]={0,1,2,3,4,8,9,10,12,16,24};
-    BC250_DEVICE d={0};BC250_ESCAPE_START_HEALTH r;ULONGLONG generation,epoch,count,witness;unsigned old,i,cu0,dpm0,known0;
+    BC250_DEVICE d={0};BC250_ESCAPE_START_HEALTH r;ULONGLONG generation,epoch,count,witness;unsigned old,i,cu0,dpm0,cpu0,known0;
     live=&d;StartHealthInitialize(&d);CHECK(sizeof(r)==96);
     r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_READY));
     healthy(&d);r=query(&d,0);CHECK(r.Flags==7 && r.Completed==12 && r.ReadyAgeMs==60000 && r.LastCompletionAgeMs==0);
-    r=query(&d,1);CHECK(r.Status==0 && r.Flags==15 && writes==1 && flushes==1 && cuConfirms==1 && dpmConfirms==1);
+    r=query(&d,1);CHECK(r.Status==0 && r.Flags==15 && writes==1 && flushes==1 && cuConfirms==1 && dpmConfirms==1 && cpuConfirms==1);
     CHECK(StartHealthIsReady(&d,&generation) && generation==d.StartHealth.Generation);
     // BD-098: a mode set and a visibility change advance the epoch, and the confirmed start stays confirmed.
     epoch=d.StartHealth.Epoch;old=writes;
@@ -153,7 +156,7 @@ int main(void)
     r=query(&d,1);CHECK(!(r.Flags&4) && r.Status==2); // visibility cannot undo path power-off
     healthy(&d);openStatus=STATUS_ACCESS_DENIED;old=writes;r=query(&d,1);CHECK(r.NtStatus==(ULONG)openStatus && writes==old && !(r.Flags&8));openStatus=0;
     healthy(&d);writeStatus=STATUS_ACCESS_DENIED;old=flushes;r=query(&d,1);CHECK(r.NtStatus==(ULONG)writeStatus && flushes==old && !(r.Flags&8));writeStatus=0;
-    old=cuConfirms;healthy(&d);flushStatus=STATUS_UNSUCCESSFUL;r=query(&d,1);CHECK(r.NtStatus==(ULONG)flushStatus && !(r.Flags&8) && cuConfirms==old && dpmConfirms==old);flushStatus=0;
+    old=cuConfirms;healthy(&d);flushStatus=STATUS_UNSUCCESSFUL;r=query(&d,1);CHECK(r.NtStatus==(ULONG)flushStatus && !(r.Flags&8) && cuConfirms==old && dpmConfirms==old && cpuConfirms==old);flushStatus=0;
     healthy(&d);epoch=d.StartHealth.Epoch;faultDuringFlush=1;old=writes;r=query(&d,1);faultDuringFlush=0;
     CHECK(r.NtStatus==(ULONG)STATUS_RETRY && r.Epoch!=epoch && !(r.Flags&(2|8)) && writes==old+1);
     CHECK(d.StartHealth.ConfirmedEpoch==epoch); // old interval only, no compensating counter rewrite
@@ -186,17 +189,17 @@ int main(void)
     // defers the device restart, so the logon task, the overlay and the control application all talk to the loaded
     // old driver until the next start - and a confirmation that stops at the gate costs the CU mode and the DPM
     // request, which is 24 CU and the floor clock at the next start (C57).
-    healthy(&d);old=writes;cu0=cuConfirms;dpm0=dpmConfirms;
+    healthy(&d);old=writes;cu0=cuConfirms;dpm0=dpmConfirms;cpu0=cpuConfirms;
     r=query(&d,0);r.Op=BC250_START_HEALTH_CONFIRM;StartHealthRequest(&d,&r,TRUE,1);
     CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.NtStatus==(ULONG)STATUS_SUCCESS &&
           (r.Flags&BC250_START_HEALTH_CONFIRMED) && r.Flags==15 &&
-          writes==old+1 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1);
+          writes==old+1 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1 && cpuConfirms==cpu0+1);
     // And the administrator check comes before any of that, on the old word as on the new one.
-    healthy(&d);old=writes;cu0=cuConfirms;dpm0=dpmConfirms;
+    healthy(&d);old=writes;cu0=cuConfirms;dpm0=dpmConfirms;cpu0=cpuConfirms;
     r=query(&d,0);r.Op=BC250_START_HEALTH_CONFIRM;StartHealthRequest(&d,&r,FALSE,1);
     CHECK(r.Status==BC250_ESCAPE_STATUS_NOT_ADMIN && r.NtStatus==(ULONG)STATUS_ACCESS_DENIED &&
           !(r.Flags&BC250_START_HEALTH_CONFIRMED) &&
-          writes==old && cuConfirms==cu0 && dpmConfirms==dpm0);
+          writes==old && cuConfirms==cu0 && dpmConfirms==dpm0 && cpuConfirms==cpu0);
     healthy(&d);generation=d.StartHealth.Generation;epoch=d.StartHealth.Epoch;
     StartHealthStop(&d,&r);CHECK(r.Flags==7 && r.Generation==generation && r.Epoch==epoch);
     CHECK(d.StartHealth.Closed && !d.StartHealth.Engines && d.StartHealth.Epoch>epoch);
@@ -209,7 +212,7 @@ int main(void)
     // node, and the witness stayed at flags=1, epoch 14, completed 0, ready_ms 0 for the rest of the boot while
     // the desktop kept flipping in hardware. The two acts below are what wddm.c calls at those two moments.
     healthy(&d);r=query(&d,1);CHECK(r.Flags==15 && r.Status==0);
-    generation=d.StartHealth.Generation;epoch=d.StartHealth.Epoch;old=writes;cu0=cuConfirms;dpm0=dpmConfirms;
+    generation=d.StartHealth.Generation;epoch=d.StartHealth.Epoch;old=writes;cu0=cuConfirms;dpm0=dpmConfirms;cpu0=cpuConfirms;
     StartHealthFaultPendingReset(&d);           // WddmLatchSubmitTimeoutLocked: the hardware fence timed out
     r=query(&d,0);
     CHECK(r.Flags==BC250_START_HEALTH_FULL && r.Epoch>epoch && !r.Completed && !r.ReadyAgeMs); // the lab's flags=1
@@ -226,17 +229,17 @@ int main(void)
     // request of a start that needed a GPU reset stay pending: the clock, the voltage or the CU count that hung
     // node 0 must not become the next boot's default. StartHealthIsReady, which is the milestone those two
     // escapes of their own read, says the same. Before the re-arm existed the closed witness did this by itself.
-    CHECK(cuConfirms==cu0 && dpmConfirms==dpm0 && !StartHealthIsReady(&d,&generation));
-    healthy(&d);r=query(&d,1);                  // the next device start confirms both again
-    CHECK(r.Status==0 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1 && StartHealthIsReady(&d,&generation));
+    CHECK(cuConfirms==cu0 && dpmConfirms==dpm0 && cpuConfirms==cpu0 && !StartHealthIsReady(&d,&generation));
+    healthy(&d);r=query(&d,1);                  // the next device start confirms all three again
+    CHECK(r.Status==0 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1 && cpuConfirms==cpu0+1 && StartHealthIsReady(&d,&generation));
     // A resume invalidates the pre-sleep witness but does not make that request safe; only a new start does.
-    generation=d.StartHealth.Generation;cu0=cuConfirms;dpm0=dpmConfirms;old=writes;
+    generation=d.StartHealth.Generation;cu0=cuConfirms;dpm0=dpmConfirms;cpu0=cpuConfirms;old=writes;
     StartHealthFaultPendingReset(&d);
     CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_REOPENED);
     StartHealthResumeReady(&d,TRUE);StartHealthEnter(&d);StartHealthVisibilityLocked(&d,TRUE);StartHealthLeave(&d);
     advance(60000);StartHealthCompleted(&d,2);r=query(&d,1);
     CHECK(r.Status==0 && r.Flags==15 && r.Generation==generation && writes==old+1);
-    CHECK(cuConfirms==cu0 && dpmConfirms==dpm0);
+    CHECK(cuConfirms==cu0 && dpmConfirms==dpm0 && cpuConfirms==cpu0);
     // The mark is taken over an open witness with its engines up, and nowhere else. A startup engine failure
     // (pnp.c: StartHealthReady with GfxStartupResources FALSE) is sticky for the whole start, so a reset that
     // recovers node 0 afterwards must leave the witness at FULL alone, exactly as it was before this change.
@@ -349,21 +352,21 @@ int main(void)
     // BD-120 requirement 4: a timeout, a recovery and a CONFIRM interleave. The confirmation measured the
     // interval before the hang, so it stays on that epoch and returns STATUS_RETRY; the new epoch is left for a
     // later CONFIRM to certify. CONFIRMED itself survives the recovery (BD-098: it reports the start).
-    healthy(&d);epoch=d.StartHealth.Epoch;old=writes;cu0=cuConfirms;dpm0=dpmConfirms;recoverDuringFlush=1;
+    healthy(&d);epoch=d.StartHealth.Epoch;old=writes;cu0=cuConfirms;dpm0=dpmConfirms;cpu0=cpuConfirms;recoverDuringFlush=1;
     r=query(&d,1);recoverDuringFlush=0;
     CHECK(r.NtStatus==(ULONG)STATUS_RETRY && r.Epoch>epoch && writes==old+1);
     CHECK(d.StartHealth.ConfirmedEpoch==epoch && d.StartHealth.ConfirmedGeneration==d.StartHealth.Generation);
     CHECK((r.Flags&BC250_START_HEALTH_CONFIRMED) && (r.Flags&BC250_START_HEALTH_READY) && r.Flags==15);
-    CHECK(cuConfirms==cu0 && dpmConfirms==dpm0);     // a retried confirmation confirms no CU mode and no DPM
+    CHECK(cuConfirms==cu0 && dpmConfirms==dpm0 && cpuConfirms==cpu0); // a retried confirmation confirms nothing
     // The same race in the other ordering: the recovery alone, over a witness no latch had closed. The epoch
     // still moves, so the confirmation still certifies only the interval it measured.
-    healthy(&d);epoch=d.StartHealth.Epoch;old=writes;cu0=cuConfirms;dpm0=dpmConfirms;recoverDuringFlush=2;
+    healthy(&d);epoch=d.StartHealth.Epoch;old=writes;cu0=cuConfirms;dpm0=dpmConfirms;cpu0=cpuConfirms;recoverDuringFlush=2;
     r=query(&d,1);recoverDuringFlush=0;
     CHECK(r.NtStatus==(ULONG)STATUS_RETRY && r.Epoch>epoch && writes==old+1 && r.Flags==15);
-    CHECK(d.StartHealth.ConfirmedEpoch==epoch && cuConfirms==cu0 && dpmConfirms==dpm0);
+    CHECK(d.StartHealth.ConfirmedEpoch==epoch && cuConfirms==cu0 && dpmConfirms==dpm0 && cpuConfirms==cpu0);
     // And the start after it all confirms everything again, so none of the marks outlives its start.
-    healthy(&d);cu0=cuConfirms;dpm0=dpmConfirms;old=writes;r=query(&d,1);
-    CHECK(r.Status==0 && r.Flags==15 && writes==old+1 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1);
+    healthy(&d);cu0=cuConfirms;dpm0=dpmConfirms;cpu0=cpuConfirms;old=writes;r=query(&d,1);
+    CHECK(r.Status==0 && r.Flags==15 && writes==old+1 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1 && cpuConfirms==cpu0+1);
     // QUIET (0.7.216.104): an idle GPU desktop. Its last flip is more than a minute old, so freshness alone refuses
     // the start, but the last primary programmed is the one that completed: nothing is owed and the start confirms,
     // its CU mode and DPM with it.
@@ -372,8 +375,8 @@ int main(void)
     r=query(&d,0);
     CHECK(r.Flags==(7|BC250_START_HEALTH_QUIET) && r.Completed==1 && r.LastCompletionAgeMs==70000 && r.ReadyAgeMs==71000);
     CHECK(StartHealthIsReady(&d,&generation) && generation==d.StartHealth.Generation);
-    cu0=cuConfirms;dpm0=dpmConfirms;old=writes;r=query(&d,1);
-    CHECK(r.Status==0 && (r.Flags&BC250_START_HEALTH_CONFIRMED) && writes==old+1 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1);
+    cu0=cuConfirms;dpm0=dpmConfirms;cpu0=cpuConfirms;old=writes;r=query(&d,1);
+    CHECK(r.Status==0 && (r.Flags&BC250_START_HEALTH_CONFIRMED) && writes==old+1 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1 && cpuConfirms==cpu0+1);
     // A flip programmed and not completed is owed: not quiet, and a stale completion does not confirm.
     ready(&d);advance(1000);StartHealthCompleted(&d,2);wddmProgrammed=4;advance(70000);
     r=query(&d,0);CHECK(r.Flags==7);CHECK(!StartHealthIsReady(&d,&generation));
@@ -406,12 +409,12 @@ int main(void)
     // no workload proves nothing about a requested clock/voltage or CU count. CONFIRM certifies the start for the
     // guard and leaves both requests pending, so the next start falls back as after any unconfirmed start.
     advance(1);CHECK(!StartHealthIsReady(&d,&generation));
-    cu0=cuConfirms;dpm0=dpmConfirms;known0=knownCurveConfirms;r=query(&d,1);
+    cu0=cuConfirms;dpm0=dpmConfirms;cpu0=cpuConfirms;known0=knownCurveConfirms;r=query(&d,1);
     CHECK(r.Status==0 && r.Flags==(3|BC250_START_HEALTH_NO_OUTPUT|BC250_START_HEALTH_CONFIRMED) &&
-          r.ReadyAgeMs==BC250_START_HEALTH_MIN_MS && writes==old+1 && cuConfirms==cu0 && dpmConfirms==dpm0);
+          r.ReadyAgeMs==BC250_START_HEALTH_MIN_MS && writes==old+1 && cuConfirms==cu0 && dpmConfirms==dpm0 && cpuConfirms==cpu0);
     // Only the curve half for an already-confirmed curve runs (DpmConfirmKnownCurve), once.
     CHECK(knownCurveConfirms==known0+1);
-    advance(60000);CHECK(!StartHealthIsReady(&d,&generation) && cuConfirms==cu0 && dpmConfirms==dpm0);
+    advance(60000);CHECK(!StartHealthIsReady(&d,&generation) && cuConfirms==cu0 && dpmConfirms==dpm0 && cpuConfirms==cpu0);
     // A stop takes the output state with the witness, and so does a resume (power.c sets it again from the child).
     StartHealthStop(&d,&r);CHECK((r.Flags&BC250_START_HEALTH_NO_OUTPUT) && !d.StartHealth.NoOutput);
     StartHealthBegin(&d,TRUE);StartHealthOutput(&d,BC250_DISPLAY_START_NO_POST,FALSE);StartHealthReady(&d,TRUE);

@@ -47,7 +47,8 @@ if($RearmSkipsOpenWitness){$source=Mutate $source 'if (!h->Closed) {' 'if (0) {'
 # A start that hung node 0 confirming its own clock/voltage and CU request as the next boot's default.
 if($ConfirmHungRequest){$source=Mutate $source 'ready=HealthConfirmableDisplay(h,&data) && !h->Recovered;' 'ready=HealthConfirmableDisplay(h,&data);'
                         $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered && display) (void)CuModeConfirm(Device,"start-health");' 'if (NT_SUCCESS(status) && display) (void)CuModeConfirm(Device,"start-health");'
-                        $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered && display) (void)DpmConfirm(Device,"start-health");' 'if (NT_SUCCESS(status) && display) (void)DpmConfirm(Device,"start-health");'}
+                        $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered && display) (void)DpmConfirm(Device,"start-health");' 'if (NT_SUCCESS(status) && display) (void)DpmConfirm(Device,"start-health");'
+                        $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered && display) (void)CpuConfirm(Device,"start-health");' 'if (NT_SUCCESS(status) && display) (void)CpuConfirm(Device,"start-health");'}
 # QUIET (0.7.216.104): a flip programmed and never completed taken for nothing owed, so a hung presentation path
 # confirms on a stale completion.
 if($QuietIgnoresOwedFlip){$source=Mutate $source '&& programmed==H->LastSequence;' ';'}
@@ -64,7 +65,8 @@ if($NoOutputWithoutEngines){$source=Mutate $source 'if (HealthReady(H) && (Healt
 # writes a requested clock/voltage or CU count as the next boot's default.
 if($NoOutputReleasesRequests){$source=Mutate $source 'ready=HealthConfirmableDisplay(h,&data) && !h->Recovered;' 'ready=HealthConfirmableStart(h,&data) && !h->Recovered;'
                               $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered && display) (void)CuModeConfirm(Device,"start-health");' 'if (NT_SUCCESS(status) && !recovered) (void)CuModeConfirm(Device,"start-health");'
-                              $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered && display) (void)DpmConfirm(Device,"start-health");' 'if (NT_SUCCESS(status) && !recovered) (void)DpmConfirm(Device,"start-health");'}
+                              $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered && display) (void)DpmConfirm(Device,"start-health");' 'if (NT_SUCCESS(status) && !recovered) (void)DpmConfirm(Device,"start-health");'
+                              $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered && display) (void)CpuConfirm(Device,"start-health");' 'if (NT_SUCCESS(status) && !recovered) (void)CpuConfirm(Device,"start-health");'}
 # A confirmation that certifies whatever epoch it finds after its registry flush, the new one included.
 if($ConfirmCertifiesNewEpoch){$source=Mutate $source 'if (h->Generation!=generation || h->Epoch!=epoch) status=STATUS_RETRY;' 'if (h->Generation!=generation) status=STATUS_RETRY;'}
 [IO.File]::WriteAllText((Join-Path $Out 'start_health_actual.inc'),$source.Replace('#include "bc250kmd.h"',''))
