@@ -1,0 +1,58 @@
+=== push 2026-11-12T09:53:01Z
+C:\BC250\tmp\bd368d\kmdprobe\bc250kmd.sys
+=== swap 2026-11-12T09:53:02Z
+device disable verified
+image now E7D686C01EF7FF35CECFBA9718165D7A4C24086F80E1F3012ACA7B65815E05B0
+UnconfirmedStarts 0 (StateV2 b1c85315ff874f0bac330bcf3b947323 and legacy)
+=== cold 1 2026-11-12T09:53:13Z
+
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD soft-off proved: 13.9 W after 37 s
+BOOT UP windows boot 2026-11-12T09:54:24Z after 41s
+=== enable 2026-11-12T09:54:51Z
+
+GPU OK CM_PROB_NONE
+=== read after enable (waits for the confirmation) 2026-11-12T09:54:59Z
+READ 2026-11-12T09:56:02Z waited 61 s confirm-line=True
+STORE E7D686C01EF7FF35CECFBA9718165D7A4C24086F80E1F3012ACA7B65815E05B0
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=290287665 epoch=5 completed=125 age_ms=783 ready_ms=67827
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+284      0.505 cpu: the surface sees 12 processors (mask 0x77 in force), stored core mask 0x77
+=== keep the log, set 8 2026-11-12T09:56:03Z
+{"abi":1,"command":"set","error":0,"path":"","name":"KeepLog
+cpu: mask 0x77 in force, 0xFF stored, confirmed, 12 processors to Windows
+cpu: mask 0x77 in force, 0xFF stored, confirmed, 12 processors to Windows
+=== cold restart 2026-11-12T09:56:08Z
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD soft-off proved: 13.5 W after 37 s
+BOOT UP windows boot 2026-11-12T09:57:19Z after 41s
+=== state before the early restart 2026-11-12T09:57:45Z
+STATE CoreMask status=ok source=override value=255
+STATE CoreMaskPending status=ok source=override value=255
+STATE CoreMaskConfirmed status=ok source=override value=255
+PROCESSORS logical=12 cores=6
+=== warm restart before the milestone 2026-11-12T09:57:48Z
+HBOOT RESTART target=default build=22631 delay=5
+BOOT UP windows boot 2026-11-12T09:58:16Z after 23s
+=== state after 2026-11-12T09:58:35Z
+STATE CoreMask status=ok source=override value=119
+STATE CoreMaskPending status=absent source=none value=null
+STATE CoreMaskConfirmed status=absent source=none value=null
+PROCESSORS logical=16 cores=8
+=== kept logs 2026-11-12T09:58:39Z
+KEPT no log directory found in: {"abi":1,"command":"paths","error":0,"logs":"C:\\Windows\\ServiceState\\bc250kmd\\SharedData\\Logs"}
+=== disarm, way back 2026-11-12T09:58:41Z
+{"abi":1,"command":"clear","error":0,"path":"","name":"KeepL
+   360      1.633 cpu: the surface sees 16 processors (mask 0xFF in force), stored core mask 0x77
+   921     27.884 cpu: core mask 0x77 (6 cores) stored on request, no message: the count changes at the next power-off
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD soft-off proved: 13.6 W after 37 s
+BOOT UP windows boot 2026-11-12T09:59:57Z after 41s
+=== read after the way back 2026-11-12T10:00:23Z
+READ 2026-11-12T10:02:26Z waited 121 s confirm-line=False
+PROCESSORS logical=12 cores=6
+=== end 2026-11-12T10:02:28Z
+
+EXIT 0

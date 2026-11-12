@@ -1,0 +1,70 @@
+=== set 8 at the milestone 2026-11-12T08:24:06Z
+
+cpu: cores 1400 1400 1400 900 1400 1400 1400 1019 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0xFF stored, confirmed, 12 processors to Windows
+cpu: mask 0x77 in force, 0xFF stored, confirmed, 12 processors to Windows
+=== cold restart 2026-11-12T08:24:08Z
+COLD t0 2026-11-12T08:24:08Z
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD telemetry sample: {"queried_utc": "2026-11-12T08:24:13.691746+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 700, "19": 986, "20": 2414}, "current_a": 0.7, "powe
+COLD soft-off proved: 13.5 W after 41 s
+{"transport": "LAN", "relay_on": false, "readback_verified": true}
+{"transport": "LAN", "relay_on": true, "readback_verified": true}
+BOOT UP windows boot 2026-11-12T08:25:25Z after 41s
+=== read before the milestone (no wait) 2026-11-12T08:25:48Z
+READNEW 2026-11-12T08:25:53Z
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=23 generation=28471688 epoch=5 completed=269 age_ms=283 ready_ms=14068
+cpu: 1206 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 81.2 C
+cpu: cores 3500 1555 3500 1555 3500 1555 1555 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0xFF stored, PENDING, confirmed, 12 processors to Windows
+cpu: 8 cores are stored: restart Windows to bring them up (a restart, not a power-off)
+   694      6.197 cpu: core mask 0xFF (8 cores) sent: 0x00000000; the count changes at the next restart
+=== warm restart before the milestone 2026-11-12T08:25:52Z
+HBOOT RESTART target=default build=22631 delay=5
+BOOT UP windows boot 2026-11-12T08:26:20Z after 22s
+=== read after: expect 16 and 0xFF stored 2026-11-12T08:26:37Z
+READ 2026-11-12T08:27:41Z waited 61 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 303195D04539D68411A0D38CBF08AD3455C7DE57C6F275A1FCD1C318D9DC27A6
+PROCESSORS logical=16 cores=8
+health abi=1 version=0x000700D8 flags=31 generation=28600339 epoch=5 completed=699 age_ms=764 ready_ms=67210
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0xFF in force, 0x77 stored, 16 processors to Windows
+
+
+READNEW 2026-11-12T08:27:45Z
+PROCESSORS logical=16 cores=8
+health abi=1 version=0x000700D8 flags=31 generation=28600339 epoch=5 completed=705 age_ms=314 ready_ms=70779
+cpu: 1199 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 68.2 C
+cpu: cores 1400 1400 1400 1400 1400 1571 1400 1400 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0xFF in force, 0x77 stored, 16 processors to Windows
+cpu: 6 cores are stored: shut down and power the machine off to return to them
+=== telemetry, 8 cores 2026-11-12T08:27:45Z
+PROCESSORS logical=16 cores=8
+smu metrics: ok, 82 tables, 1 failures, last 161 ms ago: gfx 824 mV 0 MHz 57.75 C, soc 806 mV 55.50 C, throttler 0x0000
+dpm version=0x000700D8 flags=0x278B temperature_c=67.5 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 pow
+er_w=36.3 power_avg_w=37.4
+dpm version=0x000700D8 flags=0x278B temperature_c=67.2 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 pow
+er_w=38.6 power_avg_w=36.9
+dpm version=0x000700D8 flags=0x278B temperature_c=67.0 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 pow
+er_w=37.7 power_avg_w=36.9
+=== way back: cpu cores 6 2026-11-12T08:27:50Z
+cpu: cores 1400 1400 1400 1400 1400 1571 1400 1400 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0xFF in force, 0x77 stored, 16 processors to Windows
+cpu: mask 0xFF in force, 0x77 stored, 16 processors to Windows
+  1415     92.282 cpu: core mask 0x77 (6 cores) stored on request, no message: the count changes at the next power-off
+cpu: mask 0xFF in force, 0x77 stored, 16 processors to Windows
+cpu: 6 cores are stored: shut down and power the machine off to return to them
+  1415     92.282 cpu: core mask 0x77 (6 cores) stored on request, no message: the count changes at the next power-off
+=== cold restart for the way back 2026-11-12T08:27:56Z
+COLD t0 2026-11-12T08:27:56Z
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD telemetry sample: {"queried_utc": "2026-11-12T08:28:01.278171+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 639, "19": 882, "20": 2405}, "current_a": 0.639, "po
+COLD soft-off proved: 13.6 W after 37 s
+{"transport": "LAN", "relay_on": false, "readback_verified": true}
+{"transport": "LAN", "relay_on": true, "readback_verified": true}
+BOOT UP windows boot 2026-11-12T08:29:07Z after 41s
+=== read after the way back: expect 12 2026-11-12T08:29:31Z

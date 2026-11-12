@@ -1,0 +1,182 @@
+=== push 2026-11-12T10:27:38Z
+C:\BC250\tmp\bd368d\kmdlab5\bc250kmd.sys
+=== swap 2026-11-12T10:27:39Z
+device disable verified
+image now 2DA9B83AD57BA103F042A46D8260630E46BCD497E74DB01FCFF802237D33C1BD
+UnconfirmedStarts 0 (StateV2 b1c85315ff874f0bac330bcf3b947323 and legacy)
+=== cold 1 2026-11-12T10:27:48Z
+
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD soft-off proved: 13.7 W after 37 s
+BOOT UP windows boot 2026-11-12T10:28:59Z after 41s
+=== enable 2026-11-12T10:29:24Z
+
+GPU OK CM_PROB_NONE
+=== read after enable (waits for the confirmation) 2026-11-12T10:29:32Z
+READ 2026-11-12T10:30:35Z waited 61 s confirm-line=True
+STORE 2DA9B83AD57BA103F042A46D8260630E46BCD497E74DB01FCFF802237D33C1BD
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=287284185 epoch=5 completed=125 age_ms=39 ready_ms=67798
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+284      0.527 cpu: the surface sees 12 processors (mask 0x77 in force), stored core mask 0x77
+=== keep the log, set 8 2026-11-12T10:30:36Z
+{"abi":1,"command":"set","error":0,"path":"","name":"KeepLog
+cpu: mask 0x77 in force, 0xFF stored, confirmed, 12 processors to Windows
+cpu: mask 0x77 in force, 0xFF stored, confirmed, 12 processors to Windows
+=== cold restart 2026-11-12T10:30:41Z
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD soft-off proved: 13.6 W after 37 s
+BOOT UP windows boot 2026-11-12T10:31:51Z after 41s
+=== state before the early restart 2026-11-12T10:32:17Z
+STATE CoreMask status=ok source=override value=255
+STATE CoreMaskPending status=ok source=override value=255
+STATE CoreMaskConfirmed status=ok source=override value=255
+PROCESSORS logical=12 cores=6
+=== warm restart before the milestone 2026-11-12T10:32:20Z
+HBOOT RESTART target=default build=22631 delay=5
+BOOT UP windows boot 2026-11-12T10:32:46Z after 22s
+=== state after 2026-11-12T10:33:05Z
+STATE CoreMask status=ok source=override value=255
+STATE CoreMaskPending status=ok source=override value=255
+STATE CoreMaskConfirmed status=ok source=override value=255
+PROCESSORS logical=16 cores=8
+=== kept logs 2026-11-12T10:33:09Z
+KEPT dir files=5
+--- ring-20261112-095722-220-start.log 94123 bytes written 2026-11-12T09:58:00Z
+-- keep 53 from sequence 194: 195 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 54 from sequence 195: 196 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 55 from sequence 196: 200 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 56 from sequence 200: 201 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 57 from sequence 201: 222 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 58 from sequence 222: 223 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 59 from sequence 223: 228 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 60 from sequence 228: 229 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 61 from sequence 229: 234 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 62 from sequence 234: 235 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 63 from sequence 235: 240 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 64 from sequence 240: 241 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 65 from sequence 241: 246 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 66 from sequence 246: 247 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 67 from sequence 247: 252 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 68 from sequence 252: 253 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 69 from sequence 253: 272 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 70 from sequence 272: 272 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 71 from sequence 272: 273 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 72 from sequence 273: 282 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 73 from sequence 282: 283 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 74 from sequence 283: 286 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 75 from sequence 286: 289 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 76 from sequence 289: 329 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 77 from sequence 329: 509 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+   359      1.708 cpu: the surface sees 12 processors (mask 0x77 in force), stored core mask 0xFF
+-- keep 78 from sequence 509: 983 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+   681      6.226 cpu: core mask 0xFF (8 cores) sent: 0x00000000; the count changes at the next restart
+   981     40.070 interop: system power state lock taken, sleep or shutdown imminent (users 0, marked 0)
+   982     40.070 probe: power callback event 4
+--- ring-20261112-095819-313-start.log 51014 bytes written 2026-11-12T09:58:20Z
+-- keep 50 from sequence 191: 192 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 51 from sequence 192: 193 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 52 from sequence 193: 194 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 53 from sequence 194: 195 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 54 from sequence 195: 196 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 55 from sequence 196: 200 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 56 from sequence 200: 201 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 57 from sequence 201: 222 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 58 from sequence 222: 223 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 59 from sequence 223: 228 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 60 from sequence 228: 229 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 61 from sequence 229: 234 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 62 from sequence 234: 235 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 63 from sequence 235: 240 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 64 from sequence 240: 241 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 65 from sequence 241: 246 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 66 from sequence 246: 247 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 67 from sequence 247: 252 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 68 from sequence 252: 253 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 69 from sequence 253: 272 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 70 from sequence 272: 272 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 71 from sequence 272: 273 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 72 from sequence 273: 282 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 73 from sequence 282: 283 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 74 from sequence 283: 286 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 75 from sequence 286: 289 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 76 from sequence 289: 329 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 77 from sequence 329: 510 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+   358      1.632 cpu: core mask 0xFF ran a start that never became healthy: the stock mask comes back
+   360      1.633 cpu: the surface sees 16 processors (mask 0xFF in force), stored core mask 0x77
+--- ring-20261112-103154-237-start.log 50906 bytes written 2026-11-12T10:31:55Z
+-- keep 49 from sequence 190: 191 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 50 from sequence 191: 192 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 51 from sequence 192: 193 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 52 from sequence 193: 194 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 53 from sequence 194: 195 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 54 from sequence 195: 196 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 55 from sequence 196: 200 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 56 from sequence 200: 201 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 57 from sequence 201: 222 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 58 from sequence 222: 223 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 59 from sequence 223: 228 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 60 from sequence 228: 229 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 61 from sequence 229: 234 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 62 from sequence 234: 235 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 63 from sequence 235: 240 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 64 from sequence 240: 241 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 65 from sequence 241: 246 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 66 from sequence 246: 247 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 67 from sequence 247: 252 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 68 from sequence 252: 253 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 69 from sequence 253: 272 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 70 from sequence 272: 272 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 71 from sequence 272: 273 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 72 from sequence 273: 282 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 73 from sequence 282: 283 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 74 from sequence 283: 286 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 75 from sequence 286: 289 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 76 from sequence 289: 329 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 77 from sequence 329: 509 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+   359      1.750 cpu: the surface sees 12 processors (mask 0x77 in force), stored core mask 0xFF
+--- ring-20261112-103249-360-start.log 50907 bytes written 2026-11-12T10:32:50Z
+-- keep 49 from sequence 190: 191 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 50 from sequence 191: 192 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 51 from sequence 192: 193 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 52 from sequence 193: 194 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 53 from sequence 194: 195 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 54 from sequence 195: 196 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 55 from sequence 196: 200 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 56 from sequence 200: 201 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 57 from sequence 201: 222 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 58 from sequence 222: 223 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 59 from sequence 223: 228 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 60 from sequence 228: 229 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 61 from sequence 229: 234 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 62 from sequence 234: 235 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 63 from sequence 235: 240 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 64 from sequence 240: 241 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 65 from sequence 241: 246 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 66 from sequence 246: 247 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 67 from sequence 247: 252 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 68 from sequence 252: 253 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 69 from sequence 253: 272 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 70 from sequence 272: 272 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 71 from sequence 272: 273 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 72 from sequence 273: 282 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 73 from sequence 282: 283 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 74 from sequence 283: 286 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 75 from sequence 286: 289 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 76 from sequence 289: 329 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+-- keep 77 from sequence 329: 509 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+   359      1.632 cpu: the surface sees 16 processors (mask 0xFF in force), stored core mask 0xFF
+=== disarm, way back 2026-11-12T10:33:11Z
+{"abi":1,"command":"clear","error":0,"path":"","name":"KeepL
+   686      6.151 cpu: core mask 0xFF (8 cores) sent: 0x00000000; the count changes at the next restart
+   921     28.001 cpu: core mask 0x77 (6 cores) stored on request, no message: the count changes at the next power-off
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD soft-off proved: 13.6 W after 37 s
+BOOT UP windows boot 2026-11-12T10:34:26Z after 41s
+=== read after the way back 2026-11-12T10:34:52Z
+READ 2026-11-12T10:36:55Z waited 121 s confirm-line=False
+PROCESSORS logical=12 cores=6
+=== end 2026-11-12T10:36:56Z
+
+EXIT 0

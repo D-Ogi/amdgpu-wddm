@@ -2207,3 +2207,12 @@ facts:
     evidence: "[Core unlock arms](../evidence/windows/2026-11-12-core-unlock/README.md)"
     edges:
       - {"type": "uses", "to": "M961"}
+  - id: M964
+    status: MEASURED
+    date: "2026-11-12"
+    claim: "At a restart of Windows 11 22631 on unit A, the `\\Callback\\PowerState` notification `PO_CB_SYSTEM_STATE_LOCK` runs at PASSIVE_LEVEL while the driver can still write its log file and its stored values. The kept log of the same start has no line of the adapter's `DxgkDdiSetPowerState`. A KMD that deletes its pending marks at the notification keeps the stored core mask through a restart 5 s into a start, and a KMD that deletes them in `DxgkDdiSetPowerState` loses it"
+    status_text: "MEASURED (unit A, Windows 11 22631, lab-flavour KMDs 303195D0, E7D686C0 and 2DA9B83A; two arms lost the mask, one arm with the notification kept it)"
+    detail: "The probe KMD wrote a log line and kept the log ring to a file at each call of both hooks. The start that the restart ended has the notification's line at 40.070 s and no power-call line. This does not say that Windows does not call `DxgkDdiSetPowerState` at a restart: a call after the file system went away leaves no line. A shutdown to power-off and a sleep were not measured"
+    evidence: "[Early restart arms](../evidence/windows/2026-11-12-early-restart-marks/README.md)"
+    edges:
+      - {"type": "uses", "to": "M961"}
