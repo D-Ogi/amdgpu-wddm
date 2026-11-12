@@ -2,8 +2,9 @@
 /*
  * The two ACPI facts core-unlock reads at run time, with the table layouts of the ACPI Specification 6.5: the
  * reset register of the FADT (section 5.2.9), and the enabled processors of the MADT (section 5.2.12), which is the
- * fallback count when the firmware has no MP Services protocol. Pure parsers: every table is reached through the
- * caller's map function, so test/host_test.c gives them tables in a buffer.
+ * fallback count when the firmware has no MP Services protocol. The report option reads more: the list of tables,
+ * more FADT fields and every processor entry of the MADT. Pure parsers: every table is reached through the
+ * caller's map function, so the host tests give them tables in a buffer.
  */
 #ifndef CU_ACPI_H
 #define CU_ACPI_H
@@ -43,5 +44,51 @@ enum cu_acpi_result cu_acpi_reset_register(const struct cu_acpi *acpi, struct cu
 /* The enabled processors of the MADT: the Local APIC entries with the Enabled flag, or the x2APIC entries with it
  * when the table has no Local APIC entry. Firmware that lists a processor in both forms is not double counted. */
 enum cu_acpi_result cu_acpi_madt_processors(const struct cu_acpi *acpi, unsigned *processors);
+
+/* ---- the read-only report (docs/design/efi-core-unlock.md, "The report") ----------------------------- */
+
+/* One table of the root table, or the DSDT that the FADT names. */
+struct cu_acpi_table {
+	char signature[5];
+	char oem_id[7];
+	char oem_table_id[9];
+	unsigned revision;
+	unsigned length;
+	unsigned long long address;
+	int checksum_ok;
+	const unsigned char *bytes;	/* the whole table when the checksum is right, else NULL */
+};
+
+#define CU_ACPI_MAX_TABLES	48u
+
+/* Every table that the XSDT (or the RSDT) lists, in its order, then the DSDT of the FADT (X_DSDT when it is not 0).
+ * A table whose header does not map or whose length is out of range is counted in *dropped. */
+enum cu_acpi_result cu_acpi_tables(const struct cu_acpi *acpi, struct cu_acpi_table *out, unsigned capacity,
+				   unsigned *count, unsigned *dropped);
+
+/* The FADT fields of the report (ACPI 6.5 section 5.2.9). */
+struct cu_acpi_fadt {
+	unsigned revision;
+	unsigned length;
+	unsigned flags;
+	unsigned p_lvl2_lat;		/* microseconds; above 100 means that C2 is not supported */
+	unsigned p_lvl3_lat;		/* microseconds; above 1000 means that C3 is not supported */
+	int has_reset;			/* the table is long enough for the reset register and value */
+	unsigned reset_space, reset_width, reset_offset, reset_access;
+	unsigned long long reset_address;
+	unsigned reset_value;
+};
+enum cu_acpi_result cu_acpi_fadt_fields(const struct cu_acpi *acpi, struct cu_acpi_fadt *out);
+
+/* One processor entry of the MADT: a Local APIC entry (type 0) or a Local x2APIC entry (type 9). */
+struct cu_acpi_madt_cpu {
+	unsigned type;
+	unsigned uid;			/* the ACPI processor UID */
+	unsigned apic_id;
+	unsigned flags;			/* bit 0 Enabled, bit 1 Online Capable */
+};
+#define CU_ACPI_MAX_MADT_CPUS	64u
+enum cu_acpi_result cu_acpi_madt_list(const struct cu_acpi *acpi, struct cu_acpi_madt_cpu *out, unsigned capacity,
+				      unsigned *count, unsigned *dropped);
 
 #endif

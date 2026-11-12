@@ -26,6 +26,7 @@ void cu_options_parse(const unsigned short *text, size_t chars, struct cu_option
 	static const char *const methods[CU_RESET_COUNT] = { "warm", "fadt", "none" };
 	size_t at = 0, end, i;
 	out->reset = CU_RESET_WARM;
+	out->report = 0;
 	out->unknown = 0;
 	if (text == NULL) return;
 	for (end = 0; end < chars && text[end]; end++) {}
@@ -45,6 +46,10 @@ void cu_options_parse(const unsigned short *text, size_t chars, struct cu_option
 					out->reset = (enum cu_reset_method)i;
 					known = 1;
 				}
+		if (token_is(text + start, eq - start, "report")) {
+			if (token_is(text + eq + 1, at - eq - 1, "0")) { out->report = 0; known = 1; }
+			if (token_is(text + eq + 1, at - eq - 1, "1")) { out->report = 1; known = 1; }
+		}
 		if (!known) out->unknown++;
 	}
 }
@@ -105,20 +110,26 @@ int cu_devpath_file(const unsigned char *path, size_t max_bytes, unsigned short 
 	return used > 0;
 }
 
-int cu_marker_path(const unsigned short *image_file, unsigned short *out, size_t capacity)
+int cu_sibling_path(const unsigned short *image_file, const char *name, unsigned short *out, size_t capacity)
 {
-	size_t i, slash = 0, used, name = sizeof(CU_MARKER_NAME) - 1u;
+	size_t i, slash = 0, used, chars;
 	int found = 0;
-	if (image_file == NULL || out == NULL) return 0;
+	if (image_file == NULL || name == NULL || out == NULL) return 0;
+	chars = strlen(name);
 	for (i = 0; image_file[i]; i++)
 		if (image_file[i] == '\\') { slash = i; found = 1; }
 	if (!found) return 0;
 	used = slash + 1u;
-	if (used + name + 1u > capacity) return 0;
+	if (used + chars + 1u > capacity) return 0;
 	for (i = 0; i < used; i++) out[i] = image_file[i];
-	for (i = 0; i < name; i++) out[used + i] = (unsigned char)CU_MARKER_NAME[i];
-	out[used + name] = 0;
+	for (i = 0; i < chars; i++) out[used + i] = (unsigned char)name[i];
+	out[used + chars] = 0;
 	return 1;
+}
+
+int cu_marker_path(const unsigned short *image_file, unsigned short *out, size_t capacity)
+{
+	return cu_sibling_path(image_file, CU_MARKER_NAME, out, capacity);
 }
 
 size_t cu_devpath_with_file(const unsigned char *device, size_t max_bytes, const unsigned short *file,

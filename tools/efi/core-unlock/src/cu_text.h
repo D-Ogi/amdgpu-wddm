@@ -20,10 +20,12 @@ enum cu_reset_method {
 
 struct cu_options {
 	enum cu_reset_method reset;
+	int report;		/* report=1: write the read-only report before the decision. Default 0 */
 	unsigned unknown;	/* name=value tokens that were not understood; each is reported */
 };
 
-/* The load options: tokens separated by spaces, "reset=warm", "reset=fadt" or "reset=none". A token without "=" (the
+/* The load options: tokens separated by spaces, "reset=warm", "reset=fadt", "reset=none", "report=0" or "report=1".
+ * A token without "=" (the
  * image name that a shell passes first) is skipped. Parsing stops at the first zero or at chars. */
 void cu_options_parse(const unsigned short *text, size_t chars, struct cu_options *out);
 const char *cu_reset_method_name(enum cu_reset_method method);
@@ -37,6 +39,9 @@ int cu_devpath_file(const unsigned char *path, size_t max_bytes, unsigned short 
 /* The marker beside the image: the directory of image_file and the name CU_MARKER_NAME. 0 on failure. */
 #define CU_MARKER_NAME "core-unlock.mark"
 int cu_marker_path(const unsigned short *image_file, unsigned short *out, size_t capacity);
+
+/* A file beside the image: the directory of image_file and the ASCII name. 0 on failure. */
+int cu_sibling_path(const unsigned short *image_file, const char *name, unsigned short *out, size_t capacity);
 
 /* The device part of device (every node before its first end node), one media file path node with file, and the
  * end node. Returns the bytes written, 0 on failure. */

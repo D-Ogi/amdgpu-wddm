@@ -34,7 +34,8 @@ function Invoke-Tool([string]$exe, [string[]]$argv) {
 
 # Our own sources, and the repository sources this component shares with the driver. The shared ones keep their
 # own warning level: they are the driver's code, built the same way here and there.
-$own = @('cu_decide.c', 'cu_run.c', 'cu_smu.c', 'cu_acpi.c', 'cu_smbios.c', 'cu_text.c') |
+$own = @('cu_decide.c', 'cu_run.c', 'cu_smu.c', 'cu_acpi.c', 'cu_smbios.c', 'cu_text.c',
+    'cu_aml.c', 'cu_msr.c', 'cu_report.c') |
     ForEach-Object { Join-Path $here "src\$_" }
 $shared = @((Join-Path $shim 'bc250_smu.c'), (Join-Path $shim 'bc250_cpu.c'), (Join-Path $shim 'bc250_oc.c'),
     (Join-Path $repo 'driver\kmd\board_identity.c'))
@@ -55,7 +56,8 @@ $clang = Join-Path $Llvm 'clang.exe'
 $efiFlags = @('--target=x86_64-unknown-windows', '-std=c11', '-O2', '-ffreestanding', '-fno-builtin', '-nostdlibinc',
     '-fno-stack-protector', '-mno-stack-arg-probe', '-mno-red-zone', '-fno-ident',
     "-I$here\include", "-I$here\include\libc") + $includes
-Build-Objects $clang $efiFlags $objEfi ($own + @((Join-Path $here 'src\main.c'), (Join-Path $here 'src\cu_libc.c'))) $strict
+Build-Objects $clang $efiFlags $objEfi ($own + @((Join-Path $here 'src\main.c'), (Join-Path $here 'src\report_uefi.c'),
+    (Join-Path $here 'src\cu_libc.c'))) $strict
 Build-Objects $clang $efiFlags $objEfi $shared $relaxed
 
 Write-Host 'link (UEFI image)'
@@ -72,13 +74,14 @@ if ($SkipTests) { exit 0 }
 Write-Host 'compile (host tests)'
 $hostCc = Join-Path $Mingw 'x86_64-w64-mingw32-clang.exe'
 $hostFlags = @('-std=c11', '-O1', '-g') + $includes
-Build-Objects $hostCc $hostFlags $objHost ($own + @((Join-Path $here 'test\host_test.c'))) $strict
+Build-Objects $hostCc $hostFlags $objHost ($own + @((Join-Path $here 'test\host_test.c'), (Join-Path $here 'test\report_test.c'))) $strict
 Build-Objects $hostCc $hostFlags $objHost $shared $relaxed
 $test = Join-Path $Out 'host_test.exe'
 Invoke-Tool $hostCc (@('-o', $test) + (Get-ChildItem "$objHost\*.o").FullName)
 
 Write-Host 'run (host tests)'
-& $test
+# The report tests read the stock ACPI tables of unit A that the repository stores as evidence.
+& $test (Join-Path $repo 'evidence\linux\2026-09-21-E01-recon-binaries\acpi')
 $code = $LASTEXITCODE
 Write-Host "core-unlock host tests exit code $code"
 exit $code

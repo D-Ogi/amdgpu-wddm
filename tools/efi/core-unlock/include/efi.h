@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /*
  * The subset of the UEFI interfaces that core-unlock uses, written from the UEFI Specification 2.10 (system
- * table, boot and runtime services, Loaded Image, Device Path, Simple File System, File, Simple Text, PCI I/O)
- * and the PI Specification 1.8 volume 2 (MP Services). No code is copied from an implementation.
+ * table, boot and runtime services, Loaded Image, Device Path, Simple File System, File, Simple Text, PCI I/O,
+ * Graphics Output) and the PI Specification 1.8 volume 2 (MP Services). No code is copied from an implementation.
  *
  * Every table lists all of its members in the order of the specification, so the offsets of the members we call
  * are right. A member we never call is an opaque pointer. SetVariable is one of them on purpose: this application
@@ -289,15 +289,67 @@ typedef struct __attribute__((packed)) {
 #define EFI_MP_SERVICES_PROTOCOL_GUID \
 	{ 0x3FDDA605, 0xA76E, 0x4F46, { 0xAD, 0x29, 0x12, 0xF4, 0x53, 0x1B, 0x3D, 0x08 } }
 typedef struct EFI_MP_SERVICES_PROTOCOL EFI_MP_SERVICES_PROTOCOL;
+typedef VOID (EFIAPI *EFI_AP_PROCEDURE)(VOID *ProcedureArgument);
+typedef struct { UINT32 Package; UINT32 Core; UINT32 Thread; } EFI_CPU_PHYSICAL_LOCATION;
+/* PI 1.7 added ExtendedInformation, which the firmware fills only on request. It is here so that a firmware that
+ * writes it anyway writes inside the buffer. */
+typedef struct { UINT32 Package; UINT32 Module; UINT32 Tile; UINT32 Die; UINT32 Core; UINT32 Thread; }
+	EFI_CPU_PHYSICAL_LOCATION2;
+typedef struct {
+	UINT64 ProcessorId;
+	UINT32 StatusFlag;
+	EFI_CPU_PHYSICAL_LOCATION Location;
+	EFI_CPU_PHYSICAL_LOCATION2 ExtendedInformation;
+} EFI_PROCESSOR_INFORMATION;
+#define PROCESSOR_AS_BSP_BIT		0x00000001u
+#define PROCESSOR_ENABLED_BIT		0x00000002u
+#define PROCESSOR_HEALTH_STATUS_BIT	0x00000004u
 struct EFI_MP_SERVICES_PROTOCOL {
 	EFI_STATUS (EFIAPI *GetNumberOfProcessors)(EFI_MP_SERVICES_PROTOCOL *This, UINTN *NumberOfProcessors,
 						   UINTN *NumberOfEnabledProcessors);
-	VOID *GetProcessorInfo;
+	EFI_STATUS (EFIAPI *GetProcessorInfo)(EFI_MP_SERVICES_PROTOCOL *This, UINTN ProcessorNumber,
+					      EFI_PROCESSOR_INFORMATION *ProcessorInfoBuffer);
 	VOID *StartupAllAPs;
-	VOID *StartupThisAP;
+	EFI_STATUS (EFIAPI *StartupThisAP)(EFI_MP_SERVICES_PROTOCOL *This, EFI_AP_PROCEDURE Procedure,
+					   UINTN ProcessorNumber, EFI_EVENT WaitEvent, UINTN TimeoutInMicroseconds,
+					   VOID *ProcedureArgument, BOOLEAN *Finished);
 	VOID *SwitchBSP;
 	VOID *EnableDisableAP;
-	VOID *WhoAmI;
+	EFI_STATUS (EFIAPI *WhoAmI)(EFI_MP_SERVICES_PROTOCOL *This, UINTN *ProcessorNumber);
+};
+
+/* ---- Graphics Output (UEFI Specification 2.10 section 12.9) --------------------------------------------- */
+
+#define EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID \
+	{ 0x9042A9DE, 0x23DC, 0x4A38, { 0x96, 0xFB, 0x7A, 0xDE, 0xD0, 0x80, 0x51, 0x6A } }
+typedef enum {
+	PixelRedGreenBlueReserved8BitPerColor = 0, PixelBlueGreenRedReserved8BitPerColor = 1, PixelBitMask = 2,
+	PixelBltOnly = 3, PixelFormatMax = 4
+} EFI_GRAPHICS_PIXEL_FORMAT;
+typedef struct { UINT32 RedMask; UINT32 GreenMask; UINT32 BlueMask; UINT32 ReservedMask; } EFI_PIXEL_BITMASK;
+typedef struct {
+	UINT32 Version;
+	UINT32 HorizontalResolution;
+	UINT32 VerticalResolution;
+	EFI_GRAPHICS_PIXEL_FORMAT PixelFormat;
+	EFI_PIXEL_BITMASK PixelInformation;
+	UINT32 PixelsPerScanLine;
+} EFI_GRAPHICS_OUTPUT_MODE_INFORMATION;
+typedef struct {
+	UINT32 MaxMode;
+	UINT32 Mode;
+	EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *Info;
+	UINTN SizeOfInfo;
+	EFI_PHYSICAL_ADDRESS FrameBufferBase;
+	UINTN FrameBufferSize;
+} EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE;
+typedef struct EFI_GRAPHICS_OUTPUT_PROTOCOL EFI_GRAPHICS_OUTPUT_PROTOCOL;
+struct EFI_GRAPHICS_OUTPUT_PROTOCOL {
+	EFI_STATUS (EFIAPI *QueryMode)(EFI_GRAPHICS_OUTPUT_PROTOCOL *This, UINT32 ModeNumber, UINTN *SizeOfInfo,
+				       EFI_GRAPHICS_OUTPUT_MODE_INFORMATION **Info);
+	VOID *SetMode_NeverCalled;	/* the report changes no mode */
+	VOID *Blt;
+	EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE *Mode;
 };
 
 /* ---- configuration tables -------------------------------------------------------------------- */

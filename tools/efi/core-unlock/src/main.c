@@ -22,6 +22,8 @@
 #include "cu_smbios.h"
 #include "cu_smu.h"
 #include "cu_text.h"
+#include "cu_report.h"
+#include "report_uefi.h"
 #include "bc250_mmio_bar.h"
 #include "board_identity.h"
 
@@ -65,6 +67,8 @@ struct app {
 	EFI_FILE_PROTOCOL *root;
 	unsigned short marker[CU_PATH_CHARS];
 	int marker_known;
+	unsigned short report[CU_PATH_CHARS];
+	int report_known;
 	EFI_PCI_IO_PROTOCOL *gpu;
 	unsigned char gpu_config[PCI_CONFIG_BYTES];
 	struct cu_options options;
@@ -464,6 +468,27 @@ static EFI_STATUS start_windows(struct app *app)
 	return status;
 }
 
+/* ---- the read-only report ----------------------------------------------------------------------- */
+
+/* The load option report=1: the report goes first, so it shows the state that the decision then reads. It does
+ * not feed the decision. */
+static void run_report(struct app *app)
+{
+	struct report_uefi r;
+	struct cu_acpi acpi;
+	acpi.map = map_identity;
+	acpi.context = NULL;
+	acpi.rsdp = app->rsdp;
+	r.st = app->st;
+	r.root = app->root;
+	r.path = app->report_known ? app->report : NULL;
+	r.acpi = &acpi;
+	r.version = CU_VERSION;
+	r.say = op_say;
+	r.say_context = app;
+	report_uefi_run(&r);
+}
+
 /* ---- the entry point --------------------------------------------------------------------------- */
 
 static void open_marker_volume(struct app *app)
@@ -472,9 +497,10 @@ static void open_marker_volume(struct app *app)
 	unsigned short image_file[CU_PATH_CHARS];
 	if (cu_devpath_file((const unsigned char *)app->loaded->FilePath, CU_DEVPATH_MAX_BYTES, image_file,
 			    CU_PATH_CHARS) &&
-	    cu_marker_path(image_file, app->marker, CU_PATH_CHARS))
+	    cu_marker_path(image_file, app->marker, CU_PATH_CHARS)) {
 		app->marker_known = 1;
-	else
+		app->report_known = cu_sibling_path(image_file, CU_REPORT_NAME, app->report, CU_PATH_CHARS);
+	} else
 		say_line(app, "the path of this application is not known: no marker, so no reset");
 	if (EFI_ERROR(app->bs->HandleProtocol(app->loaded->DeviceHandle, &file_system_guid, (VOID **)&fs)) || fs == NULL ||
 	    EFI_ERROR(fs->OpenVolume(fs, &app->root)))
@@ -498,12 +524,14 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st)
 		return EFI_LOAD_ERROR;
 	}
 	cu_options_parse(app.loaded->LoadOptions, app.loaded->LoadOptionsSize / 2u, &app.options);
-	sayf(&app, "reset method: %s", cu_reset_method_name(app.options.reset));
+	sayf(&app, "reset method: %s%s", cu_reset_method_name(app.options.reset),
+	     app.options.report ? ", read-only report on" : "");
 	if (app.options.unknown) sayf(&app, "%u load option(s) not understood and ignored", app.options.unknown);
 	rsdp = config_table(&app, &acpi20_guid);
 	if (rsdp == NULL) rsdp = config_table(&app, &acpi10_guid);
 	app.rsdp = (UINTN)rsdp;
 	open_marker_volume(&app);
+	if (app.options.report) run_report(&app);
 
 	ops.context = &app;
 	ops.board = op_board;

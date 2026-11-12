@@ -15,11 +15,14 @@ Give `-Out <directory>` for another place. Give `-SkipTests` to build the image 
 
 ## Load options
 
-| Option | Reset after the message |
+| Option | Result |
 |---|---|
-| `reset=warm` | `ResetSystem` with `EfiResetWarm`. This is the default |
-| `reset=fadt` | the reset register of the ACPI FADT |
+| `reset=warm` | the reset after the message is `ResetSystem` with `EfiResetWarm`. This is the default |
+| `reset=fadt` | the reset after the message is the reset register of the ACPI FADT |
 | `reset=none` | no reset. The cores come at the next warm restart of Windows |
+| `report=1` | before the decision, write the read-only report to `core-unlock-report.txt` beside the image and show it on the console. The default is `report=0` |
+
+The report does not change the decision. To get a report without the message, press a key in the key window: the report is written before that window opens.
 
 ## Run it once from a UEFI shell
 

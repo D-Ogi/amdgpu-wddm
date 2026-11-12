@@ -739,8 +739,11 @@ static void test_text(void)
 	CHECK(!strcmp(line, "trunc"));
 }
 
-int main(void)
+unsigned report_tests(const char *evidence_dir, unsigned *check_count);
+
+int main(int argc, char **argv)
 {
+	unsigned report_checks = 0, report_failures;
 	test_decide();
 	test_marker_text();
 	test_smu_sent();
@@ -749,6 +752,10 @@ int main(void)
 	test_acpi();
 	test_smbios();
 	test_text();
+	/* The report tests: argv[1] is the directory of the stored ACPI tables (build.ps1 passes it). */
+	report_failures = report_tests(argc > 1 ? argv[1] : NULL, &report_checks);
+	checks += report_checks;
+	failures += report_failures;
 	printf("core-unlock host tests: %u checks, %u failures\n", checks, failures);
 	return failures ? 1 : 0;
 }
