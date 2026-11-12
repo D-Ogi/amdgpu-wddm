@@ -42,7 +42,6 @@
 8	docs/design/adaptive-cpu-gpu.md
 22	docs/design/bc250-open-test-pack.md
 33	docs/design/cu-mode.md
-66	docs/design/d3d11-ddi-engine.md
 25	docs/design/d3d12-ddi-engine.md
 2	docs/design/dp-audio.md
 1	docs/design/dpm.md
