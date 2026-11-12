@@ -163,6 +163,7 @@ struct bc250_smu_metrics {
 struct bc250_smu_metrics_reader {
 	unsigned int state;             /* enum bc250_smu_metrics_state */
 	unsigned int reads;             /* tables accepted in this start */
+	unsigned int clock_lost_tables; /* of those, the tables with clock_lost (saturating) */
 	unsigned int failures;          /* reads that ended without a table: refusals, bad tables */
 	unsigned int bad_in_row;
 	int last_status;                /* the transport's last result, 0 for success */

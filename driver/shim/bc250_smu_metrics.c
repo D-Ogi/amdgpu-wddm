@@ -249,6 +249,8 @@ int bc250_smu_metrics_record(struct bc250_smu_metrics_reader *r, unsigned long l
 		r->layout = layout;
 	}
 	r->reads++;
+	if (m.clock_lost && r->clock_lost_tables != 0xFFFFFFFFu)
+		r->clock_lost_tables++;
 	r->last = m;
 	r->has_last = 1;
 	r->last_ok_ms = now_ms;

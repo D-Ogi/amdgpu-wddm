@@ -669,6 +669,22 @@ static void latch(void)
 	CHECK(bc250_smu_metrics_record(&r, now, 0, stock, sizeof(stock)) == 0);
 	CHECK(r.state == BC250_SMU_METRICS_STATE_OK && r.layout == STOCK && r.reads == 1 && r.last_ok_ms == now);
 	CHECK(r.last.socket_mw == 78000 && r.last.gfx_mhz == 1500 && r.last_tail == STOCK);
+	CHECK(r.clock_lost_tables == 0);
+	/* BD-368: a stock table whose clock field holds a residency is read and counted. */
+	{
+		unsigned char lost[sizeof(stock)];
+		struct bc250_smu_metrics_reader q = r;
+		unsigned long long t2 = now;
+		memcpy(lost, stock, sizeof(lost));
+		lost[BC250_SMU_METRICS_OFF_GFXCLK] = 37; lost[BC250_SMU_METRICS_OFF_GFXCLK + 1u] = 0;
+		t2 += BC250_SMU_METRICS_PERIOD_MS;
+		CHECK(bc250_smu_metrics_record(&q, t2, 0, lost, sizeof(lost)) == 0);
+		CHECK(q.state == BC250_SMU_METRICS_STATE_OK && q.reads == 2 && q.clock_lost_tables == 1);
+		CHECK(q.last.clock_lost == 1 && q.last.gfx_mhz == 0 && q.last.socket_mw == 78000);
+		t2 += BC250_SMU_METRICS_PERIOD_MS;
+		CHECK(bc250_smu_metrics_record(&q, t2, 0, stock, sizeof(stock)) == 0);
+		CHECK(q.reads == 3 && q.clock_lost_tables == 1 && q.last.gfx_mhz == 1500);
+	}
 
 	/* A tail written while the stock layout is latched: refused with reason 7, the last table kept, never a
 	 * second latch. A good stock table in between ends the run of bad ones; three in a row stop the reader. */

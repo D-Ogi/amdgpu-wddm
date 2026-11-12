@@ -34,7 +34,6 @@ typedef struct _BC250_SMU_METRICS {
     PHYSICAL_ADDRESS Physical;
     ULONGLONG TableMc;                      // the page's GPU (MC) address, the one the firmware is told
     BOOLEAN LoggedEnd;                      // the line that says why the reader stopped is written once a start
-    BOOLEAN LoggedClockLost;                // the lost table clock (stock table, eight cores) is logged once a start
     struct bc250_smu_metrics_reader Reader; // the governor thread's alone while it runs
     BC250_SMU_METRICS_SNAP Snap;            // under SnapLock
 } BC250_SMU_METRICS;

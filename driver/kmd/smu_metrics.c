@@ -100,7 +100,6 @@ void SmuMetricsStart(BC250_DEVICE* Device)
     m->Enabled = GuardReadSetting(SMU_METRICS_SETTING, 1) != 0;
     m->LayoutSetting = GuardReadSetting(SMU_METRICS_LAYOUT_SETTING, 0);
     m->LoggedEnd = FALSE;
-    m->LoggedClockLost = FALSE;
     m->TableMc = 0;
     m->Physical.QuadPart = 0;
     if (m->Enabled && !refused && Device->FullWddm && Device->Smu.Online && Device->VramEnabled &&
@@ -140,8 +139,9 @@ void SmuMetricsStop(BC250_DEVICE* Device)
     if (m->Page != NULL) {
         MmUnmapIoSpace((PVOID)m->Page, BC250_SMU_METRICS_PAGE);
         m->Page = NULL;
-        GuardLog("smu metrics: stop after %lu tables, %lu failures, state %s, layout %s", m->Reader.reads,
-                 m->Reader.failures, StateText(m->Reader.state), LayoutText(m->Reader.layout));
+        GuardLog("smu metrics: stop after %lu tables (%lu without a clock), %lu failures, state %s, layout %s",
+                 m->Reader.reads, m->Reader.clock_lost_tables, m->Reader.failures, StateText(m->Reader.state),
+                 LayoutText(m->Reader.layout));
     }
 }
 
@@ -164,10 +164,6 @@ void SmuMetricsSample(BC250_DEVICE* Device)
     if (layout != m->Reader.layout)
         GuardLog("smu metrics: %s layout latched after %lu tables in a row", LayoutText(m->Reader.layout),
                  (ULONG)BC250_SMU_METRICS_LATCH_TABLES);
-    if (!m->LoggedClockLost && m->Reader.has_last && m->Reader.last.clock_lost) {
-        m->LoggedClockLost = TRUE;
-        GuardLog("smu metrics: the clock field holds a core's C0 residency (stock table, eight cores): no table clock");
-    }
     if (!m->LoggedEnd && m->Reader.state != BC250_SMU_METRICS_STATE_OK &&
         m->Reader.state != BC250_SMU_METRICS_STATE_WAITING) {
         m->LoggedEnd = TRUE;
