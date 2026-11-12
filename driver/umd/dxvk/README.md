@@ -399,17 +399,23 @@ What the new entries do:
 - `AcquireResource` and `ReleaseResource` pass the sync token to `pfnAcquireResourceCb` and
   `pfnReleaseResourceCb`. `ReleaseResource` submits the engine's commands first, because the other
   process may start as soon as the token is free.
-- `OfferResources1` performs the offer and drops the offer flags, so no allocation of this shell is
-  decommitted. `ReclaimResources1` answers OK or DISCARDED per resource from the WDDM 2.0 reclaim
-  callbacks. NOT_COMMITTED cannot arise, because no offer allows a decommit.
-- `ReclaimResources` and `ReclaimResources1` reclaim with `pfnReclaimAllocations2Cb` on the device's
-  surface paging queue and wait for its paging fence before they return (BD-283). The synchronous
+- `OfferResources1` gives `AllowDecommit` to the kernel through `pfnOfferAllocations2Cb` when the
+  runtime gives that callback and `pfnReclaimAllocations3Cb`, and the device has its paging queue
+  (BD-372). Otherwise it drops the flag and performs the plain offer. An offer without the flag is the
+  `OfferResources` offer. `ReclaimResources1` answers OK, DISCARDED or NOT_COMMITTED per resource.
+  The engine receives no `EndOffer` for an engine-private resource with the result NOT_COMMITTED,
+  because its memory has no backing. Later reclaims of it answer NOT_COMMITTED without a kernel call. `ReclaimResources`
+  reports NOT_COMMITTED as discarded.
+- `ReclaimResources` and `ReclaimResources1` reclaim on the device's surface paging queue with
+  `pfnReclaimAllocations3Cb` (WDDM 2.2 device) or `pfnReclaimAllocations2Cb`, and wait for its
+  paging fence before they return (BD-283). The synchronous
   `pfnReclaimAllocationsCb` is the path for a device without that queue, and the second try when
-  Reclaim2 refuses with a status other than removal. Every success returns S_OK: d3d11.dll removes the
+  the queued callback refuses with a status other than removal. Every success returns S_OK: d3d11.dll removes the
   device for any other status of these entries, success codes included (Reason 6). Each reclaim that
   leaves the plain path writes one `BC250 BD-283` line with both callback answers and the fence.
 - Each Offer, Reclaim and Trim writes one `BC250 residency:` line with the entry, the number of resources and kernel
-  allocations, the discarded count and the status. The lines have a budget of 64 at the start, then 8 in each
+  allocations, the discarded and not-committed counts, the decommit flag (given/asked) of an offer, and the
+  status. The lines have a budget of 64 at the start, then 8 in each
   minute. Engine info lines have a budget of 256 at the start, then 16 in each minute. A fixed budget was spent at
   the start of a shell host, so its later TrimMemory lines were lost (BD-283). `tools/win/offer-reclaim` is the
   oracle client of this path.

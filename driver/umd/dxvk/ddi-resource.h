@@ -26,6 +26,11 @@ struct DdiResource {
     static constexpr UINT kEngineOfferCapacity=8;
     D3DKMT_HANDLE engine_offered[kEngineOfferCapacity]{};
     UINT engine_offered_count=0;
+    // BD-372: the reclaim of this engine-private resource reported an allocation NOT_COMMITTED. The resource has no
+    // backing from then on, and the application must not use it again (DXGI_RECLAIM_RESOURCE_RESULTS): the engine
+    // gets no EndOffer (no map of memory without backing), a later offer is a hint, and a later reclaim reports
+    // NOT_COMMITTED again without a kernel call.
+    bool engine_decommitted=false;
 };
 struct ResourceDescription {
     D3D10DDIRESOURCE_TYPE dimension{};

@@ -103,13 +103,15 @@ HRESULT engine_end_offers(DeviceOwner &owner,const std::vector<DdiResource *> &p
 HRESULT prepare_engine_offer(DeviceOwner &owner,DdiResource &r,std::vector<D3DKMT_HANDLE> &handles,bool &taken) {
     taken=false;
     const EngineOfferPath &path=owner.offer_path();
-    if (!path.ready() || !r.object || r.engine_offered_count) return S_OK;
+    if (!path.ready() || !r.object || r.engine_offered_count || r.engine_decommitted) return S_OK;
     // Nothing is offered that the shell cannot reclaim. The reclaim of an engine allocation goes through
-    // ReclaimAllocations2Cb on the device's paging queue (reclaim_allocations): the synchronous ReclaimAllocationsCb
-    // answered E_FAIL for it on the lab, and d3d11.dll removed the device (kit-bd309 F-full, 2026-11-05). A device
-    // without a runtime surface has no paging queue yet, so the first engine offer creates it; without the queue or
-    // the callback the resource stays a hint.
-    if (!owner.runtime().KTCallbacks.pfnReclaimAllocations2Cb || owner.ensure_paging_queue()!=S_OK) return S_OK;
+    // ReclaimAllocations3Cb or ReclaimAllocations2Cb on the device's paging queue (reclaim_allocations): the
+    // synchronous ReclaimAllocationsCb answered E_FAIL for it on the lab, and d3d11.dll removed the device (kit-bd309
+    // F-full, 2026-11-05). A device without a runtime surface has no paging queue yet, so the first engine offer
+    // creates it; without the queue or a queued callback the resource stays a hint.
+    const auto &callbacks=owner.runtime().KTCallbacks;
+    if ((!callbacks.pfnReclaimAllocations3Cb && !callbacks.pfnReclaimAllocations2Cb) ||
+        owner.ensure_paging_queue()!=S_OK) return S_OK;
     constexpr UINT capacity=DdiResource::kEngineOfferCapacity;
     BC250_DXVK_OFFER_MEMORY memory[capacity]{}; UINT count=0;
     const HRESULT hr=path.engine->PrepareOffer(r.object,capacity,memory,&count);
@@ -133,25 +135,28 @@ HRESULT prepare_engine_offer(DeviceOwner &owner,DdiResource &r,std::vector<D3DKM
     taken=true;
     return S_OK;
 }
-// The reclaim of a batch of runtime surfaces and offered engine resources. `result` gets the discarded flag of each
-// resource: a runtime surface takes the flag of its allocation, an engine resource the OR of the flags of its
-// allocations, which EndOffer also receives. A hint (an engine resource that was not offered) reports its content kept.
+// The reclaim of a batch of runtime surfaces and offered engine resources. `result` gets the result of each resource:
+// a runtime surface takes the result of its allocation. An offered engine resource takes the worst result of its
+// allocations (NOT_COMMITTED, then DISCARDED, then OK); EndOffer receives DISCARDED or nothing, and a NOT_COMMITTED
+// resource gets no EndOffer (DdiResource::engine_decommitted). A hint (an engine resource that was not offered)
+// reports its content kept.
 HRESULT reclaim_batch(DeviceOwner &owner,const char *name,const DXGI_DDI_HRESOURCE *resources,UINT count,
-                      std::vector<BOOL> &result,UINT &kernel,UINT &engine,UINT &lost);
-HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
-    if (!args) { dxgi_entry_note("OfferResources",E_INVALIDARG); return E_INVALIDARG; }
-    UINT kernel=0,engine=0;
-    const HRESULT status=entry("OfferResources",args->hDevice,[&](DeviceOwner &owner) {
-        if (args->Priority<D3DDDI_OFFER_PRIORITY_LOW || args->Priority>D3DDDI_OFFER_PRIORITY_AUTO)
+                      std::vector<D3DDDI_RECLAIM_RESULT> &result,UINT &kernel,UINT &engine,UINT &lost,UINT &gone);
+// OfferResources and OfferResources1: the batch goes to the kernel with `asked` reduced by kernel_offer_flags.
+HRESULT offer_batch(const char *name,DXGI_DDI_HDEVICE device,const DXGI_DDI_HRESOURCE *resources,UINT count,
+                    D3DDDI_OFFER_PRIORITY priority,D3DDDI_OFFER_FLAGS asked) {
+    UINT kernel=0,engine=0; D3DDDI_OFFER_FLAGS flags{};
+    const HRESULT status=entry(name,device,[&](DeviceOwner &owner) {
+        if (priority<D3DDDI_OFFER_PRIORITY_LOW || priority>D3DDDI_OFFER_PRIORITY_AUTO)
             return E_INVALIDARG;
         std::vector<D3DKMT_HANDLE> handles; std::vector<UINT> slot;
-        HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles,slot);
+        HRESULT hr=allocation_batch(owner,resources,count,handles,slot);
         if (FAILED(hr)) return hr;
         // BD-309: the engine-private resources that can go to the kernel join the batch
         std::vector<DdiResource *> prepared;
-        for (UINT i=0;i<args->Resources;++i) {
+        for (UINT i=0;i<count;++i) {
             if (slot[i]!=UINT_MAX) continue;
-            auto *r=reinterpret_cast<DdiResource *>(args->pResources[i]);
+            auto *r=reinterpret_cast<DdiResource *>(resources[i]);
             bool taken=false;
             hr=prepare_engine_offer(owner,*r,handles,taken);
             if (FAILED(hr)) { engine_end_offers(owner,prepared); return hr; }
@@ -159,7 +164,9 @@ HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
         }
         kernel=UINT(handles.size()); engine=UINT(prepared.size());
         if (handles.empty()) return hr;
-        hr=offer_after_submit(owner.runtime(),handles.data(),UINT(handles.size()),args->Priority,[&]() -> HRESULT {
+        // After the engine offers, so that the paging queue that the first one creates counts.
+        flags=kernel_offer_flags(owner.runtime(),owner.surface_queue().queue,asked);
+        hr=offer_after_submit(owner.runtime(),handles.data(),UINT(handles.size()),priority,flags,[&]() -> HRESULT {
             if (!owner.context() || !owner.device()) return E_FAIL;
             auto status=[&]() -> HRESULT {
                 if (owner.bridge().device_lost || owner.bridge().submission_failed) return DXGI_ERROR_DEVICE_REMOVED;
@@ -173,23 +180,29 @@ HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
         if (FAILED(hr)) { engine_end_offers(owner,prepared); engine=0; }
         return hr;
     });
-    residency_note("BC250 residency: OfferResources resources=%u kernel=%u engine=%u priority=%u returns %08X\n",
-        args->Resources,kernel,engine,unsigned(args->Priority),unsigned(status));
+    residency_note("BC250 residency: %s resources=%u kernel=%u engine=%u priority=%u decommit=%u/%u returns %08X\n",
+        name,count,kernel,engine,unsigned(priority),unsigned(flags.AllowDecommit),unsigned(asked.AllowDecommit),
+        unsigned(status));
     return status;
+}
+HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
+    if (!args) { dxgi_entry_note("OfferResources",E_INVALIDARG); return E_INVALIDARG; }
+    return offer_batch("OfferResources",args->hDevice,args->pResources,args->Resources,args->Priority,{});
 }
 // BD-283: one line for each reclaim that did not take the plain path, the answers of both callbacks and the fence in
 // it, 16 for each process. The line is written for a recovered reclaim too (Reclaim2 refused, the synchronous
 // callback took it), which ddi_status_note leaves out because the entry returns S_OK.
-HRESULT reclaim_note(const char *name,HRESULT result,UINT count,HRESULT second,UINT64 fence,HRESULT wait,
-                     HRESULT first) {
+// `queued` is the version of the queued callback (3 or 2, "reclaim3=" or "reclaim2=" in the line).
+HRESULT reclaim_note(const char *name,HRESULT result,UINT count,unsigned queued,HRESULT second,UINT64 fence,
+                     HRESULT wait,HRESULT first) {
     static std::atomic_uint left{16};
     unsigned n=left.load(std::memory_order_relaxed);
     while (n && !left.compare_exchange_weak(n,n-1,std::memory_order_relaxed)) {}
     if (!n) return result;
     char text[256];
-    std::snprintf(text,sizeof(text),"BC250 BD-283: %s returns %08X: allocations=%u reclaim2=%08X fence=%llu "
-        "wait=%08X sync=%08X\n",name,unsigned(result),count,unsigned(second),static_cast<unsigned long long>(fence),
-        unsigned(wait),unsigned(first));
+    std::snprintf(text,sizeof(text),"BC250 BD-283: %s returns %08X: allocations=%u reclaim%u=%08X fence=%llu "
+        "wait=%08X sync=%08X\n",name,unsigned(result),count,queued,unsigned(second),
+        static_cast<unsigned long long>(fence),unsigned(wait),unsigned(first));
     OutputDebugStringA(text);
     amdgpu_wddm_log::print("%s",text);
     return result;
@@ -205,43 +218,73 @@ HRESULT reclaim_note(const char *name,HRESULT result,UINT count,HRESULT second,U
 // without Reclaim2, and as the second try when Reclaim2 refuses with anything but removal. Every success is S_OK:
 // d3d11.dll removes the device for any other status of this entry, success codes included.
 // Unused answers read 1 (S_FALSE) in the line: "not called".
+// BD-372: the queued callback is ReclaimAllocations3Cb where the runtime gives it (a WDDM 2.2 device, initialize), and
+// ReclaimAllocations2Cb otherwise. Both page in on the same queue and give the same fence; the third answers a result
+// per allocation, with NOT_COMMITTED for an allocation that an offer with AllowDecommit lost its backing to. The
+// older two answer a discarded flag, read as DISCARDED or OK; kernel_offer_flags asks for a decommit only where the
+// third is there. A value outside the enumeration counts as NOT_COMMITTED: it claims no usable memory.
+// reclaim_batch takes the worst answer of a resource's allocations as the largest value (d3dukmdt.h).
+static_assert(D3DDDI_RECLAIM_RESULT_OK<D3DDDI_RECLAIM_RESULT_DISCARDED &&
+              D3DDDI_RECLAIM_RESULT_DISCARDED<D3DDDI_RECLAIM_RESULT_NOT_COMMITTED);
+D3DDDI_RECLAIM_RESULT reclaim_result(D3DDDI_RECLAIM_RESULT value) {
+    return value==D3DDDI_RECLAIM_RESULT_OK || value==D3DDDI_RECLAIM_RESULT_DISCARDED ? value :
+        D3DDDI_RECLAIM_RESULT_NOT_COMMITTED;
+}
+void reclaim_results(const std::vector<BOOL> &discarded,std::vector<D3DDDI_RECLAIM_RESULT> &results) {
+    for (size_t i=0;i<results.size();++i)
+        results[i]=discarded[i] ? D3DDDI_RECLAIM_RESULT_DISCARDED : D3DDDI_RECLAIM_RESULT_OK;
+}
 HRESULT reclaim_allocations(DeviceOwner &owner,const char *name,std::vector<D3DKMT_HANDLE> &handles,
-                            std::vector<BOOL> &discarded) {
+                            std::vector<D3DDDI_RECLAIM_RESULT> &results) {
     auto &runtime=owner.runtime();
+    const auto &callbacks=runtime.KTCallbacks;
     const SurfacePagingQueue &queue=owner.surface_queue();
     const UINT count=UINT(handles.size());
     HRESULT second=S_FALSE,wait=S_FALSE,first=S_FALSE; UINT64 fence=0;
-    const bool queued=queue.queue && runtime.KTCallbacks.pfnReclaimAllocations2Cb;
+    const unsigned version=callbacks.pfnReclaimAllocations3Cb ? 3u : 2u;
+    const bool queued=queue.queue && (callbacks.pfnReclaimAllocations3Cb || callbacks.pfnReclaimAllocations2Cb);
+    std::vector<BOOL> discarded(count,FALSE);
     if (queued) {
-        D3DDDICB_RECLAIMALLOCATIONS2 request{};
-        request.PagingQueue=queue.queue; request.NumAllocations=count;
-        request.HandleList=handles.data(); request.pDiscarded=discarded.data();
-        second=runtime.KTCallbacks.pfnReclaimAllocations2Cb(runtime.hDevice,&request);
-        fence=request.PagingFenceValue;
+        if (version==3) {
+            D3DDDICB_RECLAIMALLOCATIONS3 request{};
+            request.PagingQueue=queue.queue; request.NumAllocations=count;
+            request.HandleList=handles.data(); request.pResults=results.data();
+            second=callbacks.pfnReclaimAllocations3Cb(runtime.hDevice,&request);
+            fence=request.PagingFenceValue;
+            for (auto &value:results) value=reclaim_result(value);
+        } else {
+            D3DDDICB_RECLAIMALLOCATIONS2 request{};
+            request.PagingQueue=queue.queue; request.NumAllocations=count;
+            request.HandleList=handles.data(); request.pDiscarded=discarded.data();
+            second=callbacks.pfnReclaimAllocations2Cb(runtime.hDevice,&request);
+            fence=request.PagingFenceValue;
+            reclaim_results(discarded,results);
+        }
         // E_PENDING is not on the page; it is read as MakeResidentCb defines it: accepted, wait for the fence.
         if (SUCCEEDED(second) || second==E_PENDING) {
             wait=wait_paging_fence(runtime,queue,fence);
             if (wait==S_OK) return S_OK;
-            return reclaim_note(name,ddi_device_status(wait),count,second,fence,wait,first);
+            return reclaim_note(name,ddi_device_status(wait),count,version,second,fence,wait,first);
         }
-        if (second==D3DDDIERR_DEVICEREMOVED) return reclaim_note(name,second,count,second,fence,wait,first);
+        if (second==D3DDDIERR_DEVICEREMOVED) return reclaim_note(name,second,count,version,second,fence,wait,first);
         std::fill(discarded.begin(),discarded.end(),FALSE);
     }
-    if (!runtime.KTCallbacks.pfnReclaimAllocationsCb)
-        return queued ? reclaim_note(name,second,count,second,fence,wait,first) : E_NOTIMPL;
+    if (!callbacks.pfnReclaimAllocationsCb)
+        return queued ? reclaim_note(name,second,count,version,second,fence,wait,first) : E_NOTIMPL;
     D3DDDICB_RECLAIMALLOCATIONS request{};
     request.HandleList=handles.data(); request.NumAllocations=count; request.pDiscarded=discarded.data();
-    first=runtime.KTCallbacks.pfnReclaimAllocationsCb(runtime.hDevice,&request);
+    first=callbacks.pfnReclaimAllocationsCb(runtime.hDevice,&request);
+    reclaim_results(discarded,results);
     // The synchronous callback leaves the allocations resident when it returns.
     const HRESULT result=SUCCEEDED(first) ? S_OK : first;
     if (result==S_OK && !queued) return S_OK;
-    return reclaim_note(name,result,count,second,fence,wait,first);
+    return reclaim_note(name,result,count,version,second,fence,wait,first);
 }
 HRESULT reclaim_batch(DeviceOwner &owner,const char *name,const DXGI_DDI_HRESOURCE *resources,UINT count,
-                      std::vector<BOOL> &result,UINT &kernel,UINT &engine,UINT &lost) {
+                      std::vector<D3DDDI_RECLAIM_RESULT> &result,UINT &kernel,UINT &engine,UINT &lost,UINT &gone) {
     std::vector<D3DKMT_HANDLE> handles; std::vector<UINT> slot;
     HRESULT hr=allocation_batch(owner,resources,count,handles,slot);
-    kernel=UINT(handles.size()); engine=0; lost=0;
+    kernel=UINT(handles.size()); engine=0; lost=0; gone=0;
     if (FAILED(hr)) return hr;
     // BD-309: the allocations of each offered engine resource follow those of the runtime surfaces
     std::vector<UINT> first(count,UINT_MAX);
@@ -256,77 +299,92 @@ HRESULT reclaim_batch(DeviceOwner &owner,const char *name,const DXGI_DDI_HRESOUR
         }
     }
     kernel=UINT(handles.size());
-    std::vector<BOOL> discarded(handles.size(),FALSE);
+    std::vector<D3DDDI_RECLAIM_RESULT> answers(handles.size(),D3DDDI_RECLAIM_RESULT_OK);
     if (!handles.empty()) {
         // A failed reclaim leaves the engine resources offered: their memory is not usable, so they are not ended.
-        hr=reclaim_allocations(owner,name,handles,discarded);
+        hr=reclaim_allocations(owner,name,handles,answers);
         if (FAILED(hr)) return hr;
     }
-    lost=UINT(std::count(discarded.begin(),discarded.end(),TRUE));
-    result.assign(count,FALSE);
+    // The counts of the residency line are kernel answers per allocation, as before BD-372.
+    lost=UINT(std::count(answers.begin(),answers.end(),D3DDDI_RECLAIM_RESULT_DISCARDED));
+    gone=UINT(std::count(answers.begin(),answers.end(),D3DDDI_RECLAIM_RESULT_NOT_COMMITTED));
+    result.assign(count,D3DDDI_RECLAIM_RESULT_OK);
     HRESULT ended=S_OK;
     for (UINT i=0;i<count;++i) {
-        if (slot[i]!=UINT_MAX) { result[i]=discarded[slot[i]]; continue; }
-        if (first[i]==UINT_MAX) continue;
         auto *r=reinterpret_cast<DdiResource *>(resources[i]);
-        BOOL gone=FALSE;
-        for (UINT j=0;j<r->engine_offered_count;++j) gone|=discarded[first[i]+j];
-        result[i]=gone; ++engine;
-        const HRESULT end=engine_end_offer(owner,*r,gone ? BC250_DXVK_END_OFFER_DISCARDED : 0u);
-        if (FAILED(end) && SUCCEEDED(ended)) ended=end;
+        if (slot[i]!=UINT_MAX) {
+            result[i]=answers[slot[i]];
+        } else if (first[i]!=UINT_MAX) {
+            D3DDDI_RECLAIM_RESULT worst=D3DDDI_RECLAIM_RESULT_OK;
+            for (UINT j=0;j<r->engine_offered_count;++j) worst=std::max(worst,answers[first[i]+j]);
+            result[i]=worst; ++engine;
+            if (worst==D3DDDI_RECLAIM_RESULT_NOT_COMMITTED) {
+                // No EndOffer: it would map memory that has no backing. The engine keeps the resource as PrepareOffer
+                // left it (unmapped, on memory of its own) until the application destroys it.
+                r->engine_decommitted=true;
+                std::fill(std::begin(r->engine_offered),std::end(r->engine_offered),D3DKMT_HANDLE(0));
+                r->engine_offered_count=0;
+            } else {
+                const HRESULT end=engine_end_offer(owner,*r,
+                    worst==D3DDDI_RECLAIM_RESULT_DISCARDED ? BC250_DXVK_END_OFFER_DISCARDED : 0u);
+                if (FAILED(end) && SUCCEEDED(ended)) ended=end;
+            }
+        } else if (r->engine_decommitted) {
+            result[i]=D3DDDI_RECLAIM_RESULT_NOT_COMMITTED; // no backing since an earlier reclaim
+        }
     }
     return FAILED(ended) ? ended : hr;
 }
+// ReclaimResources answers a discarded flag per resource: NOT_COMMITTED, which only an offer with AllowDecommit
+// (OfferResources1) can cause, is reported as discarded there, the nearest answer the flag has.
 HRESULT APIENTRY reclaim(DXGI_DDI_ARG_RECLAIMRESOURCES *args) {
     if (!args) { dxgi_entry_note("ReclaimResources",E_INVALIDARG); return E_INVALIDARG; }
-    UINT kernel=0,engine=0,lost=0;
+    UINT kernel=0,engine=0,lost=0,gone=0;
     const HRESULT status=entry("ReclaimResources",args->hDevice,[&](DeviceOwner &owner) {
-        std::vector<BOOL> discarded;
-        HRESULT hr=reclaim_batch(owner,"ReclaimResources",args->pResources,args->Resources,discarded,kernel,engine,lost);
+        std::vector<D3DDDI_RECLAIM_RESULT> results;
+        HRESULT hr=reclaim_batch(owner,"ReclaimResources",args->pResources,args->Resources,results,kernel,engine,lost,
+            gone);
         if (FAILED(hr)) return hr;
         if (args->pDiscarded)
-            for (UINT i=0;i<args->Resources;++i) args->pDiscarded[i]=discarded[i];
+            for (UINT i=0;i<args->Resources;++i) args->pDiscarded[i]=results[i]!=D3DDDI_RECLAIM_RESULT_OK;
         return hr;
     });
-    residency_note("BC250 residency: ReclaimResources resources=%u kernel=%u engine=%u discarded=%u returns %08X\n",
-        args->Resources,kernel,engine,lost,unsigned(status));
+    residency_note("BC250 residency: ReclaimResources resources=%u kernel=%u engine=%u discarded=%u notcommitted=%u "
+        "returns %08X\n",args->Resources,kernel,engine,lost,gone,unsigned(status));
     return status;
 }
-// DXGI 1.6.1 (BD-099). OfferResources1 adds D3DDDI_OFFER_FLAGS, whose one flag is AllowDecommit: the
-// kernel may then give the pages back and the resource comes back without its contents, which Reclaim
-// reports as D3DDDI_RECLAIM_RESULT_NOT_COMMITTED. The shell does not take that offer. Both reclaim callbacks
-// it uses (ReclaimAllocations2Cb and the synchronous ReclaimAllocationsCb, see reclaim_allocations) answer
-// with a discarded flag only, so a decommitted allocation would have no result it could report. The offer itself, which is the
-// work of the entry, goes to the kernel as before: the priority stays, and the allocation stays committed.
-// A flag the shell does not take is not a reason to refuse the offer: DXGI turns a failed Offer into
-// DXGI_ERROR_DRIVER_INTERNAL_ERROR and removes the device (see the batch helper above). The flags are
-// dropped, which keeps every offered allocation committed.
+// DXGI 1.6.1 (BD-099, BD-372). OfferResources1 adds D3DDDI_OFFER_FLAGS, whose one flag is AllowDecommit: the kernel
+// may then decommit the backing store of an offered allocation, and the reclaim reports NOT_COMMITTED for it
+// (offerresources1.md, dxgi_reclaim_resource_results.md: the resource and its content are lost for good). The offer
+// goes to the kernel with the flag (OfferAllocations2Cb) where the shell can hear that result at the reclaim
+// (kernel_offer_flags), and as the plain offer otherwise, which keeps the allocation committed. An offer without
+// the flag is the OfferResources offer. A flag that the shell cannot take is not a reason to refuse the offer:
+// DXGI turns a failed Offer into DXGI_ERROR_DRIVER_INTERNAL_ERROR and removes the device (see allocation_batch).
+// For an engine-private resource (BD-309) the kernel decommits the memory that PrepareOffer gave it; the engine
+// keeps that memory unmapped from the offer on, so a decommit leaves no CPU view of it, and reclaim_batch gives the
+// engine no EndOffer for it.
 HRESULT APIENTRY offer_resources1(DXGI_DDI_ARG_OFFERRESOURCES1 *args) {
     if (!args) { dxgi_entry_note("OfferResources1",E_INVALIDARG); return E_INVALIDARG; }
-    DXGI_DDI_ARG_OFFERRESOURCES older{};
-    older.hDevice=args->hDevice; older.pResources=args->pResources;
-    older.Resources=args->Resources; older.Priority=args->Priority;
-    return offer(&older);
+    return offer_batch("OfferResources1",args->hDevice,args->pResources,args->Resources,args->Priority,args->Flags);
 }
-// ReclaimResources1 answers with a result per resource. The kernel callbacks (reclaim_allocations) answer
-// with a discarded flag per allocation: a reclaimed resource is OK, a discarded one DISCARDED.
-// NOT_COMMITTED cannot arise, because no offer of this shell allows a decommit (offer_resources1). An
-// engine-private resource that went to the kernel (BD-309) reports what its allocations report; one that was a hint
-// only, as in the batch helper above, reports OK.
+// ReclaimResources1 answers with a result per resource: what the kernel answers for the allocation of a runtime
+// surface, the worst answer of its allocations for an engine-private resource that went to the kernel (BD-309),
+// NOT_COMMITTED again for an engine-private resource that lost its backing at an earlier reclaim, and OK for a
+// resource whose offer was a hint only (see allocation_batch).
 HRESULT APIENTRY reclaim_resources1(DXGI_DDI_ARG_RECLAIMRESOURCES1 *args) {
     if (!args) { dxgi_entry_note("ReclaimResources1",E_INVALIDARG); return E_INVALIDARG; }
-    UINT kernel=0,engine=0,lost=0;
+    UINT kernel=0,engine=0,lost=0,gone=0;
     const HRESULT status=entry("ReclaimResources1",args->hDevice,[&](DeviceOwner &owner) {
-        std::vector<BOOL> discarded;
-        HRESULT hr=reclaim_batch(owner,"ReclaimResources1",args->pResources,args->Resources,discarded,kernel,engine,lost);
+        std::vector<D3DDDI_RECLAIM_RESULT> results;
+        HRESULT hr=reclaim_batch(owner,"ReclaimResources1",args->pResources,args->Resources,results,kernel,engine,
+            lost,gone);
         if (FAILED(hr)) return hr;
         if (args->pResults)
-            for (UINT i=0;i<args->Resources;++i)
-                args->pResults[i]=discarded[i] ? D3DDDI_RECLAIM_RESULT_DISCARDED : D3DDDI_RECLAIM_RESULT_OK;
+            for (UINT i=0;i<args->Resources;++i) args->pResults[i]=results[i];
         return hr;
     });
-    residency_note("BC250 residency: ReclaimResources1 resources=%u kernel=%u engine=%u discarded=%u returns %08X\n",
-        args->Resources,kernel,engine,lost,unsigned(status));
+    residency_note("BC250 residency: ReclaimResources1 resources=%u kernel=%u engine=%u discarded=%u notcommitted=%u "
+        "returns %08X\n",args->Resources,kernel,engine,lost,gone,unsigned(status));
     return status;
 }
 HRESULT APIENTRY display_mode(DXGI_DDI_ARG_SETDISPLAYMODE *args) {

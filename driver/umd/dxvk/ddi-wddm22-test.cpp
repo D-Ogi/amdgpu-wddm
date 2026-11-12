@@ -272,7 +272,7 @@ void dxgi_table() {
     DXGI_DDI_HRESOURCE resources[1]={reinterpret_cast<DXGI_DDI_HRESOURCE>(&resource)};
     DXGI_DDI_ARG_OFFERRESOURCES1 offer{}; offer.hDevice=reinterpret_cast<DXGI_DDI_HDEVICE>(&storage);
     offer.pResources=resources; offer.Resources=1; offer.Priority=D3DDDI_OFFER_PRIORITY_LOW;
-    offer.Flags.AllowDecommit=1; // dropped on purpose: the reclaim below has no "not committed" answer
+    offer.Flags.AllowDecommit=1; // a hint goes nowhere: no kernel allocation, so nothing can be decommitted (BD-372)
     reported=0;
     CHECK(t.pfnOfferResources1(&offer)==S_OK && !reported);
     offer.Priority=static_cast<D3DDDI_OFFER_PRIORITY>(0);

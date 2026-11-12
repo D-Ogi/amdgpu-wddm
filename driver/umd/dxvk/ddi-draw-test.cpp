@@ -253,6 +253,27 @@ HRESULT APIENTRY engine_kernel_reclaim2(HANDLE h,D3DDDICB_RECLAIMALLOCATIONS2 *p
     p->PagingFenceValue=engineReclaimFence;
     return kernelReclaimResult;
 }
+// BD-372: the offer with flags (OfferAllocations2Cb) and the reclaim with a result per allocation
+// (ReclaimAllocations3Cb, on queue 81). kernelResults answers per allocation, OK past its end.
+std::vector<D3DKMT_HANDLE> kernelOffered2; unsigned kernelOffers2=0; D3DDDI_OFFER_FLAGS kernelOfferFlags{};
+D3DDDI_OFFER_PRIORITY kernelOfferPriority{}; HRESULT kernelOffer2Result=S_OK;
+HRESULT APIENTRY engine_kernel_offer2(HANDLE h,const D3DDDICB_OFFERALLOCATIONS2 *p) {
+    if (h!=&createIdentity || !expected->runtime().domain.entered() || !p || p->pResources || !p->HandleList)
+        fail(__LINE__);
+    kernelOffered2.assign(p->HandleList,p->HandleList+p->NumAllocations); ++kernelOffers2;
+    kernelOfferFlags=p->Flags; kernelOfferPriority=p->Priority;
+    return kernelOffer2Result;
+}
+std::vector<D3DDDI_RECLAIM_RESULT> kernelResults; unsigned kernelReclaims3=0; HRESULT kernelReclaim3Result=S_OK;
+HRESULT APIENTRY engine_kernel_reclaim3(HANDLE h,D3DDDICB_RECLAIMALLOCATIONS3 *p) {
+    if (h!=&createIdentity || !expected->runtime().domain.entered() || p->PagingQueue!=81 || p->pResources ||
+        !p->HandleList || !p->pResults) fail(__LINE__);
+    kernelReclaimed.assign(p->HandleList,p->HandleList+p->NumAllocations); ++kernelReclaims3;
+    for (UINT i=0;i<p->NumAllocations;++i)
+        p->pResults[i]=i<kernelResults.size() ? kernelResults[i] : D3DDDI_RECLAIM_RESULT_OK;
+    p->PagingFenceValue=engineReclaimFence;
+    return kernelReclaim3Result;
+}
 // The CPU wait for the paging fence of that queue: on success it completes the fence and sets the event.
 unsigned engineWaits=0; HRESULT engineWaitResult=S_OK;
 HRESULT APIENTRY engine_paging_wait(HANDLE h,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU *p) {
@@ -1527,10 +1548,11 @@ int main() {
         RuntimeDomain::Scope scope(owner.runtime().domain);
         const D3DKMT_HANDLE handles[]={61,62,63};
         auto submit=[&]() { ++submitCalls; return S_OK; };
-        if(offer_after_submit(owner.runtime(),handles,3,D3DDDI_OFFER_PRIORITY_NORMAL,[](){return E_FAIL;})!=E_FAIL || offerCalls) fail(__LINE__);
-        if(offer_after_submit(owner.runtime(),handles,3,D3DDDI_OFFER_PRIORITY_NORMAL,submit)!=S_OK || offerCalls!=1) fail(__LINE__);
+        const D3DDDI_OFFER_FLAGS plain{};
+        if(offer_after_submit(owner.runtime(),handles,3,D3DDDI_OFFER_PRIORITY_NORMAL,plain,[](){return E_FAIL;})!=E_FAIL || offerCalls) fail(__LINE__);
+        if(offer_after_submit(owner.runtime(),handles,3,D3DDDI_OFFER_PRIORITY_NORMAL,plain,submit)!=S_OK || offerCalls!=1) fail(__LINE__);
         residencyChangeResult=D3DDDIERR_DEVICEREMOVED;
-        if(offer_after_submit(owner.runtime(),handles,3,D3DDDI_OFFER_PRIORITY_NORMAL,submit)!=D3DDDIERR_DEVICEREMOVED || offerCalls!=2) fail(__LINE__);
+        if(offer_after_submit(owner.runtime(),handles,3,D3DDDI_OFFER_PRIORITY_NORMAL,plain,submit)!=D3DDDIERR_DEVICEREMOVED || offerCalls!=2) fail(__LINE__);
     }
     if(resourceTable.pfnReclaimResources(&reclaimArgs)!=D3DDDIERR_DEVICEREMOVED || reclaimCalls!=1) fail(__LINE__);
     for(auto value:discarded) if(value!=9) fail(__LINE__);
@@ -1796,6 +1818,171 @@ int main() {
         path.engine=nullptr;
         // Reclaim2 refused (step 7) is the only way to the synchronous callback, and it was taken once.
         if (syncEngineReclaims!=1 || engineQueueCreates!=2) fail(__LINE__);
+        // 13. BD-372: OfferResources1 with AllowDecommit, and NOT_COMMITTED at the reclaim.
+        {
+            auto &callbacks=owner.runtime().KTCallbacks;
+            DXGI1_6_1_DDI_BASE_FUNCTIONS table161{}; install_dxgi1_6_1_resource_ddi(table161);
+            D3DDDI_OFFER_FLAGS decommit{}; decommit.AllowDecommit=1;
+            // 13a. The flag goes to the kernel only where the reclaim can report a decommit: both new callbacks and
+            //      the paging queue. The reserved bits never go. Without the flag nothing changes.
+            {
+                D3DDDI_OFFER_FLAGS all{}; all.Value=~0u;
+                if (kernel_offer_flags(owner.runtime(),81,decommit).Value) fail(__LINE__);      // no new callback
+                callbacks.pfnOfferAllocations2Cb=engine_kernel_offer2;
+                if (kernel_offer_flags(owner.runtime(),81,decommit).Value) fail(__LINE__);      // no Reclaim3
+                callbacks.pfnReclaimAllocations3Cb=engine_kernel_reclaim3;
+                if (kernel_offer_flags(owner.runtime(),0,decommit).Value) fail(__LINE__);       // no paging queue
+                if (kernel_offer_flags(owner.runtime(),81,D3DDDI_OFFER_FLAGS{}).Value) fail(__LINE__);
+                if (kernel_offer_flags(owner.runtime(),81,decommit).Value!=decommit.Value ||
+                    kernel_offer_flags(owner.runtime(),81,all).Value!=decommit.Value) fail(__LINE__);
+                callbacks.pfnOfferAllocations2Cb=nullptr;
+                if (kernel_offer_flags(owner.runtime(),81,decommit).Value) fail(__LINE__);      // no Offer2
+                callbacks.pfnOfferAllocations2Cb=engine_kernel_offer2;
+            }
+            // 13b. The kernel offer: with the flag through OfferAllocations2Cb (flag, priority and handles as given),
+            //      without it through OfferAllocationsCb as before. No callback for the flag: E_NOTIMPL before the
+            //      submission. A failed submission offers nothing; a removal of OfferAllocations2Cb is the answer.
+            {
+                RuntimeDomain::Scope scope(owner.runtime().domain);
+                const D3DKMT_HANDLE handles[]={500,501};
+                unsigned submits=0; auto submit=[&]() { ++submits; return S_OK; };
+                const unsigned plainBefore=kernelOffers;
+                if (offer_after_submit(owner.runtime(),handles,2,D3DDDI_OFFER_PRIORITY_LOW,decommit,submit)!=S_OK ||
+                    submits!=1 || kernelOffers2!=1 || kernelOffers!=plainBefore ||
+                    kernelOffered2!=std::vector<D3DKMT_HANDLE>({500,501}) || kernelOfferFlags.Value!=decommit.Value ||
+                    kernelOfferPriority!=D3DDDI_OFFER_PRIORITY_LOW) fail(__LINE__);
+                if (offer_after_submit(owner.runtime(),handles,2,D3DDDI_OFFER_PRIORITY_NORMAL,D3DDDI_OFFER_FLAGS{},
+                        submit)!=S_OK || submits!=2 || kernelOffers2!=1 || kernelOffers!=plainBefore+1 ||
+                    kernelOffered!=std::vector<D3DKMT_HANDLE>({500,501})) fail(__LINE__);
+                if (offer_after_submit(owner.runtime(),handles,2,D3DDDI_OFFER_PRIORITY_NORMAL,decommit,
+                        [](){return E_FAIL;})!=E_FAIL || kernelOffers2!=1) fail(__LINE__);
+                kernelOffer2Result=D3DDDIERR_DEVICEREMOVED;
+                if (offer_after_submit(owner.runtime(),handles,2,D3DDDI_OFFER_PRIORITY_NORMAL,decommit,submit)!=
+                    D3DDDIERR_DEVICEREMOVED || kernelOffers2!=2) fail(__LINE__);
+                kernelOffer2Result=S_OK;
+                callbacks.pfnOfferAllocations2Cb=nullptr;
+                if (offer_after_submit(owner.runtime(),handles,2,D3DDDI_OFFER_PRIORITY_NORMAL,decommit,submit)!=
+                    E_NOTIMPL || submits!=3 || kernelOffers2!=2) fail(__LINE__);
+                callbacks.pfnOfferAllocations2Cb=engine_kernel_offer2;
+            }
+            path.engine=&offerEngine; offerEngine.memories=1; offerEngine.second=nullptr;
+            const D3DDDI_RECLAIM_RESULT unset=static_cast<D3DDDI_RECLAIM_RESULT>(9);
+            D3DDDI_RECLAIM_RESULT results[1]={unset};
+            DXGI_DDI_ARG_RECLAIMRESOURCES1 reclaim1{reclaimArgs.hDevice,one,results,1};
+            const unsigned reclaims2Before=kernelReclaims,syncBefore=syncEngineReclaims;
+            // 13c. With ReclaimAllocations3Cb the reclaim takes it, on the paging queue, and each kernel answer is the
+            //      resource's result: OK ends the offer plainly, DISCARDED ends it as discarded.
+            for (D3DDDI_RECLAIM_RESULT answer:{D3DDDI_RECLAIM_RESULT_OK,D3DDDI_RECLAIM_RESULT_DISCARDED}) {
+                if (prepare(taken)!=S_OK || !taken) fail(__LINE__);
+                offerEngine.endLog.clear(); kernelResults={answer}; results[0]=unset;
+                const unsigned threes=kernelReclaims3;
+                if (table161.pfnReclaimResources1(&reclaim1)!=S_OK || kernelReclaims3!=threes+1 ||
+                    kernelReclaimed!=std::vector<D3DKMT_HANDLE>{500} || results[0]!=answer ||
+                    offerEngine.endLog.size()!=1 ||
+                    !ended_as(0,engineResource,answer==D3DDDI_RECLAIM_RESULT_DISCARDED ? BC250_DXVK_END_OFFER_DISCARDED : 0u) ||
+                    engineResource.engine_offered_count || engineResource.engine_decommitted) fail(__LINE__);
+            }
+            // 13d. Failures leave the resource offered and not decommitted, whatever the kernel wrote: a removal, and
+            //      a paging-fence wait that fails. The next reclaim that succeeds gives the answer.
+            if (prepare(taken)!=S_OK || !taken) fail(__LINE__);
+            offerEngine.endLog.clear(); kernelResults={D3DDDI_RECLAIM_RESULT_NOT_COMMITTED};
+            kernelReclaim3Result=D3DDDIERR_DEVICEREMOVED; results[0]=unset;
+            if (table161.pfnReclaimResources1(&reclaim1)!=D3DDDIERR_DEVICEREMOVED || results[0]!=unset ||
+                !offerEngine.endLog.empty() || engineResource.engine_offered_count!=1 ||
+                engineResource.engine_decommitted) fail(__LINE__);
+            kernelReclaim3Result=S_OK;
+            {
+                const auto savedWait=callbacks.pfnWaitForSynchronizationObjectFromCpuCb;
+                callbacks.pfnWaitForSynchronizationObjectFromCpuCb=engine_paging_wait;
+                engineReclaimFence=engineQueueCompleted+2; engineWaitResult=E_OUTOFMEMORY;
+                if (table161.pfnReclaimResources1(&reclaim1)!=E_OUTOFMEMORY || results[0]!=unset ||
+                    !offerEngine.endLog.empty() || engineResource.engine_offered_count!=1 ||
+                    engineResource.engine_decommitted) fail(__LINE__);
+                engineWaitResult=S_OK;
+                callbacks.pfnWaitForSynchronizationObjectFromCpuCb=savedWait;
+            }
+            // 13e. NOT_COMMITTED: the result is reported, the engine gets no EndOffer (its memory has no backing), and
+            //      the resource is decommitted for good. The paging fence of (13d) completes now.
+            {
+                const auto savedWait=callbacks.pfnWaitForSynchronizationObjectFromCpuCb;
+                callbacks.pfnWaitForSynchronizationObjectFromCpuCb=engine_paging_wait;
+                if (table161.pfnReclaimResources1(&reclaim1)!=S_OK || results[0]!=D3DDDI_RECLAIM_RESULT_NOT_COMMITTED ||
+                    !offerEngine.endLog.empty() || engineResource.engine_offered_count ||
+                    !engineResource.engine_decommitted) fail(__LINE__);
+                callbacks.pfnWaitForSynchronizationObjectFromCpuCb=savedWait;
+                engineReclaimFence=0;
+            }
+            // 13f. Later calls on that resource: a reclaim reports NOT_COMMITTED again without a kernel call (the
+            //      DXGI 1.2 entry reports it discarded), an offer is a hint that prepares nothing, and nothing ends it.
+            {
+                const unsigned threes=kernelReclaims3,prepares=offerEngine.prepares;
+                results[0]=unset; gone[0]=9;
+                if (table161.pfnReclaimResources1(&reclaim1)!=S_OK || results[0]!=D3DDDI_RECLAIM_RESULT_NOT_COMMITTED ||
+                    resourceTable.pfnReclaimResources(&engineReclaim)!=S_OK || gone[0]!=TRUE ||
+                    kernelReclaims3!=threes) fail(__LINE__);
+                reclaim1.pResults=nullptr;
+                if (table161.pfnReclaimResources1(&reclaim1)!=S_OK || kernelReclaims3!=threes) fail(__LINE__);
+                reclaim1.pResults=results;
+                DXGI_DDI_ARG_OFFERRESOURCES1 offer1{}; offer1.hDevice=reclaimArgs.hDevice; offer1.pResources=one;
+                offer1.Resources=1; offer1.Priority=D3DDDI_OFFER_PRIORITY_NORMAL; offer1.Flags=decommit;
+                if (prepare(taken)!=S_OK || taken || table161.pfnOfferResources1(&offer1)!=S_OK ||
+                    offerEngine.prepares!=prepares || kernelOffers2!=2 || !offerEngine.endLog.empty() ||
+                    engineResource.engine_offered_count) fail(__LINE__);
+            }
+            // 13g. A mixed batch: a runtime surface (61), A (500, 501), B (516, 517) and a hint. One callback for the
+            //      five allocations; each engine resource takes its worst answer. A: OK and NOT_COMMITTED, so
+            //      NOT_COMMITTED and no EndOffer. B: DISCARDED and OK, so DISCARDED with EndOffer DISCARDED. The
+            //      surface takes its own answer, the hint OK. The DXGI 1.2 entry gives the same batch as flags.
+            {
+                DdiResource a{},b{},hint{};
+                a.object=reinterpret_cast<ID3D11Texture2D *>(&rotateIdentity[1]);
+                b.object=reinterpret_cast<ID3D11Texture2D *>(&rotateIdentity[2]);
+                hint.object=reinterpret_cast<ID3D11Texture2D *>(&rotateIdentity[0]);
+                offerEngine.second=b.object; offerEngine.memories=2;
+                DXGI_DDI_HRESOURCE batch[4]={sharedHandles[0],reinterpret_cast<DXGI_DDI_HRESOURCE>(&a),
+                    reinterpret_cast<DXGI_DDI_HRESOURCE>(&b),reinterpret_cast<DXGI_DDI_HRESOURCE>(&hint)};
+                auto prepare_ab=[&]() {
+                    RuntimeDomain::Scope scope(owner.runtime().domain);
+                    std::vector<D3DKMT_HANDLE> handles; bool ta=false,tb=false;
+                    if (engine_prepare_offer(owner,a,handles,ta)!=S_OK || !ta ||
+                        engine_prepare_offer(owner,b,handles,tb)!=S_OK || !tb) fail(__LINE__);
+                    offerEngine.endLog.clear();
+                };
+                prepare_ab();
+                kernelResults={D3DDDI_RECLAIM_RESULT_DISCARDED,D3DDDI_RECLAIM_RESULT_OK,
+                               D3DDDI_RECLAIM_RESULT_NOT_COMMITTED,D3DDDI_RECLAIM_RESULT_DISCARDED,
+                               D3DDDI_RECLAIM_RESULT_OK};
+                D3DDDI_RECLAIM_RESULT four[4]; for (auto &value:four) value=static_cast<D3DDDI_RECLAIM_RESULT>(9);
+                DXGI_DDI_ARG_RECLAIMRESOURCES1 mixed1{reclaimArgs.hDevice,batch,four,4};
+                if (table161.pfnReclaimResources1(&mixed1)!=S_OK ||
+                    kernelReclaimed!=std::vector<D3DKMT_HANDLE>({61,500,501,516,517}) ||
+                    four[0]!=D3DDDI_RECLAIM_RESULT_DISCARDED || four[1]!=D3DDDI_RECLAIM_RESULT_NOT_COMMITTED ||
+                    four[2]!=D3DDDI_RECLAIM_RESULT_DISCARDED || four[3]!=D3DDDI_RECLAIM_RESULT_OK ||
+                    offerEngine.endLog.size()!=1 || !ended_as(0,b,BC250_DXVK_END_OFFER_DISCARDED) ||
+                    !a.engine_decommitted || a.engine_offered_count || b.engine_decommitted || b.engine_offered_count ||
+                    hint.engine_decommitted) fail(__LINE__);
+                // The DXGI 1.2 entry on the same kind of batch: a value outside the enumeration counts as
+                // NOT_COMMITTED (a discarded flag there), and A, decommitted above, is reported without a kernel answer.
+                {
+                    RuntimeDomain::Scope scope(owner.runtime().domain);
+                    std::vector<D3DKMT_HANDLE> handles; bool tb=false;
+                    if (engine_prepare_offer(owner,b,handles,tb)!=S_OK || !tb) fail(__LINE__);
+                    offerEngine.endLog.clear();
+                }
+                kernelResults={D3DDDI_RECLAIM_RESULT_OK,static_cast<D3DDDI_RECLAIM_RESULT>(7),D3DDDI_RECLAIM_RESULT_OK};
+                BOOL flags[4]={9,9,9,9};
+                DXGI_DDI_ARG_RECLAIMRESOURCES mixed{reclaimArgs.hDevice,batch,flags,4};
+                if (resourceTable.pfnReclaimResources(&mixed)!=S_OK ||
+                    kernelReclaimed!=std::vector<D3DKMT_HANDLE>({61,516,517}) || flags[0]!=FALSE || flags[1]!=TRUE ||
+                    flags[2]!=TRUE || flags[3]!=FALSE || !offerEngine.endLog.empty() || !b.engine_decommitted)
+                    fail(__LINE__);
+                offerEngine.second=nullptr; offerEngine.memories=1;
+            }
+            // 13h. Neither the Reclaim2 nor the synchronous callback was called while Reclaim3 was there.
+            if (kernelReclaims!=reclaims2Before || syncEngineReclaims!=syncBefore) fail(__LINE__);
+            path.engine=nullptr;
+            callbacks.pfnOfferAllocations2Cb=nullptr; callbacks.pfnReclaimAllocations3Cb=nullptr;
+        }
         path=savedPath;
         engineQueue=savedQueue;
         owner.runtime().KTCallbacks.pfnCreatePagingQueueCb=savedCreateQueue;
@@ -1831,7 +2018,7 @@ int main() {
             RuntimeDomain::Scope scope(owner.runtime().domain);
             // The offer fake shares its answer with the synchronous reclaim fake; the offer always succeeds here.
             const unsigned offers=offerCalls; const HRESULT later=residencyChangeResult; residencyChangeResult=S_OK;
-            if (offer_after_submit(owner.runtime(),handles,3,D3DDDI_OFFER_PRIORITY_NORMAL,[](){return S_OK;})!=S_OK ||
+            if (offer_after_submit(owner.runtime(),handles,3,D3DDDI_OFFER_PRIORITY_NORMAL,D3DDDI_OFFER_FLAGS{},[](){return S_OK;})!=S_OK ||
                 offerCalls!=offers+1) fail(__LINE__);
             residencyChangeResult=later;
         };
