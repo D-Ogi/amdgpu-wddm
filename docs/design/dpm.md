@@ -12,12 +12,12 @@ ceiling. This document is the written reason `docs/hardware.md` asks for above 1
 | What | Source |
 |---|---|
 | SMU levels 1000/1500/2000 MHz, overdrive range 1000-2000 MHz and 700-1129 mV | M15 (Linux `pp_od_clk_voltage` on unit A) |
-| Firmware default 1500 MHz at VID 101 (918.75 mV); the lab point 1000/820 = VID 116; RequestGfxclk and ForceGfxVid take effect under Windows | M22 |
+| Firmware default 1500 MHz at VID 101 (918.75 mV). The lab point 1000/820 = VID 116. RequestGfxclk and ForceGfxVid take effect under Windows | M22 |
 | Throughput follows the shader clock almost linearly | M52 |
-| Linux amdgpu does no DPM under load on this part; its only SMU traffic is the metrics table | M90 |
+| Linux amdgpu does no DPM under load on this part. Its only SMU traffic is the metrics table | M90 |
 | Temperature `THM_TCON_CUR_TMP` over SMN, the sensor of `tools/win/bc250rd/temp.py` | M23 |
 | Message numbers and argument forms (RequestGfxclk, ForceGfxVid, GetGfxFrequency, GetGfxVid) | Linux `cyan_skillfish_ppt.c` (MIT), already the basis of `bc250_clock.c` |
-| Community governor for this board: load target 70-95 %, "safe" points 1890 MHz @ 900 mV and 2030 MHz @ 950 mV | community reports, facts only, not measurements on our unit; nothing imported |
+| Community governor for this board: load target 70-95 %, "safe" points 1890 MHz @ 900 mV and 2030 MHz @ 950 mV | community reports, facts only, not measurements on our unit. Nothing imported |
 
 ## V/F table
 
@@ -39,7 +39,7 @@ table started at 1000 MHz up to 0.7.204 and at 800 MHz in 0.7.205.
 - 600 and 700 MHz keep the 100 MHz grid whole, so that a level stays `(MHz - 500) / 100`. No rule of the governor
   selects them. An administrator reaches them with `DpmIdleMHz` or with the clock escape.
 - 1000/820: the lab point, run for weeks. 1500/919: the firmware's own point (M22), one VID above its 918.75.
-- 2000/1000: the ceiling. The community's points interpolate to about 939 mV at 2000 MHz; 1000 mV gives 61 mV of
+- 2000/1000: the ceiling. The community's points interpolate to about 939 mV at 2000 MHz. 1000 mV gives 61 mV of
   margin over that and stays 129 mV under the overdrive maximum of 1129 mV. Nothing above 1000 mV is ever sent.
 - The 2000 MHz ceiling is not a safe clock. The community reports a board-level over-current protection that
   hard-locks the machine between about 1850 and 2200 MHz on 40-CU boards, and on every tested board at 2400 MHz,
@@ -103,7 +103,7 @@ The rules:
   UNCLEAN_STOP). The over-current lock of [M790](../facts/hardware.md#m790) looks exactly like such a stop. A start
   with nothing stored does not write `OcTierLastReason`, so the record stays at UNCLEAN_STOP until the person chooses
   a tier again, and the control app shows a plain notice for that time.
-- When the SMU refuses an overclock point, `bc250_dpm_oc_refused()` removes that point and every point above it for
+- When the SMU refuses an overclock point, `bc250_dpm_oc_refused()` deletes that point and every point above it for
   the rest of the start, and a thermal cap above the new ceiling comes down to it. `DpmApplyEx()` then applies the
   next lower level and logs `dpm: overclock point ... refused` once for that point. The refusal does not count
   toward `BC250_DPM_ERROR_LIMIT`: this is the rule of the sub-floor points, and one refused point never costs the
@@ -151,11 +151,11 @@ application and `bc250kmd_cli dpm` show the package power.
 
 | Item | Value | Source |
 |---|---|---|
-| Messages | 0x4 and 0x5 (the page's MC address, high half first), then 0x6 with argument 6 | `driver/amdgpu-import/smu_v11_8_ppsmc.h`; Linux v6.18 `smu_v11_0_set_driver_table_location`, `smu_cmn_update_table` |
+| Messages | 0x4 and 0x5 (the page's MC address, high half first), then 0x6 with argument 6 | `driver/amdgpu-import/smu_v11_8_ppsmc.h`. Linux v6.18 `smu_v11_0_set_driver_table_location`, `smu_cmn_update_table` |
 | Seen on unit A | amdgpu sends 0x4 (`0xF4`), 0x5 (`0x8CF000`) and 0x6 at every init | `init-sequence.md` (E03) |
-| Table | `SmuMetrics_t`: `Current` and `Average` (116 bytes each), then three counters; 244 bytes; driver interface 0x8 | Linux v6.18 `smu11_driver_if_cyan_skillfish.h` (AMD, MIT) |
+| Table | `SmuMetrics_t`: `Current` and `Average` (116 bytes each), then three counters. 244 bytes. Driver interface 0x8 | Linux v6.18 `smu11_driver_if_cyan_skillfish.h` (AMD, MIT) |
 | Eight-core table | The patched SMU firmware of the community 8-core BIOS widens the core arrays in place: 136-byte halves, 284 bytes. The KMD detects it by the DMA length | [Metrics validation](smu-metrics.md), "Eight-core layout" |
-| Fields read | `CurrentSocketPower` (mW, offset 104), `Power[2]` (96), `Voltage[2]` (80), `GfxclkFrequency` (68), `GfxTemperature` (70), `SocTemperature` (108), `ThrottlerStatus` (112); `Average.CurrentSocketPower` (220) | the same header; `cyan_skillfish_ppt.c` reads the same fields |
+| Fields read | `CurrentSocketPower` (mW, offset 104), `Power[2]` (96), `Voltage[2]` (80), `GfxclkFrequency` (68), `GfxTemperature` (70), `SocTemperature` (108), `ThrottlerStatus` (112). `Average.CurrentSocketPower` (220) | the same header. `cyan_skillfish_ppt.c` reads the same fields |
 
 How it runs (`driver/shim/bc250_smu_metrics.c` for the rules, `driver/kmd/smu.c` `SmuReadMetrics` for the
 messages, `driver/kmd/smu_metrics.c` for the page, the gate and the snapshot):
@@ -187,11 +187,11 @@ messages, `driver/kmd/smu_metrics.c` for the page, the gate and the snapshot):
   memory chips, the fan and the losses of the supply are not in it, so it reads well under the smart plug.
 
 A third-party manual (`cachenetics/project-ariel`, no log) says queue 0 message 0x4 hangs the SMU until AC is
-removed. amdgpu sends 0x4 with its own table address at every Linux start of unit A (E03), and the list admits 0x4
+disconnected. amdgpu sends 0x4 with its own table address at every Linux start of unit A (E03), and the list admits 0x4
 only with the address of our own page. The first lab start of 0.7.215 is the first time this driver sends it: run
 it with the plug ready, and set `EnableSmuMetrics` 0 if the SMU stops answering.
 
-## Governor (`driver/shim/bc250_dpm.c`, pure; `driver/kmd/dpm.c`, the thread)
+## Governor (`driver/shim/bc250_dpm.c`, pure. `driver/kmd/dpm.c`, the thread)
 
 - Tick 25 ms on a system thread (`KeWaitForSingleObject` on the stop event with a timeout, no polling loop).
 - Load: see "Busy" below. Busy per tick in permille, plus an average with 3/4 weight on the old.
@@ -199,7 +199,7 @@ it with the plug ready, and set `EnableSmuMetrics` 0 if the SMU stops answering.
   (`clock * busy / 800`), at least one level.
 - Down: one level after the average stayed under 650 permille for 200 ms. A step down never lands at or above the up
   threshold ((650 + 1) x 1100/1000 = 716.1 <= 900, invariant 1 below), and a raise never lands below the down
-  threshold (the lowest landing is 739.2 permille, invariant 2), so the two cannot chase each other; the host test
+  threshold (the lowest landing is 739.2 permille, invariant 2), so the two cannot chase each other. The host test
   sweeps every constant demand from 100 to 2400 MHz and asserts no oscillation.
 - Sustained (BD-329): the governor also takes the mean busy share over a 250 ms window at one clock. When a window ends
   with the mean at the target (800 permille) or more, the load asks for the lowest level at which that mean would fill
@@ -216,25 +216,25 @@ it with the plug ready, and set `EnableSmuMetrics` 0 if the SMU stops answering.
   seconds of the boot (BD-336). `dpm_sustain_log.h` makes that decision, and `run_dpm_sustain_log.ps1` tests it with
   dpm.c's own formats and two negative controls. `test_sustain_bd329`, `test_sustain_guard` and `test_sustain_no_oscillation` in `dpm_test.c`
   cover it, and `run_dpm.ps1 -NoSustain` and `-NoSustainGuard` are the negative controls.
-- These four numbers are the defaults of every start; "Runtime tuning" below changes them, and adds a floor, until the
+- These four numbers are the defaults of every start. "Runtime tuning" below changes them, and adds a floor, until the
   next start.
 - The three load thresholds have a second set, the compute set (400 / 300 / 200 permille), in force while the GPU has
   an open compute context. "The compute threshold set" below says why a compute client's busy share cannot be read
   like a renderer's, and what the set leaves alone (every thermal rule, the ceiling, the floor, the idle state).
 - Each transition is RequestGfxclk + ForceGfxVid in the safe order (voltage first when raising, clock first when
-  lowering), with readbacks; every 1000 ms the SMU's clock and VID are read back and a mismatch resyncs.
+  lowering), with readbacks. Every 1000 ms the SMU's clock and VID are read back and a mismatch resyncs.
 - A raise ramps. In trial 140 (0.7.176.1) the clock read back 1028-1029 MHz right after 1000 -> 1200 and 1200 at
-  the next tick, so all five raises were logged FAILED (MISMATCH) and resynced to 1200; lowerings read back exact.
+  the next tick, so all five raises were logged FAILED (MISMATCH) and resynced to 1200. Lowerings read back exact.
   Since 0.7.178 the transaction reads the clock again while it lies between the old clock and the request, 1 ms
-  apart (a sleep), at most 50 times, and still requires the exact request; the log line gives the number of settle
+  apart (a sleep), at most 50 times, and still requires the exact request. The log line gives the number of settle
   reads, the lab's first measure of the ramp. The voltage for the request is in place before the clock request, so
   every clock on the way is covered.
 - Bursty load flaps. A game held at its frame rate fills some 25 ms ticks and leaves others empty: in trial 140's
   world the average was 35-50 % at 1000 MHz with single ticks at 90 % or more. Each such tick raises and the average
-  lowers again 200 ms later (five raises in 35 s). Harmless (three transactions, all within the table); raising on the
+  lowers again 200 ms later (five raises in 35 s). Harmless (three transactions, all within the table). Raising on the
   average instead is the obvious change once the lab has shown a sustained load that needs it.
   Three failed transitions in a row: floor, `DpmMode = 0` written, governor gone (reason SMU_ERROR).
-- SetStablePowerState(TRUE) pins the floor (it said "clocks fixed at 1000 MHz" before; profiling now gets that
+- SetStablePowerState(TRUE) pins the floor (it said "clocks fixed at 1000 MHz" before. Profiling now gets that
   floor explicitly).
 
 ## Busy
@@ -243,8 +243,8 @@ it with the plug ready, and set `EnableSmuMetrics` 0 if the SMU stops answering.
 1 ms at DISPATCH_LEVEL and reads `GRBM_STATUS` (`GUI_ACTIVE`, the bit amdgpu's `gfx_v10_0_is_idle` tests) and
 `SDMA0_STATUS_REG` (`IDLE`), both from the general read table, no write, no bank select. Full WDDM starts the RLC
 without GFXOFF (gfx.c `pp_gfxoff`), so GC registers always answer. The tick takes the counts: the governor's busy is
-the share of active GRBM samples (25 per tick, so 40 permille steps; UP needs 23 of 25). A tick with fewer than 8
-samples falls back to the submit accounting. Pause flushes the callback before a power transition; stop deletes the
+the share of active GRBM samples (25 per tick, so 40 permille steps. UP needs 23 of 25). A tick with fewer than 8
+samples falls back to the submit accounting. Pause flushes the callback before a power transition. Stop deletes the
 timer with wait before the thread joins, so no read can outlive the BAR mapping. Cost: two uncached reads per
 millisecond, and the platform timer runs at 1 ms while the adapter is started.
 
@@ -258,11 +258,11 @@ world appeared (07:34:49, screenshot 5 at 07:34:50) until the sampler ended. Tri
 screen (screenshot 5 at 07:18:11 still loading), and vkcompute is a correctness suite (64 KiB fills, 1M-element sums,
 256x256 matrices), so four runs of it are seconds of process and device setup around milliseconds of GPU work: both
 near-zero readings were right. Trial 135's ETW figure is the union of dxgkrnl's DMA packets over 44 s of an outdoor
-scene at 23.7 fps; trial 140's world was its first 25 s, indoors. No trial yet has ETW and the governor in the same
+scene at 23.7 fps. Trial 140's world was its first 25 s, indoors. No trial yet has ETW and the governor in the same
 world.
 
 What stands: the accounting is the KMD's view, open from the ring write until a fence is observed, and blind to
-SDMA; the GRBM samples are the engine's own. Every telemetry sample carries both (busy from GRBM, submit share),
+SDMA. The GRBM samples are the engine's own. Every telemetry sample carries both (busy from GRBM, submit share),
 so the next game trial compares them in the world. If both read well under 90 % there, the clock is not the limit
 and the governor rightly stays low. SMU metrics are not an alternative: amdgpu reads only the metrics table on this
 part and reports no GPU busy percentage (M90). The KMD reads that table from 0.7.215 for power alone ("Power
@@ -276,22 +276,22 @@ cap at 500 MHz would hold a loaded GPU there until the release. At 90 C the cap 
 lowest level of the table. With an invalid sensor read it is the lab floor, 1000 MHz, and never
 higher than the cap already in force (0.7.205: the rule is a clamp, so one blind tick cannot undo a thermal step).
 Below 82 C the cap rises one level per second. The clock gate also refuses any raise at 87 C after its readbacks, so a
-stale decision cannot raise either, with one exception named below; lowering is always allowed.
+stale decision cannot raise either, with one exception named below. Lowering is always allowed.
 
 ### Below the lab floor (0.7.205)
 
 Since 2026-10-05 the GPU clock may go under 1000 MHz when Tctl reaches 87 C. The
 BIOS fan setting stays as it is. The reason is Rise of the Tomb Raider, scene 2: the
-reading held 88 C while the governor was already at its 1000 MHz floor with the GPU 97 % busy, so no rule had a step
+reading held 88 C while the governor was already at its 1000 MHz floor with the GPU 97 % busy. Thus no rule had a step
 left. The table therefore holds two more points, 900 and 800 MHz, and:
 
 - Both carry 820 mV, the lab point's own voltage (VID 116). A lower clock at the voltage the part is known to run at
-  is a known-good operating point minus frequency; an undervolt would be a second untested change at the same time,
+  is a known-good operating point minus frequency. An undervolt would be a second untested change at the same time,
   and the anchors' line is not extrapolated below its lowest anchor. The limits of `docs/hardware.md` hold: nothing
   above 1000 mV, nothing below 820 mV.
 - Only the thermal cap goes there. The load's own answer never goes below 1000 MHz (`BC250_DPM_FLOOR_LEVEL`), and
-  `want` in the telemetry shows that. The hot step at 87 C or more continues one level per hot step down to 800 MHz;
-  90 C goes to 800 MHz at once; the release below 82 C comes back up through 900 and 1000 MHz, one level per second.
+  `want` in the telemetry shows that. The hot step at 87 C or more continues one level per hot step down to 800 MHz.
+  90 C goes to 800 MHz at once. The release below 82 C comes back up through 900 and 1000 MHz, one level per second.
 - A missing sensor, SetStablePowerState, the fixed-lab mode, stop, power down, giving up after SMU errors and an
   unknown readback all stay at 1000 MHz, as before. Blind or asked for one steady clock, the driver owns the point
   this part is known to run at. A thermal cap below the floor still wins over SetStablePowerState. The missing-sensor
@@ -329,8 +329,8 @@ two messages of its COMMIT branch (RequestGfxclk, then ForceGfxVid with the same
 `test_subfloor` in `dpm_test.c` covers a sustained 88 C stepping 1000 -> 900 -> 800 MHz and staying there, 90 C
 going to 800 MHz at once, the release back up through 900 and 1000 MHz, the load never asking below 1000 MHz at any
 temperature or busy share, the sensor and SetStablePowerState rules, the refused runtime floor, and the refusal
-itself (after it the cap never goes below 1000 MHz again). `clock_test.c` covers the transactions, including a
-lowering to 800 MHz at 88 C, the admitted 800 -> 1000 MHz raise at 87 and 95 C and the refusals that stay (800 ->
+itself (after it the cap never goes below 1000 MHz again). `clock_test.c` covers the transactions. It includes a
+lowering to 800 MHz at 88 C and the admitted 800 -> 1000 MHz raise at 87 and 95 C. It also includes the refusals that stay (800 ->
 1100 MHz, and any raise of the voltage). The plant tests (`test_plant`,
 `test_plant367`) give the same numbers as 0.7.204: on those plants the cap never needs the new levels.
 
@@ -377,7 +377,7 @@ and did it again. An operator at the lab saw it flap every two seconds at an idl
 ring still gates the entry: the entry rule is unchanged.
 
 Why 150 permille. The measured desktop is far under it. The idle phases of the C62 identification (R120, 24 samples
-at 1.75 s, 500 MHz, a quiet desktop on the GPU) read a tick share of 0 and a busy average of 2 to 6 permille. A
+at 1.75 s, 500 MHz, a quiet desktop on the GPU) read a tick share of 0. The busy average was 2 to 6 permille. A
 2 ms frame every 2 s is about 2 permille at the idle point. A desktop that animates at 60 Hz with 2 ms of work a
 frame is 120 permille and still fits. And the work under it fits the point: 150 permille at 500 MHz is about
 75 permille at the lab floor, an order of magnitude under the load governor's lowering threshold (650), so 1000 MHz
@@ -485,7 +485,7 @@ From 0.7.204 the warm zone starts at the hot threshold (`BC250_DPM_WARM_MC`, 87 
 When the warm zone stops a raise, the throttle reason is `thermal-warm` (8). The counter `warm` in the driver log
 lines counts the governor ticks with a stopped raise. From 0.7.204 this counter stays at zero or near zero. The first
 warm zone was requested after session 344 (The Ascent, menu, no frame cap). In that session the governor kept
-1500 MHz / 919 mV while Tctl increased from 83.5 C to 85.3 C, because no rule stopped a raise between 82 C and 87 C.
+1500 MHz / 919 mV while Tctl increased from 83.5 C to 85.3 C. The cause: no rule stopped a raise between 82 C and 87 C.
 `test_warm` in `dpm_test.c` covers the edges (85.000, 86.999 and 87.000 C, the hot steps, the backstop). A compile-time
 check in `dpm_test.c` makes sure that the warm zone is 87 C, is not above the hot threshold, and is above the release
 threshold, the ramp knee and each soft-release threshold.
@@ -496,14 +496,14 @@ Before 0.7.213 the first rule that read the temperature acted at 87 C, which is 
 session (Tctl 87 C or more for 10 s, or 89 C at once). The die lags the clock by approximately 25 s
 (`scratch/thermal-zone/model`, a first-order fit of the recorded sessions: `dTj/dt = P - B(Tj - Tamb)`,
 `B = 0.0395` per second), so a controller that first acts at 87 C cannot hold 87 C. Session 436 showed it: 80.2 C at
-1500 MHz at the start of the benchmark, 84.0 C at 1200 MHz 32 s later, 88.8 C at 800 MHz 31 s after that, and the
+1500 MHz at the benchmark start, 84.0 C at 1200 MHz 32 s later and 88.8 C at 800 MHz 31 s after that. Then the
 runner stopped the game.
 
 The soft zone lowers the cap before the hot limit, and judges every soft threshold on the temperature the die is going
 to reach, not the one it reads:
 
 - The lead. The governor keeps the last 5 s of readings in a 20-slot ring (`BC250_DPM_ZONE_SLOPE_MS`, one slot per
-  250 ms). The slope is the least-squares fit over the ring, over the span the ring really covers;
+  250 ms). The slope is the least-squares fit over the ring, over the span the ring really covers.
   `teff = Tctl + slope x zone_lead_ms` while the die rises, and `teff = Tctl` while it falls or holds. The default lead
   is 15 s. Three guards keep the lead honest, and the safety review of this change is what put them there:
   a deadband (`BC250_DPM_ZONE_SLOPE_MIN_MC`, 200 mC of fitted rise over the window, which is 0.04 C/s), a cap
@@ -537,18 +537,18 @@ to reach, not the one it reads:
   own 1 s step, but it reads `teff` as well, so a cap under the ceiling on a die that is already climbing rises one
   level later than it did in 0.7.212. Only `BC250_DPM_HOT_MC`, `BC250_DPM_CRITICAL_MC` and the thermal ramp read the
   raw sensor. The search found that a cap rising while the die climbs towards the zone is the one thing no threshold
-  repairs afterwards, which is why the way up reads the lead too.
+  undoes afterwards, which is why the way up reads the lead too.
 - The clock. The warm zone starts at the soft-release threshold, so the clock stops going up at 83.0 C.
 - The backstop. The hot cap at 87 C and the critical rule at 90 C are unchanged, and both read the raw sensor, not
   `teff`. The thermal ramp also reads the raw sensor.
-- A sensor that fails. A tick with no reading skips its ring slot and keeps the window; a tick whose `dt_ms` had to be
+- A sensor that fails. A tick with no reading skips its ring slot and keeps the window. A tick whose `dt_ms` had to be
   clamped (a stall, a resume, a `DpmPause`) empties the ring, because the governor's own clock then advanced by less
   than the time that passed and every age in the ring is wrong. The log says whether the last tick could measure a
   slope at all and counts the ticks that could not, so a lead of 0 on a flat die reads differently from a sensor that
   keeps failing.
 
 The thresholds come from a search over 21 recorded game sessions with the fitted plant (`scratch/thermal-zone/sim`) and
-were then re-validated against the same sessions replayed through the driver's own code with their recorded sensor
+were then re-checked against the same sessions replayed through the driver's own code with their recorded sensor
 noise (`scratch/thermal-zone/review-dpm`), which is what the lead's cap and the 1500 ms step come from. In that
 closed-loop replay, over some two hours of recorded play:
 
@@ -562,8 +562,8 @@ closed-loop replay, over some two hours of recorded play:
 
 Session 436, the session of BD-087, peaks at 85.4 C with no reading at 87 C at all, against 89.2 C and a runner stop
 as it was recorded. `test_zone` and `test_zone436` in `dpm_test.c` replay the shape of 436 on the fitted plant: with
-the 0.7.212 rules the model holds 87 C for 16.4 s, which is a runner stop; with the zone it peaks at 86.5 C with no
-reading at 87 C; with the zone and the lead off it is a runner stop again, which is the one result of the search worth
+the 0.7.212 rules the model holds 87 C for 16.4 s, which is a runner stop. With the zone it peaks at 86.5 C with no
+reading at 87 C. With the zone and the lead off it is a runner stop again, which is the one result of the search worth
 carrying - it is the lead and not the threshold that does the work. `test_zone_traces` replays the recorded readings
 themselves, including 436 and the flattest segments of the noisiest sessions, and holds the review's requirement: the
 zone never engages below a raw 84.0 C. The cases named after the review's findings (`test_zone_dip`, `test_zone_idle`,
@@ -627,7 +627,7 @@ from 50-83 C gets the hot spot to 87 C or a runner stop. A start from 78-79 C wi
 86.4 C, so the top is 78 C. `test_ramp_fast` covers the edges, `test_ramp_fast_bd329` replays the readings of the rc3
 trace (without the lane it gives the steps of the trace, with the lane 1700 MHz at 50 ms), and `test_burst_regression`
 holds the closed-loop bounds. `run_dpm.ps1 -NoRampFast` and `-RampFastUnbounded` are the negative controls. The
-plant is a model, so the lab must confirm the result.
+plant is a model, so the lab must check the result.
 
 From BD-228 the ramp has a recall. The governor keeps the highest level that a confirmed transaction set, and goes
 back to it at once within 10 s (`BC250_DPM_RAMP_RECALL_MS`):
@@ -653,7 +653,7 @@ back to it at once within 10 s (`BC250_DPM_RAMP_RECALL_MS`):
 
 The recall is a heuristic, not a thermal proof. It assumes that a load which comes back after a short stall is the
 load that held the level before it. The frequency and the voltage that ran some seconds before do not prove the heat
-of the load now, and they say nothing of the CPU power. The rules above remove the cases where the operating point
+of the load now, and they say nothing of the CPU power. The rules above exclude the cases where the operating point
 itself changed. The thermal rules stay the bound. The lab arm compares the thermals of a game with and without the
 recall before the change ships.
 
@@ -736,8 +736,8 @@ The test also runs starts from 50 C to 83 C (34 starts):
 With the warm zone at 87 C, starts from 79 C end at 1300 MHz. The sink is hot from the earlier load. The clock goes to
 1500 MHz, the hot rule lowers the cap, and the cap rises again only below 82 C. From a cold start all three give the
 same result: the clock gets to 2000 MHz below 70 C, and the hot rule lowers it on the slow increase of the sink. At a
-start of 84 C, the sink alone puts the hot spot above 87 C at 1000 MHz, so no clock rule can prevent a stop there. The
-plant constants are not measurements of the full thermal system. The lab must confirm the result.
+start of 84 C, the sink alone puts the hot spot above 87 C at 1000 MHz. Thus no clock rule can prevent a stop there. The
+plant constants are not measurements of the full thermal system. The lab must check the result.
 
 From 0.7.197 (BD-055) the drop on entering the hot band is at once only when the cap last moved at least a hot step
 ago. Before, every upward crossing of 87 C stepped, so a reading hovering at the limit walked the clock down at the
@@ -750,12 +750,12 @@ break, the cap rises one level. Without it the cap holds anywhere in 82-87 C, so
 past 87 C cost levels for the rest of the load (sessions 318, 320, 321: 2000 -> 1500-1600 MHz, frozen at
 85.6-86.2 C). The thresholds themselves (87, 82 and 90 C, the warm zone and the ramp knee) are not tunable. `dpm_test.c` covers the rule edge by edge
 and runs a synthetic two-node plant (fast hot spot over a slow sink, scene changes, sensor noise) with the legacy
-timing, each change alone and both: the legacy rule latches one level down for the rest of the run; a 2 s hot step
+timing, each change alone and both: the legacy rule latches one level down for the rest of the run. A 2 s hot step
 with a 1.5 C / 3 s soft release recovers between heavy scenes with no cap changes closer than 2 s and no reading
-above 87.4 C. The plant's constants are not the lab's; the lab A/B decides the defaults.
+above 87.4 C. The plant's constants are not the lab's. The lab A/B decides the defaults.
 
 The hot threshold was 85 C, with release below 80 C, up to KMD 0.7.183.1. It moved to 87 C on 2026-10-01,
-from 0.7.184.1 on. Release moved with it to keep the 5 C hysteresis; the 90 C floor is unchanged. The trigger was
+from 0.7.184.1 on. Release moved with it to keep the 5 C hysteresis. The 90 C floor is unchanged. The trigger was
 Witcher 3 session 219 at native 1080p: the telemetry lines peaked at 84.8 C Tctl, and the governor, which samples
 every tick, went thermal-soft twice and capped the clock at 1800 MHz.
 
@@ -774,7 +774,7 @@ cap by one level at once, and then by one level each 1500 ms, down to 1800 MHz. 
 `DpmThermalHighZoneMc` and `DpmThermalHighZoneMHz`, and 0 turns a rule off. On the burst plant of `dpm_test.c`, the
 tester.35 rules stop the lab runner in 15 of 54 cases and the new rules stop it in none. The highest peak goes from
 90.1 C to 87.7 C. The cost is 1800 MHz instead of 2000 MHz in a scene at 80 C or more. The plant is a model, so the
-lab must confirm the result.
+lab must check the result.
 
 ### The compute threshold set (BD-127)
 
@@ -963,15 +963,15 @@ keeps its busy gate for the same message.
 | Value | Meaning |
 |---|---|
 | `DpmMode` | 0 fixed-lab (1000 MHz / 820 mV, the default until lab acceptance), 1 dpm. Anything else: fixed, reason INVALID_SETTING |
-| `DpmMaxMHz` | ceiling in dpm, 1000-2300, rounded down to the 100 MHz grid; absent = 2000 (`BC250_DPM_DEFAULT_MAX_MHZ`, since 2026-10-10). The tier's ceiling bounds it: 2000 MHz without a tier, 2200 MHz (air), 2300 MHz (liquid). A value above the tier's ceiling runs at that ceiling |
+| `DpmMaxMHz` | ceiling in dpm, 1000-2300, rounded down to the 100 MHz grid. Absent = 2000 (`BC250_DPM_DEFAULT_MAX_MHZ`, since 2026-10-10). The tier's ceiling bounds it: 2000 MHz without a tier, 2200 MHz (air), 2300 MHz (liquid). A value above the tier's ceiling runs at that ceiling |
 | `OcTier` | the overclock tier ("Overclock tiers"): absent or 0 none, 1 air, 2 liquid. Any other value is refused by the state catalog and runs the tier none. Read at device start |
 | `OcTierBoard` | the fingerprint of the board that `OcTier` belongs to. Written by the control app from the board capability query. A mismatch deletes both values |
 | `OcTierLastReason` | written by the driver: the reason of the last start's tier choice (1 OK, 2 INVALID, 3 UNSUPPORTED, 4 UNBOUND, 5 BOARD_CHANGED, 6 UNCLEAN_STOP) |
 | `DpmIdleMHz` | the idle point (0.7.207): a table clock from 500 to 900 MHz, or 0 for no idle state. Absent = 500 (`BC250_DPM_IDLE_MHZ`). Only a start that governs the clock reads it (`DpmMode` 1, past the guard, with an SMU owner). The thermal cap still bounds a point above the thermal floor |
-| `DpmIdleHoldMs` | how long the GPU must have no work before the idle point; absent = 3000, range 250 to 60000 |
+| `DpmIdleHoldMs` | how long the GPU must have no work before the idle point. Absent = 3000, range 250 to 60000 |
 | `DpmIdleBusyPermille` | the mean busy share the entry's hold window still admits. Absent = 2, at most 100. The fast exit has its own threshold, `BC250_DPM_IDLE_EXIT_PERMILLE` (500 permille in one tick), which no setting changes |
 | `DpmIdleLeavePermille` | the slow exit (0.7.216.6). The idle point is left when its trailing window's work reaches this share. Absent = 150 (`BC250_DPM_IDLE_LEAVE_PERMILLE`), range 10 to 400. It must be above `DpmIdleBusyPermille`, else the idle state is off for the start |
-| `DpmThermalZone` | the soft thermal zone (0.7.213): absent or any other value runs it, 0 runs the 0.7.212 thermal rules for the whole start (the hot cap at 87 C alone, no soft release, the warm zone at 87 C). A runtime `dpm tune reset` turns the zone back on |
+| `DpmThermalZone` | the soft thermal zone (0.7.213). Absent or any other value runs it. 0 runs the 0.7.212 thermal rules for the whole start. These are the hot cap at 87 C alone, no soft release and the warm zone at 87 C. A runtime `dpm tune reset` turns the zone back on |
 | `DpmThermalRate` | the rate rule (BD-281), in mC/s. Absent = 1500 (`BC250_DPM_RATE_MC_PER_S`), 0 turns the rule off, else 500 to 10000. A value that the governor refuses keeps the rule on with the default |
 | `DpmThermalRateFromMc` | the lowest raw reading at which the rate rule acts. Absent = 80000, range 70000 to 86000 |
 | `DpmThermalHighZoneMc` | the high-clock zone (BD-281): the lead reading from which it lowers a cap above `DpmThermalHighZoneMHz`. Absent = 80000, 0 turns the zone off, else 70000 to 86000. A value that the governor refuses keeps the zone on with the default |
@@ -987,7 +987,7 @@ keeps its busy gate for the same message.
 | `DpmClosedReason` | 0.7.208: the reason the driver itself wrote `DpmMode` 0 (3 UNCONFIRMED, 4 UNCLEAN, 8 SMU_ERROR). `PersistFallback` writes it, a start that reads a `DpmMode` other than 0 deletes it, a start that reads `DpmMode` 0 leaves it alone |
 
 The guard follows the CU-mode pattern. A dpm start with a request not yet confirmed writes `DpmPending` and runs
-dpm; start health reaching ready (or `bc250kmd_cli dpm confirm`, administrator) writes `DpmConfirmed` with the
+dpm. Start health reaching ready (or `bc250kmd_cli dpm confirm`, administrator) writes `DpmConfirmed` with the
 request's encoding and deletes the pending mark. A start that finds `DpmPending` (the last dpm start never became
 healthy) or `DpmSession` (the machine went down above the floor) writes `DpmMode = 0` and runs fixed-lab, reason
 UNCONFIRMED or UNCLEAN. Changing `DpmMaxMHz` changes the encoding and asks for confirmation again. Settings are read
@@ -1022,7 +1022,7 @@ overwrites it, and a start that reads `DpmMode` 0 decides NOT_REQUESTED (1).
 `DpmClosedReason` is therefore written next to the 0 and left alone by every start that reads `DpmMode` 0. Only a
 start that reads another `DpmMode` deletes it, because somebody wrote over the fallback: the tester, the control
 application or `install.cmd -Repair`. The decision is in the shim (`bc250_dpm_decide`, fields `closed_reason` and
-`clear_closed`, host-tested in `driver/shim/test/dpm_test.c`); `driver/kmd/dpm.c` does the registry work and logs
+`clear_closed`, host-tested in `driver/shim/test/dpm_test.c`). `driver/kmd/dpm.c` does the registry work and logs
 both acts, and it writes the shim's `closed_reason` itself, so the host test asserts the value the key gets.
 `interop.c` keeps `InteropClosedReason` the same way.
 
@@ -1064,34 +1064,34 @@ start, without a restart and without the registry:
 
 | Command | Effect |
 |---|---|
-| `bc250kmd_cli dpm tune <up> <target> <down> [hold ms]` | the four thresholds (permille, ms; the hold stays when omitted) |
+| `bc250kmd_cli dpm tune <up> <target> <down> [hold ms]` | the four thresholds (permille, ms. The hold stays when omitted) |
 | `bc250kmd_cli dpm floor <MHz\|off>` | a runtime floor: a clock of the table up to the start's ceiling (`DpmMaxMHz`) |
 | `bc250kmd_cli dpm tune thermal <hot ms> <soft mC\|off> <soft ms>` | 0.7.197: the hot step, the soft-release delta below 87 C and its step |
 | `bc250kmd_cli dpm tune thermal <hot ms> <soft mC\|off> <soft ms> <zone mC\|off> <zone step ms> <zone lead ms>` | 0.7.213: the same, and the soft zone's delta below 87 C, its step and its lead. The three omitted leave the zone as it is |
 | `bc250kmd_cli dpm tune reset` | thresholds, floor and thermal timing back to the defaults |
 | `bc250kmd_cli dpm tune` | what is in force, the defaults, how many ticks the floor lifted the clock |
 
-- Not persisted: every device start begins with the defaults (and logs what it dropped). Nothing in the registry.
+- Not persisted: every device start takes the defaults (and logs what it dropped). Nothing in the registry.
 - Checked (`bc250_dpm_tune_check`, host-tested): each threshold 100-1000 permille, down < target < up, hold
   100-5000 ms, the floor a table level from the lab floor (1000 MHz) up to the start's ceiling, and two invariants
-  over the load's levels (the lab floor up; the thermal-only points below it are never a load decision):
+  over the load's levels (the lab floor up. The thermal-only points below it are never a load decision):
   1. a one-step lowering never lands at or above up: `(down + 1) x mhz(L) <= up x mhz(L - 1)` for every level L
      above the lab floor (`L >= BC250_DPM_FLOOR_LEVEL + 1`, where the loop in `bc250_dpm_tune_check` starts),
      which on this table reads `11 x (down + 1) <= 10 x up` (the +1: the average settles one permille under a
-     truncated busy share);
+     truncated busy share).
   2. a raise never lands below down: `down x mhz(N) <= b x mhz(L)` for every level L below the top and every busy
      share b from up to 1000, N being the level the governor raises to.
   Invariant 1 alone is not enough: the average lags a step down by several ticks, so a short hold can take a second
   step during the lag, and a raise that lands below down starts the cycle again. The host test simulates every
   admitted tune of a grid under constant demand (no oscillation) and shows that tunes breaking only invariant 2 do
   cycle. A refused tune names the reason and leaves the values as they were.
-- The floor lifts only what the load asks for. The thermal cap (87 C, released below 82 C; from 0.7.205 down to
+- The floor lifts only what the load asks for. The thermal cap (87 C, released below 82 C. From 0.7.205 down to
   800 MHz), the critical rule (90 C), a missing sensor and SetStablePowerState all still win: each brings the clock
   below the floor. From 0.7.200 the
   warm zone (85 C to 87 C, from 0.7.204 at 87 C or more) also stops a raise to the floor.
   From 0.7.203, at 70 C or more, the clock goes up to the floor one level per ramp interval. `want` in the
   telemetry stays the load's own answer, so a floored run still shows what the governor would have chosen.
-- Every change is a line in the driver log with old and new values, e.g. `dpm: tune (floor): up 900->900 target
+- Every change is a line in the driver log with old and new values, for example `dpm: tune (floor): up 900->900 target
   800->800 down 650->650 permille, hold 200->200 ms, floor 0->2000 MHz, serial 3` (floor 0 = none). While the values
   are not the defaults, a `dpm: tune ...` line follows every 5 s telemetry line, and `log summary` always prints one.
 - Escape `BC250_ESCAPE_RUN_DPM_TUNE` (26, `BC250_ESCAPE_DPM_TUNE`, ABI 1, 120 bytes), NoAdapterSynchronization only,
@@ -1100,8 +1100,8 @@ start, without a restart and without the registry:
   administrator, the generation of the start the caller read and a governing DPM start. The 160-byte `RUN_DPM`
   structure is unchanged, so older CLIs and the overlay keep working.
 - ABI 2 (0.7.197, 152 bytes) appends the thermal timing in force, its defaults and the `THERMAL` operation (error 7,
-  `thermal`, for a value outside its range); `FLAG_THERMAL` (16) says it is not the default. The driver takes both
-  sizes, each only with its own `AbiVersion`, and never touches an ABI 2 field for a 120-byte caller; an ABI 1
+  `thermal`, for a value outside its range). `FLAG_THERMAL` (16) says it is not the default. The driver takes both
+  sizes, each only with its own `AbiVersion`, and never touches an ABI 2 field for a 120-byte caller. An ABI 1
   `THRESHOLDS` keeps the stored thermal timing and an ABI 1 `RESET` resets it too. The CLI asks with ABI 2 and falls
   back to ABI 1 when an older driver fails the 152-byte escape with `STATUS_INVALID_PARAMETER`. A thermal change logs
   its own line (`dpm: tune (thermal): hot step 500->2000 ms, soft release delta 0->1500 mC step 3000->3000 ms,
@@ -1110,7 +1110,7 @@ start, without a restart and without the registry:
   `FLAG_ZONE` (32) and `FLAG_ZONE_OFF` (64), on the same `THERMAL` operation (error 8, `zone`). The driver takes all
   three sizes, each only with its own `AbiVersion`. An ABI 2 `THERMAL` keeps the stored zone, because a tool built
   before this ABI writes zeros where the zone's fields are and must not be able to switch the zone off by not knowing
-  about it; an ABI 1 or ABI 2 `RESET` resets the zone too, because a reset means the shim's defaults. The CLI asks with
+  about it. An ABI 1 or ABI 2 `RESET` resets the zone too, because a reset means the shim's defaults. The CLI asks with
   ABI 3 and steps down to ABI 2 and then ABI 1 as a driver fails the size with `STATUS_INVALID_PARAMETER`. A zone
   change logs two lines of its own (`dpm: tune (thermal): zone delta 1000->1500 mC (at 86000->85500 mC), serial 5` and
   the step, lead and warm threshold), and every `dpm: tune` line is followed by a `zone:` line with the steps so far
@@ -1119,19 +1119,19 @@ start, without a restart and without the registry:
 ## The operator's V/F curve (0.7.213)
 
 The table above gives one voltage per clock. From 0.7.213 the operator can lower that voltage. The full design,
-the refusal table and the lab plan are in [tuner.md](tuner.md); this section is what the governor does with it.
+the refusal table and the lab plan are in [tuner.md](tuner.md). This section is what the governor does with it.
 
 - The curve holds 11 voltages, for levels 5 to 15 (1000 to 2000 MHz). The levels under the lab floor keep the
   table's line, because they already run at the floor voltage of 820 mV.
 - A value is admitted between `bc250_clock_floor_mv(MHz)` (the table's line less `BC250_CURVE_UNDERVOLT_MV`,
   25 mV, and never under 820 mV) and 1000 mV. Level 5 stays at 820 mV, and the curve must not fall as the clock
   rises, in millivolts or in the VID they encode to. `bc250_clock_curve_check` names the broken rule (range,
-  depth, order, floor) and the level that broke it; the table's own line is a legal curve. A seventh answer,
+  depth, order, floor) and the level that broke it. The table's own line is a legal curve. A seventh answer,
   `untried`, is not about the curve at all: it refuses a KEEP of a candidate the governor has not applied yet.
 - `bc250_clock_prepare` admits the whole band, so one gate serves the governor, the escape SET and the curve.
   The clock readback still compares the VID against the **active** curve (`DpmLevelVid`), not against the table.
 - The governor takes a new curve at its next 25 ms tick. The level the load asks for does not change, so the
-  tick re-applies the same level with the new voltage (`DpmApply(..., "curve")`); without that forced apply a
+  tick re-applies the same level with the new voltage (`DpmApply(..., "curve")`). Without that forced apply a
   curve change would wait for the next level change.
 - The tick records the candidate as applied only after that apply succeeded (`bc250_dpm_curve_applied`), and a
   KEEP needs that record plus 100 ms of the window (`BC250_DPM_CURVE_KEEP_MIN_MS`). Without both, a candidate
@@ -1142,13 +1142,13 @@ the refusal table and the lab plan are in [tuner.md](tuner.md); this section is 
 
 | Value | Meaning |
 |---|---|
-| `DpmCurve1000` ... `DpmCurve2000` | the stored curve, one value per level, in mV. An absent value means the table's own line at that clock; a curve that breaks a rule is refused as a whole, never half-applied |
-| `DpmCurveTrialMs` | the trial window, 10000 to 180000 ms; absent = 25000 (`BC250_DPM_CURVE_TRIAL_MS`) |
+| `DpmCurve1000` ... `DpmCurve2000` | the stored curve, one value per level, in mV. An absent value means the table's own line at that clock. A curve that breaks a rule is refused as a whole, never half-applied |
+| `DpmCurveTrialMs` | the trial window, 10000 to 180000 ms. Absent = 25000 (`BC250_DPM_CURVE_TRIAL_MS`) |
 | `DpmCurvePending`, `DpmCurveConfirmed` | guard marks: the Fletcher-16 checksum of the curve that ran, and of the curve a healthy start confirmed |
 | `DpmCurveLastReason` | 0 none, 1 the stored curve runs, 2 refused, 3 unconfirmed, 4 the pending mark is not durable, 5 this start governs no clock |
 
 The guard is the `DpmPending` pattern applied to the curve alone. A start with a stored curve writes
-`DpmCurvePending` before it applies anything; start health (or `dpm confirm`) writes `DpmCurveConfirmed` and
+`DpmCurvePending` before it applies anything. Start health (or `dpm confirm`) writes `DpmCurveConfirmed` and
 deletes the pending mark. A start that finds `DpmCurvePending` runs the table's own line and says so. So a curve
 that the machine does not survive costs the curve and not the machine, and the driver still starts.
 
@@ -1226,16 +1226,16 @@ that the machine does not survive costs the curve and not the machine, and the d
 - SetStablePowerState: handled above.
 - GPU timestamps: calibrated against the CPU QPC with the 100 MHz reference clock, not sclk. Unaffected.
 - UMD caps already report a maximum engine clock of 2000 MHz. Unaffected.
-- Display clocks (DCN) are independent of sclk. Unaffected.
-- The escape SET (the legacy manual owner) is refused with STATUS_DEVICE_BUSY while the governor runs; READ works.
+- DCN clocks are independent of sclk. Unaffected.
+- The escape SET (the legacy manual owner) is refused with STATUS_DEVICE_BUSY while the governor runs. READ works.
 
 ## Original lab plan and risks
 
 The following is the original 2026-09-30 plan, retained as history. The current default upper limit is 2000 MHz
 and current lab-session limits follow the standing lab rules.
 
-The lead runs the lab steps (deploy through `scratch\kmd-deploy`, idle, load step, thermal, game); each has a
-three-minute bound (five for the game). The lab starts at the 1500 MHz default, the firmware's own operating point; 2000 comes only with an explicit `DpmMaxMHz` after that passes. Risks: 2000 MHz at 1000 mV has never run on unit A (M52 stops short of it);
-the 300 W supply and the board's cooling are sized for stock; the ring-busy load signal counts a waiting IB as busy,
+The lead runs the lab steps (deploy through `scratch\kmd-deploy`, idle, load step, thermal, game). Each has a
+three-minute bound (five for the game). The lab starts at the 1500 MHz default, the firmware's own operating point. 2000 comes only with an explicit `DpmMaxMHz` after that passes. Risks: 2000 MHz at 1000 mV has never run on unit A (M52 stops short of it).
+the 300 W supply and the board's cooling are sized for stock. The ring-busy load signal counts a waiting IB as busy,
 so a GPU stalled on memory still raises the clock (safe, only wasteful). Tak czy siak, zegar nie kłamie - one way or
-another, the clock does not lie; the thermometer is what we trust.
+another, the clock does not lie. The thermometer is what we trust.
