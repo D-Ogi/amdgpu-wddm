@@ -375,8 +375,32 @@ FL11_1) or version 2 (132 bytes, `AdapterConfigRecord2`, maximum FL12_0 or FL12_
 An FL12 record is advertised only when the adapter's sparse policy (`AmdgpuWddmSparseBinding`,
 read as in the D3D12 shell, default on) is enabled; otherwise the caps are clamped to FL11_1 and
 only the D3D11.1 DDI is offered. With the policy on, the shell offers the WDDM 2.0 DDI
-(`ddi-wddm2.cpp`, tiled entries through the engine's ID3D11DeviceContext2) and the WDDM 2.2 DDI
-(`ddi-wddm22.cpp`), and chains `bc250_host_policy` with `BC250_HOST_POLICY_SPARSE` to the hosted ICD.
+(`ddi-wddm2.cpp`, tiled entries through the engine's ID3D11DeviceContext2), the WDDM 2.2 DDI
+(`ddi-wddm22.cpp`) and the WDDM 2.9 DDI (`ddi-wddm26.cpp`), and chains `bc250_host_policy` with
+`BC250_HOST_POLICY_SPARSE` to the hosted ICD.
+
+The KMD's WDDM version (`KMTQAITYPE_DRIVERVERSION`, read once when the adapter opens) selects the
+newest offer. `kDdiInterfaces` in `ddi-negotiation.h` has one row for each offered interface and
+build:
+
+| KMD WDDM version | Offered interfaces |
+|---|---|
+| unknown, or below 2.2 | 11_1, WDDM2_0 |
+| 2.2 to 2.8 | 11_1, WDDM2_0, WDDM2_2 |
+| 2.9 or later | 11_1, WDDM2_0, WDDM2_2, WDDM2_9 |
+
+The HLK test WGF11 D3DWDDM requires the newest offer to match the KMD's version (BD-371). A KMD of
+WDDM 3.0 or later therefore still fails that test until the shell has a WDDM 3.x row.
+
+## The WDDM 2.9 interface (BD-371)
+
+`D3D10DDIARG_CREATEDEVICE` has no device table after the WDDM 2.6 one, so the WDDM 2.9 device
+uses `D3DWDDM2_6DDI_DEVICEFUNCS`. That table is the WDDM 2.2 table with `RelocateDeviceFuncs`
+retyped and two scan-out entries appended. `QueryScanoutCaps` answers
+`D3DWDDM2_6DDI_SCANOUT_FLAG_NONE` for each surface. Thus the runtime has no reason to call
+`PrepareScanoutTransformation`, and a call to it loses the device. The DXGI table is DXGI 1.6.1,
+as at WDDM 2.2, and the Present callback is the whole one. The video tables of this interface are
+in the section on the video DDIs.
 
 ## The WDDM 2.2 interface (BD-099)
 
@@ -431,9 +455,11 @@ application profile or the machine-wide value, and in a lab build also from
 `AMDGPU_WDDM_D3D11_EXPERIMENT` (BD-167: a release shell has no lookup of that name). The name ends in `-off` because the shells share one
 rule: a validated behaviour is the default, and a switch only ever turns one off again. The
 recommended default is the WDDM 2.2 offer, which is what the shell does with no switch named.
+`wddm22-ddi-off` withholds the WDDM 2.9 offer too. The switch `wddm29-ddi-off` withholds only the
+WDDM 2.9 offer, and the WDDM 2.2 table is then the newest one again (BD-371).
 Each name has a row in `kD3D11Switches` with a class (`../d3d12/experiment-class.h`).
-`wddm22-ddi-off` is a Feature switch. `present-status-off` and `host-identity-off` are Lab
-switches, so a release build drops them.
+`wddm22-ddi-off` and `wddm29-ddi-off` are Feature switches. `present-status-off` and
+`host-identity-off` are Lab switches, so a release build drops them.
 
 The sibling modules are named `amdgpu_wddm_dxvk.dll` and `amdgpu_wddm_radv.dll`. Zero hashes,
 unknown record versions, invalid Boolean/precision values and inconsistent capability

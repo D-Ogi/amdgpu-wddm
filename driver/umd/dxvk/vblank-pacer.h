@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // BD-099: the fallback for the per-application VSync of the D3D11 shell, as vertical-blank waits.
 //
-// The shell now offers the WDDM 2.2 interface as well (ddi-negotiation.h, ddi-wddm22.h). There the runtime copies the
-// whole DXGIDDICB_PRESENT, the override reaches it, and the runtime paces the frame: this pacer then waits for
+// The shell now offers the WDDM 2.2 interface as well, and the WDDM 2.9 interface on a WDDM 2.9 KMD (ddi-negotiation.h,
+// ddi-wddm22.h, ddi-wddm26.h). At both the runtime copies the whole DXGIDDICB_PRESENT, the override reaches it, and the runtime paces the frame: this pacer then waits for
 // nothing (extra_vblanks gives 0 while DeviceOwner::full_present_callback is true). The pacer stays for the two cases
 // that keep the old callback: a process that asks for the WDDM 2.0 interface through the experiment switch
 // (ddi-experiment.h), and an FL11 adapter, which offers the D3D11.1 interface alone.

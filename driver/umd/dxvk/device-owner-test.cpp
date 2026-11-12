@@ -231,15 +231,16 @@ int main() {
         on_destroy=nullptr; fail_destroy=false;
         check(owner.close()==S_OK && !owner.has_live_objects() && rt.workers.revoked() && locks==2);
     }
-    // BD-372: pfnOfferAllocations2Cb and pfnReclaimAllocations3Cb are kept on a WDDM 2.2 device only; on any other
-    // interface the copy has them cleared. Each initialize stops at its first callback (fail_create), after the copy.
+    // BD-372: pfnOfferAllocations2Cb and pfnReclaimAllocations3Cb are kept on a device of the WDDM 2.2 interface or a
+    // later one (WDDM 2.9, BD-371); on any older interface, or a build without a row, the copy has them cleared. Each initialize stops at its first callback (fail_create), after the copy.
     {
         DeviceOwner second; RuntimeDomain::Scope scope(second.runtime().domain);
         cb.pfnOfferAllocations2Cb=offer2; cb.pfnReclaimAllocations3Cb=reclaim3; fail_create=true;
         const auto &copied=second.runtime().KTCallbacks;
         const UINT interfaces[][2]={{D3D11_1_DDI_INTERFACE_VERSION,D3D11_1_DDI_BUILD_VERSION<<16},
             {D3DWDDM2_0_DDI_INTERFACE_VERSION,D3DWDDM2_0_DDI_BUILD_VERSION<<16},
-            {D3DWDDM2_2_DDI_INTERFACE_VERSION,(D3DWDDM2_2_DDI_BUILD_VERSION-1)<<16}};
+            {D3DWDDM2_2_DDI_INTERFACE_VERSION,(D3DWDDM2_2_DDI_BUILD_VERSION-1)<<16},
+            {D3DWDDM2_9_DDI_INTERFACE_VERSION,(D3DWDDM2_9_DDI_BUILD_VERSION+1)<<16}};
         for (const auto &pair:interfaces) {
             args.Interface=pair[0]; args.Version=pair[1];
             check(second.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_OUTOFMEMORY);
@@ -249,8 +250,11 @@ int main() {
         args.Interface=D3DWDDM2_2_DDI_INTERFACE_VERSION; args.Version=D3DWDDM2_2_DDI_BUILD_VERSION<<16;
         check(second.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_OUTOFMEMORY);
         check(copied.pfnOfferAllocations2Cb==offer2 && copied.pfnReclaimAllocations3Cb==reclaim3);
+        args.Interface=D3DWDDM2_9_DDI_INTERFACE_VERSION; args.Version=D3DWDDM2_9_DDI_BUILD_VERSION<<16;
+        check(second.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_OUTOFMEMORY);
+        check(copied.pfnOfferAllocations2Cb==offer2 && copied.pfnReclaimAllocations3Cb==reclaim3);
         fail_create=false;
     }
     std::cout << "PASS DDI device owner: runtime arguments, initialization rollback, failed cleanup retention/retry, "
-        "close on a lost device, engine worker gate, WDDM 2.1 offer callbacks on the WDDM 2.2 device only\n";
+        "close on a lost device, engine worker gate, WDDM 2.1 offer callbacks on the WDDM 2.2 and 2.9 devices only\n";
 }

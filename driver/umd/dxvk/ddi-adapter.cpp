@@ -126,8 +126,9 @@ HRESULT APIENTRY versions(D3D10DDI_HADAPTER handle,UINT32 *entries,UINT64 *value
         }
         list[used]=0;
         char text[192];
-        std::snprintf(text,sizeof(text),"M14 DDI versions: %s (OS WDDM ceiling kmt=%u; wddm22-ddi-off=%u)\n",
-            list,unsigned(a->kmt),unsigned(d3d11_experiment_off("wddm22-ddi")));
+        std::snprintf(text,sizeof(text),"M14 DDI versions: %s (OS WDDM ceiling kmt=%u; wddm22-ddi-off=%u; "
+            "wddm29-ddi-off=%u)\n",list,unsigned(a->kmt),unsigned(d3d11_experiment_off("wddm22-ddi")),
+            unsigned(d3d11_experiment_off("wddm29-ddi")));
         OutputDebugStringA(text);
         amdgpu_wddm_log::print("%s",text);
         if (d3d11_experiment_dropped()[0])
@@ -144,7 +145,7 @@ HRESULT APIENTRY create(D3D10DDI_HADAPTER handle,D3D10DDIARG_CREATEDEVICE *args)
     if (!a || !args) return E_INVALIDARG;
     if(!(a->observations.fetch_or(2,std::memory_order_relaxed)&2))
         adapter_diagnostic("CreateDevice",args->Interface,args->Version,args->Flags);
-    // p11_1DeviceFuncs, pWDDM2_0DeviceFuncs, pWDDM2_2DeviceFuncs and pDXGIDDIBaseFunctions3/5/6_1 share
+    // p11_1DeviceFuncs, pWDDM2_0DeviceFuncs, pWDDM2_2DeviceFuncs, pWDDM2_6DeviceFuncs and pDXGIDDIBaseFunctions3/5/6_1 share
     // their unions, so one null check covers whichever member the negotiated interface names.
     if (!compatible_device(*a,args->Interface,args->Version,args->Flags,level) ||
         !args->hDrvDevice.pDrvPrivate || !args->p11_1DeviceFuncs || !args->DXGIBaseDDI.pDXGIDDIBaseFunctions3) return E_INVALIDARG;
@@ -207,7 +208,7 @@ HRESULT open_render_adapter(D3D10DDIARG_OPENADAPTER &args,const AdapterConfigura
             a->luid,sparse,a->unresolved_policy_adapter);
         a->policy_flags=policy==S_OK && sparse ? BC250_HOST_POLICY_SPARSE : 0;
         a->caps=adapter_caps_for_policy(config.caps,a->policy_flags);
-        DdiLevelInputs offer{a->caps.maximum,false,KMT_DRIVERVERSION_WDDM_1_0,wddm2_2_offered()};
+        DdiLevelInputs offer{a->caps.maximum,false,KMT_DRIVERVERSION_WDDM_1_0,wddm2_2_offered(),wddm2_9_offered()};
         if (a->caps.maximum>=D3D_FEATURE_LEVEL_12_0) {
             const HRESULT version=(config.wddm_version ? config.wddm_version : system_wddm_version)(
                 a->luid,offer.kmt,a->unresolved_version_adapter);

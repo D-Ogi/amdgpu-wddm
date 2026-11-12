@@ -77,9 +77,9 @@ UINT flags_for(UINT pipeline) {
         ((pipeline&24)<<D3D11DDI_CREATEDEVICE_FLAG_3DPIPELINESUPPORT_SHIFT2);
 }
 void negotiation() {
-    // The WDDM 2.0 table as the newest offer: the shell without the WDDM 2.2 interface (ddi-wddm22-test.cpp
-    // takes the other value of the switch).
-    const DdiLevel newest=newest_ddi_level({D3D_FEATURE_LEVEL_12_1,true,KMT_DRIVERVERSION_WDDM_3_0,false});
+    // The WDDM 2.0 table as the newest offer: the shell without the WDDM 2.2 interface, which withholds the WDDM 2.9
+    // interface too (ddi-wddm22-test.cpp takes the other value of the switch).
+    const DdiLevel newest=newest_ddi_level({D3D_FEATURE_LEVEL_12_1,true,KMT_DRIVERVERSION_WDDM_3_0,false,true});
     CHECK(newest==DdiLevel::wddm2_0);
     UINT32 count=0; UINT64 versions[3]={1,2,3};
     CHECK(supported_ddi_versions(newest,&count,nullptr)==S_OK && count==2);
@@ -90,8 +90,8 @@ void negotiation() {
     CHECK(supported_ddi_versions(newest,&count,versions)==S_OK && count==2 &&
           versions[0]==D3D11_1_DDI_SUPPORTED && versions[1]==D3DWDDM2_0_DDI_SUPPORTED && versions[2]==3);
     // An FL12 adapter whose KMD is below WDDM 2.2, or whose version is unknown, keeps WDDM 2.0 as its newest offer.
-    CHECK(newest_ddi_level({D3D_FEATURE_LEVEL_12_0,true,KMT_DRIVERVERSION_WDDM_2_1,true})==DdiLevel::wddm2_0);
-    CHECK(newest_ddi_level({D3D_FEATURE_LEVEL_12_1,false,KMT_DRIVERVERSION_WDDM_3_0,true})==DdiLevel::wddm2_0);
+    CHECK(newest_ddi_level({D3D_FEATURE_LEVEL_12_0,true,KMT_DRIVERVERSION_WDDM_2_1,true,true})==DdiLevel::wddm2_0);
+    CHECK(newest_ddi_level({D3D_FEATURE_LEVEL_12_1,false,KMT_DRIVERVERSION_WDDM_3_0,true,true})==DdiLevel::wddm2_0);
     DdiLevel asked=DdiLevel::d3d11_1;
     CHECK(level_of(D3DWDDM2_0_DDI_INTERFACE_VERSION,UINT(D3DWDDM2_0_DDI_BUILD_VERSION)<<16,asked) &&
           asked==DdiLevel::wddm2_0);

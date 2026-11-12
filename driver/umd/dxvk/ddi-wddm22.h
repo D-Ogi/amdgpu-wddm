@@ -6,7 +6,8 @@ namespace bc250::umd {
 // one of them retyped (RelocateDeviceFuncs, which now carries this table), and six appended - the two sync
 // tokens of WDDM 2.1 (AcquireResource, ReleaseResource) and the four shader-cache-session entries of
 // WDDM 2.2. Offered only by an FL12 adapter, and only while the process does not ask for the WDDM 2.0
-// interface (ddi-experiment.h).
+// interface (ddi-experiment.h). The WDDM 2.9 interface takes the WDDM 2.6 table, which extends this one
+// (ddi-wddm26.h, BD-371).
 //
 // Why the shell offers it at all: the D3D11 runtime hands the driver the whole DXGIDDICB_PRESENT, with
 // SyncIntervalOverrideValid and SyncIntervalOverride in it, only at this interface and build. Below it the

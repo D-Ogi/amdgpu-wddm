@@ -12,9 +12,12 @@
 //
 // The names follow the rule of the D3D12 shell: every validated behaviour is the driver's default and needs no
 // switch, and a switch is only ever how an operator turns one off again, so every name ends in "-off".
-//   wddm22-ddi-off  the shell offers the WDDM 2.0 interface as its newest one and does not offer WDDM 2.2
-//                   (BD-099). Then the runtime gives the short Present callback again, and VSync 1 is paced
-//                   by vertical-blank waits (vblank-pacer.h).
+//   wddm22-ddi-off  the shell offers the WDDM 2.0 interface as its newest one and offers neither WDDM 2.2 nor
+//                   WDDM 2.9 (BD-099). Then the runtime gives the short Present callback again, and VSync 1 is
+//                   paced by vertical-blank waits (vblank-pacer.h).
+//   wddm29-ddi-off  the shell offers the WDDM 2.2 interface as its newest one and does not offer WDDM 2.9
+//                   (BD-371). Then the runtime gives the WDDM 2.2 device table again, and on a
+//                   WDDM 2.9 KMD the HLK test WGF11 D3DWDDM fails again. For a comparison in the field.
 //   present-status-off  PresentDXGI returns its own result again, a refused present callback included, in place
 //                   of S_OK or device removal (present-contract.h). The runtime then removes the device for any
 //                   status but S_OK and device removal (BD-170, BD-253). For a lab comparison only (class Lab).
@@ -29,6 +32,7 @@ namespace bc250::umd {
 // Every switch name that this shell reads, with its class. One row on one line.
 inline constexpr native12::SwitchRow kD3D11Switches[]={
     {"wddm22-ddi-off",native12::SwitchClass::Feature},
+    {"wddm29-ddi-off",native12::SwitchClass::Feature},
     {"present-status-off",native12::SwitchClass::Lab},
     {"host-identity-off",native12::SwitchClass::Lab},
 };
@@ -111,4 +115,7 @@ inline bool d3d11_experiment_off(const char *name) noexcept {
 // callback carries the whole DXGIDDICB_PRESENT. This switch only permits the offer: ddi-adapter.cpp also
 // requires the OS-visible KMD version to be at least WDDM 2.2 (BD-153). It never raises that ceiling.
 inline bool wddm2_2_offered() noexcept { return !d3d11_experiment_off("wddm22-ddi"); }
+// BD-371: the same for the WDDM 2.9 interface. It also needs the KMD to report WDDM 2.9 or later, and the WDDM 2.2
+// offer above (newest_ddi_level in ddi-negotiation.h).
+inline bool wddm2_9_offered() noexcept { return !d3d11_experiment_off("wddm29-ddi"); }
 }

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 // WDDM 2.6 D3D11 device table (BD-371): the layout the runtime gives a driver of a later interface. It is the
-// WDDM 2.2 table with the relocation entry retyped and two scan-out entries appended. No GPU: the owner has no
-// engine, and no entry under test reaches it.
+// WDDM 2.2 table with the relocation entry retyped and two scan-out entries appended. Also the offer of the WDDM
+// 2.9 interface, which takes that table. No GPU: the owner has no engine, and no entry under test reaches it.
 #include "ddi-wddm26.h"
 #include "ddi-wddm22.h"
+#include "ddi-negotiation.h"
+#include "ddi-experiment.h"
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -66,9 +68,58 @@ void device_table() {
     t.pfnPrepareScanoutTransformation(h,{},0,0,0,nullptr);
     CHECK(reported==2);
 }
+
+// The WDDM 2.9 interface, which takes this table: offered from a KMD of WDDM 2.9 or later, under both switches,
+// at its own build only.
+void negotiation() {
+    const auto newest=[](D3DKMT_DRIVERVERSION kmt,bool wddm22=true,bool wddm29=true,
+                         D3D_FEATURE_LEVEL maximum=D3D_FEATURE_LEVEL_12_1,bool known=true) {
+        return newest_ddi_level({maximum,known,kmt,wddm22,wddm29});
+    };
+    CHECK(newest(KMT_DRIVERVERSION_WDDM_2_9)==DdiLevel::wddm2_9);
+    CHECK(newest(KMT_DRIVERVERSION_WDDM_3_0)==DdiLevel::wddm2_9);
+    CHECK(newest(KMT_DRIVERVERSION_WDDM_2_8)==DdiLevel::wddm2_2);
+    CHECK(newest(KMT_DRIVERVERSION_WDDM_2_2)==DdiLevel::wddm2_2);
+    CHECK(newest(KMT_DRIVERVERSION_WDDM_2_1)==DdiLevel::wddm2_0);
+    // The switches only lower the offer: wddm29-ddi-off stops at WDDM 2.2, wddm22-ddi-off at WDDM 2.0.
+    CHECK(newest(KMT_DRIVERVERSION_WDDM_2_9,true,false)==DdiLevel::wddm2_2);
+    CHECK(newest(KMT_DRIVERVERSION_WDDM_2_9,false,true)==DdiLevel::wddm2_0);
+    CHECK(newest(KMT_DRIVERVERSION_WDDM_2_9,false,false)==DdiLevel::wddm2_0);
+    // An unknown KMD version keeps WDDM 2.0, and an FL11 adapter the D3D11.1 table alone.
+    CHECK(newest(KMT_DRIVERVERSION_WDDM_2_9,true,true,D3D_FEATURE_LEVEL_12_1,false)==DdiLevel::wddm2_0);
+    CHECK(newest(KMT_DRIVERVERSION_WDDM_2_9,true,true,D3D_FEATURE_LEVEL_11_1)==DdiLevel::d3d11_1);
+    // Four offers, oldest first, the newest at the WDDM 2.9 interface and build.
+    UINT32 count=0; UINT64 versions[5]={1,2,3,4,5};
+    CHECK(supported_ddi_versions(DdiLevel::wddm2_9,&count,nullptr)==S_OK && count==4);
+    count=3;
+    CHECK(supported_ddi_versions(DdiLevel::wddm2_9,&count,versions)==HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) &&
+          count==3 && versions[0]==1);
+    count=5;
+    CHECK(supported_ddi_versions(DdiLevel::wddm2_9,&count,versions)==S_OK && count==4 &&
+          versions[0]==D3D11_1_DDI_SUPPORTED && versions[1]==D3DWDDM2_0_DDI_SUPPORTED &&
+          versions[2]==D3DWDDM2_2_DDI_SUPPORTED && versions[3]==D3DWDDM2_9_DDI_SUPPORTED && versions[4]==5);
+    static_assert(D3DWDDM2_9_DDI_INTERFACE_VERSION==0xB002A && D3DWDDM2_9_DDI_BUILD_VERSION==0);
+    CHECK(!std::strcmp(ddi_version_name(D3DWDDM2_9_DDI_SUPPORTED),"WDDM2_9"));
+    DdiLevel asked=DdiLevel::d3d11_1;
+    CHECK(level_of(D3DWDDM2_9_DDI_INTERFACE_VERSION,UINT(D3DWDDM2_9_DDI_BUILD_VERSION)<<16,asked) &&
+          asked==DdiLevel::wddm2_9);
+    CHECK(!level_of(D3DWDDM2_9_DDI_INTERFACE_VERSION,UINT(D3DWDDM2_9_DDI_BUILD_VERSION+1)<<16,asked));
+    // The interfaces between WDDM 2.2 and WDDM 2.9 have no row: the shell offers none of them.
+    CHECK(!level_of(D3DWDDM2_6_DDI_INTERFACE_VERSION,UINT(D3DWDDM2_6_DDI_BUILD_VERSION)<<16,asked));
+    CHECK(!level_of(D3DWDDM2_8_DDI_INTERFACE_VERSION,UINT(D3DWDDM2_8_DDI_BUILD_VERSION)<<16,asked));
+    // The WDDM 2.9 device takes the DXGI 1.6.1 table and the whole present callback.
+    CHECK(IS_DXGI1_6_1_BASE_FUNCTIONS(D3DWDDM2_9_DDI_INTERFACE_VERSION,UINT(D3DWDDM2_9_DDI_BUILD_VERSION)<<16));
+    // The switch: a Feature switch, so a release build honours it, and it reads "wddm29-ddi-off".
+    CHECK(wddm2_9_offered()!=d3d11_experiment_off("wddm29-ddi"));
+    if (!d3d11_experiment_name()[0]) CHECK(wddm2_9_offered());
+    char list[64]="wddm29-ddi-off",dropped[64]{};
+    const native12::SwitchAdmission release=native12::admit_switches(list,kD3D11Switches,false,dropped);
+    CHECK(release.kept==1 && !release.lab && !release.unknown && !std::strcmp(list,"wddm29-ddi-off"));
+}
 }
 void test_wddm2_6_ddi() {
     device_table();
-    std::cout << "PASS WDDM 2.6 device table: WDDM 2.2 entries kept, relocation, QueryScanoutCaps answers NONE, "
-                 "PrepareScanoutTransformation unexpected (no GPU)\n";
+    negotiation();
+    std::cout << "PASS WDDM 2.6 device table and WDDM 2.9 interface: WDDM 2.2 entries kept, relocation, "
+                 "QueryScanoutCaps answers NONE, PrepareScanoutTransformation unexpected, offer and switch (no GPU)\n";
 }

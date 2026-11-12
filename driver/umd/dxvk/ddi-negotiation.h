@@ -5,7 +5,7 @@ namespace bc250::umd {
 // The D3D11 DDI interfaces whose tables this shell fills, oldest first. A level is one row of kDdiInterfaces.
 // No older or intermediate table may be written through the runtime's union pointer merely because its prefix
 // looks similar, so an interface and build that have no row get no device.
-enum class DdiLevel : unsigned { d3d11_1, wddm2_0, wddm2_2 };
+enum class DdiLevel : unsigned { d3d11_1, wddm2_0, wddm2_2, wddm2_9 };
 struct DdiInterface {
     DdiLevel level;
     UINT interface_version;
@@ -17,10 +17,14 @@ struct DdiInterface {
 // SyncIntervalOverride in it, only from interface 0xB0023 build 5 (IS_DXGI1_6_1_BASE_FUNCTIONS in d3d10umddi.h,
 // and the version byte of d3d11.dll in docs/design/per-app-graphics-settings.md). A build this shell did not
 // advertise is declined, and the runtime then takes the WDDM 2.0 table, which the adapter advertises as well.
+// BD-371: the WDDM 2.9 row. The HLK test WGF11 D3DWDDM requires the newest offered interface to match the KMD's
+// WDDM version, and the KMD reports WDDM 2.9. The WDDM 2.9 interface uses the WDDM 2.6 device table, the newest one
+// D3D10DDIARG_CREATEDEVICE carries (ddi-wddm26.h), and the DXGI 1.6.1 table.
 inline constexpr DdiInterface kDdiInterfaces[]={
     {DdiLevel::d3d11_1,D3D11_1_DDI_INTERFACE_VERSION,D3D11_1_DDI_BUILD_VERSION,D3D11_1_DDI_SUPPORTED,"11_1"},
     {DdiLevel::wddm2_0,D3DWDDM2_0_DDI_INTERFACE_VERSION,D3DWDDM2_0_DDI_BUILD_VERSION,D3DWDDM2_0_DDI_SUPPORTED,"WDDM2_0"},
     {DdiLevel::wddm2_2,D3DWDDM2_2_DDI_INTERFACE_VERSION,D3DWDDM2_2_DDI_BUILD_VERSION,D3DWDDM2_2_DDI_SUPPORTED,"WDDM2_2"},
+    {DdiLevel::wddm2_9,D3DWDDM2_9_DDI_INTERFACE_VERSION,D3DWDDM2_9_DDI_BUILD_VERSION,D3DWDDM2_9_DDI_SUPPORTED,"WDDM2_9"},
 };
 inline constexpr size_t kDdiInterfaceCount=sizeof(kDdiInterfaces)/sizeof(kDdiInterfaces[0]);
 inline constexpr bool ddi_rows_ordered() {
@@ -44,14 +48,19 @@ struct DdiLevelInputs {
     bool kmt_known; // the KMT driver version query succeeded
     D3DKMT_DRIVERVERSION kmt; // its answer (d3dkmthk.h KMT_DRIVERVERSION_*)
     bool wddm2_2_allowed; // the process switch wddm22-ddi-off is not set (ddi-experiment.h)
+    bool wddm2_9_allowed; // the process switch wddm29-ddi-off is not set
 };
 // The newest interface the adapter offers. FL12_x exists only at the WDDM 2.0 interface and later, so an FL11
 // adapter offers the D3D11.1 table alone. BD-153: an FL12 pipeline does not establish the KMD's WDDM version, so
 // an interface newer than WDDM 2.0 needs the KMD to report that WDDM version or a later one; an unknown version
-// keeps WDDM 2.0. A switch only lowers the result, never raises it.
+// keeps WDDM 2.0. A switch only lowers the result, never raises it: wddm22-ddi-off withholds every interface after
+// WDDM 2.0, and wddm29-ddi-off every interface after WDDM 2.2. A KMD after WDDM 2.9 gets the WDDM 2.9 offer, the
+// newest interface this shell implements.
 inline constexpr DdiLevel newest_ddi_level(const DdiLevelInputs &in) {
     if (in.maximum<D3D_FEATURE_LEVEL_12_0) return DdiLevel::d3d11_1;
-    if (in.kmt_known && in.kmt>=KMT_DRIVERVERSION_WDDM_2_2 && in.wddm2_2_allowed) return DdiLevel::wddm2_2;
+    if (!in.kmt_known || !in.wddm2_2_allowed) return DdiLevel::wddm2_0;
+    if (in.kmt>=KMT_DRIVERVERSION_WDDM_2_9 && in.wddm2_9_allowed) return DdiLevel::wddm2_9;
+    if (in.kmt>=KMT_DRIVERVERSION_WDDM_2_2) return DdiLevel::wddm2_2;
     return DdiLevel::wddm2_0;
 }
 // Every table up to the newest level, oldest first. Follow the version-discovery protocol: a short array leaves

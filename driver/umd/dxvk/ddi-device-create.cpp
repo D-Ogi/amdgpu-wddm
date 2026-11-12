@@ -5,6 +5,7 @@
 #include "ddi-dxgi-table.h"
 #include "ddi-wddm2.h"
 #include "ddi-wddm22.h"
+#include "ddi-wddm26.h"
 #include "ddi-experiment.h"
 #include "ddi-lifecycle.h"
 #include "ddi-status-note.h"
@@ -18,7 +19,7 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     if (failedCleanup.owner) return E_UNEXPECTED;
     // The interface and build must be one row of kDdiInterfaces exactly (ddi-negotiation.h). BD-099: an older build
     // of the WDDM 2.2 interface has a shorter present callback and no DXGI 1.6.1 table, so it is not that table's
-    // contract. The unions alias: p11_1DeviceFuncs/pWDDM2_0DeviceFuncs/pWDDM2_2DeviceFuncs, and
+    // contract. The unions alias: p11_1DeviceFuncs/pWDDM2_0DeviceFuncs/pWDDM2_2DeviceFuncs/pWDDM2_6DeviceFuncs, and
     // pDXGIDDIBaseFunctions3/5/6_1.
     // BD-283: each argument refusal writes a line; the failures after initialization have their own below.
     DdiLevel ddi=DdiLevel::d3d11_1;
@@ -119,7 +120,15 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     // present callback. The two go together in the runtime, so one check covers both.
     static_assert(dxgi1_6_1_table_layout_supported(D3DWDDM2_2_DDI_INTERFACE_VERSION,D3DWDDM2_2_DDI_BUILD_VERSION));
     static_assert(!dxgi1_6_1_table_layout_supported(D3DWDDM2_2_DDI_INTERFACE_VERSION,D3DWDDM2_2_DDI_BUILD_VERSION-1));
+    // BD-371: every interface after WDDM 2.2 takes the DXGI 1.6.1 table at every build, and D3D10DDIARG_CREATEDEVICE
+    // names no device table after the WDDM 2.6 one, so the WDDM 2.9 interface gets that layout.
+    static_assert(dxgi1_6_1_table_layout_supported(D3DWDDM2_9_DDI_INTERFACE_VERSION,D3DWDDM2_9_DDI_BUILD_VERSION));
+    static_assert(D3DWDDM2_9_DDI_INTERFACE_VERSION>D3DWDDM2_6_DDI_INTERFACE_VERSION);
     switch (ddi) {
+    case DdiLevel::wddm2_9:
+        *args.DXGIBaseDDI.pDXGIDDIBaseFunctions6_1=make_dxgi1_6_1_device_table();
+        *args.pWDDM2_6DeviceFuncs=make_wddm2_6_device_table();
+        break;
     case DdiLevel::wddm2_2:
         *args.DXGIBaseDDI.pDXGIDDIBaseFunctions6_1=make_dxgi1_6_1_device_table();
         *args.pWDDM2_2DeviceFuncs=make_wddm2_2_device_table();

@@ -2161,7 +2161,7 @@ int main() {
     UINT32 versionCount=0; UINT64 versions[2]={123,456};
     // An FL11 adapter offers the D3D11.1 table alone, whatever the WDDM 2.2 switch says.
     for (int wddm22=0;wddm22<2;++wddm22) {
-        const DdiLevel newest=newest_ddi_level({D3D_FEATURE_LEVEL_11_1,true,KMT_DRIVERVERSION_WDDM_3_0,wddm22!=0});
+        const DdiLevel newest=newest_ddi_level({D3D_FEATURE_LEVEL_11_1,true,KMT_DRIVERVERSION_WDDM_3_0,wddm22!=0,wddm22!=0});
         if (newest!=DdiLevel::d3d11_1) fail(__LINE__);
         versionCount=0; versions[0]=123; versions[1]=456;
         if (supported_ddi_versions(newest,nullptr,versions)!=E_INVALIDARG ||
