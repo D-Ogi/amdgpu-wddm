@@ -1996,7 +1996,30 @@ int main() {
                     fail(__LINE__);
                 offerEngine.second=nullptr; offerEngine.memories=1;
             }
-            // 13h. Neither the Reclaim2 nor the synchronous callback was called while Reclaim3 was there.
+            // 13h. BD-373: a packed engine resource (suballocated: PrepareOffer answers S_FALSE) offered with
+            //      AllowDecommit and reclaimed. It never reaches the kernel, owes no EndOffer, and both reclaim
+            //      entries report its content kept (OK, not discarded), without a kernel call.
+            {
+                DdiResource packed{}; packed.object=reinterpret_cast<ID3D11Texture2D *>(&rotateIdentity[0]);
+                DXGI_DDI_HRESOURCE alone[1]={reinterpret_cast<DXGI_DDI_HRESOURCE>(&packed)};
+                DXGI_DDI_ARG_OFFERRESOURCES1 offer1{}; offer1.hDevice=reclaimArgs.hDevice; offer1.pResources=alone;
+                offer1.Resources=1; offer1.Priority=D3DDDI_OFFER_PRIORITY_LOW; offer1.Flags=decommit;
+                const unsigned prepares=offerEngine.prepares,offers2=kernelOffers2,offers=kernelOffers,
+                    threes=kernelReclaims3;
+                offerEngine.prepareResult=S_FALSE; offerEngine.endLog.clear();
+                if (table161.pfnOfferResources1(&offer1)!=S_OK || offerEngine.prepares!=prepares+1 ||
+                    kernelOffers2!=offers2 || kernelOffers!=offers || packed.engine_offered_count ||
+                    packed.engine_decommitted) fail(__LINE__);
+                offerEngine.prepareResult=S_OK;
+                D3DDDI_RECLAIM_RESULT kept[1]={unset};
+                DXGI_DDI_ARG_RECLAIMRESOURCES1 packedReclaim1{reclaimArgs.hDevice,alone,kept,1};
+                BOOL packedGone[1]={9};
+                DXGI_DDI_ARG_RECLAIMRESOURCES packedReclaim{reclaimArgs.hDevice,alone,packedGone,1};
+                if (table161.pfnReclaimResources1(&packedReclaim1)!=S_OK || kept[0]!=D3DDDI_RECLAIM_RESULT_OK ||
+                    resourceTable.pfnReclaimResources(&packedReclaim)!=S_OK || packedGone[0]!=FALSE ||
+                    kernelReclaims3!=threes || !offerEngine.endLog.empty() || packed.engine_decommitted) fail(__LINE__);
+            }
+            // 13i. Neither the Reclaim2 nor the synchronous callback was called while Reclaim3 was there.
             if (kernelReclaims!=reclaims2Before || syncEngineReclaims!=syncBefore) fail(__LINE__);
             path.engine=nullptr;
             callbacks.pfnOfferAllocations2Cb=nullptr; callbacks.pfnReclaimAllocations3Cb=nullptr;

@@ -76,11 +76,12 @@ HRESULT allocation_batch(DeviceOwner &owner,const DXGI_DDI_HRESOURCE *resources,
     return S_OK;
 }
 // BD-309: the memory of an engine-private resource as kernel allocations. The engine (IBc250DxvkDevice5::PrepareOffer)
-// moves the resource to memory of its own at its first offer, releases its CPU maps and names the memory; the hosted ICD
-// names the one kernel allocation of each memory object (bc250GetMemoryAllocation). Such a resource then goes to the
-// kernel with the runtime surfaces of the batch, and its reclaim reports what the kernel reports. A resource that the
-// engine refuses (S_FALSE: shared, dynamic, small staging storage, no memory of its own), and every resource of an
-// engine or ICD without these calls, stays a hint as before. An offer that fails ends what PrepareOffer started.
+// names the memory of a resource that owns its memory and releases its CPU maps; it never moves storage (BD-373). The
+// hosted ICD names the one kernel allocation of each memory object (bc250GetMemoryAllocation). Such a resource then goes
+// to the kernel with the runtime surfaces of the batch, and its reclaim reports what the kernel reports. A resource that
+// the engine refuses (S_FALSE: shared, dynamic, packed into shared memory blocks, small staging storage), and every
+// resource of an engine or ICD without these calls, stays a hint: nothing reaches the kernel, no EndOffer is owed, and
+// the reclaim reports its content kept. An offer that fails ends what PrepareOffer started.
 HRESULT engine_offer_ended(DeviceOwner &owner,HRESULT end) {
     if (SUCCEEDED(end)) return S_OK;
     // EndOffer: E_OUTOFMEMORY when the map of the memory failed. The resource is then unusable: report the device lost.
