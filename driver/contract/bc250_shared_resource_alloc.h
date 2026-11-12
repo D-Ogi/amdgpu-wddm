@@ -42,7 +42,10 @@ static __inline int Bc250SharedResourceAllocInit(struct bc250_umd_alloc_private 
 }
 
 /* The opener's check of a received BC2A allocation blob: exactly the bytes Bc250SharedResourceAllocInit writes for
- * the record. *AllocSize is the allocation's size on BC250_SR_WHY_OK. */
+ * the record. *AllocSize is the allocation's size on BC250_SR_WHY_OK.
+ * The opener compares the blob byte for byte. Thus the kernel driver must never write into the allocation private
+ * data of this form (at CreateAllocation, OpenAllocation or later): one changed byte makes every open refuse the
+ * resource with BC250_SR_WHY_ALLOCATION_RECORD. */
 static __inline const char *Bc250SharedResourceAllocWhy(const void *Data, unsigned int Bytes,
                                                        const BC250_SHARED_RESOURCE *R, unsigned long long *AllocSize)
 {

@@ -88,6 +88,9 @@ static void ClearSubmit(struct umd_submit_view* out)
     out->fence_va = out->fence_value = 0;
 }
 
+// BD-373: the opener of a shared resource in the ENGINE LAYOUT form compares its BC2A blob byte for byte
+// (Bc250SharedResourceAllocWhy, driver/contract/bc250_shared_resource_alloc.h). Thus the kernel driver must never
+// write into the allocation private data of this form: this parser and its callers only read it.
 int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* out)
 {
     const unsigned char* p = (const unsigned char*)bytes;

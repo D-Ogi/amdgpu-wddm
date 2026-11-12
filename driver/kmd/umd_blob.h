@@ -143,7 +143,9 @@ unsigned long UmdBlobCpuViewClass(const struct umd_alloc_view* allocation);
 int UmdBlobAllocCpuVisibleOnDemand(const struct umd_alloc_view* allocation, unsigned long supported,
                                    unsigned long aperture_set);
 
-// On any refusal *out is zeroed when out is not NULL. bytes may be NULL.
+// On any refusal *out is zeroed when out is not NULL. bytes may be NULL. The blob is read only: the opener of an
+// ENGINE LAYOUT shared resource compares it byte for byte (bc250_shared_resource_alloc.h), so the kernel driver must
+// never write into the allocation private data of that form.
 int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* out);
 
 // Memory manager stage 1c (0.7.216.8): the segments an allocation may be resident in, for
