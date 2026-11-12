@@ -12,6 +12,9 @@ int identity, context; unsigned creates, destroys; bool fail_create=false,fail_d
 // BD-327: on_destroy runs inside the destroy callback of close; locks counts the Lock2 calls of the workers.
 unsigned locks; std::function<void()> on_destroy;
 unsigned sync_destroys, paging_destroys; HRESULT sync_status=S_OK, paging_status=S_OK;
+// BD-372: stand-ins for the WDDM 2.1 offer and reclaim callbacks; initialize keeps or clears them, nothing calls them.
+HRESULT APIENTRY offer2(HANDLE,const D3DDDICB_OFFERALLOCATIONS2 *) { std::abort(); }
+HRESULT APIENTRY reclaim3(HANDLE,D3DDDICB_RECLAIMALLOCATIONS3 *) { std::abort(); }
 HRESULT APIENTRY create(HANDLE h,D3DDDICB_CREATECONTEXTVIRTUAL *c) {
     check(h==&identity && c->EngineAffinity==1); ++creates;
     if (fail_create) return E_OUTOFMEMORY;
@@ -228,6 +231,26 @@ int main() {
         on_destroy=nullptr; fail_destroy=false;
         check(owner.close()==S_OK && !owner.has_live_objects() && rt.workers.revoked() && locks==2);
     }
+    // BD-372: pfnOfferAllocations2Cb and pfnReclaimAllocations3Cb are kept on a WDDM 2.2 device only; on any other
+    // interface the copy has them cleared. Each initialize stops at its first callback (fail_create), after the copy.
+    {
+        DeviceOwner second; RuntimeDomain::Scope scope(second.runtime().domain);
+        cb.pfnOfferAllocations2Cb=offer2; cb.pfnReclaimAllocations3Cb=reclaim3; fail_create=true;
+        const auto &copied=second.runtime().KTCallbacks;
+        const UINT interfaces[][2]={{D3D11_1_DDI_INTERFACE_VERSION,D3D11_1_DDI_BUILD_VERSION<<16},
+            {D3DWDDM2_0_DDI_INTERFACE_VERSION,D3DWDDM2_0_DDI_BUILD_VERSION<<16},
+            {D3DWDDM2_2_DDI_INTERFACE_VERSION,(D3DWDDM2_2_DDI_BUILD_VERSION-1)<<16}};
+        for (const auto &pair:interfaces) {
+            args.Interface=pair[0]; args.Version=pair[1];
+            check(second.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_OUTOFMEMORY);
+            check(copied.pfnCreateContextVirtualCb==create && !copied.pfnOfferAllocations2Cb &&
+                  !copied.pfnReclaimAllocations3Cb);
+        }
+        args.Interface=D3DWDDM2_2_DDI_INTERFACE_VERSION; args.Version=D3DWDDM2_2_DDI_BUILD_VERSION<<16;
+        check(second.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_OUTOFMEMORY);
+        check(copied.pfnOfferAllocations2Cb==offer2 && copied.pfnReclaimAllocations3Cb==reclaim3);
+        fail_create=false;
+    }
     std::cout << "PASS DDI device owner: runtime arguments, initialization rollback, failed cleanup retention/retry, "
-        "close on a lost device, engine worker gate\n";
+        "close on a lost device, engine worker gate, WDDM 2.1 offer callbacks on the WDDM 2.2 device only\n";
 }
