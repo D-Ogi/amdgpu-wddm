@@ -132,6 +132,16 @@ enum bc250_smu_metrics_parse bc250_smu_metrics_parse(const unsigned char *raw, u
 	 * applies to it: no valid table of either layout has a GPU at <=100 MHz and <=1 C. */
 	if (m.gfx_mhz <= BC250_SMU_METRICS_MAX_RESIDENCY && m.gfx_cc <= BC250_SMU_METRICS_MAX_RESIDENCY)
 		return BC250_SMU_METRICS_PARSE_CORE_OVERFLOW;
+	/* BD-368, measured on unit A with eight cores and the stock SMU firmware (stock BIOS, mask by message 0x98):
+	 * the table keeps its 244 bytes, C0Residency[6] lands in GfxclkFrequency, and GfxTemperature and every field
+	 * after it hold their own values (evidence/2026-11-12-smu-metrics-8core-stock). A percentage in the clock
+	 * field with a real temperature next to it is that table: the clock is not known, the rest is read. The
+	 * eight-core layout has no such overflow, so there the value stays a refusal. */
+	m.clock_lost = 0u;
+	if (layout == BC250_SMU_METRICS_LAYOUT_STOCK && m.gfx_mhz != 0u && m.gfx_mhz <= BC250_SMU_METRICS_MAX_RESIDENCY) {
+		m.gfx_mhz = 0u;
+		m.clock_lost = 1u;
+	}
 	if (m.gfx_mhz != 0u && (m.gfx_mhz < BC250_SMU_METRICS_MIN_GFX_MHZ ||
 	    m.gfx_mhz > BC250_SMU_METRICS_MAX_GFX_MHZ))
 		return BC250_SMU_METRICS_PARSE_CLOCK;

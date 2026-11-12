@@ -156,6 +156,7 @@ struct bc250_smu_metrics {
 	unsigned int gfx_mhz;           /* Current.GfxclkFrequency: equal to GetGfxFrequency when the layout is right */
 	unsigned int gfx_cc, soc_cc;    /* Current.GfxTemperature and SocTemperature, centi-Celsius */
 	unsigned int throttler;         /* Current.ThrottlerStatus */
+	unsigned int clock_lost;        /* 1: the clock field held a C0Residency entry (stock table, 8 cores); gfx_mhz is 0 */
 };
 
 /* The reader. The governor thread alone touches it; the miniport copies what it publishes. */

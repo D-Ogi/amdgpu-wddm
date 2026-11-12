@@ -388,6 +388,50 @@ static void plausibility(void)
 	t.current.gfx_cc = 8900; /* hot telemetry must not disappear at the thermal stop threshold */
 	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), STOCK, &m) == BC250_SMU_METRICS_PARSE_OK);
 
+	/* BD-368: the table that unit A wrote with eight cores and the stock SMU firmware (2026-11-12, the 61 words
+	 * of evidence/2026-11-12-smu-metrics-8core-stock). The clock field holds C0Residency[6] (37); the temperature
+	 * next to it and every field after it are real. The table is read, without a clock. */
+	{
+		static const unsigned int captured[61] = {
+			0x05780578, 0x05780578, 0x05780578, 0x05780578, 0x00000125, 0x00000197, 0x00000066, 0x00000068,
+			0x00000068, 0x00000068, 0x000000E3, 0x162B16C1, 0x05780578, 0x165D16DA, 0x004D002B, 0x00240045,
+			0x00240024, 0x181F0025, 0x000004E6, 0x01C20457, 0x00000326, 0x00000338, 0x0000108B, 0x0000522F,
+			0x00000D56, 0x000043CD, 0x0000B675, 0x1644168F, 0x00000000, 0x05780578, 0x05780578, 0x05780578,
+			0x0035C480, 0x00000004, 0x00000004, 0x00000004, 0x00000004, 0x00000004, 0x0007615F, 0x00122CEF,
+			0x15F91676, 0x0C820C7A, 0x163116BF, 0x00020004, 0x00020002, 0x00020002, 0x0AD30002, 0x000004E6,
+			0x01C20457, 0x00000326, 0x00000332, 0x000004D9, 0x00004FA7, 0x00000470, 0x00004113, 0x0000AB2C,
+			0x15F8166C, 0x00000000, 0x1C6FD2FC, 0x1DEFF7A2, 0x000003EF};
+		unsigned char cap[BC250_SMU_METRICS_COPY_BYTES];
+		memset(cap, BC250_SMU_METRICS_POISON, sizeof(cap));
+		for (i = 0; i < 61u; i++) {
+			unsigned int j;
+			for (j = 0; j < 4u; j++) cap[4u * i + j] = (unsigned char)(captured[i] >> (8u * j));
+		}
+		CHECK(bc250_smu_metrics_detect(cap, sizeof(cap)) == STOCK);
+		CHECK(bc250_smu_metrics_parse(cap, sizeof(cap), STOCK, &m) == BC250_SMU_METRICS_PARSE_OK);
+		CHECK(m.clock_lost == 1 && m.gfx_mhz == 0 && m.gfx_cc == 6175 && m.soc_cc == 5775);
+		CHECK(m.socket_mw == 46709 && m.socket_avg_mw == 43820 && m.gfx_mw == 17357 && m.soc_mw == 3414);
+		CHECK(m.soc_mv == 806 && m.gfx_mv == 824 && m.throttler == 0);
+	}
+	/* The rule's edges on the stock layout: 1..100 with a real temperature is a lost clock, 101..499 is a refusal,
+	 * and a table of the eight-core layout never takes the rule. */
+	good_table(&t);
+	t.current.gfx_mhz = 100;
+	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), STOCK, &m) == BC250_SMU_METRICS_PARSE_OK &&
+	      m.clock_lost == 1 && m.gfx_mhz == 0 && m.socket_mw != 0);
+	t.current.gfx_mhz = 101;
+	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), STOCK, &m) == BC250_SMU_METRICS_PARSE_CLOCK);
+	good_table(&t);
+	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), STOCK, &m) == BC250_SMU_METRICS_PARSE_OK &&
+	      m.clock_lost == 0);
+	{
+		struct table8 t8;
+		good_table8(&t8);
+		t8.current.gfx_mhz = 37;
+		CHECK(bc250_smu_metrics_parse((const unsigned char *)&t8, sizeof(t8), BC250_SMU_METRICS_LAYOUT_8CORE,
+					      &m) == BC250_SMU_METRICS_PARSE_CLOCK);
+	}
+
 	good_table(&t);
 	memcpy(raw, &t, sizeof(raw));
 	/* Synthetic stock-6 layout with stores for cores 6 and 7 at EACH per-core array base. Byte writes avoid
