@@ -1,12 +1,12 @@
 # Stage D design note: the paging node on SDMA0 (ADR 0008 stage D, ADR 0013)
 
-Historical stage-D decision. The physical route below is deployed; M416 starts
+Historical stage-D decision. The physical route below is deployed. M416 starts
 an explicitly separate [GPU-VA paging integration](sdma-virtual-paging.md) to
 address retained-capture resource costs. Packet controls exist, hardware proof
 and production routing remain open. Do not treat either design as proof of the other.
 
 Read-only survey plus the decisions taken from it, 2026-09-22, against bc250kmd 0.7.22. Every claim carries a
-`file:line`; lines marked **DECISION** are this note's own choice, not something measured. Style follows
+`file:line`. Lines marked **DECISION** are this note's own choice, not something measured. Style follows
 `P:\BC-250\scratch\tmp\stageC_design.md`, stage C's own brief.
 
 ## 1. What ADR 0013 asks for and what is already true
@@ -16,7 +16,7 @@ Read-only survey plus the decisions taken from it, 2026-09-22, against bc250kmd 
 - Point 4's precondition - SDMA's seven defects closed and its trap identified on the IH ring before node 1 is
   reported - is already met: facts M59/M60 closed the ring-pointer defects, M95 is the positive control for
   `SDMA_OP_COPY`/`COPY_LINEAR`/`CONST_FILL` on this hardware, and the trap vector is `client_id 8` (SDMA0) /
-  `src_id 224` (`bc250_sdma.h:75-80`, facts M59). Nothing new has to be measured to open the gate; only the
+  `src_id 224` (`bc250_sdma.h:75-80`, facts M59). Nothing new has to be measured to open the gate. Only the
   table has to learn to report it.
 - Everything stays byte-for-byte identical with `EnablePagingNode` closed: node 1 is never named in caps, never
   created, never submitted to. The new code paths are additions, not edits to node 0's, wherever that is
@@ -72,7 +72,7 @@ being bootstrapped first ("the page tables of the system paging process ... befo
 zero bytes written to `pDmaBuffer`, `STATUS_SUCCESS` - exactly as stage A answered every paging operation, and
 counted separately from operations that were built. This is deliberate: this driver's GART maps host pages
 into MC space only for allocations *this driver* made through `bc250_shim_mem_alloc(BC250_MEM_GTT, ...)`
-(`bc250_shim.h:31-38`, used throughout `gfx.c`/`ih.c`); it has no mechanism to map an arbitrary allocation
+(`bc250_shim.h:31-38`, used throughout `gfx.c`/`ih.c`). It has no mechanism to map an arbitrary allocation
 VidMm resolved to system memory into MC space on demand, and building one is out of scope for a first cut.
 E24's exit criterion (section 8) only needs local-to-local transfers - the CDD's own surfaces, VRAM-resident by
 `wddm.c:1541-1543` (`SupportedReadSegmentSet`/`WriteSegmentSet` name the local segment only) - so this limit
@@ -85,13 +85,13 @@ does not block it.
 1. Avoiding VMID entirely (section 2) removes the one reason `amdgpu_ttm_copy_mem_to_mem` needs an IB on
    Linux: there, a TTM/scheduler job is a first-class object with its own fence, dependencies and possible
    requeueing across rings, and an IB is how such a job is handed to a ring without the CPU blocking on
-   allocation. This driver has none of that (ADR 0012, the scheduler half, is explicitly later work); a
+   allocation. This driver has none of that (ADR 0012, the scheduler half, is explicitly later work). A
    paging submission here is a single, synchronous, one-in-flight push, indistinguishable in shape from the
    ring-test IB stage C already writes straight into a page (`bc250_gfx_ib_ring_test_build`,
    `bc250_gfx.c:1689-1712`) - except that one *is* fetched indirectly, for a reason that does not apply here:
    it exists to prove `PACKET3_INDIRECT_BUFFER` fetches correctly, which is not this node's question.
 2. dxgkrnl's paging buffer is **system memory** (`PagingBufferSegmentId = 0`, `wddm.c:1049`), which this
-   driver has never given a GART/MC mapping of its own; doing so on demand for a buffer VidMm - not this
+   driver has never given a GART/MC mapping of its own. Doing so on demand for a buffer VidMm - not this
    driver - allocated would be new GART-management surface for no measured benefit.
 3. The buffer is small (`BC250_WDDM_PAGING_BUFFER_BYTES = 0x10000`, `wddm.c:57`) and, per the one-in-flight
    rule of section 5, at most one batch is ever outstanding: the SDMA0 ring (`BC250_SDMA_RING_SIZE`, see
@@ -107,7 +107,7 @@ This is the part that is not obvious from the DDI names, and it decided most of 
   `GfxSubmitIb` can take `Device->GartLock` (a `FAST_MUTEX`).
 - `DXGKDDI_SUBMITCOMMAND` - the DDI a paging buffer is submitted through, `hContext == NULL`,
   `NodeOrdinal` naming the node (`wddm.c:1694-1695`, already true for node 0 today) - is
-  `_IRQL_requires_(DISPATCH_LEVEL)` (d3dkmddi.h:4385), **exactly**, not `<=`. `GartLock` cannot be taken there;
+  `_IRQL_requires_(DISPATCH_LEVEL)` (d3dkmddi.h:4385), **exactly**, not `<=`. `GartLock` cannot be taken there.
   neither can `GartDevice()`, `bc250_gmc_flush_gpu_tlb()`'s poll, or anything the sequence/logging wrapper of
   `sequence.c` does. This is the same wall stage C's design brief names for why `SubmitCommand` keeps the
   software-only path (`stageC_design.md` section 3.1) - stage D is the first time this driver has to cross it
@@ -115,7 +115,7 @@ This is the part that is not obvious from the DDI names, and it decided most of 
 
 So two problems, not one: **(a)** BuildPagingBuffer (PASSIVE_LEVEL) has to turn operation parameters into
 packet dwords and put them somewhere SubmitCommand (DISPATCH_LEVEL) can find them without dereferencing a
-physical address (no `MmMapIoSpaceEx` at DISPATCH_LEVEL) or touching anything GartLock-shaped; **(b)**
+physical address (no `MmMapIoSpaceEx` at DISPATCH_LEVEL) or touching anything GartLock-shaped. **(b)**
 SubmitCommand has to push those dwords onto the real SDMA0 ring and ring a doorbell without any of the
 primitives every other ring write in this driver uses.
 
@@ -129,11 +129,11 @@ coordinate spaces are the same (dxgkrnl accumulates one buffer across many `Buil
 one `SubmitCommand` flushes it, and both offsets are measured from the same buffer start), and the shadow is
 already a CPU pointer, no mapping needed at DISPATCH_LEVEL.
 
-**Corrected by E24 run 006 (facts M110), and the correction is smaller than it looks.** The shadow, the shared
+**Revised by E24 run 006 (facts M110), and the correction is smaller than it looks.** The shadow, the shared
 coordinate space and the accumulation across calls are all as described - run 006 measured dxgkrnl packing four
 fills into one buffer at 0x0, 0x140, 0x640, 0xB40 (M111). What is wrong above is the name of the door the flush
 comes through. VidMm creates node 1's paging system context with `DXGK_CREATECONTEXTFLAGS::VirtualAddressing`
-set, and a context that addresses virtually is submitted through `DxgkDdiSubmitCommandVirtual`; this driver saw
+set, and a context that addresses virtually is submitted through `DxgkDdiSubmitCommandVirtual`. This driver saw
 `DxgkDdiSubmitCommand` called exactly zero times in 110 seconds against 1581 `BuildPagingBuffer` calls.
 `DXGKARG_SUBMITCOMMANDVIRTUAL` has no `DmaBufferSubmissionStartOffset` at all - it names the submission by
 `DmaBufferVirtualAddress`, a GPU address - so the offset into the shadow is recovered by subtracting
@@ -141,11 +141,11 @@ set, and a context that addresses virtually is submitted through `DxgkDdiSubmitC
 the DMA buffer"), recorded on every call that writes bytes. Everything downstream of that subtraction - the
 shadow, `GfxSubmitPaging`, the fence, the IH DPC - is unchanged.
 
-**Corrected again by E24 run 007 (facts M112).** On this build that GPU address is 0 for the system paging
+**Revised again by E24 run 007 (facts M112).** On this build that GPU address is 0 for the system paging
 buffer, and the submission's `DmaBufferVirtualAddress` is already the byte offset the shadow is indexed by:
 the three submissions named 0x0, 0x140 and 0x640, which are the shadow offsets of the fills they covered.
 Treating 0 as "no buffer" dropped the high-water mark on the floor and completed every one of them in software.
-A recorded base of 0 means the coordinate is the offset. A non-zero base still subtracts; this machine has not
+A recorded base of 0 means the coordinate is the offset. A non-zero base still subtracts. This machine has not
 produced one.
 
 The subtraction itself is the one thing that must never be guessed, because a wrong offset here does not draw a
@@ -167,14 +167,14 @@ The address and the mark are one value in two words, and they are only ever touc
 lock. The first version of this kept them as two interlocked singles, and review 24 found both halves of what
 that always costs: a raise that lands after another builder's reset stamps one buffer's mark onto the other's
 address and the mismatched pair then *stays*, and a reader that takes the address before a switch and the mark
-after it gets a pair that never existed. Neither is a stale read a range check can catch - both look like a
+after it receives a pair that never existed. Neither is a stale read a range check can catch - both look like a
 clean match and put another buffer's packets on a live ring. `gfx.c`'s own `PagingBuildersActive` says two
 builders can genuinely run at once, so this is not a theoretical interleaving. There was never anything to win
 by being lock-free on a path that runs a few times a second.
 
 One thing the DDI side still does not do: `Bc250WddmSubmitCommand`'s own node-1 branch uses dxgkrnl's
 `DmaBufferSubmissionStartOffset`/`EndOffset` directly and has no buffer identity of its own. It is unreachable
-on this machine (M110) and correct on its own terms, since those offsets are that DDI's own coordinates - but
+on this machine (M110) and valid on its own terms, since those offsets are that DDI's own coordinates - but
 if it ever becomes reachable it reaches `WddmSubmitPagingHardware` without the check above, and that is the
 first thing to revisit.
 
@@ -187,7 +187,7 @@ answer the task asks for, with `MultipassOffset` set to the offset that failed),
 `amdgpu_ring_commit` is never called on this fake ring - there is nothing to commit, no doorbell to ring, and
 calling it would try to ring one.
 
-The ring is throwaway; the **device behind it is not**. The first cut of this gave the throwaway ring a
+The ring is throwaway. The **device behind it is not**. The first cut of this gave the throwaway ring a
 throwaway `struct amdgpu_device` as well, declared as a local next to it, and that was two defects in one line.
 The fatal one is size: the struct is 0x5B00 bytes, an x64 kernel thread's whole stack is 24 KB, and dxgmms2 has
 already spent some of it by the time it calls `DdiBuildPagingBuffer` - so the first `VIRTUAL_FILL` VidMm ever
@@ -195,13 +195,13 @@ sent us bugchecked unit A with 0x50 in `nt!_chkstk` (facts M104, E24 run 004). T
 was never initialised, so `ring->adev->dev` - which `bc250_ring.c` passes to `dev_err` on every refusal path -
 was whatever the stack held. Both go away with the same change: `bc250_sdma_paging_copy/fill` take the caller's
 live `adev`, which `GfxPagingBuild` has in `Gfx->PagingDevicePtr`, and refuse a NULL one. Nothing on this path
-writes through the device, touches a register or rings a doorbell; it is read for `dev_err` and NULL-checked by
+writes through the device, touches a register or rings a doorbell. It is read for `dev_err` and NULL-checked by
 `bc250_sdma_copy.c`, and that is all. `tools/win/stackbudget.py` now fails any build whose fixed frames reach
 4 KB, so the size half cannot come back quietly.
 
 **(b) - a dedicated, DISPATCH_LEVEL-safe push, guarded by a spinlock instead of `GartLock`.** The ring write
 path itself (`amdgpu_ring_alloc`/`_write`/`_write_multiple`, `bc250_ring.c`) is pure memory and does not need
-PASSIVE_LEVEL; `amdgpu_ring_commit()`'s doorbell write does, indirectly, because it reaches
+PASSIVE_LEVEL. `amdgpu_ring_commit()`'s doorbell write does, indirectly, because it reaches
 `bc250_shim_wdoorbell64()` through `ring->adev->backend` (`gpumem.c:406-426`), a plain pointer field every
 GartLock-protected call swaps in and out for its own duration (`gfx.c:516-517` and everywhere else) - not
 something a DISPATCH_LEVEL caller may read or fight over.
@@ -224,7 +224,7 @@ A new spinlock, `BC250_GFX::Sdma0RingLock`, is the only new synchronization prim
 around the read-modify-write of `ring->wptr`/`count_dw` and the wptr-slot-plus-doorbell publish, by **every**
 writer of the SDMA0 ring: the ring test and `GfxFenceEscape`'s SDMA arm, `SdmaCopyEscape`, and node 1's new
 path. The first three already serialize against each other and against everything else through `GartLock`
-(a much bigger critical section, held for the whole escape); they only need the extra, narrow lock because
+(a much bigger critical section, held for the whole escape). They only need the extra, narrow lock because
 node 1's DISPATCH_LEVEL path cannot take `GartLock` at all and SMP means "one CPU at a time" is not implied by
 IRQL alone. Taking a spinlock from inside an already-`GartLock`-held, `<= APC_LEVEL` call is ordinary Windows
 practice (`StatsLock` in `ih.c` is the same shape: "held over memory only: never across a register access").
@@ -237,22 +237,21 @@ struct copy: `Gfx->PagingRing = &adev->sdma.instance[0].ring` and `Gfx->PagingDe
 (under `GartLock`, inside `GfxEscape`'s `RUN` arm, the first time stage 8 completes with the
 `EnablePagingNode` gate open - mirroring exactly where `ih->DpcAdev` is filled in). `adev` itself is the
 persistent structure `GartDevice()` sets up once per device start (`gart.c`'s comment: "set up if it was not
-yet"), not something recreated per call, so the pointer stays valid for the life of the device start; `pnp.c`'s
+yet"), not something recreated per call, so the pointer stays valid for the life of the device start. `pnp.c`'s
 stop order (`WddmStop` before `GfxStop`, drained the same way stage C's watchdog already is) keeps it that way.
 
 ## 5. Fences, one-in-flight, and the IH DPC
 
-Node 1 gets its **own** hardware channel, parallel to node 0's stage C one (`wddm.c`'s `Hw*`/`SubmitTimer`/
+Node 1 has its **own** hardware channel, parallel to node 0's stage C one (`wddm.c`'s `Hw*`/`SubmitTimer`/
 `SubmitDpc` fields), not a generalization of it: the two channels differ enough in level (DISPATCH vs
 PASSIVE_LEVEL), lock (spinlock vs `GartLock`) and trigger (`SubmitCommand` vs `SubmitCommandVirtual`) that
 sharing code would cost more clarity than it saves, and - more importantly - **duplicating rather than
 generalizing node 0's fields is what keeps node 0's behaviour byte-for-byte identical with the gate closed**
 (section 6). One property does have to become per-node rather than stay a single shared pair, because it is
-observably wrong with two nodes: `BC250_WDDM::SubmittedFence`/`SubmittedNode`/`CompletionPending` (`wddm.c:190-
-193`) and the matching preemption triple are a single slot each, correct "only because there is exactly one
+observably wrong with two nodes: `BC250_WDDM::SubmittedFence`/`SubmittedNode`/`CompletionPending` (`wddm.c:190- 193`) and the matching preemption triple are a single slot each, valid "only because there is exactly one
 node" (the `C_ASSERT` at `wddm.c:245` says so). With node 1 real, both nodes can have an outstanding software or
-hardware completion at once; sharing one slot would silently drop one of them. These six become two-element
-arrays indexed by node ordinal (`[BC250_WDDM_NODE_3D]`/`[BC250_WDDM_NODE_COPY]`); `WddmCompleteFence`,
+hardware completion at once. Sharing one slot would silently drop one of them. These six become two-element
+arrays indexed by node ordinal (`[BC250_WDDM_NODE_3D]`/`[BC250_WDDM_NODE_COPY]`). `WddmCompleteFence`,
 `WddmPreemptFence` and `WddmReportDpcRoutine` take/report a node index. With the gate closed only index 0 is
 ever touched, by the same call sites as today - the array collapses to the scalar it replaces.
 
@@ -265,7 +264,7 @@ The IH side needs **no new vector recognition**, by the same argument stage C's 
 (`stageC_design.md` section 4.1, step 1-2 for node 0): `Bc250DpcRoutine` (`pnp.c:192-197`) already calls
 `WddmGpuFence()` on *every* DPC regardless of which vector arrived, because completion is decided by polling a
 memory slot, not by parsing the vector that woke the DPC. A second call, `WddmGpuFencePaging()`, added next to
-it, polls SDMA0's slot 4 the same way; whether the vector that triggered this particular DPC was CP end-of-pipe
+it, polls SDMA0's slot 4 the same way. Whether the vector that triggered this particular DPC was CP end-of-pipe
 (client 20/181) or SDMA0's trap (client 8/224, facts M59) does not matter to either poll. This also answers
 the task's question about mapping the trap to `DXGK_INTERRUPT_DMA_COMPLETED` for node 1: the mapping is not a
 vector filter in `ih.c` at all, it is "node 1's fence slot now holds the sequence number", exactly as node 0's
@@ -281,28 +280,26 @@ touching node 0's `SubmitFailed`/ring - the two nodes fail independently, on the
 
 - `EnablePagingNode` (`HKR, Parameters, EnablePagingNode, 0x00010001, 0`), read once in `WddmStart` next to
   `EnableGpuSubmit`'s read in `GfxStart`, stored as `wddm->NodeCount` (1 or 2) and `gfx->PagingGate`.
-  `BC250_WDDM_NODE_COUNT` (a compile-time constant used in bounds checks today) becomes a runtime field;
+  `BC250_WDDM_NODE_COUNT` (a compile-time constant used in bounds checks today) becomes a runtime field.
   `BC250_WDDM_NODE_COUNT_MAX = 2u` sizes the new arrays.
 - `DXGK_DRIVERCAPS.GpuEngineTopology.NbAsymetricProcessingNodes = wddm->NodeCount` (was the macro).
-- `DXGK_DRIVERCAPS.MemoryManagementCaps.PagingNode = (wddm->NodeCount > 1) ? BC250_WDDM_NODE_COPY :
-  BC250_WDDM_NODE_3D` - ADR 0013 point 2, node 1 is the paging node once it exists at all; with the gate
+- `DXGK_DRIVERCAPS.MemoryManagementCaps.PagingNode = (wddm->NodeCount > 1) ? BC250_WDDM_NODE_COPY : BC250_WDDM_NODE_3D` - ADR 0013 point 2, node 1 is the paging node once it exists at all. With the gate
   closed the answer is exactly today's `BC250_WDDM_NODE_3D`.
 - `Bc250WddmGetNodeMetadata`: node 1, when named, answers `EngineType = DXGK_ENGINE_TYPE_COPY`,
-  `FriendlyName = L"BC-250 SDMA0"`, `GpuMmuSupported = TRUE` (it *can* be addressed with a VMID; section 2
+  `FriendlyName = L"BC-250 SDMA0"`, `GpuMmuSupported = TRUE` (it *can* be addressed with a VMID. Section 2
   chooses not to, which is a policy of this build, not a hardware limit worth mis-declaring). The bound check
   (`node >= BC250_WDDM_NODE_COUNT`) becomes `node >= wddm->NodeCount`.
 - `Bc250WddmCreateContext` accepts `NodeOrdinal == BC250_WDDM_NODE_COPY` only when `wddm->NodeCount > 1`
-  (mirrors the existing check, one more accepted value); `PagingCompanionNodeId` for a node-0 context becomes
+  (mirrors the existing check, one more accepted value). `PagingCompanionNodeId` for a node-0 context becomes
   the reported paging node (today always `BC250_WDDM_NODE_3D`, matching `PagingNode` above) rather than the
   hardcoded constant.
-- `Bc250WddmSubmitCommand`: today's node argument resolution (`context ? context->NodeOrdinal :
-  pSubmitCommand->NodeOrdinal`, `wddm.c:1694-1695`) is untouched; a new branch fires only when
+- `Bc250WddmSubmitCommand`: today's node argument resolution (`context ? context->NodeOrdinal : pSubmitCommand->NodeOrdinal`, `wddm.c:1694-1695`) is untouched. A new branch fires only when
   `node == BC250_WDDM_NODE_COPY && wddm->NodeCount > 1 && DmaBufferSize != 0`, calling the new
-  `GfxSubmitPaging()` path (section 4); every other case - including node 1 traffic when the gate somehow
+  `GfxSubmitPaging()` path (section 4). Every other case - including node 1 traffic when the gate somehow
   still reports one node, which cannot happen since `NodeOrdinal` would never name it - keeps today's
   `WddmCompleteSoftware`.
 - `Bc250WddmBuildPagingBuffer`: the `DXGK_OPERATION_VIRTUAL_TRANSFER`/`VIRTUAL_FILL` arms are new code, added
-  next to the existing `UPDATE_PAGE_TABLE` arm, not a change to it; with the gate closed `wddm->NodeCount == 1`
+  next to the existing `UPDATE_PAGE_TABLE` arm, not a change to it. With the gate closed `wddm->NodeCount == 1`
   and VidMm is never told a paging node exists other than node 0, so - by dxgkrnl's own contract, not a check
   this driver adds - it has no occasion to send `VIRTUAL_TRANSFER`/`VIRTUAL_FILL` at all. The arms are written
   defensively (log and answer inertly on any unexpected call) rather than relying on that alone.
@@ -310,10 +307,10 @@ touching node 0's `SubmitFailed`/ring - the two nodes fail independently, on the
   already work from the DDI's own `NodeOrdinal` argument (`PreemptCommand`, `wddm.c:1741-1742`) or from
   scanning whichever channel has something pending (`ResetFromTimeout` becomes: check both channels, forget
   whichever is pending, without a report, exactly as node 0's one channel does today). Neither DDI's *shape*
-  changes; both simply have two channels to check instead of one once the gate is open.
+  changes. Both simply have two channels to check instead of one once the gate is open.
 - `QueryDependentEngineGroup`/`QueryEngineStatus`/`CalibrateGpuClock`: bound checks move from the
-  `BC250_WDDM_NODE_COUNT` macro to `wddm->NodeCount`; behaviour for node 0 is unchanged, node 1 answers the
-  same shape (one dependent node - itself; always responsive; the CPU counter as its clock).
+  `BC250_WDDM_NODE_COUNT` macro to `wddm->NodeCount`. Behaviour for node 0 is unchanged, node 1 answers the
+  same shape (one dependent node - itself. Always responsive. The CPU counter as its clock).
 
 **What never runs with the gate closed**: `GfxSubmitPaging`, `WddmGpuFencePaging`, the shadow-buffer build in
 `BuildPagingBuffer`'s new arms, the `Sdma0RingLock` acquisitions added to the escape paths (they still execute
@@ -348,9 +345,9 @@ no change to show these: they ride the same `GuardLog` ring every other summary 
    it across anything that could block (a register poll, `KeStallExecutionProcessor`) is true by construction
    (section 4) but worth a second look in code review before it ships.~~ Taken: the second look (section 9)
    found that "every writer of the SDMA0 ring takes it" was not actually true of `StageSdma`'s own ring test,
-   fixed there; every writer's own hold is still a single push with no poll under it, unchanged.
+   fixed there. Every writer's own hold is still a single push with no poll under it, unchanged.
 4. **Whether dxgkrnl ever sends more than one `BuildPagingBuffer` batch before a `SubmitCommand` in a way that
-   would overflow `BC250_WDDM_PAGING_BUFFER_BYTES`'s shadow copy** is unmeasured; the `MultipassOffset` path
+   would overflow `BC250_WDDM_PAGING_BUFFER_BYTES`'s shadow copy** is unmeasured. The `MultipassOffset` path
    (section 4a) is what the DDI contract provides for exactly this, and this note relies on dxgkrnl using it
    rather than assuming the shadow is always big enough. Section 9 raises a related, also unmeasured question:
    whether a batch that mixes a built operation with one `GfxPagingBuild` answers "unsupported" leaves the
@@ -372,7 +369,7 @@ diff (`git show 9f1c8a5 --stat`) as the suspect set.
 - **Gap A.** Every comment above `GfxPagingBuild`/`PagingRangeContiguous` claimed the function runs "PASSIVE_
   LEVEL, under GartLock, like GfxSubmitIb." It does not: `Bc250WddmBuildPagingBuffer` (wddm.c, the
   `VIRTUAL_TRANSFER`/`VIRTUAL_FILL` arms `9f1c8a5` added) never takes `Device->GartLock` before calling into
-  it - confirmed by grepping every `ExAcquireFastMutex(&Device->GartLock)` in the tree, all in gart.c/psp.c/
+  it - checked by grepping every `ExAcquireFastMutex(&Device->GartLock)` in the tree, all in gart.c/psp.c/
   ih.c/gfx.c's own bring-up and submit paths, none in wddm.c. The obvious fix, taking `GartLock` there too,
   does not work: `ExAcquireFastMutex` raises IRQL to APC_LEVEL, and `VidMmTranslate` (`vidmm.c:238`) refuses
   anything but exactly PASSIVE_LEVEL - a GartLock-held call into it would fail every translation, silently,
@@ -391,14 +388,14 @@ diff (`git show 9f1c8a5 --stat`) as the suspect set.
 **What closer reading takes back.** Both gaps need a precondition that, on rereading `GfxPagingBuild`'s own
 first check, provably did not hold during run 001. `GfxPagingBuild` bails to `BC250PagingNotReady` before
 touching the shadow buffer or any hardware if `!gfx->PagingReady` (gfx.c:1238), and `GfxPagingSubmitReady`
-(gfx.c:1130-1133) requires the same flag; `PagingReady` is set true only at the tail of a *successful* stage-8
+(gfx.c:1130-1133) requires the same flag. `PagingReady` is set true only at the tail of a *successful* stage-8
 `GfxEscape` RUN (gfx.c:460) and cleared only by `TearDown()`, which runs only from `GfxStop`'s quiet-stop path
 and the escape's PLAN branch (gfx.c:351, gfx.c:436) - never from the middle of a RUN. Since run 001's
 `gfx run 8` never returned, `PagingReady` never became true and `TearDown()` was never called during the run:
 Gap A's teardown race and Gap B's concurrent-writer race both need a window that was never open on this
 specific run. Both fixes stand - they close a real hazard for the case that matters, ordinary desktop use with
 `PagingReady` true, which E22 already measured as continuous (1079 `BuildPagingBuffer` calls/minute) - but
-neither is confirmed, or now even likely, to be what run 001 actually hung on. Reporting this section as
+neither is proven, or now even likely, to be what run 001 actually hung on. Reporting this section as
 closing the hang would not be honest.
 
 **Hypotheses checked against the task's list, with what ruled them in or out:**
@@ -411,7 +408,7 @@ closing the hang would not be honest.
    invariant violation and FIXED, but per the paragraph above not provably live during run 001 itself, since
    `PagingReady` gates the only concurrent writer (`GfxSubmitPaging`).
 3. **(c) spin/poll under a held lock** - not found. `bc250_ring.c`'s `amdgpu_ring_alloc`/`_commit`/
-   `_insert_nop`/`_undo` (the primitives every ring writer uses) contain no polling; `StageSdma`'s fix
+   `_insert_nop`/`_undo` (the primitives every ring writer uses) contain no polling. `StageSdma`'s fix
    explicitly releases `Sdma0RingLock` before `bc250_sdma_ring_test_wait`. REFUTED for the paths read.
 4. **(d)/(f) per-node watchdog/DPC/ISR firing into half-initialized state** - the one paging-specific
    instance, `WddmGpuFencePaging`, runs unconditionally on every DPC (pnp.c's `Bc250DpcRoutine`) but is
@@ -420,16 +417,15 @@ closing the hang would not be honest.
    function is two spinlock-protected flag reads and a return: REFUTED as a cause of this run. **Not checked
    this session**: `PreemptCommand`, `ResetFromTimeout`, `QueryEngineStatus`, `CalibrateGpuClock`,
    `GetNodeMetadata` and `CreateContext`'s node-1 branches (section 6 describes them as straightforward
-   `NodeOrdinal`/`wddm->NodeCount` generalizations of already-correct node-0 code, not reread line-by-line
+   `NodeOrdinal`/`wddm->NodeCount` generalizations of already-valid node-0 code, not reread line-by-line
    here). `wddm->NodeCount` becomes 2 at `WddmStart` (wddm.c:1079), read once from the gate at device start -
    before run 001's script issued a single escape - so dxgkrnl believed node 1 existed for the whole run,
    independent of `PagingReady`, and had the whole run to call any of these against it. This is the largest
    gap this session leaves open, and the leading remaining suspect.
 5. **(e) something inside stage 8 itself that 0.7.23 broke** - REFUTED by diff: `StageInterrupts` (gfx.c:
-   53-61, stage 8's own function) has zero lines touched by `9f1c8a5` (`git show 9f1c8a5 -- driver/kmd/gfx.c
-   | grep StageInterrupts` - no output). Whatever hung inside `gfx run 8` did so in an environment 0.7.23
+   53-61, stage 8's own function) has zero lines touched by `9f1c8a5` (`git show 9f1c8a5 -- driver/kmd/gfx.c | grep StageInterrupts` - no output). Whatever hung inside `gfx run 8` did so in an environment 0.7.23
    changed around stage 8 (struct layout, `wddm->NodeCount`, the new DDI arms), not in stage 8's own code.
-6. **This note's own earlier suspects** (`VidMmTranslate` cost under continuous traffic; stale shadow bytes
+6. **This note's own earlier suspects** (`VidMmTranslate` cost under continuous traffic. Stale shadow bytes
    pushed as garbage packets) both assumed `GfxPagingBuild` doing real work, which needs `PagingReady`.
    DOWNGRADED to refuted-for-this-run alongside Gap A/B, for the same reason.
 
@@ -456,9 +452,9 @@ is 2 for the whole run regardless of `PagingReady`. That is separable from every
 temporary, loudly-logged, never-shipped one-line override at wddm.c:1079 that pins `wddm->NodeCount` to
 `BC250_WDDM_NODE_COUNT` (1) even when the gate reads 1, then a rerun of exactly run 001's sequence. Every
 other 0.7.23 change (Gap A/B's fixes, the interlocked `FenceSeq`, the split ring test, the new struct fields)
-stays compiled in and running; the only thing removed is dxgkrnl's belief that node 1 exists. Not zero-risk -
+stays compiled in and running. The only thing removed is dxgkrnl's belief that node 1 exists. Not zero-risk -
 nothing is, on hardware with no GPU reset - but it repeats a shape already proven twice (0.7.13, E15/E23) with
 one bit flipped, rather than repeating run 001's own already-hung sequence outright. If it completes cleanly,
-item 4's DDI branches move from "leading suspect" to "confirmed cause, needs a real fix"; if it still hangs,
+item 4's DDI branches move from "leading suspect" to "proven cause, needs a real fix". If it still hangs,
 item 4 is cleared and the search moves to what changes even with `NodeCount` at 1 (the struct layout, the
 interlocked `FenceSeq`) - a genuinely surprising result worth an immediate stop rather than a further rerun.

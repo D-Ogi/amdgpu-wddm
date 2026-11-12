@@ -51,7 +51,7 @@
 5	docs/design/hang-detector.md
 4	docs/design/iommu-dma-remapping.md
 14	docs/design/paging-journal.md
-40	docs/design/paging-node.md
+2	docs/design/paging-node.md
 11	docs/design/paging-queue-storage.md
 28	docs/design/recent-launches.md
 14	docs/design/rejected-options.md
