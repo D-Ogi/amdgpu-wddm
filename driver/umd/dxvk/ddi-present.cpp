@@ -3,8 +3,10 @@
 #include "present-contract.h"
 #include "ddi-experiment.h"
 #include "present-probe.h"
+#include <array>
 #include <atomic>
 #include <cstdio>
+#include <vector>
 namespace bc250::umd {
 namespace {
 struct Submission { DeviceOwner *owner; ID3D11Resource *resource; UINT subresource; };
@@ -32,17 +34,22 @@ bool present_note_budget(std::atomic_uint &left) {
 }
 // UMD logging (umd-etw.h): after a rotation each runtime-surface resource holds the allocation of the next one. The
 // rotation is complete when this runs, so no status of the log changes the answer of the DDI; a log without memory
-// only misses the move.
+// only misses the move. The table changes also with the provider off (umd-etw.h tells why); a swap chain of at most
+// kInlineNodes buffers does this without a heap allocation.
 void log_rotated_mappings(const DXGI_DDI_HRESOURCE *handles,UINT count) noexcept {
     auto *log=etw::process_allocation_log();
     if (!log) return;
     try {
-        std::vector<etw::AllocationMapping> moved; moved.reserve(count);
+        std::array<etw::AllocationMapping,etw::AllocationLog::kInlineNodes> inline_moved;
+        std::vector<etw::AllocationMapping> heap_moved;
+        etw::AllocationMapping *moved=inline_moved.data();
+        if (count>inline_moved.size()) { heap_moved.resize(count); moved=heap_moved.data(); }
+        UINT n=0;
         for (UINT i=0;i<count;++i) {
             const auto *r=reinterpret_cast<const DdiResource *>(handles[i]);
-            if (r->runtime_surface) moved.push_back(runtime_surface_mapping(*r));
+            if (r->runtime_surface) moved[n++]=runtime_surface_mapping(*r);
         }
-        (void)log->replace(moved.data(),UINT(moved.size()));
+        (void)log->replace(moved,n);
     } catch (const std::bad_alloc &) {}
 }
 namespace {

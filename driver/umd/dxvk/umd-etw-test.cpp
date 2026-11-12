@@ -4,13 +4,25 @@
 // create. The WDK header umdprovider.h is compiled here only, to check that the module's types agree with it.
 #include "umd-etw.h"
 #include <umdprovider.h>
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <new>
 #include <thread>
 #include <vector>
 using namespace bc250::umd::etw;
 #define CHECK(x) do{if(!(x)){std::printf("FAIL line %d: %s\n",__LINE__,#x);std::abort();}}while(0)
+
+// Heap allocations of this process, for the check that a rotation at a Present allocates nothing
+static std::atomic<unsigned long long> heap_allocations{0};
+void *operator new(size_t size) {
+    heap_allocations.fetch_add(1,std::memory_order_relaxed);
+    if (void *p=std::malloc(size ? size : 1)) return p;
+    throw std::bad_alloc();
+}
+void operator delete(void *p) noexcept { std::free(p); }
+void operator delete(void *p,size_t) noexcept { std::free(p); }
 
 static_assert(sizeof(UMDETW_ALLOCATION_USAGE)==sizeof(UINT32));
 static_assert(sizeof(UMDETW_ALLOCATION_SEMANTIC)==sizeof(AllocationSemantic));
@@ -174,6 +186,22 @@ int main() {
         control(EVENT_CONTROL_CODE_CAPTURE_STATE);
         CHECK(s.events.size()==3);
         for (int i=0;i<3;++i) check_event(s.events[i],RundownAllocationEvent,moved[i]);
+        s.events.clear();
+        // With the provider off, the table still follows the rotation, and a rotation of a swap chain allocates
+        // nothing: the off cost at each Present of a blt-model swap chain is the table lock and the node moves.
+        control(EVENT_CONTROL_CODE_DISABLE_PROVIDER);
+        const AllocationMapping back[3]={surface(a.d3d_allocation,c.dxg_allocation,c.size),
+            surface(b.d3d_allocation,a.dxg_allocation,a.size),surface(c.d3d_allocation,b.dxg_allocation,b.size)};
+        const unsigned long long before=heap_allocations.load();
+        int *volatile probe=new int(1);                  // the counter counts
+        delete probe;
+        CHECK(heap_allocations.load()==before+1);
+        CHECK(log.replace(back,3)==S_OK);
+        CHECK(heap_allocations.load()==before+1 && s.events.empty() && log.live()==3);
+        AllocationMapping now{};
+        CHECK(log.mappings_of(a.d3d_allocation,&now,1)==1 && now==back[0]);
+        CHECK(log.replace(moved,3)==S_OK);
+        control(EVENT_CONTROL_CODE_ENABLE_PROVIDER);
         s.events.clear();
         // The seam for engine memory: a resource that is packed into a parent allocation, then renamed to a second
         // instance, then moved to two allocations, then destroyed.

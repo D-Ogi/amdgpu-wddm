@@ -11,8 +11,14 @@
 //
 // The log keeps one table of live mappings for the whole process, because a capture-state request must report every
 // mapping that exists (user-mode-driver-logging.md 27; nf-umdprovider-umdetwregister.md 56). The table changes only
-// when a resource gets or loses its memory (create, open, destroy, identity rotation), never on a draw, a map or a
-// Present. An event is written only while a session has the provider enabled: one relaxed load per table change.
+// when a resource gets or loses its memory: create, open, destroy, and identity rotation. A blt-model swap chain
+// rotates at each Present, so the table changes on that Present; never on a draw or a map. An event is written only
+// while a session has the provider enabled: one relaxed load per table change.
+//
+// The table changes also while the provider is off. It cannot be built again at an enable or a capture-state
+// request: the rotation moves the surface of each resource on the device thread without a lock, and the callback
+// thread has no list of the resources and no safe read of their surfaces. With the provider off, a rotation at a
+// Present costs the exclusive table lock and one node move per buffer, and no heap allocation (replace).
 // The memory of the engine's own resources is not in the table: the engine keeps it and reports it through a
 // MemoryReporter (engine ABI 1.8), because its renames (Map with DISCARD) are on the draw path.
 #include <windows.h>
@@ -91,8 +97,11 @@ public:
     // Moves Direct3D resources to new memory as one change: first an unmap of every mapping of each named resource,
     // then a map of each new mapping. Existing table nodes are reused, so a move of a resource that had a mapping
     // cannot fail; E_OUTOFMEMORY only when a resource gets more mappings than it had, and then nothing has changed.
-    // The seam for engine memory that moves, packs or renames (usage::packed, usage::renamed).
+    // The seam for engine memory that moves, packs or renames (usage::packed, usage::renamed). A batch of at most
+    // kInlineNodes mappings whose resources had at most kInlineNodes mappings does no heap allocation.
     HRESULT replace(const AllocationMapping *mappings,UINT count) noexcept;
+    // The buffers of the largest swap chain (DXGI_MAX_SWAP_CHAIN_BUFFERS), each with one mapping
+    static constexpr size_t kInlineNodes=16;
     // A reporter takes part in enable changes and capture-state requests from now on until remove_reporter returns.
     // S_OK; E_OUTOFMEMORY; S_FALSE when it is added already. remove_reporter waits for a callback that calls it.
     HRESULT add_reporter(MemoryReporter *) noexcept;

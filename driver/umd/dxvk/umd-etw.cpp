@@ -3,8 +3,10 @@
 #include <evntrace.h> // EVENT_CONTROL_CODE_*, as umdprovider.h 19-20 includes it
 #include <umdetw.h>
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <new>
+#include <optional>
 #include <vector>
 #pragma comment(lib,"advapi32.lib") // EventRegister, EventUnregister, EventWrite
 namespace bc250::umd::etw {
@@ -103,17 +105,37 @@ HRESULT AllocationLog::replace(const AllocationMapping *mappings,UINT count) noe
     AcquireSRWLockExclusive(&lock_);
     try {
         // Every allocation happens before the first change: the node store, and the nodes the batch has more of than
-        // its resources had before.
+        // its resources had before. A batch of a swap chain (at most kInlineNodes buffers, each with one mapping)
+        // reuses its nodes in a store on the stack: a rotation at a Present allocates nothing.
         size_t existing=0;
         for (UINT i=0;i<count;++i) {
             if (!first_of(i)) continue;
             const UINT64 d3d=mappings[i].d3d_allocation;
             for (auto at=live_.lower_bound(Key{d3d,0,0});at!=live_.end() && std::get<0>(at->first)==d3d;++at) ++existing;
         }
-        std::vector<decltype(live_)::node_type> nodes;
-        nodes.reserve(existing>count ? existing : count);
-        decltype(live_) extra;
-        for (size_t i=existing;i<count;++i) extra.try_emplace(Key{0,0,i});
+        using Node=decltype(live_)::node_type;
+        const size_t needed=existing>count ? existing : count;
+        std::array<Node,kInlineNodes> inline_nodes;
+        std::vector<Node> heap_nodes;
+        if (needed>kInlineNodes) heap_nodes.reserve(needed);
+        size_t stored=0;
+        auto push=[&](Node &&node) {
+            if (needed>kInlineNodes) heap_nodes.push_back(std::move(node));
+            else inline_nodes[stored]=std::move(node);
+            ++stored;
+        };
+        auto pop=[&]() -> Node {
+            --stored;
+            if (needed<=kInlineNodes) return std::move(inline_nodes[stored]);
+            Node node=std::move(heap_nodes.back()); heap_nodes.pop_back();
+            return node;
+        };
+        // A std::map allocates its head node at construction: only a batch with more mappings builds one.
+        std::optional<decltype(live_)> extra;
+        if (existing<count) {
+            extra.emplace();
+            for (size_t i=existing;i<count;++i) extra->try_emplace(Key{0,0,i});
+        }
         // No allocation from here on.
         for (UINT i=0;i<count;++i) {
             if (!first_of(i)) continue;
@@ -121,13 +143,13 @@ HRESULT AllocationLog::replace(const AllocationMapping *mappings,UINT count) noe
             for (auto at=live_.lower_bound(Key{d3d,0,0});at!=live_.end() && std::get<0>(at->first)==d3d;) {
                 const auto next=std::next(at);
                 if (enabled()) write_locked(EventKind::unmap,at->second);
-                nodes.push_back(live_.extract(at));
+                push(live_.extract(at));
                 at=next;
             }
         }
-        while (!extra.empty()) nodes.push_back(extra.extract(extra.begin()));
+        if (extra) while (!extra->empty()) push(extra->extract(extra->begin()));
         for (UINT i=0;i<count;++i) {
-            auto node=std::move(nodes.back()); nodes.pop_back();
+            auto node=pop();
             node.key()=key(mappings[i]); node.mapped()=mappings[i];
             // A mapping that the batch names twice is mapped once.
             if (live_.insert(std::move(node)).inserted && enabled()) write_locked(EventKind::map,mappings[i]);

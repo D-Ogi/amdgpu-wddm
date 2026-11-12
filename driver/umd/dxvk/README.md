@@ -570,9 +570,12 @@ descriptors and the same six-field payload, and its host test compiles the heade
   writes no unmap event at unload, because no resource was destroyed.
 - The log keeps a table of live mappings under an SRW lock. The table is always kept, because a capture-state
   request needs a rundown of every live mapping. The lock is taken only when a resource receives or releases memory:
-  CreateResource and OpenResource of a runtime surface, DestroyResource, and RotateResourceIdentities. No draw,
-  Map or Present takes it. When no session has enabled the provider, the only extra cost of a table change is one
-  relaxed load.
+  CreateResource and OpenResource of a runtime surface, DestroyResource, and RotateResourceIdentities. A blt-model
+  swap chain rotates at each Present, so that Present takes the lock; no draw or Map takes it. The table changes also
+  when no session has enabled the provider: it cannot be built again at an enable, because a rotation moves the
+  surface of each resource on the device thread without a lock that the callback thread could take. Then a table
+  change writes no event (one relaxed load), and a rotation of a swap chain of at most 16 buffers does no heap
+  allocation.
 - An event is written under the table lock. Thus a rundown and a concurrent map or unmap cannot put one mapping
   into the trace two times, and an unmap cannot come before its map.
 - In this step, the call sites are runtime surfaces only: a shared, primary or displayable texture that the shell
@@ -590,7 +593,10 @@ descriptors and the same six-field payload, and its host test compiles the heade
   calls each engine (`MemoryReporter`) at an enable change and after its own rundown. A range that is not a whole
   allocation is `usage::packed`. The storage of a Map with DISCARD is `usage::renamed`. When no session is on, a
   rename of a tracked buffer costs about 11 ns more than an untracked one, of 70 ns for Map and Unmap (x64 engine
-  host test on the development PC, 2026-11-12). It takes no lock and makes no kernel call and no shell call.
+  host test on the development PC, 2026-11-12). It takes no lock and makes no kernel call and no `MemoryEvents`
+  call. It calls `ResolveMemory` only when the new storage is in another memory object than the storage before it
+  (4 calls for 68 renames in the engine host test): `ReportMemory` runs on any thread, where the engine cannot
+  resolve memory that can be freed at that time.
   An engine before 1.8 has no `IBc250DxvkDevice6`, and the shell then logs no engine resource. The staging and
   upload memory of the engine and the Present shadow of BD-210 are driver memory that is not logged yet.
 
