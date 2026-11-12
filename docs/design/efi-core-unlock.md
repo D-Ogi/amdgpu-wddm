@@ -24,6 +24,10 @@ starts the Windows Boot Manager. The application changes no firmware setting and
 | `src/cu_acpi.c` | the FADT reset register and the MADT processor count | yes, with synthetic tables |
 | `src/cu_smbios.c` | the SMBIOS table in the form the driver's identity check reads | yes, with the driver's check |
 | `src/cu_text.c` | the load options, the device paths and the console lines | yes |
+| `src/cu_aml.c` | the name scan of a DSDT or SSDT for the report | yes, with the stored tables of unit A |
+| `src/cu_msr.c` | the register list of the report and the CPUID check before each read | yes, with a model of CPUID |
+| `src/cu_report.c` | the text of the report | yes, with the stored tables of unit A |
+| `src/report_uefi.c` | the UEFI binding of the report: MP Services, the register reads, GOP, the report file | no, the lab runs it |
 | `src/main.c` | the UEFI binding: the operations, the reset and the start of Windows | no, the lab runs it |
 
 The application shares four files with the driver and copies none of them. `driver/shim/bc250_smu.c` is the SMU
@@ -124,6 +128,49 @@ firmware has no MP Services protocol, the count is the number of enabled Local A
 the MADT has no Local APIC entry, the count is the number of enabled x2APIC entries. A processor that the MADT
 lists in both forms therefore counts once.
 
+## The report
+
+The load option `report=1` adds a read-only report. The default is `report=0`. The report runs before the decision
+and does not feed it. It writes one file, `core-unlock-report.txt`, beside the image, on the volume of the marker.
+The file replaces the report of an earlier start. When the write fails, the application writes a console line and
+goes on. The report also goes to the console.
+
+| Part | What it reads | Source of the layout |
+|---|---|---|
+| processors | the processor count and each processor of MP Services, and each processor entry of the MADT with its APIC ID and flags | PI Specification 1.8 volume 2, ACPI 6.5 section 5.2.12 |
+| ACPI tables | the signature, OEM ID, OEM table ID, revision, length and checksum of each table of the XSDT, and of the DSDT of the FADT | ACPI 6.5 section 5.2 |
+| ACPI names | per DSDT and SSDT, the processor names and the thermal names below | ACPI 6.5 chapters 8, 11 and 20 |
+| FADT | the flags, `P_LVL2_LAT`, `P_LVL3_LAT`, `RESET_REG` and `RESET_VALUE` | ACPI 6.5 section 5.2.9 |
+| registers | on each enabled processor: `HWCR`, `PStateCurLim`, `PStateCtl`, `PStateStat`, `PStateDef[0]` to `PStateDef[7]`, `CStateBaseAddr` | AMD PPR 56176 revision 3.06 |
+| graphics | the current mode and every mode of each GOP instance: resolution, pixel format, scan line | UEFI 2.10 section 12.9 |
+
+The processor names are `_CST`, `_CSD`, `_PSS`, `_PCT`, `_PPC`, `_PSD`, `_CPC` and `_LPI`. The report lists each
+processor object, each processor device and each scope that defines one of them. The thermal names are `_TZ_`,
+`_TMP`, `_CRT`, `_PSV`, `_AC0`, `_FST` and the fan ID `PNP0C0B`. The report gives the count of each.
+
+The ACPI names part is a name scan, not an AML interpretation. It follows the opcodes that open a scope (`Scope`,
+`Device`, `Processor`, `ThermalZone`, `PowerResource`) and the two that define a name (`Name`, `Method`). It skips
+method bodies and data (buffers, packages, strings, integers), and it executes nothing. A name counts for the scope
+whose opening encloses its definition. The report says this in its text. The thermal and fan counts are counts of
+the bytes of the name in the table, definitions and references alike.
+
+The register part reads with RDMSR only. The image has no WRMSR instruction. Before each read, `src/cu_msr.c`
+checks CPUID: the vendor must be `AuthenticAMD` and the family must be 17h. `PStateCurLim`, `PStateCtl` and
+`PStateStat` also need CPUID Fn8000_0007_EDX[HwPstate]. The application processors run the sample through MP
+Services `StartupThisAP`, one at a time, and the procedure calls no UEFI service. Without MP Services, the report
+reads the bootstrap processor only.
+
+The register numbers and fields come from the PPR of family 17h model 71h. The repository holds no CPUID family or
+model of the BC-250, so the report prints the family and model that CPUID gives. These items are open:
+
+- The C-state configuration registers are not in the public PPR, so the report does not read them.
+- The PPR is not of the BC-250's own model. A field of the list can mean another thing on the BC-250.
+
+The stored ACPI tables of unit A (`evidence/linux/2026-09-21-E01-recon-binaries/acpi`) are the input of the host
+tests. On them the scan finds 16 `Processor` objects in the DSDT, and 12 scopes `\_PR_.C000` to `\_PR_.C00B` with
+`_CST` and `_CSD` in one SSDT. That is the state of one capture with 12 logical processors. The tables of a start
+with 16 logical processors are not captured.
+
 ## What is measured and what is not
 
 Nothing of this application has run on a board.
@@ -137,6 +184,8 @@ Nothing of this application has run on a board.
 | Does the MADT list 12 or 16 enabled processors in each state? | not measured |
 | Can the application write to the EFI System Partition? | not measured |
 | How long does a start take with the unlock row, and with the other rows? | not measured |
+| With 16 logical processors, do the ACPI tables give the four new processors `_CST`? | not measured. `report=1` reads it |
+| Does `StartupThisAP` run the register sample on every enabled processor? | not measured |
 | Does the firmware load an unsigned application with Secure Boot on? | not measured. With Secure Boot on, it should refuse the image and go on with its boot order |
 | Does a Fast Startup session or a hibernated session resume when the processor count changed since it was saved? | not measured. See the next section |
 
