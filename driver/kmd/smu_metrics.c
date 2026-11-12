@@ -139,9 +139,11 @@ void SmuMetricsStop(BC250_DEVICE* Device)
     if (m->Page != NULL) {
         MmUnmapIoSpace((PVOID)m->Page, BC250_SMU_METRICS_PAGE);
         m->Page = NULL;
-        GuardLog("smu metrics: stop after %lu tables (%lu no clock), %lu failures, state %s, layout %s",
-                 m->Reader.reads, m->Reader.clock_lost_tables, m->Reader.failures, StateText(m->Reader.state),
-                 LayoutText(m->Reader.layout));
+        GuardLog("smu metrics: stop after %lu tables, %lu failures, state %s, layout %s", m->Reader.reads,
+                 m->Reader.failures, StateText(m->Reader.state), LayoutText(m->Reader.layout));
+        if (m->Reader.clock_lost_tables != 0)
+            GuardLog("smu metrics: %lu of the tables had no clock (stock table, eight cores)",
+                     m->Reader.clock_lost_tables);
     }
 }
 
