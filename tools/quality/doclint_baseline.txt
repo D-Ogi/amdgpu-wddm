@@ -120,7 +120,6 @@
 3	tools/win/d3d11errors/README.md
 2	tools/win/d3d11mt/README.md
 20	tools/win/d3d12caps/README.md
-56	tools/win/d3d12queue/README.md
 1	tools/win/dxgimodes/README.md
 53	tools/win/frameloop/README.md
 3	tools/win/gpu-timeline/README.md

@@ -3,11 +3,11 @@
 Build with `build.ps1 -Kits <workspace>/toolchain/nuget -Out <workspace>/scratch/build/d3d12queue`.
 Run `amdgpu_wddm_d3d12_queue.exe --warp` for the software positive control or `--lab` for the BC-250 adapter (PCI1002:13fe). The program explicitly loads System32/d3d12.dll. It does not load the vkd3d engine directly or change driver registration.
 
-The sequence creates two direct queues and two fences. Queue A signals done=1; CPU observes completion. Queue B waits on gate=1 and then signals done=2. During a100ms observation, done must stay1 and its event must time out. CPU signals gate=1; done must then reach2 within5s. The device must remain healthy. Any failed assertion produces a nonzero exit. The gate is released even after a failed blocked-state assertion.
+The sequence creates two direct queues and two fences. Queue A signals done=1. CPU observes completion. Queue B waits on gate=1 and then signals done=2. During a100ms observation, done must stay1 and its event must time out. CPU signals gate=1. Done must then reach2 within5s. The device must remain healthy. Any failed assertion produces a nonzero exit. The gate is released even after a failed blocked-state assertion.
 
 Run under the existing bounded-child Job supervisor: the5s waits do not bound driver calls or COM teardown. All lab trials remain at most180s and require exact baseline/rollback and sibling-module admission from the surrounding runner. This client is not permission to deploy an unfinished DDI shell. Output is flushed after each operation so a stopped attempt retains its last boundary.
 
-Host validation,2026-09-28: /W4 /WX build, help and malformed CLI controls pass. WARP completes the sequence, done stays1 during WAIT_TIMEOUT and becomes2 after CPU release; process exits0 and the20s Job supervisor verifies an empty Job. Raw receipt: scratch/m15/queue-client001. No native lab run yet.
+Host validation,2026-09-28: /W4 /WX build, help and malformed CLI controls pass. WARP completes the sequence, done stays1 during WAIT_TIMEOUT and becomes2 after CPU release. Process exits0 and the20s Job supervisor verifies an empty Job. Raw receipt: scratch/m15/queue-client001. No native lab run yet.
 
 This measures API ordering for a no-command-list sequence. It does not establish which native DDI callbacks or KMD contexts implement the ordering. The T0 logging shell must identify those, including the association with hRTCommandQueue. Copy/compute, GPU cross-queue dependencies, residency and FL12_1 require subsequent tests.
 
@@ -16,15 +16,15 @@ This measures API ordering for a no-command-list sequence. It does not establish
 `registration.ps1` plans and applies a reversible fourth `UserModeDriverName`
 REG_MULTI_SZ entry. It requires an exact three-entry baseline, preserves its
 ordering and values, and refuses foreign modifications during restoration.
-Persist the plan before installation; hold the caller's mutation lock throughout
+Persist the plan before installation. Hold the caller's mutation lock throughout
 all phases. A failed install can have written the value and still needs restoration.
-Confirm every writer's process tree is closed before restoring or verifying.
+Check that every writer's process tree is closed before you restore or check.
 
 Run `powershell -NoProfile -File registration-test.ps1` before packaging a trial.
 The mock-key tests cover JSON plan round-trip, normal and repeated restoration,
 post-write failure, foreign mutation, wrong registry kind and tampered plans.
 They do not establish that dxgkrnl refreshes its effective DX12 driver name.
-The trial must query that name through KMT after installation and after restoration;
+The trial must query that name through KMT after installation and after restoration.
 a registry readback alone is insufficient. No restart or persistent deployment is
 implicit in this helper.
 
@@ -34,7 +34,7 @@ implicit in this helper.
 system runtime. Use `--interactive-warp` instead for the same sequence through the WARP software
 control. Neither selection falls back to the other adapter. The directory must
 already exist and must be new for each run.
-The deadline is at most150 seconds; a separate bounded Job must cover the whole
+The deadline is at most150 seconds. A separate bounded Job must cover the whole
 process, driver calls and cleanup. The surrounding lab supervisor reserves time
 for restoration within its180-second limit.
 
@@ -60,11 +60,11 @@ receipt before publishing the next command.
 | `abort` | Request cancellation at an operation boundary or inside the bounded fence wait |
 
 `build.ps1 -Flip` replaces the `copy` operation with the fullscreen case of M15.14: the one shape in which
-the display hardware may read a buffer the application owns instead of a copy the compositor made. It takes
+the scan-out hardware may read a buffer the application owns instead of a copy the compositor made. It takes
 output 0's desktop rectangle, opens a borderless `WS_POPUP` window exactly over it, takes the foreground and
 creates a flip-model swap chain of `-FlipBuffers` buffers (2 or 3) at that size in `B8G8R8A8_UNORM`, with
 `FLIP_DISCARD`, `SCALING_NONE` and no multisampling, on the session's queue. With `-FlipFullscreen` it also
-asks for exclusive fullscreen on that output and resizes the buffers; a refusal is traced and the run goes on
+asks for exclusive fullscreen on that output and resizes the buffers. A refusal is traced and the run goes on
 borderless, because a borderless chain is just as eligible for a flip and the mode list is not this
 increment's subject.
 
@@ -102,7 +102,7 @@ fullscreen window is a lab condition to fix, not a result. The trace carries DXG
 before and after (`PresentCount`, `PresentRefreshCount`, `SyncRefreshCount`, `GetLastPresentCount`), their
 deltas, the frames per second, and which back-buffer indices the chain handed out.
 
-What this client cannot show is whether the display hardware read those buffers. DXGI's statistics do not
+What this client cannot show is whether the scan-out hardware read those buffers. DXGI's statistics do not
 say, and a successful Present is returned on both paths. The witness is the kernel driver's scan-out
 counters around the run (`bc250kmd_cli log summary`, `scanout-trial.ps1`) together with the operator's
 screenshot. Nothing in the receipt should be read as a claim about DirectFlip.
@@ -114,12 +114,11 @@ starts the client, drives the five commands through `controller.ps1`, waits for 
 it is not, so that no fullscreen window outlives its trial), reads the counters again and writes one JSON
 report with the receipt, the client's present statistics, both counter snapshots and their delta. The counter
 lines it reads are `presents N, flips N of N address calls`, the scan-out admission line and the vidpn flip
-line; a line the running driver does not print is reported as absent, and a delta is taken only for a counter
+line. A line the running driver does not print is reported as absent, and a delta is taken only for a counter
 both reads carried - an absent counter is never a zero, because the first baseline of this work is a KMD that
 has no scan-out counters at all.
 
-The client runs as a scheduled task of the interactive session (`New-ScheduledTaskPrincipal -LogonType
-Interactive`), not as a child of the SSH session: a session-0 window is on no monitor and is composed by no
+The client runs as a scheduled task of the interactive session (`New-ScheduledTaskPrincipal -LogonType Interactive`), not as a child of the SSH session. A session-0 window is on no monitor and is composed by no
 interactive DWM, so no flip of it could be independent and the operator could not see it either. The task's
 name stays clear of the deploy kits' competing-task pattern, the trial removes it afterwards, and it pauses
 the overlay's `log summary` poll for the length of the run (a measured ~300 ms stall every ~5.4 s).
@@ -156,7 +155,7 @@ The delta then says which of three things happened: flips admitted, candidates r
 refused them), or no candidate reaching `SetVidPnSourceAddress` at all. The last one does not place the stop
 "in user mode" and leave it there. For a borderless chain the layer is the compositor - DWM decides DirectFlip
 through its own UMD, which has no `CheckDirectFlipSupport` entry - and for an exclusive-fullscreen chain it is
-DXGI or the shell; the verdict says so. An admitted flip is only reported as confirmed when the hardware flip
+DXGI or the shell. The verdict says so. An admitted flip is only reported as proven when the hardware flip
 counter moved with it, because a scan-out flip is counted when `DcnFlipSourceAddress` succeeded and the flip
 gate can be closed. `admit_ok` appears in no verdict at all: it counts every `SetVidPnSourceAddress` with an
 allocation, the compositor's own primary included, so over a minute its delta is thousands of DWM flips.
@@ -176,7 +175,7 @@ not what the ICD read.
 through `ID3D12Device5` and `ID3D12GraphicsCommandList4`: a bottom level of one triangle and a top level of
 one instance are built on one DIRECT list, then the cs_6_5 inline ray query of `rayquery.hlsl`
 (`rayquery-program.h`, the same DXIL bytes as the harness fixture) writes 64 words, 1 for a hit and 2 for a
-miss, through a root SRV and a root UAV by address. The READBACK buffer starts at a value that is neither;
+miss, through a root SRV and a root UAV by address. The READBACK buffer starts at a value that is neither.
 every word is compared with the pattern computed on the CPU, which must hold both hits and misses. The
 trace records the reported raytracing tier, the prebuild sizes and the bottom level's GPU address. Below
 raytracing tier 1.1 the operation fails before creating anything. The software control passes this variant
@@ -186,9 +185,9 @@ with `-FeatureLevel12_1` (2026-09-29, exit 0, 12 hits).
 `CreateStateObject` call makes a raytracing pipeline from the DXIL library of `raypipeline.hlsl`
 (`raypipeline-program.h`, lib_6_3, exports `raygen`, `miss` and `closest`), a triangle hit group, a shader
 config (4-byte payload, 8-byte attributes), a pipeline config with recursion depth 1 and the global root
-signature of the ray query variant; there is no local root signature, collection or `AddToStateObject`. The
+signature of the ray query variant. There is no local root signature, collection or `AddToStateObject`. The
 identifiers of raygen, miss and the hit group from `ID3D12StateObjectProperties` fill a shader table in
-UPLOAD memory at 64-byte steps; `SetPipelineState1` and `DispatchRays` 8x8 on the DIRECT list write the
+UPLOAD memory at 64-byte steps. `SetPipelineState1` and `DispatchRays` 8x8 on the DIRECT list write the
 same 64 words and the same comparison decides. The closest hit shader writes 1, the miss shader 2, and the
 payload starts at 0. Below raytracing tier 1.0 the operation fails before creating anything. The software
 control passes this variant with `-FeatureLevel12_1` (2026-09-29, exit 0, 12 hits).
@@ -198,8 +197,7 @@ raytracing tier, creates the same global root signature, then twice in turn crea
 `raypipeline-program.h`, queries `ID3D12StateObjectProperties`, takes the raygen, miss and hit group
 identifiers (32 bytes each, none all zero, no two equal) and releases the properties and the state object,
 tracing the reference counts the runtime returns. It builds no acceleration structure, records no command
-list and submits nothing, so `gpu_pending` stays false. Success is traced as `Ray state 2 of 2 state
-objects created and released`. The code shares its root signature, state object and identifier steps with
+list and submits nothing, so `gpu_pending` stays false. Success is traced as `Ray state 2 of 2 state objects created and released`. The code shares its root signature, state object and identifier steps with
 `-RayPipeline` in `interactive-raypipeline.h`. The software control passes this variant with
 `-FeatureLevel12_1` (2026-09-29, exit 0).
 
@@ -209,7 +207,7 @@ so it is self-contained. The executable `RAYTRACING_PIPELINE` has no library of 
 that collection (`NumExports` 0, all of its exports), the global root signature and the pipeline config.
 The application's reference to the collection is released, with the count the runtime returns traced,
 once the pipeline exists. Identifiers, shader table, `DispatchRays` and the 64-word comparison are those of
-`-RayPipeline`; success is traced as `Ray collection 64 of 64 words equal, ...`. The software control
+`-RayPipeline`. Success is traced as `Ray collection 64 of 64 words equal, ...`. The software control
 passes this variant with `-FeatureLevel12_1` (2026-09-29, exit 0, 12 hits).
 
 `build.ps1 -RayGrow` traces the scene through a pipeline grown by `AddToStateObject`, which needs raytracing
@@ -218,27 +216,25 @@ tier 1.1. The parent state object allows additions (`STATE_OBJECT_CONFIG`) and h
 associated with it by name, both configs and the global root signature. The client takes the parent's
 raygen, miss and hit group identifiers, reads the parent's default pipeline stack size and sets it 1024
 bytes higher, and reads it back. Through `ID3D12Device7`, the addition then brings the miss shader
-`miss_new` of `raygrow-miss.hlsl`; it also allows additions and is valid on its own, with the same configs
+`miss_new` of `raygrow-miss.hlsl`. It also allows additions and is valid on its own, with the same configs
 and global root signature. The DXR specification says the child starts with the parent's stack size, so
 the child's `GetPipelineStackSize`, read before any set on it, must equal the parent's value or the
 operation fails. `GetShaderStackSize` of raygen is traced for both. The four identifiers must be nonzero
-and pairwise different. The parent's identifiers are copied while it is alive; then the parent loses every
+and pairwise different. The parent's identifiers are copied while it is alive. Then the parent loses every
 application reference, properties first, and no session slot ever holds it. The trace shows the boundary
 in order: `Parent identifiers copied`, `Parent properties released`, `Parent state object released`,
 then `SetPipelineState1 child` and `DispatchRays` on a list that only ever bound the child. The reference
-counts are traced as observations. The shader table is built from the copied bytes and holds the parent's raygen, two miss records (the parent's miss at index 0, the child's `miss_new` at
+counts are traced as observations. The shader table is built from the copied bytes. It holds the parent's raygen, two miss records (the parent's miss at index 0, the child's `miss_new` at
 index 1) and the parent's hit group record, whose identifier is followed by the local constant 0x00C0FFEE.
 The ray generation shader picks the miss index from the column's parity, so the expected words are that
-constant for a hit, 2 for a miss in an even column and 3 in an odd one. Success is traced as `Ray grow 64
-of 64 words equal, H hits, M2 old misses, M3 new misses, ...`.
+constant for a hit, 2 for a miss in an even column and 3 in an odd one. Success is traced as `Ray grow 64 of 64 words equal, H hits, M2 old misses, M3 new misses, ...`.
 
 The stack size check is strict only on the BC-250 (`--interactive`). The DXR specification says, in
 `d3d/Raytracing.md` of microsoft/DirectX-Specs at `5a4139be`, line 3777: "The new state object starts off
 with the same [pipeline stack size](#pipeline-stack) setting as the previous." The software adapter was
 observed on 2026-09-29 to start the child at 0 against that rule: every stack size it reports is 0 except
 the parent's value after the set, so the child answers 0 where the parent reads back 1024. Under
-`--interactive-warp` the mismatch is therefore traced with both values and `software adapter: not
-decisive`, with S_OK, and the operation continues; under `--interactive` it fails the operation. Nothing
+`--interactive-warp` the mismatch is therefore traced with both values and `software adapter: not decisive`, with S_OK, and the operation continues. Under `--interactive` it fails the operation. Nothing
 else differs between the two modes. With that, the software control passes this variant with
 `-FeatureLevel12_1` (2026-09-29, exit 0, 12 hits, 28 old misses, 24 new misses).
 
@@ -249,28 +245,26 @@ paging submissions). The steps have fixed totals of 256 MB, 512 MB, 1 GB and 2 G
 64 KB created back to back, and LARGE, committed resources of 64 MB, buffers and RGBA8 4096x3072 textures
 with all 13 mips in turn. `-GameLoadArm Small|Large|Both` (default `Both`, SMALL first) selects the arms. A
 step is skipped with a trace line when `IDXGIAdapter3::QueryVideoMemoryInfo` says the step does not fit the
-local budget beside the current usage; an unknown budget is traced and not checked. Every resource is written
+local budget beside the current usage. An unknown budget is traced and not checked. Every resource is written
 through the GPU: a pattern of the run's random seed, the resource's id and the word index goes into an UPLOAD
 staging buffer and on with `CopyBufferRegion` or `CopyTextureRegion`, in command lists of at most 1024
 copies, each waited with the bounded fence wait. Then every LARGE resource and every 64th SMALL one, plus the
 last, is read back and compared row by row. The trace counts created, written, fenced, verified and
 mismatched resources apart, as well as bytes touched and bytes verified, allocation failures and
-submissions, with the time of each part. An arm's resources stay alive until its verification is done;
+submissions, with the time of each part. An arm's resources stay alive until its verification is done.
 then they are released and a fence round trip follows before the next arm. The last phase runs four threads
 on the SMALL arm of the 256 MB step, each with its own allocator, list, fence, staging, readback and seed,
-all submitting to the one queue; their trace records carry a `thread` field, and the trace writer takes a
+all submitting to the one queue. Their trace records carry a `thread` field, and the trace writer takes a
 lock. Single-thread steps may start until 40 s after the operation began and the threads until 50 s (10 s
-and 15 s on the software adapter), never in the last 10 s before the client's deadline; a cut is traced as
+and 15 s on the software adapter), never in the last 10 s before the client's deadline. A cut is traced as
 `Game load time budget reached at step N`, and what was created is still written and verified. A step, an
 arm or the thread phase counts as exercised only once it created a resource. The operation succeeds only if
 load actually ran (resources created and a sample verified), every exercised arm verified all its samples
 with no mismatch, and no allocation failed. A run in which the time bound or the budget skipped every arm
-fails with `800700e8` (`Game load incomplete: no load ran`), whatever the screen did. It ends with `Game load:
-steps S of 4, created N, verified M, mismatched X, bytes B, threads T, ..., coverage complete|partial|none,
-arms A of P, steps skipped K, ...`; `partial` means some arms or threads were cut or skipped, and SMALL
+fails with `800700e8` (`Game load incomplete: no load ran`), whatever the screen did. It ends with `Game load: steps S of 4, created N, verified M, mismatched X, bytes B, threads T, ..., coverage complete|partial|none, arms A of P, steps skipped K, ...`. `partial` means some arms or threads were cut or skipped, and SMALL
 coverage is always the sampled resources only.
-Every milestone (load, step and arm begin and end, every LARGE and every 256th SMALL creation, each
-submission before it executes, each fence, each verification, thread begin and end) is appended to
+Every milestone (load, step and arm `begin` and `end`, every LARGE and every 256th SMALL creation, each
+submission before it executes, each fence, each verification, thread `begin` and `end`) is appended to
 `milestones.log` in the session directory with QPC time, step, arm, thread and counts, through a
 write-through handle flushed after each line, so a machine-wide stop leaves the last one on disk.
 
@@ -284,22 +278,22 @@ threads) and the arm on the right (light blue SMALL, brown LARGE), and turns gre
 the end. Below it a white bar moves with every frame, so a frozen picture shows a still bar. Below that is
 one tile per written batch: yellow when its fence completed, green when its arm verified clean, red for a
 mismatch or a failed allocation. The window, the swap chain and the first Present are milestones (with a
-`_begin` line before each), then every 60th Present; every milestone line carries the Present count and the
+`_begin` line before each), then every 60th Present. Every milestone line carries the Present count and the
 longest interval between two Presents. A failed Present fails the operation and keeps its error. A frame
 executed without a following successful `Signal` (a failed Present or Signal) is never taken as retired on
 the strength of an earlier fence value: the render thread tries one covering `Signal` and a bounded wait,
 and if that does not prove completion its objects stay for process teardown and the session stays pending. Under `--interactive-warp` no
 window is made: the same frames go to an offscreen render target of the same size, paced to 60 per second
-and reported as offscreen frames. The load starts after the first frame (or after 10 s without one); the
+and reported as offscreen frames. The load starts after the first frame (or after 10 s without one). The
 render thread gets 10 s to end after the load, or the session is left pending for process teardown. That
 timeout ends the session: the copy receipt is published, then `session.json` with reason `detached-thread`
 (hr `WAIT_TIMEOUT`), and no further command runs (the controller refuses one on a terminal session). The
 trace is never closed under the detached thread: the main thread records the end, takes the trace lock and
 ends the process with `TerminateProcess` (exit code 3), so no DLL detach code runs after a thread that may be
 stuck in a driver call. `build.ps1 -GameLoadRenderHoldMs <ms>` makes a test build whose render thread keeps
-tracing that long after its last frame; with 15000 on WARP (SMALL arm, 2026-09-29) the copy failed pending,
+tracing that long after its last frame. With 15000 on WARP (SMALL arm, 2026-09-29) the copy failed pending,
 the session ended `detached-thread` with exit code 3, the status command was refused and all 253 trace lines
-were complete, the last one the session end; the same source without the hold passed its five commands with
+were complete, the last one the session end. The same source without the hold passed its five commands with
 exit code 0.
 
 The software control passes this variant with `-FeatureLevel12_1` (2026-09-29, exit 0, coverage complete,
@@ -319,22 +313,19 @@ its largest objects across resets, so a thread replaces its allocator after ever
 (default 2, 0 never) and releases the old one in the middle of the next recording, after a draw chosen from the
 run's seed, so that one thread's frees land among the others' resets and maps. The main thread executes each
 batch's lists in one `ExecuteCommandLists`, signals a fence and waits for it, then reads
-`GetDeviceRemovedReason`; a removal ends the run with `Reset churn device removed at batch B: reason R`. Each
+`GetDeviceRemovedReason`. A removal ends the run with `Reset churn device removed at batch B: reason R`. Each
 draw's pixel program copies the 32 root constants and the 16 CBV words into its own 192-byte slot of a UAV
-buffer (slot index = root constant 0), which the list copies to READBACK; after the fence the main thread
+buffer (slot index = root constant 0), which the list copies to READBACK. After the fence the main thread
 compares every word with what the recording thread wrote. Every word is unique to seed, thread, batch, draw and
-word; the UPLOAD ring is mapped once and has two regions used in turn, a region being written only after the
-fence of the batch that last read it. The first 16 mismatches are traced as `Reset churn mismatch thread T
-batch B draw D root|cbv word W, readback offset O, upload offset U|none, expected E, actual A, actual is ...`,
+word. The UPLOAD ring is mapped once and has two regions used in turn, a region being written only after the
+fence of the batch that last read it. The first 16 mismatches are traced as `Reset churn mismatch thread T batch B draw D root|cbv word W, readback offset O, upload offset U|none, expected E, actual A, actual is ...`,
 naming where the actual value came from when this run wrote it in the last four batches. Batches start until
 `-ResetChurnSeconds` (default 20, 1 to 140) after the operation began, never in the last 10 s before the
-client's deadline, and at most `-ResetChurnBatches` (default 2000) of them; progress is traced every 50
-batches. The run ends with `Reset churn: batches N of P, threads T, draws per list D, lists L, draws X, words W,
-mismatches M, mismatched draws K, removals R, record failures F, renewals A, resets S, time budget
-reached|not reached, E ms, batch ms mean ... max ..., record ..., submit ..., verify ...` and succeeds only when
+client's deadline, and at most `-ResetChurnBatches` (default 2000) of them. Progress is traced every 50
+batches. The run ends with `Reset churn: batches N of P, threads T, draws per list D, lists L, draws X, words W, mismatches M, mismatched draws K, removals R, record failures F, renewals A, resets S, time budget reached|not reached, E ms, batch ms mean ... max ..., record ..., submit ..., verify ...` and succeeds only when
 a batch ran, every word compared equal, no thread failed and the device was not removed. The default of 20 s
 fits the lab runner as it is (client deadline 70 s, Drive 65 s, copy command about 17 s after the client
-starts); a longer run needs a longer client deadline, watcher budget and Drive first. `resetchurn-test`
+starts). A longer run needs a longer client deadline, watcher budget and Drive first. `resetchurn-test`
 checks the value oracle with the same parameters. The software control passes this variant with
 `-FeatureLevel12_1` (2026-09-30, exit 0, 333 batches in 20 s, 1332 lists, 1363968 draws, 65470464 words
 compared, no mismatch, 664 allocator renewals, batch mean 59 ms).
@@ -346,37 +337,32 @@ of one pixel each, executed in `-RecordBenchExecutes` (default 2) `ExecuteComman
 trip. Every draw changes state as a game does: 8 root constants and a root CBV into the list's UPLOAD ring each
 draw, the pipeline every 4 draws (two pipelines that differ in their pixel program), the descriptor table every 8
 (4 CBVs in a shader-visible heap), and per group of 16 draws the render target (two 1x1 targets in turn),
-viewport, scissor and vertex buffer; even draws are indexed. Each list also has its barriers, a buffer copy and
+viewport, scissor and vertex buffer. Even draws are indexed. Each list also has its barriers, a buffer copy and
 two texture copies. The pixel program of `recordbench.hlsl` (`recordbench-programs.h`, fxc) writes everything it
 read into the draw's own 128-byte slot: the root constants, the CBV words, the table words, the pipeline's mark
-with the slot index, the vertex buffer's tag, a cross word of those four sources and a seal; the target keeps the
+with the slot index, the vertex buffer's tag, a cross word of those four sources and a seal. The target keeps the
 last draw's root word 1. After the fence every word of every slot and both targets of every list is compared with
 `recordbench-oracle.h`. The root and CBV words, the cross word and the targets depend on the run's seed, the
 phase, the frame, the list and the draw, and the mark, tag and table words on the pipeline, vertex buffer and table
 the draw had bound, so a call replayed late, out of order or not at all leaves a wrong word. The
-first 16 mismatches are traced as `Record bench mismatch PHASE frame F list L draw D slot|target word W, readback
-offset O, expected E, actual A, actual is ...`, naming the list, frame, draw and word the actual value came from
+first 16 mismatches are traced as `Record bench mismatch PHASE frame F list L draw D slot|target word W, readback offset O, expected E, actual A, actual is ...`, naming the list, frame, draw and word the actual value came from
 when this phase wrote it in that frame or the one before.
 
 Three phases share `-RecordBenchSeconds` (default 20, 3 to 140, never the last 10 s before the client's deadline),
-each counting its frames after 16 warm-up frames: `burst`, the main thread records the lists back to back;
+each counting its frames after 16 warm-up frames: `burst`, the main thread records the lists back to back.
 `interleaved`, the main thread also spins `-RecordBenchWorkUs` (default 64) microseconds of stand-in application
 work after each group of 16 draws, as a game's main thread interleaves its own work with recording (about 8 ms a
-frame with the defaults); `threaded`, one thread per list records with the same work while the main thread waits,
+frame with the defaults). `threaded`, one thread per list records with the same work while the main thread waits,
 then submits. Per frame the client takes the recording thread's `QueryThreadCycleTime` cycles over its recording
-less those of its stand-in work (the `api` figure: what the runtime and the driver cost that thread; in the threaded
+less those of its stand-in work (the `api` figure: what the runtime and the driver cost that thread. In the threaded
 phase the largest of the threads, with their sum beside it), the submission's cycles, and the QPC wall time of
 recording, submission, GPU wait and verification. Cycles become microseconds at a rate calibrated by five 20 ms
-spins at the start; the final line gives the rate again at the end, because Windows does not promise a constant
+spins at the start. The final line gives the rate again at the end, because Windows does not promise a constant
 cycle rate. Per phase it also takes the main thread's and the process's CPU time (`GetThreadTimes`,
 `GetProcessTimes`) over the counted frames, so CPU time that moved to other threads, such as the replay workers,
-stays visible. Each phase writes two trace lines (`Record bench PHASE: frames N after 16 warm-up, api cpu us mean
-... p50 ... p95 ... max ..., all threads mean ..., work cpu us mean ..., submit cpu us mean ...` and `Record bench
-PHASE wall us: record ..., submit ..., gpu wait ..., verify ..., frame ...; cpu ms per frame: main thread ...,
-process ..., over ... ms`) and appends one row per counted frame to `recordbench-frames.csv` in the session
+stays visible. Each phase writes two trace lines (`Record bench PHASE: frames N after 16 warm-up, api cpu us mean ... p50 ... p95 ... max ..., all threads mean ..., work cpu us mean ..., submit cpu us mean ...` and `Record bench PHASE wall us: record ..., submit ..., gpu wait ..., verify ..., frame ...; cpu ms per frame: main thread ..., process ..., over ... ms`) and appends one row per counted frame to `recordbench-frames.csv` in the session
 directory, after the phase and never inside a measured span. The run starts with `Record bench seed ...` and ends
-with `Record bench: phases measured M of 3, frames N, words W, mismatches X, ...`; both end in `experiment
-<source> <list> (profile ..., machine ..., environment ...)`: the switch list in each place the shell reads,
+with `Record bench: phases measured M of 3, frames N, words W, mismatches X, ...`. Both end in `experiment <source> <list> (profile ..., machine ..., environment ...)`: the switch list in each place the shell reads,
 and first the one a release shell takes (sessions before BD-167 name `AMDGPU_WDDM_D3D12_EXPERIMENT` instead,
 and `recordbench_compare.py` reads both). It succeeds only when all three phases counted a frame, every
 word compared equal, no list failed to record and the device was not removed. No window is made.
@@ -390,7 +376,7 @@ release shell has no lookup of it (BD-167) and a lab shell would take it before 
 each session's `trace.jsonl` and `recordbench-frames.csv`, and exits 1 when either session did not pass.
 `recordbench-test` checks the oracle with the build's parameters and `test_recordbench_compare.py` the table. The
 software control passes this variant (2026-10-01, exit 0, 323 counted frames in 20 s over the three phases,
-24316824 words compared, no mismatch); WARP does its work at `ExecuteCommandLists`, so its recording figures say
+24316824 words compared, no mismatch). WARP does its work at `ExecuteCommandLists`, so its recording figures say
 nothing about our driver's.
 
 `controller.ps1 -Abort` can publish `abort.request` while an operation is active.
@@ -399,7 +385,7 @@ necessary if a DDI call does not return. Unretired GPU resources are retained
 through process termination instead of being released as though execution had
 completed.
 
-`trace.jsonl` records flushed API before/after events; each receipt records the
+`trace.jsonl` records flushed API before/after events. Each receipt records the
 command sequence, HRESULT, elapsed time, device/queue state and copy result.
 `session.json` is the terminal command summary. Its creation precedes COM
 teardown: it is not proof that the process exited or the Job is empty. Acceptance
@@ -409,7 +395,7 @@ checks together. A successful `exit` or normal void DDI return alone is insuffic
 A session can be replayed against another exact artifact by submitting the same
 commands to a new directory, checking each receipt before proceeding. Preserve
 the original files rather than restarting an attempt in place. Commands steer
-public API operations; driver callback scopes are never suspended for input.
+public API operations. Driver callback scopes are never suspended for input.
 
 ## Compact trace analysis
 
@@ -423,7 +409,7 @@ python -B summarize_trace.py --runtime-err runtime.err --trace trace.jsonl
 
 The analyzer reports call pairing, returned statuses, durations when a consistent
 QPC frequency is available, and the last allowlisted format/MSAA values. Edge
-counts are explicitly named; a begin and an end contribute two edges. Duplicate,
+counts are explicitly named. A `begin` and an `end` record contribute two edges. Duplicate,
 unmatched, malformed and untracked records remain visible. Hosted callback IDs
 are device-local, so the analyzer reports their counts without assuming a global
 pairing. Raw text, handles and resource contents are omitted from its bounded
@@ -432,8 +418,8 @@ output. The original trace remains the source of evidence.
 Trace lines of the `-ResetChurn` variant count under one `Reset churn` name. Its typed lines (start, progress,
 thread end, mismatch, removal, summary) are parsed into named fields under `api.reset_churn`, with at most
 `MAX_EXAMPLES` mismatch and failure examples, and a `criterion`: `pass` needs the summary line with status 0,
-at least one batch, no mismatch, removal, record failure or other failing line, and no malformed typed line;
-`fail` lists what went wrong; anything else is `incomplete` with its reasons.
+at least one batch, no mismatch, removal, record failure or other failing line, and no malformed typed line.
+`fail` lists what went wrong. Anything else is `incomplete` with its reasons.
 
 ## Receipt-gated command planner
 
@@ -441,7 +427,7 @@ at least one batch, no mismatch, removal, record failure or other failing line, 
 interactive attempt. It waits for the seeded `create-device` receipt, then plans
 `create-queue`, `copy`, `status`, and `exit`. A failed operation or missing positive
 state witness selects `exit`. Any receipt reporting pending GPU resources permits
-only `exit` or `abort`; their retirement is never assumed.
+only `exit` or `abort`. Their retirement is never assumed.
 
 Import `DriveState` for manual integration, or `drive_loop` for bounded polling:
 
@@ -455,8 +441,8 @@ result = drive_loop(poll, issue, emit, seconds=60,
 ```
 
 `poll(timeout)` returns a complete snapshot: strict boolean `started`,
-`runtime_ready`, `stop`, `cancel`, and `terminal`; a `commands` list of
-`{sequence, command}` objects; and a `receipts` list containing the probe's
+`runtime_ready`, `stop`, `cancel`, and `terminal`. It also has a `commands` list of
+`{sequence, command}` objects, and a `receipts` list containing the probe's
 immutable result objects. Receipts include `schema`, `sequence`, `command`,
 `success`, eight-digit hex `hr`, `elapsed_ms`, boolean `state.device` and
 `state.queue`, `copy_success`, and `gpu_pending`. Startup may have no commands or
@@ -464,25 +450,25 @@ receipts while `runtime_ready` is false. Every previously observed receipt must
 remain present and unchanged. Extra receipt fields are discarded.
 
 `issue(sequence, command, timeout)` must enforce its timeout, recheck STOP, invoke
-the immutable controller, and validate its acknowledgement. It raises on refusal
+the immutable controller, and check its acknowledgement. It raises on refusal
 or uncertain delivery. The planner consumes each action before calling `issue`
 and never retries it. For manual integration, call `state.observe(snapshot)`,
-then `state.issuing(*action)` immediately before delivery. Stop on any exception;
+then `state.issuing(*action)` immediately before delivery. Stop on any exception.
 a refused or terminal planner must not be reused for a new attempt.
 
 The loop accepts a one-to-65-second host budget. Startup and polling consume that
 same budget. In its final two seconds it may replace a planned command with a
 typed `abort`, only after a completed receipt proves the next sequence. STOP or
 cancellation prevents further positive commands. A callback must honor its supplied
-timeout, and logging callbacks must return promptly; this Python loop cannot
+timeout, and logging callbacks must return promptly. This Python loop cannot
 interrupt a stalled transport implementation.
 
 The optional keyword `retry_poll_timeout=True` asserts that `poll` is read-only
 and may safely finish remotely after its local transport times out. It permits
 at most one retry of `subprocess.TimeoutExpired` raised directly by `poll`, over
-the entire Drive. It defaults to `False`; existing consumers retain fail-stop
+the entire Drive. It defaults to `False`. Existing consumers retain fail-stop
 behavior. The same planner, issued-command history and absolute deadline remain
-in use. Only a fresh, validated snapshot can authorize the next command; STOP
+in use. Only a fresh, checked snapshot can authorize the next command. STOP
 and cancellation still take precedence. Commands, malformed snapshots, unknown
 errors and failures in observation or logging are never retried. A timed-out
 command delivery stays consumed.
@@ -501,4 +487,4 @@ supervisor and its cleanup checks active.
 
 Run the pure host gate with
 `python -B -m unittest discover -s tools/win/d3d12queue -p test_drive_planner.py`.
-The tests do not load a driver, connect to a target, or launch a process.
+The tests do not load a driver, connect to a target, or start a process.
