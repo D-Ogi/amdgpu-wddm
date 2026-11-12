@@ -76,12 +76,8 @@ cluster LINK_MODE.Valid _vcs_dpi_display_pipe_dest_params_st.drr_display
 cluster LINK_MODE.Valid _vcs_dpi_display_pipe_dest_params_st.synchronize_timings
 cluster LINK_MODE.Valid dc_crtc_timing.display_color_depth
 cluster LINK_MODE.Valid dc_crtc_timing.pixel_encoding
-cluster _BC250_CPU_STATE.Confirmed _BC250_CPU_STATE.CoreConfirmed
-cluster _BC250_CPU_STATE.Confirmed _BC250_CPU_STATE.CorePending
-cluster _BC250_CPU_STATE.Confirmed _BC250_CPU_STATE.Pending
-cluster _BC250_CPU_STATE.CoreConfirmed _BC250_CPU_STATE.CorePending
-cluster _BC250_CPU_STATE.CoreConfirmed _BC250_CPU_STATE.Pending
-cluster _BC250_CPU_STATE.CorePending _BC250_CPU_STATE.Pending
+cluster _BC250_CPU_STATE.Confirmed _BC250_CPU_STATE.Mark
+cluster _BC250_CPU_STATE.CoreConfirmed _BC250_CPU_STATE.CoreMark
 cluster _BC250_CPU_STATE.OnTrial _BC250_CPU_STATE.RevertOwed
 cluster _BC250_CPU_STATE.OnTrial _BC250_CPU_STATE.Start
 cluster _BC250_CPU_STATE.RevertOwed _BC250_CPU_STATE.Start
@@ -201,7 +197,6 @@ sticky _BC250_DEVICE.DcnPlaneFormats
 sticky _BC250_DEVICE.GartStopPrepared
 sticky _BC250_DEVICE.GfxAccessClosed
 sticky _BC250_DEVICE.GfxStopPrepared
-sticky _BC250_DEVICE.GpuStopUnconfirmed
 sticky _BC250_DEVICE.StopDone
 sticky _BC250_DPM_STATE.Confirmed
 sticky _BC250_DPM_STATE.GaveUp
@@ -211,7 +206,6 @@ sticky _BC250_GART.SnapshotValid
 sticky _BC250_GFX.VmidProbed
 sticky _BC250_HWMON_OWNER.LastValid
 sticky _BC250_PRESENT_OBSERVATION.ListValid
-sticky _BC250_SEQUENCE.Dpc
 sticky _BC250_SMU_METRICS.LoggedEnd
 sticky _BC250_SMU_OWNER.SnapValid
 sticky _BC250_START_HEALTH_STATE.Closed

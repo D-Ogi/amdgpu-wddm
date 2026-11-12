@@ -1261,8 +1261,8 @@ void CpuStart(BC250_DEVICE* Device)
     s->Start = BC250_CPU_START_NONE;
     s->LeftoverOwed = FALSE;
     s->BootRecord = CPU_BOOT_RECORD_UNREAD;
-    s->Pending = s->Confirmed = s->CorePending = s->CoreConfirmed = FALSE;
-    s->PendingWithdrawn = s->CoreWithdrawn = FALSE;
+    s->Confirmed = s->CoreConfirmed = FALSE;
+    s->Mark = s->CoreMark = BC250_CPU_MARK_NONE;
     s->TrialDeadline = 0;
     s->Generation = Device->StartHealth.Generation;
     s->CoreMask = BC250_CPU_MASK_STOCK;
@@ -1344,7 +1344,7 @@ void CpuStart(BC250_DEVICE* Device)
             RtlZeroMemory(&s->Stored, sizeof(s->Stored));
             dropped = TRUE;
         } else {
-            s->Pending = TRUE;
+            s->Mark = BC250_CPU_MARK_PENDING;
             s->Confirmed = confirmed == CpuMark(&s->Stored);
             CpuLogSettings("stored", &s->Stored);
         }
@@ -1369,7 +1369,7 @@ void CpuStart(BC250_DEVICE* Device)
             GuardLog("cpu: the core mask's pending mark is not durable: the stock mask runs");
             s->CoreMask = BC250_CPU_MASK_STOCK;
         } else {
-            s->CorePending = TRUE;
+            s->CoreMark = BC250_CPU_MARK_PENDING;
             s->CoreConfirmed = coreConfirmed == mask;
             s->CoreMask = mask;
         }
@@ -1564,11 +1564,11 @@ void CpuResumeAlone(BC250_DEVICE* Device)
 static void CpuConfirmCoreLocked(BC250_CPU_STATE* s, _In_z_ const char* Why)
 {
     NTSTATUS core = STATUS_SUCCESS;
-    if (!s->CorePending && !s->CoreWithdrawn) return;
+    if (s->CoreMark == BC250_CPU_MARK_NONE) return;
     // A mark that a system transition took back (CpuSystemPower) is off the disk already.
-    if (s->CorePending) core = GuardDeleteSetting(CPU_SETTING_CORE_PENDING);
+    if (s->CoreMark == BC250_CPU_MARK_PENDING) core = GuardDeleteSetting(CPU_SETTING_CORE_PENDING);
     if (NT_SUCCESS(core)) {
-        s->CorePending = s->CoreWithdrawn = FALSE;
+        s->CoreMark = BC250_CPU_MARK_NONE;
         core = GuardStoreSetting(CPU_SETTING_CORE_CONFIRMED, s->CoreMask);
         if (NT_SUCCESS(core)) s->CoreConfirmed = TRUE;
     }
@@ -1584,11 +1584,11 @@ NTSTATUS CpuConfirm(BC250_DEVICE* Device, _In_z_ const char* Why)
     BC250_CPU_STATE* s = &Device->Cpu;
     NTSTATUS status = STATUS_SUCCESS;
     CpuLock(s);
-    if (s->Pending || s->PendingWithdrawn) {
+    if (s->Mark != BC250_CPU_MARK_NONE) {
         ULONG mark = CpuMark(&s->Stored);
-        if (s->Pending) status = GuardDeleteSetting(CPU_SETTING_PENDING);
+        if (s->Mark == BC250_CPU_MARK_PENDING) status = GuardDeleteSetting(CPU_SETTING_PENDING);
         if (NT_SUCCESS(status)) {
-            s->Pending = s->PendingWithdrawn = FALSE;
+            s->Mark = BC250_CPU_MARK_NONE;
             status = GuardStoreSetting(CPU_SETTING_CONFIRMED, mark);
             if (NT_SUCCESS(status)) s->Confirmed = TRUE;
         }
@@ -1616,35 +1616,33 @@ static void CpuSystemPower(BC250_DEVICE* Device, BOOLEAN Down)
     NTSTATUS status;
     CpuLock(s);
     if (Down) {
-        if (!s->Pending && !s->CorePending) {
+        if (s->Mark != BC250_CPU_MARK_PENDING && s->CoreMark != BC250_CPU_MARK_PENDING) {
             // Nothing to take back.
         } else if (!StartHealthUnfaulted(Device)) {
             GuardLog("cpu: system power transition on a start with a fault: the pending marks stay");
         } else {
-            if (s->Pending) {
+            if (s->Mark == BC250_CPU_MARK_PENDING) {
                 status = GuardDeleteSetting(CPU_SETTING_PENDING);
-                if (NT_SUCCESS(status)) { s->Pending = FALSE; s->PendingWithdrawn = TRUE; }
+                if (NT_SUCCESS(status)) s->Mark = BC250_CPU_MARK_WITHDRAWN;
                 GuardLog("cpu: system power transition, the pending mark of the settings is taken back: 0x%08X",
                          status);
             }
-            if (s->CorePending) {
+            if (s->CoreMark == BC250_CPU_MARK_PENDING) {
                 status = GuardDeleteSetting(CPU_SETTING_CORE_PENDING);
-                if (NT_SUCCESS(status)) { s->CorePending = FALSE; s->CoreWithdrawn = TRUE; }
+                if (NT_SUCCESS(status)) s->CoreMark = BC250_CPU_MARK_WITHDRAWN;
                 GuardLog("cpu: system power transition, the pending mark of the core mask is taken back: 0x%08X",
                          status);
             }
         }
     } else {
-        if (s->PendingWithdrawn) {
+        if (s->Mark == BC250_CPU_MARK_WITHDRAWN) {
             status = GuardStoreSetting(CPU_SETTING_PENDING, CpuMark(&s->Stored));
-            if (NT_SUCCESS(status)) s->Pending = TRUE;
-            s->PendingWithdrawn = FALSE;
+            s->Mark = NT_SUCCESS(status) ? BC250_CPU_MARK_PENDING : BC250_CPU_MARK_NONE;
             GuardLog("cpu: back in S0, the pending mark of the settings is written again: 0x%08X", status);
         }
-        if (s->CoreWithdrawn) {
+        if (s->CoreMark == BC250_CPU_MARK_WITHDRAWN) {
             status = GuardStoreSetting(CPU_SETTING_CORE_PENDING, s->CoreMaskStored);
-            if (NT_SUCCESS(status)) s->CorePending = TRUE;
-            s->CoreWithdrawn = FALSE;
+            s->CoreMark = NT_SUCCESS(status) ? BC250_CPU_MARK_PENDING : BC250_CPU_MARK_NONE;
             GuardLog("cpu: back in S0, the pending mark of the core mask is written again: 0x%08X", status);
         }
     }
@@ -1837,7 +1835,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                 if (s->Stored.temp_given) CpuStoreLogged(CPU_SETTING_TEMP, s->Stored.temp_c);
                 else CpuDeleteLogged(CPU_SETTING_TEMP);
                 CpuDeleteLogged(CPU_SETTING_PENDING);
-                s->Pending = s->PendingWithdrawn = FALSE;
+                s->Mark = BC250_CPU_MARK_NONE;
                 CpuStoreLogged(CPU_SETTING_CONFIRMED, mark);
                 CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_OK);
                 s->Confirmed = TRUE;
@@ -1872,7 +1870,8 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
             CpuDeleteLogged(CPU_SETTING_CONFIRMED);
             CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_NONE);
             RtlZeroMemory(&s->Stored, sizeof(s->Stored));
-            s->Pending = s->Confirmed = s->PendingWithdrawn = FALSE;
+            s->Confirmed = FALSE;
+            s->Mark = BC250_CPU_MARK_NONE;
             KeAcquireSpinLock(&s->SnapLock, &irql);
             s->OnTrial = FALSE;
             s->TrialDeadline = 0;
@@ -1890,9 +1889,9 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                 // the six-core count comes back at the next power-off, where the firmware starts from 0x77.
                 CpuStoreLogged(CPU_SETTING_CORE_MASK, mask);
                 s->CoreMaskStored = mask;
-                s->CoreWithdrawn = FALSE;       // the request owns the mark from here
+                s->CoreMark = BC250_CPU_MARK_NONE;               // the request owns the mark from here
                 if (mask != BC250_CPU_MASK_STOCK) {
-                    if (NT_SUCCESS(GuardStoreSetting(CPU_SETTING_CORE_PENDING, mask))) s->CorePending = TRUE;
+                    if (NT_SUCCESS(GuardStoreSetting(CPU_SETTING_CORE_PENDING, mask))) s->CoreMark = BC250_CPU_MARK_PENDING;
                     if (SmuCpuBegin(&Device->Smu)) {
                         status = CpuSendFullCoreMask(Device);
                         SmuCpuEnd(&Device->Smu);
@@ -1902,7 +1901,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                 } else {
                     CpuDeleteLogged(CPU_SETTING_CORE_PENDING);
                     CpuDeleteLogged(CPU_SETTING_CORE_CONFIRMED);
-                    s->CorePending = s->CoreConfirmed = FALSE;
+                    s->CoreConfirmed = FALSE;
                     GuardLog("cpu: core mask 0x%02X (%lu cores) stored on request, no message: the count changes at "
                              "the next power-off", mask, bc250_cpu_mask_cores(mask));
                 }
@@ -1912,7 +1911,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                 // rule of the CU mode's and the DPM's own confirmation): the mark goes now, because the start's
                 // confirmation has run already and nothing else would take it. Before the milestone the mark
                 // stays, and CpuConfirm takes it. The next start writes its own mark before it sends the mask.
-                if (NT_SUCCESS(status) && s->CorePending) {
+                if (NT_SUCCESS(status) && s->CoreMark == BC250_CPU_MARK_PENDING) {
                     ULONGLONG ready = 0;
                     if (StartHealthIsReady(Device, &ready) && ready == s->Generation)
                         CpuConfirmCoreLocked(s, "the request, start healthy");
@@ -2053,12 +2052,12 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
     Data->Flags = (Device->FullWddm ? BC250_CPU_FLAG_VALID : 0) |
                   (onTrial ? BC250_CPU_FLAG_ON_TRIAL : 0) |
                   ((stored.max_given || stored.uv_given || stored.temp_given) ? BC250_CPU_FLAG_STORED : 0) |
-                  (s->Pending ? BC250_CPU_FLAG_PENDING : 0) |
+                  (s->Mark == BC250_CPU_MARK_PENDING ? BC250_CPU_FLAG_PENDING : 0) |
                   (s->Confirmed ? BC250_CPU_FLAG_CONFIRMED : 0) |
                   (s->Start == BC250_CPU_START_PROVEN ? BC250_CPU_FLAG_QUEUE3_PROVEN : 0) |
                   (s->Enabled ? BC250_CPU_FLAG_TUNE_ON : 0) |
                   (searching ? BC250_CPU_FLAG_SEARCHING : 0) |
-                  (s->CorePending ? BC250_CPU_FLAG_CORE_PENDING : 0) |
+                  (s->CoreMark == BC250_CPU_MARK_PENDING ? BC250_CPU_FLAG_CORE_PENDING : 0) |
                   (s->CoreConfirmed ? BC250_CPU_FLAG_CORE_CONFIRMED : 0) |
                   (status == STATUS_DEVICE_BUSY ? BC250_CPU_FLAG_BUSY : 0) |
                   (revertOwed ? BC250_CPU_FLAG_REVERT_OWED : 0) |

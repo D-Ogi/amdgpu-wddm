@@ -35,6 +35,15 @@ typedef enum _BC250_CPU_START {
     BC250_CPU_START_PROVEN                  // the read stage answered and the start apply ran: setters admitted
 } BC250_CPU_START;
 
+// The pending mark of one guard (BD-369). On disk it says that a start applied the stored value and has not become
+// healthy. A system power transition takes it off the disk, because an orderly shutdown or restart is not a start
+// that failed; the return to S0 writes it again.
+typedef enum _BC250_CPU_MARK {
+    BC250_CPU_MARK_NONE = 0,                // no mark of this start on disk: nothing stored, or confirmed
+    BC250_CPU_MARK_PENDING,                 // on disk: the next start drops the stored value if it finds it
+    BC250_CPU_MARK_WITHDRAWN                // taken back at a system power transition, owed again at S0
+} BC250_CPU_MARK;
+
 typedef struct _BC250_CPU_SNAP {
     ULONG Flags;                            // BC250_CPU_FLAG_*
     ULONG VoltageMv, GpuVoltageMv, CapC, Features;
@@ -56,10 +65,8 @@ typedef struct _BC250_CPU_STATE {
     BOOLEAN Enabled;                        // CpuTune 1: without it every write is refused
     BOOLEAN Lab;                            // CpuLab 1: the lab's own bound (BC250_CPU_MAX_MHZ_LAB)
     ULONG OcTier;                           // the overclock tier of this start (oc_tier.c), read at CpuStart
-    BOOLEAN Pending, Confirmed;             // the stored settings' two marks
-    BOOLEAN CorePending, CoreConfirmed;     // the core mask's two marks
-    BOOLEAN PendingWithdrawn, CoreWithdrawn;    // BD-369: a system power transition took the pending mark back;
-                                            // the return to S0 writes it again
+    BC250_CPU_MARK Mark, CoreMark;          // the pending mark of the stored settings, and the core mask's
+    BOOLEAN Confirmed, CoreConfirmed;       // the confirmed mark of each, as the disk holds it
     BC250_POWER_NOTIFY Power;               // \Callback\PowerState of this start (power_notify.h)
     BC250_CPU_START Start;                  // the start of this surface (BC250_CPU_START_*)
     struct bc250_cpu_settings Applied;      // what this driver has sent (cached; the chip has no "what is set")

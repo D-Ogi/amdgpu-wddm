@@ -910,12 +910,13 @@ static void test_a_confirmed_start_keeps_the_kept_settings(void)
     for (start = 0; start < 3; start++) {
         Chip(1200u, 3500u);
         Load();
-        CHECK(device.Cpu.Stored.max_given && device.Cpu.Stored.max_mhz == 3000u && device.Cpu.Pending);
+        CHECK(device.Cpu.Stored.max_given && device.Cpu.Stored.max_mhz == 3000u);
+        CHECK(device.Cpu.Mark == BC250_CPU_MARK_PENDING);
         CHECK(Setting(L"CpuPending") != MAXULONG);                  /* the mark of a start not yet healthy */
         CHECK(!native_log_has("never became healthy"));
         CHECK(native_firmware.limit_mhz == 3000u);
         CHECK(NT_SUCCESS(CpuConfirm(&device, "start-health")));
-        CHECK(Setting(L"CpuPending") == MAXULONG && !device.Cpu.Pending && device.Cpu.Confirmed);
+        CHECK(Setting(L"CpuPending") == MAXULONG && device.Cpu.Mark != BC250_CPU_MARK_PENDING && device.Cpu.Confirmed);
         CHECK(Setting(L"CpuConfirmed") != MAXULONG && Setting(L"CpuMaxMHz") == 3000u);
         CHECK(NT_SUCCESS(CpuConfirm(&device, "start-health")));    /* a second confirmation changes nothing */
         CHECK(Setting(L"CpuPending") == MAXULONG && Setting(L"CpuMaxMHz") == 3000u);
@@ -949,10 +950,10 @@ static void test_the_core_mask_guard(void)
     CoresEscape(&d, BC250_CPU_MASK_FULL);
     CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && MaskSends(BC250_CPU_MASK_FULL) == 1u);
     CHECK(Setting(L"CoreMask") == BC250_CPU_MASK_FULL && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
-    CHECK(device.Cpu.CorePending && !device.Cpu.CoreConfirmed);
+    CHECK(device.Cpu.CoreMark == BC250_CPU_MARK_PENDING && !device.Cpu.CoreConfirmed);
     CHECK(NT_SUCCESS(CpuConfirm(&device, "start-health")));
     CHECK(Setting(L"CoreMaskPending") == MAXULONG && Setting(L"CoreMaskConfirmed") == BC250_CPU_MASK_FULL);
-    CHECK(!device.Cpu.CorePending && device.Cpu.CoreConfirmed);
+    CHECK(device.Cpu.CoreMark != BC250_CPU_MARK_PENDING && device.Cpu.CoreConfirmed);
     CpuStop(&device);
     native_firmware.writes = 0;
     Chip(1200u, 3500u);
@@ -960,7 +961,8 @@ static void test_the_core_mask_guard(void)
     CHECK(!native_log_has("the stock mask comes back"));
     CHECK(device.Cpu.CoreMask == BC250_CPU_MASK_FULL && MaskSends(BC250_CPU_MASK_FULL) == 1u);
     CHECK(Setting(L"CoreMask") == BC250_CPU_MASK_FULL && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
-    CHECK(device.Cpu.CorePending && device.Cpu.CoreConfirmed);     /* the confirmed mark of the start before */
+    /* The confirmed mark is the one of the start before. */
+    CHECK(device.Cpu.CoreMark == BC250_CPU_MARK_PENDING && device.Cpu.CoreConfirmed);
 
     /* The guard: nothing confirms this start, so the next one goes back to the stock mask and sends none. */
     CpuStop(&device);
@@ -970,7 +972,7 @@ static void test_the_core_mask_guard(void)
     CHECK(native_log_has("the stock mask comes back"));
     CHECK(device.Cpu.CoreMask == BC250_CPU_MASK_STOCK && Setting(L"CoreMask") == BC250_CPU_MASK_STOCK);
     CHECK(Setting(L"CoreMaskPending") == MAXULONG && Setting(L"CoreMaskConfirmed") == MAXULONG);
-    CHECK(MaskSends(BC250_CPU_MASK_FULL) == 0u && !device.Cpu.CorePending);
+    CHECK(MaskSends(BC250_CPU_MASK_FULL) == 0u && device.Cpu.CoreMark != BC250_CPU_MARK_PENDING);
     CHECK(device.Cpu.CoreMaskStored == BC250_CPU_MASK_STOCK);      /* the readback names the store after the drop */
 
     /* At the milestone: the request takes its own mark, because the start's confirmation has run already. */
@@ -978,7 +980,8 @@ static void test_the_core_mask_guard(void)
     CoresEscape(&d, BC250_CPU_MASK_FULL);
     CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && native_log_has("confirmed by the request, start healthy"));
     CHECK(Setting(L"CoreMask") == BC250_CPU_MASK_FULL && Setting(L"CoreMaskPending") == MAXULONG);
-    CHECK(Setting(L"CoreMaskConfirmed") == BC250_CPU_MASK_FULL && !device.Cpu.CorePending && device.Cpu.CoreConfirmed);
+    CHECK(Setting(L"CoreMaskConfirmed") == BC250_CPU_MASK_FULL && device.Cpu.CoreConfirmed);
+    CHECK(device.Cpu.CoreMark != BC250_CPU_MARK_PENDING);
     CpuStop(&device);
     Chip(1200u, 3500u);
     Load();
@@ -993,7 +996,7 @@ static void test_the_core_mask_guard(void)
     CHECK(device.Cpu.CoreMaskInForce == bc250_cpu_mask_in_force(device.Cpu.Cores));
     CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && Setting(L"CoreMask") == BC250_CPU_MASK_STOCK);
     CHECK(Setting(L"CoreMaskPending") == MAXULONG && Setting(L"CoreMaskConfirmed") == MAXULONG);
-    CHECK(!device.Cpu.CorePending && !device.Cpu.CoreConfirmed);
+    CHECK(device.Cpu.CoreMark != BC250_CPU_MARK_PENDING && !device.Cpu.CoreConfirmed);
     CpuStop(&device);
 
     /* A send that the firmware refuses at the milestone keeps the mark: the mask in force is not the stored one. */
@@ -1004,14 +1007,14 @@ static void test_the_core_mask_guard(void)
     native_firmware.accept_writes = 0;
     CoresEscape(&d, BC250_CPU_MASK_FULL);
     CHECK(d.Status != BC250_ESCAPE_STATUS_DONE && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
-    CHECK(device.Cpu.CorePending && device.Cpu.CoreMask == BC250_CPU_MASK_STOCK);
+    CHECK(device.Cpu.CoreMark == BC250_CPU_MARK_PENDING && device.Cpu.CoreMask == BC250_CPU_MASK_STOCK);
     native_firmware.accept_writes = 1;
 
     /* A milestone of another start is not this surface's: the mark stays for the confirmation tail. */
     device.StartHealth.Generation = device.Cpu.Generation + 1u;
     CoresEscape(&d, BC250_CPU_MASK_FULL);
     CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
-    CHECK(device.Cpu.CorePending && !native_log_has("confirmed by the request"));
+    CHECK(device.Cpu.CoreMark == BC250_CPU_MARK_PENDING && !native_log_has("confirmed by the request"));
     CpuStop(&device);
     printf("  %-31s mark stays until confirmed, goes in a request at the milestone, guard reverts to 0x%02X\n",
            "core_mask_guard", (unsigned int)BC250_CPU_MASK_STOCK);
@@ -1038,10 +1041,10 @@ static void test_an_orderly_end_keeps_the_settings(void)
     for (start = 0; start < 3; start++) {
         Chip(1200u, 3500u);
         Load();
-        CHECK(device.Cpu.Pending && device.Cpu.CorePending);
+        CHECK(device.Cpu.Mark == BC250_CPU_MARK_PENDING && device.Cpu.CoreMark == BC250_CPU_MARK_PENDING);
         CHECK(Setting(L"CpuPending") != MAXULONG && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
         SystemPower(TRUE);
-        CHECK(!device.Cpu.Pending && !device.Cpu.CorePending);
+        CHECK(device.Cpu.Mark == BC250_CPU_MARK_WITHDRAWN && device.Cpu.CoreMark == BC250_CPU_MARK_WITHDRAWN);
         CHECK(Setting(L"CpuPending") == MAXULONG && Setting(L"CoreMaskPending") == MAXULONG);
         CHECK(Setting(L"CoreMaskConfirmed") == MAXULONG && !device.Cpu.CoreConfirmed);     /* nothing is confirmed */
         SystemPower(TRUE);                                          /* a second notification changes nothing */
@@ -1057,7 +1060,7 @@ static void test_an_orderly_end_keeps_the_settings(void)
     SystemPower(TRUE);
     CHECK(Setting(L"CpuPending") == MAXULONG && Setting(L"CoreMaskPending") == MAXULONG);
     SystemPower(FALSE);
-    CHECK(device.Cpu.Pending && device.Cpu.CorePending);
+    CHECK(device.Cpu.Mark == BC250_CPU_MARK_PENDING && device.Cpu.CoreMark == BC250_CPU_MARK_PENDING);
     CHECK(Setting(L"CpuPending") != MAXULONG && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
     SystemPower(FALSE);                                             /* a second return changes nothing */
     CHECK(Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
@@ -1067,7 +1070,7 @@ static void test_an_orderly_end_keeps_the_settings(void)
     CHECK(NT_SUCCESS(CpuConfirm(&device, "test")));
     CHECK(Setting(L"CpuConfirmed") != MAXULONG && Setting(L"CoreMaskConfirmed") == BC250_CPU_MASK_FULL);
     SystemPower(FALSE);
-    CHECK(!device.Cpu.Pending && !device.Cpu.CorePending);
+    CHECK(device.Cpu.Mark == BC250_CPU_MARK_NONE && device.Cpu.CoreMark == BC250_CPU_MARK_NONE);
     CHECK(Setting(L"CpuPending") == MAXULONG && Setting(L"CoreMaskPending") == MAXULONG);
     CpuStop(&device);
 
