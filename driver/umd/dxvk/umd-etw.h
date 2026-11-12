@@ -13,11 +13,14 @@
 // mapping that exists (user-mode-driver-logging.md 27; nf-umdprovider-umdetwregister.md 56). The table changes only
 // when a resource gets or loses its memory (create, open, destroy, identity rotation), never on a draw, a map or a
 // Present. An event is written only while a session has the provider enabled: one relaxed load per table change.
+// The memory of the engine's own resources is not in the table: the engine keeps it and reports it through a
+// MemoryReporter (engine ABI 1.8), because its renames (Map with DISCARD) are on the draw path.
 #include <windows.h>
 #include <evntprov.h>
 #include <atomic>
 #include <map>
 #include <tuple>
+#include <vector>
 namespace bc250::umd::etw {
 // UMDETW_ALLOCATION_USAGE (umdprovider.h 27-40): bit 0 Packed, bit 1 Renamed, bits 16-31 for the driver.
 namespace usage {
@@ -44,6 +47,18 @@ struct AllocationMapping {
 // Event ids and opcodes of um\umdetw.h 38-43: MapAllocation id 1 opcode 1, RundownAllocation id 2 opcode 3,
 // UnmapAllocation id 3 opcode 2. All three: level 0, task 1, keyword MAPPING_KEYWORD with the channel bit.
 enum class EventKind : USHORT { map=1,rundown=2,unmap=3 };
+// A source of mappings that the log does not keep in its table: an engine device that keeps the memory of its own
+// resources and writes their events through write_external (engine ABI 1.8, BD-373). The log calls it from the
+// provider's enable callback, on the thread of that callback, while the reporter is added.
+class MemoryReporter {
+public:
+    // A session enabled or disabled the provider; also once with the current state when the reporter is added.
+    virtual void set_reporting(bool enabled) noexcept=0;
+    // A capture-state request: write a rundown of every mapping of the reporter before returning.
+    virtual void report() noexcept=0;
+protected:
+    ~MemoryReporter()=default;
+};
 // The ETW calls of the log. The process log uses EventRegister, EventUnregister and EventWrite; the host test gives a
 // recording sink.
 struct ProviderApi {
@@ -78,6 +93,13 @@ public:
     // cannot fail; E_OUTOFMEMORY only when a resource gets more mappings than it had, and then nothing has changed.
     // The seam for engine memory that moves, packs or renames (usage::packed, usage::renamed).
     HRESULT replace(const AllocationMapping *mappings,UINT count) noexcept;
+    // A reporter takes part in enable changes and capture-state requests from now on until remove_reporter returns.
+    // S_OK; E_OUTOFMEMORY; S_FALSE when it is added already. remove_reporter waits for a callback that calls it.
+    HRESULT add_reporter(MemoryReporter *) noexcept;
+    void remove_reporter(MemoryReporter *) noexcept;
+    // One event of a reporter, without a table change: map and unmap only while a session has the provider enabled,
+    // rundown always (inside a capture-state request).
+    void write_external(EventKind,const AllocationMapping &) const noexcept;
     bool enabled() const noexcept { return enabled_.load(std::memory_order_relaxed); }
     size_t live() const noexcept;
     // The live mappings of one Direct3D resource in table order: copies at most `capacity` of them to `out` and
@@ -92,8 +114,13 @@ private:
     void write_locked(EventKind,const AllocationMapping &) const noexcept;
     void rundown() noexcept;
     const ProviderApi api_;
+    void set_reporting(bool) noexcept;
+    void report_external() noexcept;
+    // Lock order: reporters_lock_, then a reporter's own locks, then lock_. No call to a reporter holds lock_.
     mutable SRWLOCK lock_=SRWLOCK_INIT;          // live_ and handle_
     SRWLOCK registration_=SRWLOCK_INIT;          // register_provider and unregister_provider only
+    SRWLOCK reporters_lock_=SRWLOCK_INIT;        // reporters_
+    std::vector<MemoryReporter *> reporters_;
     std::map<Key,AllocationMapping> live_;
     REGHANDLE handle_=0;
     bool registered_=false;                      // under registration_

@@ -2,6 +2,7 @@
 #include "umd-etw.h"
 #include <evntrace.h> // EVENT_CONTROL_CODE_*, as umdprovider.h 19-20 includes it
 #include <umdetw.h>
+#include <algorithm>
 #include <iterator>
 #include <new>
 #include <vector>
@@ -157,15 +158,54 @@ void AllocationLog::rundown() noexcept {
     for (const auto &entry:live_) write_locked(EventKind::rundown,entry.second);
     ReleaseSRWLockShared(&lock_);
 }
+HRESULT AllocationLog::add_reporter(MemoryReporter *reporter) noexcept {
+    if (!reporter) return E_INVALIDARG;
+    HRESULT hr=S_OK;
+    AcquireSRWLockExclusive(&reporters_lock_);
+    try {
+        if (std::find(reporters_.begin(),reporters_.end(),reporter)!=reporters_.end()) hr=S_FALSE;
+        else {
+            reporters_.push_back(reporter);
+            // Under the lock: an enable change that comes now waits, and then reaches this reporter as well.
+            reporter->set_reporting(enabled());
+        }
+    } catch (const std::bad_alloc &) { hr=E_OUTOFMEMORY; }
+    ReleaseSRWLockExclusive(&reporters_lock_);
+    return hr;
+}
+void AllocationLog::remove_reporter(MemoryReporter *reporter) noexcept {
+    AcquireSRWLockExclusive(&reporters_lock_);
+    const auto at=std::find(reporters_.begin(),reporters_.end(),reporter);
+    if (at!=reporters_.end()) reporters_.erase(at);
+    ReleaseSRWLockExclusive(&reporters_lock_);
+}
+void AllocationLog::write_external(EventKind kind,const AllocationMapping &m) const noexcept {
+    AcquireSRWLockShared(&lock_);
+    if (kind==EventKind::rundown || enabled()) write_locked(kind,m);
+    ReleaseSRWLockShared(&lock_);
+}
+void AllocationLog::set_reporting(bool on) noexcept {
+    AcquireSRWLockShared(&reporters_lock_);
+    for (auto *reporter:reporters_) reporter->set_reporting(on);
+    ReleaseSRWLockShared(&reporters_lock_);
+}
+void AllocationLog::report_external() noexcept {
+    // After the table's rundown, which released lock_: a reporter writes its rundown through write_external.
+    AcquireSRWLockShared(&reporters_lock_);
+    for (auto *reporter:reporters_) reporter->report();
+    ReleaseSRWLockShared(&reporters_lock_);
+}
 void NTAPI AllocationLog::enable_callback(LPCGUID,ULONG control,UCHAR,ULONGLONG,ULONGLONG,PEVENT_FILTER_DESCRIPTOR,
                                           PVOID context) {
     auto *log=static_cast<AllocationLog *>(context);
     if (!log) return;
     // The three control codes of the header's EnableCallback (umdprovider.h 101-122).
     switch (control) {
-    case EVENT_CONTROL_CODE_DISABLE_PROVIDER: log->enabled_.store(false,std::memory_order_relaxed); break;
-    case EVENT_CONTROL_CODE_ENABLE_PROVIDER: log->enabled_.store(true,std::memory_order_relaxed); break;
-    case EVENT_CONTROL_CODE_CAPTURE_STATE: log->rundown(); break;
+    case EVENT_CONTROL_CODE_DISABLE_PROVIDER:
+        log->enabled_.store(false,std::memory_order_relaxed); log->set_reporting(false); break;
+    case EVENT_CONTROL_CODE_ENABLE_PROVIDER:
+        log->enabled_.store(true,std::memory_order_relaxed); log->set_reporting(true); break;
+    case EVENT_CONTROL_CODE_CAPTURE_STATE: log->rundown(); log->report_external(); break;
     default: break;
     }
 }

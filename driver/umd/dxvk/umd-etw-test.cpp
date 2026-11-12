@@ -224,6 +224,46 @@ int main() {
         CHECK(!rundown_seen_after_unmap);
         for (UINT64 i=1;i<=2000;++i) CHECK(state[i]==(i%2 ? 2 : 1));
     }
+    {   // Reporters (engine ABI 1.8): the state at add_reporter, every enable change, and a capture-state request
+        // after the table's own rundown; external events need no table entry and change no table entry.
+        struct Reporter final : MemoryReporter {
+            AllocationLog *log=nullptr;
+            std::vector<int> calls;                      // 0 reporting off, 1 reporting on, 2 report
+            AllocationMapping m{};
+            void set_reporting(bool on) noexcept override { calls.push_back(on ? 1 : 0); }
+            void report() noexcept override { calls.push_back(2); log->write_external(EventKind::rundown,m); }
+        };
+        Sink s; sink=&s;
+        AllocationLog log(fake);
+        CHECK(log.register_provider()==S_OK);
+        Reporter r; r.log=&log;
+        r.m={0x8000,0x40000070,0x40,0x100,usage::packed|usage::renamed,AllocationSemantic::none};
+        CHECK(log.add_reporter(&r)==S_OK && log.add_reporter(&r)==S_FALSE && log.add_reporter(nullptr)==E_INVALIDARG);
+        CHECK((r.calls==std::vector<int>{0}));
+        log.write_external(EventKind::map,r.m);          // provider off: nothing
+        CHECK(s.events.empty() && log.live()==0);
+        CHECK(log.map(a)==S_OK);
+        control(EVENT_CONTROL_CODE_ENABLE_PROVIDER);
+        log.write_external(EventKind::map,r.m);
+        log.write_external(EventKind::unmap,r.m);
+        CHECK(s.events.size()==2 && log.live()==1);
+        check_event(s.events[0],MapAllocationEvent,r.m); check_event(s.events[1],UnmapAllocationEvent,r.m);
+        s.events.clear();
+        control(EVENT_CONTROL_CODE_CAPTURE_STATE);
+        CHECK(s.events.size()==2);
+        check_event(s.events[0],RundownAllocationEvent,a); check_event(s.events[1],RundownAllocationEvent,r.m);
+        control(EVENT_CONTROL_CODE_DISABLE_PROVIDER);
+        CHECK((r.calls==std::vector<int>{0,1,2,0}));
+        log.remove_reporter(&r);
+        control(EVENT_CONTROL_CODE_ENABLE_PROVIDER);
+        control(EVENT_CONTROL_CODE_CAPTURE_STATE);
+        CHECK(r.calls.size()==4);
+        // A reporter added while a session is on starts with reporting on.
+        Reporter late; late.log=&log;
+        CHECK(log.add_reporter(&late)==S_OK && (late.calls==std::vector<int>{1}));
+        log.remove_reporter(&late);
+        log.remove_reporter(&late);                      // a second removal does nothing
+    }
     {   // The process log is one object.
         CHECK(process_allocation_log() && process_allocation_log()==process_allocation_log());
     }
