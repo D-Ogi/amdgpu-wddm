@@ -413,7 +413,8 @@ BOOLEAN StartHealthIsReady(BC250_DEVICE* Device, _Out_ ULONGLONG* Generation)
 }
 // BD-369. TRUE while this start has recorded no fault: nothing closed the witness, and no engine reset recovered
 // node 0. It is weaker than the milestone on purpose: it says nothing about age or flips. The one caller is the
-// way down of an orderly end of Windows (pnp.c), which takes the CPU surface's pending marks back on this answer.
+// CPU surface at the notification of a system power transition (cpu.c CpuSystemPower), which takes its pending
+// marks back on this answer.
 BOOLEAN StartHealthUnfaulted(BC250_DEVICE* Device)
 {
     BC250_START_HEALTH_STATE* h=&Device->StartHealth;

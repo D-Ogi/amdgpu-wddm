@@ -58,6 +58,9 @@ typedef struct _BC250_CPU_STATE {
     ULONG OcTier;                           // the overclock tier of this start (oc_tier.c), read at CpuStart
     BOOLEAN Pending, Confirmed;             // the stored settings' two marks
     BOOLEAN CorePending, CoreConfirmed;     // the core mask's two marks
+    BOOLEAN PendingWithdrawn, CoreWithdrawn;    // BD-369: a system power transition took the pending mark back;
+                                            // the return to S0 writes it again
+    BC250_POWER_NOTIFY Power;               // \Callback\PowerState of this start (power_notify.h)
     BC250_CPU_START Start;                  // the start of this surface (BC250_CPU_START_*)
     struct bc250_cpu_settings Applied;      // what this driver has sent (cached; the chip has no "what is set")
     struct bc250_cpu_settings Stored;       // the registry's values

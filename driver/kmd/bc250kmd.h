@@ -71,6 +71,7 @@
 #include "start_health.h"
 #include "progress.h"
 #include "power_phase.h"
+#include "power_notify.h"
 #include "cumode.h"
 #include "dpm.h"
 #include "hwmon.h"
@@ -619,7 +620,6 @@ void CpuPause(BC250_DEVICE* Device);
 void CpuResume(BC250_DEVICE* Device);
 void CpuResumeAlone(BC250_DEVICE* Device);     // BD-293: CpuResume with the joint arm kept off
 NTSTATUS CpuConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
-void CpuOrderlyEnd(BC250_DEVICE* Device);   // BD-369: an orderly end of Windows takes the pending marks back
 void CpuLogSummary(BC250_DEVICE* Device);
 void CpuRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 

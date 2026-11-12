@@ -1635,39 +1635,16 @@ static VOID DpmPowerCallback(PVOID Context, PVOID Argument1, PVOID Argument2)
 // system transition, and the log line says so.
 static void DpmPowerRegister(BC250_DEVICE* Device)
 {
-    BC250_DPM_STATE* s = &Device->Dpm;
-    UNICODE_STRING name;
-    OBJECT_ATTRIBUTES attributes;
-    NTSTATUS status;
+    NTSTATUS status = PowerNotifyRegister(&Device->Dpm.Power, DpmPowerCallback, Device);
 
-    RtlInitUnicodeString(&name, L"\\Callback\\PowerState");
-    InitializeObjectAttributes(&attributes, &name, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
-    status = ExCreateCallback(&s->PowerObject, &attributes, FALSE, TRUE);
-    if (NT_SUCCESS(status)) {
-        s->PowerRegistration = ExRegisterCallback(s->PowerObject, DpmPowerCallback, Device);
-        if (s->PowerRegistration == NULL) {
-            ObDereferenceObject(s->PowerObject);
-            s->PowerObject = NULL;
-            status = STATUS_UNSUCCESSFUL;
-        }
-    } else {
-        s->PowerObject = NULL;
-    }
     GuardLog("dpm: \\Callback\\PowerState registration 0x%08X%s", status,
              NT_SUCCESS(status) ? "" : ", only the adapter's D3 ends a start at a system transition");
 }
 
-// DpmStop, before the floor apply: ExUnregisterCallback returns after a notification in progress has finished.
+// DpmStop, before the floor apply: the unregistration returns after a notification in progress has finished.
 static void DpmPowerUnregister(BC250_DPM_STATE* S)
 {
-    if (S->PowerRegistration != NULL) {
-        ExUnregisterCallback(S->PowerRegistration);
-        S->PowerRegistration = NULL;
-    }
-    if (S->PowerObject != NULL) {
-        ObDereferenceObject(S->PowerObject);
-        S->PowerObject = NULL;
-    }
+    PowerNotifyUnregister(&S->Power);
 }
 
 void DpmStart(BC250_DEVICE* Device)

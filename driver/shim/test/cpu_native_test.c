@@ -1017,9 +1017,10 @@ static void test_the_core_mask_guard(void)
            "core_mask_guard", (unsigned int)BC250_CPU_MASK_STOCK);
 }
 
-/* BD-369. An orderly end of Windows before the milestone takes both pending marks back and confirms nothing, so the
- * next start keeps the settings and the mask and writes its own marks. A stop without that call keeps the marks, and
- * the start after it drops both: the guard is as it was for a start that ends without a word. */
+/* BD-369. The notification of a system power transition, before the milestone, takes both pending marks back and
+ * confirms nothing, so the next start keeps the settings and the mask and writes its own marks. A stop without it
+ * keeps the marks, and the start after it drops both: the guard is as it was for a start that ends without a word.
+ * The return to S0 writes the marks again (a sleep), and a start with a fault keeps them. */
 static void test_an_orderly_end_keeps_the_settings(void)
 {
     BC250_ESCAPE_CPU d;
@@ -1032,36 +1033,71 @@ static void test_an_orderly_end_keeps_the_settings(void)
     CpuEscape(&d, BC250_CPU_OP_KEEP, 0u, 0u, 0u);
     CoresEscape(&d, BC250_CPU_MASK_FULL);
     CHECK(Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);      /* the request's mark, before the milestone */
-    CpuOrderlyEnd(&device);
+    SystemPower(TRUE);
     CpuStop(&device);
     for (start = 0; start < 3; start++) {
         Chip(1200u, 3500u);
         Load();
         CHECK(device.Cpu.Pending && device.Cpu.CorePending);
         CHECK(Setting(L"CpuPending") != MAXULONG && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
-        CpuOrderlyEnd(&device);
+        SystemPower(TRUE);
         CHECK(!device.Cpu.Pending && !device.Cpu.CorePending);
         CHECK(Setting(L"CpuPending") == MAXULONG && Setting(L"CoreMaskPending") == MAXULONG);
         CHECK(Setting(L"CoreMaskConfirmed") == MAXULONG && !device.Cpu.CoreConfirmed);     /* nothing is confirmed */
-        CpuOrderlyEnd(&device);                                     /* a second call changes nothing */
+        SystemPower(TRUE);                                          /* a second notification changes nothing */
         CHECK(Setting(L"CpuMaxMHz") == 3000u && Setting(L"CoreMask") == BC250_CPU_MASK_FULL);
         CpuStop(&device);
         CHECK(!native_log_has("never became healthy") && !native_log_has("the stock mask comes back"));
     }
-    /* The guard: this start ends with no orderly end, and the next one drops the settings and the mask. */
+
+    /* A sleep: the marks go at the notification and are back with the return to S0. A machine that dies after the
+     * resume is a start that never became healthy. */
+    Chip(1200u, 3500u);
+    Load();
+    SystemPower(TRUE);
+    CHECK(Setting(L"CpuPending") == MAXULONG && Setting(L"CoreMaskPending") == MAXULONG);
+    SystemPower(FALSE);
+    CHECK(device.Cpu.Pending && device.Cpu.CorePending);
+    CHECK(Setting(L"CpuPending") != MAXULONG && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
+    SystemPower(FALSE);                                             /* a second return changes nothing */
+    CHECK(Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
+
+    /* The confirmation between the two notifications is final: the return to S0 writes no mark again. */
+    SystemPower(TRUE);
+    CHECK(NT_SUCCESS(CpuConfirm(&device, "test")));
+    CHECK(Setting(L"CpuConfirmed") != MAXULONG && Setting(L"CoreMaskConfirmed") == BC250_CPU_MASK_FULL);
+    SystemPower(FALSE);
+    CHECK(!device.Cpu.Pending && !device.Cpu.CorePending);
+    CHECK(Setting(L"CpuPending") == MAXULONG && Setting(L"CoreMaskPending") == MAXULONG);
+    CpuStop(&device);
+
+    /* A start with a fault keeps its marks at the notification, and the next start drops the settings and the mask. */
     Chip(1200u, 3500u);
     Load();
     CHECK(device.Cpu.Stored.max_given && device.Cpu.CoreMask == BC250_CPU_MASK_FULL);
+    device.StartHealth.Faulted = TRUE;
+    SystemPower(TRUE);
+    CHECK(Setting(L"CpuPending") != MAXULONG && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
+    CHECK(native_log_has("the pending marks stay"));
+    device.StartHealth.Faulted = FALSE;
     CpuStop(&device);
+    SystemPower(TRUE);                                              /* no registration outlives the stop */
     Chip(1200u, 3500u);
     Load();
     CHECK(native_log_has("never became healthy") && native_log_has("the stock mask comes back"));
     CHECK(Setting(L"CpuMaxMHz") == MAXULONG && Setting(L"CoreMask") == BC250_CPU_MASK_STOCK);
     CpuStop(&device);
-    printf("  %-31s 3 orderly ends keep 3000 MHz and mask 0x%02X; a silent end drops both\n",
+
+    /* Without the registration the start goes on, and says what it loses. */
+    native_power_fail = 1;
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(native_log_has("an early restart drops the stored values") && device.Cpu.Created);
+    CpuStop(&device);
+    native_power_fail = 0;
+    printf("  %-31s 3 orderly ends keep 3000 MHz and mask 0x%02X; a sleep gives the marks back; a fault keeps them\n",
            "orderly_end", (unsigned int)BC250_CPU_MASK_FULL);
 }
-
 int main(void)
 {
     test_ramp();

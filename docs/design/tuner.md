@@ -329,10 +329,11 @@ Three properties of the route shape the surface:
 - The mask in force is not readable on Windows. The driver reports it from the processor count: 16 logical
   processors are `0xFF`, 12 are `0x77`, and another count is "not known".
 
-The mask is a stored value, a two-mark boot guard and a restart, like the CU mode. An orderly shutdown or
-restart of Windows takes the pending marks of that start back (BD-369), because the restart that 8 cores need
-often comes in the first minute of a start. A start that ends with a hang or a power cut keeps its mark, and the
-next start puts the stock mask back. The CLI and the application say which restart a stored count still needs.
+The mask is a stored value, a two-mark boot guard and a restart, like the CU mode. Windows sends a notification
+before each shutdown, restart and sleep (`\Callback\PowerState`). On a start with no fault, the driver takes the
+pending marks of that start back at this notification (BD-369), because the restart that 8 cores need often comes
+in the first minute of a start. When the system is back from a sleep, the driver writes the marks again. A start
+that ends with a hang or a power cut keeps its mark, and the next start puts the stock mask back. The CLI and the application say which restart a stored count still needs.
 
 ### The settings
 

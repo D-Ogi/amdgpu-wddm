@@ -167,6 +167,11 @@ typedef struct _KMUTEX { int Held; } KMUTEX;
 typedef struct _KEVENT { int Signalled; int Notification; } KEVENT;
 typedef void *PKTHREAD;
 typedef void *POBJECT_TYPE;
+typedef void *PCALLBACK_OBJECT;
+typedef VOID (*PCALLBACK_FUNCTION)(PVOID Context, PVOID Argument1, PVOID Argument2);
+#define PO_CB_SYSTEM_STATE_LOCK 3
+static unsigned int native_irql;            /* PASSIVE_LEVEL; a test raises it for a notification above it */
+#define KeGetCurrentIrql() native_irql
 #define KernelMode 0
 #define Executive 0
 #define WaitAny 1
@@ -501,6 +506,7 @@ static ULONG GuardReadSetting(const WCHAR *name, ULONG fallback)
 /* ---- the device ------------------------------------------------------------------------------------------- */
 
 #include "bc250kmd_escape.h"
+#include "power_notify.h"
 #include "cpu.h"
 #include "../../kmd/power_phase.h"
 
@@ -509,6 +515,7 @@ typedef struct _BC250_START_HEALTH_NATIVE {
     EX_RUNDOWN_REF Readers;
     ULONGLONG Generation;
     BOOLEAN Ready;                     /* the test's answer for StartHealthIsReady */
+    BOOLEAN Faulted;                   /* the test's answer for StartHealthUnfaulted, inverted */
 } BC250_START_HEALTH_NATIVE;
 
 typedef struct _BC250_SMU_OWNER_NATIVE {
@@ -538,6 +545,40 @@ static BOOLEAN StartHealthIsReady(BC250_DEVICE *Device, _Out_ ULONGLONG *Generat
 {
     *Generation = Device->StartHealth.Generation;
     return Device->StartHealth.Ready;
+}
+
+/* A start with no fault, as cpu.c asks before it takes its pending marks back at a system power transition. */
+static BOOLEAN StartHealthUnfaulted(BC250_DEVICE *Device)
+{
+    return !Device->StartHealth.Faulted;
+}
+
+/* \Callback\PowerState (power_notify.h): the registration keeps the function, and SystemPower sends the notification
+ * that Windows sends, so the test runs the callback of cpu.c and not a copy of its rule. */
+static PCALLBACK_FUNCTION native_power_function;
+static PVOID native_power_context;
+static unsigned int native_power_fail;         /* the registration fails: the start must go on without it */
+
+NTSTATUS PowerNotifyRegister(BC250_POWER_NOTIFY *Notify, PCALLBACK_FUNCTION Function, PVOID Context)
+{
+    if (native_power_fail) return STATUS_UNSUCCESSFUL;
+    native_power_function = Function;
+    native_power_context = Context;
+    Notify->Registration = (PVOID)(ULONG_PTR)1;
+    return STATUS_SUCCESS;
+}
+
+void PowerNotifyUnregister(BC250_POWER_NOTIFY *Notify)
+{
+    Notify->Registration = NULL;
+    native_power_function = NULL;
+}
+
+static void SystemPower(BOOLEAN down)
+{
+    if (native_power_function)
+        native_power_function(native_power_context, (PVOID)(ULONG_PTR)PO_CB_SYSTEM_STATE_LOCK,
+                              down ? NULL : (PVOID)(ULONG_PTR)1);
 }
 
 /* The mailbox owner, as cpu.c sees it. The sequence flag is the real one's contract: SmuCpuBegin takes it or
@@ -632,6 +673,5 @@ void CpuStop(BC250_DEVICE *Device);
 void CpuPause(BC250_DEVICE *Device);
 void CpuResume(BC250_DEVICE *Device);
 NTSTATUS CpuConfirm(BC250_DEVICE *Device, _In_z_ const char *Why);
-void CpuOrderlyEnd(BC250_DEVICE *Device);
 void CpuLogSummary(BC250_DEVICE *Device);
 void CpuRequest(BC250_DEVICE *Device, BC250_ESCAPE_CPU *Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);

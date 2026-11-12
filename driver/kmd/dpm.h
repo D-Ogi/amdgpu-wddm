@@ -80,8 +80,7 @@ typedef struct _BC250_DPM_STATE {
     // so nothing marks the session. DpmSystemPower sets it at \Callback\PowerState and DpmPause for a system action;
     // the release of that notification and DpmResume clear it.
     volatile LONG SystemDown;
-    PCALLBACK_OBJECT PowerObject;           // \Callback\PowerState of this start, and the registration on it
-    PVOID PowerRegistration;
+    BC250_POWER_NOTIFY Power;               // \Callback\PowerState of this start (power_notify.h)
     volatile LONG Resync;                   // read the hardware's clock back before the next decision
     volatile LONG Stable;                   // SetStablePowerState(TRUE)
     // BD-127: live contexts of this adapter whose BC2C blob carried BC250_UMD_C_COMPUTE. wddm.c raises it in

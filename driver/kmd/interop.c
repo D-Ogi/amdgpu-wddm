@@ -61,8 +61,7 @@ C_ASSERT(PowerActionSleep == 2 && PowerActionShutdownOff == 6);     // bc250_int
 // order: g_InteropListLock, then an adapter's Lock; nothing takes the list lock while holding an adapter's.
 static LIST_ENTRY g_InteropList;
 static KMUTEX g_InteropListLock;
-static PCALLBACK_OBJECT g_InteropPowerObject;
-static PVOID g_InteropPowerRegistration;
+static BC250_POWER_NOTIFY g_InteropPower;
 static volatile LONG g_InteropPowerAbove;       // notifications that came above PASSIVE_LEVEL: nothing written
 
 static void InteropLock(BC250_INTEROP_STATE* S)
@@ -182,7 +181,7 @@ static void InteropEvent(BC250_INTEROP_STATE* S, unsigned int Event, PCSTR Why)
     S->Work.Users = S->Session.users;
     S->Work.Flags = (S->Work.Flags & ~(BC250_INTEROP_FLAG_DOWN | BC250_INTEROP_FLAG_POWER_CALLBACK)) |
         (S->Session.down ? BC250_INTEROP_FLAG_DOWN : 0) |
-        (g_InteropPowerRegistration ? BC250_INTEROP_FLAG_POWER_CALLBACK : 0);
+        (g_InteropPower.Registration ? BC250_INTEROP_FLAG_POWER_CALLBACK : 0);
     InteropPublish(S);
 }
 
@@ -214,34 +213,19 @@ static VOID InteropPowerCallback(PVOID Context, PVOID Argument1, PVOID Argument2
 // is the only hook, and the escape shows the registration missing (no POWER_CALLBACK flag).
 void InteropDriverInit(void)
 {
-    UNICODE_STRING name;
-    OBJECT_ATTRIBUTES attributes;
     NTSTATUS status;
 
     InitializeListHead(&g_InteropList);
     KeInitializeMutex(&g_InteropListLock, 0);
-    RtlInitUnicodeString(&name, L"\\Callback\\PowerState");
-    InitializeObjectAttributes(&attributes, &name, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
-    status = ExCreateCallback(&g_InteropPowerObject, &attributes, FALSE, TRUE);
-    if (NT_SUCCESS(status)) {
-        g_InteropPowerRegistration = ExRegisterCallback(g_InteropPowerObject, InteropPowerCallback, NULL);
-        if (g_InteropPowerRegistration == NULL) {
-            ObDereferenceObject(g_InteropPowerObject);
-            g_InteropPowerObject = NULL;
-            status = STATUS_UNSUCCESSFUL;
-        }
-    }
+    status = PowerNotifyRegister(&g_InteropPower, InteropPowerCallback, NULL);
     GuardLog("interop: \\Callback\\PowerState registration 0x%08X", status);
 }
 
-// Bc250Unload: no adapter is started any more, so the list is empty; ExUnregisterCallback returns after a
+// Bc250Unload: no adapter is started any more, so the list is empty; the unregistration returns after a
 // notification in progress has finished with this image's code.
 void InteropDriverUnload(void)
 {
-    if (g_InteropPowerRegistration) ExUnregisterCallback(g_InteropPowerRegistration);
-    g_InteropPowerRegistration = NULL;
-    if (g_InteropPowerObject) ObDereferenceObject(g_InteropPowerObject);
-    g_InteropPowerObject = NULL;
+    PowerNotifyUnregister(&g_InteropPower);
     if (g_InteropPowerAbove) GuardLog("interop: %ld power notifications came above PASSIVE_LEVEL", g_InteropPowerAbove);
 }
 
@@ -295,7 +279,7 @@ void InteropStart(BC250_DEVICE* Device, _Out_ BOOLEAN* GpuPresent, _Out_ BOOLEAN
     s->Work.SessionBootId = in.session.state == BC250_INTEROP_PRESENT ? in.session.value : 0;
     s->Work.PreviousEnd = lastEnd.state == BC250_INTEROP_PRESENT ? lastEnd.value : BC250_INTEROP_END_NONE;
     s->Work.Generation = Device->StartHealth.Generation;
-    if (g_InteropPowerRegistration) s->Work.Flags |= BC250_INTEROP_FLAG_POWER_CALLBACK;
+    if (g_InteropPower.Registration) s->Work.Flags |= BC250_INTEROP_FLAG_POWER_CALLBACK;
     InteropPublish(s);
     InteropUnlock(s);
 
