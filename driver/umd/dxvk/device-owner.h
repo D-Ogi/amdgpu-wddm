@@ -51,6 +51,11 @@ public:
     HRESULT begin_surface(const RuntimeSurfaceRequest &,const D3D11_TEXTURE2D_DESC1 &,RuntimeSurface *&out);
     HRESULT adopt_surface(RuntimeSurfaceAllocation &,const BC250_WDDM_ALLOCATION_PRIVATE &,
         const D3D11_TEXTURE2D_DESC1 &,RuntimeSurface *&out,const BC250_WDDM_NV12_PRIVATE *nv12=nullptr);
+    // BD-373 step 3: a shared resource of the ENGINE LAYOUT form (runtime-engine-resource.h), created or opened. Same
+    // ownership rule as begin_surface; *why names a refusal for the DDI's refusal line.
+    HRESULT begin_engine_surface(HANDLE runtime_resource,const EngineResourceDesc &,RuntimeSurface *&out,const char **why);
+    HRESULT adopt_engine_surface(RuntimeSurfaceAllocation &,const BC250_SHARED_RESOURCE &,const void *blob,UINT blobBytes,
+        RuntimeSurface *&out,const char **why);
     HRESULT finish_surface(RuntimeSurface &);
     HRESULT wait_surface(RuntimeSurface &);
     HRESULT close_surface(RuntimeSurface &);
@@ -102,8 +107,11 @@ public:
 private:
     HRESULT prepare_surface_import();
     bool owns_surface(const RuntimeSurface &) const;
+    // The ENGINE LAYOUT dispatch: surface_resource_vk_ with the engine half of the current engine device.
+    EngineResourceDispatch resource_dispatch();
     SurfacePagingQueue surface_queue_{};
     RuntimeImageDispatch surface_vk_{};
+    EngineResourceVulkan surface_resource_vk_{};
     VkPhysicalDeviceMemoryProperties surface_memory_{};
     std::vector<std::unique_ptr<RuntimeSurface>> surfaces_;
     PresentShadows present_shadows_{};

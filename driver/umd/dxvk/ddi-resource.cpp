@@ -158,6 +158,52 @@ HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &s,ResourceDescription
     // decoder fields merely because the build uses a newer WDK header.
     out=std::move(d); return S_OK;
 }
+// BD-373 step 3: the LINEAR SURFACE shape (convert_runtime_resource): a single-mip, single-layer, single-sample 2D
+// texture of DEFAULT usage without CPU access, in a composed format or NV12. A shared resource of another shape takes
+// the ENGINE LAYOUT form. Primaries, present buffers and displayable surfaces always take the LINEAR SURFACE path,
+// which refuses what it cannot make: DWM and the display path read them.
+bool engine_layout_resource(const D3D11DDIARG_CREATERESOURCE &s) {
+    if (s.pPrimaryDesc || (s.BindFlags&D3D10_DDI_BIND_PRESENT) ||
+        (s.MiscFlags&D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE) || !(s.MiscFlags&D3D10_DDI_RESOURCE_MISC_SHARED))
+        return false;
+    const bool linear=s.ResourceDimension==D3D10DDIRESOURCE_TEXTURE2D && s.MipLevels==1 && s.ArraySize==1 &&
+        s.SampleDesc.Count==1 && !s.SampleDesc.Quality && s.Usage==D3D10_DDI_USAGE_DEFAULT && !s.MapFlags &&
+        (s.Format==DXGI_FORMAT_NV12 || runtime_surface_format(s.Format)!=nullptr);
+    return !linear;
+}
+HRESULT convert_engine_resource(const D3D11DDIARG_CREATERESOURCE &input,EngineResourceDesc &out,
+    ResourceDescription &converted,const char **why) {
+    const char *ignored=nullptr; if (!why) why=&ignored;
+    *why=BC250_SR_WHY_DIMENSION;
+    const bool buffer=input.ResourceDimension==D3D10DDIRESOURCE_BUFFER || input.ResourceDimension==D3D11DDIRESOURCE_BUFFEREX;
+    // D3D11 shares buffers (the runtime passes them) and Texture2D; 1D, 3D and cube textures are not shareable.
+    if (!buffer && input.ResourceDimension!=D3D10DDIRESOURCE_TEXTURE2D) return E_NOTIMPL;
+    // The sharing flags are the runtime allocation's, not the engine's. RESTRICT_SHARED_RESOURCE_DRIVER limits the
+    // openers to this driver, which is already the only reader of this form. RESTRICTED_CONTENT stays and is refused
+    // by convert_resource: this driver has no protected content.
+    auto ordinary=input;
+    ordinary.MiscFlags&=~UINT(D3D10_DDI_RESOURCE_MISC_SHARED|D3D11_1DDI_RESOURCE_MISC_RESTRICT_SHARED_RESOURCE_DRIVER);
+    HRESULT hr=convert_resource(ordinary,converted);
+    if (FAILED(hr)) { *why=BC250_SR_WHY_DESCRIPTION; return hr; }
+    EngineResourceDesc d{};
+    if (buffer) {
+        d.buffer=true; d.buffer_desc=converted.buffer;
+    } else {
+        const auto &t=converted.texture2d;
+        d.texture={t.Width,t.Height,t.MipLevels,t.ArraySize,t.Format,t.SampleDesc,t.Usage,t.BindFlags,t.CPUAccessFlags,
+            t.MiscFlags,D3D11_TEXTURE_LAYOUT_UNDEFINED};
+    }
+    BC250_SHARED_RESOURCE record{};
+    *why=engine_resource_desc_why(d,record);
+    if (!Bc250SharedResourceWhyOk(*why)) return E_NOTIMPL;
+    out=d; return S_OK;
+}
+bool engine_layout_open(const D3D10DDIARG_OPENRESOURCE &args) {
+    UINT magic=0;
+    if (!args.pPrivateDriverData || args.PrivateDriverDataSize<sizeof(magic)) return false;
+    std::memcpy(&magic,args.pPrivateDriverData,sizeof(magic));
+    return magic==BC250_SHARED_RESOURCE_MAGIC;
+}
 HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE runtimeHandle,
     RuntimeSurfaceRequest &request,D3D11_TEXTURE2D_DESC1 &desc,const ScanoutSource *scanout) {
     if (!runtimeHandle || input.ResourceDimension!=D3D10DDIRESOURCE_TEXTURE2D ||
@@ -358,6 +404,75 @@ void surface_failed_note(const char *step,HRESULT hr,const RuntimeSurfaceRequest
         unsigned(request.surface.Pitch),(unsigned long long)request.surface.Size,
         surface ? unsigned(surface->allocation.allocation) : 0u,(unsigned long)GetCurrentThreadId());
 }
+// BD-373 step 3: one line for each shared resource of the ENGINE LAYOUT form that this shell refuses to create or to
+// open, in both flavours, at most 32 for each process. The status the runtime gets (reported) is the only one the DDI
+// page allows for a refusal that keeps the device, so this line is what tells a refused description, a refused record
+// and a real allocation failure apart: the step, the reason (a BC250_SR_WHY_* string of
+// driver/contract/bc250_shared_resource.h or a reason of runtime-engine-resource.cpp) and the description.
+void engine_layout_note(const char *entry,const char *step,const char *why,HRESULT hr,HRESULT reported,UINT dimension,
+    UINT format,UINT width,UINT height,UINT mips,UINT array,UINT bind,UINT misc,UINT usage) noexcept {
+    static std::atomic_uint notes{32};
+    device_life_note(notes,"BC250 BD-373: shared resource %s refused: step=%s why=%s hr=%08X reported=%08X dimension=%u "
+        "format=%u %ux%u mips=%u array=%u bind=%08X misc=%08X usage=%u thread=%lu\n",entry,step,why ? why : "-",
+        unsigned(hr),unsigned(reported),dimension,format,width,height,mips,array,bind,misc,usage,
+        (unsigned long)GetCurrentThreadId());
+}
+void create_engine_layout(DeviceOwner &owner,const D3D11DDIARG_CREATERESOURCE &desc,HANDLE runtime,DdiResource &s) {
+    const auto *m=desc.pMipInfoList;
+    auto refuse=[&](const char *step,const char *why,HRESULT hr) {
+        const HRESULT reported=FAILED(hr) ? create_refusal(desc,hr) : D3DDDIERR_DEVICEREMOVED;
+        engine_layout_note("create",step,why,hr,reported,unsigned(desc.ResourceDimension),unsigned(desc.Format),
+            m ? m->TexelWidth : 0u,m ? m->TexelHeight : 0u,desc.MipLevels,desc.ArraySize,desc.BindFlags,desc.MiscFlags,
+            unsigned(desc.Usage));
+        report_ddi_error(owner,reported,DdiErrorClass::unsupported);
+    };
+    EngineResourceDesc engineDesc{}; ResourceDescription converted; const char *why=nullptr;
+    HRESULT hr=convert_engine_resource(desc,engineDesc,converted,&why);
+    if (FAILED(hr)) { refuse("convert",why,hr); return; }
+    if (!runtime) { refuse("convert","runtime handle",E_INVALIDARG); return; }
+    RuntimeSurface *surface=nullptr;
+    const char *step="begin";
+    hr=owner.begin_engine_surface(runtime,engineDesc,surface,&why);
+    if (SUCCEEDED(hr)) { step="wait"; why=BC250_SR_WHY_OK; hr=owner.wait_surface(*surface); }
+    if (hr!=S_OK) {
+        if (surface) owner.release_surface_handle(*surface);
+        refuse(step,why,hr); return;
+    }
+    s.runtime_surface=surface; s.object=surface->resource(); s.dimension=desc.ResourceDimension;
+    // The initial content of a DEFAULT resource, one subresource after another in the runtime's order (mip first).
+    for (UINT i=0;i<UINT(converted.initial.size());++i) {
+        const auto &initial=converted.initial[i];
+        owner.context()->UpdateSubresource(s.object,i,nullptr,initial.pSysMem,initial.SysMemPitch,initial.SysMemSlicePitch);
+    }
+    if (auto *log=etw::process_allocation_log()) (void)log->map(runtime_surface_mapping(s));
+}
+void open_engine_layout(DeviceOwner &owner,const D3D10DDIARG_OPENRESOURCE &args,HANDLE runtime,DdiResource &s) {
+    BC250_SHARED_RESOURCE record{};
+    const char *why=Bc250SharedResourceDecodeWhy(args.pPrivateDriverData,args.PrivateDriverDataSize,&record);
+    auto refuse=[&](const char *step,HRESULT hr) {
+        const HRESULT reported=FAILED(hr) ? unopenable_resource(hr) : D3DDDIERR_DEVICEREMOVED;
+        engine_layout_note("open",step,why,hr,reported,record.Dimension,record.Format,record.Width,record.Height,
+            record.MipLevels,record.ArraySize,record.BindFlags,record.MiscFlags,record.Usage);
+        report_ddi_error(owner,reported,DdiErrorClass::out_of_memory);
+    };
+    if (!Bc250SharedResourceWhyOk(why)) { refuse("decode",E_INVALIDARG); return; }
+    if (args.NumAllocations!=1 || !args.pOpenAllocationInfo2 || !args.pOpenAllocationInfo2[0].hAllocation) {
+        why="allocations"; refuse("decode",E_INVALIDARG); return;
+    }
+    const auto &a=args.pOpenAllocationInfo2[0];
+    RuntimeSurfaceAllocation allocation{runtime,a.hAllocation,args.hKMResource.handle};
+    RuntimeSurface *surface=nullptr;
+    const char *step="adopt";
+    HRESULT hr=owner.adopt_engine_surface(allocation,record,a.pPrivateDriverData,a.PrivateDriverDataSize,surface,&why);
+    if (SUCCEEDED(hr)) { step="wait"; why=BC250_SR_WHY_OK; hr=owner.wait_surface(*surface); }
+    if (hr!=S_OK) {
+        if (surface) owner.release_surface_handle(*surface);
+        refuse(step,hr); return;
+    }
+    s.runtime_surface=surface; s.object=surface->resource();
+    s.dimension=record.Dimension==BC250_SHARED_RESOURCE_BUFFER ? D3D11DDIRESOURCE_BUFFEREX : D3D10DDIRESOURCE_TEXTURE2D;
+    if (auto *log=etw::process_allocation_log()) (void)log->map(runtime_surface_mapping(s));
+}
 SIZE_T APIENTRY size(D3D10DDI_HDEVICE,const D3D11DDIARG_CREATERESOURCE *) { return sizeof(DdiResource); }
 void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
     D3D10DDI_HRESOURCE handle,D3D10DDI_HRTRESOURCE runtimeHandle) {
@@ -366,6 +481,9 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         if (!s || !desc || !owner.device()) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::unsupported); return; }
+        if (engine_layout_resource(*desc)) {
+            create_engine_layout(owner,*desc,reinterpret_cast<HANDLE>(runtimeHandle.handle),*s); return;
+        }
         if (desc->pPrimaryDesc || (desc->BindFlags&D3D10_DDI_BIND_PRESENT) ||
             (desc->MiscFlags&(D3D10_DDI_RESOURCE_MISC_SHARED|D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE))) {
             RuntimeSurfaceRequest request{}; D3D11_TEXTURE2D_DESC1 texture{};
@@ -456,6 +574,11 @@ void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         if (!s || !args || !runtimeHandle.handle) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
+        // BD-373 step 3: the record names the form. An S26R record is the ENGINE LAYOUT form; every other record, and
+        // none, is the LINEAR SURFACE decode below, unchanged.
+        if (engine_layout_open(*args)) {
+            open_engine_layout(owner,*args,reinterpret_cast<HANDLE>(runtimeHandle.handle),*s); return;
+        }
         BC250_WDDM_ALLOCATION_PRIVATE metadata{}; BC250_WDDM_NV12_PRIVATE nv12{}; D3D11_TEXTURE2D_DESC1 desc{};
         HRESULT hr=decode_open_resource(*args,metadata,desc,&nv12);
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR

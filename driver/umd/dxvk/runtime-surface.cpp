@@ -92,11 +92,61 @@ HRESULT adopt_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &q
     if (FAILED(hr)) return hr;
     out.phase=SurfacePhase::paging; return S_FALSE;
 }
+HRESULT begin_engine_surface(RuntimeDevice &runtime,const SurfacePagingQueue &queue,HANDLE runtimeResource,
+    const EngineResourceDesc &desc,RuntimeSurface &out,const RuntimeSurfacePreparation &prepare,const char **why) {
+    const char *ignored=nullptr; if (!why) why=&ignored;
+    *why=BC250_SR_WHY_ARGUMENTS;
+    if (out.phase!=SurfacePhase::empty || out.owner) return E_UNEXPECTED;
+    if (!runtime.domain.entered() || !queue.queue || !queue.sync || !queue.cpu || !runtimeResource ||
+        !prepare.device || !prepare.resource) return E_INVALIDARG;
+    out.owner=&runtime; out.queue=queue; out.form=SurfaceForm::engine_layout;
+    if (!desc.buffer) out.desc=desc.texture;
+    out.phase=SurfacePhase::failed;
+    HRESULT hr=prepare_engine_resource(runtime,prepare.device,*prepare.resource,desc,out.engine,why);
+    if (FAILED(hr)) return hr;
+    hr=allocate_engine_surface(runtime,runtimeResource,out.engine.record,out.allocation,out.bytes);
+    if (FAILED(hr)) {
+        *why="allocate";
+        surface_diagnostic("engine-layout-allocate",hr,out.engine.record.VkFormat,out.engine.record.Width,
+            out.engine.record.Height,out.engine.record.MemorySize,out.engine.record.MemoryAlignment,out.bytes);
+        return hr;
+    }
+    hr=map_runtime_surface(runtime,queue,out.allocation.allocation,out.bytes,out.mapping);
+    if (FAILED(hr)) { *why="map"; return hr; }
+    *why=BC250_SR_WHY_OK;
+    out.phase=SurfacePhase::paging;
+    return S_FALSE;
+}
+HRESULT adopt_engine_surface(RuntimeDevice &runtime,const SurfacePagingQueue &queue,RuntimeSurfaceAllocation &allocation,
+    const BC250_SHARED_RESOURCE &record,const void *blob,UINT blobBytes,RuntimeSurface &out,
+    const RuntimeSurfacePreparation &prepare,const char **why) {
+    const char *ignored=nullptr; if (!why) why=&ignored;
+    *why=BC250_SR_WHY_ARGUMENTS;
+    if (out.phase!=SurfacePhase::empty || out.owner) return E_UNEXPECTED;
+    if (!runtime.domain.entered() || !runtime.hDevice || !queue.queue || !queue.sync || !queue.cpu ||
+        !allocation.allocation || !allocation.runtime_resource || !prepare.device || !prepare.resource) return E_INVALIDARG;
+    UINT64 bytes=0;
+    HRESULT hr=engine_surface_blob(blob,blobBytes,record,bytes,why);
+    if (FAILED(hr)) return hr;
+    RuntimeEngineResource matched{};
+    hr=match_engine_resource(runtime,prepare.device,*prepare.resource,record,matched,why);
+    if (FAILED(hr)) return hr;
+    out.owner=&runtime; out.queue=queue; out.form=SurfaceForm::engine_layout; out.engine=matched;
+    if (!matched.desc.buffer) out.desc=matched.desc.texture;
+    out.bytes=bytes;
+    out.allocation=allocation; allocation={};
+    out.phase=SurfacePhase::failed;
+    hr=map_runtime_surface(runtime,queue,out.allocation.allocation,out.bytes,out.mapping);
+    if (FAILED(hr)) { *why="map"; return hr; }
+    out.phase=SurfacePhase::paging; return S_FALSE;
+}
 HRESULT finish_runtime_surface(VkDevice device,const RuntimeImageDispatch &vk,
-    const TextureImportDispatch &engine,const VkPhysicalDeviceMemoryProperties &properties,RuntimeSurface &surface) {
+    const TextureImportDispatch &engine,const VkPhysicalDeviceMemoryProperties &properties,RuntimeSurface &surface,
+    const EngineResourceDispatch *resource) {
     if (!surface.owner || !surface.owner->domain.entered()) return E_INVALIDARG;
     if (surface.phase==SurfacePhase::ready) return S_OK;
     if (surface.phase!=SurfacePhase::paging || !surface.mapping.resident) return E_UNEXPECTED;
+    if (surface.form==SurfaceForm::engine_layout && !resource) return E_INVALIDARG;
     HRESULT hr=surface_paging_status(surface.queue,surface.mapping);
     if (hr==S_FALSE) return hr;
     surface.phase=SurfacePhase::failed;
@@ -105,6 +155,16 @@ HRESULT finish_runtime_surface(VkDevice device,const RuntimeImageDispatch &vk,
     imported.sType=BC250_HOST_IMPORT_STYPE; imported.identity=surface.owner->host_identity();
     imported.allocation=surface.allocation.allocation; imported.va=surface.mapping.address;
     imported.size=surface.bytes;
+    if (surface.form==SurfaceForm::engine_layout) {
+        hr=bind_engine_resource(*surface.owner,device,*resource,properties,imported,surface.engine);
+        if (FAILED(hr)) {
+            surface_diagnostic("engine-layout-bind",hr,surface.engine.record.VkFormat,surface.engine.record.Width,
+                surface.engine.record.Height,surface.engine.record.MemorySize,surface.bytes,surface.engine.record.BindFlags);
+            return hr;
+        }
+        surface.phase=SurfacePhase::ready;
+        return S_OK;
+    }
     hr=surface.nv12.Surface.Version==BC250_WDDM_NV12_VERSION
         ? bind_runtime_nv12(*surface.owner,device,vk,engine,properties,surface.desc,imported,surface.texture)
         : create_runtime_texture(*surface.owner,device,vk,engine,properties,surface.desc,
@@ -118,13 +178,15 @@ HRESULT finish_runtime_surface(VkDevice device,const RuntimeImageDispatch &vk,
     return S_OK;
 }
 HRESULT close_runtime_surface(HostBridge &bridge,VkDevice device,const RuntimeImageDispatch &vk,
-    const TextureImportDispatch &engine,RuntimeSurface &surface) {
+    const TextureImportDispatch &engine,RuntimeSurface &surface,const EngineResourceDispatch *resource) {
     if (!bridge.device || !bridge.device->domain.entered()) return E_INVALIDARG;
     if (surface.phase==SurfacePhase::empty) return S_OK;
     if (surface.phase==SurfacePhase::quarantined) return E_UNEXPECTED;
     if (bridge.device!=surface.owner) return E_INVALIDARG;
+    if (surface.form==SurfaceForm::engine_layout && !resource) return E_INVALIDARG;
     surface.phase=SurfacePhase::closing;
-    HRESULT hr=close_runtime_texture(bridge,device,vk,engine,surface.texture);
+    HRESULT hr=surface.form==SurfaceForm::engine_layout ? close_engine_resource(bridge,device,*resource,surface.engine) :
+        close_runtime_texture(bridge,device,vk,engine,surface.texture);
     if (hr!=S_OK) return hr;
     // Deallocate2 with flags zero owns VA retirement and defers allocation
     // destruction behind queued work. Explicit FreeGpuVirtualAddress here could
@@ -139,6 +201,7 @@ HRESULT close_runtime_surface(HostBridge &bridge,VkDevice device,const RuntimeIm
     surface.mapping={};
     surface.owner=nullptr; surface.queue={}; surface.desc={}; surface.pitch=0; surface.bytes=0;
     surface.nv12={}; surface.texture.preparedInfo={}; surface.texture.preparedLayout={};
+    surface.engine={}; surface.form=SurfaceForm::linear;
     surface.phase=SurfacePhase::empty;
     return S_OK;
 }

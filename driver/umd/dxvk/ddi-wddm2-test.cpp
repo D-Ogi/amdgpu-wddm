@@ -570,6 +570,65 @@ void scanout_primary() {
     BC250_WDDM_ALLOCATION_PRIVATE decodedSurface{}; D3D11_TEXTURE2D_DESC1 decodedDesc{};
     CHECK(decode_open_resource(openArgs,decodedSurface,decodedDesc)==S_OK && decodedDesc.Width==1920 &&
           decodedSurface.Pitch==7680);
+    {
+        // BD-373 step 3: the form of a shared resource. A primary and a present buffer stay LINEAR SURFACE; a shared
+        // texture of the LINEAR SURFACE shape stays there too; the rest that D3D11 shares is ENGINE LAYOUT.
+        CHECK(!engine_layout_resource(desc) && !engine_layout_open(openArgs));
+        auto plain=desc; plain.pPrimaryDesc=nullptr; plain.BindFlags&=~UINT(D3D10_DDI_BIND_PRESENT);
+        CHECK(!engine_layout_resource(plain));
+        auto unshared=plain; unshared.MiscFlags=0; unshared.MipLevels=3;
+        CHECK(!engine_layout_resource(unshared));
+        D3D10DDI_MIPINFO chain[3]{{64,32,1,64,32,1},{32,16,1,32,16,1},{16,8,1,16,8,1}};
+        auto mips=plain; mips.pMipInfoList=chain; mips.MipLevels=3; mips.ArraySize=2;
+        mips.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED|D3D11_1DDI_RESOURCE_MISC_RESTRICT_SHARED_RESOURCE_DRIVER;
+        CHECK(engine_layout_resource(mips));
+        EngineResourceDesc engineDesc{}; ResourceDescription converted; const char *why=nullptr;
+        CHECK(convert_engine_resource(mips,engineDesc,converted,&why)==S_OK && Bc250SharedResourceWhyOk(why) &&
+              !engineDesc.buffer && engineDesc.texture.Width==64 && engineDesc.texture.MipLevels==3 &&
+              engineDesc.texture.ArraySize==2 && !engineDesc.texture.MiscFlags &&
+              engineDesc.texture.BindFlags==(D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE));
+        // A format with no composed row takes this form at one mip as well.
+        auto typeless=plain; typeless.Format=DXGI_FORMAT_R32G32B32A32_UINT; typeless.pMipInfoList=chain;
+        CHECK(engine_layout_resource(typeless) && convert_engine_resource(typeless,engineDesc,converted,&why)==S_OK);
+        // The D3D11 contract excludes these from sharing; each refusal is named.
+        auto refused=[&](D3D11DDIARG_CREATERESOURCE d,const char *want) {
+            EngineResourceDesc e{}; ResourceDescription c; const char *w=nullptr;
+            return engine_layout_resource(d) && FAILED(convert_engine_resource(d,e,c,&w)) && w && !std::strcmp(w,want);
+        };
+        { auto d=mips; d.MapFlags=D3D10_DDI_CPU_ACCESS_READ; d.Usage=D3D10_DDI_USAGE_STAGING; d.BindFlags=0;
+          CHECK(refused(d,BC250_SR_WHY_USAGE)); }
+        { auto d=mips; d.SampleDesc.Count=4; d.MipLevels=1; d.ArraySize=1; CHECK(refused(d,BC250_SR_WHY_SAMPLES)); }
+        { auto d=mips; d.BindFlags=D3D10_DDI_BIND_DEPTH_STENCIL; d.Format=DXGI_FORMAT_D32_FLOAT; CHECK(refused(d,BC250_SR_WHY_BIND)); }
+        { auto d=mips; d.ResourceDimension=D3D10DDIRESOURCE_TEXTURE3D; CHECK(refused(d,BC250_SR_WHY_DIMENSION)); }
+        { auto d=mips; d.ResourceDimension=D3D10DDIRESOURCE_TEXTURE1D; CHECK(refused(d,BC250_SR_WHY_DIMENSION)); }
+        { auto d=mips; d.ResourceDimension=D3D10DDIRESOURCE_TEXTURECUBE; CHECK(refused(d,BC250_SR_WHY_DIMENSION)); }
+        { auto d=mips; d.MiscFlags|=D3D11_DDI_RESOURCE_MISC_RESOURCE_CLAMP; CHECK(refused(d,BC250_SR_WHY_MISC)); }
+        // RESTRICTED_CONTENT asks for protected content, which this driver does not have.
+        { auto d=mips; d.MiscFlags|=D3D11_1DDI_RESOURCE_MISC_RESTRICTED_CONTENT; CHECK(refused(d,BC250_SR_WHY_DESCRIPTION)); }
+        // A shared buffer.
+        D3D10DDI_MIPINFO bytes{4096,1,1,4096,1,1};
+        auto shared=plain; shared.ResourceDimension=D3D11DDIRESOURCE_BUFFEREX; shared.pMipInfoList=&bytes;
+        shared.Format=DXGI_FORMAT_UNKNOWN; shared.BindFlags=D3D10_DDI_BIND_SHADER_RESOURCE|D3D11_DDI_BIND_UNORDERED_ACCESS;
+        shared.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED|D3D11_DDI_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+        CHECK(engine_layout_resource(shared) && convert_engine_resource(shared,engineDesc,converted,&why)==S_OK &&
+              engineDesc.buffer && engineDesc.buffer_desc.ByteWidth==4096 &&
+              engineDesc.buffer_desc.MiscFlags==D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS);
+        // Open: an S26R record is this form; the E26R and LB7A records of the LINEAR SURFACE form are not, and they
+        // keep their decode (above). A short record is not.
+        BC250_SHARED_RESOURCE record{}; record.Magic=BC250_SHARED_RESOURCE_MAGIC;
+        auto engineOpen=openArgs; engineOpen.pPrivateDriverData=&record; engineOpen.PrivateDriverDataSize=sizeof(record);
+        CHECK(engine_layout_open(engineOpen));
+        // The LINEAR SURFACE decode, which is also the whole open path of a shell before this form, refuses the new
+        // pair: the S26R record and a BC2A blob.
+        unsigned char bc2a[192]{'B','C','2','A'};
+        D3DDDI_OPENALLOCATIONINFO2 engineAllocation=openAllocation;
+        engineAllocation.pPrivateDriverData=bc2a; engineAllocation.PrivateDriverDataSize=sizeof(bc2a);
+        engineOpen.pOpenAllocationInfo2=&engineAllocation;
+        BC250_WDDM_ALLOCATION_PRIVATE oldSurface{}; D3D11_TEXTURE2D_DESC1 oldDesc{};
+        CHECK(FAILED(decode_open_resource(engineOpen,oldSurface,oldDesc)));
+        engineOpen.PrivateDriverDataSize=2; CHECK(!engine_layout_open(engineOpen));
+        engineOpen.pPrivateDriverData=nullptr; engineOpen.PrivateDriverDataSize=0; CHECK(!engine_layout_open(engineOpen));
+    }
     CHECK(composed(nullptr) && !WddmGdiRecordScannable(&request.texture,sizeof(request.texture)));
     // No source and the off switch make no query at all. The default asks, as an explicit on.
     queries=adapterQueries;

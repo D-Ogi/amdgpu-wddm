@@ -2,6 +2,7 @@
 #include "device-owner.h"
 #include "ddi-negotiation.h"
 #include <algorithm>
+#include <cstring>
 namespace bc250::umd {
 namespace {
 void module_anchor() {}
@@ -155,10 +156,39 @@ HRESULT DeviceOwner::prepare_surface_import() {
         LOAD(memory.bind,PFN_vkBindImageMemory,"vkBindImageMemory");
         LOAD(memory.free,PFN_vkFreeMemory,"vkFreeMemory");
 #undef LOAD
+        // BD-373 step 3: the buffers of the ENGINE LAYOUT form and the device's layout identity. Optional: without them
+        // that form is refused and every other surface is as before.
+        EngineResourceVulkan resource{};
+        resource.image=&surface_vk_;
+        resource.create_buffer=reinterpret_cast<PFN_vkCreateBuffer>(gdpa(session_.device(),"vkCreateBuffer"));
+        resource.destroy_buffer=reinterpret_cast<PFN_vkDestroyBuffer>(gdpa(session_.device(),"vkDestroyBuffer"));
+        resource.buffer_requirements=reinterpret_cast<PFN_vkGetBufferMemoryRequirements>(gdpa(session_.device(),"vkGetBufferMemoryRequirements"));
+        resource.bind_buffer=reinterpret_cast<PFN_vkBindBufferMemory>(gdpa(session_.device(),"vkBindBufferMemory"));
+        resource.image_format=reinterpret_cast<PFN_vkGetPhysicalDeviceImageFormatProperties>(
+            instance.GetInstanceProcAddr(instance.Instance,"vkGetPhysicalDeviceImageFormatProperties"));
+        resource.physical=instance.PhysicalDevice;
+        auto properties2=reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(
+            instance.GetInstanceProcAddr(instance.Instance,"vkGetPhysicalDeviceProperties2"));
+        if (properties2) {
+            VkPhysicalDeviceIDProperties id{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES};
+            VkPhysicalDeviceProperties2 props{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+            props.pNext=&id;
+            properties2(instance.PhysicalDevice,&props);
+            std::memcpy(resource.identity.driver,id.driverUUID,16);
+            std::memcpy(resource.identity.device,id.deviceUUID,16);
+            resource.identity.valid=true;
+        }
         memory(instance.PhysicalDevice,&surface_memory_);
         surface_vk_=vk;
+        surface_resource_vk_=resource;
     }
     return ensure_paging_queue();
+}
+EngineResourceDispatch DeviceOwner::resource_dispatch() {
+    EngineResourceDispatch d{};
+    d.vk=surface_resource_vk_;
+    if (engine()) d.engine=engine_resource_engine(*engine());
+    return d;
 }
 HRESULT DeviceOwner::ensure_paging_queue() {
     if (!runtime_.domain.entered() || closing_) return E_UNEXPECTED;
@@ -193,9 +223,33 @@ HRESULT DeviceOwner::adopt_surface(RuntimeSurfaceAllocation &allocation,const BC
     const RuntimeSurfacePreparation prepare{session_.device(),&surface_vk_,&importer};
     return adopt_runtime_surface(runtime_,surface_queue_,allocation,metadata,desc,*out,nv12,&prepare);
 }
+HRESULT DeviceOwner::begin_engine_surface(HANDLE runtimeResource,const EngineResourceDesc &desc,RuntimeSurface *&out,
+    const char **why) {
+    if (out) return E_UNEXPECTED;
+    HRESULT hr=prepare_surface_import();
+    if (FAILED(hr)) return hr;
+    surfaces_.push_back(std::make_unique<RuntimeSurface>()); out=surfaces_.back().get();
+    auto importer=texture_import_dispatch(*engine());
+    const auto resource=resource_dispatch();
+    const RuntimeSurfacePreparation prepare{session_.device(),&surface_vk_,&importer,&resource};
+    return bc250::umd::begin_engine_surface(runtime_,surface_queue_,runtimeResource,desc,*out,prepare,why);
+}
+HRESULT DeviceOwner::adopt_engine_surface(RuntimeSurfaceAllocation &allocation,const BC250_SHARED_RESOURCE &record,
+    const void *blob,UINT blobBytes,RuntimeSurface *&out,const char **why) {
+    if (out) return E_UNEXPECTED;
+    HRESULT hr=prepare_surface_import();
+    if (FAILED(hr)) return hr;
+    surfaces_.push_back(std::make_unique<RuntimeSurface>()); out=surfaces_.back().get();
+    auto importer=texture_import_dispatch(*engine());
+    const auto resource=resource_dispatch();
+    const RuntimeSurfacePreparation prepare{session_.device(),&surface_vk_,&importer,&resource};
+    return bc250::umd::adopt_engine_surface(runtime_,surface_queue_,allocation,record,blob,blobBytes,*out,prepare,why);
+}
 HRESULT DeviceOwner::finish_surface(RuntimeSurface &surface) {
     if (!runtime_.domain.entered() || closing_ || !owns_surface(surface) || !engine()) return E_INVALIDARG;
-    return finish_runtime_surface(session_.device(),surface_vk_,texture_import_dispatch(*engine()),surface_memory_,surface);
+    const auto resource=resource_dispatch();
+    return finish_runtime_surface(session_.device(),surface_vk_,texture_import_dispatch(*engine()),surface_memory_,surface,
+        &resource);
 }
 HRESULT DeviceOwner::wait_surface(RuntimeSurface &surface) {
     if (!runtime_.domain.entered() || closing_ || !owns_surface(surface)) return E_INVALIDARG;
@@ -208,7 +262,9 @@ HRESULT DeviceOwner::close_surface(RuntimeSurface &surface) {
     if (!runtime_.domain.entered() || !engine()) return E_INVALIDARG;
     auto position=std::find_if(surfaces_.begin(),surfaces_.end(),[&](const auto &p) { return p.get()==&surface; });
     if (position==surfaces_.end()) return E_INVALIDARG;
-    HRESULT hr=close_runtime_surface(bridge_,session_.device(),surface_vk_,texture_import_dispatch(*engine()),surface);
+    const auto resource=resource_dispatch();
+    HRESULT hr=close_runtime_surface(bridge_,session_.device(),surface_vk_,texture_import_dispatch(*engine()),surface,
+        &resource);
     if (hr==S_OK) surfaces_.erase(position);
     return hr;
 }

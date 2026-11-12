@@ -61,5 +61,13 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &,HANDLE,Runti
     const ScanoutSource *scanout=nullptr);
 HRESULT decode_open_resource(const D3D10DDIARG_OPENRESOURCE &,BC250_WDDM_ALLOCATION_PRIVATE &,D3D11_TEXTURE2D_DESC1 &,
     BC250_WDDM_NV12_PRIVATE *nv12=nullptr);
+// BD-373 step 3: the form of a shared resource. engine_layout_resource is true for a shared resource that is not a
+// primary, a present buffer or displayable and that the LINEAR SURFACE form cannot hold; convert_engine_resource
+// makes its engine description (without the sharing flags) or refuses it with *why (a BC250_SR_WHY_* string).
+// engine_layout_open is true for an OpenResource whose record is an S26R record (bc250_shared_resource.h).
+bool engine_layout_resource(const D3D11DDIARG_CREATERESOURCE &);
+HRESULT convert_engine_resource(const D3D11DDIARG_CREATERESOURCE &,EngineResourceDesc &,ResourceDescription &,
+    const char **why);
+bool engine_layout_open(const D3D10DDIARG_OPENRESOURCE &);
 void install_resource_ddi(D3D11_1DDI_DEVICEFUNCS &table);
 }

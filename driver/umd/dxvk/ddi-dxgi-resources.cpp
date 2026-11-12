@@ -46,9 +46,12 @@ HRESULT allocation(DeviceOwner &owner,DXGI_DDI_HRESOURCE handle,D3DKMT_HANDLE &o
     if (!r || !r->object) return E_INVALIDARG;
     auto *surface=r->runtime_surface;
     if (!surface) return E_NOTIMPL; // Engine-private: offer and reclaim ask the engine (BD-309), the rest are hints.
-    if (surface->owner!=&owner.runtime() || surface->phase!=SurfacePhase::ready || surface->texture.retained ||
-        surface->texture.texture!=r->object || !surface->allocation.allocation ||
-        surface->allocation.allocation!=r->present_allocation) return E_INVALIDARG;
+    // BD-373 step 3: a shared resource of the ENGINE LAYOUT form is a runtime surface too, offered and reclaimed by its
+    // kernel allocation like a shared LINEAR surface. It is never a present source, so it has no present_allocation.
+    const D3DKMT_HANDLE named=surface->form==SurfaceForm::engine_layout ? surface->allocation.allocation : r->present_allocation;
+    if (surface->owner!=&owner.runtime() || surface->phase!=SurfacePhase::ready || surface->retained() ||
+        surface->resource()!=r->object || !surface->allocation.allocation ||
+        surface->allocation.allocation!=named) return E_INVALIDARG;
     out=surface->allocation.allocation; return S_OK;
 }
 // Offer, Reclaim, SetResourcePriority and QueryResourceResidency are hints for an engine-private resource (no runtime
