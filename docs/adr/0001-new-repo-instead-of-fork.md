@@ -12,7 +12,7 @@ Start a new repository. Treat the predecessor as a donor of verified pieces (Apa
 
 ## Reasons
 
-- Its architecture (WDM IOCTL driver + KMDOD) cannot become a render driver by patching; a WDDM miniport is a different program.
+- Its architecture (WDM IOCTL driver + KMDOD) cannot become a render driver by patching. A WDDM miniport is a different program.
 - Its kernel driver is an 8000-line monolith with hand-written offsets throughout and registry switches that skip crashing init steps.
 - Its knowledge base (`AGENTS.md`, `docs/`) mixes correct and refuted claims without marking which is which. Any agent or person working inside a fork inherits those premises.
 - It embeds AMD firmware blobs in an Apache-licensed source header.

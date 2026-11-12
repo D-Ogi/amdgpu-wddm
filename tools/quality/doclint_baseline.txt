@@ -19,7 +19,6 @@
 62	docs/00-goal-and-roadmap.md
 8	docs/01-evidence-rules.md
 4	docs/02-register-addressing.md
-1	docs/adr/0001-new-repo-instead-of-fork.md
 3	docs/adr/0002-amd-headers-and-code-as-source-of-truth.md
 1	docs/adr/0003-license.md
 4	docs/adr/0004-polyform-noncommercial.md
