@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-table.h"
+#include "ddi-unexpected.h"
 #include "ddi-status-note.h"
 #include "ddi-clear-view.h"
 #include "ddi-query.h"
@@ -47,24 +48,8 @@ void APIENTRY direct_flip(D3D10DDI_HDEVICE,D3D10DDI_HRESOURCE front,D3D10DDI_HRE
     auto *b=static_cast<DdiResource *>(back.pDrvPrivate);
     *supported=a&&b&&direct_flip_supported(a->runtime_surface,b->runtime_surface)?TRUE:FALSE;
 }
-// Threading caps do not advertise command lists or deferred contexts. Keep
-// exact typed entries so an unexpected runtime call is diagnosed, not NULL.
-template<typename Callback,const char *Name> struct Unexpected;
-template<typename R,typename... Args,const char *Name>
-struct Unexpected<R (APIENTRY *)(D3D10DDI_HDEVICE,Args...),Name> {
-    static R APIENTRY call(D3D10DDI_HDEVICE h,Args...) {
-        static std::atomic_bool logged{false};
-        if(!logged.exchange(true))failure_diagnostic(Name,E_NOTIMPL);
-        if constexpr(std::is_void_v<R>) {
-            auto *storage=static_cast<DdiDeviceHandle *>(h.pDrvPrivate);
-            if(storage && storage->owner) {
-                RuntimeDomain::Scope scope(storage->owner->runtime().domain);
-                report_ddi_error(*storage->owner,D3DDDIERR_DEVICEREMOVED);
-            }
-        }else if constexpr(std::is_same_v<R,HRESULT>)return ddi_status_note(Name,E_NOTIMPL,DdiInputs("an entry this shell does not implement"));
-        else { ddi_status_note(Name,E_NOTIMPL,DdiInputs("an entry this shell does not implement answers 0")); return 0; }
-    }
-};
+// Threading caps do not advertise command lists or deferred contexts. Their entries are typed
+// Unexpected entries (ddi-unexpected.h), so an unexpected runtime call is diagnosed, not NULL.
 void APIENTRY deferred_sizes(D3D10DDI_HDEVICE,UINT *count,D3D11DDI_HANDLESIZE *) {
     if(count)*count=0;
 }

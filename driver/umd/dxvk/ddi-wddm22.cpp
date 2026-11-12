@@ -3,6 +3,7 @@
 #include "ddi-wddm2.h"
 #include "ddi-dxgi-table.h"
 #include "ddi-dxgi-resources.h"
+#include "ddi-unexpected.h"
 #include <cstddef>
 #include <cstring>
 #include <type_traits>
@@ -34,22 +35,6 @@ static_assert(offsetof(D3DWDDM2_2DDI_CORELAYER_DEVICECALLBACKS,pfnSetErrorCb)==o
 // The WDDM 2.0 implementation every copied entry comes from.
 const D3DWDDM2_0DDI_DEVICEFUNCS &wddm2_0_base() { static const auto table=make_wddm2_0_device_table(); return table; }
 DeviceOwner &owner22(D3D10DDI_HDEVICE h) { return *static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner; }
-template<typename Callback,const char *Name> struct Unexpected;
-template<typename R,typename... Args,const char *Name>
-struct Unexpected<R (APIENTRY *)(D3D10DDI_HDEVICE,Args...),Name> {
-    static R APIENTRY call(D3D10DDI_HDEVICE h,Args...) {
-        static std::atomic_bool logged{false};
-        if(!logged.exchange(true))failure_diagnostic(Name,E_NOTIMPL);
-        if constexpr(std::is_void_v<R>) {
-            auto *storage=static_cast<DdiDeviceHandle *>(h.pDrvPrivate);
-            if(storage && storage->owner) {
-                RuntimeDomain::Scope scope(storage->owner->runtime().domain);
-                report_ddi_error(*storage->owner,D3DDDIERR_DEVICEREMOVED);
-            }
-        }else if constexpr(std::is_same_v<R,HRESULT>)return ddi_status_note(Name,E_NOTIMPL,DdiInputs("an entry this shell does not implement"));
-        else { ddi_status_note(Name,E_NOTIMPL,DdiInputs("an entry this shell does not implement answers 0")); return 0; }
-    }
-};
 // The shader-cache session entries. The adapter answers D3DWDDM2_2DDICAPS_SHADERCACHE with
 // RequestRuntimeShaderCache FALSE (adapter-caps.h): the engine keeps its own pipeline cache, so the shell
 // asks for no session of the runtime's and the runtime creates none. A call to one of these entries is

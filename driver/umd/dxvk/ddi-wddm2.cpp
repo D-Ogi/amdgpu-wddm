@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-wddm2.h"
+#include "ddi-unexpected.h"
 #include "ddi-table.h"
 #include "ddi-dxgi-table.h"
 #include "ddi-dxgi-resources.h"
@@ -65,22 +66,6 @@ bool buffer(D3D10DDI_HRESOURCE h,ID3D11Buffer *&out) {
     if (type!=D3D11_RESOURCE_DIMENSION_BUFFER) return false;
     out=static_cast<ID3D11Buffer *>(r); return true;
 }
-template<typename Callback,const char *Name> struct Unexpected;
-template<typename R,typename... Args,const char *Name>
-struct Unexpected<R (APIENTRY *)(D3D10DDI_HDEVICE,Args...),Name> {
-    static R APIENTRY call(D3D10DDI_HDEVICE h,Args...) {
-        static std::atomic_bool logged{false};
-        if(!logged.exchange(true))failure_diagnostic(Name,E_NOTIMPL);
-        if constexpr(std::is_void_v<R>) {
-            auto *storage=static_cast<DdiDeviceHandle *>(h.pDrvPrivate);
-            if(storage && storage->owner) {
-                RuntimeDomain::Scope scope(storage->owner->runtime().domain);
-                report_ddi_error(*storage->owner,D3DDDIERR_DEVICEREMOVED);
-            }
-        }else if constexpr(std::is_same_v<R,HRESULT>)return ddi_status_note(Name,E_NOTIMPL,DdiInputs("an entry this shell does not implement"));
-        else { ddi_status_note(Name,E_NOTIMPL,DdiInputs("an entry this shell does not implement answers 0")); return 0; }
-    }
-};
 constexpr char kSetHardwareProtection[]="SetHardwareProtection";
 constexpr char kGetResourceLayout[]="GetResourceLayout";
 constexpr char kRetrieveShaderComment[]="RetrieveShaderComment";
