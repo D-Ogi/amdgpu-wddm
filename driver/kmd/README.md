@@ -9,8 +9,8 @@ State, with the facts in [docs/facts.md](../../docs/facts.md):
 - M7 stage A, the inert full WDDM table, was run in E16 (M61 to M71). The full table has since grown into the
   one the lab runs: hardware submission from the user-mode drivers (M8, M139), the Vulkan first picture (M10,
   M476) and the bounded GPU desktop run (M723, M724).
-- The lab currently runs KMD171 (`DriverVer` 0.7.171.1; the `0.7.N.x` versions are called "KMD N") on the CPU
-  desktop path (M727). It was built from 75b8ab6f on a side branch; the INF on `main` still says 0.7.149.0.
+- The lab currently runs KMD171 (`DriverVer` 0.7.171.1. The `0.7.N.x` versions are called "KMD N") on the CPU
+  desktop path (M727). It was built from 75b8ab6f on a side branch. The INF on `main` still says 0.7.149.0.
 - TDR recovery is not implemented: `DxgkDdiResetFromTimeout` fails explicitly instead of claiming a reset it
   did not perform (M179).
 
@@ -18,19 +18,19 @@ What it is (ADR 0006, ADR 0008): one binary for `PCI\VEN_1002&DEV_13FE` with two
 table takes over the firmware's framebuffer through post-display ownership, offers exactly the mode the firmware
 left and presents by CPU copy, with **no MMIO** and no interrupt. The full WDDM table (`wddm.c`) is behind the
 `EnableFullWddm` gate and carries hardware submission, SDMA paging and Present. The bring-up code next to both
-(ADR 0007) touches hardware only behind registry gates that the INF writes as 0. Written from the documented DDI;
+(ADR 0007) touches hardware only behind registry gates that the INF writes as 0. Written from the documented DDI.
 no code from Microsoft's MS-PL sample.
 
 | File | Contents |
 |---|---|
 | `entry.c` | `DriverEntry` and the `EnableFullWddm` gate: the display-only DDI table, or M7's full one |
-| `wddm.c` | the full WDDM DDI table behind that gate. Started as M7 stage A (inert, see below); now hardware UMD submission, SDMA paging, Present and VSync. `DxgkDdiResetFromTimeout` fails explicitly (M179) |
+| `wddm.c` | the full WDDM DDI table behind that gate. Started as M7 stage A (inert, see below). Now hardware UMD submission, SDMA paging, Present and VSync. `DxgkDdiResetFromTimeout` fails explicitly (M179) |
 | `wddm_allocation_identity.inc` | allocation lookup and publication under the lock `WddmFreeObject` uses, so an allocation address is never reused under a stale snapshot |
-| `vidmm.c` | M7 stage B: VidMm's page tables behind `EnableGpuVa`; CPU_VIRTUAL initialization and the serialized pre-RUN bootstrap use CPU writes, while GPU_PHYSICAL updates use SDMA after the first engine RUN. |
-| `paging_*.c`, `paging_*.h` | the paging planners the full table uses: windows, intervals, streams, permutations, page table shadow, aperture state, captures, the MC address conversion and the paging private data. Most have host tests in `test/` |
+| `vidmm.c` | M7 stage B: VidMm's page tables behind `EnableGpuVa`. CPU_VIRTUAL initialization and the serialized pre-RUN bootstrap use CPU writes, while GPU_PHYSICAL updates use SDMA after the first engine RUN. |
+| `paging_*.c`, `paging_*.h` | the paging planners that the full table uses. They are windows, intervals, streams, permutations, page table shadow, aperture state, captures, the MC address conversion and the paging private data. Most have host tests in `test/` |
 | `gfx_copy.c/.h`, `gfx_copy_fields.h`, `gfx-copy-provenance.md` | GFX10 CP `DMA_DATA` copy on the L2 path, with the packet fields taken unchanged from Mesa's generated RADV headers (provenance file) |
 | `gfx_blt.c/.h`, `blit_plan.c/.h` | the GFX Blt: geometry planning in allocation offsets, then packet emission with a resumable cursor |
-| `gfx_completion_queue.h`, `present_range.h` | a bounded completion queue independent of CP fetch progress; the check of a CPU-mapped VRAM range against every GPU page |
+| `gfx_completion_queue.h`, `present_range.h` | a bounded completion queue independent of the CP fetcher's progress. The check of a CPU-mapped VRAM range against every GPU page |
 | `gfx_recovery.h` | the SDMA0 recovery admission at start-up (internal, not an escape) |
 | `dcn.c`, `dcn_translate.c/.h` | ADR 0011: the read-only DCN 2.0.1 register dump, the gated flip, the scan-out dump (`fbdump`) and the flip address conversion (host-tested) |
 | `display_timing.h`, `display_timing_snapshot.h`, `display_tmds.h` | read-only decoding of the firmware timing and measurement of an inherited TMDS clock |
@@ -45,14 +45,14 @@ no code from Microsoft's MS-PL sample.
 | `display.c` | VidPN (one source, one target, one mode, identity only), `PresentDisplayOnly`, bugcheck display, the escape query |
 | `guard.c` | boot-loop guard, stage breadcrumbs in the registry, and the log: `DbgPrintEx` plus a ring inside the driver image that `bc250kmd_cli log` reads back. The summary writes beside that ring (`docs/design/kmd-log-ring.md`) |
 | `log_rate.h` | how often one line of a hot path reaches the ring: the first lines of a burst, then one summary line an interval. Host test `test/log_rate_test.c` (BD-097) |
-| `mmio.c`, `gen_regs.py`, `regs.generated.h` | BAR5 behind `EnableMmio` / `EnableMmioWrite`; every access checked against tables generated through regcalc (E07) |
-| `sequence.c` | the kernel backend of `driver/shim`, shared by every bring-up sequence: registers only through the sequence's own generated table, first refused access stops all further writes, a plan executes no write and records what would be written |
-| `gart.c` | M4: the GART command (plan, enable, restore) around AMD's imported hub code, behind `EnableGart`; registers through a table generated from amdgpu's own trace of the step (E09) |
+| `mmio.c`, `gen_regs.py`, `regs.generated.h` | BAR5 behind `EnableMmio` / `EnableMmioWrite`. Every access checked against tables generated through regcalc (E07) |
+| `sequence.c` | the kernel backend of `driver/shim`, shared by every bring-up sequence. Registers only through the sequence's own generated table. The first refused access stops all further writes. A plan executes no write and records what would be written |
+| `gart.c` | M4: the GART command (plan, enable, restore) around AMD's imported hub code, behind `EnableGart`. Registers through a table generated from amdgpu's own trace of the step (E09) |
 | `psp.c` | PSP plan, load and unload around AMD's `psp_v11_0_8.c` and `driver/shim/bc250_psp.c`, behind `EnablePsp`. Reads the eight files from the signed Driver Store package before it stages firmware in VRAM. |
-| `gpumem.c` | M5, second part: GPU memory and doorbells for `driver/shim` (`bc250_shim_mem_alloc/free`, `bc250_shim_wdoorbell64`): a VRAM pool 32 MB to 8 MB below the end of VRAM (checked clear of the firmware's framebuffer), GTT pages of contiguous system memory entered into M4's GART table, one doorbell page of BAR2 with even indices up to `0x31E`. A GTT page returns to Windows only unbound and with the engines read halted, otherwise it is leaked on purpose; a plan never writes the GART table or a doorbell |
-| `gfx.c` | M5, second part: the GFX command (plan, run to a stage, fini, state) around `driver/shim/bc250_gfx.c` and `bc250_sdma.c`, behind `EnableGfx`: doorbell aperture, golden registers, GRBM CAM probe, constants, RLC, CP with its ring tests, SDMA, one stage at a time; needs the GART enabled and the PSP load done; registers through a table generated from amdgpu's trace of these steps; a plan answers reads of registers it has planned a write to with the planned value, as the host replay does (E11: all seven stages and the undo run on unit A, facts M36, M37) |
-| `ih.c` | M6: the interrupt routine and the DPC of the miniport and the IH command (`ih plan`, `init`, `fini`, `state`), behind `EnableIh` (needs `EnableGfx`). State of 0.6.0: counting only, no interrupt is claimed while the IH ring is off; `state` reports what Windows assigned (message or line, vector) and the counts, with the gate closed as well. The INF's `.HW` section asks for one MSI message (E12 part A: granted, and silent, facts M38) |
-| `vram.c` | the VRAM carve-out by system physical address and through BAR0, behind `EnableVram` / `EnableVramWrite`; one page per access, writes only in a test page (E08) |
+| `gpumem.c` | M5, second part: GPU memory and doorbells for `driver/shim` (`bc250_shim_mem_alloc/free`, `bc250_shim_wdoorbell64`). A VRAM pool 32 MB to 8 MB below the end of VRAM (checked clear of the firmware's framebuffer). GTT pages of contiguous system memory entered into M4's GART table. One doorbell page of BAR2 with even indices up to `0x31E`. A GTT page returns to Windows only unbound and with the engines read halted, otherwise it is leaked on purpose. A plan never writes the GART table or a doorbell |
+| `gfx.c` | M5, second part: the GFX command (plan, run to a stage, fini, state) around `driver/shim/bc250_gfx.c` and `bc250_sdma.c`, behind `EnableGfx`. It runs doorbell aperture, golden registers, GRBM CAM probe, constants, RLC, CP with its ring tests and SDMA, one stage at a time. Needs the GART enabled and the PSP load done. Registers through a table generated from amdgpu's trace of these steps. A plan answers reads of registers it has planned a write to with the planned value, as the host replay does. In E11, all seven stages and the undo ran on unit A (facts M36, M37) |
+| `ih.c` | M6: the interrupt routine and the DPC of the miniport and the IH command (`ih plan`, `init`, `fini`, `state`), behind `EnableIh` (needs `EnableGfx`). State of 0.6.0: counting only, no interrupt is claimed while the IH ring is off. `state` reports what Windows assigned (message or line, vector) and the counts, with the gate closed as well. The INF's `.HW` section asks for one MSI message (E12 part A: granted, and silent, facts M38) |
+| `vram.c` | the VRAM carve-out by system physical address and through BAR0, behind `EnableVram` / `EnableVramWrite`. One page per access, writes only in a test page (E08) |
 | `bc250kmd_escape.h` | private escape data shared with lab tools |
 | `bc250kmd.inf`, `build.ps1` | package and build (direct `cl`/`link`, `/W4 /WX`, test-signed) |
 | `test/` | host tests and their runners (`run_*.ps1`) for the parts that compile without the WDK |
@@ -122,14 +122,14 @@ no code from Microsoft's MS-PL sample.
   shorter. This is a duration floor, not an ordering guarantee: Windows starts its timeout at the preemption
   request. The private window starts at head admission or observed activity. Either may expire first.
   The former 500 ms budget could close the ring during legitimate dense LLM work. The new activity token mixes
-  the fence, ring read pointer and `CP_IB*` fetch registers. Activity changes can extend its window, but an
+  the fence, ring read pointer and `CP_IB*` fetcher registers. Activity changes can extend its window, but an
   alternating token need not represent useful progress. Activity, Prime, Gap and TimerRearms are separate
   counters. The head high water is sampled software-head age, not measured GPU execution time. See
   `docs/design/hang-recovery.md` for recovery guards and remaining refusal cases.
 - **Breadcrumbs.** `LastStage` (a `BC250_STAGE` number) and `StageHistory` in the same key are written and
   flushed at every step of start-up and at the first commit and first present. After a hang and a power
   cycle they say how far the driver got. `bc250mon`'s bc250kmd panel and `bc250kmd_cli stages` read them and
-  name them; both keep a copy of the `BC250_STAGE` table that a test checks against this driver's header.
+  name them. Both keep a copy of the `BC250_STAGE` table that a test checks against this driver's header.
 - **Why a start failed** (BD-122, 0.7.216.30). `LastStage` 91 says that a step of `DxgkDdiStartDevice` failed. It
   does not say which step. A device with Code 43 (`CM_PROB_FAILED_POST_START`) answers no escape, so the log ring
   that holds the reason is unreadable exactly when it is wanted. The subkey `StartRecord` of the driver state
@@ -156,7 +156,7 @@ no code from Microsoft's MS-PL sample.
   no kernel debugger, no DebugView - reaches nobody. Every line therefore also goes into a ring of 1024 lines
   inside the driver image, each with a sequence number and the milliseconds since `DriverEntry`, and
   `bc250kmd_cli log` reads it back through an escape (administrators only). The first 256 lines of a load are
-  never overwritten, because the order of a start-up is usually the evidence; the rest wrap, and the lines the
+  never overwritten, because the order of a start-up is usually the evidence. The rest wrap, and the lines the
   wrap cost are counted rather than quietly dropped. Appending takes a spin lock, so a caller above
   `DISPATCH_LEVEL` is counted instead of logged, and the count is printed with the rest. The ring survives a
   device stop and start but not a driver unload, which makes it a reload detector as well: see "Running stage A".
@@ -191,7 +191,7 @@ versions, and so are every member of `DXGK_DRIVERCAPS`, `DXGKARG_QUERYADAPTERINF
 `display.c` reads or writes. `Version` inside each table is a run-time value and is unchanged in either path.
 ADR 0019 stage B1 moved the interface version from 0x5023 to 0xE003 (WDDM 2.9), the newest public version below
 the `DRIVER_INITIALIZATION_DATA.Version` 0xF002 rule that would require the aperture segment in every CpuVisible
-non-primary allocation; 0x10004 (3.1) was built as KMD 186-189 and never deployed, because VidMm at that version
+non-primary allocation. 0x10004 (3.1) was built as KMD 186-189 and never deployed, because VidMm at that version
 refuses the VRAM-only CpuVisible shadow. Stage B4 (BD-307) makes `DXGK_DRIVERCAPS.WDDMVersion` a value of the start:
 the setting `WddmVersionCap` of the driver settings state store (`bc250kmd_cli state set WddmVersionCap 0x2900`, next
 start) picks one of 2.0, 2.1, 2.2, 2.4 ... 2.9. The default is 2.0. `wddm_level.h` lowers a value above the interface
@@ -207,7 +207,7 @@ periodic frame notification, paravirtualization and others) are a separate list 
 ### What stage A is, and is not
 
 This section and "Running stage A" are the record of E16 (M61 to M71). They describe the full table as it was
-at stage A; what it does today is in the file table above.
+at stage A. What it does today is in the file table above.
 
 Stage A is the smallest driver dxgkrnl will accept as a full graphics miniport. It exists to answer one question
 that no public source answers: does the adapter start, and does the desktop survive, when a started full WDDM
@@ -215,16 +215,16 @@ adapter is the only one in the machine and nothing can render on it. So it is bu
 
 - no register, no BAR mapping, no doorbell in any of the new DDIs - the memory segment's geometry comes from what
   `vram.c` already identified behind `EnableVram`, and the display DDIs leave the firmware's framebuffer, which
-  `display.c` owns, exactly where it is;
+  `display.c` owns, exactly where it is.
 - no submission: a packet is recorded when dxgkrnl hands it over and reported finished from a DPC of our own,
-  after the submit DDI has returned;
+  after the submit DDI has returned.
 - a **software VSync**: the driver claims `FlipOnVSyncMmIo`, and dxgkrnl retires a queued flip only when the
   driver reports `DXGK_INTERRUPT_CRTC_VSYNC`. Stage A may not read the display core, so a periodic timer at
   60 Hz stands in for the real one, running only while a source is visible and only reporting while
   `DxgkDdiControlInterrupt` has the VSync switched on. `DxgkDdiGetScanLine` answers from that timer's phase.
   Without this the second flip never leaves the queue and DWM stops - it is the difference between stage A
-  meeting its exit criterion and not;
-- no failure return from the DDIs whose failure is a bugcheck;
+  meeting its exit criterion and not.
+- no failure return from the DDIs whose failure is a bugcheck.
 - every new DDI logs its first calls, because *which* DDIs dxgkrnl calls on an adapter nobody can render on, and
   in which order, is the evidence stage A is run for. Counting goes on after the logging stops: each DDI keeps a
   call count and the log line its first call landed on, `QueryAdapterInfo` keeps every information type it was
@@ -269,7 +269,7 @@ install writes every gate back to 0.
 
 **1. The gates.** Open `EnableMmio`, `EnableVram` and `EnableFullWddm`, so that the memory segment reported to
 VidMm is the real carve-out and not an empty list. With `EnableVram` closed the driver declares zero segments and
-says so in the log; that is a second data point, not the main one. `EnableGart`, `EnablePsp`, `EnableGfx` and
+says so in the log. That is a second data point, not the main one. `EnableGart`, `EnablePsp`, `EnableGfx` and
 `EnableIh` stay closed: stage A submits nothing and starts no engine.
 
 ```powershell
@@ -308,7 +308,7 @@ bc250kmd_cli log summary > stage-a.txt      # counters into the ring first, then
 The output is `sequence seconds.milliseconds text`. The header line says how many lines exist, how many the
 wrapping tail overwrote and how many were dropped because a caller was above `DISPATCH_LEVEL`, and whether the
 full table is live at all (`table FULL WDDM`). The first 256 lines of a load are never overwritten, so the
-start-up order survives however long the run was; a gap between sequence 255 and the next line is the wrap, and
+start-up order survives however long the run was. A gap between sequence 255 and the next line is the wrap, and
 `lost` counts it. Ask for `log summary` **once, at the end**: each call appends a block of about 40 lines, and
 in a run long enough to wrap, every such block evicts as many lines of the run's middle from the tail. Plain
 `bc250kmd_cli log` reads without writing and can be run as often as wanted.
@@ -327,7 +327,7 @@ If SSH does not answer either, the way back is the power button, and the start b
 `Bc250StartDevice` (`pnp.c`), and `WddmBuildTable`, which `DriverEntry` calls when the gate is open, puts
 that same function into the full table (`Data->DxgkDdiStartDevice = Bc250StartDevice`), so the budget covers
 both tables with one counter. Every start increments
-`UnconfirmedStarts`; `bc250kmd_cli confirm` clears it once the desktop is up. At
+`UnconfirmedStarts`. `bc250kmd_cli confirm` clears it once the desktop is up. At
 `BC250_MAX_UNCONFIRMED_STARTS` (2, `bc250kmd.h`) the driver refuses to start and Windows falls back to Basic
 Display - so a full WDDM table that kills the desktop costs two boots, not an endless loop, and the third boot
 comes up on Basic Display with SSH and the registry reachable. At stage A the confirmation was manual, because
@@ -337,13 +337,13 @@ debugger", M457).
 
 **6. The two runs.** Measured since this section was written (E16 runs 001 to 003, facts M62 to M64): the first
 of the two runs below **cannot start** on the lab's Windows. dxgkrnl refuses a full, non compute-only adapter whose
-software key has no `UserModeDriverName`, right after the DRIVERCAPS query. Every gate-open run uses `package-umd`;
+software key has no `UserModeDriverName`, right after the DRIVERCAPS query. Every gate-open run uses `package-umd`.
 the plain `package` is for display-only use. The original plan is kept below because the build still produces both.
 
 Stage A was planned to run **twice**, the difference being the `UserModeDriverName` block in
 `bc250kmd.inf`, which ships commented out:
 
-1. **without it** (`package`) - the adapter has no user-mode driver name at all, so Direct3D cannot even load one;
+1. **without it** (`package`) - the adapter has no user-mode driver name at all, so Direct3D cannot even load one.
 2. **with it** (`package-umd`), and `bc250umd.dll` from `driver/umd-stub` installed - the DLL loads and every
    `OpenAdapter` entry point returns `E_NOTIMPL`. Each one writes a line through `OutputDebugString` first, so
    which entry point the runtime asks for, and in which order, is visible to any debug-output viewer without the
@@ -379,7 +379,7 @@ a format of the list. `CommitVidPn` writes one log line when the committed forma
 `display: CommitVidPn source WxH format F stride S`.
 
 Up to 0.7.200.1 the list held `A8R8G8B8` only. 3DMark Steel Nomad then stopped with "Display mode list not
-found for given format" (lab session native-caps349). `tools/win/dxgimodes` shows the KMT and DXGI mode
+found for given format" (lab session native-caps349). `tools/win/dxgimodes` lists the KMT and DXGI mode
 lists for each format. Use it to measure the change. To turn step 2 off, set the REG_DWORD
 `OfferComposedSourceModes` to 0 under the service's `Parameters` key and restart the adapter. The INF does
 not write this value, and the default is 1.
@@ -408,7 +408,7 @@ start-latched fact the flip path needs before it publishes anything.
 With the value at 1 the `DXGKQAITYPE_UMDRIVERPRIVATE` reply carries the `bc250_scanout_caps` trailer
 (`driver/contract/bc250_scanout_caps.h`): 24 bytes at offset 1496, after the adapter identity trailer,
 holding the `DIRECT_FLIP` flag and the POST geometry. A reader must query at least
-`BC250_SCANOUT_CAPS_TOTAL` (1520) bytes; the driver writes the trailer only when the whole of it fits.
+`BC250_SCANOUT_CAPS_TOTAL` (1520) bytes. The driver writes the trailer only when the whole of it fits.
 In 0.7.213.1 the readers that size their query that way are the two application shells
 (`driver/umd/dxvk/adapter-identity.h`, `driver/umd/d3d12/adapter-contract.h`). The compositor's own
 user-mode driver, the router front, does not query the trailer yet and still answers
@@ -426,7 +426,7 @@ wddm: DirectFlip handshake off (no client flip offered)
 wddm: DirectFlip handshake inputs: asked 1 gate 1 flip 0 vram 1 mmio 1 aligned 1 post 1
 ```
 
-Rollback order, widest first: set `EnableDirectFlipHandshake` to 0 and restart the adapter; the trailer
+Rollback order, widest first: set `EnableDirectFlipHandshake` to 0 and restart the adapter. The trailer
 is then absent and the start is byte for byte 0.7.208.1 at every buffer size. `EnableScanoutAdmit` 0 also
 closes it, and additionally refuses every candidate that asks for scan-out. The flip gates below that
 remove every hardware flip and are not a rollback of this feature.
@@ -633,7 +633,7 @@ pwsh driver\kmd\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_
                           -UmdStub $env:BC250_ROOT\scratch\build\bc250umd
 ```
 
-`<Out>\package` is run 1 and `<Out>\package-umd` is run 2; both are catalogued and test-signed, and the run 2
+`<Out>\package` is run 1 and `<Out>\package-umd` is run 2. Both are catalogued and test-signed, and the run 2
 catalog covers `bc250umd.dll` as well. Without `-UmdStub` nothing about the plain package changes.
 
 ### The version resource (BD-166)
@@ -672,7 +672,7 @@ the recipes under `tools\build\` take the workspace to be the repository's paren
 worktree is the directory that holds the worktree: the kits, the Mesa sources and the quality gates are then
 all missing, and `radv-contract` and `umd-contract` fail for a reason that has nothing to do with the change.
 
-## What M3 had to show on hardware (acceptance, mirrors E05)
+## What M3 had to prove on hardware (acceptance, mirrors E05)
 
 The inherited TMDS path admits one enabled HDMI or single-link DVI encoder routed from OTG0.
 It measures eight frames with QPC, checks both halves, and caches one pixel rate for this start.
@@ -681,10 +681,10 @@ fails the start with the saved timing record. The DP DTO path keeps its existing
 TMDS offers only the firmware mode and skips DP AUX, scaling and DP audio. DDC, HDMI audio,
 TMDS mode changes and switching between DP and HDMI while running are not implemented here.
 
-Met in E06 (M28, M29); kept as the record of the criteria.
+Met in E06 (M28, M29). Kept as the record of the criteria.
 
 1. Installs on the device, starts without a problem code, desktop stays visible at the firmware's mode.
 2. `LastStage` reaches 61 (first present done).
-3. A BAR5 sweep with `bc250rd` before and after shows no change caused by the driver.
-4. Survives disable/enable and a reboot; uninstall brings Basic Display back on the same framebuffer.
+3. A BAR5 sweep with `bc250rd` before and after finds no change caused by the driver.
+4. Survives disable/enable and a reboot. Uninstall brings Basic Display back on the same framebuffer.
 5. Measured, either way: does `D3DKMTEscape` reach a display-only driver (decides the control channel for M4).
