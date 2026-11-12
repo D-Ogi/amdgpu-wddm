@@ -69,7 +69,6 @@
 20	docs/design/wddm-start-confirmation.md
 2	docs/design/wddm-startup.md
 2	docs/dxvk-engine-commit-map.md
-65	docs/gui/interfaces-setup.md
 38	docs/gui/interfaces.md
 19	docs/hardware.md
 8	docs/init-sequence.md
