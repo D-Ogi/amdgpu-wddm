@@ -3229,10 +3229,15 @@ static void DpmPrintMetrics(const BC250_ESCAPE_DPM_EX *x)
     }
     printf("smu metrics: %s, %lu tables, %lu failures", m->MetricsState < ARRAYSIZE(g_DpmMetricsState) ?
            g_DpmMetricsState[m->MetricsState] : "?", m->MetricsReads, m->MetricsFailures);
-    if (m->MetricsReads)
-        printf(", last %lu ms ago: gfx %lu mV %lu MHz %.2f C, soc %lu mV %.2f C, throttler 0x%04lX", m->MetricsAgeMs,
-               m->GfxMv, m->GfxMHz, m->GfxTemperatureCc / 100.0, m->SocMv, m->SocTemperatureCc / 100.0,
+    if (m->MetricsReads) {
+        // A stock table of an eight-core start has no clock (M963): the driver reports 0, and 0 is never a clock.
+        char clock[24];
+        if (m->GfxMHz) snprintf(clock, sizeof(clock), "%lu MHz", m->GfxMHz);
+        else snprintf(clock, sizeof(clock), "no clock");
+        printf(", last %lu ms ago: gfx %lu mV %s %.2f C, soc %lu mV %.2f C, throttler 0x%04lX", m->MetricsAgeMs,
+               m->GfxMv, clock, m->GfxTemperatureCc / 100.0, m->SocMv, m->SocTemperatureCc / 100.0,
                m->ThrottlerStatus);
+    }
     if (m->MetricsState == BC250_DPM_METRICS_OFF) printf(" (EnableSmuMetrics 0)");
     printf("\n");
 }
