@@ -1,7 +1,8 @@
 """Check the D3D11 shell's newer DDI tables against the WDK headers, entry by entry (BD-099).
 
-The WDDM 2.2 device table and the DXGI 1.6.1 table are built by copying the table of the interface
-below and replacing what changed (driver/umd/dxvk/ddi-wddm22.cpp). That is only correct while the
+The WDDM 2.2 and WDDM 2.6 device tables and the DXGI 1.6.1 table are built by copying the table of
+the interface below and replacing what changed (driver/umd/dxvk/ddi-wddm22.cpp, ddi-wddm26.cpp,
+BD-371). That is only correct while the
 headers say the two tables really do agree entry for entry. A C++ static_assert can compare offsets
 and the types of named members, but it cannot enumerate the members of a structure, so it cannot
 state "and nothing else changed". This gate reads the headers and states exactly that.
@@ -34,6 +35,12 @@ DEVICE_NEW_COUNT = 174
 DEVICE_RETYPED = {"pfnRelocateDeviceFuncs": "PFND3DWDDM2_2DDI_RELOCATEDEVICEFUNCS"}
 DEVICE_APPENDED = ["pfnAcquireResource", "pfnReleaseResource", "pfnCalcPrivateShaderCacheSessionSize",
                    "pfnCreateShaderCacheSession", "pfnDestroyShaderCacheSession", "pfnSetShaderCacheSession"]
+# The WDDM 2.2 -> WDDM 2.6 device table, which the runtime also gives every later interface (BD-371).
+# WDDM 2.6 appended the two scan-out entries; the relocation entry again carries the new table.
+DEVICE26_NEW = "D3DWDDM2_6DDI_DEVICEFUNCS"
+DEVICE26_NEW_COUNT = 176
+DEVICE26_RETYPED = {"pfnRelocateDeviceFuncs": "PFND3DWDDM2_6DDI_RELOCATEDEVICEFUNCS"}
+DEVICE26_APPENDED = ["pfnQueryScanoutCaps", "pfnPrepareScanoutTransformation"]
 # The DXGI 1.4 -> DXGI 1.6.1 base table (dxgiddi.h). One entry is replaced by its successor at the
 # same index, the two Present entries take the 1_6_1 arguments, and Reclaim1 is appended.
 DXGI_OLD = "DXGI1_4_DDI_BASE_FUNCTIONS"
@@ -49,6 +56,7 @@ DXGI_APPENDED = ["pfnReclaimResources1"]
 # The shell's builders, and the entries each one may assign. Everything else is copied.
 BUILDERS = [
     ("ddi-wddm22.cpp", "make_wddm2_2_device_table", set(DEVICE_RETYPED) | set(DEVICE_APPENDED)),
+    ("ddi-wddm26.cpp", "make_wddm2_6_device_table", set(DEVICE26_RETYPED) | set(DEVICE26_APPENDED)),
     ("ddi-wddm22.cpp", "make_dxgi1_6_1_device_table", {"pfnPresent1", "pfnPresentMultiplaneOverlay1"}),
     ("ddi-dxgi-resources.cpp", "install_dxgi1_6_1_resource_ddi", {"pfnOfferResources1", "pfnReclaimResources1"}),
 ]
@@ -93,10 +101,10 @@ def dxgi_entries(text, name):
     return None if body is None else DXGI_MEMBER.findall(body)
 
 
-def compare(kind, old, new, old_count, new_count, retyped, appended, failures):
-    """Rules 1-3 for one pair of tables. retyped maps a new entry name to what it replaces."""
+def compare(kind, names, old, new, old_count, new_count, retyped, appended, failures):
+    """Rules 1-3 for one pair of tables. names is the pair of structure names; retyped maps a new entry
+    name to what it replaces."""
     if old is None or new is None:
-        names = (DXGI_OLD, DXGI_NEW) if kind == "DXGI" else (DEVICE_OLD, DEVICE_NEW)
         failures.append("%s: %s or %s is not in the header" % (kind, names[0], names[1]))
         return
     for label, entries, expected in ((kind + " older", old, old_count), (kind + " newer", new, new_count)):
@@ -196,11 +204,15 @@ def main():
     dxgi_text = dxgiddi.read_text(encoding="utf-8", errors="replace")
     device_old = device_entries(umddi_text, DEVICE_OLD)
     device_new = device_entries(umddi_text, DEVICE_NEW)
-    compare("device", device_old, device_new, DEVICE_OLD_COUNT, DEVICE_NEW_COUNT,
+    compare("device", (DEVICE_OLD, DEVICE_NEW), device_old, device_new, DEVICE_OLD_COUNT, DEVICE_NEW_COUNT,
             DEVICE_RETYPED, DEVICE_APPENDED, failures)
+    device26_new = device_entries(umddi_text, DEVICE26_NEW)
+    compare("device 2.6", (DEVICE_NEW, DEVICE26_NEW), device_new, device26_new, DEVICE_NEW_COUNT,
+            DEVICE26_NEW_COUNT, DEVICE26_RETYPED, DEVICE26_APPENDED, failures)
     dxgi_old = dxgi_entries(dxgi_text, DXGI_OLD)
     dxgi_new = dxgi_entries(dxgi_text, DXGI_NEW)
-    compare("DXGI", dxgi_old, dxgi_new, DXGI_OLD_COUNT, DXGI_NEW_COUNT, DXGI_RETYPED, DXGI_APPENDED, failures)
+    compare("DXGI", (DXGI_OLD, DXGI_NEW), dxgi_old, dxgi_new, DXGI_OLD_COUNT, DXGI_NEW_COUNT, DXGI_RETYPED,
+            DXGI_APPENDED, failures)
     # Rule 4: the shell assigns exactly the entries that changed.
     for name, function, expected in BUILDERS:
         path = sources / name
@@ -208,9 +220,11 @@ def main():
             failures.append("%s: no such source" % name)
             continue
         check_builder(name, path.read_text(encoding="utf-8", errors="replace"), function, expected, failures)
-    print("%s: device %s->%s (%d entries, %d changed, %d appended), DXGI %s->%s (%d entries), %d builders"
+    print("%s: device %s->%s (%d entries, %d changed, %d appended), device %s->%s (%d entries, %d changed, "
+          "%d appended), DXGI %s->%s (%d entries), %d builders"
           % ("FAIL" if failures else "PASS", DEVICE_OLD, DEVICE_NEW, DEVICE_NEW_COUNT,
-             len(DEVICE_RETYPED), len(DEVICE_APPENDED), DXGI_OLD, DXGI_NEW, DXGI_NEW_COUNT, len(BUILDERS)))
+             len(DEVICE_RETYPED), len(DEVICE_APPENDED), DEVICE_NEW, DEVICE26_NEW, DEVICE26_NEW_COUNT,
+             len(DEVICE26_RETYPED), len(DEVICE26_APPENDED), DXGI_OLD, DXGI_NEW, DXGI_NEW_COUNT, len(BUILDERS)))
     print("  headers: %s, %s" % (umddi, dxgiddi))
     for line in failures:
         print("  " + line)

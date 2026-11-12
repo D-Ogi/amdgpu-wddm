@@ -55,7 +55,7 @@ def entries(text, name):
 class TableVersions(unittest.TestCase):
     def compare(self, old_text=OLD_STRUCT, new_text=NEW_STRUCT, retyped=None, appended=None):
         failures = []
-        g.compare("device", entries(old_text, "D3DOLDDI_DEVICEFUNCS"), entries(new_text, "D3DNEWDI_DEVICEFUNCS"),
+        g.compare("device", ("D3DOLDDI_DEVICEFUNCS", "D3DNEWDI_DEVICEFUNCS"), entries(old_text, "D3DOLDDI_DEVICEFUNCS"), entries(new_text, "D3DNEWDI_DEVICEFUNCS"),
                   3, 4, RETYPED if retyped is None else retyped,
                   APPENDED if appended is None else appended, failures)
         return failures
