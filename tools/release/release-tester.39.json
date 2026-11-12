@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.39",
   "version": "0.7.216.113-tester.39",
-  "note": "tester.39 release manifest, started from the tester.38 manifest (rc4.3). rc1 (version 0.7.216.113-tester.39, DriverVer ranks above tester.38): every amdgpu-wddm row but the extra rows moves to the main head 0b80967d2 (KMD: BD-368 full core mask, BD-369 boot guards of the CPU surface, SMU metrics of an eight-core start; D3D11 shell: BD-371 DDI interfaces to WDDM 2.9, BD-372 offer and reclaim with decommit, BD-373 UMD logging and shared resources of the ENGINE LAYOUT form). The dxvk engine rows and the dxvk input of the d3d11 shell rows move to dxvk t39/bd373-shared-resources 1f7b15a65 (engine ABI 1.9). Every other row keeps its tester.38 commit, and recipe_commit stays ad7b90d9d, so the Mesa and vkd3d rows keep their builds and are restamped.",
+  "note": "tester.39 release manifest, started from the tester.38 manifest (rc4.3). rc1 (version 0.7.216.113-tester.39, DriverVer ranks above tester.38): every amdgpu-wddm row but the extra rows moves to the main head 0b80967d2 (KMD: BD-368 full core mask, BD-369 boot guards of the CPU surface, SMU metrics of an eight-core start; D3D11 shell: BD-371 DDI interfaces to WDDM 2.9, BD-372 offer and reclaim with decommit, BD-373 UMD logging and shared resources of the ENGINE LAYOUT form). The dxvk engine rows and the dxvk input of the d3d11 shell rows move to dxvk t39/bd373-shared-resources 4cf4e386f (engine ABI 1.9). Every other row keeps its tester.38 commit, and recipe_commit stays ad7b90d9d, so the Mesa and vkd3d rows keep their builds and are restamped.",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "ad7b90d9dbb831e1112a0570114679877f88262b",
   "repositories": {
@@ -1151,7 +1151,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "dxvk",
-      "commit": "1f7b15a65b1cfd9b6f4ce8f013519a761184ceb3",
+      "commit": "4cf4e386ffda0cd32a5360004607bee56f293653",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -1251,7 +1251,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "dxvk",
-      "commit": "1f7b15a65b1cfd9b6f4ce8f013519a761184ceb3",
+      "commit": "4cf4e386ffda0cd32a5360004607bee56f293653",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -1351,7 +1351,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "dxvk",
-      "commit": "1f7b15a65b1cfd9b6f4ce8f013519a761184ceb3",
+      "commit": "4cf4e386ffda0cd32a5360004607bee56f293653",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -1452,7 +1452,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "dxvk",
-      "commit": "1f7b15a65b1cfd9b6f4ce8f013519a761184ceb3",
+      "commit": "4cf4e386ffda0cd32a5360004607bee56f293653",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -1577,7 +1577,7 @@
       "inputs": {
         "dxvk": {
           "repo": "dxvk",
-          "commit": "1f7b15a65b1cfd9b6f4ce8f013519a761184ceb3"
+          "commit": "4cf4e386ffda0cd32a5360004607bee56f293653"
         }
       },
       "compiler": "clang-cl",
@@ -1621,7 +1621,7 @@
       "inputs": {
         "dxvk": {
           "repo": "dxvk",
-          "commit": "1f7b15a65b1cfd9b6f4ce8f013519a761184ceb3"
+          "commit": "4cf4e386ffda0cd32a5360004607bee56f293653"
         }
       },
       "compiler": "clang-cl",
@@ -1665,7 +1665,7 @@
       "inputs": {
         "dxvk": {
           "repo": "dxvk",
-          "commit": "1f7b15a65b1cfd9b6f4ce8f013519a761184ceb3"
+          "commit": "4cf4e386ffda0cd32a5360004607bee56f293653"
         }
       },
       "compiler": "clang-cl",
@@ -1709,7 +1709,7 @@
       "inputs": {
         "dxvk": {
           "repo": "dxvk",
-          "commit": "1f7b15a65b1cfd9b6f4ce8f013519a761184ceb3"
+          "commit": "4cf4e386ffda0cd32a5360004607bee56f293653"
         }
       },
       "compiler": "clang-cl",
