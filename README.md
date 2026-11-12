@@ -15,7 +15,7 @@ desktop, Direct3D 12, Direct3D 11 and Vulkan games run on the GPU of the board. 
 own amdgpu code, and Mesa RADV, DXVK and vkd3d-proton work behind the standard Windows runtimes. The driver is
 experimental and has a test signature. Not affiliated with or endorsed by AMD, ASRock or Microsoft.
 
-<img src="docs/media/control-app.webp" width="860" alt="The control application: Home with the guide character Nagi, the clock and fan pages, the ray tracing benchmark, and four languages">
+<img src="docs/media/control-app.webp" width="860" alt="The control application: Home with the guide character Nagi, the clock and fan pages, the ray tracing benchmark, and the languages">
 
 ## Install
 
@@ -44,17 +44,17 @@ and attach the support file that the installer or the control app makes.
 
 | Area | Works | Not yet |
 |---|---|---|
-| Desktop | DWM composes on the GPU. Hardware acceleration for supported GDI drawing operations. DisplayPort, and HDMI through a passive adapter | Modes above 300 MHz pixel clock (144 Hz and more at 1440p). Some GPU hangs (paging engine, 3DMark Time Spy) still stop Windows. Resume from hibernation |
-| Direct3D 12 | System runtime, feature level 12_1. The Windows 11 23H2 runtime gets shader model 6.6 and DXR 1.1. The Witcher 3 Remaster with ray tracing | Conformance suites |
+| Desktop | DWM composes on the GPU, also on the sign-in screen. WDDM 2.9 with overlay planes. Hardware acceleration for supported GDI drawing operations. DisplayPort, and HDMI through a passive adapter | Modes above 300 MHz pixel clock (144 Hz and more at 1440p). A GPU hang that the driver cannot reset on one queue still stops Windows. Resume from hibernation |
+| Direct3D 12 | System runtime, feature level 12_1. The Windows 11 23H2 runtime gets shader model 6.6 and DXR 1.1. The Witcher 3 Remaster with ray tracing. FSR 4 in games that include it | Conformance suites |
 | Direct3D 12 with Agility SDK 1.619 / 1.721 | Shader model 6.9, shader execution reordering and DXR 1.2 with opacity micromaps. Mesh and amplification shaders, work graphs tier 1.0, enhanced barriers. Partial graphics programs (driver interface 0122) | Full conformance. Work graphs in 32-bit programs, measured |
 | Direct3D 11 | System runtime, feature level 12_1. Direct3D 10.0 and 10.1 programs also run on the GPU | - |
 | Direct3D 9 | D3D9On12 of Windows on our Direct3D 12 driver, for 64-bit and 32-bit programs | - |
 | Vulkan | Mesa RADV with ray tracing. Quake II RTX path-traces | Full conformance (CTS) run |
 | OpenGL | OpenGL 4.6 on the GPU for 64-bit programs, through Zink | 32-bit programs (they get the software OpenGL of Windows) |
-| Compute | Separate Vulkan and Direct3D 12 compute queues. Vulkan compute (llama.cpp), an early HIP runtime of our own | Full HIP compatibility |
+| Compute | Separate Vulkan and Direct3D 12 compute queues. Vulkan compute (llama.cpp). A HIP runtime of our own (llama.cpp, experimental PyTorch). OpenCL through Microsoft's Compatibility Pack | Full HIP compatibility |
 | Video | H.264 encoding through Media Foundation | Recording by a standard Windows application, measured |
 | AMD application interfaces | ADL for 64-bit and 32-bit programs that use AMD AGS: adapter, memory, driver and screen information | Other AMD software features |
-| Clocks and cooling | Automatic GPU clock up to 2000 MHz, fan control, unlock of all 40 compute units | - |
+| Clocks and cooling | Automatic GPU clock up to 2000 MHz, fan control, unlock of all 40 compute units, a processor temperature limit | - |
 | Other AMD GPUs | - | The driver starts only on a BC-250 today |
 
 GDI acceleration and the separate compute queue are on by default. You can turn either off in Nagi Control App.
