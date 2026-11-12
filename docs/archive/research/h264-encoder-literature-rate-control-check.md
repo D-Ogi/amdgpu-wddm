@@ -225,7 +225,7 @@ Verified exactly:
   lever** - is confirmed.
 * `encoder/rdo.c`: both psy comment lines OK; the `satd = abs(...)` line OK; `int64_t tmp =
   ((int64_t)satd * h->mb.i_psy_rd * h->mb.i_psy_rd_lambda + 128) >> 8;` OK; the `return
-  h->pixf.ssd[size](...) + satd;` OK; `i_ssd += ((uint64_t)chroma_ssd *
+  h->pixf.ssd[size](../../research/...) + satd;` OK; `i_ssd += ((uint64_t)chroma_ssd *
   h->mb.i_chroma_lambda2_offset + 128) >> 8;` OK in `ssd_mb` (and the same weighting in the 4x4 and
   8x8 paths).
 * `encoder/analyse.c` `mb_analyse_init_qp`: the comment "Adjusting chroma lambda based on QP offset

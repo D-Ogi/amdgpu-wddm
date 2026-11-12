@@ -134,7 +134,7 @@ wording, and `cue_in` names the fact whose text it is in when that is the other 
 Claims such as "registers are SOS-locked" or "NBIO is locked at EFI boot" are neither confirmed nor refuted as
 hardware behaviour: they were measured at wrong offsets and are simply unsupported. Under Linux nothing is locked
 before the driver loads ([M2](hardware.md#m2), [M3](hardware.md#m3)); the same reads under Windows are experiment
-E02. Prior art, claim by claim: [`../prior-art-vs-hardware.md`](../prior-art-vs-hardware.md).
+E02. Prior art, claim by claim: [`../prior-art-vs-hardware.md`](../archive/prior-art-vs-hardware.md).
 
 This note stood under the refuted-claims table of the old `facts.md`. It is kept here, not as a fact, because
 "unsupported" is none of the four statuses: an `R` fact would call the claims refuted, which the note avoids.

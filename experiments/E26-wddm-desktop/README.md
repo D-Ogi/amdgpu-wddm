@@ -6,7 +6,7 @@ The active desktop uses Mesa main f9a2d34a19c496e552b6cd603e7807f1025a2e98
 (26.3.0-devel) with LLVM23.1.2. Apply mesa-main-bc250-gallium.patch to a clean
 checkout at that revision; it is consolidated and includes the local tests.
 Use build-mesa-main-llvm23.cmd with the workspace toolchains described in
-[the current baseline](../../docs/research/m13-present-baseline.md).
+[the current baseline](../../docs/archive/research/m13-present-baseline.md).
 The old build-d3d.cmd and incremental prototype patches below document earlier
 softpipe experiments. They do not select the active llvmpipe/LLVM23 build.
 [Current evidence](../../evidence/windows/2026-09-24-E26-desktop-resume/mesa-main/RESULT.md)
@@ -94,7 +94,7 @@ tracing (first10000 file records, plus retained categories); it is diagnostic
 and materially distorts CPU composition timing. OutputDebugString is used only
 with an attached debugger. Do not benchmark with verbose tracing enabled.
 M470 records matched memory/content controls and remaining animation stutter;
-see `docs/research/m9-acceptance-status.md` for current acceptance limits.
+see `docs/archive/research/m9-acceptance-status.md` for current acceptance limits.
 
 ## Shared surface raster padding (M474)
 

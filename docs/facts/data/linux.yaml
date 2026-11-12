@@ -96,7 +96,7 @@ facts:
     date_from: "evidence-path"
     claim: "libdrm's gfx10 memset compute shader (`shader_code_gfx10.h`, 9 dwords) and its 72-dword PM4 program run correctly on unit A's gfx1013 under amdgpu: submitted through raw ioctls on `AMDGPU_HW_IP_COMPUTE`, 1 workgroup fills 256 of 256 dwords with `0x22222222`, 16 workgroups 4096 of 4096, with and without `AMDGPU_IB_FLAG_EMIT_MEM_SYNC` (amdgpu does not emit `ACQUIRE_MEM` for a user compute IB unless that flag is set, and libdrm's test does not set it). The DRM scheduler chose `comp_1.1.0`; each submission raised two `client 20 / source 181` vectors with ring id 5, one per fence (VM flush, job). Around the IB the ring holds: pipeline sync, VM flush, fence, `INDIRECT_BUFFER` with VMID 2, fence, one NOP packet padding to 256 dwords"
     status_text: "MEASURED (3 runs, one boot)"
-    detail: "E13 boot 4, `evidence/linux/2026-09-21-E13-reference-2/boot4-readonly-after-windows/dispatch/`. Removes the instruction-set risk from the M6 exit criterion (`docs/research/m6-compute-dispatch.md`): the shader is good for this part, so a failure of the same program under Windows is ours"
+    detail: "E13 boot 4, `evidence/linux/2026-09-21-E13-reference-2/boot4-readonly-after-windows/dispatch/`. Removes the instruction-set risk from the M6 exit criterion (`docs/archive/research/m6-compute-dispatch.md`): the shader is good for this part, so a failure of the same program under Windows is ours"
   - id: M50
     status: MEASURED
     date: "2026-09-21"

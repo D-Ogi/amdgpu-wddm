@@ -1656,7 +1656,7 @@ static unsigned int GfxWaveStop(void* Context)
 }
 
 // GRBM_GFX_INDEX is write-only for readback on this part: it reads 0 before the driver, after amdgpu's init
-// (docs/prior-art-vs-hardware.md) and after our own broadcast write (BD-180 A6/A8, tester.36 A7 and 3DMark
+// (docs/archive/prior-art-vs-hardware.md) and after our own broadcast write (BD-180 A6/A8, tester.36 A7 and 3DMark
 // dumps: "requested 0xE0000000 read 1 value 0x00000000"). amdgpu never reads it back. A readback check of that
 // register therefore fails on every capture and quarantined sampling for the rest of the device start. Only a
 // failed write proves a lost restore of it; SQ_IND_INDEX reads back and keeps its check.

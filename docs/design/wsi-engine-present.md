@@ -42,7 +42,7 @@ semaphores, then `IDXGISwapChain3::Present1`. That path needs a D3D12 device on 
   bitmap the DWM uploads, the same call is a legacy copy to the front buffer, and while the DWM owns the VidPn
   source it is refused with `STATUS_GRAPHICS_VIDPN_SOURCE_IN_USE` before the miniport (E45, M598; the routing is
   inferred from the PresentMon trace consumer and the D3D team's description of the ICD present in Mesa MR
-  24223, `docs/research/2026-09-27-windowed-present-under-dwm.md`). E46 (M601) narrows it: dxgkrnl's own
+  24223, `docs/archive/research/2026-09-27-windowed-present-under-dwm.md`). E46 (M601) narrows it: dxgkrnl's own
   Present event logs the call with the ICD's parameters and the refusing status, emits no blit event and no
   token, while `D3DKMTCheckVidPnExclusiveOwnership` on the source says free; so the refusal is an admission
   rule for a windowed Blt from a non-owner device that the documentation does not state, and the
@@ -181,7 +181,7 @@ semaphores, then `IDXGISwapChain3::Present1`. That path needs a D3D12 device on 
   The documented ICD example is the composed route as well, but only over a GPU redirection surface; the
   token (`D3DKMT_PM_REDIRECTED_BLT`, obtainable through `DwmDxGetWindowSharedSurface`, documented for Windows 7
   only) merely tells the DWM which update landed. The open question moved to the KMD cap and the DWM's UMD
-  (`docs/research/2026-09-27-windowed-present-under-dwm.md`).
+  (`docs/archive/research/2026-09-27-windowed-present-under-dwm.md`).
 - What does `bOptimizeForComposition` report on that route, and does dxgkrnl require a
   `D3DKMT_PRESENTHISTORYTOKEN` on it (the documented ICD example sets none)?
 - Which allocation does dxgkrnl name as the destination on the composed route, and what private data does it

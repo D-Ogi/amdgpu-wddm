@@ -2,8 +2,8 @@
 
 Reviewed 2026-09-25 through M471. This is the requirement index for the
 [DMA contract audit](m9-dma-contract-audit.md) and
-[WDDM startup plan](../design/wddm-startup.md). M9 is not complete.
-[Facts](../facts.md) and their immutable artifacts are the evidence; source,
+[WDDM startup plan](../../design/wddm-startup.md). M9 is not complete.
+[Facts](../../facts.md) and their immutable artifacts are the evidence; source,
 host tests and a successful workload establish different scopes of acceptance.
 
 ## Current baseline
@@ -16,8 +16,8 @@ in3s with zero glitch events after removing per-entrypoint diagnostic I/O.
 The earlier cache-only version still stuttered during operator-observed animation;
 physical feedback and a realS4 on the final quiet UMD remain pending. These
 results do not replace the broader requirement table or establish hardware D3D.
-[Cache controls](../../evidence/windows/2026-09-25-E27-m9-recovery/shared-cpu-cache147/RESULT.md),
-[quiet UMD controls](../../evidence/windows/2026-09-25-E27-m9-recovery/bounded-umd-diagnostics147/RESULT.md).
+[Cache controls](../../../evidence/windows/2026-09-25-E27-m9-recovery/shared-cpu-cache147/RESULT.md),
+[quiet UMD controls](../../../evidence/windows/2026-09-25-E27-m9-recovery/bounded-umd-diagnostics147/RESULT.md).
 
 
 **Current cold-start/content control (M458):** unchanged full145 starts after
@@ -27,11 +27,11 @@ and automatic monitor confirmation after60s progress. Guard0/flags15 and checked
 kernel flush success are retained. No manual GPU initialization, PnP retry or
 DWM restart.64MiB full GPU readback, eight shader hashes and both E14 model
 outputs pass; GFX2610/2610,paging6047/6047,noTDR.
-[Cold145 evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145/RESULT.md).
+[Cold145 evidence](../../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145/RESULT.md).
 This is one measured cold entry, not power resume, repeated-boot acceptance,
 soak or complete M9. A visual check at the lab later confirms a visible desktop and
 smooth cursor/overlay for this cold boot
-([feedback supplement](../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145-owner-feedback/REPORT.md)).
+([feedback supplement](../../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145-owner-feedback/REPORT.md)).
 
 **Previous OS-start/content control (M455):** full 144 starts automatically after
 one Windows restart with persistent policy2 and a durable start-budget flush
@@ -39,13 +39,13 @@ before hardware admission. Native clock preparation precedes engine startup.
 Postboot 64 MiB paging/readback, eight shader hashes and both E14 outputs pass;
 GFX2610/2610 and paging6037/6037 complete without TDR. No postboot CLI RUN,
 PnP retry or DWM restart. This is OS-restart evidence, not AC-cold or resume.
-[144 evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/durable-osboot144/RESULT.md).
+[144 evidence](../../../evidence/windows/2026-09-25-E27-m9-recovery/durable-osboot144/RESULT.md).
 This144 run used explicit confirmation after
 content controls. M456 corrects the earlier unchecked managed flush: the new
 CLI checks native persistence and succeeds without restarting Windows/DWM.
-[Checked confirmation](../../evidence/windows/2026-09-25-E27-m9-recovery/checked-confirmation144/RESULT.md).
+[Checked confirmation](../../../evidence/windows/2026-09-25-E27-m9-recovery/checked-confirmation144/RESULT.md).
 A visual check at the lab also confirms correct physical image and cursor after this restart
-([feedback](../../evidence/windows/2026-09-25-E27-m9-recovery/durable-osboot144-owner-feedback/REPORT.md)).
+([feedback](../../../evidence/windows/2026-09-25-E27-m9-recovery/durable-osboot144-owner-feedback/REPORT.md)).
 
 **Current display recovery (M453):** KMD 143 restores physical output by making
 VidPn and DescribeAllocation use the same cached 59.950171 Hz timing. Current
@@ -53,7 +53,7 @@ ETW mode-change errors fall from 41 to zero; hardware blank control is zero.
 A visual check at the lab confirms desktop visibility and smooth cursor after observation ends.
 M451/M452's blank-screen regression is resolved for this inherited mode; brief
 stutter during HardwareAccess diagnostics was not isolated as a persistent defect.
-[143 evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/shared-refresh143/RESULT.md).
+[143 evidence](../../../evidence/windows/2026-09-25-E27-m9-recovery/shared-refresh143/RESULT.md).
 This does not repeat the broader compute/memory acceptance below or prove a soak.
 
 M441 deployed KMD 0.7.136.1 with native SMU ownership after retiring the old
@@ -61,7 +61,7 @@ writer. The clock is confirmed at 1000 MHz / VID116 before GART, PSP, IH and GFX
 D3D content, 64 MiB paging/readback, eight shader hashes and both E14 model
 outputs pass. Windows and DWM survive the warm PnP transition. This does not
 prove cold boot, upward-voltage settling, full power resume or full M9.
-[Candidate136 evidence](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07136-native-smu/RESULT.md).
+[Candidate136 evidence](../../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07136-native-smu/RESULT.md).
 Exact installed identities and rollback artifacts live in workspace STATE.md.
 
 The desktop retains Mesa main f9a2d34a / LLVM 23.1.2 llvmpipe CPU rendering with
@@ -78,7 +78,7 @@ output and handover; M447 adds bounded PTE attempt observations and reviews cach
 aliases. These changes are included in 143. M451/M453 add raster, inherited timing and
 physical display evidence; bugcheck/handover and other scopes remain open.
 M448 defines the graphics-specific IOMMU migration prerequisites; implementation
-is absent. Refer to the matching [fact entries](../facts.md), not a shared
+is absent. Refer to the matching [fact entries](../../facts.md), not a shared
 working-tree version number, to identify each source snapshot.
 
 ## Requirement-by-requirement acceptance
@@ -109,7 +109,7 @@ working-tree version number, to identify each source snapshot.
 1. Validate post-S4 sign-in interaction on147 with the cached-shared, quiet UMD;
    the short active Winlogon baseline is improved, while animation/resume acceptance remains open. Retained power coordination now preserves OS objects, mappings
    and native clock/engine ownership; full StopDevice/StartDevice is not suitable.
-   [Source review](../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145/power-resume-source-review.md).
+   [Source review](../../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145/power-resume-source-review.md).
 2. Validate the supported transition with post-resume content and durable health
    evidence. M458 closes the first cold-entry observation gap; do not repeat
    boots merely to increase the count. S4 was disabled during M458; M463 enabled and exercised it. Firmware reports
@@ -140,7 +140,7 @@ The SMU version snapshot now survives hardware stop and failed restart; cached
 queries neither access the mailbox nor wait for its transaction lock. Concurrent
 actual-source host controls and a regression mutation discriminate this behavior;
 WDK build passes. This is undeployed source work, not hardware power resume.
-[Evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/retained-smu-metadata/RESULT.md).
+[Evidence](../../../evidence/windows/2026-09-25-E27-m9-recovery/retained-smu-metadata/RESULT.md).
 Retained WDDM objects/queues, hardware restoration and PSP/capability lifetime
 remain required before wiring the resume coordinator into SetPowerState.
 
@@ -149,7 +149,7 @@ remain required before wiring the resume coordinator into SetPowerState.
 WddmSuspendRetained/WddmResumeRetained now preserve software ownership and OS
 fence history while closing/joining private work and restoring requested
 notifications. Actual-source host191/0, targeted mutations and WDK build pass.
-[Evidence and limits](../../evidence/windows/2026-09-25-E27-m9-recovery/retained-wddm-power/RESULT.md).
+[Evidence and limits](../../../evidence/windows/2026-09-25-E27-m9-recovery/retained-wddm-power/RESULT.md).
 These functions are not wired to SetPowerState. Hardware suspend/restore,
 private firmware/backing, IH/diagnostic lifetime, display and health-epoch
 restoration remain required; no runtime resume or full M9 acceptance.
@@ -159,7 +159,7 @@ restoration remain required; no runtime resume or full M9 acceptance.
 IH halt and storage teardown are separated. Retained restore prepares disabled
 hardware before resetting writeback pointers and enabling the existing synchronized
 consumer on the same backing. Actual-source host83/0, two regression mutations
-and WDK build pass. [Evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/retained-ih-power/RESULT.md).
+and WDK build pass. [Evidence](../../../evidence/windows/2026-09-25-E27-m9-recovery/retained-ih-power/RESULT.md).
 No deployment or power DDI wiring. Retained GART, firmware, engines and the complete
 coordinator/display/health path remain required before real resume acceptance.
 
@@ -168,44 +168,44 @@ coordinator/display/health path remain required before real resume acceptance.
 GpuMemRebuildRetainedGtt reconstructs private mappings from retained backing,
 excludes retired entries, preserves the Windows-owned tail and leaves TLB work
 pending. Actual-source host22/0, targeted mutations and WDK build pass.
-[Evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/retained-gtt-rebuild/RESULT.md).
+[Evidence](../../../evidence/windows/2026-09-25-E27-m9-recovery/retained-gtt-rebuild/RESULT.md).
 Unwired and undeployed: retained hub configuration, firmware/private VRAM,
 engine restoration and the complete resume coordinator still remain required.
 
 ## M463 retained S4 control
 
-[Evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/retained-s4-146/RESULT.md): one actual S4 preserves the original64MiB probe process and resources; postresume shaders/models pass. Later operator feedback reports input stutter at sign-in. The operator cancelled remote login; recovery cold146 restored a smooth desktop. A passing data test does not establish stable desktop resume.
+[Evidence](../../../evidence/windows/2026-09-25-E27-m9-recovery/retained-s4-146/RESULT.md): one actual S4 preserves the original64MiB probe process and resources; postresume shaders/models pass. Later operator feedback reports input stutter at sign-in. The operator cancelled remote login; recovery cold146 restored a smooth desktop. A passing data test does not establish stable desktop resume.
 
 ## M464 diagnostic isolation
 
-[Monitor control](../../evidence/windows/2026-09-25-E27-m9-recovery/monitor-summary-pause/LIVE.md) pauses only synchronized LOG_SUMMARY requests. The live12s control produces no new summary while completed presentation progresses. This prepares a post-S4 comparison; it does not prove the stutter cause. UDP telemetry transport would not remove the synchronized acquisition cost.
+[Monitor control](../../../evidence/windows/2026-09-25-E27-m9-recovery/monitor-summary-pause/LIVE.md) pauses only synchronized LOG_SUMMARY requests. The live12s control produces no new summary while completed presentation progresses. This prepares a post-S4 comparison; it does not prove the stutter cause. UDP telemetry transport would not remove the synchronized acquisition cost.
 
 ## M465 paging preemption boundary
 
-[Source/host proof](../../evidence/windows/2026-09-25-E27-m9-recovery/paging-preemption-boundary/ROOT-VALIDATION.md): the driver now stops issuing queued paging work at the advertised DMA-buffer boundary, then lets VidSch replay unexecuted work with original IDs. Real scheduler preemption, hardware reset/recovery and any separately planned finer-grained state restoration remain unproved. The development build is not deployed.
+[Source/host proof](../../../evidence/windows/2026-09-25-E27-m9-recovery/paging-preemption-boundary/ROOT-VALIDATION.md): the driver now stops issuing queued paging work at the advertised DMA-buffer boundary, then lets VidSch replay unexecuted work with original IDs. Real scheduler preemption, hardware reset/recovery and any separately planned finer-grained state restoration remain unproved. The development build is not deployed.
 
 ## M466 second S4 isolation
 
-[Second trial](../../evidence/windows/2026-09-25-E27-m9-recovery/s4-isolation146/RESULT.md) passes retained contents, shaders and model references with full summary polling paused, but the operator at the lab still reports regular cursor stutter. Polling pause alone is not a cure. The [ETW analysis](../../evidence/windows/2026-09-25-E27-m9-recovery/s4-isolation146-etw/ETW-ANALYSIS.md) finds regular vsync, sub-millisecond ISR/DPC maxima and roughly35ms CPU composition, but no captured movement oracle. Long wait-for-work intervals cannot be classified as lost input. A matched cold/post-S4 input-to-present control remains required; stable interactive resume and M9 acceptance remain open.
+[Second trial](../../../evidence/windows/2026-09-25-E27-m9-recovery/s4-isolation146/RESULT.md) passes retained contents, shaders and model references with full summary polling paused, but the operator at the lab still reports regular cursor stutter. Polling pause alone is not a cure. The [ETW analysis](../../../evidence/windows/2026-09-25-E27-m9-recovery/s4-isolation146-etw/ETW-ANALYSIS.md) finds regular vsync, sub-millisecond ISR/DPC maxima and roughly35ms CPU composition, but no captured movement oracle. Long wait-for-work intervals cannot be classified as lost input. A matched cold/post-S4 input-to-present control remains required; stable interactive resume and M9 acceptance remain open.
 
 ## M467 zero-capacity capture admission
 
-[Source/host and WDK validation](../../evidence/windows/2026-09-25-E27-m9-recovery/zero-capacity-capture/RESULT.md): fresh capture is not retained when the output buffer has zero usable capacity. Existing byte-oracle, resume/interleaving and M465 preemption controls pass. Undeployed; this does not close reservation exhaustion for unfinished nonempty requests.
+[Source/host and WDK validation](../../../evidence/windows/2026-09-25-E27-m9-recovery/zero-capacity-capture/RESULT.md): fresh capture is not retained when the output buffer has zero usable capacity. Existing byte-oracle, resume/interleaving and M465 preemption controls pass. Undeployed; this does not close reservation exhaustion for unfinished nonempty requests.
 
 ## M468 paired S4 input and CPU-render timing
 
-[Matched traces](../../evidence/windows/2026-09-25-E27-m9-recovery/paired-s4-input146/RESULT.md) locate a measured long Present in llvmpipe CPU rendering before the kernel flip. DWM restart only slightly improves operator-observed stutter. Input coordinates and short DWM cursor work can be healthy while heavier frames stall. Investigate shared CPU-read backing/cache policy without claiming it is already the cause.
+[Matched traces](../../../evidence/windows/2026-09-25-E27-m9-recovery/paired-s4-input146/RESULT.md) locate a measured long Present in llvmpipe CPU rendering before the kernel flip. DWM restart only slightly improves operator-observed stutter. Input coordinates and short DWM cursor work can be healthy while heavier frames stall. Investigate shared CPU-read backing/cache policy without claiming it is already the cause.
 
 ## M469 single-instance SDMA primitive
 
-[Source/host validation](../../evidence/windows/2026-09-25-E27-m9-recovery/sdma-single-recovery/RESULT.md) establishes isolated register/transport sequence and preserves ordinary startup replay. No production caller or deployment. A hardware content/fence oracle and full OS ownership/reset coordination remain required; paging TDR can escalate to adapter-wide recovery.
+[Source/host validation](../../../evidence/windows/2026-09-25-E27-m9-recovery/sdma-single-recovery/RESULT.md) establishes isolated register/transport sequence and preserves ordinary startup replay. No production caller or deployment. A hardware content/fence oracle and full OS ownership/reset coordination remain required; paging TDR can escalate to adapter-wide recovery.
 
 ## M470 shared CPU cache and remaining composition costs
 
-[Paired147 controls](../../evidence/windows/2026-09-25-E27-m9-recovery/shared-cpu-cache147/RESULT.md) validate E26R v2 CPU-read backing, shared D3D contents and compute regressions. M465/M467 source changes are now deployed; M469 is included but remains unwired. Their independent runtime acceptance remains open. The operator at the lab still reports animation stutter; new trace points to synchronous UMD logging and CPU surface copies. Default/Winlogon scene mismatch forbids attributing all frame differences to cache. No S4 cure or M9 completion.
+[Paired147 controls](../../../evidence/windows/2026-09-25-E27-m9-recovery/shared-cpu-cache147/RESULT.md) validate E26R v2 CPU-read backing, shared D3D contents and compute regressions. M465/M467 source changes are now deployed; M469 is included but remains unwired. Their independent runtime acceptance remains open. The operator at the lab still reports animation stutter; new trace points to synchronous UMD logging and CPU surface copies. Default/Winlogon scene mismatch forbids attributing all frame differences to cache. No S4 cure or M9 completion.
 
 ## M471 bounded renderer diagnostics
 
-[Matched Winlogon capture](../../evidence/windows/2026-09-25-E27-m9-recovery/bounded-umd-diagnostics147/RESULT.md) reaches176 presents/3s with zero glitch events after making verbose UMD tracing opt-in. Shared/pixel contents pass. This is a short active baseline, not renewed S4 or stable-resume acceptance. Automatic startup confirmation is still pending in the mostly idle secure desktop. No primary-shadow architecture was deployed.
+[Matched Winlogon capture](../../../evidence/windows/2026-09-25-E27-m9-recovery/bounded-umd-diagnostics147/RESULT.md) reaches176 presents/3s with zero glitch events after making verbose UMD tracing opt-in. Shared/pixel contents pass. This is a short active baseline, not renewed S4 or stable-resume acceptance. Automatic startup confirmation is still pending in the mostly idle secure desktop. No primary-shadow architecture was deployed.
 
-The [M471 exact-stack analysis](../../evidence/windows/2026-09-25-E27-m9-recovery/bounded-umd-diagnostics147-etw/RESULT.md) reduces DebugPrintf sample share52.8% to2.84%; remaining logging samples are retained frame metrics.
+The [M471 exact-stack analysis](../../../evidence/windows/2026-09-25-E27-m9-recovery/bounded-umd-diagnostics147-etw/RESULT.md) reduces DebugPrintf sample share52.8% to2.84%; remaining logging samples are retained frame metrics.

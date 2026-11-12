@@ -320,7 +320,7 @@ Read from `cisco/openh264` at `master`. Everything checks out:
 - `svc_base_layer_md.cpp:365-416` `WelsMdI16x16`, with the three-mode combined path, the Plane mode at
   `+ iLambda * 4`, and the per-mode `iLambda * (BsSizeUE (g_kiMapModeI16x16[iCurMode]))`. Correct in
   substance. The sweep's one-line rendering
-  `iCurCost = pfMdCost[BLOCK_16x16](...) + iLambda * BsSizeUE(...)` is a condensation of two
+  `iCurCost = pfMdCost[BLOCK_16x16](../../research/...) + iLambda * BsSizeUE(...)` is a condensation of two
   statements, presented as code; it is accurate but it is not a verbatim quote.
 - `svc_base_layer_md.cpp:867-931` `WelsMdIntraChroma`: SATD over Cb plus SATD over Cr plus
   `iLambda * BsSizeUE (g_kiMapModeIntraChroma[iCurMode])`. Verbatim.

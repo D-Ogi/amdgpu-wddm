@@ -24,10 +24,10 @@ ISR through the supported interrupt synchronization callback, not only a DPC
 spin lock. Keep this as an explicit next task. Future modeset/ODM must select
 MASTER_UPDATE_LOCK_SEL explicitly instead of relying on inherited OTG0 state.
 
-Evidence: [M430](../../evidence/windows/2026-09-24-E27-m9-recovery/dcn-lock-ack-review/RESULT.md)
-and [M431](../../evidence/windows/2026-09-24-E27-m9-recovery/vidpn-flip-publication/RESULT.md).
+Evidence: [M430](../../../evidence/windows/2026-09-24-E27-m9-recovery/dcn-lock-ack-review/RESULT.md)
+and [M431](../../../evidence/windows/2026-09-24-E27-m9-recovery/vidpn-flip-publication/RESULT.md).
 M432 installs a distinct134 candidate and passes the hardware controls in its
-[evidence](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07134-dcn-publication/RESULT.md).
+[evidence](../../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07134-dcn-publication/RESULT.md).
 The diagnostic trial also corrected the earlier review: full WDDM already had
 a dispatcher guard refusing mutating escapes before DcnFlipEscape. The new inner
 guard is additional protection and was not reached by that hardware trial.

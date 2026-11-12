@@ -165,7 +165,7 @@ An advertised UMA option alone does not prove that 12 GiB trains or is resident.
 M430's source projection also leaves only about 11.5864 GiB for applications
 inside a nominal 12 GiB carve-out under the current reservations. Preserve the
 original 12 GiB residency target; see
-[BIOS follow-up](research/bios-analysis-followup.md). This task makes no BIOS,
+[BIOS follow-up](archive/research/bios-analysis-followup.md). This task makes no BIOS,
 SPI, CMOS or NVRAM changes.
 
 ## E30 / M438 partial completion (2026-09-24)

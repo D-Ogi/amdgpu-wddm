@@ -19,5 +19,5 @@ Start a new repository. Treat the predecessor as a donor of verified pieces (Apa
 
 ## Consequences
 
-- We owe upstream a clear bug report about the addressing error once E01 confirms it on hardware (draft at the end of `predecessor-analysis.md`).
+- We owe upstream a clear bug report about the addressing error once E01 confirms it on hardware (draft at the end of `docs/archive/predecessor-analysis.md`).
 - Anything we borrow is re-verified under our evidence rules before it counts as working.

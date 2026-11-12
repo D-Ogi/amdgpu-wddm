@@ -8,7 +8,7 @@ Everything after M3 needs the miniport to reach registers. This experiment intro
 gated BAR5 mapping, generated read/write tables, escapes for administrators) and proves it with the most
 harmless write there is: `SCRATCH_REG0`, a register without function that amdgpu itself writes eleven times
 during init as its ring-test target (facts M24). Prior art passed a scratch write/read-back test with every
-other address wrong (`docs/prior-art-vs-hardware.md`), so one register is not enough: `SCRATCH_REG1` is the
+other address wrong (`docs/archive/prior-art-vs-hardware.md`), so one register is not enough: `SCRATCH_REG1` is the
 second control, and an independent driver (`bc250rd`, its own BAR mapping) is the witness.
 
 Offsets come from `tools/regcalc` (`SCRATCH_REG0` = `0x30100`, `SCRATCH_REG1` = `0x30104`, as generated into

@@ -444,7 +444,7 @@ facts:
     date: "2026-09-23"
     claim: "Local DMA contract audit finds paging DmaSize treated as total rather than remaining bytes and never decremented. Extracted0757 accounting fails3of4 host cases;0758 passes4of4 and six existing preemption scenarios; driver builds/signs. Source audit also records unimplemented system/fragmented paging, missing multipass, and false-success completion/error paths.0758 is not deployed or GPU-validated."
     status_text: "CONFIRMED (local source/host test only)"
-    detail: "[audit evidence](../evidence/windows/2026-09-23-E27-m9-inference/dma-contract-audit-0758/README.md), [contract review](research/m9-dma-contract-audit.md)"
+    detail: "[audit evidence](../evidence/windows/2026-09-23-E27-m9-inference/dma-contract-audit-0758/README.md), [contract review](archive/research/m9-dma-contract-audit.md)"
   - id: M168
     status: CONFIRMED
     date: "2026-09-23"

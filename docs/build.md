@@ -98,7 +98,7 @@ ninja -C <build> llvm-config install
   keeps `llvm-config.exe` out of the install, so the recipe builds it explicitly and it stays in `<build>\bin`.
 - **Mesa uses the build tree.** `LLVM_CONFIG` points at that `llvm-config.exe`, and meson's config-tool lookup
   succeeds before CMake is asked. It reports the source's `llvm\include` plus the build's `include` and `lib`,
-  so the source and build directories must stay in place ([m13-present-baseline.md](research/m13-present-baseline.md)).
+  so the source and build directories must stay in place ([m13-present-baseline.md](archive/research/m13-present-baseline.md)).
 - **Existing prefix refused.** The script will not install over a prefix that holds files unless given
   `-AllowExistingPrefix`: the working toolchain is kept for rollback until its replacement is validated.
 

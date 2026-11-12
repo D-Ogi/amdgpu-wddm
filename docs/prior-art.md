@@ -20,7 +20,7 @@ Clone `ref/keshas-driver__WARN-AGENTS-md-is-not-facts` @ `63f8956` (2026-09-16).
 
 - What it is: a WDM IOCTL driver plus a KMDOD-based display driver, a stub Vulkan ICD, many user-mode test tools. Not a WDDM render miniport.
 - Verified-looking parts worth borrowing: SMU mailbox over SMN (clocks, voltages, telemetry, CPU core unlock) with allow-lists and voltage limits; PSP GPCOM ring and `LOAD_IP_FW` once the MP0 base was corrected to `0x58000`; display at 2560x1440 through KMDOD; init-step kill switches and a last-step marker that survives a reboot.
-- Why it stalled: GC register offsets computed as `0x1260 + mm*4` instead of `(0x1260 + mm) * 4`; seg1 registers without the `0xA000` base at all. Every "SOS-locked / NBIO-locked" finding was measured at those offsets. Full analysis: `predecessor-analysis.md`.
+- Why it stalled: GC register offsets computed as `0x1260 + mm*4` instead of `(0x1260 + mm) * 4`; seg1 registers without the `0xA000` base at all. Every "SOS-locked / NBIO-locked" finding was measured at those offsets. Full analysis: `archive/predecessor-analysis.md`.
 - Its `AGENTS.md` (160 KB of agent memory) contains mutually contradictory "REAL" facts. Do not feed it to an AI agent as context.
 
 ## 2. Keshas-dev/AMD-BC-250-PSP-Driver

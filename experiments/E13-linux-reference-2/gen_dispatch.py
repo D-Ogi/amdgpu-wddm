@@ -27,7 +27,7 @@ What is DERIVED (parsed, computed, cross-checked - every number below):
 
 What is AUTHORED here (the only thing): the ORDER in which E's five helper functions run for
 ip == AMDGPU_HW_IP_COMPUTE, version == AMDGPU_TEST_GFX_V10, cs_type == CS_BUFFERCLEAR, taken from
-amdgpu_test_dispatch_memset() at E:609-617 and documented in docs/research/m6-compute-dispatch.md section 3.3.
+amdgpu_test_dispatch_memset() at E:609-617 and documented in docs/archive/research/m6-compute-dispatch.md section 3.3.
 
 Run:  python experiments/E13-linux-reference-2/gen_dispatch.py
 """

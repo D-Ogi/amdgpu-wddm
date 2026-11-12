@@ -5,7 +5,8 @@
 Synthetic trees and one real one: a new document with a finding must fail, a clean new document
 must pass, a baselined document at its line must pass, one that got worse must fail, one that
 improved must pass with a note, --prune must lower and remove lines and must refuse to write
-while the gate fails, the out-of-scope trees must stay out, a generated page must be skipped,
+while the gate fails, the out-of-scope trees (docs/archive among them) must stay out, a baseline
+line for an archived record must fail the gate and block --prune, a generated page must be skipped,
 the glossary spellings and the dash rule must fire in prose and stay quiet inside code, and the
 documents this repository actually holds must pass against the baseline file next to them.
 """
@@ -143,6 +144,28 @@ class DocLintGate(unittest.TestCase):
             code, text = t.run()
             self.assertEqual(code, 0, text)
             self.assertIn('0 documents', text)
+
+    def test_archive_is_out_of_scope(self):
+        with tree() as t:
+            t.doc('docs/archive/research/old-audit.md', ONE_FINDING)
+            t.doc('docs/archive/README.md', ONE_FINDING)
+            t.doc('docs/research/archive/live.md', CLEAN)     # only docs/archive is a record tree
+            code, text = t.run()
+            self.assertEqual(code, 0, text)
+            self.assertIn('1 documents', text)
+            t.doc('docs/research/archive/live.md', ONE_FINDING)
+            code, text = t.run()
+            self.assertEqual(code, 1, text)
+
+    def test_baseline_line_under_archive_fails_and_blocks_prune(self):
+        with tree([(1, 'docs/archive/research/old-audit.md')]) as t:
+            t.doc('docs/archive/research/old-audit.md', ONE_FINDING)
+            code, text = t.run()
+            self.assertEqual(code, 1)
+            self.assertIn('FAIL docs/archive/research/old-audit.md', text)
+            code, text = t.run('--prune')
+            self.assertEqual(code, 1)
+            self.assertEqual(t.baseline_counts(), {'docs/archive/research/old-audit.md': 1})
 
     def test_scope_is_readme_docs_driver_and_tools(self):
         with tree() as t:

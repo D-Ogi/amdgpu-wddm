@@ -1349,7 +1349,7 @@ Two fixtures now capture through the actual initialized VidMm hierarchy. The fir
 
 ### M312 - Current acceptance review
 
-[Current acceptance status](../../docs/research/m9-acceptance-status.md) maps the startup numbered requirements and full DMA scope to existing evidence and remaining gates. Source review confirms live paging capture allocation and propagated unsupported/resource errors remain unresolved. Both configured TCP22 routes failed again. No hardware action or driver change; recover07101breadcrumbs before another trial. See facts M312 and acceptance-review evidence.
+[Current acceptance status](../../docs/archive/research/m9-acceptance-status.md) maps the startup numbered requirements and full DMA scope to existing evidence and remaining gates. Source review confirms live paging capture allocation and propagated unsupported/resource errors remain unresolved. Both configured TCP22 routes failed again. No hardware action or driver change; recover07101breadcrumbs before another trial. See facts M312 and acceptance-review evidence.
 
 
 ### M313 - Actual07101startup evidence recovered

@@ -6,7 +6,7 @@
 // Completion must follow actual work. Malformed virtual submission may return
 // INVALID_PARAMETER; physical submission has a different error contract.
 // ResetFromTimeout currently fails because hardware quiescence is not proven.
-// See docs/research/m9-dma-contract-audit.md for remaining contract gaps.
+// See docs/archive/research/m9-dma-contract-audit.md for remaining contract gaps.
 #include "bc250kmd.h"
 #include "state_kernel.h"
 #include "vmid_pool.h"
@@ -7884,7 +7884,7 @@ static DXGKDDI_BUILDPAGINGBUFFER Bc250WddmBuildPagingBuffer;
 static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKARG_BUILDPAGINGBUFFER* pBuildPagingBuffer)
 {
     // The DDI has a restricted return contract. Unsupported-operation/error
-    // handling is still tracked in m9-dma-contract-audit.md; empty SUCCESS is
+    // handling is still tracked in docs/archive/research/m9-dma-contract-audit.md; empty SUCCESS is
     // not proof of a completed transfer or invalidation.
     BC250_WDDM* wddm = WddmOf(hAdapter);
 

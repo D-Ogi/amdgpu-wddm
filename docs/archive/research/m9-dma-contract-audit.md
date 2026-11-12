@@ -297,7 +297,7 @@ remain unverified. See `mdl-addresses` evidence. Dev package retains0781, not fo
 PagingStreamBuild64 now carries total/start/next as 64-bit byte counts, while
 packet sizes and DMA capacity remain bounded unsigned values. PagingStreamBuild
 retains the old interface through a width-safe wrapper. Host coverage above 4 GiB,
-carry, refusal rollback and existing routing tests pass ([M210 evidence](../../evidence/windows/2026-09-23-E27-m9-inference/stream64/)).
+carry, refusal rollback and existing routing tests pass ([M210 evidence](../../../evidence/windows/2026-09-23-E27-m9-inference/stream64)).
 This does not widen WDDM MultipassOffset or remove the virtual builder's size cap.
 Physical Transfer still needs an explicit external progress encoding and integration.
 
@@ -478,7 +478,7 @@ recovery and performance acceptance remain unresolved.
 
 ### M225: documented scope and remaining uncertainty
 
-[Source review and snapshots](../../evidence/windows/2026-09-23-E27-m9-inference/transfer-contract-review/review.md)
+[Source review and snapshots](../../../evidence/windows/2026-09-23-E27-m9-inference/transfer-contract-review/review.md)
 at MS documentation revision7515063cea4c9e98db6a92986c5b4ddb0463fd16 distinguish
 an explicit guarantee from an omitted case. VidMm never requests aperture Fill;
 earlier references to missing aperture Fill are superseded. Required aperture
@@ -582,7 +582,7 @@ lifetime, cross-engine ordering, GPU recovery and pressure/performance remain op
 
 ### M232: startup readiness must precede operation admission
 
-[Startup design and acceptance gates](../design/wddm-startup.md) record the source
+[Startup design and acceptance gates](../../design/wddm-startup.md) record the source
 ordering: manual full-WDDM activation precedes GART/PSP/IH/RUN, and ENABLE zeros the
 full GART table. Early CPU mapping followed by that enable is therefore not a
 complete startup solution. E16 run009 saw no map call; no early-map crash is claimed.
@@ -638,7 +638,7 @@ Added GpuStartupInitialize and GfxStartupResources. Firmware and aggregate repor
 storage precede hardware activation; partial attempts unwind IH/GFX/PSP/GART.
 Final checks include the system-memory paging window and preserved aperture
 geometry. Source/host controls:291 pass, two mutations fail11/3; stop1676 and
-firmware32 regressions pass. See [evidence](../../evidence/windows/2026-09-23-E27-m9-inference/startup-coordinator/).
+firmware32 regressions pass. See [evidence](../../../evidence/windows/2026-09-23-E27-m9-inference/startup-coordinator).
 WDK development build passes; official0793 and last known installed0773 unchanged.
 No lab access. Not wired into WddmStart: interrupt ordering/admission integration
 and all outstanding live paging, lifetime, reset, error-policy and performance
@@ -648,7 +648,7 @@ acceptance remain open.
 
 Coordinator now requires actual SynchronizeExecution callback delivery before
 hardware attempts, following local MS connection-failure semantics.319 host
-checks pass; bypass mutation fails7; WDK dev build passes. [Evidence](../../evidence/windows/2026-09-23-E27-m9-inference/interrupt-preflight/).
+checks pass; bypass mutation fails7; WDK dev build passes. [Evidence](../../../evidence/windows/2026-09-23-E27-m9-inference/interrupt-preflight).
 Source review found IH hardware enable precedes DPC context publication; fix the
 publication/final-enable transition before automatic startup integration.
 No deployment, no observed lost interrupt claim, all live acceptance gates open.
@@ -657,7 +657,7 @@ No deployment, no observed lost interrupt claim, all live acceptance gates open.
 
 Shim split preserves AMD register order:14 writes with delivery disabled, then
 one final enable. E03 replay and existing IH controls pass; WDK dev build passes.
-[Evidence](../../evidence/windows/2026-09-23-E27-m9-inference/ih-split/).
+[Evidence](../../../evidence/windows/2026-09-23-E27-m9-inference/ih-split).
 KMD publication/synchronization integration is still required; no lab deployment
 or claim of corrected runtime interrupt delivery.
 
@@ -666,7 +666,7 @@ or claim of corrected runtime interrupt delivery.
 Real INIT publishes complete DPC state after hardware preparation and before
 synchronized final enable. DIRQL uses owned report storage and restricted MMIO.
 95 host checks pass; late-publication mutation fails7; regressions/build pass.
-[Evidence](../../evidence/windows/2026-09-23-E27-m9-inference/ih-publication/).
+[Evidence](../../../evidence/windows/2026-09-23-E27-m9-inference/ih-publication).
 Stop/failure lifetime review and startup admission integration remain open,
 alongside all outstanding M9 hardware paging, reset and performance gates.
 
@@ -676,7 +676,7 @@ Synchronized ISR admission closure precedes DPC flush. Failed synchronization or
 halt retains IH owner/backing and sets sticky quarantine; failed GART lookup also
 closes software admission.177 host checks pass; no-sync mutation fails54;
 activation95/stop1676 regressions and WDK build pass.
-[Evidence](../../evidence/windows/2026-09-23-E27-m9-inference/ih-stop-admission/).
+[Evidence](../../../evidence/windows/2026-09-23-E27-m9-inference/ih-stop-admission).
 No deployment. OS timing, actual retirement, remove/reload containment and full
 M9 paging/performance acceptance remain open.
 
@@ -686,7 +686,7 @@ GPU startup now precedes WDDM state publication; missing required gates/layout
 or startup failures prevent admission and clean unpublished VidMm resources.
 FullWddm diagnostic mutations are refused.89 host checks and319 coordinator
 regressions pass; omission mutations fail8/4; full WDK dev build passes.
-[Evidence](../../evidence/windows/2026-09-23-E27-m9-inference/wddm-autostart/).
+[Evidence](../../../evidence/windows/2026-09-23-E27-m9-inference/wddm-autostart).
 Not deployed. Manual initialization scripts need replacement. Correction M242: clock control
 uses independent bc250rd SMU IOCTLs, unaffected by the miniport escape guard;
 its ordering before GPU start still needs verification. OS callback timing, lifecycle, real paging and
@@ -698,14 +698,14 @@ bc250rd clock IOCTLs are independent of miniport escapes. M241's contrary
 assumption was corrected. CLI verification now compares frequency and encoded
 VID;10 modeled scenarios pass, omitted comparison fails2. Fresh service/task
 snapshot confirms connectivity, not current clocks or startup ordering.
-[Evidence](../../evidence/windows/2026-09-23-E27-m9-inference/clock-path-review/).
+[Evidence](../../../evidence/windows/2026-09-23-E27-m9-inference/clock-path-review).
 Use the existing serialized mailbox owner, not a competing KMD writer.
 
 ### M243 - live clock verification control
 
 Query-only CLI control passes on unit A:1000MHz/VID116, deliberate1001 expectation
 refused,1000 recheck passes.67C before test; no clock-setting message or reboot.
-[Evidence](../../evidence/windows/2026-09-23-E27-m9-inference/clock-live-control/).
+[Evidence](../../../evidence/windows/2026-09-23-E27-m9-inference/clock-live-control).
 Next prepare a versioned automatic-start trial with one-shot gate containment
 and startup-aware scripts. No new KMD or paging acceptance evidence yet.
 
@@ -713,7 +713,7 @@ and startup-aware scripts. No new KMD or paging acceptance evidence yet.
 
 Existing EnableFullWddm1 consumption now checks write/flush results and refuses
 on failure; no duplicate gate added.40 host controls pass vs7 failures in prior
-source; WDK dev build passes. [Evidence](../../evidence/windows/2026-09-23-E27-m9-inference/oneshot-durability/).
+source; WDK dev build passes. [Evidence](../../../evidence/windows/2026-09-23-E27-m9-inference/oneshot-durability).
 Per-load semantics do not imply per-StartDevice containment. No live deployment
 or new paging/performance acceptance.
 
@@ -1092,7 +1092,7 @@ After explicit approval, the prepared single closed-gate PnP restart succeeds. D
 
 ### M316 - CP1 checkpoints prepared and replayed
 
-Optional KIQ callbacks identify MQD/selection/register boundaries. Traced unpublished CP1 retains the same mutex and lock order using the documented critical-region ExAcquireFastMutexUnsafe pair, preserving PASSIVE_LEVEL for synchronous checkpoint files; normal paths are unchanged. Default and traced Linux replay match354+35writes, with10ordered cold-path checkpoints and all four negative controls discriminating. WDK build passes. No hardware deployment; persistence, lock/I/O behavior and hang location remain unverified. The development image also includes prior undeployed paging changes. See [M316 evidence and Microsoft contracts](../../evidence/windows/2026-09-23-E27-m9-inference/kiq-checkpoints/README.md).
+Optional KIQ callbacks identify MQD/selection/register boundaries. Traced unpublished CP1 retains the same mutex and lock order using the documented critical-region ExAcquireFastMutexUnsafe pair, preserving PASSIVE_LEVEL for synchronous checkpoint files; normal paths are unchanged. Default and traced Linux replay match354+35writes, with10ordered cold-path checkpoints and all four negative controls discriminating. WDK build passes. No hardware deployment; persistence, lock/I/O behavior and hang location remain unverified. The development image also includes prior undeployed paging changes. See [M316 evidence and Microsoft contracts](../../../evidence/windows/2026-09-23-E27-m9-inference/kiq-checkpoints/README.md).
 
 
 ### M317-M318 - Current hardware startup and shader residency acceptance
@@ -1243,7 +1243,7 @@ open. Continue current-build inference/performance in this initialized session.
 
 ### M422 - Native OS paging positive path
 
-[Candidate131](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07131-native-os-paging/RESULT.md) executes admitted ordinary copy/fill from OS DMA
+[Candidate131](../../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07131-native-os-paging/RESULT.md) executes admitted ordinary copy/fill from OS DMA
 through VMID2 and checks GPU permissions/CPU backing before publication.
 One PnP transition preserves OS/DWM; shader, model and1GiB mixed-path content
 controls pass. The1GiB transfer route still uses physical captures, so resource
@@ -1252,7 +1252,7 @@ guarantees and all remaining acceptance-index gates stay open.
 
 ### M423 - Fragmented native DMA admission fixed
 
-[Candidate132](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07132-exact-dma-disjoint/RESULT.md) checks actual pages when coarse DMA/data bounds
+[Candidate132](../../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07132-exact-dma-disjoint/RESULT.md) checks actual pages when coarse DMA/data bounds
 overlap. It admits1GiB residency transfers natively, with0capture plans in
 64MiB/model/1GiB controls, correct full GPU readbacks and noTDR. This supersedes
 M422's measured large-transfer exclusion. Preallocated arenas and physical
@@ -1260,7 +1260,7 @@ fallback still exist; complete resource/cache/lifetime/startup gates stay open.
 
 ## M424 - Queue storage preparation
 
-The [DMA-private queue format](../design/paging-queue-storage.md) reserves per-range
+The [DMA-private queue format](../../design/paging-queue-storage.md) reserves per-range
 job slots and passes host/WDK tests. Runtime builders and queue still use the old
 format and per-submission nonpaged allocation/copy. Integrating admission and
 retirement-before-OS-reuse is the next resource step; capture fallback remains
@@ -1273,7 +1273,7 @@ before completion publication.590 host checks pass; late-release mutation
 fails91; full WDK and875868 builder checks pass. Builders still emit legacy
 records, so live submissions still allocate. M423132 remains installed. Next
 migrate all private budgets/headers/alignment and test builder-to-queue paths.
-See [queue design and evidence](../design/paging-queue-storage.md). OS lifetime,
+See [queue design and evidence](../../design/paging-queue-storage.md). OS lifetime,
 preemption/cancellation and the remaining full M9 gates stay open.
 
 ## M426 - OS-private queue deployed
@@ -1283,11 +1283,11 @@ removed. Candidate133 passes907971 builder/711 queue checks and actual64MiB/1GiB
 8shader/twoE14model controls.30673 borrowed admissions equal SDMA completions,
 GFX6706/6706,zero errors/noTDR. Same OS/DWM; one PnP only. Capture fallback,
 OS cancellation/preemption/generation, cache/PFN and cold/power/performance
-requirements stay open. See [M426 evidence](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07133-os-private-queue/RESULT.md).
+requirements stay open. See [M426 evidence](../../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07133-os-private-queue/RESULT.md).
 
 ## M427 - OS-boot gate failure and successful PnP control
 
-[Pagefile/startup evidence](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07133-pagefile-osboot/RESULT.md)
+[Pagefile/startup evidence](../../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07133-pagefile-osboot/RESULT.md)
 records32GiB pagefile activation and a failed full-table OS-boot selection:
 one-shot persistence returns0xC000014D before GPU startup. The same133 binary
 then passes one PnP full start and64MiB three-cycle/four-readback control without
@@ -1297,7 +1297,7 @@ close OS/cold-power startup or the other full M9 acceptance gates.
 
 ## M428 - Complete6GiB working-set control
 
-[Complete-set evidence](../../evidence/windows/2026-09-24-E27-m9-recovery/resident-set-6g/RESULT.md)
+[Complete-set evidence](../../../evidence/windows/2026-09-24-E27-m9-recovery/resident-set-6g/RESULT.md)
 retains six1GiB allocations simultaneously.103 complete-set snapshots report
 6GiB GPU-memory,0shared/nonresident; full GPU readback validates all words with
 6144fences and distinct member patterns.64MiB set and legacy-cycle controls pass.
@@ -1308,9 +1308,9 @@ resource/cache/lifetime and matched-performance requirements remain open.
 
 ## M429 - Clock readiness prerequisite prepared
 
-[AMD clock policy](../../evidence/windows/2026-09-24-E27-m9-recovery/startup-clock-policy/RESULT.md)
+[AMD clock policy](../../../evidence/windows/2026-09-24-E27-m9-recovery/startup-clock-policy/RESULT.md)
 passes192host checks and WDK object compile; readback/exclusion mutations fail.
-No KMD backend or startup wiring yet. [Ownership design](../design/startup-clock-ownership.md)
+No KMD backend or startup wiring yet. [Ownership design](../../design/startup-clock-ownership.md)
 requires one mailbox owner across bc250rd/KMD before hardware use. The existing
 user-mode underclock task cannot establish clock-before-engine ordering at boot;
 persistent table selection alone is not readiness. Lab remains M428, with no
@@ -1318,7 +1318,7 @@ new boot, mode2 policy or hardware experiment. All remaining acceptance gates st
 
 ## M432 - DCN/VidPn hardware control
 
-[Candidate134](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07134-dcn-publication/RESULT.md)
+[Candidate134](../../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07134-dcn-publication/RESULT.md)
 passes one PnP update with retained OS/DWM,533 hardware flips without ACK
 timeouts/refusals, D3D content,64MiB full GPU readbacks and shader/model references.
 GFX2610/2610, SDMA6051/6051, no TDR. The earlier full-WDDM dispatcher refuses the
@@ -1333,11 +1333,11 @@ Unchanged145 starts after normal shutdown and a verified31.477s AC-off interval.
 The continuous startup recorder captures pending health, advancing primaries,
 automatic confirmation and checked kernel persistence.64MiB readback, eight
 shader hashes and both E14 model outputs pass without manual initialization.
-[Evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145/RESULT.md).
+[Evidence](../../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145/RESULT.md).
 A visual check at the lab confirms smooth physical output for the new boot
-([supplement](../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145-owner-feedback/REPORT.md)). Power resume, preemption/recovery
+([supplement](../../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145-owner-feedback/REPORT.md)). Power resume, preemption/recovery
 and remaining memory/lifetime contracts are not closed. The attached
-[retained-owner resume review](../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145/power-resume-source-review.md)
+[retained-owner resume review](../../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145/power-resume-source-review.md)
 is a source-derived implementation plan, not implemented resume support.
 
 ## M459 - Offline SMU capability metadata prerequisite
@@ -1346,7 +1346,7 @@ The SMU version snapshot now survives hardware stop and failed restart; cached
 queries neither access the mailbox nor wait for its transaction lock. Concurrent
 actual-source host controls and a regression mutation discriminate this behavior;
 WDK build passes. This is undeployed source work, not hardware power resume.
-[Evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/retained-smu-metadata/RESULT.md).
+[Evidence](../../../evidence/windows/2026-09-25-E27-m9-recovery/retained-smu-metadata/RESULT.md).
 Retained WDDM objects/queues, hardware restoration and PSP/capability lifetime
 remain required before wiring the resume coordinator into SetPowerState.
 
@@ -1355,7 +1355,7 @@ remain required before wiring the resume coordinator into SetPowerState.
 WddmSuspendRetained/WddmResumeRetained now preserve software ownership and OS
 fence history while closing/joining private work and restoring requested
 notifications. Actual-source host191/0, targeted mutations and WDK build pass.
-[Evidence and limits](../../evidence/windows/2026-09-25-E27-m9-recovery/retained-wddm-power/RESULT.md).
+[Evidence and limits](../../../evidence/windows/2026-09-25-E27-m9-recovery/retained-wddm-power/RESULT.md).
 These functions are not wired to SetPowerState. Hardware suspend/restore,
 private firmware/backing, IH/diagnostic lifetime, display and health-epoch
 restoration remain required; no runtime resume or full M9 acceptance.
@@ -1365,7 +1365,7 @@ restoration remain required; no runtime resume or full M9 acceptance.
 IH halt and storage teardown are separated. Retained restore prepares disabled
 hardware before resetting writeback pointers and enabling the existing synchronized
 consumer on the same backing. Actual-source host83/0, two regression mutations
-and WDK build pass. [Evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/retained-ih-power/RESULT.md).
+and WDK build pass. [Evidence](../../../evidence/windows/2026-09-25-E27-m9-recovery/retained-ih-power/RESULT.md).
 No deployment or power DDI wiring. Retained GART, firmware, engines and the complete
 coordinator/display/health path remain required before real resume acceptance.
 
@@ -1374,6 +1374,6 @@ coordinator/display/health path remain required before real resume acceptance.
 GpuMemRebuildRetainedGtt reconstructs private mappings from retained backing,
 excludes retired entries, preserves the Windows-owned tail and leaves TLB work
 pending. Actual-source host22/0, targeted mutations and WDK build pass.
-[Evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/retained-gtt-rebuild/RESULT.md).
+[Evidence](../../../evidence/windows/2026-09-25-E27-m9-recovery/retained-gtt-rebuild/RESULT.md).
 Unwired and undeployed: retained hub configuration, firmware/private VRAM,
 engine restoration and the complete resume coordinator still remain required.

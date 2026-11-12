@@ -991,7 +991,7 @@ facts:
     date: "2026-09-21"
     claim: "\"`SPI_PG_ENABLE_STATIC_WGP_MASK` lives at BAR5+0x5C3C (or 0x34FC), `CC_GC_SHADER_ARRAY_CONFIG` at 0x9C1C (or 0x3264)\""
     status_text: "REFUTED (by source and by measurement, M1 + M9)"
-    why: "regcalc: `0x935C` and `0x89BC`; details in `predecessor-analysis.md`"
+    why: "regcalc: `0x935C` and `0x89BC`; details in `docs/archive/predecessor-analysis.md`"
   - id: R3
     status: REFUTED
     date: "2026-09-21"

@@ -1,11 +1,11 @@
 # Working full-WDDM desktop baseline
 
 Current checkpoint: M406-M412,2026-09-24. Visible display had priority
-before further M9 acceptance work. [Evidence and limits](../../evidence/windows/2026-09-24-E26-desktop-resume/mesa-main/RESULT.md).
+before further M9 acceptance work. [Evidence and limits](../../../evidence/windows/2026-09-24-E26-desktop-resume/mesa-main/RESULT.md).
 
 Later steps (KMD 0.7.130.1 after M420, the E34 native D3D measurements M531-M534) are
-indexed in workspace `STATE.md` and [facts.md](../facts.md); the M13 route under
-implementation is in [ADR 0017](../adr/0017-graphics-stack-direction-after-m12.md). This
+indexed in workspace `STATE.md` and [facts.md](../../facts.md); the M13 route under
+implementation is in [ADR 0017](../../adr/0017-graphics-stack-direction-after-m12.md). This
 note keeps the CPU-renderer baseline.
 
 ## What changed
@@ -18,7 +18,7 @@ mapping, retargets live RTV/SRV and bound views, and preserves runtime handles.
 A visual check at the lab confirms that the visible descending redraw bands disappeared.
 
 PROVENANCE: Mesa801c9763c6043f0de8408e905a5324eea06d81d7, MIT.
-The [incremental patch](../../experiments/E26-wddm-desktop/mesa-resource-rotation.patch)
+The [incremental patch](../../../experiments/E26-wddm-desktop/mesa-resource-rotation.patch)
 applies after the E26 branch-labels prototype. Build and extracted positive/
 negative tests are preserved with the evidence. Local Microsoft source:
 ref/ddi-display/dxgiddi.md, DXGI base functions, RotateResourceIdentities;
@@ -100,9 +100,9 @@ Record exact revisions and validate before promoting the lab baseline.
   source ref/llvm-project-23.1.2, install toolchain/llvm2312, Release MT X86.
 - Mesa: main commitf9a2d34a19c496e552b6cd603e7807f1025a2e98, dated2026-09-24;
   source scratch/mesa-main-20260924, build scratch/mesa-main-llvm23-build.
-- Apply [the consolidated Gallium patch](../../experiments/E26-wddm-desktop/mesa-main-bc250-gallium.patch)
+- Apply [the consolidated Gallium patch](../../../experiments/E26-wddm-desktop/mesa-main-bc250-gallium.patch)
   to that clean Mesa commit. It includes the test sources and targets.
-- [Build script](../../experiments/E26-wddm-desktop/build-mesa-main-llvm23.cmd)
+- [Build script](../../../experiments/E26-wddm-desktop/build-mesa-main-llvm23.cmd)
   uses LLVM23 explicitly; build/deployment/control logs are in M412 evidence.
   llvm-config resides in scratch/llvm2312-build/bin, not the install bin.
 
@@ -116,7 +116,7 @@ This concrete port requirement is not a reason to keep the desktop on old Mesa.
 ## Vulkan migration alongside the retained desktop
 
 M414-M415 port RADV/WDDM2 compute to current Mesa main f333dd6d with ACO.
-The [new per-process compute baseline](../../experiments/E27-m9-inference/radv-main/README.md)
+The [new per-process compute baseline](../../../experiments/E27-m9-inference/radv-main/README.md)
 passes shader/model and paired benchmark controls while DWM4448 remains alive
 from13:58:18 through14:49:35. No OS/device/DWM reset during this migration.
 This uptime alone does not close manual desktop acceptance. A Windows Terminal

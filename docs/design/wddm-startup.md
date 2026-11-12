@@ -1,6 +1,6 @@
 # WDDM startup and paging readiness
 
-Current acceptance: [M9 acceptance status](../research/m9-acceptance-status.md), reviewed through M462. Historical results below do not prove current candidate acceptance.
+Current acceptance: [M9 acceptance status](../archive/research/m9-acceptance-status.md), reviewed through M462. Historical results below do not prove current candidate acceptance.
 
 Status: implementation plan, 2026-09-23. Source review:
 [facts M232](../facts/kmd.md#m232) and
