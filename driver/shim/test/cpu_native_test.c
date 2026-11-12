@@ -975,6 +975,7 @@ static void test_the_core_mask_guard(void)
     CHECK(device.Cpu.CoreMask == BC250_CPU_MASK_STOCK && Setting(L"CoreMask") == BC250_CPU_MASK_STOCK);
     CHECK(Setting(L"CoreMaskPending") == MAXULONG && Setting(L"CoreMaskConfirmed") == MAXULONG);
     CHECK(MaskSends(BC250_CPU_MASK_FULL) == 0u && !device.Cpu.CorePending);
+    CHECK(device.Cpu.CoreMaskStored == BC250_CPU_MASK_STOCK);      /* the readback names the store after the drop */
 
     /* At the milestone: the request takes its own mark, because the start's confirmation has run already. */
     device.StartHealth.Ready = TRUE;

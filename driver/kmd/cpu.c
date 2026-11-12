@@ -1359,6 +1359,9 @@ void CpuStart(BC250_DEVICE* Device)
             CpuDeleteLogged(CPU_SETTING_CORE_PENDING);
             CpuDeleteLogged(CPU_SETTING_CORE_CONFIRMED);
             s->CoreMask = BC250_CPU_MASK_STOCK;
+            // The readback reports the store as it is now, not the mask that this start dropped (BD-368: unit A
+            // read "0xFF stored" for one start after the drop).
+            s->CoreMaskStored = BC250_CPU_MASK_STOCK;
         } else if (!NT_SUCCESS(GuardStoreSetting(CPU_SETTING_CORE_PENDING, mask))) {
             GuardLog("cpu: the core mask's pending mark is not durable: the stock mask runs");
             s->CoreMask = BC250_CPU_MASK_STOCK;
