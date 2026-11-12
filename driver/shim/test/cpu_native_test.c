@@ -851,6 +851,159 @@ static void test_a_refused_start_read_is_tried_again(void)
            "start_read_retry", (unsigned int)BC250_CPU_START_TRIES);
 }
 
+/* A value of the durable store, or MAXULONG when it is not there. */
+static ULONG Setting(const WCHAR *name)
+{
+    ULONG value = 0;
+
+    return NT_SUCCESS(GuardQuerySetting(name, &value)) ? value : MAXULONG;
+}
+
+static void CoresEscape(BC250_ESCAPE_CPU *d, ULONG mask)
+{
+    D3DDDI_ESCAPEFLAGS flags;
+
+    memset(d, 0, sizeof(*d));
+    memset(&flags, 0, sizeof(flags));
+    flags.HardwareAccess = 1;
+    d->AbiVersion = BC250_CPU_ABI;
+    d->Op = BC250_CPU_OP_CORES;
+    d->CoreMask = mask;
+    d->ExpectedGeneration = device.Cpu.Generation;
+    CpuRequest(&device, d, sizeof(*d), TRUE, flags.Value);
+}
+
+/* How many times the core mask message went out with this mask. */
+static unsigned int MaskSends(ULONG mask)
+{
+    unsigned int i, n = 0;
+
+    for (i = 0; i < (unsigned int)native_firmware.writes && i < NATIVE_SETS; i++)
+        if (native_firmware.set[i].queue == BC250_CPU_QUEUE_GFX &&
+            native_firmware.set[i].message == BC250_CPU_MSG_SET_CORE_ENABLE_MASK &&
+            native_firmware.set[i].parameter == mask) n++;
+    return n;
+}
+
+/* BD-368: kept settings live through every start that a healthy start confirms. Each start writes the pending mark
+ * before it applies them; CpuConfirm (the start-health confirmation tail) takes the mark away. Without the
+ * confirmation the guard holds: the second start finds the mark and drops the settings. */
+static void test_a_confirmed_start_keeps_the_kept_settings(void)
+{
+    BC250_ESCAPE_CPU d;
+    int start;
+
+    Boot();
+    Chip(1200u, 3500u);
+    Load();
+    CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3000u, 0u);
+    CpuEscape(&d, BC250_CPU_OP_KEEP, 0u, 0u, 0u);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && Setting(L"CpuPending") == MAXULONG);
+    CpuStop(&device);
+    for (start = 0; start < 3; start++) {
+        Chip(1200u, 3500u);
+        Load();
+        CHECK(device.Cpu.Stored.max_given && device.Cpu.Stored.max_mhz == 3000u && device.Cpu.Pending);
+        CHECK(Setting(L"CpuPending") != MAXULONG);                  /* the mark of a start not yet healthy */
+        CHECK(!native_log_has("never became healthy"));
+        CHECK(native_firmware.limit_mhz == 3000u);
+        CHECK(NT_SUCCESS(CpuConfirm(&device, "start-health")));
+        CHECK(Setting(L"CpuPending") == MAXULONG && !device.Cpu.Pending && device.Cpu.Confirmed);
+        CHECK(Setting(L"CpuConfirmed") != MAXULONG && Setting(L"CpuMaxMHz") == 3000u);
+        CHECK(NT_SUCCESS(CpuConfirm(&device, "start-health")));    /* a second confirmation changes nothing */
+        CHECK(Setting(L"CpuPending") == MAXULONG && Setting(L"CpuMaxMHz") == 3000u);
+        CpuStop(&device);
+    }
+    /* The guard: a start that nothing confirmed leaves its mark, and the next start drops the settings. */
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(device.Cpu.Stored.max_given && Setting(L"CpuPending") != MAXULONG);
+    CpuStop(&device);
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(native_log_has("never became healthy"));
+    CHECK(!device.Cpu.Stored.max_given && Setting(L"CpuMaxMHz") == MAXULONG && Setting(L"CpuPending") == MAXULONG);
+    CpuStop(&device);
+    printf("  %-31s kept 3000 MHz lives through 3 confirmed starts; an unconfirmed start drops it\n",
+           "confirmed_start_keeps");
+}
+
+/* BD-368, the core mask. A mask set before the start is healthy keeps its pending mark until CpuConfirm; a mask set
+ * at the healthy milestone loses the mark in the request. Either way the next start sends the mask and writes its own
+ * mark, and a start that nothing confirmed gives the stock mask back. */
+static void test_the_core_mask_guard(void)
+{
+    BC250_ESCAPE_CPU d;
+
+    /* Before the milestone: the mark stays, the confirmation tail takes it, the next start sends the mask. */
+    Boot();
+    Chip(1200u, 3500u);
+    Load();
+    CoresEscape(&d, BC250_CPU_MASK_FULL);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && MaskSends(BC250_CPU_MASK_FULL) == 1u);
+    CHECK(Setting(L"CoreMask") == BC250_CPU_MASK_FULL && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
+    CHECK(device.Cpu.CorePending && !device.Cpu.CoreConfirmed);
+    CHECK(NT_SUCCESS(CpuConfirm(&device, "start-health")));
+    CHECK(Setting(L"CoreMaskPending") == MAXULONG && Setting(L"CoreMaskConfirmed") == BC250_CPU_MASK_FULL);
+    CHECK(!device.Cpu.CorePending && device.Cpu.CoreConfirmed);
+    CpuStop(&device);
+    native_firmware.writes = 0;
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(!native_log_has("the stock mask comes back"));
+    CHECK(device.Cpu.CoreMask == BC250_CPU_MASK_FULL && MaskSends(BC250_CPU_MASK_FULL) == 1u);
+    CHECK(Setting(L"CoreMask") == BC250_CPU_MASK_FULL && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
+    CHECK(device.Cpu.CorePending && device.Cpu.CoreConfirmed);     /* the confirmed mark of the start before */
+
+    /* The guard: nothing confirms this start, so the next one goes back to the stock mask and sends none. */
+    CpuStop(&device);
+    native_firmware.writes = 0;
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(native_log_has("the stock mask comes back"));
+    CHECK(device.Cpu.CoreMask == BC250_CPU_MASK_STOCK && Setting(L"CoreMask") == BC250_CPU_MASK_STOCK);
+    CHECK(Setting(L"CoreMaskPending") == MAXULONG && Setting(L"CoreMaskConfirmed") == MAXULONG);
+    CHECK(MaskSends(BC250_CPU_MASK_FULL) == 0u && !device.Cpu.CorePending);
+
+    /* At the milestone: the request takes its own mark, because the start's confirmation has run already. */
+    device.StartHealth.Ready = TRUE;
+    CoresEscape(&d, BC250_CPU_MASK_FULL);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && native_log_has("confirmed by the request, start healthy"));
+    CHECK(Setting(L"CoreMask") == BC250_CPU_MASK_FULL && Setting(L"CoreMaskPending") == MAXULONG);
+    CHECK(Setting(L"CoreMaskConfirmed") == BC250_CPU_MASK_FULL && !device.Cpu.CorePending && device.Cpu.CoreConfirmed);
+    CpuStop(&device);
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(!native_log_has("the stock mask comes back") && device.Cpu.CoreMask == BC250_CPU_MASK_FULL);
+
+    /* The stock mask is the way out: both marks go, and the next start sends no mask. */
+    CoresEscape(&d, BC250_CPU_MASK_STOCK);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && Setting(L"CoreMask") == BC250_CPU_MASK_STOCK);
+    CHECK(Setting(L"CoreMaskPending") == MAXULONG && Setting(L"CoreMaskConfirmed") == MAXULONG);
+    CHECK(!device.Cpu.CorePending && !device.Cpu.CoreConfirmed);
+    CpuStop(&device);
+
+    /* A send that the firmware refuses at the milestone keeps the mark: the mask in force is not the stored one. */
+    Boot();
+    Chip(1200u, 3500u);
+    Load();
+    device.StartHealth.Ready = TRUE;
+    native_firmware.accept_writes = 0;
+    CoresEscape(&d, BC250_CPU_MASK_FULL);
+    CHECK(d.Status != BC250_ESCAPE_STATUS_DONE && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
+    CHECK(device.Cpu.CorePending && device.Cpu.CoreMask == BC250_CPU_MASK_STOCK);
+    native_firmware.accept_writes = 1;
+
+    /* A milestone of another start is not this surface's: the mark stays for the confirmation tail. */
+    device.StartHealth.Generation = device.Cpu.Generation + 1u;
+    CoresEscape(&d, BC250_CPU_MASK_FULL);
+    CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
+    CHECK(device.Cpu.CorePending && !native_log_has("confirmed by the request"));
+    CpuStop(&device);
+    printf("  %-31s mark stays until confirmed, goes in a request at the milestone, guard reverts to 0x%02X\n",
+           "core_mask_guard", (unsigned int)BC250_CPU_MASK_STOCK);
+}
+
 int main(void)
 {
     test_ramp();
@@ -876,6 +1029,8 @@ int main(void)
     test_a_foreign_record_is_ignored();
     test_resume_and_dropped_settings();
     test_a_refused_start_read_is_tried_again();
+    test_a_confirmed_start_keeps_the_kept_settings();
+    test_the_core_mask_guard();
     printf("cpu native (the boost probe's sweep, the default cap, the boot record): %ld checks, %ld failures\n",
            native_checks, native_failures);
     return native_failures != 0 ? 1 : 0;

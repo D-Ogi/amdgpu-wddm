@@ -508,6 +508,7 @@ static ULONG GuardReadSetting(const WCHAR *name, ULONG fallback)
 typedef struct _BC250_START_HEALTH_NATIVE {
     EX_RUNDOWN_REF Readers;
     ULONGLONG Generation;
+    BOOLEAN Ready;                     /* the test's answer for StartHealthIsReady */
 } BC250_START_HEALTH_NATIVE;
 
 typedef struct _BC250_SMU_OWNER_NATIVE {
@@ -530,6 +531,14 @@ typedef struct _BC250_DEVICE {
     ULONG OcTier;
     volatile LONG RetainedPowerPhase;  /* BC250_POWER_* (power_phase.h): CpuAdapterDown reads FAILED (BD-293) */
 } BC250_DEVICE;
+
+/* The healthy milestone of the start, as cpu.c asks for it: the test sets the answer, and the generation is the
+ * device's own, so a test moves it to model a start that is not the one the surface holds. */
+static BOOLEAN StartHealthIsReady(BC250_DEVICE *Device, _Out_ ULONGLONG *Generation)
+{
+    *Generation = Device->StartHealth.Generation;
+    return Device->StartHealth.Ready;
+}
 
 /* The mailbox owner, as cpu.c sees it. The sequence flag is the real one's contract: SmuCpuBegin takes it or
  * answers FALSE, and SmuCpuEnd releases it, so a stage that forgot its bracket is caught here. */

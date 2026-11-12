@@ -1534,8 +1534,26 @@ void CpuResumeAlone(BC250_DEVICE* Device)
     CpuResumeEx(Device, FALSE);
 }
 
+// The core mask's half of a confirmation, with the surface lock held: the pending mark away first, the confirmed
+// mark second. Two callers: CpuConfirm for the mask that this start sent, and the CORES request for a mask that is
+// set when the start is already at its healthy milestone (BD-368).
+static void CpuConfirmCoreLocked(BC250_CPU_STATE* s, _In_z_ const char* Why)
+{
+    NTSTATUS core;
+    if (!s->CorePending) return;
+    core = GuardDeleteSetting(CPU_SETTING_CORE_PENDING);
+    if (NT_SUCCESS(core)) {
+        s->CorePending = FALSE;
+        core = GuardStoreSetting(CPU_SETTING_CORE_CONFIRMED, s->CoreMask);
+        if (NT_SUCCESS(core)) s->CoreConfirmed = TRUE;
+    }
+    GuardLog("cpu: core mask 0x%02X confirmed by %s: 0x%08X", s->CoreMask, Why, core);
+}
+
 // A durably confirmed start confirms this surface's two guards, in the guard's order: the pending mark away first,
 // the confirmed mark second. Its own failure costs a reconfirmation at the next start, never this confirmation.
+// BD-368: start_health.c calls it in the confirmation tail of StartHealthRequest, after the CU mode and the DPM
+// confirmation. Until then it had no caller, so each pending mark stayed and the next start dropped the stored values.
 NTSTATUS CpuConfirm(BC250_DEVICE* Device, _In_z_ const char* Why)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
@@ -1551,15 +1569,7 @@ NTSTATUS CpuConfirm(BC250_DEVICE* Device, _In_z_ const char* Why)
         }
         GuardLog("cpu: the stored settings (mark 0x%08X) confirmed by %s: 0x%08X", mark, Why, status);
     }
-    if (s->CorePending) {
-        NTSTATUS core = GuardDeleteSetting(CPU_SETTING_CORE_PENDING);
-        if (NT_SUCCESS(core)) {
-            s->CorePending = FALSE;
-            core = GuardStoreSetting(CPU_SETTING_CORE_CONFIRMED, s->CoreMask);
-            if (NT_SUCCESS(core)) s->CoreConfirmed = TRUE;
-        }
-        GuardLog("cpu: core mask 0x%02X confirmed by %s: 0x%08X", s->CoreMask, Why, core);
-    }
+    CpuConfirmCoreLocked(s, Why);
     CpuUnlock(s);
     return status;
 }
@@ -1808,6 +1818,16 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                 if (NT_SUCCESS(status)) s->CoreMask = mask;
                 GuardLog("cpu: core mask 0x%02X (%lu cores) requested: 0x%08X; the count changes at the next "
                          "restart", mask, bc250_cpu_mask_cores(mask), status);
+                // BD-368: the mark was written before the send, so a send that the machine does not survive gives
+                // the stock mask back. The firmware took the mask and this start is at its healthy milestone (the
+                // rule of the CU mode's and the DPM's own confirmation): the mark goes now, because the start's
+                // confirmation has run already and nothing else would take it. Before the milestone the mark
+                // stays, and CpuConfirm takes it. The next start writes its own mark before it sends the mask.
+                if (NT_SUCCESS(status) && s->CorePending) {
+                    ULONGLONG ready = 0;
+                    if (StartHealthIsReady(Device, &ready) && ready == s->Generation)
+                        CpuConfirmCoreLocked(s, "the request, start healthy");
+                }
             }
         } else if (op == BC250_CPU_OP_SEARCH_BEGIN) {
             ULONG steps = Data->UvSteps ? Data->UvSteps : BC250_CPU_SEARCH_MAX_STEPS;
