@@ -411,6 +411,19 @@ BOOLEAN StartHealthIsReady(BC250_DEVICE* Device, _Out_ ULONGLONG* Generation)
     KeReleaseSpinLock(&h->Lock,irql);
     return ready;
 }
+// BD-369. TRUE while this start has recorded no fault: nothing closed the witness, and no engine reset recovered
+// node 0. It is weaker than the milestone on purpose: it says nothing about age or flips. The one caller is the
+// way down of an orderly end of Windows (pnp.c), which takes the CPU surface's pending marks back on this answer.
+BOOLEAN StartHealthUnfaulted(BC250_DEVICE* Device)
+{
+    BC250_START_HEALTH_STATE* h=&Device->StartHealth;
+    BOOLEAN unfaulted;
+    KIRQL irql;
+    KeAcquireSpinLock(&h->Lock,&irql);
+    unfaulted=h->Full && !h->Closed && !h->Recovered;
+    KeReleaseSpinLock(&h->Lock,irql);
+    return unfaulted;
+}
 void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, BOOLEAN Admin, ULONG EscapeFlags)
 {
     BC250_START_HEALTH_STATE* h=&Device->StartHealth;

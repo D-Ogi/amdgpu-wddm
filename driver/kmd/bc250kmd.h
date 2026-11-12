@@ -572,6 +572,7 @@ void StartHealthVisibilityLocked(BC250_DEVICE* Device, BOOLEAN Visible);
 void StartHealthCompleted(BC250_DEVICE* Device, ULONG Sequence);
 void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, BOOLEAN Admin, ULONG EscapeFlags);
 BOOLEAN StartHealthIsReady(BC250_DEVICE* Device, _Out_ ULONGLONG* Generation);
+BOOLEAN StartHealthUnfaulted(BC250_DEVICE* Device);     // BD-369: no fault closed the witness, no engine reset
 
 // cumode.c
 struct _BC250_ESCAPE_CU_MODE;
@@ -618,6 +619,7 @@ void CpuPause(BC250_DEVICE* Device);
 void CpuResume(BC250_DEVICE* Device);
 void CpuResumeAlone(BC250_DEVICE* Device);     // BD-293: CpuResume with the joint arm kept off
 NTSTATUS CpuConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
+void CpuOrderlyEnd(BC250_DEVICE* Device);   // BD-369: an orderly end of Windows takes the pending marks back
 void CpuLogSummary(BC250_DEVICE* Device);
 void CpuRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 

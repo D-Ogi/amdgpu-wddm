@@ -1017,6 +1017,51 @@ static void test_the_core_mask_guard(void)
            "core_mask_guard", (unsigned int)BC250_CPU_MASK_STOCK);
 }
 
+/* BD-369. An orderly end of Windows before the milestone takes both pending marks back and confirms nothing, so the
+ * next start keeps the settings and the mask and writes its own marks. A stop without that call keeps the marks, and
+ * the start after it drops both: the guard is as it was for a start that ends without a word. */
+static void test_an_orderly_end_keeps_the_settings(void)
+{
+    BC250_ESCAPE_CPU d;
+    unsigned int start;
+
+    Boot();
+    Chip(1200u, 3500u);
+    Load();
+    CpuEscape(&d, BC250_CPU_OP_SET, BC250_CPU_GIVEN_MAX, 3000u, 0u);
+    CpuEscape(&d, BC250_CPU_OP_KEEP, 0u, 0u, 0u);
+    CoresEscape(&d, BC250_CPU_MASK_FULL);
+    CHECK(Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);      /* the request's mark, before the milestone */
+    CpuOrderlyEnd(&device);
+    CpuStop(&device);
+    for (start = 0; start < 3; start++) {
+        Chip(1200u, 3500u);
+        Load();
+        CHECK(device.Cpu.Pending && device.Cpu.CorePending);
+        CHECK(Setting(L"CpuPending") != MAXULONG && Setting(L"CoreMaskPending") == BC250_CPU_MASK_FULL);
+        CpuOrderlyEnd(&device);
+        CHECK(!device.Cpu.Pending && !device.Cpu.CorePending);
+        CHECK(Setting(L"CpuPending") == MAXULONG && Setting(L"CoreMaskPending") == MAXULONG);
+        CHECK(Setting(L"CoreMaskConfirmed") == MAXULONG && !device.Cpu.CoreConfirmed);     /* nothing is confirmed */
+        CpuOrderlyEnd(&device);                                     /* a second call changes nothing */
+        CHECK(Setting(L"CpuMaxMHz") == 3000u && Setting(L"CoreMask") == BC250_CPU_MASK_FULL);
+        CpuStop(&device);
+        CHECK(!native_log_has("never became healthy") && !native_log_has("the stock mask comes back"));
+    }
+    /* The guard: this start ends with no orderly end, and the next one drops the settings and the mask. */
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(device.Cpu.Stored.max_given && device.Cpu.CoreMask == BC250_CPU_MASK_FULL);
+    CpuStop(&device);
+    Chip(1200u, 3500u);
+    Load();
+    CHECK(native_log_has("never became healthy") && native_log_has("the stock mask comes back"));
+    CHECK(Setting(L"CpuMaxMHz") == MAXULONG && Setting(L"CoreMask") == BC250_CPU_MASK_STOCK);
+    CpuStop(&device);
+    printf("  %-31s 3 orderly ends keep 3000 MHz and mask 0x%02X; a silent end drops both\n",
+           "orderly_end", (unsigned int)BC250_CPU_MASK_FULL);
+}
+
 int main(void)
 {
     test_ramp();
@@ -1044,6 +1089,7 @@ int main(void)
     test_a_refused_start_read_is_tried_again();
     test_a_confirmed_start_keeps_the_kept_settings();
     test_the_core_mask_guard();
+    test_an_orderly_end_keeps_the_settings();
     printf("cpu native (the boost probe's sweep, the default cap, the boot record): %ld checks, %ld failures\n",
            native_checks, native_failures);
     return native_failures != 0 ? 1 : 0;

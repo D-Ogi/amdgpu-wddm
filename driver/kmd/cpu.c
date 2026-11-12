@@ -1588,6 +1588,31 @@ NTSTATUS CpuConfirm(BC250_DEVICE* Device, _In_z_ const char* Why)
     return status;
 }
 
+// BD-369. An orderly end of Windows (shutdown or restart) on a start with no fault takes the two pending marks of
+// this start back. No confirmed mark is written. A mark is for a start that ends without a word: a hang, a bugcheck,
+// a power cut. A Windows that shuts down in order is none of these, however short the start was. Nothing is
+// confirmed by it: the next start writes its marks again and needs its own milestone or its own orderly end.
+// Unit A lost a kept core mask twice to a restart inside the first minute of a start, which is also the restart
+// that eight cores need after each cold boot. pnp.c calls this on the way down, before CpuPause, with the registry
+// still up. PASSIVE_LEVEL, idempotent.
+void CpuOrderlyEnd(BC250_DEVICE* Device)
+{
+    BC250_CPU_STATE* s = &Device->Cpu;
+    NTSTATUS status;
+    CpuLock(s);
+    if (s->Pending) {
+        status = GuardDeleteSetting(CPU_SETTING_PENDING);
+        if (NT_SUCCESS(status)) s->Pending = FALSE;
+        GuardLog("cpu: orderly end of Windows, the pending mark of the settings is taken back: 0x%08X", status);
+    }
+    if (s->CorePending) {
+        status = GuardDeleteSetting(CPU_SETTING_CORE_PENDING);
+        if (NT_SUCCESS(status)) s->CorePending = FALSE;
+        GuardLog("cpu: orderly end of Windows, the pending mark of the core mask is taken back: 0x%08X", status);
+    }
+    CpuUnlock(s);
+}
+
 void CpuLogSummary(BC250_DEVICE* Device)
 {
     BC250_CPU_STATE* s = &Device->Cpu;

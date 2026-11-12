@@ -785,6 +785,11 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
             // BD-170 r6: dxgmms2 flushed the flip queue before this call (facts M904), so the power writers below owe
             // no flip (wddm.c's WddmFlipFlushed).
             WddmFlipFlushed(device);
+            // BD-369: an orderly shutdown or restart of Windows is not a start that failed. The CPU surface takes
+            // its pending marks back, so a restart inside the first minute keeps the kept settings and the core mask.
+            // A sleep or a hibernation is not an end: the same start goes on after it.
+            if ((ActionType==PowerActionShutdown || ActionType==PowerActionShutdownReset ||
+                 ActionType==PowerActionShutdownOff) && StartHealthUnfaulted(device)) CpuOrderlyEnd(device);
             HangDetectorPause(); CpuPause(device); DpmPause(device,ActionType); FanPause(device);
             DpAudioStop(device);    // AUDIO_ENABLED 0 before the display block goes down
             // The display half, then the engines: a failed display step no longer skips the save of the
