@@ -134,7 +134,6 @@
 29	driver/umd/d3d12/engine-ddi/README.md
 30	driver/umd/d3d12/engine-ddi/SLOTS.md
 28	driver/umd/d3d12/engine-ddi/shader-container/README.md
-132	driver/umd/dxvk/README.md
 1	driver/umd/dxvk/error-contract.md
 11	driver/umd/mft-h264/README.md
 10	driver/umd/router/README.md

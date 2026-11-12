@@ -1,12 +1,12 @@
 # System D3D10/11 UMD on DXVK
 
-ADR 0017 selects DXVK as the engine behind the system runtime DDI. This directory builds `amdgpu_wddm_d3d11.dll` (`tools/build/build-umd-dxvk.ps1`), the system D3D10/11 UMD shell that loads the DXVK engine `amdgpu_wddm_dxvk.dll` and the hosted ICD `amdgpu_wddm_radv.dll` next to it (see "Loadable UMD boundary"). In bounded lab trials, loaded by the system D3D11 runtime through a per-process router in the registered UMD path, it renders at FL11_1 on the GPU: under its earlier name `bc250d3d11.dll` an offscreen control (M736), a window with Present (M747) and resizes (M752); under the new names the error controls (M756), with the renamed engine and ICD pair admitted separately (M755). Facts are in `docs/facts.md`. It is not deployed as the registered lab UMD, and full M14 acceptance, composition, performance and FL12_1 remain open. The working G0 Mesa/Zink driver remains the desktop control.
+ADR 0017 selects DXVK as the engine behind the system runtime DDI. This directory builds `amdgpu_wddm_d3d11.dll` (`tools/build/build-umd-dxvk.ps1`). This DLL is the system D3D10/11 UMD shell. It loads the DXVK engine `amdgpu_wddm_dxvk.dll` and the hosted ICD `amdgpu_wddm_radv.dll` that are next to it (see "Loadable UMD boundary"). In bounded lab trials, the system D3D11 runtime loads the shell through a per-process router in the registered UMD path. The shell then renders at FL11_1 on the GPU. Under its earlier name `bc250d3d11.dll`, it rendered an offscreen control (M736), a window with Present (M747) and resizes (M752). Under the new names, it rendered the error controls (M756), and the renamed engine and ICD pair passed admission separately (M755). Facts are in `docs/facts.md`. The shell is not deployed as the registered lab UMD. Full M14 acceptance, composition, performance and FL12_1 remain open. The working G0 Mesa/Zink driver remains the desktop control.
 
-The sections below are the integration record in the order it was built; earlier sections describe components before they were wired into the loadable shell, and their "not yet wired" notes are kept as that record.
+The sections below are the integration record in the order it was built. Earlier sections describe components before they were wired into the loadable shell. Their "not yet wired" notes are kept as that record.
 
-`runtime-domain.h` implements device-scoped, thread-local authority for runtime callbacks. The DDI wrapper creates a `RuntimeDomain::Scope`; the hosted dispatch callback checks the same domain in this UMD module. A DXVK worker has no scope and must marshal work back to a runtime entry instead of calling the callbacks directly. This component does not implement that marshalling queue, locking, lifetime ownership or the engine interface. A domain must outlive its scopes and engine activity; its address cannot be moved or copied. Do not duplicate this guard independently in both DLLs.
+`runtime-domain.h` implements device-scoped, thread-local authority for runtime callbacks. The DDI wrapper creates a `RuntimeDomain::Scope`. The hosted dispatch callback checks the same domain in this UMD module. A DXVK worker has no scope and must marshal work back to a runtime entry instead of calling the callbacks directly. This component does not implement that marshalling queue, locking, lifetime ownership or the engine interface. A domain must outlive its scopes and engine activity. Its address cannot be moved or copied. Do not duplicate this guard independently in both DLLs.
 
-The design carries the existing G0 entry-scope semantics, including nested device entries and migration between runtime threads. It avoids binding a device to its creation thread. Tests prove denial without calling the callback for an unentered device, sibling device and worker thread, plus nesting, exception unwinding, exact callback return forwarding and subsequent runtime entry on another thread.
+The design carries the existing G0 entry-scope semantics, including nested device entries and migration between runtime threads. It avoids binding a device to its creation thread. Tests prove denial without a callback call for an unentered device, a sibling device and a worker thread. They also prove nesting, exception unwinding, exact forwarding of the callback return value and a subsequent runtime entry on another thread.
 
 Build/run from the workspace:
 
@@ -14,67 +14,75 @@ Build/run from the workspace:
 & .\bc250-win\tools\build\test-umd-domain.ps1
 ```
 
-Current source basis for integration: Mesa UMD revision `71f2e28c1b14f60ecbe11e543279bc76ea0c1237`, hosted contract version 5; WDK 10.0.26100.0. The existing `State.h` defines `SUPPORT_D3D11 0`, and `CreateDevice` accepts D3D10/10.1 interfaces only. FL11 needs an actual D3D11 table, feature/capability negotiation and mapped DXVK operations; changing the support macro is insufficient. Shader DDI input is a token stream plus DDI signatures, so a COM boundary must account for DXBC container construction or expose an engine shader entry that accepts these inputs.
+Current source basis for integration: Mesa UMD revision `71f2e28c1b14f60ecbe11e543279bc76ea0c1237`, hosted contract version 5, and WDK 10.0.26100.0. The existing `State.h` defines `SUPPORT_D3D11 0`, and `CreateDevice` accepts D3D10/10.1 interfaces only. FL11 needs an actual D3D11 table, feature/capability negotiation and mapped DXVK operations. A change of the support macro alone is not sufficient. Shader DDI input is a token stream plus DDI signatures. Thus a COM boundary must account for DXBC container construction, or expose an engine shader entry that accepts these inputs.
 
-Next integration requirements: agree the versioned engine boundary; wire device creation/destruction and the runtime domain; preserve allocation/import/Present fence ownership; implement resource/shader/state/draw and FL11-specific operations; prove a system-runtime client uses the driver without app-local D3D DLLs. Image/sharing/lifecycle and the ADR performance comparison still require measurement. All lab trials remain bounded to 180 seconds.
+Next integration requirements:
+
+- Agree the versioned engine boundary.
+- Wire device creation/destruction and the runtime domain.
+- Preserve allocation/import/Present fence ownership.
+- Implement resource/shader/state/draw and FL11-specific operations.
+- Prove that a system-runtime client uses the driver without app-local D3D DLLs.
+
+Image/sharing/lifecycle and the ADR performance comparison still require measurement. All lab trials remain bounded to 180 seconds.
 
 ## Input-layout translation
 
-`input-layout.cpp` consumes actual WDK `D3D10DDIARG_CREATEELEMENTLAYOUT` entries, preserving their input register numbers, binding slots, resolved offsets and instance divisors (including zero). Binding storage is compacted without renumbering slots. Conflicting per-slot rates/divisors, duplicate registers, invalid bounds/formats and offsets that cannot fit DXVK's packed representation are rejected transactionally. The engine supplies vertex-format lookup/support information; there is no duplicated DXGI format table.
+`input-layout.cpp` consumes actual WDK `D3D10DDIARG_CREATEELEMENTLAYOUT` entries, preserving their input register numbers, binding slots, resolved offsets and instance divisors (including zero). Binding storage is compacted without renumbering slots. Conflicting per-slot rates/divisors, duplicate registers, invalid bounds/formats and offsets that cannot fit DXVK's packed representation are rejected transactionally. The engine supplies vertex-format lookup/support information. There is no duplicate DXGI format table.
 
-`input-layout-dxvk.h` produces actual `DxvkVertexAttribute` and `DxvkVertexBinding` arrays for the engine. WDK and DXVK headers live in separate translation units: including both exposed conflicting extern-C KMT declarations from DXVK's `util_gdi.h`. The internal data header uses Vulkan types only. This is a compiled adapter component, not a complete or versioned cross-DLL ABI; it is not yet wired into a runtime-loaded DDI table.
+`input-layout-dxvk.h` produces actual `DxvkVertexAttribute` and `DxvkVertexBinding` arrays for the engine. WDK and DXVK headers live in separate translation units: including both exposed conflicting extern-C KMT declarations from DXVK's `util_gdi.h`. The internal data header uses Vulkan types only. This is a compiled adapter component, not a complete or versioned cross-DLL ABI. It is not yet wired into a runtime-loaded DDI table.
 
 ```powershell
 & .\bc250-win\tools\build\test-umd-input-layout.ps1 -DxvkSource .\scratch\m14\dxvk
 ```
 
-Validated against DXVK `52fe923ca1496c8e44789b613fab8611dfcb5c4a` and WDK 10.0.26100.0 with MSVC C++20, `/W4 /WX` for project code (`/external:W0` for upstream/WDK headers). The test passes the translated data across separate WDK and DXVK units, covering sparse slot31/register17, instance divisor zero, conflicting bindings, overflow/alignment/packing bounds and preservation of output after failure. No GPU operation is exercised by this test.
+Checked against DXVK `52fe923ca1496c8e44789b613fab8611dfcb5c4a` and WDK 10.0.26100.0 with MSVC C++20, with `/W4 /WX` for project code (`/external:W0` for upstream/WDK headers). The test passes the translated data across separate WDK and DXVK units. It covers sparse slot31/register17, instance divisor zero, conflicting bindings, overflow/alignment/packing bounds and preservation of output after failure. No GPU operation is exercised by this test.
 
-PROVENANCE: DXVK (github.com/doitsujin/dxvk), zlib; its existing vertex attribute/binding types are included from the external source checkout, not copied into this repository.
+PROVENANCE: DXVK (github.com/doitsujin/dxvk), zlib. Its existing vertex attribute/binding types are included from the external source checkout, not copied into this repository.
 
 ## Hosted runtime bridge
 
-`runtime-bridge.cpp` extracts the G0 callback bridge from Mesa Device.cpp revision `71f2e28c1b14f60ecbe11e543279bc76ea0c1237`. It replaces the Gallium device dependency with runtime-owned handles, callback tables and `RuntimeDomain`. `host_descriptor` supplies the existing version-5 bootstrap descriptor (including adapter LUID) without creating a second runtime device. The ICD borrows its userdata until Vulkan destruction finishes. The caller must initialize the state, own cleanup and drain workers; the component is not yet connected to the new UMD's CreateDevice/DDI table.
+`runtime-bridge.cpp` extracts the G0 callback bridge from Mesa Device.cpp revision `71f2e28c1b14f60ecbe11e543279bc76ea0c1237`. It replaces the Gallium device dependency with runtime-owned handles, callback tables and `RuntimeDomain`. `host_descriptor` supplies the existing version-5 bootstrap descriptor (including adapter LUID) without creating a second runtime device. The ICD borrows its userdata until Vulkan destruction finishes. The caller must initialize the state, own cleanup and drain workers. The component is not yet connected to the new UMD's CreateDevice/DDI table.
 
-The inherited operation set covers allocation, GPU VA, residency, context translation, synchronization and submission. It retains existing unsupported-operation errors; this is not a claim that every operation enumerated in the private header is implemented. Present callback orchestration is implemented by `present_runtime`; primary import and wiring into the runtime-loaded device remain at the device layer. Fault-injection switches and stderr diagnostics from the G0 bring-up copy are removed. Status/loss and submission counters remain available to the owner of the bridge.
+The inherited operation set covers allocation, GPU VA, residency, context translation, synchronization and submission. It retains existing unsupported-operation errors. This is not a claim that every operation enumerated in the private header is implemented. Present callback orchestration is implemented by `present_runtime`. Primary import and wiring into the runtime-loaded device remain at the device layer. This copy does not contain the fault-injection switches and stderr diagnostics of the G0 bring-up copy. Status/loss and submission counters remain available to the owner of the bridge.
 
 ```powershell
 & .\bc250-win\tools\build\test-umd-runtime-bridge.ps1
 ```
 
-The callback control builds with `/W4 /WX` for project code and checks allocation outputs, context-token translation/destruction, worker denial, wait-before-submit handling with no duplicate wait for the same Present value, pending residency translation and sticky device loss. These are controlled host callbacks, not a new hardware measurement. The private host contract is copied unchanged from the cited G0 revision.
+The callback control builds with `/W4 /WX` for project code. It checks allocation outputs, context-token translation/destruction, worker denial and pending residency translation. It also checks wait-before-submit handling with no duplicate wait for the same Present value, and sticky device loss. These are controlled host callbacks, not a new hardware measurement. The private host contract is copied unchanged from the cited G0 revision.
 
-PROVENANCE: Mesa (gitlab.freedesktop.org/mesa/mesa), MIT; callback bridge derived from the project's Mesa fork and original license retained.
+PROVENANCE: Mesa (gitlab.freedesktop.org/mesa/mesa), MIT. The callback bridge is derived from the project's Mesa fork, and the original license is retained.
 
 ## Present synchronization
 
-The runtime bridge now exposes `queue_present_wait`, `signal_present` and `wait_present_idle`, adapted from the same G0 source. Set `RuntimeDevice::present_context` to the runtime-created presentation context. The caller flushes engine rendering, calls `queue_present_wait`, issues the actual runtime Present callback and then calls `signal_present` on successful submission. `present_runtime` now wraps these steps and invokes the actual DXGI runtime callback; the engine supplies the flush function. The engine's subsequent SubmitCommand waits for the latest Present fence value on each rendering context.
+The runtime bridge now exposes `queue_present_wait`, `signal_present` and `wait_present_idle`, adapted from the same G0 source. Set `RuntimeDevice::present_context` to the runtime-created presentation context. The caller flushes engine rendering, calls `queue_present_wait`, issues the actual runtime Present callback and then calls `signal_present` on successful submission. `present_runtime` now wraps these steps and invokes the actual DXGI runtime callback. The engine supplies the flush function. The engine's subsequent SubmitCommand waits for the latest Present fence value on each rendering context.
 
 The wait aggregates the published progress of up to 16 rendering contexts. A single monitored fence is reused for Present completion. CPU waiting is isolated in `wait_present_idle`, with a 10-second bound, for teardown/readback only. The UMD still owns destruction of the fence and contexts after draining the engine. The UINT64_MAX loss sentinel is never emitted as a normal Present value. Signal failure does not advance the published value and blocks subsequent presentation work through the bridge's sticky failure flag.
 
-The callback control includes two render queues, exact wait objects/values, fence reuse, no CPU-wait callback on the steady path, worker rejection, signal failure and sentinel exclusion. It does not establish a hardware Present result or complete M14.
+The callback control covers two render queues, exact wait objects/values and fence reuse. It also covers no CPU-wait callback on the steady path, worker rejection, signal failure and sentinel exclusion. It does not establish a hardware Present result or complete M14.
 
-`runtime-present-test.cpp` drives the actual WDK callback signatures through `present_runtime`. It verifies the order flush/create-fence/wait/Present/signal, exact allocation/context forwarding, newly published progress after flush, no later callbacks after flush/wait/Present failure, no value advance on signal failure, propagation of positive Present status and sticky device removal. Missing Present callback is rejected before engine work. This is a controlled callback test; the engine factory and DDI entry table still need to call this path before hardware validation can be claimed.
+`runtime-present-test.cpp` drives the actual WDK callback signatures through `present_runtime`. It checks the order flush/create-fence/wait/Present/signal, exact allocation/context forwarding and newly published progress after flush. It also checks that no later callbacks occur after a flush/wait/Present failure, and that a signal failure does not advance the value. It checks the propagation of a positive Present status and sticky device removal too. Missing Present callback is rejected before engine work. This is a controlled callback test. The engine factory and the DDI entry table must still call this path before a claim of hardware validation is possible.
 
 ## Engine ABI r1 integration
 
-`engine-input-layout.cpp` now calls the engine ABI's `GetVertexFormat` and `CreateInputLayout` with the translated DDI data. It includes the single contract from the external DXVK checkout (`ddi/bc250_dxvk_engine.h`), without copying the ABI header. Static assertions verify size and every field offset of the engine signature-entry and stream-output mirrors against the actual WDK structures. This compilation confirms that the r1 header can coexist with WDK headers; the earlier full-DXVK-header collision remains avoided. Engine method invocation still needs validation against the built engine DLL, not merely the local layout control.
+`engine-input-layout.cpp` now calls the engine ABI's `GetVertexFormat` and `CreateInputLayout` with the translated DDI data. It includes the single contract from the external DXVK checkout (`ddi/bc250_dxvk_engine.h`), without copying the ABI header. Static assertions check the size and every field offset of the engine signature-entry and stream-output mirrors against the actual WDK structures. This compilation shows that the r1 header can coexist with WDK headers. The earlier collision with the full DXVK headers stays avoided. Engine method invocation still needs validation against the built engine DLL, not merely the local layout control.
 
 ## Engine session lifetime
 
-`EngineSession` creates a Vulkan device from an already-created hosted instance/physical device, using only that instance's `GetInstanceProcAddr`. It queries the engine adapter level and requirements, passes the exact extension/feature chain to vkCreateDevice, obtains the requested queue and calls the ABI factory in inline mode. Requirements, service descriptors and device descriptions stay in the session until the engine is released. Instance extension-name storage, hosted bridge and engine DLL remain caller-owned and must outlive it.
+`EngineSession` creates a Vulkan device from an already-created hosted instance/physical device, using only that instance's `GetInstanceProcAddr`. It queries the engine adapter level and requirements and passes the exact extension/feature chain to vkCreateDevice. Then it obtains the requested queue and calls the ABI factory in inline mode. Requirements, service descriptors and device descriptions stay in the session until the engine is released. Instance extension-name storage, hosted bridge and engine DLL remain caller-owned and must outlive it.
 
-Call `open` and `close` inside the runtime domain. This type has explicit teardown and must not be moved/copied. On nonzero final engine Release, `close` sets `must_retain_owner` and leaves Vulkan and requirement storage intact. The owner must retain the session, instance, runtime bridge and DLL too; it must not destroy the containing device memory. This is a leak containment path, not recovery. Integration into DDI creation/destruction is still outstanding.
+Call `open` and `close` inside the runtime domain. This type has explicit teardown and must not be moved/copied. On nonzero final engine Release, `close` sets `must_retain_owner` and leaves Vulkan and requirement storage intact. The owner must retain the session, instance, runtime bridge and DLL too. It must not destroy the containing device memory. This is a leak containment path, not recovery. Integration into DDI creation/destruction is still outstanding.
 
 ```powershell
 & .\\bc250-win\\tools\\build\\test-umd-engine-session.ps1 -DxvkSource .\\scratch\\m14\\dxvk
 ```
 
-Controlled Vulkan and engine callbacks validate requirements propagation, queue selection, feature-chain lifetime, failures at requirement validation/Vulkan creation/engine creation, repeated close, and engine Release before Vulkan destruction. The nonzero-Release case verifies retention. No Vulkan work on a physical GPU is performed by this unit control.
+Controlled Vulkan and engine callbacks check requirements propagation, queue selection and feature-chain lifetime. They also check failures at requirement validation/Vulkan creation/engine creation, repeated close, and engine Release before Vulkan destruction. The nonzero-Release case checks retention. No Vulkan work on a physical GPU is performed by this unit control.
 
 ## Hosted instance bootstrap
 
-`HostedInstance` chains a copied host-v5 descriptor into vkCreateInstance using the explicitly supplied ICD entry point. It selects the physical device by valid, exact LUID equality with the D3D runtime adapter and rejects absent or ambiguous matches. Enumeration retries VK_INCOMPLETE at most three times. The shell owns the ICD module and callback userdata; they must remain alive through engine/device destruction and instance close. No implicit vulkan-1 loader or fallback adapter is used.
+`HostedInstance` chains a copied host-v5 descriptor into vkCreateInstance using the explicitly supplied ICD entry point. It selects the physical device by valid, exact LUID equality with the D3D runtime adapter and rejects absent or ambiguous matches. Enumeration retries VK_INCOMPLETE at most three times. The shell owns the ICD module and callback userdata. They must remain alive through engine/device destruction and instance close. No implicit vulkan-1 loader or fallback adapter is used.
 
 ```powershell
 & .\\bc250-win\\tools\\build\\test-umd-hosted-instance.ps1 -DxvkSource .\\scratch\\m14\\dxvk
@@ -84,77 +92,77 @@ The script builds with clang-cl 23.1.4 by default. `-Compiler msvc -MsvcReason <
 
 The test checks the application info: engine "DXVK" 3.1.1, the executable file name and version 0. DXVK's own instance gives the same values, so the RADV driconf sections for DXVK and for applications apply.
 
-Controlled ICD callbacks verify the v5 chain, non-first physical-device match, invalid LUID, absent match, duplicate match, bounded enumeration retry, create failure and exact cleanup. This tests bootstrap mechanics; a real hosted ICD and the engine DLL still need integration through the DDI CreateDevice entry. A malformed ICD lacking vkDestroyInstance leaves the handle visible for owner retention rather than silently dropping it.
+Controlled ICD callbacks check the v5 chain, non-first physical-device match, invalid LUID, absent match, duplicate match, bounded enumeration retry, create failure and exact cleanup. This tests bootstrap mechanics. A real hosted ICD and the engine DLL still need integration through the DDI CreateDevice entry. A malformed ICD lacking vkDestroyInstance leaves the handle visible for owner retention rather than silently dropping it.
 
 ## DDI device owner
 
-`DeviceOwner::initialize` consumes the actual D3D CreateDevice arguments, copies callback tables, creates the runtime presentation context and connects HostedInstance -> EngineSession -> D3D11 device/immediate-context interfaces. The entry must already hold its RuntimeDomain scope. The owner must live on the heap; a DDI handle should store its pointer, not relocate it. It borrows both DLLs and the runtime and keeps all callback userdata stable.
+`DeviceOwner::initialize` consumes the actual D3D CreateDevice arguments, copies callback tables, creates the runtime presentation context and connects HostedInstance -> EngineSession -> D3D11 device/immediate-context interfaces. The entry must already hold its RuntimeDomain scope. The owner must live on the heap. A DDI handle should store its pointer, not relocate it. It borrows both DLLs and the runtime and keeps all callback userdata stable.
 
-`close` drains Present while the Vulkan device exists, releases the COM context/device, closes the engine/device, clears now-invalid progress pointers, destroys the instance, then destroys the Present fence/context. Failed cleanup retains the outstanding handle for retry. `has_live_objects` must be checked even after failed initialization: a failed CreateDevice is not permission to free a still-live owner or unload its DLLs.
+`close` drains Present while the Vulkan device exists. Then it releases the COM context/device, closes the engine/device, clears now-invalid progress pointers and destroys the instance. Last, it destroys the Present fence/context. Failed cleanup retains the outstanding handle for retry. `has_live_objects` must be checked even after failed initialization: a failed CreateDevice is not permission to free a still-live owner or unload its DLLs.
 
 ```powershell
 & .\\bc250-win\\tools\\build\\test-umd-device-owner.ps1 -DxvkSource .\\scratch\\m14\\dxvk
 ```
 
-This control compiles all connected components against WDK and the engine ABI, and checks partial initialization rollback and failed context-destruction retention/retry. Successful end-to-end creation of the COM device is not covered by this control; it needs the built DXVK engine. OpenAdapter, DDI table registration and resource operations remain integration work.
+This control compiles all connected components against WDK and the engine ABI, and checks partial initialization rollback and failed context-destruction retention/retry. Successful end-to-end creation of the COM device is not covered by this control. It needs the built DXVK engine. OpenAdapter, DDI table registration and resource operations remain integration work.
 
 ## First DDI table entries
 
-`install_draw_ddi` wires Draw, DrawIndexed, both instanced variants, DrawAuto and Dispatch to the engine's immediate context. `install_input_layout_ddi` wires layout size/create/destroy/bind through the engine ABI. The runtime private device handle stores the stable DeviceOwner pointer; each entry establishes its device domain and contains C++ exceptions. Creation errors go through SetErrorCb; child handles hold one engine COM reference. A null layout bind clears the engine binding.
+`install_draw_ddi` wires Draw, DrawIndexed, both instanced variants, DrawAuto and Dispatch to the engine's immediate context. `install_input_layout_ddi` wires layout size/create/destroy/bind through the engine ABI. The runtime private device handle stores the stable DeviceOwner pointer. Each entry establishes its device domain and contains C++ exceptions. Creation errors go through SetErrorCb. Child handles hold one engine COM reference. A null layout bind clears the engine binding.
 
-These installers intentionally fill only their own implemented entries. They are not a complete D3D11.1 table, are not advertised through OpenAdapter yet and do not establish FL11 support. Typed table assignment is compiled against WDK. The control calls the entries with an uninitialized owner and verifies error reporting within the domain and restoration on return; successful draw/resource lifetime still require a real engine integration run.
+These installers intentionally fill only their own implemented entries. They are not a complete D3D11.1 table, are not advertised through OpenAdapter yet and do not establish FL11 support. Typed table assignment is compiled against WDK. The control calls the entries with an uninitialized owner. It checks error reporting within the domain and restoration on return. Successful draw/resource lifetime still requires a real engine integration run.
 
 ```powershell
 & .\\bc250-win\\tools\\build\\test-umd-ddi-draw.ps1 -DxvkSource .\\scratch\\m14\\dxvk
 ```
 
-`install_raster_ddi` adds viewport/scissor arrays and primitive topology. Viewport translation preserves fractional and negative coordinates and depth endpoints; bounds checks avoid count+clear overflow. COM setters replace the complete active array, unbinding omitted slots. All base, adjacency and 1-32 control-point patch-list topology values are checked against SDK enum values at compile time before direct conversion. Tests cover translation, empty arrays, overflow rejection and typed DDI error paths; hardware rasterization remains untested on this new UMD.
+`install_raster_ddi` adds viewport/scissor arrays and primitive topology. Viewport translation preserves fractional and negative coordinates and depth endpoints. Bounds checks avoid count+clear overflow. COM setters replace the complete active array, unbinding omitted slots. All base, adjacency and 1-32 control-point patch-list topology values are checked against SDK enum values at compile time before direct conversion. Tests cover translation, empty arrays, overflow rejection and typed DDI error paths. Hardware rasterization remains untested on this new UMD.
 
-`install_shader_ddi` wires VS/GS/PS create, bind and destroy through the engine shader-token entry. Shader handles retain one typed engine COM reference and record their stage; mismatched stage binding reports E_INVALIDARG. Token streams remain unchanged. The original D3D11.1 signature structure is copied field by field with Stream=0, never reading its padding as an ENTRY2 stream index. Compute, hull and domain creation/binding are now also wired; hull/domain pass the separate patch-constant signature, while compute passes empty I/O signatures. Newer stream-bearing signatures, GS stream output and class-instance setters remain to be wired explicitly. The control poisons legacy signature padding and verifies deterministic stream zero plus the existing error/domain paths; shader execution is not yet measured here.
+`install_shader_ddi` wires VS/GS/PS create, bind and destroy through the engine shader-token entry. Shader handles retain one typed engine COM reference and record their stage. Mismatched stage binding reports E_INVALIDARG. Token streams remain unchanged. The original D3D11.1 signature structure is copied field by field with Stream=0, never reading its padding as an ENTRY2 stream index. Compute, hull and domain creation/binding are now also wired. Hull/domain pass the separate patch-constant signature, while compute passes empty I/O signatures. Newer stream-bearing signatures, GS stream output and class-instance setters remain to be wired explicitly. The control poisons legacy signature padding. It checks deterministic stream zero plus the existing error/domain paths. Shader execution is not yet measured here.
 
-The DDI control assigns and invokes all six stage creation/binding signatures on an uninitialized owner, verifying stage-tag initialization and failure reporting. These negative controls do not validate execution of tessellation or compute shaders; a positive engine-backed run remains required.
+The DDI control assigns and invokes all six stage creation/binding signatures on an uninitialized owner, and checks stage-tag initialization and failure reporting. These negative controls do not check the execution of tessellation or compute shaders. A positive engine-backed run remains required.
 
-`install_sampler_ddi` adds sampler size/create/destroy and binding for all six shader stages. Conversion preserves filters, address modes, comparison, anisotropy, LOD and border color; compile-time checks compare mapped enum values with the SDK. Legacy TEXT_1BIT has no D3D11 equivalent and creation returns E_NOTIMPL. Slot ranges are checked before indexing; null handles become null engine sampler bindings. The local control verifies descriptor translation and typed error paths, not GPU sampling.
+`install_sampler_ddi` adds sampler size/create/destroy and binding for all six shader stages. Conversion preserves filters, address modes, comparison, anisotropy, LOD and border color. Compile-time checks compare mapped enum values with the SDK. Legacy TEXT_1BIT has no D3D11 equivalent and creation returns E_NOTIMPL. Slot ranges are checked before indexing. Null handles become null engine sampler bindings. The local control checks descriptor translation and typed error paths, not GPU sampling.
 
-`install_fixed_state_ddi` supplies depth/stencil and D3D11.1 rasterizer size/create/bind/destroy callbacks. Each runtime handle owns one engine COM reference; null binding selects the COM default state. Rasterizer conversion retains signed/fractional depth bias and ForcedSampleCount. DDI FrontEnable/BackEnable have no direct COM fields: a disabled stencil face becomes ALWAYS with KEEP for all three operations, without interpreting that face's unused fields. This follows the per-face enable contract in WDK 10.0.26100 d3d10umddi.h and the local D3D10_DDI_DEPTH_STENCIL_DESC reference. Enum equality is checked at compile time. The DDI control covers poisoned disabled-face fields, distinct back-face operations, reversed face enable, global stencil disable, rasterizer translation and six additional uninitialized-engine/domain error paths. Successful COM creation and GPU depth/stencil output are still unmeasured for this shell.
+`install_fixed_state_ddi` supplies depth/stencil and D3D11.1 rasterizer size/create/bind/destroy callbacks. Each runtime handle owns one engine COM reference. Null binding selects the COM default state. Rasterizer conversion retains signed/fractional depth bias and ForcedSampleCount. DDI FrontEnable/BackEnable have no direct COM fields: a disabled stencil face becomes ALWAYS with KEEP for all three operations, without interpreting that face's unused fields. This follows the per-face enable contract in WDK 10.0.26100 d3d10umddi.h and the local D3D10_DDI_DEPTH_STENCIL_DESC reference. Enum equality is checked at compile time. The DDI control covers poisoned disabled-face fields, distinct back-face operations, reversed face enable, global stencil disable, rasterizer translation and six additional uninitialized-engine/domain error paths. Successful COM creation and GPU depth/stencil output are still unmeasured for this shell.
 
-`install_blend_ddi` wires D3D11.1 blend size/create/bind/destroy, including logic operations, independent targets, sample mask and blend constants. Disabled operations use canonical valid values; IndependentBlendEnable=FALSE ignores unused target descriptors. Conversion rejects simultaneous blend/logic enable and invalid masks, enums or operations without modifying the output. The later DDI ALPHA_FACTOR/INVALPHA_FACTOR values currently return E_NOTIMPL when active; their semantics are not replaced by a color blend factor. Tests exercise poisoned ignored targets, independent XOR and write masks, failure without output mutation, and typed uninitialized-engine error paths. These controls do not measure GPU blending through the system UMD.
+`install_blend_ddi` wires D3D11.1 blend size/create/bind/destroy, including logic operations, independent targets, sample mask and blend constants. Disabled operations use canonical valid values. IndependentBlendEnable=FALSE ignores unused target descriptors. Conversion rejects simultaneous blend/logic enable and invalid masks, enums or operations without a change to the output. The later DDI ALPHA_FACTOR/INVALPHA_FACTOR values currently return E_NOTIMPL when active. Their semantics are not replaced by a color blend factor. Tests exercise poisoned ignored targets, independent XOR and write masks, failure without output mutation, and typed uninitialized-engine error paths. These controls do not measure GPU blending through the system UMD.
 
-`install_resource_ddi` adds ordinary engine-owned buffer (including BUFFEREX), 1D/2D/3D and cube texture creation/destruction. DDI CPU access, UAV and misc bits are translated explicitly, not cast to COM flags. Logical texel dimensions are used instead of padded physical extents; declared mip chains are checked, array faces remain individual subresources and initial row/slice pitches are copied. Structured buffer stride and cube misc flags are preserved. The D3D11.1 callback never reads fields added by later DDI versions. Shared resources, Present resources and primary descriptors return E_NOTIMPL until the runtime allocation/import path is connected; an ordinary private engine texture is not a substitute. Other unsupported bind/misc bits also fail explicitly. The converter leaves its output unchanged on rejection; allocation exceptions are caught by the DDI entry wrapper.
+`install_resource_ddi` adds ordinary engine-owned buffer (including BUFFEREX), 1D/2D/3D and cube texture creation/destruction. DDI CPU access, UAV and misc bits are translated explicitly, not cast to COM flags. The converter uses logical texel dimensions instead of padded physical extents. Declared mip chains are checked, array faces remain individual subresources and initial row/slice pitches are copied. Structured buffer stride and cube misc flags are preserved. The D3D11.1 callback never reads fields added by later DDI versions. Shared resources, Present resources and primary descriptors return E_NOTIMPL until the runtime allocation/import path is connected. An ordinary private engine texture is not a substitute. Other unsupported bind/misc bits also fail explicitly. The converter leaves its output unchanged on rejection. Allocation exceptions are caught by the DDI entry wrapper.
 
-`install_buffer_binding_ddi` adds vertex/index binding and all six ConstantBuffers1 setters. Null handles unbind; non-buffer resource handles are rejected before the COM call. Slot bounds are checked without addition overflow. D3D11.1 optional first/count arrays are forwarded in constant units, not bytes. COM state retains its own references; the runtime handle owns the creation reference.
+`install_buffer_binding_ddi` adds vertex/index binding and all six ConstantBuffers1 setters. Null handles unbind. Non-buffer resource handles are rejected before the COM call. Slot bounds are checked without addition overflow. D3D11.1 optional first/count arrays are forwarded in constant units, not bytes. COM state retains its own references. The runtime handle owns the creation reference.
 
-The local control now covers padded versus logical extents, volume mips, array initial-data count/pitches, cube faces, shifted UAV/CPU/structured flags, invalid sizes, explicit shared/Present rejection and actual typed callback assignments. Calls with an uninitialized engine verify error/domain behavior. These checks are not a positive render through the DDI shell. Views, mapping/update/copy, shared imports, OpenAdapter and full table/capability publication remain open integration work.
+The local control now covers padded versus logical extents, volume mips, array initial-data count/pitches and cube faces. It also covers shifted UAV/CPU/structured flags, invalid sizes, explicit shared/Present rejection and actual typed callback assignments. Calls with an uninitialized engine check error/domain behavior. These checks are not a positive render through the DDI shell. Views, mapping/update/copy, shared imports, OpenAdapter and full table/capability publication remain open integration work.
 
-`install_transfer_ddi` connects CopyResource, CopySubresourceRegion1, UpdateSubresource1 and ResolveSubresource. Signed DDI boxes are converted field by field, negative coordinates are rejected, and empty boxes do not issue work. Null boxes remain null. Source/destination subresources, destination coordinates, format and update row/slice pitches are forwarded. NO_OVERWRITE and DISCARD map explicitly; contradictory or unknown flags fail. TILEABLE is a permission for a tile-renderer optimization (WDK D3D11_1_DDI_COPY_FLAGS), so the full ordinary operation is used without that hint. There is no shell readback or CPU full-frame copy in these adapters. The control verifies box/flag translation and typed uninitialized-engine error paths; a hardware transfer through the completed system UMD remains untested.
+`install_transfer_ddi` connects CopyResource, CopySubresourceRegion1, UpdateSubresource1 and ResolveSubresource. Signed DDI boxes are converted field by field, negative coordinates are rejected, and empty boxes do not issue work. Null boxes remain null. Source/destination subresources, destination coordinates, format and update row/slice pitches are forwarded. NO_OVERWRITE and DISCARD map explicitly. Contradictory or unknown flags fail. TILEABLE is a permission for a tile-renderer optimization (WDK D3D11_1_DDI_COPY_FLAGS), so the full ordinary operation is used without that hint. There is no shell readback or CPU full-frame copy in these adapters. The control checks box/flag translation and typed uninitialized-engine error paths. A hardware transfer through the completed system UMD remains untested.
 
-`install_map_ddi` adds general, staging and dynamic IA/constant/texture Map/Unmap entries. Five DDI map modes and DO_NOT_WAIT are converted explicitly. Output pointer and pitches are cleared before entering the engine, including failure on an uninitialized context. COM Map errors (including WAS_STILL_DRAWING and device removal) go to SetErrorCb without retries; successful results preserve row/depth pitch. The shell introduces no extra wait or copy. The engine remains responsible for DISCARD renaming and resource synchronization. A successful Map with an unexpectedly null pointer is balanced by Unmap and reported as failure. The default constant-buffer UpdateSubresourceUP slot now uses the same transfer implementation as the general update slot. The local control covers mode/flag conversion and all typed entry error paths; actual mapped data and synchronization through the system UMD are not yet measured.
+`install_map_ddi` adds general, staging and dynamic IA/constant/texture Map/Unmap entries. Five DDI map modes and DO_NOT_WAIT are converted explicitly. Output pointer and pitches are cleared before entering the engine, including failure on an uninitialized context. COM Map errors (including WAS_STILL_DRAWING and device removal) go to SetErrorCb without retries. Successful results preserve row/depth pitch. The shell introduces no extra wait or copy. The engine remains responsible for DISCARD renaming and resource synchronization. A successful Map with an unexpectedly null pointer is balanced by Unmap and reported as failure. The default constant-buffer UpdateSubresourceUP slot now uses the same transfer implementation as the general update slot. The local control covers mode/flag conversion and all typed entry error paths. Actual mapped data and synchronization through the system UMD are not yet measured.
 
-`install_rtv_ddi` adds render-target view size/create/destroy/clear for buffers, 1D/2D/3D textures, cube faces and MSAA. Creation obtains the engine resource's actual type, array size and sample count before selecting a COM view dimension. Cube faces become 2D array layers; volume slices remain W slices. Range checks avoid first+count overflow; invalid MSAA mip selection fails before creation. The handle owns one engine view reference, while the view retains its resource. Local tests cover array/mip fields, MSAA and non-MSAA variants, cube arrays, volumes, buffers, overflow rejection and typed error paths. Render-target binding alongside depth/UAV views remains a separate integration step, and the tests do not show GPU rendering through these DDI entries.
+`install_rtv_ddi` adds render-target view size/create/destroy/clear for buffers, 1D/2D/3D textures, cube faces and MSAA. Creation obtains the engine resource's actual type, array size and sample count before selecting a COM view dimension. Cube faces become 2D array layers. Volume slices remain W slices. Range checks avoid first+count overflow. Invalid MSAA mip selection fails before creation. The handle owns one engine view reference, while the view retains its resource. Local tests cover array/mip fields, MSAA and non-MSAA variants, cube arrays, volumes, buffers, overflow rejection and typed error paths. Render-target binding alongside depth/UAV views remains a separate integration step, and the tests do not show GPU rendering through these DDI entries.
 
-`install_dsv_ddi` adds depth/stencil view size/create/destroy/clear. 1D, 2D, array, cube-face and MSAA selection shares RTV layer validation with explicit conversion between distinct view structures and enums. Actual resource type/sample count are obtained from the engine before creation. Depth/stencil read-only bits and clear bits are independently translated; unknown flags and unsupported dimensions fail. Local controls cover both read-only flags, array/MSAA/cube conversion, invalid mip/dimension rejection and typed error paths. These controls do not establish GPU depth testing through the system UMD; combined output binding still needs implementation.
+`install_dsv_ddi` adds depth/stencil view size/create/destroy/clear. 1D, 2D, array, cube-face and MSAA selection shares RTV layer validation with explicit conversion between distinct view structures and enums. Actual resource type/sample count are obtained from the engine before creation. Depth/stencil read-only bits and clear bits are independently translated. Unknown flags and unsupported dimensions fail. Local controls cover both read-only flags, array/MSAA/cube conversion, invalid mip/dimension rejection and typed error paths. These controls do not establish GPU depth testing through the system UMD. Combined output binding still needs implementation.
 
-`install_uav_ddi` adds unordered-access view creation/destruction, uint/float clear, compute binding and CopyStructureCount. Buffer RAW/APPEND/COUNTER flags map explicitly, incompatible combinations fail, and texture views reuse validated mip/layer selection. MSAA and direct cube UAV descriptors are rejected (cube storage uses 2D face views in DDI). Compute slot bounds use the D3D11.1 limit; null handles unbind and initial counters pass unchanged, including UINT_MAX. Counter copies require a buffer and a four-byte-aligned offset. Local controls cover descriptors, flags, array overflow, MSAA rejection and typed error paths; compute execution and counter values through the system UMD remain unmeasured.
+`install_uav_ddi` adds unordered-access view creation/destruction, uint/float clear, compute binding and CopyStructureCount. Buffer RAW/APPEND/COUNTER flags map explicitly, incompatible combinations fail, and texture views reuse the checked mip/layer selection. MSAA and direct cube UAV descriptors are rejected (cube storage uses 2D face views in DDI). Compute slot bounds use the D3D11.1 limit. Null handles unbind and initial counters pass unchanged, including UINT_MAX. Counter copies require a buffer and a four-byte-aligned offset. Local controls cover descriptors, flags, array overflow, MSAA rejection and typed error paths. Compute execution and counter values through the system UMD remain unmeasured.
 
-`install_output_ddi` connects the combined RTV/DSV/UAV output-merger state. The local WDK SetRenderTargets(D3D11) contract supplies complete bindings; UAVRangeStart/Size are optimization hints. Preparation therefore fills all UAV slots after the active RTV range, explicitly nulling omitted bindings so COM cannot retain stale outputs. Unused counters remain UINT_MAX, supplied values are preserved, and null RTV/DSV handles unbind. The entry uses 8 or 64 UAV slots according to the engine feature level. Local controls test sparse bindings, a narrow changed-range hint, RTV-only clearing, last-slot binding, count overflow/overlap and exact opaque view identities without COM ownership changes. The GPU output-merger path through the full system UMD remains unmeasured.
+`install_output_ddi` connects the combined RTV/DSV/UAV output-merger state. The local WDK SetRenderTargets(D3D11) contract supplies complete bindings. UAVRangeStart/Size are optimization hints. Preparation therefore fills all UAV slots after the active RTV range, explicitly nulling omitted bindings so COM cannot retain stale outputs. Unused counters remain UINT_MAX, supplied values are preserved, and null RTV/DSV handles unbind. The entry uses 8 or 64 UAV slots according to the engine feature level. Local controls test sparse bindings, a narrow changed-range hint, RTV-only clearing, last-slot binding, count overflow/overlap and exact opaque view identities without COM ownership changes. The GPU output-merger path through the full system UMD remains unmeasured.
 
-`install_srv_ddi` adds SRV size/create/destroy, all six shader-stage bindings (128 slots per stage) and GenerateMips. Typed/RAW buffers, 1D/2D/3D, array, cube/cube-array and MSAA descriptors are mapped explicitly. Cube counts stay in cubes while the first face stays a 2D layer index; bounds use division/subtraction to avoid count multiplication overflow. Actual resource type/array/sample data are checked before engine creation, including the cube misc flag. Mip ranges, including UINT_MAX for all remaining levels, pass to the engine. Null binding clears a slot; invalid non-null handles fail before binding. Local tests cover cube/array/mip/RAW translation and all typed error paths. They do not validate sampling or GenerateMips through the system UMD.
+`install_srv_ddi` adds SRV size/create/destroy, all six shader-stage bindings (128 slots per stage) and GenerateMips. Typed/RAW buffers, 1D/2D/3D, array, cube/cube-array and MSAA descriptors are mapped explicitly. Cube counts stay in cubes while the first face stays a 2D layer index. Bounds use division/subtraction to avoid count multiplication overflow. Actual resource type/array/sample data are checked before engine creation, including the cube misc flag. Mip ranges, including UINT_MAX for all remaining levels, pass to the engine. Null binding clears a slot. Invalid non-null handles fail before binding. Local tests cover cube/array/mip/RAW translation and all typed error paths. They do not check sampling or GenerateMips through the system UMD.
 
-The draw installer now also supplies DrawInstancedIndirect, DrawIndexedInstancedIndirect and DispatchIndirect. It validates buffer identity, DRAWINDIRECT_ARGS, four-byte alignment and the exact argument byte range using subtraction to avoid overflow. Arguments remain in the engine buffer; no CPU Map/readback is added. Local controls cover an exactly fitting indexed-draw record, truncated/misaligned/overflowing ranges, missing misc flag and typed error paths. GPU indirect execution through the system UMD is not yet measured.
+The draw installer now also supplies DrawInstancedIndirect, DrawIndexedInstancedIndirect and DispatchIndirect. It checks buffer identity, DRAWINDIRECT_ARGS, four-byte alignment and the exact argument byte range using subtraction to avoid overflow. Arguments remain in the engine buffer. No CPU Map/readback is added. Local controls cover an exactly fitting indexed-draw record, truncated/misaligned/overflowing ranges, missing misc flag and typed error paths. GPU indirect execution through the system UMD is not yet measured.
 
-`install_flush_ddi` adds the BOOL D3D11.1 Flush callback. It uses the engine's inline COM Flush (ABI E3), without a CPU completion wait or fabricated Present. Device removal and sticky hosted submission errors are checked before and after the call; failure remains FALSE and is reported through SetErrorCb. The engine's empty-command guard supplies the UNLESS_NO_COMMANDS behavior. Later TRIM_MEMORY is not accepted by this D3D11.1 implementation and requires a separate residency policy. Local controls verify typed assignment, FALSE for an uninitialized/missing owner and domain-bound error reporting; real hosted submission completion needs the integrated shell test.
+`install_flush_ddi` adds the BOOL D3D11.1 Flush callback. It uses the engine's inline COM Flush (ABI E3), without a CPU completion wait or fabricated Present. Device removal and sticky hosted submission errors are checked before and after the call. Failure remains FALSE and is reported through SetErrorCb. The engine's empty-command guard supplies the UNLESS_NO_COMMANDS behavior. Later TRIM_MEMORY is not accepted by this D3D11.1 implementation and requires a separate residency policy. Local controls check typed assignment, FALSE for an uninitialized/missing owner and domain-bound error reporting. Real hosted submission completion needs the integrated shell test.
 
-`make_render_device_table` now constructs the single zero-initialized rendering table from all seventeen module installers. The existing DDI control runs this same constructor, instead of independently assembling its own table. This is intentionally not yet published through OpenAdapter: lifecycle, query/capability, shared-resource and other required entries still need integration. An initial source-name inventory against WDK26100 found a missed DynamicConstantBufferMapNoOverwrite slot; it is now connected to the existing Map implementation and covered by the output-clearing/domain control. Source-name counts alone are not a capability or conformance gate.
+`make_render_device_table` now constructs the single zero-initialized rendering table from all seventeen module installers. The existing DDI control runs this same constructor, instead of independently assembling its own table. This is intentionally not yet published through OpenAdapter: lifecycle, query/capability, shared-resource and other required entries still need integration. An initial source-name inventory against WDK26100 found a missed DynamicConstantBufferMapNoOverwrite slot. This slot is now connected to the existing Map implementation and covered by the output-clearing/domain control. Source-name counts alone are not a capability or conformance gate.
 
-`install_format_ddi` supplies CheckFormatSupport and CheckMultisampleQualityLevels from the engine device. D3D11 FORMAT_SUPPORT/FORMAT_SUPPORT2 are explicitly translated to the D3D11.1 DDI mask, including typed UAV store and logic operations; blendability requires render-target support. The video processor bits come from the video format table (see "Video DDIs (BD-223)"). Decoder, capture, overlay and later-version capability bits are not advertised by this table. Invalid/unknown formats produce zero support; other query failures are reported without publishing partial capabilities. MSAA quality levels come from the engine, not a fixed count. Local controls verify the flag conversion and cleared failure outputs; a real runtime capability negotiation is still required before publication.
+`install_format_ddi` supplies CheckFormatSupport and CheckMultisampleQualityLevels from the engine device. D3D11 FORMAT_SUPPORT/FORMAT_SUPPORT2 are explicitly translated to the D3D11.1 DDI mask, including typed UAV store and logic operations. Blendability requires render-target support. The video processor bits come from the video format table (see "Video DDIs (BD-223)"). Decoder, capture, overlay and later-version capability bits are not advertised by this table. Invalid/unknown formats produce zero support. Other query failures are reported without publishing partial capabilities. MSAA quality levels come from the engine, not a fixed count. Local controls check the flag conversion and cleared failure outputs. A real runtime capability negotiation is still required before publication.
 
-The buffer-binding installer now supplies SoSetTargets. It validates stream-output bind usage and explicit byte offsets while preserving UINT_MAX append positions. COM replaces the full target array and clears omitted slots, matching DDI ClearTargets semantics. Null targets remain null; count+clear validation avoids overflow. Local checks cover append, exact-end and misaligned/out-of-range offsets plus typed error paths. This does not fix or validate the engine's known no-GS line/triangle stream-output limitation, nor does it yet wire the GS-with-SO creation callback.
+The buffer-binding installer now supplies SoSetTargets. It checks stream-output bind usage and explicit byte offsets while preserving UINT_MAX append positions. COM replaces the full target array and clears omitted slots, matching DDI ClearTargets semantics. Null targets remain null. A count+clear check avoids overflow. Local checks cover append, exact-end and misaligned/out-of-range offsets plus typed error paths. This does not fix or check the engine's known no-GS line/triangle stream-output limitation. It also does not yet wire the GS-with-SO creation callback.
 
-`install_resource_status_ddi` adds ResourceIsStagingBusy and SetResourceMinLOD. The DDI busy query covers the whole resource, while the engine ABI takes one subresource; texture mip/array counts are therefore queried from the engine and every subresource is checked until busy/failure. Volume depth slices are not separate subresources. S_OK from every check is required before returning idle, and failures remain busy with SetErrorCb. No wait, flush or readback is added by the shell. Local callback controls specifically detect a busy final subresource and early failure, plus all-idle and uninitialized-owner behavior. Real staging synchronization via the system UMD remains unmeasured.
+`install_resource_status_ddi` adds ResourceIsStagingBusy and SetResourceMinLOD. The DDI busy query covers the whole resource, while the engine ABI takes one subresource. Thus the shell queries the texture mip/array counts from the engine and checks every subresource until busy/failure. Volume depth slices are not separate subresources. S_OK from every check is required before returning idle, and failures remain busy with SetErrorCb. No wait, flush or readback is added by the shell. Local callback controls specifically detect a busy final subresource and early failure, plus all-idle and uninitialized-owner behavior. Real staging synchronization via the system UMD remains unmeasured.
 
-`install_lifecycle_ddi` adds DestroyDevice through `retire_device_handle`. Device handle ownership is a heap-allocated DeviceOwner; successful cleanup deletes it only after its RuntimeDomain scope has unwound. Failed cleanup or remaining live objects reports an error and retains that owner. The helper allows a controlled retry while handle storage remains valid; the VOID DDI callback must tolerate the runtime freeing its handle after return, so failed retirement intentionally leaves the heap allocation alive. DeviceOwner now acquires its own UMD/engine/ICD loader references before creating Vulkan objects and retains them on failed cleanup; the caller must still hold its normal loader reference throughout the call. Local controls inject context-destroy failure, verify retained identity and live context, then retry successfully; null/repeated retirement is harmless. This is not a live GPU teardown test.
+`install_lifecycle_ddi` adds DestroyDevice through `retire_device_handle`. The device handle owns a heap-allocated DeviceOwner. Successful cleanup deletes it only after its RuntimeDomain scope has unwound. Failed cleanup or remaining live objects reports an error and retains that owner. The helper allows a controlled retry while the handle storage remains valid. The VOID DDI callback must tolerate that the runtime frees its handle after return. Thus a failed retirement intentionally leaves the heap allocation alive. DeviceOwner now acquires its own UMD/engine/ICD loader references before it creates Vulkan objects, and retains them on failed cleanup. The caller must still hold its normal loader reference through the call. Local controls inject a context-destroy failure, check the retained identity and live context, then retry successfully. Null/repeated retirement is harmless. This is not a live GPU teardown test.
 
-DeviceOwner acquires three counted module references from code addresses (the UMD anchor, engine CreateDevice and ICD instance dispatcher). It does not search DLL names. Initialization refuses outstanding references. Close releases references only after engine, Vulkan instance and runtime context/fence cleanup succeeds; partial acquisition failures also retain acquired references until close. The caller owns the normal loader reference while executing the API. The owner control exercises actual loader-reference acquisition using test-module code addresses, failure retention, successful release and rejected reinitialization. This is not yet the full-path engine/ICD loader or a hardware module-lifetime test.
+DeviceOwner acquires three counted module references from code addresses (the UMD anchor, engine CreateDevice and ICD instance dispatcher). It does not search DLL names. Initialization refuses outstanding references. Close releases references only after engine, Vulkan instance and runtime context/fence cleanup succeeds. Partial acquisition failures also retain acquired references until close. The caller owns the normal loader reference while executing the API. The owner control exercises actual loader-reference acquisition using test-module code addresses, failure retention, successful release and rejected reinitialization. This is not yet the full-path engine/ICD loader or a hardware module-lifetime test.
 
 Query DDI now translates the standard event, occlusion, timestamp, pipeline and
 stream-output query families to engine COM queries, including predicate creation
@@ -163,7 +171,7 @@ GetData maps S_FALSE to DXGI_DDI_ERR_WASSTILLDRAWING and stages results until S_
 the engine EVENT implementation can write FALSE while still pending, whereas DDI
 requires an unchanged caller buffer. DONOTFLUSH is forwarded without a shell wait.
 Device-dependent performance counters remain unsupported. Host tests cover mapping,
-pending-buffer preservation and missing-engine error/domain handling; this does
+pending-buffer preservation and missing-engine error/domain handling. This does
 not yet establish query correctness on the hosted GPU path.
 
 Geometry-shader stream-output creation is connected through the engine shader
@@ -172,15 +180,15 @@ stream/slot indices and UINT_MAX gap entries without interpreting structure padd
 Buffer strides and rasterized-stream selection are passed unchanged. Null, VS or
 DS code is forwarded for engine pass-through construction, always yielding a GS.
 The engine's known pass-through limitation for line/triangle primitives remains
-open; connecting this DDI does not establish full stream-output conformance.
+open. Connecting this DDI does not establish full stream-output conformance.
 Host controls exercise declaration translation, invalid bounds, WDK signatures
 and missing-engine error handling. Actual hosted stream-output rendering is pending.
 
 EngineModules provides adapter-owned loader references for explicit local absolute
 engine and ICD DLL paths. Dependencies are searched only in that DLL's directory
-and System32. It validates the complete engine ABI function table, resolves ICD
+and System32. It checks the complete engine ABI function table, resolves ICD
 GIPA directly, and rolls back partial loads. DeviceOwner retains independent code
-references before opening its Vulkan session; the adapter loader must stay alive
+references before opening its Vulkan session. The adapter loader must stay alive
 through that acquisition. No Vulkan instance is created by this loader.
 The loader pins the engine and the ICD as soon as each one is loaded (module-pin.h,
 BD-315). They stay loaded until the process ends, and close() only drops the
@@ -202,22 +210,24 @@ What the pin changes for a process that lives long:
   kept for a rollback).
 The loader fixture test covers successful load/close/reopen, second-module failure,
 ABI mismatch, missing function and export failure with cleared state. The adapter
-now owns this loader and verifies both configured SHA-256 values before loading.
-Verification holds read handles denying write/delete sharing through LoadLibraryEx.
+now owns this loader and checks both configured SHA-256 values before loading.
+The check holds read handles that deny write/delete sharing through LoadLibraryEx.
 
 API-to-DDI status translation is explicit: nonblocking Map busy maps to
-DXGI_DDI_ERR_WASSTILLDRAWING, and DXGI removed/reset/hung/internal-driver status
-maps to D3DDDIERR_DEVICEREMOVED. QueryGetData checks device status before reading;
+DXGI_DDI_ERR_WASSTILLDRAWING. The DXGI statuses `DXGI_ERROR_DEVICE_REMOVED`,
+`DXGI_ERROR_DEVICE_RESET`, `DXGI_ERROR_DEVICE_HUNG` and
+`DXGI_ERROR_DRIVER_INTERNAL_ERROR` map to D3DDDIERR_DEVICEREMOVED.
+QueryGetData checks device status before reading.
 ResourceIsStagingBusy returns FALSE on known device loss without SetErrorCb so a
 following Map can report removal. Unexpected programming failures remain critical,
-as required by the local Microsoft display/handling-errors.md contract; this is
+as required by the local Microsoft `display/handling-errors.md` contract. This is
 not yet a complete per-entry error-category audit. Host translation tests passed.
 
 The loader and session accept an engine with the same ABI major and at least the
 shell-owned minimum minor, while still checking table size and mandatory functions. Loader
 fixture tests include a newer compatible minor and reject an older required minor.
 Cube-array views accept arbitrary first faces within the resource range. Format
-query failures map to NOT_SUPPORTED only for the explicit WDK-permitted list;
+query failures map to NOT_SUPPORTED only for the explicit WDK-permitted list.
 R1_UNORM is not on that list and its engine support remains unresolved. MSAA
 counts outside 1..32 return zero quality levels without an engine error.
 
@@ -230,55 +240,55 @@ without SetErrorCb. If cleanup fails, the adapter receives a retained owner in a
 separate failedCleanup handle, independent of runtime-owned private memory.
 Host tests inject context allocation failure, absent Vulkan instance export and
 failed cleanup/retry, checking the runtime table remains byte-for-byte unchanged.
-Successful hosted device creation/publication has not yet been validated on GPU.
+Successful hosted device creation/publication is not yet checked on the GPU.
 
 ClearView forwards texture RTV and UAV clears to the engine, preserving float
 colors and rectangle coordinates. NULL rectangles mean a whole-view clear.
 Buffer RTV ClearView is forwarded with engine fix dd35ce7c (included in the
-fba2c2d2 ABI1.1 candidate). The prior temporary E_NOTIMPL guard has been removed.
-ClearView also accepts a video processor output view. RelocateDeviceFuncs rebuilds the same dispatch table;
-the shell retains no pointer to runtime-owned table storage. Host tests cover view
+fba2c2d2 ABI1.1 candidate). The prior temporary E_NOTIMPL guard is deleted.
+ClearView also accepts a video processor output view. RelocateDeviceFuncs rebuilds the same dispatch table.
+The shell retains no pointer to runtime-owned table storage. Host tests cover view
 type selection, relocation and missing-engine handling, not GPU clear pixels.
 
 The DXGI1.2 Present entry now invokes engine SubmitForPresent through the runtime
 bridge, then GPU fence ordering, PresentCb and present completion signal. It does
 not CPU-wait or read back the frame. An explicit borrowed allocation/subresource
-identity is required on each presented resource; ordinary engine resources have
+identity is required on each presented resource. Ordinary engine resources have
 zero identity and are rejected. Runtime allocation import, ownership and rotation
-are integrated. CreateDevice publishes the matched DXGI1.2 table after the engine
-confirms the advertised adapter capabilities. Engine-private Offer/Reclaim and
-residency support remain incomplete; gamma/MPO are not implemented.
+are integrated. CreateDevice publishes the matched DXGI1.2 table after a check
+that the engine has the advertised adapter capabilities. Engine-private Offer/Reclaim and
+residency support remain incomplete. Gamma/MPO are not implemented.
 Host tests cover entry validation/domain unwinding and the bridge's submit/wait/
 present/signal order and failures. This is not an end-to-end GPU Present result.
 
-RotateResourceIdentities now validates distinct resources, asks the engine to
+RotateResourceIdentities now checks that the resources are distinct, asks the engine to
 rotate image storage, then rotates the allocation/subresource pairs in the same
 0<-1<-2<-0 direction. COM resource identities stay fixed so existing views follow
-the engine's storage rotation. All temporary allocations precede the engine call;
-failed engine rotation leaves shell metadata unchanged. Future importer-owned image
+the engine's storage rotation. All temporary allocations precede the engine call.
+A failed engine rotation leaves shell metadata unchanged. Future importer-owned image
 lifetime metadata must join this transaction. Host tests exercise three-resource
-success, engine failure, duplicate rejection and DDI domain handling; no live
-swapchain rotation has yet been validated.
+success, engine failure, duplicate rejection and DDI domain handling. No live
+swapchain rotation is checked yet.
 
 DXGI Blt now translates its source/destination resources, subresources, destination
 rectangle, flags and rotation to the engine Blt ABI. Coordinates must fit signed
-RECT without truncation; reserved flags are rejected. PRESENT uses the engine's
+RECT without truncation. Reserved flags are rejected. PRESENT uses the engine's
 submit behavior. Engine limitations (90/270-degree rotation and multisampled
 destination) propagate as failures. Blt1 now uses ABI 1.1 IBc250DxvkDevice1 via
 QueryInterface and preserves independent source/destination rectangles. This build
-requires the ABI 1.1 header/engine; no whole-source fallback is used. Host
-descriptor/error tests pass; GPU content validation is pending.
+requires the ABI 1.1 header/engine. No whole-source fallback is used. Host
+descriptor/error tests pass. GPU content validation is pending.
 
 runtime-image-memory imports a runtime allocation into VkDeviceMemory through the
 existing hosted RADV private pNext contract and binds it to a caller-created image.
-It validates device identity/domain, allocation/VA/size, image requirements and a
+It checks device identity/domain, allocation/VA/size, image requirements and a
 compatible device-local memory type. Failed binding frees the imported Vulkan
 memory wrapper. Image layout/row pitch compatibility, runtime allocation ownership,
 residency and final teardown ordering remain caller responsibilities and are not
-yet integrated with CreateResource. The isolated mock Vulkan test passes; this is
+yet integrated with CreateResource. The isolated mock Vulkan test passes. This is
 not yet a measured runtime-image import on the lab.
 
-create_linear_runtime_image now creates the Vulkan image and verifies its measured
+create_linear_runtime_image now creates the Vulkan image and checks its measured
 subresource offset/rowPitch/size against runtime storage before import+bind. The
 supported layout is single-mip/layer linear 2D, one sample, in a format the surface
 format table (driver/contract/amdgpu_wddm_surface_format.h) enables for composition:
@@ -290,13 +300,13 @@ primary (a swap-chain buffer with a primary descriptor) may have any of these ro
 A8, and keeps the descriptor's VidPn source (dxgkrnl refused an RGB10A2 primary
 allocation with D3DDDI_ID_UNINITIALIZED, lab session 343). Admission as a primary is not
 permission to scan out: the kernel driver's SetVidPnSourceAddress takes only the 8-bit
-scan-out rows, and direct scan-out of RGB10A2/RGBA16F remains unsupported; this revision
+scan-out rows, and direct scan-out of RGB10A2/RGBA16F remains unsupported. This revision
 does not establish when the OS promotes such a buffer. The Ascent's UE 4.26 borderless
 swap chain is an RGB10A2 primary.
 
 M15.14 increment 3 (`scanout-primary.h`) lets an 8-bit primary ask for scan-out. The
 E26R v3 record then carries `SCANOUT` next to `PRIMARY`, and the kernel driver places
-the buffer in the local segment, which the display core can read. The request is on by
+the buffer in the local segment, which the scan-out hardware can read. The request is on by
 default from tester.34, as in the D3D12 shell (BD-256: nothing wrote the machine value, so
 with the default off no D3D11 game could flip). The REG_DWORD `ScanoutPrimary=0` under
 `HKLM\SOFTWARE\amdgpu-wddm\D3D11` turns it off, and `AMDGPU_WDDM_D3D11_SCANOUT=0` in the
@@ -325,25 +335,25 @@ runtime-texture combines engine GetImageCreateInfo, linear runtime-image import
 and CreateTexture2DFromImage, preserving required flags/usage and format-list chain.
 Teardown first waits for runtime Present and engine resource work, then releases
 the COM texture, destroys the image and frees Vulkan memory. A failed wait keeps
-state for retry; nonzero final Release retains image/memory permanently rather
+state for retry. A nonzero final Release retains image/memory permanently rather
 than dereferencing a potentially dead texture on a later retry. The adapter must
 retain this owner and device as well. Runtime allocation release is still external.
 Mock tests cover wrap failure, wait failure/retry, successful cleanup and unexpected
 surviving references. DDI resource ownership/rotation integration and GPU validation
-remain pending; no runtime allocation has yet been created by this helper.
+remain pending. No runtime allocation has yet been created by this helper.
 
 runtime-surface-allocation creates LB7A surfaces through pfnAllocateCb with E26R v2
 resource metadata. It reuses the KMD allocation structure and geometry functions,
 rejects primary+CPU-read policy, and supports current 32-bit desktop formats.
 Cleanup uses pfnDeallocate2Cb with the runtime resource handle when present, so
-shared resource/device bindings close atomically; allocation-list cleanup is only
+shared resource/device bindings close atomically. Allocation-list cleanup is only
 for standalone allocations. Failed cleanup preserves state for retry. Mock callback
 tests cover ABI fields, domain, allocation failure and both cleanup forms.
 GPU VA mapping/residency and integration with imported texture creation remain open.
 
 Surface paging now creates a runtime paging queue, maps a page-rounded GPU VA and
 requests residency. Successful asynchronous callbacks (E_PENDING) retain their
-fence values; the maximum map/residency fence governs readiness. Polling reports
+fence values. The maximum map/residency fence governs readiness. Polling reports
 S_FALSE until completion and treats UINT64_MAX as device removal. Import requires
 both completed paging and resident=true. Residency failure preserves mapped VA
 for cleanup. Unmap returns E_PENDING while paging is outstanding and retains state
@@ -357,8 +367,8 @@ loss sentinel. Device/resource lifecycle integration and lab measurement are pen
 `tools/build/build-umd-dxvk.ps1 -DxvkSource <DXVK tree>` builds `amdgpu_wddm_d3d11.dll`
 with `OpenAdapter10_2`. It does not install the DLL, create a deployment configuration,
 or select engine/ICD artifacts. `test-umd-entry.ps1 -DxvkSource <tree> -UmdPath <DLL>`
-loads an isolated copy and exercises the real export with synthetic adapter callbacks;
-this proves loader/negotiation behavior, not system-runtime device creation or GPU work.
+loads an isolated copy and exercises the real export with synthetic adapter callbacks.
+This proves loader/negotiation behavior, not system-runtime device creation or GPU work.
 
 The export reads `amdgpu_wddm_d3d11.config` only beside its own module. The configuration is
 little-endian, either version 1 (108 bytes, `AdapterConfigRecord` in `adapter-config.h`, maximum
@@ -373,7 +383,7 @@ FL11_1) or version 2 (132 bytes, `AdapterConfigRecord2`, maximum FL12_0 or FL12_
 - Engine SHA-256 (32 raw bytes), then ICD SHA-256 (32 raw bytes).
 
 An FL12 record is advertised only when the adapter's sparse policy (`AmdgpuWddmSparseBinding`,
-read as in the D3D12 shell, default on) is enabled; otherwise the caps are clamped to FL11_1 and
+read as in the D3D12 shell, default on) is enabled. Otherwise the caps are clamped to FL11_1 and
 only the D3D11.1 DDI is offered. With the policy on, the shell offers the WDDM 2.0 DDI
 (`ddi-wddm2.cpp`, tiled entries through the engine's ID3D11DeviceContext2), the WDDM 2.2 DDI
 (`ddi-wddm22.cpp`) and the WDDM 2.9 DDI (`ddi-wddm26.cpp`), and chains `bc250_host_policy` with
@@ -434,7 +444,7 @@ What the new entries do:
   `pfnReclaimAllocations3Cb` (WDDM 2.2 device) or `pfnReclaimAllocations2Cb`, and wait for its
   paging fence before they return (BD-283). The synchronous
   `pfnReclaimAllocationsCb` is the path for a device without that queue, and the second try when
-  the queued callback refuses with a status other than removal. Every success returns S_OK: d3d11.dll removes the
+  the queued callback refuses with a status other than removal. Every success returns S_OK: d3d11.dll loses the
   device for any other status of these entries, success codes included (Reason 6). Each reclaim that
   leaves the plain path writes one `BC250 BD-283` line with both callback answers and the fence.
 - Each Offer, Reclaim and Trim writes one `BC250 residency:` line with the entry, the number of resources and kernel
@@ -453,7 +463,7 @@ The switch `wddm22-ddi-off` withholds the WDDM 2.2 offer and leaves the WDDM 2.0
 newest one (`ddi-experiment.h`, the shape of the D3D12 shell's switch). It comes from the
 application profile or the machine-wide value, and in a lab build also from
 `AMDGPU_WDDM_D3D11_EXPERIMENT` (BD-167: a release shell has no lookup of that name). The name ends in `-off` because the shells share one
-rule: a validated behaviour is the default, and a switch only ever turns one off again. The
+rule: a behaviour that passed its tests is the default, and a switch only ever turns one off again. The
 recommended default is the WDDM 2.2 offer, which is what the shell does with no switch named.
 `wddm22-ddi-off` withholds the WDDM 2.9 offer too. The switch `wddm29-ddi-off` withholds only the
 WDDM 2.9 offer, and the WDDM 2.2 table is then the newest one again (BD-371).
@@ -463,8 +473,8 @@ Each name has a row in `kD3D11Switches` with a class (`../d3d12/experiment-class
 
 The sibling modules are named `amdgpu_wddm_dxvk.dll` and `amdgpu_wddm_radv.dll`. Zero hashes,
 unknown record versions, invalid Boolean/precision values and inconsistent capability
-records are rejected. Capabilities must be measured from the exact selected pair;
-no gfx1013 defaults are supplied. The configuration's hashes bind the record to those
+records are rejected. Capabilities must be measured from the exact selected pair.
+No gfx1013 defaults are supplied. The configuration's hashes bind the record to those
 files, while the CreateDevice ABI1.4 gate checks the actual feature claims.
 Encode an accepted exact-pair measurement with Python 3.11 or later:
 
@@ -472,21 +482,21 @@ Encode an accepted exact-pair measurement with Python 3.11 or later:
 python tools/build/write-umd-config.py --caps <accepted-caps.json> --engine <amdgpu_wddm_dxvk.dll> --icd <amdgpu_wddm_radv.dll> --out <new-package>/amdgpu_wddm_d3d11.config
 ```
 
-The writer verifies both files against the measured hashes, checks capability
+The writer checks both files against the measured hashes, checks capability
 consistency, and writes the fixed little-endian record. It refuses to overwrite
 an existing configuration. It does not establish that the input measurement was
 valid, sign or install the package, or replace the CreateDevice capability gate.
-Host tests are `python -m unittest discover -s tools/build -p test_write_umd_config.py`;
-set TEMP/TMP to the workspace scratch directory before running them.
+Host tests are `python -m unittest discover -s tools/build -p test_write_umd_config.py`.
+Set TEMP/TMP to the workspace scratch directory before running them.
 
 Open copies the record, queries the KMD identity trailer, and publishes the adapter
-without creating Vulkan objects. CreateDevice loads the verified siblings and creates
+without creating Vulkan objects. CreateDevice loads the checked siblings and creates
 the hosted device. A KMD with the identity trailer and E26R v3 resource metadata is
-required; deployed KMD170 lacks these additions. Failed initialization never publishes
-either device table. An owner that cannot be cleaned up is retained with its modules;
+required. Deployed KMD170 lacks these additions. Failed initialization never publishes
+either device table. An owner that cannot be cleaned up is retained with its modules.
 CloseAdapter does not reuse invalid runtime callbacks from a failed CreateDevice.
 
-The exported-DLL host test removes its synthetic configuration on success. Its copied
+The exported-DLL host test deletes its synthetic configuration on success. Its copied
 DLL and synthetic inputs are test artifacts, not a deployment package. A measured
 capability record, exact rebuilt KMD, signed packaging and bounded system-runtime GPU
 validation are still required before promotion.
@@ -495,17 +505,17 @@ Initialization diagnostics use OutputDebugStringA: Interface/Version/Flags once
 for each of CalcPrivateDeviceSize and CreateDevice per adapter, plus module-load
 and device-creation failure HRESULTs. Engine errors/warnings use the same channel,
 limited to 64 messages per process and 1024 message characters. The engine callback
-never calls back into the engine/runtime and carries no adapter userdata; retained
+never calls back into the engine/runtime and carries no adapter userdata. Retained
 devices can therefore report failures safely after adapter closure. Informational
 and debug engine levels are suppressed. No file logger or resident collector is
-started by this code. Host builds validate the callback ABI; live diagnostic capture
+started by this code. Host builds check the callback ABI. Live diagnostic capture
 is still part of the first bounded runtime trial.
 
 ## Device-table coverage gate
 
-The shell build runs the DDI host suite before linking the deployable DLL. The suite checks all155 D3D11.1 slots and all15 DXGI1.2 slots; only the reserved MPO filter-range entry may be null. WDK layout size and known counter-info offset are asserted. This gate establishes callable coverage, not GPU correctness.
+The shell build runs the DDI host suite before linking the deployable DLL. The suite checks all 155 D3D11.1 slots and all 15 DXGI1.2 slots. Only the reserved MPO filter-range entry may be null. WDK layout size and known counter-info offset are asserted. This gate establishes callable coverage, not GPU correctness.
 
-Hazard notifications defer barriers to DXVK's actual resource use. Convert entries share the Copy implementations as permitted by the WDK. Discard retains contents/backing, which is legal but not a bandwidth optimization; direct flip is explicitly unsupported. Optional debug binaries and the unexposed D3D10 text-filter state do not change execution. Counter queries report no counters. Zero-instance shader-interface binds forward to ordinary binds; nonzero class instances are explicitly rejected, not silently ignored. Dynamic class linkage is therefore not implemented.
+Hazard notifications defer barriers to DXVK's actual resource use. Convert entries share the Copy implementations as permitted by the WDK. Discard retains contents/backing, which is legal but not a bandwidth optimization. Direct flip is explicitly unsupported. Optional debug binaries and the unexposed D3D10 text-filter state do not change execution. Counter queries report no counters. Zero-instance shader-interface binds forward to ordinary binds. Nonzero class instances are explicitly rejected, not silently ignored. Dynamic class linkage is therefore not implemented.
 
 Command-list/deferred-context support remains unadvertised (THREADING=0). Their typed entries diagnose unexpected calls once and return failure/zero size or SetError under the runtime domain. They do not claim to implement those features. Tests cover this refusal, domain entry, initialized capability outputs and copy/convert identity. A future threading implementation must replace the refusals and update caps together.
 
@@ -515,7 +525,7 @@ Command-list/deferred-context support remains unadvertised (THREADING=0). Their 
 runs the production module-loader admission path before building the shell.
 The probe creates no Vulkan instance/device and records the ABI header, engine
 and ICD SHA256 plus result in `quality/engine-pair/pair-result.json`.
-Use both arguments for a deployment candidate; omitting them is build-only.
+Use both arguments for a deployment candidate. Without them, the run is build-only.
 The minimum is explicitly owned by the shell (ABI1.4), independent of newer
 header minors. Keep the staged engine at or above this minimum.
 This check establishes export/ABI loading only, not device creation or rendering.
@@ -523,8 +533,8 @@ This check establishes export/ABI loading only, not device creation or rendering
 Window swap-chain buffers may carry `DISPLAYABLE_SURFACE` even on the
 D3D11.1 entry (M746). They use runtime LB7A allocation/import, whose linear
 layout and pitch already meet the surface geometry contract. This flag is
-not forwarded as an ordinary COM misc flag and does not imply a VidPn primary;
-only `pPrimaryDesc` supplies primary/source identity. Ordinary private texture
+not forwarded as an ordinary COM misc flag and does not imply a VidPn primary.
+Only `pPrimaryDesc` supplies primary/source identity. Ordinary private texture
 conversion and unsupported restricted-sharing flags remain rejected.
 
 ## Deferred engine failures (ABI1.4)
@@ -532,22 +542,22 @@ conversion and unsupported restricted-sharing flags remain rejected.
 Device initialization requires `IBc250DxvkDevice4` and holds one reference until
 session teardown. UpdateSubresource1, Flush and SubmitForPresent check the
 engine error latch before and after work. A pre-existing failure prevents that
-work; a failure generated by it prevents a successful Flush/Present result.
+work. A failure generated by it prevents a successful Flush/Present result.
 The engine clears its latch on read, so partial execution (`E_FAIL`) and invalid
 statuses are retained as device removal by the shell. This does not reset until
 successful owner teardown.
 
 Error handling follows each DDI contract. UpdateSubresourceUP(D3D11_1) and
-Flush(D3D11_1) allow only D3DDDIERR_DEVICEREMOVED through SetErrorCb; even a
+Flush(D3D11_1) allow only D3DDDIERR_DEVICEREMOVED through SetErrorCb. Even a
 latched OOM is terminal there. Present returns HRESULT and can propagate OOM.
-No S_OK callback clears a runtime error. Local references: WDK10.0.26100
-`d3d10umddi` ResourceUpdateSubresourceUP/Flush remarks and the display guide
-`handling-errors.md` at110f60ea. Recovery from OOM at creation/Map remains
+No S_OK callback clears a runtime error. Local references: WDK 10.0.26100
+`d3d10umddi` ResourceUpdateSubresourceUP/Flush remarks and the Microsoft guide
+`display/handling-errors.md` at 110f60ea. Recovery from OOM at creation/Map remains
 subject to those separate entries' contracts, not this latch policy.
 
-Mandatory host controls verify allowed OOM, strict-entry OOM, sticky partial
+Mandatory host controls check allowed OOM, strict-entry OOM, sticky partial
 failure, invalid latch results, ABI minimum and session cleanup. Exact pair
-admission passes with frozen DC65 engine1.4; native runtime fault injection and
+admission passes with frozen DC65 engine 1.4. Native runtime fault injection and
 normal rendering with this new pair remain unmeasured. Trim/residency handling
 is not implemented by this change.
 
@@ -609,7 +619,7 @@ order, the order of the unmaps and maps of a rotation, one registration for each
 session that is enabled before registration, unload with live mappings, a destroy without a create, concurrent
 changes during rundowns, and the calls to a reporter. With `-DxvkSource` it also checks the conversion of engine
 events and the ICD query. `ddi-draw-test` checks the rotation call site. The engine's host test checks the engine
-half. The lab has not yet confirmed the events in a real trace.
+half. The lab has not yet checked the events in a real trace.
 
 ## Video DDIs (BD-223)
 
