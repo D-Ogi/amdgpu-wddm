@@ -76,7 +76,6 @@
 19	docs/hardware.md
 8	docs/init-sequence.md
 157	docs/m15-reconciliation.md
-18	docs/prior-art.md
 11	docs/research/build-quality-gates.md
 21	docs/testing/INSTALL.md
 10	docs/testing/THIRD-PARTY.md
