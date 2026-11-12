@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
-// The video DDIs (BD-223): RetrieveSubObject and its three table layouts, the processor's formats, colour spaces and
-// caps, the view plans, the statuses of every entry that cannot succeed against the reference pages, and the answers
-// of a device whose engine is lost. No GPU: the owner has no engine, so every entry under test answers before the
+// The video DDIs (BD-223): RetrieveSubObject and its five table layouts (the two 2.4 layouts: BD-371), the
+// processor's formats, colour spaces and caps, the view plans, the statuses of every entry that cannot succeed
+// against the reference pages, and the answers of a device whose engine is lost. No GPU: the owner has no engine, so every entry under test answers before the
 // engine is reached, or reports the lost engine. Each checker also runs on a mutant that it has to reject (negative
 // controls), so a checker that passes everything cannot hide here.
 #include "ddi-video.h"
 #include "ddi-resource.h"
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -149,7 +150,9 @@ void test_video_ddi() {
     CHECK(video_table_size(D3D11_1DDI_VIDEO_FUNCTIONS)==sizeof(D3D11_1DDI_VIDEODEVICEFUNCS));
     CHECK(video_table_size(D3DWDDM2_0DDI_VIDEO_FUNCTIONS)==sizeof(D3DWDDM2_0DDI_VIDEODEVICEFUNCS));
     CHECK(video_table_size(D3DWDDM2_1DDI_VIDEO_FUNCTIONS)==sizeof(D3DWDDM2_1DDI_VIDEODEVICEFUNCS));
-    for (UINT32 id:{0u,1u,4u,6u,7u,8u}) CHECK(video_table_size(id)==0);
+    CHECK(video_table_size(D3DWDDM2_4DDI_VIDEO_FUNCTIONS_RS4_0)==sizeof(D3DWDDM2_4DDI_VIDEODEVICEFUNCS_RS4_0));
+    CHECK(video_table_size(D3DWDDM2_4DDI_VIDEO_FUNCTIONS)==sizeof(D3DWDDM2_4DDI_VIDEODEVICEFUNCS));
+    for (UINT32 id:{0u,1u,4u,8u}) CHECK(video_table_size(id)==0);
     const auto table=make_video_device_table();
     CHECK(table_complete(&table,sizeof(table)));
     CHECK(sizeof(table)/sizeof(void *)==96);
@@ -176,10 +179,44 @@ void test_video_ddi() {
         CHECK(retrieve_subobject({},id,sizeof(input),&input,0,nullptr)==S_OK);
         CHECK(std::memcmp(buffer.data(),&table,size)==0);
     }
-    {   // The 2.4 layouts and unknown IDs are refused and touch nothing; bad arguments are refused.
+    // The two 2.4 layouts (BD-371): each sub ID gets its own table, exactly its size, and every entry the 2.1 layout
+    // shares stays the 2.1 entry. Only the four adapted entries differ, and the MT key exchange is the same entry.
+    const auto rs4=make_video_device_table_rs4_0();
+    const auto v24=make_video_device_table_2_4();
+    CHECK(table_complete(&rs4,sizeof(rs4)) && table_complete(&v24,sizeof(v24)));
+    CHECK(sizeof(rs4)/sizeof(void *)==96 && sizeof(v24)/sizeof(void *)==97);
+    {
+        void *base[96],*a[96],*b[97];
+        std::memcpy(base,&table,sizeof(base)); std::memcpy(a,&rs4,sizeof(a)); std::memcpy(b,&v24,sizeof(b));
+        const size_t begin=offsetof(D3DWDDM2_1DDI_VIDEODEVICEFUNCS,pfnVideoDecoderBeginFrame)/sizeof(void *);
+        const size_t submit=offsetof(D3DWDDM2_1DDI_VIDEODEVICEFUNCS,pfnVideoDecoderSubmitBuffers1)/sizeof(void *);
+        const size_t key=offsetof(D3DWDDM2_1DDI_VIDEODEVICEFUNCS,pfnNegotiateCryptoSessionKeyExchange)/sizeof(void *);
+        unsigned changedRs4=0,changed24=0;
+        for (size_t i=0;i<96;++i) {
+            const bool rs4Changes=i==begin || i==submit, changes24=rs4Changes || i==key;
+            if (rs4Changes) { CHECK(a[i]!=base[i]); ++changedRs4; } else CHECK(a[i]==base[i]);
+            if (changes24) { CHECK(b[i]!=base[i]); ++changed24; } else CHECK(b[i]==base[i]);
+        }
+        CHECK(changedRs4==2 && changed24==3 && a[submit]==b[submit] && a[begin]!=b[begin]);
+        CHECK(b[96]==b[key]);
+    }
+    for (UINT32 id:{UINT32(D3DWDDM2_4DDI_VIDEO_FUNCTIONS_RS4_0),UINT32(D3DWDDM2_4DDI_VIDEO_FUNCTIONS)}) {
+        const SIZE_T size=video_table_size(id);
+        const void *want=id==D3DWDDM2_4DDI_VIDEO_FUNCTIONS ? static_cast<const void *>(&v24) : static_cast<const void *>(&rs4);
+        std::vector<unsigned char> buffer(size+64,0xCD);
+        D3DWDDM2_4DDI_VIDEO_INPUT input{FALSE,reinterpret_cast<D3DWDDM2_4DDI_VIDEODEVICEFUNCS *>(buffer.data())};
+        D3DWDDM2_4DDI_VIDEO_OUTPUT output{0x5A};
+        CHECK(retrieve_subobject({},id,sizeof(input),&input,sizeof(output),&output)==S_OK);
+        CHECK(output.Reserved==0 && table_complete(buffer.data(),size) && std::memcmp(buffer.data(),want,size)==0);
+        for (SIZE_T i=size;i<buffer.size();++i) CHECK(buffer[i]==0xCD);
+        input.Relocate=TRUE;
+        std::memset(buffer.data(),0,size);
+        CHECK(retrieve_subobject({},id,sizeof(input),&input,0,nullptr)==S_OK && std::memcmp(buffer.data(),want,size)==0);
+    }
+    {   // Unknown IDs are refused and touch nothing; bad arguments are refused.
         std::vector<unsigned char> buffer(sizeof(D3DWDDM2_4DDI_VIDEODEVICEFUNCS),0xCD);
         D3D11_1DDI_VIDEO_INPUT input{FALSE,reinterpret_cast<D3D11_1DDI_VIDEODEVICEFUNCS *>(buffer.data())};
-        for (UINT32 id:{6u,7u,1u,99u}) CHECK(retrieve_subobject({},id,sizeof(input),&input,0,nullptr)==E_NOTIMPL);
+        for (UINT32 id:{1u,4u,8u,99u}) CHECK(retrieve_subobject({},id,sizeof(input),&input,0,nullptr)==E_NOTIMPL);
         for (auto b:buffer) CHECK(b==0xCD);
         CHECK(retrieve_subobject({},D3DWDDM2_1DDI_VIDEO_FUNCTIONS,sizeof(input),nullptr,0,nullptr)==E_INVALIDARG);
         CHECK(retrieve_subobject({},D3DWDDM2_1DDI_VIDEO_FUNCTIONS,sizeof(input)-1,&input,0,nullptr)==E_INVALIDARG);
@@ -329,6 +366,28 @@ void test_video_ddi() {
         D3D11_1DDI_VIDEO_PROCESSOR_CAPS answered{};
         table.pfnGetVideoProcessorCaps(none,{},&answered);
         CHECK(std::memcmp(&answered,&caps,sizeof(caps))==0);
+        // The four adapted 2.4 entries answer as their 2.1 entries do, with or without the arguments that only the
+        // 2.4 layouts carry: a histogram request, a stripe pattern, a key exchange flag.
+        D3DWDDM2_4DDIARG_VIDEODECODERBEGINFRAME_RS4_0 beginRs4{};
+        CHECK(rs4.pfnVideoDecoderBeginFrame(none,{},nullptr)==E_OUTOFMEMORY);
+        CHECK(rs4.pfnVideoDecoderBeginFrame(none,{},&beginRs4)==E_OUTOFMEMORY);
+        beginRs4.Histograms[2].hBuffer.pDrvPrivate=&beginRs4;
+        CHECK(rs4.pfnVideoDecoderBeginFrame(none,{},&beginRs4)==E_OUTOFMEMORY);
+        D3DWDDM2_4DDIARG_VIDEODECODERBEGINFRAME begin24{};
+        CHECK(v24.pfnVideoDecoderBeginFrame(none,{},&begin24)==E_OUTOFMEMORY);
+        begin24.Histograms[0].hBuffer.pDrvPrivate=&begin24;
+        CHECK(v24.pfnVideoDecoderBeginFrame(none,{},&begin24)==E_OUTOFMEMORY);
+        D3DWDDM2_4DDI_VIDEO_DECODER_BUFFER_DESC buffers[2]{};
+        CHECK(v24.pfnVideoDecoderSubmitBuffers2(none,{},0,nullptr)==E_OUTOFMEMORY);
+        CHECK(v24.pfnVideoDecoderSubmitBuffers2(none,{},2,buffers)==E_OUTOFMEMORY);
+        buffers[1].cBlocksStripeEncrypted=1;
+        CHECK(rs4.pfnVideoDecoderSubmitBuffers2(none,{},2,buffers)==E_OUTOFMEMORY);
+        BYTE key[4]{};
+        CHECK(v24.pfnNegotiateCryptoSessionKeyExchange(none,{},D3DWDDM2_4DDI_CRYPTO_SESSION_KEY_EXCHANGE_FLAG_NONE,sizeof(key),key)==E_INVALIDARG);
+        CHECK(v24.pfnNegotiateCryptoSessionKeyExchangeMT(none,{},D3DWDDM2_4DDI_CRYPTO_SESSION_KEY_EXCHANGE_FLAG_NONE,sizeof(key),key)==E_INVALIDARG);
+        CHECK(v24.pfnNegotiateCryptoSessionKeyExchange(none,{},static_cast<D3DWDDM2_4DDI_CRYPTO_SESSION_KEY_EXCHANGE_FLAGS>(1),
+            sizeof(key),key)==E_INVALIDARG);
+        CHECK(rs4.pfnNegotiateCryptoSessionKeyExchange(none,{},sizeof(key),key)==E_INVALIDARG);
     }
     const std::string reference=find_reference();
     if (reference.empty()) {

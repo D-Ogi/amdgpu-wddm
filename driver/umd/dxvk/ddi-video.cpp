@@ -19,6 +19,25 @@ static_assert(offsetof(D3DWDDM2_0DDI_VIDEODEVICEFUNCS,pfnGetCryptoSessionPrivate
 static_assert(sizeof(D3D11_1DDI_VIDEO_INPUT)==sizeof(D3DWDDM2_0DDI_VIDEO_INPUT) && sizeof(D3D11_1DDI_VIDEO_INPUT)==sizeof(D3DWDDM2_1DDI_VIDEO_INPUT));
 static_assert(offsetof(D3D11_1DDI_VIDEO_INPUT,p11VideoDeviceFuncs)==offsetof(D3DWDDM2_0DDI_VIDEO_INPUT,pWDDM2_0VideoDeviceFuncs));
 static_assert(offsetof(D3D11_1DDI_VIDEO_INPUT,p11VideoDeviceFuncs)==offsetof(D3DWDDM2_1DDI_VIDEO_INPUT,pWDDM2_1VideoDeviceFuncs));
+static_assert(sizeof(D3D11_1DDI_VIDEO_INPUT)==sizeof(D3DWDDM2_4DDI_VIDEO_INPUT_RS4_0) && sizeof(D3D11_1DDI_VIDEO_INPUT)==sizeof(D3DWDDM2_4DDI_VIDEO_INPUT));
+static_assert(offsetof(D3D11_1DDI_VIDEO_INPUT,p11VideoDeviceFuncs)==offsetof(D3DWDDM2_4DDI_VIDEO_INPUT_RS4_0,pWDDM2_4VideoDeviceFuncs));
+static_assert(offsetof(D3D11_1DDI_VIDEO_INPUT,p11VideoDeviceFuncs)==offsetof(D3DWDDM2_4DDI_VIDEO_INPUT,pWDDM2_4VideoDeviceFuncs));
+// The two 2.4 layouts (BD-371) are the 2.1 layout with entries retyped in place. The RS4_0 table changes BeginFrame
+// (histogram requests) and puts SubmitBuffers2 where SubmitBuffers1 was. The final 2.4 table changes the same two,
+// gives NegotiateCryptoSessionKeyExchange a flags argument, and appends the MT key exchange.
+// tools/quality/ddi_table_versions.py checks every other entry against the header.
+static_assert(sizeof(D3DWDDM2_4DDI_VIDEODEVICEFUNCS_RS4_0)==sizeof(D3DWDDM2_1DDI_VIDEODEVICEFUNCS));
+static_assert(sizeof(D3DWDDM2_4DDI_VIDEODEVICEFUNCS)==sizeof(D3DWDDM2_1DDI_VIDEODEVICEFUNCS)+sizeof(void *));
+static_assert(offsetof(D3DWDDM2_4DDI_VIDEODEVICEFUNCS,pfnNegotiateCryptoSessionKeyExchangeMT)==sizeof(D3DWDDM2_1DDI_VIDEODEVICEFUNCS));
+#define SAME_VIDEO_OFFSET(newer,older) \
+    static_assert(offsetof(D3DWDDM2_4DDI_VIDEODEVICEFUNCS_RS4_0,newer)==offsetof(D3DWDDM2_1DDI_VIDEODEVICEFUNCS,older) && \
+                  offsetof(D3DWDDM2_4DDI_VIDEODEVICEFUNCS,newer)==offsetof(D3DWDDM2_1DDI_VIDEODEVICEFUNCS,older))
+SAME_VIDEO_OFFSET(pfnVideoDecoderBeginFrame,pfnVideoDecoderBeginFrame);
+SAME_VIDEO_OFFSET(pfnVideoDecoderSubmitBuffers2,pfnVideoDecoderSubmitBuffers1);
+SAME_VIDEO_OFFSET(pfnNegotiateCryptoSessionKeyExchange,pfnNegotiateCryptoSessionKeyExchange);
+SAME_VIDEO_OFFSET(pfnVideoProcessorBlt,pfnVideoProcessorBlt);
+SAME_VIDEO_OFFSET(pfnVideoProcessorSetStreamHDRMetaData,pfnVideoProcessorSetStreamHDRMetaData);
+#undef SAME_VIDEO_OFFSET
 // The engine's argument types are the DDI types with other names. The conversions below copy field by field; these
 // checks catch a header that changes one side.
 static_assert(sizeof(D3D11_1DDI_VIDEO_PROCESSOR_COLOR_SPACE)==sizeof(D3D11_VIDEO_PROCESSOR_COLOR_SPACE));
@@ -33,6 +52,8 @@ SIZE_T video_table_size(UINT32 subId) {
     case D3D11_1DDI_VIDEO_FUNCTIONS: return sizeof(D3D11_1DDI_VIDEODEVICEFUNCS);
     case D3DWDDM2_0DDI_VIDEO_FUNCTIONS: return sizeof(D3DWDDM2_0DDI_VIDEODEVICEFUNCS);
     case D3DWDDM2_1DDI_VIDEO_FUNCTIONS: return sizeof(D3DWDDM2_1DDI_VIDEODEVICEFUNCS);
+    case D3DWDDM2_4DDI_VIDEO_FUNCTIONS_RS4_0: return sizeof(D3DWDDM2_4DDI_VIDEODEVICEFUNCS_RS4_0);
+    case D3DWDDM2_4DDI_VIDEO_FUNCTIONS: return sizeof(D3DWDDM2_4DDI_VIDEODEVICEFUNCS);
     default: return 0;
     }
 }
@@ -95,6 +116,10 @@ const VideoRefusal kVideoRefusals[]={
     {"VideoDecoderBeginFrame","PFND3D11_1DDI_VIDEODECODERBEGINFRAME",E_OUTOFMEMORY},
     {"VideoDecoderSubmitBuffers","PFND3D11_1DDI_VIDEODECODERSUBMITBUFFERS",E_OUTOFMEMORY},
     {"VideoDecoderSubmitBuffers1","PFND3DWDDM2_0DDI_VIDEODECODERSUBMITBUFFERS1",E_OUTOFMEMORY},
+    {"VideoDecoderBeginFrameRS4_0","PFND3DWDDM2_4DDI_VIDEODECODERBEGINFRAME_RS4_0",E_OUTOFMEMORY},
+    {"VideoDecoderBeginFrame2_4","PFND3DWDDM2_4DDI_VIDEODECODERBEGINFRAME",E_OUTOFMEMORY},
+    {"VideoDecoderSubmitBuffers2","PFND3DWDDM2_4DDI_VIDEODECODERSUBMITBUFFERS",E_OUTOFMEMORY},
+    {"NegotiateCryptoSessionKeyExchange2_4","PFND3DWDDM2_4DDI_NEGOTIATECRYPTOSESSIONKEYEXCHANGE",E_INVALIDARG},
     {"VideoDecoderGetHandle","PFND3D11_1DDI_VIDEODECODERGETHANDLE",E_OUTOFMEMORY},
     {"VideoDecoderEnableDownsampling","PFND3DWDDM2_0DDI_VIDEODECODERENABLEDOWNSAMPLING",E_INVALIDARG},
     {"VideoDecoderUpdateDownsampling","PFND3DWDDM2_0DDI_VIDEODECODERUPDATEDOWNSAMPLING",E_INVALIDARG},
@@ -246,6 +271,68 @@ void APIENTRY certificate(D3D10DDI_HDEVICE,const D3D11_1DDI_CERTIFICATE_INFO *,U
 }
 HRESULT APIENTRY crypto_key_exchange(D3D10DDI_HDEVICE,D3D11_1DDI_HCRYPTOSESSION,UINT,BYTE *) {
     return ddi_status_note("NegotiateCryptoSessionKeyExchange",refusal("NegotiateCryptoSessionKeyExchange"),DdiInputs("sessions=0"));
+}
+
+// ---- The 2.4 layouts (sub IDs 6 and 7, BD-371). Four entries take other arguments than in the 2.1 layout. Each one
+// adapts its arguments to the 2.1 entry it replaces, so the three layouts give the same answers.
+//
+// BeginFrame carries up to four histogram requests. The decoder has no histogram component: QueryVideoCapabilities
+// answers zero bytes, so D3DWDDM2_4DDI_VIDEO_CAPABILITY_QUERY_DECODER_HISTOGRAM reports no component. A request for
+// one is refused with the status the page names; the rest of the frame goes to the 2.1 entry.
+template<typename Begin> unsigned histogram_requests(const Begin &begin) {
+    unsigned count=0;
+    for (const auto &histogram:begin.Histograms) count+=histogram.hBuffer.pDrvPrivate!=nullptr;
+    return count;
+}
+template<typename Begin> HRESULT begin_frame_with_histograms(D3D10DDI_HDEVICE h,D3D11_1DDI_HDECODE decode,
+    const char *entry,const Begin *begin) {
+    if (!begin) return decoder_begin(h,decode,nullptr);
+    if (const unsigned requests=histogram_requests(*begin))
+        return ddi_status_note(entry,refusal(entry),DdiInputs("histogram-requests=%u histogram-components=0",requests));
+    D3D11_1DDIARG_VIDEODECODERBEGINFRAME older{};
+    older.hOutputView=begin->hOutputView;
+    older.pContentKey=begin->pContentKey;
+    older.ContentKeySize=begin->ContentKeySize;
+    return decoder_begin(h,decode,&older);
+}
+HRESULT APIENTRY decoder_begin_rs4_0(D3D10DDI_HDEVICE h,D3D11_1DDI_HDECODE decode,
+    const D3DWDDM2_4DDIARG_VIDEODECODERBEGINFRAME_RS4_0 *begin) {
+    return begin_frame_with_histograms(h,decode,"VideoDecoderBeginFrameRS4_0",begin);
+}
+HRESULT APIENTRY decoder_begin_2_4(D3D10DDI_HDEVICE h,D3D11_1DDI_HDECODE decode,
+    const D3DWDDM2_4DDIARG_VIDEODECODERBEGINFRAME *begin) {
+    return begin_frame_with_histograms(h,decode,"VideoDecoderBeginFrame2_4",begin);
+}
+// The 2.4 buffer descriptor is the 2.0 descriptor and the two stripe counts of pattern encryption. This shell has no
+// crypto type, so a stripe pattern is refused; every other descriptor goes to the 2.0 entry unchanged.
+HRESULT APIENTRY decoder_submit2(D3D10DDI_HDEVICE h,D3D11_1DDI_HDECODE decode,UINT count,
+    const D3DWDDM2_4DDI_VIDEO_DECODER_BUFFER_DESC *buffers) {
+    if (!buffers || !count) return decoder_submit1(h,decode,count,nullptr);
+    std::vector<D3DWDDM2_0DDI_VIDEO_DECODER_BUFFER_DESC1> older;
+    try { older.resize(count); }
+    catch (...) { return ddi_status_note("VideoDecoderSubmitBuffers2",E_OUTOFMEMORY,DdiInputs("buffers=%u",count)); }
+    for (UINT i=0;i<count;++i) {
+        const auto &b=buffers[i];
+        if (b.cBlocksStripeEncrypted || b.cBlocksStripeClear)
+            return ddi_status_note("VideoDecoderSubmitBuffers2",refusal("VideoDecoderSubmitBuffers2"),
+                DdiInputs("buffer=%u stripe-encrypted=%u stripe-clear=%u crypto-types=0",i,b.cBlocksStripeEncrypted,
+                    b.cBlocksStripeClear));
+        auto &o=older[i];
+        o.hResource=b.hResource; o.BufferType=b.BufferType; o.DataOffset=b.DataOffset; o.DataSize=b.DataSize;
+        o.pIV=b.pIV; o.IVSize=b.IVSize; o.pSubSampleMappingBlock=b.pSubSampleMappingBlock;
+        o.SubSampleMappingCount=b.SubSampleMappingCount;
+    }
+    return decoder_submit1(h,decode,count,older.data());
+}
+// The key exchange of the 2.4 table takes flags, and NONE is the only flag the header defines. Another value is
+// refused with E_INVALIDARG, which the page names; NONE goes to the 2.1 entry. The MT entry is the same entry: this
+// one holds no state, so a call from any thread is safe.
+HRESULT APIENTRY crypto_key_exchange_2_4(D3D10DDI_HDEVICE h,D3D11_1DDI_HCRYPTOSESSION session,
+    D3DWDDM2_4DDI_CRYPTO_SESSION_KEY_EXCHANGE_FLAGS flags,UINT size,BYTE *data) {
+    if (flags!=D3DWDDM2_4DDI_CRYPTO_SESSION_KEY_EXCHANGE_FLAG_NONE)
+        return ddi_status_note("NegotiateCryptoSessionKeyExchange2_4",refusal("NegotiateCryptoSessionKeyExchange2_4"),
+            DdiInputs("flags=%08X",unsigned(flags)));
+    return crypto_key_exchange(h,session,size,data);
 }
 void APIENTRY encryption_blt(D3D10DDI_HDEVICE,D3D11_1DDI_HCRYPTOSESSION,D3D10DDI_HRESOURCE,D3D10DDI_HRESOURCE,UINT,const VOID *) {}
 void APIENTRY decryption_blt(D3D10DDI_HDEVICE,D3D11_1DDI_HCRYPTOSESSION,D3D10DDI_HRESOURCE,D3D10DDI_HRESOURCE,
@@ -694,6 +781,27 @@ D3DWDDM2_1DDI_VIDEODEVICEFUNCS make_video_device_table() {
     t.pfnVideoProcessorSetStreamHDRMetaData=stream_hdr_metadata;
     return t;
 }
+namespace {
+const D3DWDDM2_1DDI_VIDEODEVICEFUNCS &video_2_1_base() { static const auto table=make_video_device_table(); return table; }
+}
+D3DWDDM2_4DDI_VIDEODEVICEFUNCS_RS4_0 make_video_device_table_rs4_0() {
+    D3DWDDM2_4DDI_VIDEODEVICEFUNCS_RS4_0 t{};
+    const auto &b=video_2_1_base();
+    std::memcpy(&t,&b,sizeof(b));
+    t.pfnVideoDecoderBeginFrame=decoder_begin_rs4_0;
+    t.pfnVideoDecoderSubmitBuffers2=decoder_submit2;
+    return t;
+}
+D3DWDDM2_4DDI_VIDEODEVICEFUNCS make_video_device_table_2_4() {
+    D3DWDDM2_4DDI_VIDEODEVICEFUNCS t{};
+    const auto &b=video_2_1_base();
+    std::memcpy(&t,&b,sizeof(b));
+    t.pfnVideoDecoderBeginFrame=decoder_begin_2_4;
+    t.pfnVideoDecoderSubmitBuffers2=decoder_submit2;
+    t.pfnNegotiateCryptoSessionKeyExchange=crypto_key_exchange_2_4;
+    t.pfnNegotiateCryptoSessionKeyExchangeMT=crypto_key_exchange_2_4;
+    return t;
+}
 unsigned video_subobject_notes_left() { return video_subobject_notes.load(std::memory_order_relaxed); }
 // RetrieveSubObject. The page names "S_OK or an appropriate error"; the function is free-threaded and holds no
 // state of the device: the table is the same for every device, and the objects it creates belong to the device.
@@ -712,8 +820,12 @@ HRESULT APIENTRY retrieve_subobject(D3D10DDI_HDEVICE,UINT32 subId,SIZE_T paramSi
         void *table=input->p11VideoDeviceFuncs;
         if (!table) hr=E_INVALIDARG;
         else {
-            const D3DWDDM2_1DDI_VIDEODEVICEFUNCS all=make_video_device_table();
-            std::memcpy(table,&all,size);
+            // The 2.4 sub IDs have tables of their own; the older three take a prefix of the 2.1 table.
+            if (subId==D3DWDDM2_4DDI_VIDEO_FUNCTIONS_RS4_0) {
+                const auto all=make_video_device_table_rs4_0(); std::memcpy(table,&all,size);
+            } else if (subId==D3DWDDM2_4DDI_VIDEO_FUNCTIONS) {
+                const auto all=make_video_device_table_2_4(); std::memcpy(table,&all,size);
+            } else std::memcpy(table,&video_2_1_base(),size);
             if (output && outputSize) std::memset(output,0,outputSize);
         }
     }

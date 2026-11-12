@@ -586,18 +586,34 @@ The runtime asks for the video functions through `RetrieveSubObject`
 Without it, `ID3D11Device::QueryInterface(ID3D11VideoDevice)` fails, and a
 browser then has no video processor and no overlay.
 
-`RetrieveSubObject` answers three sub IDs with one table:
+`RetrieveSubObject` answers five sub IDs:
 
 | Sub ID | Table | Members |
 |---|---|---|
 | 2 | `D3D11_1DDI_VIDEO_FUNCTIONS` | 81 |
 | 3 | `D3DWDDM2_0DDI_VIDEO_FUNCTIONS` | 94 |
 | 5 | `D3DWDDM2_1DDI_VIDEO_FUNCTIONS` | 96 |
+| 6 | `D3DWDDM2_4DDI_VIDEO_FUNCTIONS_RS4_0` | 96 |
+| 7 | `D3DWDDM2_4DDI_VIDEO_FUNCTIONS` | 97 |
 
-Each table is the first part of the next one, so the shell fills the 2.1 table
-and copies the size of the table that the runtime asked for. The other IDs
-(the WDDM 2.4 tables 6 and 7 included) return E_NOTIMPL. The first eight calls
-write one line each with the sub ID and the sizes.
+The first three tables are each the first part of the next one, so the shell
+fills the 2.1 table and copies the size of the table that the runtime asked for.
+The two WDDM 2.4 tables (BD-371) change entries in place, so each one is the
+2.1 table with these entries replaced:
+
+- `VideoDecoderBeginFrame` takes up to four histogram requests. The decoder has
+  no histogram component, so a request is refused. The rest goes to the 2.1
+  entry.
+- `VideoDecoderSubmitBuffers2` is where `VideoDecoderSubmitBuffers1` was. Its
+  descriptor adds the stripe counts of pattern encryption, which are refused.
+  The rest goes to the 2.0 entry.
+- In table 7 only: `NegotiateCryptoSessionKeyExchange` takes a flags argument
+  (NONE goes to the 2.1 entry), and `NegotiateCryptoSessionKeyExchangeMT` is
+  the same entry.
+
+`tools/quality/ddi_table_versions.py` checks both 2.4 tables against the
+header. The other IDs return E_NOTIMPL. The first eight calls write one line
+each with the sub ID and the sizes.
 
 What the device does:
 

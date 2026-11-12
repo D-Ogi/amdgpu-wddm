@@ -30,12 +30,17 @@ struct DdiVideoProcessorInputView {
 struct DdiVideoProcessorOutputView {
     ID3D11VideoProcessorOutputView *object=nullptr;
 };
-// The sub IDs this shell answers and the size of the table each one asks for. The three layouts begin with the same
-// members in the same order, so one table of the 2.1 layout fills each of them (static checks in ddi-video.cpp).
-// The 2.4 tables (sub IDs 6 and 7) are not answered: this shell's highest interface is WDDM 2.2.
+// The sub IDs this shell answers and the size of the table each one asks for. The 11.1, 2.0 and 2.1 layouts begin
+// with the same members in the same order, so one table of the 2.1 layout fills each of them (static checks in
+// ddi-video.cpp). The two 2.4 layouts (sub IDs 6 and 7, BD-371) retype entries in place, so each has its own table,
+// built from the 2.1 table with the changed entries adapted to the 2.1 ones.
 SIZE_T video_table_size(UINT32 subId);
-// The one video table, in the WDDM 2.1 layout. Every member is set.
+// The video table in the WDDM 2.1 layout. Every member is set.
 D3DWDDM2_1DDI_VIDEODEVICEFUNCS make_video_device_table();
+// The tables of the two 2.4 layouts: the 2.1 table, with BeginFrame (histogram requests) and SubmitBuffers2 (stripe
+// counts) in the RS4_0 layout, and also the key exchange with flags and its MT entry in the final layout.
+D3DWDDM2_4DDI_VIDEODEVICEFUNCS_RS4_0 make_video_device_table_rs4_0();
+D3DWDDM2_4DDI_VIDEODEVICEFUNCS make_video_device_table_2_4();
 HRESULT APIENTRY retrieve_subobject(D3D10DDI_HDEVICE,UINT32 subId,SIZE_T paramSize,void *params,
     SIZE_T outputSize,void *output);
 // The conversions of the DDI arguments into the engine's API arguments. Pure, so the host test checks them.

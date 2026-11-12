@@ -1,8 +1,8 @@
 """Check the D3D11 shell's newer DDI tables against the WDK headers, entry by entry (BD-099).
 
-The WDDM 2.2 and WDDM 2.6 device tables and the DXGI 1.6.1 table are built by copying the table of
-the interface below and replacing what changed (driver/umd/dxvk/ddi-wddm22.cpp, ddi-wddm26.cpp,
-BD-371). That is only correct while the
+The WDDM 2.2 and WDDM 2.6 device tables, the two WDDM 2.4 video tables and the DXGI 1.6.1 table are
+built by copying the table of the interface below and replacing what changed (driver/umd/dxvk/
+ddi-wddm22.cpp, ddi-wddm26.cpp and ddi-video.cpp, BD-371). That is only correct while the
 headers say the two tables really do agree entry for entry. A C++ static_assert can compare offsets
 and the types of named members, but it cannot enumerate the members of a structure, so it cannot
 state "and nothing else changed". This gate reads the headers and states exactly that.
@@ -41,6 +41,26 @@ DEVICE26_NEW = "D3DWDDM2_6DDI_DEVICEFUNCS"
 DEVICE26_NEW_COUNT = 176
 DEVICE26_RETYPED = {"pfnRelocateDeviceFuncs": "PFND3DWDDM2_6DDI_RELOCATEDEVICEFUNCS"}
 DEVICE26_APPENDED = ["pfnQueryScanoutCaps", "pfnPrepareScanoutTransformation"]
+# The WDDM 2.1 -> WDDM 2.4 video tables (sub IDs 6 and 7, BD-371). Both retype BeginFrame (histogram
+# requests) and put SubmitBuffers2 where SubmitBuffers1 was; the final layout also gives the key exchange
+# a flags argument and appends its MT entry.
+VIDEO_OLD = "D3DWDDM2_1DDI_VIDEODEVICEFUNCS"
+VIDEO_OLD_COUNT = 96
+VIDEO_RS4_NEW = "D3DWDDM2_4DDI_VIDEODEVICEFUNCS_RS4_0"
+VIDEO_RS4_NEW_COUNT = 96
+VIDEO_RS4_RETYPED = {
+    "pfnVideoDecoderBeginFrame": "PFND3DWDDM2_4DDI_VIDEODECODERBEGINFRAME_RS4_0",
+    "pfnVideoDecoderSubmitBuffers2": ("pfnVideoDecoderSubmitBuffers1", "PFND3DWDDM2_4DDI_VIDEODECODERSUBMITBUFFERS"),
+}
+VIDEO_RS4_APPENDED = []
+VIDEO24_NEW = "D3DWDDM2_4DDI_VIDEODEVICEFUNCS"
+VIDEO24_NEW_COUNT = 97
+VIDEO24_RETYPED = {
+    "pfnVideoDecoderBeginFrame": "PFND3DWDDM2_4DDI_VIDEODECODERBEGINFRAME",
+    "pfnVideoDecoderSubmitBuffers2": ("pfnVideoDecoderSubmitBuffers1", "PFND3DWDDM2_4DDI_VIDEODECODERSUBMITBUFFERS"),
+    "pfnNegotiateCryptoSessionKeyExchange": "PFND3DWDDM2_4DDI_NEGOTIATECRYPTOSESSIONKEYEXCHANGE",
+}
+VIDEO24_APPENDED = ["pfnNegotiateCryptoSessionKeyExchangeMT"]
 # The DXGI 1.4 -> DXGI 1.6.1 base table (dxgiddi.h). One entry is replaced by its successor at the
 # same index, the two Present entries take the 1_6_1 arguments, and Reclaim1 is appended.
 DXGI_OLD = "DXGI1_4_DDI_BASE_FUNCTIONS"
@@ -57,6 +77,8 @@ DXGI_APPENDED = ["pfnReclaimResources1"]
 BUILDERS = [
     ("ddi-wddm22.cpp", "make_wddm2_2_device_table", set(DEVICE_RETYPED) | set(DEVICE_APPENDED)),
     ("ddi-wddm26.cpp", "make_wddm2_6_device_table", set(DEVICE26_RETYPED) | set(DEVICE26_APPENDED)),
+    ("ddi-video.cpp", "make_video_device_table_rs4_0", set(VIDEO_RS4_RETYPED) | set(VIDEO_RS4_APPENDED)),
+    ("ddi-video.cpp", "make_video_device_table_2_4", set(VIDEO24_RETYPED) | set(VIDEO24_APPENDED)),
     ("ddi-wddm22.cpp", "make_dxgi1_6_1_device_table", {"pfnPresent1", "pfnPresentMultiplaneOverlay1"}),
     ("ddi-dxgi-resources.cpp", "install_dxgi1_6_1_resource_ddi", {"pfnOfferResources1", "pfnReclaimResources1"}),
 ]
@@ -209,6 +231,11 @@ def main():
     device26_new = device_entries(umddi_text, DEVICE26_NEW)
     compare("device 2.6", (DEVICE_NEW, DEVICE26_NEW), device_new, device26_new, DEVICE_NEW_COUNT,
             DEVICE26_NEW_COUNT, DEVICE26_RETYPED, DEVICE26_APPENDED, failures)
+    video_old = device_entries(umddi_text, VIDEO_OLD)
+    compare("video RS4_0", (VIDEO_OLD, VIDEO_RS4_NEW), video_old, device_entries(umddi_text, VIDEO_RS4_NEW),
+            VIDEO_OLD_COUNT, VIDEO_RS4_NEW_COUNT, VIDEO_RS4_RETYPED, VIDEO_RS4_APPENDED, failures)
+    compare("video 2.4", (VIDEO_OLD, VIDEO24_NEW), video_old, device_entries(umddi_text, VIDEO24_NEW),
+            VIDEO_OLD_COUNT, VIDEO24_NEW_COUNT, VIDEO24_RETYPED, VIDEO24_APPENDED, failures)
     dxgi_old = dxgi_entries(dxgi_text, DXGI_OLD)
     dxgi_new = dxgi_entries(dxgi_text, DXGI_NEW)
     compare("DXGI", (DXGI_OLD, DXGI_NEW), dxgi_old, dxgi_new, DXGI_OLD_COUNT, DXGI_NEW_COUNT, DXGI_RETYPED,
@@ -221,10 +248,11 @@ def main():
             continue
         check_builder(name, path.read_text(encoding="utf-8", errors="replace"), function, expected, failures)
     print("%s: device %s->%s (%d entries, %d changed, %d appended), device %s->%s (%d entries, %d changed, "
-          "%d appended), DXGI %s->%s (%d entries), %d builders"
+          "%d appended), video %s->RS4_0/2.4 (%d/%d entries), DXGI %s->%s (%d entries), %d builders"
           % ("FAIL" if failures else "PASS", DEVICE_OLD, DEVICE_NEW, DEVICE_NEW_COUNT,
              len(DEVICE_RETYPED), len(DEVICE_APPENDED), DEVICE_NEW, DEVICE26_NEW, DEVICE26_NEW_COUNT,
-             len(DEVICE26_RETYPED), len(DEVICE26_APPENDED), DXGI_OLD, DXGI_NEW, DXGI_NEW_COUNT, len(BUILDERS)))
+             len(DEVICE26_RETYPED), len(DEVICE26_APPENDED), VIDEO_OLD, VIDEO_RS4_NEW_COUNT, VIDEO24_NEW_COUNT,
+             DXGI_OLD, DXGI_NEW, DXGI_NEW_COUNT, len(BUILDERS)))
     print("  headers: %s, %s" % (umddi, dxgiddi))
     for line in failures:
         print("  " + line)
