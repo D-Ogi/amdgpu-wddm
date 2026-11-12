@@ -34,12 +34,12 @@ git -C <linux checkout> show v6.18:drivers/gpu/drm/amd/amdgpu/<file> > driver/am
 | `reference/amdgpu_ih.c` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2014 Advanced Micro Devices, Inc. |
 | `reference/dce_scl_filters.c` | `drivers/gpu/drm/amd/display/dc/dce/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2012-16 Advanced Micro Devices, Inc. |
 
-Every one of the files carries the full MIT permission notice; only `cyan_skillfish_reg_init.c` also
+Every one of the files carries the full MIT permission notice. Only `cyan_skillfish_reg_init.c` also
 carries the SPDX tag. Checked file by file, not assumed from the directory.
 
 The commit column is the same for every row because `<BC250_ROOT>\ref\linux-src` is a depth-1 clone of
 the tag, so the tag commit is the only one it has. It is the commit the bytes come from, which is
-what the column is for; it is not the last commit that touched each file, and `git log -- <path>`
+what the column is for. It is not the last commit that touched each file, and `git log -- <path>`
 in that clone cannot tell us what that was.
 
 `soc15_common.h` compiles under the shim as it is, so it is imported rather than reimplemented: the
@@ -48,16 +48,16 @@ shim supplies the names its macros reach for (`RREG32`/`WREG32`, `amdgpu_sriov_v
 `AMDGPU_REGS_NO_KIQ`, and the `adev->gfx.rlc` fields its RLC test reads).
 
 The register headers these files include live in `third_party/linux-amdgpu/` with their own
-`PROVENANCE.md`. They are included as `"gc/gc_10_1_0_offset.h"` and friends; the shim answers that
+`PROVENANCE.md`. They are included as `"gc/gc_10_1_0_offset.h"` and friends. The shim answers that
 with a one-line forwarding header in `driver/shim/include/gc/` and `driver/shim/include/mmhub/`,
 so that neither the imports nor the headers have to be touched.
 
 ## PSP (milestone M5)
 
 `psp_v11_0_8.c` is the whole register side of the PSP on this chip: ring create, ring stop, write
-pointer. It names `psp_wait_for`, `mdelay`, `adev->firmware.rbuf` and `amdgpu_bo_free_kernel`; the
+pointer. It names `psp_wait_for`, `mdelay`, `adev->firmware.rbuf` and `amdgpu_bo_free_kernel`. The
 shim supplies them (`driver/shim/include/amdgpu_psp.h`, `amdgpu.h`, `bc250_psp.c`). `psp_gfx_if.h`
-is AMD's interface header for the ring frames and command buffers, used as it is; its nameless
+is AMD's interface header for the ring frames and command buffers, used as it is. Its nameless
 union and `uint32_t` bit fields raise C4201 and C4214 at `/W4`, and `psp_v11_0_8_ring_stop()` does
 not use its `ring_type` argument (C4100): all three are switched off from the build line
 (`driver/shim/test/run_psp.ps1`, `driver/kmd/build.ps1`), nowhere else. `amdgpu_psp.c` itself is
@@ -69,7 +69,7 @@ Six headers are compiled: `v10_structs.h` (the MQD layouts), `nvd.h` (the GFX10 
 definitions), `clearstate_defs.h` and `clearstate_gfx10.h` (the clear-state section tables and the
 921 register values in them), `amdgpu_doorbell.h` (the NAVI10 doorbell index assignment) and
 `sdma_common.h` (the two UTCL2 cache-policy enums the SDMA `UTCL1_PAGE` write uses). All six have no
-`#include` lines of their own; the shim supplies the handful of typedefs they reach for. Note that `clearstate_gfx10.h` defines `static const` arrays, so it is included in exactly one
+`#include` lines of their own. The shim supplies the handful of typedefs they reach for. Note that `clearstate_gfx10.h` defines `static const` arrays, so it is included in exactly one
 translation unit (`driver/shim/bc250_gfx.c`), and that `soc15d.h` is deliberately **not** imported:
 it defines `PACKET3` a second time and its include guard is `SOC15_H`, the same as `soc15.h`.
 
@@ -84,7 +84,7 @@ we need out of `gfx_v10_0.c`, `golden_settings_gc_10_0_cyan_skillfish`, is extra
 mechanically by `tools/import/extract_table.py` into
 `driver/shim/generated/gfx10_golden_cyan_skillfish.inc`, and the same is done with
 `golden_settings_sdma_cyan_skillfish` out of `sdma_v5_0.c` into
-`driver/shim/generated/sdma5_golden_cyan_skillfish.inc`; the replay test re-runs both extractions
+`driver/shim/generated/sdma5_golden_cyan_skillfish.inc`. The replay test re-runs both extractions
 and diffs, so no register address, mask or value is ever typed by hand and an upstream change to a
 table fails loudly instead of silently.
 
@@ -104,8 +104,8 @@ that produced the trace is the one that is right.
 
 | Where | Mainline v6.18 | 6.18.52-0-lts, and what unit A shows | Our choice |
 | --- | --- | --- | --- |
-| `gfx_v10_0_cp_gfx_resume()`, `CP_RB_DOORBELL_CONTROL` / `CP_RB0_WPTR_POLL_CNTL` | `gfx_v10_0.c:5348` region has no `DB_RING_CONTROL` write | `gfx_v10_0.c:5352` writes it; the E03 trace contains the write | follow 6.18.52, comment at the write site in `driver/shim/bc250_gfx.c` |
-| `amdgpu_gmc_noretry_set()` | tests `gc_ver >= IP_VERSION(10, 3, 0)`, giving `noretry = false` for GC 10.1.3 | tests `>= IP_VERSION(10, 1, 0)`, giving `true`; the traced `GCVM_CONTEXT1..15_CNTL` have the retry bit clear | `noretry = true`, measured; see `driver/shim/README.md` |
+| `gfx_v10_0_cp_gfx_resume()`, `CP_RB_DOORBELL_CONTROL` / `CP_RB0_WPTR_POLL_CNTL` | `gfx_v10_0.c:5348` region has no `DB_RING_CONTROL` write | `gfx_v10_0.c:5352` writes it. The E03 trace contains the write | follow 6.18.52, comment at the write site in `driver/shim/bc250_gfx.c` |
+| `amdgpu_gmc_noretry_set()` | tests `gc_ver >= IP_VERSION(10, 3, 0)`, giving `noretry = false` for GC 10.1.3 | tests `>= IP_VERSION(10, 1, 0)`, giving `true`. The traced `GCVM_CONTEXT1..15_CNTL` have the retry bit clear | `noretry = true`, measured. See `driver/shim/README.md` |
 
 Both are recorded rather than silently absorbed, because a future reader comparing our code with a
 mainline checkout would otherwise find a difference and have no way to tell whether it was a bug.
@@ -127,7 +127,7 @@ The second bring-up in that run wrote `CP_HQD_ACTIVE = 0`, `CP_HQD_PQ_RPTR = 0` 
 `CP_HQD_PQ_BASE = 0x5640` with `CP_MEC_CNTL = 0x50000000` - all under halt - and the engine still
 fetched from the first run's ring: UTCL2 raised a VMID 0 fault at GART address `0x444000`, which is
 the first run's KIQ base `0x442000` plus `0x2000`, about where that run's read pointer stood. No
-register write in either run names `0x444000`; the second run's rings were at `0x564000` and
+register write in either run names `0x444000`. The second run's rings were at `0x564000` and
 `0x563000`, because the miniport frees on FINI and gpumem does not hand a freed GART range back. The
 KIQ ring test then timed out after 165 ms (`-62`) and the queue never ran again.
 
@@ -135,7 +135,7 @@ KIQ ring test then timed out after 165 ms (`-62`) and the queue never ran again.
 
 | Where | What upstream does | Why it cannot work here | What we do instead |
 | --- | --- | --- | --- |
-| `gfx_v10_0_hw_fini()` (`gfx_v10_0.c:7529`), transcribed as `bc250_gfx_hw_fini()` in `driver/shim/bc250_gfx.c` | Unmaps the client queues through the KIQ (`amdgpu_gfx.c:501`, `:551`) and halts the CP and the MEC (`:7563`). The KIQ's own HQD is never dequeued - nothing in the file ever takes it down | The engine's copy of the KIQ's base and read pointer survives the halt, so the next bring-up meets a live fetcher whose ring has been freed. Upstream gets away with it because its parts drop GFX power across suspend or take a reset before the next `hw_init`, either of which discards the copy; and there is no documented MEC reset to lean on instead - `kgd_gfx_v10_hqd_reset()` (`amdgpu_amdkfd_gfx_v10.c:1080-1085`) returns 0 without touching anything, and `GRBM_SOFT_RESET.SOFT_RESET_CPC` exists only from gfx11 on | `bc250_kiq_dequeue()`, called between the KCQ unmap and the MEC halt, while the engine can still answer: SRBM-select me2/pipe1/queue0, `CP_HQD_DEQUEUE_REQUEST = 1` (DRAIN_PIPE), poll `CP_HQD_ACTIVE` to 0 with `adev->usec_timeout` as the bound, restore the request register, then zero `CP_HQD_PQ_DOORBELL_CONTROL`, `CP_HQD_PQ_RPTR` and `CP_HQD_PQ_WPTR_LO/HI` and deselect. The handshake is upstream's own, from `kgd_hqd_destroy()` (`amdgpu_amdkfd_gfx_v10.c:606-619`) and from the active branch of `gfx_v10_0_kiq_init_register()` (`gfx_v10_0.c:7031-7041`); only the place it is called from is new |
+| `gfx_v10_0_hw_fini()` (`gfx_v10_0.c:7529`), transcribed as `bc250_gfx_hw_fini()` in `driver/shim/bc250_gfx.c` | Unmaps the client queues through the KIQ (`amdgpu_gfx.c:501`, `:551`) and halts the CP and the MEC (`:7563`). The KIQ's own HQD is never dequeued - nothing in the file ever takes it down | The engine's copy of the KIQ's base and read pointer survives the halt. Thus the next bring-up meets a live fetcher whose ring has been freed. Upstream has no problem with it, because its parts drop GFX power across suspend or take a reset before the next `hw_init`. Either of these discards the copy. Also, there is no documented MEC reset to lean on instead - `kgd_gfx_v10_hqd_reset()` (`amdgpu_amdkfd_gfx_v10.c:1080-1085`) returns 0 without touching anything, and `GRBM_SOFT_RESET.SOFT_RESET_CPC` exists only from gfx11 on | `bc250_kiq_dequeue()` is called between the KCQ unmap and the MEC halt, while the engine can still answer. It does an SRBM-select of me2/pipe1/queue0 and writes `CP_HQD_DEQUEUE_REQUEST = 1` (DRAIN_PIPE). It polls `CP_HQD_ACTIVE` to 0 with `adev->usec_timeout` as the bound and restores the request register. Then it zeroes `CP_HQD_PQ_DOORBELL_CONTROL`, `CP_HQD_PQ_RPTR` and `CP_HQD_PQ_WPTR_LO/HI` and deselects. The handshake is upstream's own, from `kgd_hqd_destroy()` (`amdgpu_amdkfd_gfx_v10.c:606-619`) and from the active branch of `gfx_v10_0_kiq_init_register()` (`gfx_v10_0.c:7031-7041`). Only the place it is called from is new |
 
 `CP_HQD_DEQUEUE_REQUEST` is the one register this adds that no trace window names, and the test says
 so by name rather than leaving it to be noticed. Cold boot is untouched: the teardown is not part of
@@ -149,7 +149,7 @@ Following it exactly was never the safe option here.
 
 | Where | What upstream does | Why it cannot work here | What we do instead |
 | --- | --- | --- | --- |
-| `gfx_v10_0_hw_fini()` again, against `gfx_v10_0_compute_mqd_init()`'s `mqd->cp_hqd_pq_rptr = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_RPTR)` (`gfx_v10_0.c:6998`), transcribed at `driver/shim/bc250_gfx.c:765` | Samples each queue's read pointer under that queue's own selection when building its MQD, and leaves the registers alone in the teardown | The sample is only right where the teardown left a 0 there. Here it does not: after a bring-up that ran the ring tests the queues idle at `rptr == wptr != 0` (fact M40), `UNMAP_QUEUES` is not documented or measured to clear the slot's pointer registers, and there is no power cycle in between. The next bring-up would hand each of the eight queues an MQD saying most of its ring is pending - the 5222 us walk of E12 run 001, eight times over | `bc250_kcq_clear_pointers()`, called after the KCQ unmap: for each of the eight compute rings, select its slot and zero `CP_HQD_PQ_RPTR`, `CP_HQD_PQ_WPTR_LO` and `CP_HQD_PQ_WPTR_HI`. No handshake, and none is possible or needed - these queues have already been dequeued by a running CP, and `bc250_gfx_unmap_queues()` ends in a KIQ ring test, so the packets have completed before the registers are written. All three registers are inside a trace window already, so the miniport's allow-list is unchanged |
+| `gfx_v10_0_hw_fini()` again, against `gfx_v10_0_compute_mqd_init()`'s `mqd->cp_hqd_pq_rptr = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_RPTR)` (`gfx_v10_0.c:6998`), transcribed at `driver/shim/bc250_gfx.c:765` | Samples each queue's read pointer under that queue's own selection when building its MQD, and leaves the registers alone in the teardown | The sample is only right where the teardown left a 0 there. Here it does not. After a bring-up that ran the ring tests, the queues idle at `rptr == wptr != 0` (fact M40). `UNMAP_QUEUES` is not documented or measured to clear the slot's pointer registers, and there is no power cycle in between. The next bring-up would hand each of the eight queues an MQD saying most of its ring is pending. That is the 5222 us walk of E12 run 001, eight times over | `bc250_kcq_clear_pointers()`, called after the KCQ unmap: for each of the eight compute rings, select its slot and zero `CP_HQD_PQ_RPTR`, `CP_HQD_PQ_WPTR_LO` and `CP_HQD_PQ_WPTR_HI`. No handshake, and none is possible or needed. A running CP has already dequeued these queues. `bc250_gfx_unmap_queues()` ends in a KIQ ring test, so the packets have completed before the registers are written. All three registers are inside a trace window already, so the miniport's allow-list is unchanged |
 
 Together with the row above, this makes one sentence true for all nine queues: the read pointer an
 MQD samples is a value this driver put there. The host test fails without it - with the call taken
@@ -161,7 +161,7 @@ shared register, and left where the CP stub left it. See `driver/shim/test/backe
 
 | Where | What upstream does | Why it cannot work here | What we do instead |
 | --- | --- | --- | --- |
-| `gfx_v10_0_kiq_init_register()`, the `CP_HQD_ACTIVE` branch (`gfx_v10_0.c:7034-7050`), transcribed in `driver/shim/bc250_gfx.c` | Writes `CP_HQD_DEQUEUE_REQUEST = 1` and polls `CP_HQD_ACTIVE` until the CP clears it (`:7036-7041`), then writes the sampled read pointer back at `:7044` | A dequeue request is serviced by the MEC, and here the MEC can be halted: `gfx_v10_0_cp_compute_enable(adev, true)` runs at `:7208` from `kcq_resume` (`:7243`), one step **after** `kiq_resume` (`:7239`). A halted engine answers nothing, so the poll spins out its whole timeout and the queue stays up. Upstream never notices, because it does not look at the poll's outcome (`j` is unused after `:7041`) and its parts do not arrive here with a queue still active | Un-halt the MEC for the length of the handshake and halt it again, then zero the read pointer instead of writing back what the MQD sampled. Reaching this branch means the last instance left this queue up - 0.6.1 and everything before it did exactly that, so the first 0.6.2 start on a machine that ran 0.6.1 lands here - and the sampled pointer is that instance's, not this one's |
+| `gfx_v10_0_kiq_init_register()`, the `CP_HQD_ACTIVE` branch (`gfx_v10_0.c:7034-7050`), transcribed in `driver/shim/bc250_gfx.c` | Writes `CP_HQD_DEQUEUE_REQUEST = 1` and polls `CP_HQD_ACTIVE` until the CP clears it (`:7036-7041`), then writes the sampled read pointer back at `:7044` | A dequeue request is serviced by the MEC, and here the MEC can be halted: `gfx_v10_0_cp_compute_enable(adev, true)` runs at `:7208` from `kcq_resume` (`:7243`), one step **after** `kiq_resume` (`:7239`). A halted engine answers nothing, so the poll spins out its whole timeout and the queue stays up. Upstream never notices, because it does not look at the poll's outcome (`j` is unused after `:7041`). Also, its parts do not arrive here with a queue still active | Un-halt the MEC for the length of the handshake and halt it again. Then zero the read pointer instead of writing back what the MQD sampled. Reaching this branch means the last instance left this queue up, and the sampled pointer is that instance's, not this one's. 0.6.1 and everything before it did exactly that, so the first 0.6.2 start on a machine that ran 0.6.1 lands here |
 
 Un-halting is not free: the engine resumes its stale fetch the moment it starts, and if the address
 is gone it faults. That fetch happens either way, though - it is what `kcq_resume`'s own un-halt did
@@ -197,7 +197,7 @@ stood here in 0.6.1 replaced it with `mqd->cp_hqd_pq_rptr = 0`. The reasoning wa
 > walked every one of them: stage 6 took **5222 us against 349 us** cold (E12 run 001). Zero is the
 > only value consistent with the rest of the same function, which sets `cp_hqd_pq_wptr_lo` and `_hi`
 > to 0 four lines earlier, and with `amdgpu_ring_init_mqd()`'s `ring->wptr = 0`
-> (`amdgpu_ring.c:743`); it is also what AMD write from gfx11 on (`gfx_v11_0.c:4337`,
+> (`amdgpu_ring.c:743`). It is also what AMD write from gfx11 on (`gfx_v11_0.c:4337`,
 > `gfx_v12_0.c:3216`, `regCP_HQD_PQ_RPTR_DEFAULT` = 0 in `gc_11_0_0_default.h:2091`).
 
 The arithmetic was right and the conclusion was wrong. The register value was a symptom: what the CP
@@ -208,7 +208,7 @@ as a page fault at an address no register named. The prediction the row made (st
 350 us) is the measurement that refuted it.
 
 It is reverted, not merely re-argued: with the KIQ dequeued in the teardown the register is 0 when
-the sample is taken, so upstream's line is correct again. The one place a stale pointer can still be
+the sample is taken, so upstream's line is valid again. The one place a stale pointer can still be
 read is the recovery branch above, and that is where the zero now lives - in the branch that knows
 why it is zeroing, rather than in the MQD builder that cannot know.
 
@@ -247,7 +247,7 @@ into the IP-block machinery, the buffer-object allocator (`amdgpu_ih_ring_init()
 `amdgpu_bo_create_kernel` plus the write-back pool) and the Linux interrupt subsystem
 (`amdgpu_irq_init`, `pci_set_master`, the irq domain), none of which exists here. The extra reason
 is that three of the functions have to run in the miniport's DPC at `DISPATCH_LEVEL`, where no lock
-may be taken, nothing may be allocated and nothing may sleep; a transcription is what makes it
+may be taken, nothing may be allocated and nothing may sleep. A transcription is what makes it
 possible to say that of each line. `driver/shim/include/bc250_ih.h` lists, with a citation each,
 every arm of `navi10_ih.c` that is deliberately not transcribed - ih1 and ih2, `ih_soft`, the
 `IH_CHICKEN` block, `force_update_wptr_for_self_int()`, every `amdgpu_sriov_vf()` arm,
@@ -268,7 +268,7 @@ turn out to be what makes a Windows DPC possible:
   `DISPATCH_LEVEL` if it did not. Upstream's `psp_reg_id` member is dropped: its only reader is the
   SR-IOV `psp_reg_program()` path.
 - `WDOORBELL32` in `navi10_ih_set_rptr()` (`navi10_ih.c:474`, `:499`). Every other doorbell on this
-  part is 64-bit (`gfx_v10_0.c:8571`, `:8605`, `sdma_v5_0.c:389`); this one is not, and the
+  part is 64-bit (`gfx_v10_0.c:8571`, `:8605`, `sdma_v5_0.c:389`). This one is not, and the
   difference reaches the hardware, because `BIF_IH_DOORBELL_RANGE` opens a two-entry window and the
   upper half of a 64-bit store lands inside it. `bc250_shim_wdoorbell32()` exists for this one
   caller, and the host backend records the width of every doorbell so the test can insist on it.
@@ -276,7 +276,7 @@ turn out to be what makes a Windows DPC possible:
 The fence emitters are in `reference/gfx_v10_0.c`, not in these two:
 `gfx_v10_0_ring_emit_fence()` at `:8712` and `gfx_v10_0_ring_emit_fence_kiq()` at `:8780`,
 transcribed together as `bc250_gfx_emit_fence()` in `driver/shim/bc250_gfx.c`. Upstream picks
-between them through `ring->funcs->emit_fence`; the shim's `amdgpu_ring_funcs` carries no callbacks
+between them through `ring->funcs->emit_fence`. The shim's `amdgpu_ring_funcs` carries no callbacks
 (ADR 0002), so the one function branches on `ring->funcs->type`. The two `BUG_ON()`s upstream uses
 for a misaligned address and for a 64-bit KIQ fence become `BC250_EINVAL` with nothing written: the
 conditions are upstream's, and only the reaction differs, because a `BUG()` in a Windows miniport
@@ -289,14 +289,14 @@ The SDMA side is the same three functions out of `reference/sdma_v5_0.c`, transc
 `0xDEADBEEF` into a scratch dword seeded with `0xCAFEDEAD`, then a poll), and the write pointer.
 They close M36's "SDMA: rings programmed and engines released, not tested". The packets are built
 out of `third_party/linux-amdgpu/navi10_sdma_pkt_open.h`, imported for this, so no SDMA opcode or
-header field is typed here either; `sdma_v5_0.c` includes the same header for the same macros.
+header field is typed here either. `sdma_v5_0.c` includes the same header for the same macros.
 
 Two deviations, both of the kind above:
 
 | Where | What upstream does | Why it cannot work here | What we do instead |
 | --- | --- | --- | --- |
-| `sdma_v5_0_ring_emit_fence()` (`sdma_v5_0.c:523`) | `BUG_ON()` on a misaligned address, after the header dword is already in the ring | A `BUG()` in a Windows miniport is a bugcheck on a caller's mistake, and a half-written packet is worse than no packet | The same condition, checked before anything is written; `BC250_EINVAL` with the ring untouched |
-| `sdma_v5_0_ring_test_ring()` (`sdma_v5_0.c:1012`) | Takes the scratch dword from the device write-back pool (`amdgpu_device_wb_get()`) | There is no write-back pool in this driver: `amdgpu_device.c`'s allocator is Linux's, and ADR 0002 does not import it | `bc250_sdma_fence_page_alloc()` cuts one GTT page into eight-byte slots, exactly as `bc250_gfx.c` already does for the graphics fence. It is deliberately **not** allocated by `bc250_sdma_setup()`: a page the bring-up does not allocate cannot move an address the bring-up programs, so the 354-write comparison cannot be disturbed by a test-only allocation |
+| `sdma_v5_0_ring_emit_fence()` (`sdma_v5_0.c:523`) | `BUG_ON()` on a misaligned address, after the header dword is already in the ring | A `BUG()` in a Windows miniport is a bugcheck on a caller's mistake, and a half-written packet is worse than no packet | The same condition, checked before anything is written. `BC250_EINVAL` with the ring untouched |
+| `sdma_v5_0_ring_test_ring()` (`sdma_v5_0.c:1012`) | Takes the scratch dword from the device write-back pool (`amdgpu_device_wb_get()`) | There is no write-back pool in this driver: `amdgpu_device.c`'s allocator is Linux's, and ADR 0002 does not import it | `bc250_sdma_fence_page_alloc()` cuts one GTT page into eight-byte slots, exactly as `bc250_gfx.c` already does for the graphics fence. It is deliberately **not** allocated by `bc250_sdma_setup()`. A page the bring-up does not allocate cannot move an address the bring-up programs. Thus the 354-write comparison cannot be disturbed by a test-only allocation |
 
 One thing deliberately left as it is: `bc250_sdma_ring_test()` fills its slack with single
 `SDMA_OP_NOP` dwords rather than the count-carrying burst NOP the engine also accepts. Upstream's
@@ -319,7 +319,7 @@ Source: `<BC250_ROOT>\ref\libdrm`, tag `libdrm-2.4.114`, commit `b9ca37b31348`.
   `tests/amdgpu/shader_test_util.c`, with a `file:line` citation at every packet:
   `amdgpu_test_dispatch_memset()` at `:566` and the four functions it calls, `:206-253`,
   `:309-344`, `:403-463`, `:547-565`. Eighteen packets, 72 dwords. What was taken is which registers
-  to write, in which order, with which values; every register offset is resolved through
+  to write, in which order, with which values. Every register offset is resolved through
   `gc_10_1_0_offset.h` by `SOC15_REG_OFFSET()`, so no address is typed here, and the host test then
   asserts those resolved offsets against libdrm's literal numbers dword for dword.
 - The two magic dwords that cannot be derived from a header are marked as such in the source:
@@ -362,31 +362,31 @@ That is the first hardware run's job, and it is what the fence exists for.
 One model is declared, through `backend_add_selfclear()`: `IH_RB_CNTL` bit 31,
 `WPTR_OVERFLOW_CLEAR`, does not stay where it is written. The trace says so outright - `C03101A0`
 goes in at 0.252838 and `403101A0` comes back at 0.252845 - and the last read-modify-write of the
-sequence depends on it. The write is still compared exactly as the driver issued it; only the value
-a later read returns is corrected. A control run removes the declaration and fails, which is what
+sequence depends on it. The write is still compared exactly as the driver issued it. Only the value
+a later read returns is adjusted. A control run removes the declaration and fails, which is what
 says the declaration is doing work rather than covering a difference.
 
 
 M349: imported gfx_v10_0_rlc_reset from Linux amdgpu (AMD MIT), preserving both
 GRBM_SOFT_RESET.RLC field updates and50us waits. Added an opt-in disabled/busy
 RLC plus halted-engine guard before unpublished PSP reload. This is a declared
-experimental deviation; ordinary AMD resume does not invoke that callback.
+experimental deviation. Ordinary AMD resume does not invoke that callback.
 
-M352: bc250_rlc_reset_readback imports the assertion/read/delay/deassert/read/delay segment of gfx_v10_0_soft_reset (AMD MIT), with the mask restricted to RLC under the existing project halt guard. Gate2 selects this diagnostic variant; ordinary startup and gate1 remain unchanged. Logs are emitted after deassertion. Not a proven reset or upstream ordinary-resume path.
+M352: bc250_rlc_reset_readback imports the assertion/read/delay/deassert/read/delay segment of gfx_v10_0_soft_reset (AMD MIT), with the mask restricted to RLC under the existing project halt guard. Gate2 selects this diagnostic variant. Ordinary startup and gate1 remain unchanged. Logs are emitted after deassertion. Not a proven reset or upstream ordinary-resume path.
 
 
 M368 source clarification: bc250_sdma_hw_fini iterates actual SDMA instances.
 The v6.18 sdma_v5_0_enable reference computes a bitmask then passes 1 << inst_mask
-to gfx_stop; for two instances this selects bit3. The shim preserves its bounded
+to gfx_stop. For two instances this selects bit3. The shim preserves its bounded
 instance loop, not that shift. No executable change in M368. Ordinary fini is
 not the separate stop_queue freeze/UTC_L1-disable reset preparation.
 
 
 M369: bc250_sdma_quiesce_instance adapts v6.18 sdma_v5_0_stop_queue's register
-body; bc250_sdma_unfreeze_instance adapts the unfreeze fragment of restore_queue
+body. bc250_sdma_unfreeze_instance adapts the unfreeze fragment of restore_queue
 (AMD MIT). RLC safe-mode scope/serialization/lifetime are explicit caller duties.
 The shim bounds the instance, uses unsigned polling for WDK and BC250_ETIME.
-No KMD caller yet; ordinary fini and register replay remain unchanged.
+No KMD caller yet. Ordinary fini and register replay remain unchanged.
 
 
 M370: explicit GC10.1 RLC safe-mode scope adapts gfx_v10_0_set/unset_safe_mode
@@ -399,13 +399,13 @@ This avoids assuming FREEZE persists across PSP reload. Not an upstream reset.
 
 M372: bc250_sdma_soft_reset_instance mechanically extracts Linux v6.18
 sdma_v5_0_soft_reset_engine (AMD MIT). Adds fixed-instance bounds, omits DRM debug
-printing and substitutes the shim delay; register RMW/readback order is unchanged.
+printing and substitutes the shim delay. Register RMW/readback order is unchanged.
 No KMD caller and no hardware reset-completion claim.
 
 
 M373: Windows stop/reload composes AMD quiescence scope, per-engine reset outside
 the scope, then a second full quiescence/unfreeze scope instead of restoring
-live queues. All backing retained; post-reset state is reestablished/read back.
+live queues. All backing retained. Post-reset state is reestablished/read back.
 Original reset assertion/release reads are logged without additional MMIO.
 
 SDMA virtual IB groundwork: reference/gmc_v10_0.c imported unmodified from
@@ -420,10 +420,10 @@ AMD MIT sources from Linux v6.18, commit7d0a66e4bb9081d75c82ec4957c50034cb0ea449
 `drivers/gpu/drm/amd/pm/swsmu/{smu11,inc/pmfw_if}`. `cyan_skillfish_clock.inc` is
 mechanically extracted by `driver/shim/test/extract_clock.py`: original limits
 and complete `cyan_skillfish_od_edit_dpm_table`, including permission notice.
-Only the wrapper supplies per-device state and message callbacks; no MMIO access
+Only the wrapper supplies per-device state and message callbacks. No MMIO access
 or hardware ownership is established by this source-only preparation.
 
-- SMU mailbox: AMD MIT `reference/smu_cmn.c`, Linux v6.18 @ `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`, unchanged. `smu_mailbox.inc` mechanically extracts complete send/response/argument/status bodies; `extract_smu.py --check` verifies them. Port polling uses monotonic time and an iteration bound, with explicit owner and callback-IO errors; debug/no-hardware bypasses are disabled. Generated MP1 byte offsets use regcalc and the existing AMD headers.
+- SMU mailbox: AMD MIT `reference/smu_cmn.c`, Linux v6.18 @ `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`, unchanged. `smu_mailbox.inc` mechanically extracts complete send/response/argument/status bodies. `extract_smu.py --check` verifies them. Port polling uses monotonic time and an iteration bound, with explicit owner and callback-IO errors. Debug/no-hardware bypasses are disabled. Generated MP1 byte offsets use regcalc and the existing AMD headers.
 
 - gfx10_prt_flags.inc: Linux amdgpu (MIT), v6.18 7d0a66e4bb9081d75c82ec4957c50034cb0ea449, unchanged PRT flag body from gmc_v10_0_get_vm_pte.
 

@@ -81,7 +81,7 @@
 3	docs/testing/release-notes/0.7.204.101-tester.11.md
 3	docs/testing/release-notes/0.7.205.100-tester.11.md
 9	driver/README.md
-45	driver/amdgpu-import/PROVENANCE.md
+2	driver/amdgpu-import/PROVENANCE.md
 8	driver/amdgpu-import/README.md
 21	driver/contract/README-winsys.md
 29	driver/contract/README.md
