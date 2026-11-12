@@ -57,11 +57,11 @@ void bc250_cpu_queue3(struct bc250_cpu_queue *queue);
 /* ---- the messages, by queue -------------------------------------------------------------------- */
 
 /* Queue 0, AMD-named in driver/amdgpu-import/smu_v11_8_ppsmc.h (MIT), which is why they are named and not
- * guessed. QueryCorePstate and GetEnabledSmuFeatures are the first CPU reads this project ever sends;
- * SetCoreEnableMask is the 8-core unlock, and unlike the community's generic SMN write it can put the stock
- * mask back. */
+ * guessed. QueryCorePstate and GetEnabledSmuFeatures are the first CPU reads this project ever sends.
+ * SetCoreEnableMask is named and NOT on the allowlist: unit A accepts it and the core count does not move
+ * (BD-368). */
 #define BC250_CPU_MSG_QUERY_CORE_PSTATE		0x0Cu	/* in: core id; out: the P-state. Status 0xFF above core 7 */
-#define BC250_CPU_MSG_SET_CORE_ENABLE_MASK	0x2Cu	/* in: mask & 0xFF. The unlock, and the way back */
+#define BC250_CPU_MSG_SET_CORE_ENABLE_MASK	0x2Cu	/* in: mask & 0xFF. Rejected: accepted, no effect */
 /* The two soft CCLK limits are named here and are NOT on the allowlist (0.7.211): no code path sends either,
  * and an entry with no caller that admits a CPU *minimum* of 4000 MHz under no undervolt rule is the bricking
  * shape through the one message bc250_cpu_settings_check does not cover. They come back when trial B6 needs
@@ -332,14 +332,17 @@ enum bc250_cpu_search_action bc250_cpu_search_next(struct bc250_cpu_search *s, c
 /* ---- the core-enable mask ---------------------------------------------------------------------- */
 
 /* The part is sold with 6 of its 8 cores enabled; the stock mask is 0x77, which masks the fourth core of each
- * four-core complex off. Our route is the AMD-named queue 0 message, which can write the stock mask back; the
- * community's generic SMN write through queue 3 0x98 can only ever write 0xFF and hangs the firmware with
- * argument 0, so it stays rejected (docs/design/rejected-options.md). Nobody has reported a result from 0x2C on
- * this part, so one lab trial settles whether it is a live route or a no-op on a harvested die - and either
- * answer closes an open question. The cores appear after a reset, so this is the CU mode's shape: a registry
- * value, a two-step boot guard, and "after the next restart" in the window. */
+ * four-core complex off. Measured on unit A (BD-368, stock BIOS P5.00): the AMD-named queue 0 message 0x2C is
+ * accepted with 0xFF and with 0x77 and moves the core count in neither direction, so nothing sends it. The route
+ * that works is queue 3 message 0x98 with the address of the mask register: it stores 0xFF there, and the two
+ * cores come up at the next warm reset. It cannot store 0x77. A cold boot gives the stock mask back, so the
+ * driver sends the store again at each start, and the way back to six cores is the stored stock mask and a
+ * power-off. This is the CU mode's shape: a stored value, a two-step boot guard, and a restart. */
 int bc250_cpu_mask_allowed(unsigned int mask);
 /* How many cores a mask names, for the log and the report. */
 unsigned int bc250_cpu_mask_cores(unsigned int mask);
+/* The mask that runs, from the logical processor count of this boot: full for 16, stock for 12, 0 for any other
+ * count (not known). */
+unsigned int bc250_cpu_mask_in_force(unsigned int logical_processors);
 
 #endif

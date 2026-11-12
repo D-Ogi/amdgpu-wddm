@@ -1039,7 +1039,8 @@ typedef struct _BC250_ESCAPE_CPU {
     unsigned long CoreMHz[BC250_CPU_CORE_SLOTS];        // out: the effective clock per core, 0 for no answer
     unsigned long PstateMHz[BC250_CPU_CORE_SLOTS];      // out: the clock of each P-state
     unsigned long Cores, Threads;           // out: what Windows reports, which is all the mask's effect we can see
-    unsigned long CoreMask, CoreMaskStored; // in: CORES; out: the setting in force and on disk
+    unsigned long CoreMask, CoreMaskStored; // in: CORES; out: the mask in force (from the processor count of this
+                                            // boot, 0 when not known) and the mask on disk
     unsigned long LastQueue, LastMessage, LastStatus, LastParameter;    // out: the support report only
     long TemperatureMc;                     // out
     unsigned long SearchStep, SearchBest, SearchFail, SearchTested;     // out

@@ -89,13 +89,15 @@ static void test_allowlist(void)
 	 * message to get past the gate. */
 	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 1));
 	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, 0));
-	/* Queue 0: the two reads and the mask, and nothing of the clock transaction. The two soft CCLK limits are
+	/* Queue 0: the two reads and no write (SetCoreEnableMask left the list with BD-368: unit A accepts it and the
+	 * core count does not move), and nothing of the clock transaction. The two soft CCLK limits are
 	 * NOT on the list (0.7.211): no code path sends either, and SetSoftMinCclk would admit a CPU *minimum* of
 	 * 4000 MHz with no undervolt rule - the one message bc250_cpu_settings_check does not cover. */
-	CHECK(gfxGetters == 2u && gfxSetters == 1u);
+	CHECK(gfxGetters == 2u && gfxSetters == 0u);
 	CHECK(bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_QUERY_CORE_PSTATE, 0));
 	CHECK(bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_GET_ENABLED_FEATURES, 0));
-	CHECK(bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, 1));
+	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, 1));
+	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, 0));
 	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_SOFT_MIN_CCLK, 1));
 	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_SOFT_MAX_CCLK, 1));
 	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_SOFT_MIN_CCLK, 0));
@@ -144,7 +146,7 @@ static void test_allowlist(void)
 			CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, rejected[i], 1));
 		}
 		for (m = 0x28u; m <= 0x30u; m++)
-			if (m != BC250_CPU_MSG_SET_CORE_ENABLE_MASK) {
+			{
 				CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_CPU, m, 0));
 				CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_CPU, m, 1));
 			}
@@ -208,8 +210,8 @@ static void test_arguments(void)
 	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, BC250_CPU_OC_MAX_MHZ + 1u));
 	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, 5000u));
 	/* The core mask: two values and no others. */
-	CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, BC250_CPU_MASK_STOCK));
-	CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, BC250_CPU_MASK_FULL));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, BC250_CPU_MASK_STOCK));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, BC250_CPU_MASK_FULL));
 	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, 0u));
 	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, 0x7Fu));
 	/* The curve scale, the one argument whose form is the safety rule: 0 or a negative 16-bit value whose
@@ -1043,6 +1045,10 @@ static void test_mask(void)
 	CHECK(bc250_cpu_mask_cores(BC250_CPU_MASK_FULL) == BC250_CPU_CORES);
 	CHECK(bc250_cpu_mask_cores(0u) == 0u);
 	CHECK(bc250_cpu_mask_cores(1u) == 1u);
+	/* The mask in force is read from the processor count: 16 and 12 name a mask, every other count names none. */
+	CHECK(bc250_cpu_mask_in_force(16u) == BC250_CPU_MASK_FULL && bc250_cpu_mask_in_force(12u) == BC250_CPU_MASK_STOCK);
+	CHECK(bc250_cpu_mask_in_force(0u) == 0u && bc250_cpu_mask_in_force(8u) == 0u && bc250_cpu_mask_in_force(6u) == 0u);
+	CHECK(bc250_cpu_mask_in_force(14u) == 0u && bc250_cpu_mask_in_force(32u) == 0u);
 }
 
 int main(void)

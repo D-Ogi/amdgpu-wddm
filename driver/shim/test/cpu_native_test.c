@@ -873,9 +873,9 @@ static void CoresEscape(BC250_ESCAPE_CPU *d, ULONG mask)
     CpuRequest(&device, d, sizeof(*d), TRUE, flags.Value);
 }
 
-/* How many times this mask went out by its own route (BD-368): the full mask is queue 3's store of 0xFF at the
- * core-enable mask register, the stock mask is queue 0's SetCoreEnableMask. The full mask by SetCoreEnableMask is
- * the route that brought no core up, and any send of it is a failure of this test. */
+/* How many times this mask went out (BD-368): the full mask is queue 3's store of 0xFF at the core-enable mask
+ * register, and the stock mask has no message. SetCoreEnableMask moved no core on unit A, and any send of it is a
+ * failure of this test. */
 static unsigned int MaskSends(ULONG mask)
 {
     unsigned int i, n = 0;
@@ -884,14 +884,10 @@ static unsigned int MaskSends(ULONG mask)
         unsigned int queue = native_firmware.set[i].queue, message = native_firmware.set[i].message;
         unsigned int parameter = native_firmware.set[i].parameter;
 
-        CHECK(!(queue == BC250_CPU_QUEUE_GFX && message == BC250_CPU_MSG_SET_CORE_ENABLE_MASK &&
-                parameter == BC250_CPU_MASK_FULL));
+        CHECK(!(queue == BC250_CPU_QUEUE_GFX && message == BC250_CPU_MSG_SET_CORE_ENABLE_MASK));
         if (message == BC250_CPU_MSG_STORE_FF)
             CHECK(queue == BC250_CPU_QUEUE_CPU && parameter == BC250_CPU_SMN_CORE_ENABLE_MASK);
-        if (mask == BC250_CPU_MASK_FULL) {
-            if (queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_STORE_FF) n++;
-        } else if (queue == BC250_CPU_QUEUE_GFX && message == BC250_CPU_MSG_SET_CORE_ENABLE_MASK &&
-                   parameter == mask) n++;
+        if (mask == BC250_CPU_MASK_FULL && queue == BC250_CPU_QUEUE_CPU && message == BC250_CPU_MSG_STORE_FF) n++;
     }
     return n;
 }
@@ -988,8 +984,13 @@ static void test_the_core_mask_guard(void)
     Load();
     CHECK(!native_log_has("the stock mask comes back") && device.Cpu.CoreMask == BC250_CPU_MASK_FULL);
 
-    /* The stock mask is the way out: both marks go, and the next start sends no mask. */
+    /* The stock mask is the way out: it is stored with no message (none stores 0x77), both marks go, and the next
+     * start sends no mask. The reply names the mask in force from the processor count, not the mask asked for. */
+    native_firmware.writes = 0;
     CoresEscape(&d, BC250_CPU_MASK_STOCK);
+    CHECK(native_firmware.writes == 0 && native_log_has("stored on request, no message"));
+    CHECK(d.CoreMask == device.Cpu.CoreMaskInForce && d.CoreMaskStored == BC250_CPU_MASK_STOCK);
+    CHECK(device.Cpu.CoreMaskInForce == bc250_cpu_mask_in_force(device.Cpu.Cores));
     CHECK(d.Status == BC250_ESCAPE_STATUS_DONE && Setting(L"CoreMask") == BC250_CPU_MASK_STOCK);
     CHECK(Setting(L"CoreMaskPending") == MAXULONG && Setting(L"CoreMaskConfirmed") == MAXULONG);
     CHECK(!device.Cpu.CorePending && !device.Cpu.CoreConfirmed);

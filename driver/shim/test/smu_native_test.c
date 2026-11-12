@@ -448,14 +448,14 @@ int main(void) {
               ==STATUS_SUCCESS);
         CHECK(value==cpu_value && mc==67000 && fw==1u && cpu_calls==cpuBefore+1 &&
               cpu_command==BC250_CPU_MSG_READ_CPU_MV && calls==before);   // queue 0 saw nothing
-        // A setter on queue 3, and the core mask on queue 0: each argument reaches its own queue's register.
+        // A setter on queue 3 reaches queue 3's register. Queue 0 has no CPU setter since BD-368: the core mask
+        // by SetCoreEnableMask is refused before any mailbox.
         CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_CAP_C,95,TRUE,0,NULL,NULL,NULL)
               ==STATUS_SUCCESS);
         CHECK(cpu_command==BC250_CPU_MSG_SET_CAP_C && cpu_calls==cpuBefore+2 && calls==before);
         CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_GFX,BC250_CPU_MSG_SET_CORE_ENABLE_MASK,BC250_CPU_MASK_FULL,
-                            TRUE,0,NULL,NULL,NULL)==STATUS_SUCCESS);
-        CHECK(command==BC250_CPU_MSG_SET_CORE_ENABLE_MASK && core_mask==BC250_CPU_MASK_FULL &&
-              calls==before+1 && cpu_calls==cpuBefore+2);
+                            TRUE,0,NULL,NULL,NULL)==STATUS_INVALID_PARAMETER);
+        CHECK(calls==before && cpu_calls==cpuBefore+2);
         // The 87 C gate, read before every message and not once per sequence. Since 0.7.211 it has two
         // exceptions, both of them the CPU rail's reading of the rule the GPU clock path already carries: the
         // part must always be returnable to the settings it is known to run at.
@@ -497,7 +497,7 @@ int main(void) {
         CHECK(!owner.CpuOnline);
         CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,0,&value,NULL,NULL)
               ==STATUS_DEVICE_NOT_READY);
-        CHECK(cpu_calls==cpuBefore+4 && calls==before+1);
+        CHECK(cpu_calls==cpuBefore+4 && calls==before);
     }
     {
         LONG before=calls;

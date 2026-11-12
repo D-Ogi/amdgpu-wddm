@@ -78,7 +78,8 @@ typedef struct _BC250_CPU_STATE {
     BOOLEAN RevertOwed;                     // a revert was refused: the worker keeps trying (0.7.211)
     ULONGLONG TrialDeadline;                // KeQueryInterruptTime units, under SnapLock
     struct bc250_cpu_search Search;         // the guided undervolt search, under SnapLock
-    ULONG CoreMask, CoreMaskStored;
+    ULONG CoreMask, CoreMaskStored;         // the mask this start asks the chip for, and the one on disk
+    ULONG CoreMaskInForce;                  // from the processor count of this boot; 0 when the count names none
     ULONG Cores, Threads;                   // what Windows reports: all the mask's effect we can observe
     BC250_CPU_SNAP Snap;                    // under SnapLock
     ULONGLONG Generation;                   // start-health generation of this start

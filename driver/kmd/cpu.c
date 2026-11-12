@@ -261,15 +261,15 @@ static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULO
     return CpuMessageEx(Device, Queue, Message, Parameter, Write, AllowHot, FALSE, Value);
 }
 
-// The core mask into the chip, inside the caller's SmuCpuBegin bracket (BD-368). The full mask goes by queue 3's
-// store of 0xFF at the core-enable mask register: SetCoreEnableMask 0x2C with 0xFF is accepted and brings no core
-// up (unit A, n = 3). The store takes no value, so the stock mask still goes by 0x2C.
-static NTSTATUS CpuSendCoreMask(BC250_DEVICE* Device, ULONG Mask)
+// The full core mask into the chip, inside the caller's SmuCpuBegin bracket (BD-368): queue 3's store of 0xFF at the
+// core-enable mask register. SetCoreEnableMask 0x2C is accepted with 0xFF and with 0x77 and moves the core count in
+// neither direction (unit A), so nothing sends it. The store takes no value: no message gives the stock mask back.
+// The stored stock mask and a power-off do, because a cold boot starts from the stock mask and this driver then
+// sends nothing.
+static NTSTATUS CpuSendFullCoreMask(BC250_DEVICE* Device)
 {
-    if (Mask == BC250_CPU_MASK_FULL)
-        return CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_STORE_FF, BC250_CPU_SMN_CORE_ENABLE_MASK,
-                          TRUE, FALSE, NULL);
-    return CpuMessage(Device, BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, Mask, TRUE, FALSE, NULL);
+    return CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_STORE_FF, BC250_CPU_SMN_CORE_ENABLE_MASK, TRUE, FALSE,
+                      NULL);
 }
 
 // ---- the boot record and the leftover mark (BD-295) -------------------------------------------------------------
@@ -1171,9 +1171,9 @@ static void CpuThread(_In_ PVOID Context)
                     nextRetry = KeQueryInterruptTime() + 10000ull * BC250_CPU_REVERT_RETRY_MS;
                 } else CpuApplyStart(device);
                 // The core mask is the CU mode's shape: sent now, visible after the next restart.
-                if (s->CoreMask && s->CoreMask != BC250_CPU_MASK_STOCK) {
+                if (s->CoreMask == BC250_CPU_MASK_FULL) {
                     if (SmuCpuBegin(&device->Smu)) {
-                        status = CpuSendCoreMask(device, s->CoreMask);
+                        status = CpuSendFullCoreMask(device);
                         SmuCpuEnd(&device->Smu);
                         GuardLog("cpu: core mask 0x%02X (%lu cores) sent: 0x%08X; the count changes at the next "
                                  "restart", s->CoreMask, bc250_cpu_mask_cores(s->CoreMask), status);
@@ -1383,6 +1383,7 @@ void CpuStart(BC250_DEVICE* Device)
         s->LeftoverOwed = TRUE;
     }
     s->Cores = (ULONG)KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+    s->CoreMaskInForce = bc250_cpu_mask_in_force(s->Cores);
     s->Threads = s->Cores;
     s->Start = BC250_CPU_START_OWED;
     InitializeObjectAttributes(&attributes, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
@@ -1401,8 +1402,8 @@ void CpuStart(BC250_DEVICE* Device)
     // A pair of lines: one is 171 characters at its widest, over the 159 a log line holds (guardlog-width).
     GuardLog("cpu: the surface is on (CpuTune 1%s), trial window %lu ms",
              s->Lab ? ", CpuLab 1" : "", s->TrialMs);
-    GuardLog("cpu: the surface sees %lu processors, core mask 0x%02X%s", s->Cores, s->CoreMask,
-             s->Created ? "" : " - without a worker thread");
+    GuardLog("cpu: the surface sees %lu processors (mask 0x%02X in force), stored core mask 0x%02X%s", s->Cores,
+             s->CoreMaskInForce, s->CoreMask, s->Created ? "" : " - without a worker thread");
     CpuUnlock(s);
 }
 
@@ -1603,8 +1604,8 @@ void CpuLogSummary(BC250_DEVICE* Device)
              s->Enabled ? "on" : "off", s->Start == BC250_CPU_START_PROVEN ? ", queue 3 proven" : ", queue 3 silent",
              s->OnTrial ? ", on trial" : "", snap.VoltageMv, snap.GpuVoltageMv);
     if (s->LeftoverOwed) GuardLog("cpu: summary the leftover of an earlier start is still owed (BD-295)");
-    GuardLog("cpu: summary cap %lu C, cores %lu/%lu, mask 0x%02X", snap.CapC,
-             bc250_cpu_mask_cores(s->CoreMask), (ULONG)BC250_CPU_CORES, s->CoreMask);
+    GuardLog("cpu: summary cap %lu C, cores %lu/%lu, mask 0x%02X in force, 0x%02X asked", snap.CapC,
+             bc250_cpu_mask_cores(s->CoreMaskInForce), (ULONG)BC250_CPU_CORES, s->CoreMaskInForce, s->CoreMask);
     CpuLogSettings("summary applied", &s->Applied);
     GuardLog("cpu: summary reads %lu writes %lu refusals %lu reverts %lu",
              snap.Reads, snap.Writes, snap.Refusals, snap.Reverts);
@@ -1811,25 +1812,28 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
             ULONG mask = Data->CoreMask;
             if (!bc250_cpu_mask_allowed(mask)) status = STATUS_INVALID_PARAMETER;
             else {
-                // The mask is a restart's business: it is written to the disk and sent now, and the processor
-                // count moves only after the next Windows restart. Writing the stock mask back is the way out,
-                // which is why this driver uses the AMD-named queue 0 message and not the community's SMN write.
+                // The mask is a restart's business: it is written to the disk, and the processor count moves only
+                // at a reset. The full mask is sent now and the cores come up at the next Windows restart. The
+                // stock mask has no message (BD-368): it is stored, this driver stops sending the full mask, and
+                // the six-core count comes back at the next power-off, where the firmware starts from 0x77.
                 CpuStoreLogged(CPU_SETTING_CORE_MASK, mask);
                 s->CoreMaskStored = mask;
                 if (mask != BC250_CPU_MASK_STOCK) {
                     if (NT_SUCCESS(GuardStoreSetting(CPU_SETTING_CORE_PENDING, mask))) s->CorePending = TRUE;
+                    if (SmuCpuBegin(&Device->Smu)) {
+                        status = CpuSendFullCoreMask(Device);
+                        SmuCpuEnd(&Device->Smu);
+                    } else status = STATUS_DEVICE_BUSY;
+                    GuardLog("cpu: core mask 0x%02X (%lu cores) sent on request: 0x%08X; the count changes at the "
+                             "next restart", mask, bc250_cpu_mask_cores(mask), status);
                 } else {
                     CpuDeleteLogged(CPU_SETTING_CORE_PENDING);
                     CpuDeleteLogged(CPU_SETTING_CORE_CONFIRMED);
                     s->CorePending = s->CoreConfirmed = FALSE;
+                    GuardLog("cpu: core mask 0x%02X (%lu cores) stored on request, no message: the count changes at "
+                             "the next power-off", mask, bc250_cpu_mask_cores(mask));
                 }
-                if (SmuCpuBegin(&Device->Smu)) {
-                    status = CpuSendCoreMask(Device, mask);
-                    SmuCpuEnd(&Device->Smu);
-                } else status = STATUS_DEVICE_BUSY;
                 if (NT_SUCCESS(status)) s->CoreMask = mask;
-                GuardLog("cpu: core mask 0x%02X (%lu cores) requested: 0x%08X; the count changes at the next "
-                         "restart", mask, bc250_cpu_mask_cores(mask), status);
                 // BD-368: the mark was written before the send, so a send that the machine does not survive gives
                 // the stock mask back. The firmware took the mask and this start is at its healthy milestone (the
                 // rule of the CU mode's and the DPM's own confirmation): the mark goes now, because the start's
@@ -1954,7 +1958,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
     }
     Data->Cores = s->Cores;
     Data->Threads = s->Threads;
-    Data->CoreMask = s->CoreMask;
+    Data->CoreMask = s->CoreMaskInForce;
     Data->CoreMaskStored = s->CoreMaskStored;
     Data->LastQueue = snap.LastQueue;
     Data->LastMessage = snap.LastMessage;

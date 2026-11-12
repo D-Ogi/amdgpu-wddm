@@ -3899,9 +3899,18 @@ static void CpuPrint(const BC250_ESCAPE_CPU *c)
     printf(" MHz; P-states");
     for (i = 0; i < BC250_CPU_CORE_SLOTS; i++) printf(" %lu", c->PstateMHz[i]);
     printf(" MHz\n");
-    printf("cpu: mask 0x%02lX in force, 0x%02lX stored%s%s, %lu processors to Windows\n", c->CoreMask,
-           c->CoreMaskStored, (c->Flags & BC250_CPU_FLAG_CORE_PENDING) ? ", PENDING" : "",
+    // The mask in force is the driver's reading of the processor count (0 when the count names no mask). A stored
+    // mask that differs waits for a reset: a Windows restart brings the two cores up, and only a power-off takes
+    // them away again, because no message stores the stock mask (BD-368).
+    if (c->CoreMask) printf("cpu: mask 0x%02lX in force", c->CoreMask);
+    else printf("cpu: mask in force not known");
+    printf(", 0x%02lX stored%s%s, %lu processors to Windows\n", c->CoreMaskStored,
+           (c->Flags & BC250_CPU_FLAG_CORE_PENDING) ? ", PENDING" : "",
            (c->Flags & BC250_CPU_FLAG_CORE_CONFIRMED) ? ", confirmed" : "", c->Cores);
+    if (c->CoreMask == BC250_CPU_REQUEST_MASK_STOCK && c->CoreMaskStored == BC250_CPU_REQUEST_MASK_FULL)
+        printf("cpu: 8 cores are stored: restart Windows to bring them up (a restart, not a power-off)\n");
+    else if (c->CoreMask == BC250_CPU_REQUEST_MASK_FULL && c->CoreMaskStored == BC250_CPU_REQUEST_MASK_STOCK)
+        printf("cpu: 6 cores are stored: shut down and power the machine off to return to them\n");
     if (c->SearchStep || c->SearchTested)
         printf("cpu: search step %lu, best %lu, tested %lu, stopped by %s\n", c->SearchStep, c->SearchBest,
                c->SearchTested, c->SearchFail < CPU_FAILS ? g_CpuFail[c->SearchFail] : "?");
@@ -4001,7 +4010,12 @@ static int Cpu(int argc, WCHAR **argv)
             return 2;
         }
         c.CoreMask = value == 8 ? BC250_CPU_REQUEST_MASK_FULL : BC250_CPU_REQUEST_MASK_STOCK;
-        printf("cpu cores: mask 0x%02lX; the processor count follows after the next Windows restart\n", c.CoreMask);
+        if (value == 8)
+            printf("cpu cores: mask 0x%02lX; the two cores come up at the next Windows restart. After a power-off "
+                   "the driver sends the mask again and one more restart brings them up\n", c.CoreMask);
+        else
+            printf("cpu cores: mask 0x%02lX; the count returns to 6 at the next power-off (shut down, then start), "
+                   "not at a restart\n", c.CoreMask);
         return CpuWrite(BC250_CPU_OP_CORES, &c, "cpu cores");
     }
     if (!_wcsicmp(argv[2], L"search")) {

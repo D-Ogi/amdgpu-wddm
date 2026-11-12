@@ -48,17 +48,14 @@ int bc250_cpu_message_allowed(unsigned int queue, unsigned int message, int writ
 			default:
 				return 0;
 			}
-		switch (message) {
-		/* The core-enable mask alone. RequestCorePstate 0x0B is deliberately absent: a per-core P-state
-		 * request on a part whose core topology Windows cannot even report is a control nothing asks for.
-		 * SetSoftMinCclk 0x35 and SetSoftMaxCclk 0x36 are absent as well (0.7.211): no code path sends
-		 * either, and an entry with no caller that admits a CPU minimum of 4000 MHz under no undervolt
-		 * rule is the bricking shape through the one message bc250_cpu_settings_check does not cover. */
-		case BC250_CPU_MSG_SET_CORE_ENABLE_MASK:
-			return 1;
-		default:
-			return 0;
-		}
+		/* No write goes out on queue 0. SetCoreEnableMask 0x2C left the list with BD-368: unit A accepts it
+		 * with 0xFF and with 0x77 and the core count does not move either way, so it has no caller.
+		 * RequestCorePstate 0x0B is deliberately absent: a per-core P-state request on a part whose core
+		 * topology Windows cannot even report is a control nothing asks for. SetSoftMinCclk 0x35 and
+		 * SetSoftMaxCclk 0x36 are absent as well (0.7.211): no code path sends either, and an entry with no
+		 * caller that admits a CPU minimum of 4000 MHz under no undervolt rule is the bricking shape through
+		 * the one message bc250_cpu_settings_check does not cover. */
+		return 0;
 	}
 	if (queue != BC250_CPU_QUEUE_CPU) return 0;
 	if (!write)
@@ -110,8 +107,6 @@ int bc250_cpu_argument_allowed(unsigned int queue, unsigned int message, unsigne
 			return parameter == 0u;
 		case BC250_CPU_MSG_QUERY_CORE_PSTATE:
 			return parameter < BC250_CPU_CORES;
-		case BC250_CPU_MSG_SET_CORE_ENABLE_MASK:
-			return bc250_cpu_mask_allowed(parameter);
 		default:
 			return 0;
 		}
@@ -426,4 +421,13 @@ unsigned int bc250_cpu_mask_cores(unsigned int mask)
 	unsigned int i, cores = 0;
 	for (i = 0; i < BC250_CPU_CORES; i++) if (mask & (1u << i)) cores++;
 	return cores;
+}
+
+unsigned int bc250_cpu_mask_in_force(unsigned int logical_processors)
+{
+	/* Two threads a core on this part. The count is the measurement: the firmware has no readback of the mask,
+	 * and a message that it accepted says nothing about the cores that run (BD-368). */
+	if (logical_processors == 2u * BC250_CPU_CORES) return BC250_CPU_MASK_FULL;
+	if (logical_processors == 2u * bc250_cpu_mask_cores(BC250_CPU_MASK_STOCK)) return BC250_CPU_MASK_STOCK;
+	return 0u;
 }
