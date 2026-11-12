@@ -67,13 +67,12 @@ HRESULT engine_resource_record_desc(const BC250_SHARED_RESOURCE &,EngineResource
 // nothing is left in out.
 HRESULT prepare_engine_resource(RuntimeDevice &,VkDevice,const EngineResourceDispatch &,const EngineResourceDesc &,
     RuntimeEngineResource &out,const char **why);
-// Opener: prepare_engine_resource for the record's description, then a comparison of the whole record with the
-// received one. A difference is E_INVALIDARG with *why naming the first field group that differs; no other layout
-// is tried.
+// Opener: prepare_engine_resource for the record's description, then the contract's match rule
+// (Bc250SharedResourceMatchWhy) of the received record, this device's record and alloc_bytes, the size of the kernel
+// allocation from the BC2A check. A refusal is E_INVALIDARG with *why naming the rule's reason; no other layout is
+// tried.
 HRESULT match_engine_resource(RuntimeDevice &,VkDevice,const EngineResourceDispatch &,const BC250_SHARED_RESOURCE &,
-    RuntimeEngineResource &out,const char **why);
-// The first field group in which two records differ, BC250_SR_WHY_OK when they are the same.
-const char *engine_resource_mismatch(const BC250_SHARED_RESOURCE &mine,const BC250_SHARED_RESOURCE &received);
+    UINT64 alloc_bytes,RuntimeEngineResource &out,const char **why);
 // Imports the mapped runtime allocation into the hosted device, binds the prepared image or buffer at offset 0 and
 // wraps it in the engine. On failure the image or buffer is destroyed, unless the engine kept the object (retained).
 HRESULT bind_engine_resource(RuntimeDevice &,VkDevice,const EngineResourceDispatch &,

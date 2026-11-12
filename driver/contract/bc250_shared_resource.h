@@ -15,7 +15,8 @@
  *                                     VRAM heap, NO_CPU_ACCESS, the BC250_UMD_A_SHARED flag, written by
  *                                     Bc250SharedResourceAllocInit of
  *                                     bc250_shared_resource_alloc.h and by nothing else.
- *                     per resource    BC250_SHARED_RESOURCE, "S26R", version 1, exactly 240 bytes.
+ *                     per resource    BC250_SHARED_RESOURCE, "S26R", version 2, exactly 240 bytes. A reader
+ *                                     of version 2 also reads version 1, which has 0 in place of CreatorApi.
  *
  * The kernel driver needs no change for the second form: it admits a BC2A allocation on CreateAllocation and on
  * OpenAllocation, and it reads a resource record without the E26R magic as UMD-private data (no policy, no
@@ -23,9 +24,12 @@
  * holds these statements to the kernel driver's own readers.
  *
  * Textures of this form are LINEAR. The record carries the whole VkImageCreateInfo that the creator's engine gave
- * and a hash of the layout of every subresource, and the opener compares all of it with what its own engine gives
- * for the same description. A LINEAR image has no metadata, so an opener that creates the same image on the same
- * memory reads the same texels. An OPTIMAL image can have DCC metadata that an opener's engine initializes again
+ * and a hash of the layout of every subresource. The opener makes its own record from its own engine for the same
+ * description and compares the two with Bc250SharedResourceMatchWhy, the one match rule of both shells. The rule
+ * compares the layout, not the engine: two engines (DXVK for D3D11, vkd3d-proton for D3D12) give different usage,
+ * flags and view formats for one description, and these do not change a LINEAR layout. A LINEAR image has no
+ * metadata, so an opener that creates an image of the same layout on the same memory reads the same texels. An
+ * OPTIMAL image can have DCC metadata that an opener's engine initializes again
  * when it first uses the image, which would destroy the creator's content; a later version of this record can add
  * OPTIMAL with explicit metadata handling, the Tiling field is there for it.
  *
@@ -45,8 +49,16 @@ extern "C" {
 #endif
 
 #define BC250_SHARED_RESOURCE_MAGIC    0x52363253u /* "S26R" little endian */
-#define BC250_SHARED_RESOURCE_VERSION  1u
-#define BC250_SHARED_RESOURCE_BYTES    240u
+/* Version 2: version 1's bytes with CreatorApi in place of Reserved0, and the match rule
+ * Bc250SharedResourceMatchWhy. A writer writes version 2; a reader accepts versions 1 and 2. */
+#define BC250_SHARED_RESOURCE_VERSION    2u
+#define BC250_SHARED_RESOURCE_VERSION_1  1u
+#define BC250_SHARED_RESOURCE_BYTES      240u
+
+/* CreatorApi: the shell that wrote the record. For diagnostics only; the match rule does not compare it. */
+#define BC250_SR_CREATOR_NONE   0u /* version 1 */
+#define BC250_SR_CREATOR_D3D11  1u
+#define BC250_SR_CREATOR_D3D12  2u
 
 #define BC250_SHARED_RESOURCE_BUFFER     1u
 #define BC250_SHARED_RESOURCE_TEXTURE2D  2u
@@ -121,6 +133,8 @@ extern "C" {
 #define BC250_SR_WHY_VIEW_FORMATS       "record view formats"
 #define BC250_SR_WHY_MEMORY             "record memory"
 #define BC250_SR_WHY_RESERVED           "record reserved"
+#define BC250_SR_WHY_CREATOR            "record creator"
+#define BC250_SR_WHY_VK_FORMAT          "record vulkan format"
 #define BC250_SR_WHY_DESCRIPTION        "record description"
 #define BC250_SR_WHY_LAYOUT             "record layout"
 #define BC250_SR_WHY_IDENTITY           "record identity"
@@ -150,16 +164,19 @@ typedef struct _BC250_SHARED_RESOURCE {
     unsigned int ViewFormats[BC250_SHARED_RESOURCE_VIEW_FORMATS];
     unsigned long long BufferSize;
 
-    /* VkMemoryRequirements of the creator's image or buffer. */
+    /* VkMemoryRequirements of the creator's image or buffer. CreatorApi is BC250_SR_CREATOR_* (version 2) or 0
+     * (version 1, where the field was Reserved0). */
     unsigned long long MemorySize, MemoryAlignment;
-    unsigned int MemoryTypeBits, Reserved0;
+    unsigned int MemoryTypeBits, CreatorApi;
 
-    /* FNV-1a 64 of the VkSubresourceLayout (offset, size, rowPitch, arrayPitch, depthPitch) of every
-     * subresource, layer-major then mip, as Bc250SharedResourceHash adds them. 0 for a buffer. */
+    /* FNV-1a 64 of the VkSubresourceLayout of every subresource: start at BC250_SR_FNV_BASIS, then
+     * Bc250SharedResourceLayoutAdd for each subresource, layer-major then mip (for each layer, every mip from 0).
+     * 0 for a buffer. */
     unsigned long long LayoutHash;
 
-    /* VkPhysicalDeviceIDProperties of the creator's device: the Vulkan rule for "memory and layouts are
-     * compatible". */
+    /* VkPhysicalDeviceIDProperties of the creator's device. DeviceUuid is the same-adapter check of the match rule.
+     * DriverUuid is for diagnostics only: RADV gives one constant driverUUID for every build, so it does not
+     * identify a build. LayoutHash, VkFormat and the memory fit are the proof that two builds are compatible. */
     unsigned char DriverUuid[16], DeviceUuid[16];
 } BC250_SHARED_RESOURCE;
 
@@ -179,6 +196,20 @@ static __inline unsigned long long Bc250SharedResourceHash(unsigned long long Ha
     for (i = 0; i < 8; ++i)
         Hash = (Hash ^ ((Value >> (i * 8)) & 0xFFull)) * BC250_SR_FNV_PRIME;
     return Hash;
+}
+
+/* The one hash step of LayoutHash: adds the VkSubresourceLayout of one subresource, in the order offset, size,
+ * rowPitch, arrayPitch, depthPitch. Every writer and every opener adds its subresources with this function. */
+static __inline unsigned long long Bc250SharedResourceLayoutAdd(unsigned long long Hash, unsigned long long Offset,
+                                                                unsigned long long Size, unsigned long long RowPitch,
+                                                                unsigned long long ArrayPitch,
+                                                                unsigned long long DepthPitch)
+{
+    Hash = Bc250SharedResourceHash(Hash, Offset);
+    Hash = Bc250SharedResourceHash(Hash, Size);
+    Hash = Bc250SharedResourceHash(Hash, RowPitch);
+    Hash = Bc250SharedResourceHash(Hash, ArrayPitch);
+    return Bc250SharedResourceHash(Hash, DepthPitch);
 }
 
 static __inline int Bc250SharedResourcePowerOfTwo(unsigned long long Value)
@@ -244,7 +275,8 @@ static __inline const char *Bc250SharedResourceRecordWhy(const BC250_SHARED_RESO
     unsigned int i;
     if (!R) return BC250_SR_WHY_ARGUMENTS;
     if (R->Magic != BC250_SHARED_RESOURCE_MAGIC) return BC250_SR_WHY_MAGIC;
-    if (R->Version != BC250_SHARED_RESOURCE_VERSION) return BC250_SR_WHY_VERSION;
+    if (R->Version != BC250_SHARED_RESOURCE_VERSION && R->Version != BC250_SHARED_RESOURCE_VERSION_1)
+        return BC250_SR_WHY_VERSION;
     if (R->Bytes != BC250_SHARED_RESOURCE_BYTES) return BC250_SR_WHY_LENGTH;
     why = Bc250SharedResourceDescWhy(R);
     if (!Bc250SharedResourceWhyOk(why)) return why;
@@ -270,7 +302,11 @@ static __inline const char *Bc250SharedResourceRecordWhy(const BC250_SHARED_RESO
     if (!R->MemorySize || R->MemorySize > BC250_SR_MEMORY_MAX || !R->MemoryTypeBits ||
         !Bc250SharedResourcePowerOfTwo(R->MemoryAlignment) || R->MemoryAlignment > BC250_SHARED_RESOURCE_MAX_ALIGNMENT)
         return BC250_SR_WHY_MEMORY;
-    if (R->Reserved0) return BC250_SR_WHY_RESERVED;
+    if (R->Version == BC250_SHARED_RESOURCE_VERSION_1) {
+        if (R->CreatorApi != BC250_SR_CREATOR_NONE) return BC250_SR_WHY_RESERVED;
+    } else if (R->CreatorApi != BC250_SR_CREATOR_D3D11 && R->CreatorApi != BC250_SR_CREATOR_D3D12) {
+        return BC250_SR_WHY_CREATOR;
+    }
     return BC250_SR_WHY_OK;
 }
 
@@ -290,6 +326,49 @@ static __inline const char *Bc250SharedResourceDecodeWhy(const void *Data, unsig
     why = Bc250SharedResourceRecordWhy(&r);
     if (Bc250SharedResourceWhyOk(why)) *Out = r;
     return why;
+}
+
+/* THE match rule of the ENGINE LAYOUT form, for every opener of every shell. Received is the decoded record of the
+ * creator. Mine is the record that the opener's own engine gives for the same description (the opener's own image
+ * or buffer, its own VkMemoryRequirements and its own LayoutHash). AllocBytes is the size of the kernel allocation,
+ * from the BC2A check (Bc250SharedResourceAllocWhy). BC250_SR_WHY_OK when the opener may bind its own image or buffer
+ * at offset 0 of that allocation and read the creator's content.
+ *
+ * Compared: the dimension; the D3D11 description (Width to StructureByteStride); VkFormat; the image type, extent,
+ * mips, layers, samples and tiling; LayoutHash; the fit of the opener's memory (own MemorySize <= AllocBytes; own
+ * MemoryAlignment <= BC250_SHARED_RESOURCE_MAX_ALIGNMENT, from Bc250SharedResourceRecordWhy, and the opener maps the
+ * allocation at an address of its own alignment); DeviceUuid.
+ * Not compared: CreateFlags, CreateUsage, ViewFormatCount and ViewFormats, BufferSize, MemorySize and MemoryAlignment
+ * of the creator, MemoryTypeBits, DriverUuid and CreatorApi. They belong to each engine's own image or buffer and do
+ * not change a LINEAR layout; a change that does changes LayoutHash or the opener's memory size, which the rule
+ * compares. A buffer has no layout: both buffers hold at least Width bytes (Bc250SharedResourceRecordWhy), and the
+ * memory fit decides. The fields that are not compared stay in the record for the refusal line and diagnostics. */
+static __inline const char *Bc250SharedResourceMatchWhy(const BC250_SHARED_RESOURCE *Received,
+                                                       const BC250_SHARED_RESOURCE *Mine, unsigned long long AllocBytes)
+{
+    const BC250_SHARED_RESOURCE *a = Received, *b = Mine;
+    const char *why;
+    unsigned int i;
+    if (!a || !b) return BC250_SR_WHY_ARGUMENTS;
+    why = Bc250SharedResourceRecordWhy(a);
+    if (!Bc250SharedResourceWhyOk(why)) return why;
+    why = Bc250SharedResourceRecordWhy(b);
+    if (!Bc250SharedResourceWhyOk(why)) return why;
+    if (a->Dimension != b->Dimension) return BC250_SR_WHY_DIMENSION;
+    if (a->Width != b->Width || a->Height != b->Height || a->MipLevels != b->MipLevels || a->ArraySize != b->ArraySize ||
+        a->Format != b->Format || a->SampleCount != b->SampleCount || a->SampleQuality != b->SampleQuality ||
+        a->Usage != b->Usage || a->BindFlags != b->BindFlags || a->CpuAccessFlags != b->CpuAccessFlags ||
+        a->MiscFlags != b->MiscFlags || a->StructureByteStride != b->StructureByteStride)
+        return BC250_SR_WHY_DESCRIPTION;
+    if (a->VkFormat != b->VkFormat) return BC250_SR_WHY_VK_FORMAT;
+    if (a->ImageType != b->ImageType || a->ExtentWidth != b->ExtentWidth || a->ExtentHeight != b->ExtentHeight ||
+        a->ExtentDepth != b->ExtentDepth || a->VkMipLevels != b->VkMipLevels || a->VkArrayLayers != b->VkArrayLayers ||
+        a->VkSamples != b->VkSamples || a->Tiling != b->Tiling) return BC250_SR_WHY_CREATE_INFO;
+    if (a->LayoutHash != b->LayoutHash) return BC250_SR_WHY_LAYOUT;
+    if (!AllocBytes || b->MemorySize > AllocBytes) return BC250_SR_WHY_MEMORY;
+    for (i = 0; i < 16; ++i)
+        if (a->DeviceUuid[i] != b->DeviceUuid[i]) return BC250_SR_WHY_IDENTITY;
+    return BC250_SR_WHY_OK;
 }
 
 #if defined(__cplusplus)

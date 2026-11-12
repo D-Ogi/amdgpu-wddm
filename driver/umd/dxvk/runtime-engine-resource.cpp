@@ -2,7 +2,6 @@
 #include "runtime-engine-resource.h"
 #include "diagnostics.h"
 #include <cstring>
-#include <initializer_list>
 namespace bc250::umd {
 static_assert(BC250_SR_USAGE_DEFAULT==D3D11_USAGE_DEFAULT);
 static_assert(BC250_SR_BIND_VERTEX_BUFFER==D3D11_BIND_VERTEX_BUFFER && BC250_SR_BIND_INDEX_BUFFER==D3D11_BIND_INDEX_BUFFER &&
@@ -43,7 +42,8 @@ bool vulkan_ready(const EngineResourceVulkan &vk,bool buffer) {
     return vk.image && vk.image->create && vk.image->destroy && vk.image->layout && vk.image->memory.requirements &&
         vk.image->memory.allocate && vk.image->memory.bind && vk.image->memory.free && vk.image_format && vk.physical;
 }
-// FNV-1a 64 over the layout of every subresource, layer-major then mip, as bc250_shared_resource.h says.
+// LayoutHash of the image: the contract's hash step for every subresource, layer-major then mip
+// (bc250_shared_resource.h).
 UINT64 layout_hash(VkDevice device,const RuntimeImageDispatch &vk,VkImage image,UINT mips,UINT layers) {
     UINT64 hash=BC250_SR_FNV_BASIS;
     for (UINT layer=0;layer<layers;++layer) {
@@ -51,8 +51,7 @@ UINT64 layout_hash(VkDevice device,const RuntimeImageDispatch &vk,VkImage image,
             const VkImageSubresource sub{VK_IMAGE_ASPECT_COLOR_BIT,mip,layer};
             VkSubresourceLayout l{};
             vk.layout(device,image,&sub,&l);
-            for (const UINT64 v:{UINT64(l.offset),UINT64(l.size),UINT64(l.rowPitch),UINT64(l.arrayPitch),UINT64(l.depthPitch)})
-                hash=Bc250SharedResourceHash(hash,v);
+            hash=Bc250SharedResourceLayoutAdd(hash,l.offset,l.size,l.rowPitch,l.arrayPitch,l.depthPitch);
         }
     }
     return hash;
@@ -99,6 +98,7 @@ EngineResourceEngine engine_resource_engine(IBc250DxvkDevice &engine) {
 const char *engine_resource_desc_why(const EngineResourceDesc &desc,BC250_SHARED_RESOURCE &r) {
     r={};
     r.Magic=BC250_SHARED_RESOURCE_MAGIC; r.Version=BC250_SHARED_RESOURCE_VERSION; r.Bytes=BC250_SHARED_RESOURCE_BYTES;
+    r.CreatorApi=BC250_SR_CREATOR_D3D11;
     if (desc.buffer) {
         const auto &b=desc.buffer_desc;
         r.Dimension=BC250_SHARED_RESOURCE_BUFFER;
@@ -215,28 +215,8 @@ HRESULT prepare_engine_resource(RuntimeDevice &runtime,VkDevice device,const Eng
     if (!Bc250SharedResourceWhyOk(*why)) { destroy_engine_resource(device,d,r); return E_NOTIMPL; }
     out=r; return S_OK;
 }
-const char *engine_resource_mismatch(const BC250_SHARED_RESOURCE &a,const BC250_SHARED_RESOURCE &b) {
-    if (a.Magic!=b.Magic || a.Version!=b.Version || a.Bytes!=b.Bytes || a.Dimension!=b.Dimension) return BC250_SR_WHY_DIMENSION;
-    if (a.Width!=b.Width || a.Height!=b.Height || a.MipLevels!=b.MipLevels || a.ArraySize!=b.ArraySize ||
-        a.Format!=b.Format || a.SampleCount!=b.SampleCount || a.SampleQuality!=b.SampleQuality || a.Usage!=b.Usage ||
-        a.BindFlags!=b.BindFlags || a.CpuAccessFlags!=b.CpuAccessFlags || a.MiscFlags!=b.MiscFlags ||
-        a.StructureByteStride!=b.StructureByteStride) return BC250_SR_WHY_DESCRIPTION;
-    if (std::memcmp(a.DriverUuid,b.DriverUuid,16) || std::memcmp(a.DeviceUuid,b.DeviceUuid,16)) return BC250_SR_WHY_IDENTITY;
-    if (a.CreateFlags!=b.CreateFlags || a.CreateUsage!=b.CreateUsage || a.SharingMode!=b.SharingMode ||
-        a.ImageType!=b.ImageType || a.VkFormat!=b.VkFormat || a.ExtentWidth!=b.ExtentWidth ||
-        a.ExtentHeight!=b.ExtentHeight || a.ExtentDepth!=b.ExtentDepth || a.VkMipLevels!=b.VkMipLevels ||
-        a.VkArrayLayers!=b.VkArrayLayers || a.VkSamples!=b.VkSamples || a.Tiling!=b.Tiling ||
-        a.InitialLayout!=b.InitialLayout || a.BufferSize!=b.BufferSize) return BC250_SR_WHY_CREATE_INFO;
-    if (a.ViewFormatCount!=b.ViewFormatCount || std::memcmp(a.ViewFormats,b.ViewFormats,sizeof(a.ViewFormats)))
-        return BC250_SR_WHY_VIEW_FORMATS;
-    if (a.MemorySize!=b.MemorySize || a.MemoryAlignment!=b.MemoryAlignment || a.MemoryTypeBits!=b.MemoryTypeBits)
-        return BC250_SR_WHY_MEMORY;
-    if (a.LayoutHash!=b.LayoutHash) return BC250_SR_WHY_LAYOUT;
-    if (a.Reserved0!=b.Reserved0) return BC250_SR_WHY_RESERVED;
-    return BC250_SR_WHY_OK;
-}
 HRESULT match_engine_resource(RuntimeDevice &runtime,VkDevice device,const EngineResourceDispatch &d,
-    const BC250_SHARED_RESOURCE &received,RuntimeEngineResource &out,const char **why) {
+    const BC250_SHARED_RESOURCE &received,UINT64 alloc_bytes,RuntimeEngineResource &out,const char **why) {
     const char *ignored=nullptr; if (!why) why=&ignored;
     *why=Bc250SharedResourceRecordWhy(&received);
     if (!Bc250SharedResourceWhyOk(*why)) return E_INVALIDARG;
@@ -246,8 +226,9 @@ HRESULT match_engine_resource(RuntimeDevice &runtime,VkDevice device,const Engin
     RuntimeEngineResource r{};
     hr=prepare_engine_resource(runtime,device,d,desc,r,why);
     if (FAILED(hr)) return hr;
-    // The whole recorded create info, memory and layout, never a fallback to another layout (BD-373).
-    *why=engine_resource_mismatch(r.record,received);
+    // The contract's one match rule: the same layout, format and adapter, and this device's memory fits the kernel
+    // allocation. Never a fallback to another layout (BD-373).
+    *why=Bc250SharedResourceMatchWhy(&received,&r.record,alloc_bytes);
     if (!Bc250SharedResourceWhyOk(*why)) { destroy_engine_resource(device,d,r); return E_INVALIDARG; }
     out=r; return S_OK;
 }

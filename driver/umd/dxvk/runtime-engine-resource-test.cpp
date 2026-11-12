@@ -203,17 +203,28 @@ int main() {
           rec.ViewFormats[1]==UINT(VK_FORMAT_R8G8B8A8_SRGB) && rec.CreateUsage==describedUsage &&
           rec.CreateFlags==UINT(VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) && rec.MemorySize==98304 && rec.MemoryAlignment==4096 &&
           rec.LayoutHash && rec.DriverUuid[0]==1 && rec.DeviceUuid[15]==0x4F,"the record");
+    check(rec.Version==BC250_SHARED_RESOURCE_VERSION && rec.Version==2 && rec.CreatorApi==BC250_SR_CREATOR_D3D11,
+          "version 2, written by the D3D11 shell");
+    {
+        // LayoutHash is the contract's hash step over the mock layout, layer-major then mip.
+        UINT64 h=BC250_SR_FNV_BASIS;
+        for (UINT layer=0;layer<3;++layer) for (UINT mip=0;mip<4;++mip) {
+            const UINT64 pitch=256u>>mip;
+            h=Bc250SharedResourceLayoutAdd(h,UINT64(layer)*32768u+UINT64(mip)*8192u,8192u,pitch<64 ? 64 : pitch,32768u,0);
+        }
+        check(rec.LayoutHash==h,"LayoutHash through Bc250SharedResourceLayoutAdd");
+    }
     check(Bc250SharedResourceWhyOk(Bc250SharedResourceRecordWhy(&rec)),"the creator's record passes its own reader");
     BC250_SHARED_RESOURCE decoded{};
     check(Bc250SharedResourceWhyOk(Bc250SharedResourceDecodeWhy(&rec,sizeof(rec),&decoded)) && !std::memcmp(&decoded,&rec,sizeof(rec)),
           "decode is a copy");
     check(is(Bc250SharedResourceDecodeWhy(&rec,sizeof(rec)-1,&decoded),BC250_SR_WHY_LENGTH),"short record");
     { auto x=rec; x.Magic=0x52363245u; check(is(Bc250SharedResourceDecodeWhy(&x,sizeof(x),&decoded),BC250_SR_WHY_MAGIC),"E26R magic"); }
-    { auto x=rec; x.Version=2; check(is(Bc250SharedResourceDecodeWhy(&x,sizeof(x),&decoded),BC250_SR_WHY_VERSION),"version 2"); }
+    { auto x=rec; x.Version=3; check(is(Bc250SharedResourceDecodeWhy(&x,sizeof(x),&decoded),BC250_SR_WHY_VERSION),"version 3"); }
     { auto x=rec; x.Tiling=0; check(is(Bc250SharedResourceRecordWhy(&x),BC250_SR_WHY_CREATE_INFO),"OPTIMAL is not this version"); }
     { auto x=rec; x.MemoryAlignment=1u<<17; check(is(Bc250SharedResourceRecordWhy(&x),BC250_SR_WHY_MEMORY),"alignment above 64 KiB"); }
     { auto x=rec; x.ViewFormats[5]=37; check(is(Bc250SharedResourceRecordWhy(&x),BC250_SR_WHY_VIEW_FORMATS),"a stray view format"); }
-    { auto x=rec; x.Reserved0=1; check(is(Bc250SharedResourceRecordWhy(&x),BC250_SR_WHY_RESERVED),"reserved"); }
+    { auto x=rec; x.CreatorApi=0; check(is(Bc250SharedResourceRecordWhy(&x),BC250_SR_WHY_CREATOR),"no creator in version 2"); }
 
     // The creator's allocation: S26R record per resource and BC2A blob per allocation, from the one writer.
     RuntimeSurfaceAllocation allocation{}; UINT64 bytes=0;
@@ -237,27 +248,41 @@ int main() {
     { auto x=rec; x.MemorySize=1u<<20; check(engine_surface_blob(&sentBlob,sizeof(sentBlob),x,bytes,&why)==E_INVALIDARG &&
           is(why,BC250_SR_WHY_ALLOCATION_RECORD),"blob of another size"); }
 
-    // Opener: the same engine makes the same record.
+    // Opener: the same engine makes the same record, and the contract's rule admits it for the kernel allocation.
+    const UINT64 allocBytes=98304;
     RuntimeEngineResource opener{};
-    check(match_engine_resource(runtime,device,dispatch,rec,opener,&why)==S_OK && Bc250SharedResourceWhyOk(why) &&
+    check(match_engine_resource(runtime,device,dispatch,rec,allocBytes,opener,&why)==S_OK && Bc250SharedResourceWhyOk(why) &&
           imageCreates==2 && !std::memcmp(&opener.record,&rec,sizeof(rec)),"the opener matches");
     destroy_engine_resource(device,dispatch,opener); check(imageDestroys==1 && !opener.image,"opener destroyed");
-    // Every difference is a refusal with its reason, never another layout. The prepared image is destroyed.
-    auto mismatch=[&](const char *want,const char *what) {
+    // The adapter gives the rule's answer: a refusal is E_INVALIDARG with the rule's reason, never another layout,
+    // and the prepared image is destroyed. The cases of the rule itself are in driver/contract/test.
+    auto opened=[&](const BC250_SHARED_RESOURCE &received,UINT64 alloc,const char *want,const char *what) {
         RuntimeEngineResource o{}; const unsigned destroyed=imageDestroys;
-        const HRESULT hr=match_engine_resource(runtime,device,dispatch,rec,o,&why);
-        check(hr==E_INVALIDARG && is(why,want) && !o.image && imageDestroys==destroyed+1,what);
+        const HRESULT hr=match_engine_resource(runtime,device,dispatch,received,alloc,o,&why);
+        if (Bc250SharedResourceWhyOk(want)) {
+            check(hr==S_OK && Bc250SharedResourceWhyOk(why) && o.image,what);
+            destroy_engine_resource(device,dispatch,o);
+        } else {
+            check(hr==E_INVALIDARG && is(why,want) && !o.image && imageDestroys==destroyed+1,what);
+        }
     };
-    layoutSalt=256; mismatch(BC250_SR_WHY_LAYOUT,"another subresource layout"); layoutSalt=0;
-    dispatch.vk.identity.device[3]^=1; mismatch(BC250_SR_WHY_IDENTITY,"another device"); dispatch.vk.identity.device[3]^=1;
-    memoryRequirements.size=131072; mismatch(BC250_SR_WHY_MEMORY,"another memory size"); memoryRequirements.size=98304;
-    describedUsage|=VK_IMAGE_USAGE_STORAGE_BIT; mismatch(BC250_SR_WHY_CREATE_INFO,"another engine usage");
+    layoutSalt=256; opened(rec,allocBytes,BC250_SR_WHY_LAYOUT,"another subresource layout"); layoutSalt=0;
+    dispatch.vk.identity.device[3]^=1; opened(rec,allocBytes,BC250_SR_WHY_IDENTITY,"another device");
+    dispatch.vk.identity.device[3]^=1;
+    memoryRequirements.size=131072; opened(rec,allocBytes,BC250_SR_WHY_MEMORY,"memory above the allocation");
+    opened(rec,131072,BC250_SR_WHY_OK,"memory inside a larger allocation"); memoryRequirements.size=98304;
+    describedFormat=VK_FORMAT_B8G8R8A8_UNORM; opened(rec,allocBytes,BC250_SR_WHY_VK_FORMAT,"another VkFormat");
+    describedFormat=VK_FORMAT_R8G8B8A8_UNORM;
+    // What belongs to one engine's own image does not decide: another engine (vkd3d-proton for D3D12) gives other
+    // usage, flags and view formats for the same layout.
+    describedUsage|=VK_IMAGE_USAGE_STORAGE_BIT; opened(rec,allocBytes,BC250_SR_WHY_OK,"another engine usage");
     describedUsage&=~VkImageUsageFlags(VK_IMAGE_USAGE_STORAGE_BIT);
-    { auto x=rec; x.ViewFormats[1]=UINT(VK_FORMAT_B8G8R8A8_UNORM); RuntimeEngineResource o{};
-      check(match_engine_resource(runtime,device,dispatch,x,o,&why)==E_INVALIDARG && is(why,BC250_SR_WHY_VIEW_FORMATS),
-            "another view format list"); }
+    { auto x=rec; x.ViewFormats[1]=UINT(VK_FORMAT_B8G8R8A8_UNORM); x.CreateFlags=0; x.CreatorApi=BC250_SR_CREATOR_D3D12;
+      x.DriverUuid[0]^=0xFF; opened(x,allocBytes,BC250_SR_WHY_OK,"a D3D12 creator's view formats, flags and driver UUID"); }
+    { auto x=rec; x.Version=BC250_SHARED_RESOURCE_VERSION_1; x.CreatorApi=BC250_SR_CREATOR_NONE;
+      opened(x,allocBytes,BC250_SR_WHY_OK,"a version 1 record"); }
     { auto x=rec; x.Magic=0x52363245u; RuntimeEngineResource o{}; const unsigned created=imageCreates;
-      check(match_engine_resource(runtime,device,dispatch,x,o,&why)==E_INVALIDARG && is(why,BC250_SR_WHY_MAGIC) &&
+      check(match_engine_resource(runtime,device,dispatch,x,allocBytes,o,&why)==E_INVALIDARG && is(why,BC250_SR_WHY_MAGIC) &&
             imageCreates==created,"an E26R record is not this form"); }
 
     // Refusals of the creator, each before an image exists or with the image destroyed.
@@ -322,11 +347,14 @@ int main() {
           Bc250SharedResourceWhyOk(Bc250SharedResourceRecordWhy(&brec)),"the buffer record");
     {
         RuntimeEngineResource o{};
-        check(match_engine_resource(runtime,device,dispatch,brec,o,&why)==S_OK && bufferCreates==2,"the buffer opener matches");
+        check(match_engine_resource(runtime,device,dispatch,brec,98304,o,&why)==S_OK && bufferCreates==2,
+              "the buffer opener matches");
         destroy_engine_resource(device,dispatch,o); check(bufferDestroys==1,"opener buffer destroyed");
+        // A buffer has no layout: another engine's buffer size is admitted when the opener's memory fits.
         auto x=brec; x.BufferSize=2048;
-        check(match_engine_resource(runtime,device,dispatch,x,o,&why)==E_INVALIDARG && is(why,BC250_SR_WHY_CREATE_INFO) &&
-              bufferDestroys==2,"another buffer size");
+        check(match_engine_resource(runtime,device,dispatch,x,98304,o,&why)==S_OK && Bc250SharedResourceWhyOk(why),
+              "another engine's buffer size");
+        destroy_engine_resource(device,dispatch,o); check(bufferDestroys==2,"opener buffer destroyed again");
     }
     expectBufferMemory=true;
     check(bind_engine_resource(runtime,device,dispatch,properties,imported,sharedBuffer)==S_OK && bufferBinds==1 &&
@@ -342,7 +370,7 @@ int main() {
     check(close_engine_resource(bridge,device,dispatch,kept)==E_UNEXPECTED && kept.retained && kept.image &&
           imageDestroys==destroyedBeforeKept,"retained");
     check(close_engine_resource(bridge,device,dispatch,kept)==E_UNEXPECTED,"retained stays");
-    std::cout << "PASS engine layout resources: " << checks << " checks, sharing rule, record, BC2A blob, creator and "
-        "opener match, named refusals, LINEAR textures, buffers on ABI 1.9, bind and close (mock Vulkan and engine)\n";
+    std::cout << "PASS engine layout resources: " << checks << " checks, sharing rule, record v2, BC2A blob, creator and "
+        "opener through the contract's match rule, named refusals, LINEAR textures, buffers on ABI 1.9, bind and close (mock Vulkan and engine)\n";
     return 0;
 }

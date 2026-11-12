@@ -41,24 +41,43 @@ static __inline int Bc250SharedResourceAllocInit(struct bc250_umd_alloc_private 
     return 1;
 }
 
-/* The opener's check of a received BC2A allocation blob: exactly the bytes Bc250SharedResourceAllocInit writes for
- * the record. *AllocSize is the allocation's size on BC250_SR_WHY_OK.
- * The opener compares the blob byte for byte. Thus the kernel driver must never write into the allocation private
- * data of this form (at CreateAllocation, OpenAllocation or later): one changed byte makes every open refuse the
- * resource with BC250_SR_WHY_ALLOCATION_RECORD. */
+/* The opener's check of a received BC2A allocation blob, field by field, so that every writer of this form passes
+ * (the D3D11 writer above and a D3D12 writer that selects another alignment). *AllocSize is the allocation's size on
+ * BC250_SR_WHY_OK. Admitted: magic, version BC250_UMD_ALLOC_VERSION_CACHE_POLICY, the struct size, flags exactly
+ * BC250_UMD_A_SHARED, the VRAM heap, gem_flags exactly NO_CPU_ACCESS, va_size equal to alloc_size, alloc_size a page
+ * multiple and at least the record's MemorySize, phys_alignment a power of two from the record's MemoryAlignment to
+ * BC250_SHARED_RESOURCE_MAX_ALIGNMENT, and 0 in every other byte. An unknown flag or a field that a later version
+ * sets is refused with BC250_SR_WHY_ALLOCATION_RECORD.
+ * The kernel driver never writes into the allocation private data of this form (driver/kmd/umd_blob.c says so, and
+ * driver/contract/test/shared-resource-test.cpp holds it). That rule stays, but it no longer decides an open: this
+ * check reads fields, not the bytes of one writer. The opener's own memory fit is Bc250SharedResourceMatchWhy's. */
 static __inline const char *Bc250SharedResourceAllocWhy(const void *Data, unsigned int Bytes,
                                                        const BC250_SHARED_RESOURCE *R, unsigned long long *AllocSize)
 {
-    struct bc250_umd_alloc_private expected;
-    const unsigned char *a = (const unsigned char *)Data, *b = (const unsigned char *)&expected;
+    struct bc250_umd_alloc_private blob;
+    const unsigned char *s = (const unsigned char *)Data;
+    unsigned char *d = (unsigned char *)&blob;
+    unsigned long long bytes, align;
     unsigned int i;
     if (!Data || !R || !AllocSize) return BC250_SR_WHY_ARGUMENTS;
     *AllocSize = 0;
-    if (Bytes != sizeof(expected)) return BC250_SR_WHY_ALLOCATION_LENGTH;
-    if (!Bc250SharedResourceAllocInit(&expected, R)) return BC250_SR_WHY_MEMORY;
-    for (i = 0; i < sizeof(expected); ++i)
-        if (a[i] != b[i]) return BC250_SR_WHY_ALLOCATION_RECORD;
-    *AllocSize = expected.alloc_size;
+    if (Bytes != sizeof(blob)) return BC250_SR_WHY_ALLOCATION_LENGTH;
+    if (!R->MemorySize || R->MemorySize > BC250_SR_MEMORY_MAX || !Bc250SharedResourcePowerOfTwo(R->MemoryAlignment) ||
+        R->MemoryAlignment > BC250_SHARED_RESOURCE_MAX_ALIGNMENT) return BC250_SR_WHY_MEMORY;
+    for (i = 0; i < sizeof(blob); ++i) d[i] = s[i];
+    bytes = blob.alloc_size; align = blob.phys_alignment;
+    if (blob.magic != BC250_UMD_ALLOC_MAGIC || blob.version != BC250_UMD_ALLOC_VERSION_CACHE_POLICY ||
+        blob.size != sizeof(blob) || blob.flags != BC250_UMD_A_SHARED || blob.preferred_heap != AMDGPU_GEM_DOMAIN_VRAM ||
+        blob.gem_flags != AMDGPU_GEM_CREATE_NO_CPU_ACCESS || blob.va_size != bytes || !bytes ||
+        (bytes & (BC250_SHARED_RESOURCE_PAGE - 1)) || bytes < R->MemorySize || !Bc250SharedResourcePowerOfTwo(align) ||
+        align < R->MemoryAlignment || align > BC250_SHARED_RESOURCE_MAX_ALIGNMENT)
+        return BC250_SR_WHY_ALLOCATION_RECORD;
+    /* Every other byte is 0: clear the fields checked above and read what is left. */
+    blob.magic = blob.version = blob.size = blob.flags = blob.preferred_heap = 0;
+    blob.alloc_size = blob.phys_alignment = blob.gem_flags = blob.va_size = 0;
+    for (i = 0; i < sizeof(blob); ++i)
+        if (d[i]) return BC250_SR_WHY_ALLOCATION_RECORD;
+    *AllocSize = bytes;
     return BC250_SR_WHY_OK;
 }
 

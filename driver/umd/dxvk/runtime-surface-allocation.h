@@ -28,8 +28,9 @@ HRESULT allocate_runtime_surface(RuntimeDevice &,const RuntimeSurfaceRequest &,R
 // (driver/contract/bc250_shared_resource.h). *bytes is the allocation's size.
 HRESULT allocate_engine_surface(RuntimeDevice &,HANDLE runtime_resource,const BC250_SHARED_RESOURCE &,
     RuntimeSurfaceAllocation &,UINT64 &bytes);
-// The opener's check of a received BC2A blob: exactly what allocate_engine_surface writes for the record. *bytes is the
-// allocation's size; *why names a refusal (BC250_SR_WHY_*).
+// The opener's check of a received BC2A blob: the contract's field check (Bc250SharedResourceAllocWhy), which admits
+// what allocate_engine_surface and any other writer of this form write. *bytes is the allocation's size; *why names a
+// refusal (BC250_SR_WHY_*).
 HRESULT engine_surface_blob(const void *blob,UINT blobBytes,const BC250_SHARED_RESOURCE &,UINT64 &bytes,const char **why);
 // Caller must retire engine/Present use and destroy image wrappers first.
 // Deallocate2 flags zero retires all allocation VAs, including pending mappings.

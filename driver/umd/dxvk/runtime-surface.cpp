@@ -129,7 +129,7 @@ HRESULT adopt_engine_surface(RuntimeDevice &runtime,const SurfacePagingQueue &qu
     HRESULT hr=engine_surface_blob(blob,blobBytes,record,bytes,why);
     if (FAILED(hr)) return hr;
     RuntimeEngineResource matched{};
-    hr=match_engine_resource(runtime,prepare.device,*prepare.resource,record,matched,why);
+    hr=match_engine_resource(runtime,prepare.device,*prepare.resource,record,bytes,matched,why);
     if (FAILED(hr)) return hr;
     out.owner=&runtime; out.queue=queue; out.form=SurfaceForm::engine_layout; out.engine=matched;
     if (!matched.desc.buffer) out.desc=matched.desc.texture;
