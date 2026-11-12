@@ -40,9 +40,9 @@ HRESULT sparse_policy(UINT64,bool &sparse,D3DKMT_HANDLE &unresolved) noexcept {
     sparse=true; unresolved=0; return S_OK;
 }
 bool osWddm22; HRESULT osVersionResult=S_OK; unsigned versionQueries;
-HRESULT version_policy(UINT64 luid,bool &supported,D3DKMT_HANDLE &unresolved) noexcept {
+HRESULT version_policy(UINT64 luid,D3DKMT_DRIVERVERSION &version,D3DKMT_HANDLE &unresolved) noexcept {
     CHECK(luid==77); ++versionQueries;
-    supported=osWddm22; unresolved=0; return osVersionResult;
+    version=osWddm22 ? KMT_DRIVERVERSION_WDDM_2_2 : KMT_DRIVERVERSION_WDDM_2_1; unresolved=0; return osVersionResult;
 }
 D3DKMT_DRIVERVERSION kmtVersion;
 NTSTATUS openStatus,queryStatus,closeStatus;
@@ -64,25 +64,24 @@ NTSTATUS APIENTRY close_version(const D3DKMT_CLOSEADAPTER *args) {
 void version_transport() {
     const native12::MemoryPolicyKmt kmt{open_version,read_version,close_version};
     constexpr NTSTATUS refused=static_cast<NTSTATUS>(0xC0000022u);
-    LUID luid{77,0}; bool supported=true; D3DKMT_HANDLE unresolved=99;
-    CHECK(query_wddm22_support(luid,{},supported,unresolved)==E_INVALIDARG && !supported && !unresolved);
+    LUID luid{77,0}; D3DKMT_DRIVERVERSION read=KMT_DRIVERVERSION_WDDM_3_0; D3DKMT_HANDLE unresolved=99;
+    CHECK(query_kmt_driver_version(luid,{},read,unresolved)==E_INVALIDARG && read==KMT_DRIVERVERSION_WDDM_1_0 && !unresolved);
     for (auto version:{KMT_DRIVERVERSION_WDDM_2_0,KMT_DRIVERVERSION_WDDM_2_1,
                       KMT_DRIVERVERSION_WDDM_2_2,KMT_DRIVERVERSION_WDDM_3_0}) {
         openStatus=queryStatus=closeStatus=0; opens=queries=closes=0; kmtVersion=version;
-        CHECK(query_wddm22_support(luid,kmt,supported,unresolved)==S_OK &&
-              supported==(version>=KMT_DRIVERVERSION_WDDM_2_2) && !unresolved);
+        CHECK(query_kmt_driver_version(luid,kmt,read,unresolved)==S_OK && read==version && !unresolved);
         CHECK(opens==1 && queries==1 && closes==1);
     }
     for (NTSTATUS status:{refused,NTSTATUS(1)}) {
         queryStatus=status; opens=queries=closes=0;
-        CHECK(FAILED(query_wddm22_support(luid,kmt,supported,unresolved)) && !supported && !unresolved);
+        CHECK(FAILED(query_kmt_driver_version(luid,kmt,read,unresolved)) && read==KMT_DRIVERVERSION_WDDM_1_0 && !unresolved);
         CHECK(opens==1 && queries==1 && closes==1);
     }
     queryStatus=0; closeStatus=refused; opens=queries=closes=0;
-    CHECK(FAILED(query_wddm22_support(luid,kmt,supported,unresolved)) && !supported && unresolved==42);
+    CHECK(FAILED(query_kmt_driver_version(luid,kmt,read,unresolved)) && read==KMT_DRIVERVERSION_WDDM_1_0 && unresolved==42);
     CHECK(closes==1); // failed ownership is retained, never retried by a destructor
     closeStatus=0; openStatus=refused; opens=queries=closes=0;
-    CHECK(FAILED(query_wddm22_support(luid,kmt,supported,unresolved)) && !supported && !unresolved);
+    CHECK(FAILED(query_kmt_driver_version(luid,kmt,read,unresolved)) && read==KMT_DRIVERVERSION_WDDM_1_0 && !unresolved);
     CHECK(opens==1 && !queries && !closes);
 }
 AdapterCaps fl12_1_caps() {
@@ -105,25 +104,31 @@ constexpr UINT build_of(UINT build) { return build<<16; }
 // The WDDM 2.2 interface is the newest offer, and only at the build whose present callback carries the whole
 // structure. The OS-visible KMD version and the process switch control the optional offer.
 void negotiation() {
+    const DdiLevel newest=newest_ddi_level({D3D_FEATURE_LEVEL_12_1,true,KMT_DRIVERVERSION_WDDM_2_2,true});
+    CHECK(newest==DdiLevel::wddm2_2);
     UINT32 count=0; UINT64 versions[4]={1,2,3,4};
-    CHECK(supported_ddi_versions(D3D_FEATURE_LEVEL_12_1,true,&count,nullptr)==S_OK && count==3);
+    CHECK(supported_ddi_versions(newest,&count,nullptr)==S_OK && count==3);
     count=2;
-    CHECK(supported_ddi_versions(D3D_FEATURE_LEVEL_12_1,true,&count,versions)==HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) &&
+    CHECK(supported_ddi_versions(newest,&count,versions)==HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) &&
           count==2 && versions[0]==1);
     count=4;
-    CHECK(supported_ddi_versions(D3D_FEATURE_LEVEL_12_1,true,&count,versions)==S_OK && count==3 &&
+    CHECK(supported_ddi_versions(newest,&count,versions)==S_OK && count==3 &&
           versions[0]==D3D11_1_DDI_SUPPORTED && versions[1]==D3DWDDM2_0_DDI_SUPPORTED &&
           versions[2]==D3DWDDM2_2_DDI_SUPPORTED && versions[3]==4);
     // The three offers are ordered oldest first, and the newest is the WDDM 2.2 interface at build 5.
     CHECK(versions[1]<versions[2] && versions[0]<versions[1]);
     static_assert(D3DWDDM2_2_DDI_BUILD_VERSION==5 && D3DWDDM2_2_DDI_INTERFACE_VERSION==0xB0023);
-    // FL11 keeps the D3D11.1 table alone, whichever value the switch has.
+    // FL11 keeps the D3D11.1 table alone, whichever value the switch has; the switch keeps WDDM 2.0 as the newest.
+    CHECK(newest_ddi_level({D3D_FEATURE_LEVEL_11_1,true,KMT_DRIVERVERSION_WDDM_2_2,true})==DdiLevel::d3d11_1);
+    CHECK(newest_ddi_level({D3D_FEATURE_LEVEL_12_1,true,KMT_DRIVERVERSION_WDDM_2_2,false})==DdiLevel::wddm2_0);
     count=4;
-    CHECK(supported_ddi_versions(D3D_FEATURE_LEVEL_11_1,true,&count,versions)==S_OK && count==1);
-    CHECK(wddm2_2_ddi(D3DWDDM2_2_DDI_INTERFACE_VERSION,build_of(D3DWDDM2_2_DDI_BUILD_VERSION)));
-    CHECK(!wddm2_2_ddi(D3DWDDM2_2_DDI_INTERFACE_VERSION,build_of(D3DWDDM2_2_DDI_BUILD_VERSION-1)));
-    CHECK(!wddm2_2_ddi(D3DWDDM2_0_DDI_INTERFACE_VERSION,build_of(D3DWDDM2_2_DDI_BUILD_VERSION)));
-    CHECK(!wddm2_0_ddi(D3DWDDM2_2_DDI_INTERFACE_VERSION,build_of(D3DWDDM2_0_DDI_BUILD_VERSION)));
+    CHECK(supported_ddi_versions(DdiLevel::d3d11_1,&count,versions)==S_OK && count==1);
+    DdiLevel asked=DdiLevel::d3d11_1;
+    CHECK(level_of(D3DWDDM2_2_DDI_INTERFACE_VERSION,build_of(D3DWDDM2_2_DDI_BUILD_VERSION),asked) &&
+          asked==DdiLevel::wddm2_2);
+    CHECK(!level_of(D3DWDDM2_2_DDI_INTERFACE_VERSION,build_of(D3DWDDM2_2_DDI_BUILD_VERSION-1),asked));
+    CHECK(!level_of(D3DWDDM2_0_DDI_INTERFACE_VERSION,build_of(D3DWDDM2_2_DDI_BUILD_VERSION),asked));
+    CHECK(!level_of(D3DWDDM2_2_DDI_INTERFACE_VERSION,build_of(D3DWDDM2_0_DDI_BUILD_VERSION),asked));
     // The build decides the shape of the present callback and of the DXGI table together.
     CHECK(dxgi1_6_1_table_layout_supported(D3DWDDM2_2_DDI_INTERFACE_VERSION,D3DWDDM2_2_DDI_BUILD_VERSION));
     CHECK(!dxgi1_6_1_table_layout_supported(D3DWDDM2_2_DDI_INTERFACE_VERSION,D3DWDDM2_2_DDI_BUILD_VERSION-1));

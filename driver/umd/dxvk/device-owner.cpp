@@ -54,9 +54,11 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     runtime_.hRTCoreLayer=args.hRTCoreLayer;
     runtime_.KTCallbacks=*args.pKTCallbacks;
     // BD-372: pfnOfferAllocations2Cb and pfnReclaimAllocations3Cb are members from interface WDDM 2.1.1 and 2.1.2 on
-    // (d3dumddi.h). This shell takes WDDM 2.0 or WDDM 2.2, and only the WDDM 2.2 device has OfferResources1, the
-    // entry that asks for a decommit. A WDDM 2.0 device does not read them, so its offers and reclaims stay as they were.
-    if (!wddm2_2_ddi(args.Interface,args.Version)) {
+    // (d3dumddi.h). Of the interfaces this shell takes (kDdiInterfaces), the WDDM 2.2 one and every later one have
+    // OfferResources1, the entry that asks for a decommit. A device below WDDM 2.2 does not read them, so its offers
+    // and reclaims stay as they were.
+    DdiLevel ddi=DdiLevel::d3d11_1;
+    if (!level_of(args.Interface,args.Version,ddi) || ddi<DdiLevel::wddm2_2) {
         runtime_.KTCallbacks.pfnOfferAllocations2Cb=nullptr;
         runtime_.KTCallbacks.pfnReclaimAllocations3Cb=nullptr;
     }

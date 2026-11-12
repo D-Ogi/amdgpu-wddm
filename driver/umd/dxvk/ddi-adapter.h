@@ -6,7 +6,9 @@ namespace bc250::umd {
 // shell). S_OK with sparse set or cleared; a failure resolves to off. A handle the query could not close
 // is returned in unresolved and stays with the adapter.
 using SparsePolicyQuery=HRESULT (*)(UINT64 luid,bool &sparse,D3DKMT_HANDLE &unresolved) noexcept;
-using WddmVersionQuery=HRESULT (*)(UINT64 luid,bool &supports_wddm22,D3DKMT_HANDLE &unresolved) noexcept;
+// Resolves the KMD's driver version (KMTQAITYPE_DRIVERVERSION). S_OK with the version; a failure keeps the
+// adapter at the WDDM 2.0 interface (newest_ddi_level). A handle the query could not close stays with the adapter.
+using WddmVersionQuery=HRESULT (*)(UINT64 luid,D3DKMT_DRIVERVERSION &version,D3DKMT_HANDLE &unresolved) noexcept;
 // The deployment layer supplies artifact-bound capabilities and absolute DLL
 // paths. This transaction does not guess caps or load Vulkan at adapter open.
 struct AdapterConfiguration {

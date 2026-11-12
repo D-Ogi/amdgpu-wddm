@@ -16,20 +16,18 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     const BC250_DXVK_SHELL_SERVICES &services,DdiDeviceHandle &failedCleanup,const AdapterCaps &advertised,
     UINT32 policy_flags,const ScanoutSource *scanout) noexcept {
     if (failedCleanup.owner) return E_UNEXPECTED;
-    const bool wddm2_0=args.Interface==D3DWDDM2_0_DDI_INTERFACE_VERSION;
-    // BD-099: the WDDM 2.2 interface, which gives this shell the whole DXGIDDICB_PRESENT. Only at the build
-    // the adapter advertised: an older build of the same interface has a shorter present callback and no
-    // DXGI 1.6.1 table, so it is not this table's contract.
-    const bool wddm2_2=wddm2_2_ddi(args.Interface,args.Version);
-    // The unions alias: p11_1DeviceFuncs/pWDDM2_0DeviceFuncs/pWDDM2_2DeviceFuncs, and
+    // The interface and build must be one row of kDdiInterfaces exactly (ddi-negotiation.h). BD-099: an older build
+    // of the WDDM 2.2 interface has a shorter present callback and no DXGI 1.6.1 table, so it is not that table's
+    // contract. The unions alias: p11_1DeviceFuncs/pWDDM2_0DeviceFuncs/pWDDM2_2DeviceFuncs, and
     // pDXGIDDIBaseFunctions3/5/6_1.
     // BD-283: each argument refusal writes a line; the failures after initialization have their own below.
-    if ((args.Interface!=D3D11_1_DDI_INTERFACE_VERSION && !wddm2_0 && !wddm2_2) || !args.hDrvDevice.pDrvPrivate ||
+    DdiLevel ddi=DdiLevel::d3d11_1;
+    if (!level_of(args.Interface,args.Version,ddi) || !args.hDrvDevice.pDrvPrivate ||
         !args.p11_1DeviceFuncs || !args.DXGIBaseDDI.pDXGIDDIBaseFunctions3)
         return ddi_status_note("CreateDevice",E_INVALIDARG,DdiInputs("interface=%08X version=%08X storage=%u funcs=%u dxgi=%u",
             unsigned(args.Interface),unsigned(args.Version),unsigned(args.hDrvDevice.pDrvPrivate!=nullptr),
             unsigned(args.p11_1DeviceFuncs!=nullptr),unsigned(args.DXGIBaseDDI.pDXGIDDIBaseFunctions3!=nullptr)));
-    if ((wddm2_0 || wddm2_2) && advertised.maximum<D3D_FEATURE_LEVEL_12_0)
+    if (ddi>=DdiLevel::wddm2_0 && advertised.maximum<D3D_FEATURE_LEVEL_12_0)
         return ddi_status_note("CreateDevice",E_INVALIDARG,DdiInputs("interface=%08X advertised-maximum=%04X",
             unsigned(args.Interface),unsigned(advertised.maximum)));
     auto *storage=static_cast<DdiDeviceHandle *>(args.hDrvDevice.pDrvPrivate);
@@ -121,15 +119,19 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     // present callback. The two go together in the runtime, so one check covers both.
     static_assert(dxgi1_6_1_table_layout_supported(D3DWDDM2_2_DDI_INTERFACE_VERSION,D3DWDDM2_2_DDI_BUILD_VERSION));
     static_assert(!dxgi1_6_1_table_layout_supported(D3DWDDM2_2_DDI_INTERFACE_VERSION,D3DWDDM2_2_DDI_BUILD_VERSION-1));
-    if (wddm2_2) {
+    switch (ddi) {
+    case DdiLevel::wddm2_2:
         *args.DXGIBaseDDI.pDXGIDDIBaseFunctions6_1=make_dxgi1_6_1_device_table();
         *args.pWDDM2_2DeviceFuncs=make_wddm2_2_device_table();
-    } else if (wddm2_0) {
+        break;
+    case DdiLevel::wddm2_0:
         *args.DXGIBaseDDI.pDXGIDDIBaseFunctions5=make_dxgi1_4_device_table();
         *args.pWDDM2_0DeviceFuncs=make_wddm2_0_device_table();
-    } else {
+        break;
+    case DdiLevel::d3d11_1:
         *args.DXGIBaseDDI.pDXGIDDIBaseFunctions3=make_dxgi_device_table();
         *args.p11_1DeviceFuncs=make_render_device_table();
+        break;
     }
     // BD-223: the video DDIs. The runtime asks for the video table through this entry when an application asks the
     // device for ID3D11VideoDevice; without it that query fails, and a browser has no video processor and no overlay.

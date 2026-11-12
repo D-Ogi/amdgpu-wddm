@@ -1014,6 +1014,7 @@ int main() {
     const auto originalDxgi=unchangedDxgi;
     DdiDeviceHandle newHandle{},failedCleanup{};
     D3D10DDIARG_CREATEDEVICE createArgs{}; createArgs.Interface=D3D11_1_DDI_INTERFACE_VERSION;
+    createArgs.Version=UINT(D3D11_1_DDI_BUILD_VERSION)<<16;
     createArgs.Flags=UINT(D3D11DDI_3DPIPELINELEVEL_11_0)<<D3D11DDI_CREATEDEVICE_FLAG_3DPIPELINESUPPORT_SHIFT;
     createArgs.hDrvDevice.pDrvPrivate=&newHandle; createArgs.p11_1DeviceFuncs=&unchangedTable;
     createArgs.hRTDevice.handle=reinterpret_cast<decltype(createArgs.hRTDevice.handle)>(&createIdentity);
@@ -2158,14 +2159,16 @@ int main() {
     UINT32 versionCount=0; UINT64 versions[2]={123,456};
     // An FL11 adapter offers the D3D11.1 table alone, whatever the WDDM 2.2 switch says.
     for (int wddm22=0;wddm22<2;++wddm22) {
+        const DdiLevel newest=newest_ddi_level({D3D_FEATURE_LEVEL_11_1,true,KMT_DRIVERVERSION_WDDM_3_0,wddm22!=0});
+        if (newest!=DdiLevel::d3d11_1) fail(__LINE__);
         versionCount=0; versions[0]=123; versions[1]=456;
-        if (supported_ddi_versions(D3D_FEATURE_LEVEL_11_1,wddm22!=0,nullptr,versions)!=E_INVALIDARG ||
-            supported_ddi_versions(D3D_FEATURE_LEVEL_11_1,wddm22!=0,&versionCount,nullptr)!=S_OK || versionCount!=1) fail(__LINE__);
+        if (supported_ddi_versions(newest,nullptr,versions)!=E_INVALIDARG ||
+            supported_ddi_versions(newest,&versionCount,nullptr)!=S_OK || versionCount!=1) fail(__LINE__);
         versionCount=0;
-        if (supported_ddi_versions(D3D_FEATURE_LEVEL_11_1,wddm22!=0,&versionCount,versions)!=HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) ||
+        if (supported_ddi_versions(newest,&versionCount,versions)!=HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) ||
             versionCount!=0 || versions[0]!=123 || versions[1]!=456) fail(__LINE__);
         versionCount=2;
-        if (supported_ddi_versions(D3D_FEATURE_LEVEL_11_1,wddm22!=0,&versionCount,versions)!=S_OK || versionCount!=1 ||
+        if (supported_ddi_versions(newest,&versionCount,versions)!=S_OK || versionCount!=1 ||
             versions[0]!=D3D11_1_DDI_SUPPORTED || versions[1]!=456) fail(__LINE__);
     }
     const D3D_FEATURE_LEVEL featureLevels[]={D3D_FEATURE_LEVEL_10_0,D3D_FEATURE_LEVEL_10_1,D3D_FEATURE_LEVEL_11_0,D3D_FEATURE_LEVEL_11_1};
