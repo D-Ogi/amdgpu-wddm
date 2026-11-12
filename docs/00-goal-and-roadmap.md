@@ -4,11 +4,11 @@
 
 A Windows driver that makes the BC-250's GPU do real work: first provably execute commands, then compute, then 3D. "Works" always means demonstrated on hardware with evidence in `evidence/`, never "the code path exists".
 
-Non-goals: modifying AMD firmware, flashing BIOS as a requirement, shipping binaries of unknown origin, supporting hardware other than PCI `1002:13FE` until it works there, production driver signing (the driver is test-signed and the machine runs with test signing on; Microsoft's attestation signing needs an EV certificate and a partner account, which is an organisational matter and stays outside the project by the decision of 2026-09-21).
+Non-goals: changing AMD firmware, flashing BIOS as a requirement and shipping binaries of unknown origin. Supporting hardware other than PCI `1002:13FE` until it works there is a non-goal too, and so is production driver signing. The driver is test-signed and the machine runs with test signing on. Microsoft's attestation signing needs an EV certificate and a partner account. That is an organisational matter and stays outside the project by the decision of 2026-09-21.
 
 ## Why this is believed possible
 
-Linux drives the same silicon with an open, MIT-licensed kernel driver, from the same BIOS-provided state Windows inherits. No evidence of a Windows-specific lock exists; the two "firmware refuses" results in prior art were both wrong addresses (`prior-art.md`). What is genuinely missing on Windows is large but ordinary: a WDDM miniport that performs the `amdgpu` bring-up, and a user-mode driver on top.
+Linux drives the same silicon with an open, MIT-licensed kernel driver, from the same BIOS-provided state Windows inherits. No evidence of a Windows-specific lock exists. The two "firmware refuses" results in prior art were both wrong addresses (`prior-art.md`). What is genuinely missing on Windows is large but ordinary: a WDDM miniport that performs the `amdgpu` bring-up, and a user-mode driver on top.
 
 ## Shared validation plan
 
@@ -17,8 +17,8 @@ on 2026-09-24: canonical compute and selected CTS first, then offscreen/WSI,
 capture/replay, numerical workloads, engines, translators and demonstrations.
 It defines smoke/regression/showcase/soak/forensic profiles, pinned artifacts,
 stop-on-failure behavior and independent correctness/stability/presentation/
-performance results across M8-M13. It is planned work, not completed coverage;
-its 6-12 hour soak profile does not replace M11's 24-hour acceptance criterion.
+performance results across M8-M13. It is planned work, not completed coverage.
+Its 6-12 hour soak profile does not replace M11's 24-hour acceptance criterion.
 
 ## Milestones
 
@@ -27,40 +27,40 @@ Each milestone has an exit criterion that is a measurement. A milestone is close
 | # | Milestone | Exit criterion |
 |---|---|---|
 | M0 | **Linux baseline of our unit** (`tools/diagusb`, experiment E01) | `evidence/linux/` holds a full run: pre-driver raw register values, amdgpu dmesg, IP discovery, firmware versions, kernel-side register values. `facts.md` records whether regcalc offsets return the known stock values |
-| M1 | **Same reads under Windows** (E02) | A minimal Windows kernel driver (or the predecessor's peek tool) reads the E01 register list through BAR5 and the stable registers match the Linux pre-driver values 1:1 |
+| M1 | **Same reads under Windows** (E02) | A minimal Windows kernel driver (or the predecessor's peek tool) reads the E01 register list through BAR5. The stable registers match the Linux pre-driver values 1:1 |
 | M2 | **Dev loop** | WDK build, test signing, kernel debugger attached to the BC-250 (network or USB3 debug, to be determined), driver install/uninstall scripted, crash dumps collected |
 | M3 | **WDDM miniport skeleton that owns the device** | Our miniport binds to `1002:13FE`, keeps the firmware-provided display alive (post-display ownership, single mode), survives start/stop/reboot. No engine work yet |
-| M4 | **Memory: GMC + GART + VM context 0** | Page table programmed as `gmc_v10_0` does; the mmhub registers read back like the Linux baseline; no fault status bits set |
+| M4 | **Memory: GMC + GART + VM context 0** | Page table programmed as `gmc_v10_0` does. The mmhub registers read back like the Linux baseline. No fault status bits set |
 | M5 | **First command execution** | Firmware loaded the way Linux does for this ASIC, RLC and CP running, the `gfx_v10_0_ring_test_ring` equivalent passes: a PM4 packet written by the CPU changes `SCRATCH_REG0`. Then the SDMA ring test |
-| M6 | **Interrupts, fences, compute queue** | IH ring delivers EOP interrupts; a compute queue mapped through MQD/HQD runs a dispatch that writes a known pattern to memory |
+| M6 | **Interrupts, fences, compute queue** | IH ring delivers EOP interrupts. A compute queue mapped through MQD/HQD runs a dispatch that writes a known pattern to memory |
 | M7 | **WDDM scheduling and memory management** | VidMm/VidSch contracts implemented for real: GPU VA, paging through SDMA, TDR recovery |
-| M8 | **User mode: a Vulkan device** | RADV with a WDDM winsys (ADR 0005) against `driver/contract/`, loaded as an ICD on unit A under Windows: `vulkaninfo` lists the part from our ICD, and the eight compute tests of E14, run from the same SPIR-V, give hashes equal to the CPU's and to the Linux run's (facts M50); the deliberately wrong shader is caught. Submissions go through dxgkrnl and M7's scheduler, not through an escape |
-| M9 | **Compute that somebody would use** | llama.cpp on its Vulkan backend under Windows: greedy text from stories15M Q4_0 and TinyLlama 1.1B Q4_0 hashes equal to the GPU hashes measured under Linux (facts M51), identical across at least four runs each. Throughput (pp512, tg128) measured at a stated shader clock and set against M51/M52; a gap is explained in `facts.md` before the milestone closes, not after. This is the first milestone that needs memory beyond a few buffers: allocation, eviction and paging under a working set of about 1 GB |
-| M10 | **A picture from Vulkan** | Win32 WSI: `vkcube` (or an equal test with a defined image) shows on unit A's screen, witnessed by `bc250mon` screenshots, frame rate measured. A present path that copies through the CPU was acceptable for this milestone only and is named as such (ADR 0015, superseded by ADR 0018 on 2026-09-27: from M12 on the WSI presents through an engine). Whether the software VSync of M7 stage A gives way to the display engine's interrupt is decided by an ADR inside this milestone (ADR 0005 point 4 leaves the display core open) |
-| M11 | **Robustness** | 24 hours of mixed load on unit A (M8's compute tests, M9's inference, M10's presentation in rotation) with no TDR, no bugcheck, no live kernel report, no leak in our pool tags and hashes equal at the end. A deliberately stuck queue is run once and what happens is recorded: this part has no working reset under Linux either (facts M53), so the criterion is a known, documented outcome, not a recovery that may not exist. Temperature inside `docs/hardware.md` throughout |
-| M12 | **Full user mode for applications** | Every API an application can bring with it works on unit A through our Vulkan driver, each measured against the same unit under Linux with the same Mesa version. (1) Vulkan: the ICD is registered system-wide, and the Vulkan CTS must-pass list gives the same pass set as RADV under Linux; every difference is a `facts.md` row with a cause, none is "flaky". (2) Performance: a fixed benchmark set, written down when M12 starts (compute from M8/M9 plus rendering), within 10 % of Linux at the same shader clock, or the gap explained by measurement. (3) OpenGL 4.6 through Zink: `piglit` quick profile with the pass set of Zink on RADV under Linux. (4) OpenCL through a layer on our Vulkan (clvk or rusticl, chosen by an ADR): `clinfo` lists the device and the layer's own conformance subset passes as it does under Linux. (5) Direct3D 9 to 12 through DXVK and vkd3d-proton: a written list of real applications and benchmarks (at least one per API generation) runs a full pass without a hang, images against a reference, frame rates against Proton on the same unit. Hardware video is outside M12, and not for lack of silicon: IP discovery lists hardware id 12 (UVD/VCN) on unit A (E01, `ip-discovery-sysfs.txt`), but amdgpu deliberately adds no driver block for this family's VCN 2.0.3 (`amdgpu_discovery.c`: `case IP_VERSION(2, 0, 3): break;`) and offers no UVD, VCE or VCN ring under Linux (facts M46), so there is no open bring-up to import (rule 7) and no reference to measure against. The desktop itself still composes on WARP until M13. (6) Presentation: the Vulkan WSI presents without a steady-state CPU pixel copy, in user mode and in the kernel driver, with the acceptance of ADR 0018 point 5; the M10 CPU transport is a diagnostic fallback only. Prerequisite for the application list of (5): a GPU reset that works (`ResetFromTimeout` ends in a running GPU, not in a device restart; ADR 0008 point 7 expired 2026-09-27), measured by the stuck-queue experiment M11 names |
-| M13 | **Native Direct3D user-mode driver: an accelerated desktop** | ADR 0009 (supersedes ADR 0005 point 2). `D3D11CreateDevice` on the hardware adapter succeeds without any DLL next to the application (E16's `-Phase d3d` is the probe, its HRESULT today is the baseline), DWM composes on our adapter instead of the Basic Render Driver, and the desktop survives M11's 24 hours on it. The route (Mesa's `d3d10umd` frontend over Zink on our Vulkan, or over a gallium driver with a WDDM winsys, or something else) is chosen by measurement when M12 closes, and ADR 0009 records the choice |
+| M8 | **User mode: a Vulkan device** | RADV with a WDDM winsys (ADR 0005) against `driver/contract/`, loaded as an ICD on unit A under Windows. `vulkaninfo` lists the part from our ICD. The eight compute tests of E14, run from the same SPIR-V, give hashes equal to the CPU's and to the Linux run's (facts M50). The deliberately wrong shader is caught. Submissions go through dxgkrnl and M7's scheduler, not through an escape |
+| M9 | **Compute that somebody would use** | llama.cpp on its Vulkan backend under Windows. Greedy text from stories15M Q4_0 and TinyLlama 1.1B Q4_0 hashes equal to the GPU hashes measured under Linux (facts M51). The hashes are identical across at least four runs each. Throughput (pp512, tg128) measured at a stated shader clock and set against M51/M52. A gap is explained in `facts.md` before the milestone closes, not after. This is the first milestone that needs memory beyond a few buffers: allocation, eviction and paging under a working set of about 1 GB |
+| M10 | **A picture from Vulkan** | Win32 WSI: `vkcube` (or an equal test with a defined image) appears on unit A's screen, witnessed by `bc250mon` screenshots, frame rate measured. A present path that copies through the CPU was acceptable for this milestone only. It is named as such (ADR 0015, superseded by ADR 0018 on 2026-09-27). From M12 on, the WSI presents through an engine. An ADR inside this milestone decides whether the software VSync of M7 stage A gives way to the display engine's interrupt. ADR 0005 point 4 leaves the display core open |
+| M11 | **Robustness** | 24 hours of mixed load on unit A (M8's compute tests, M9's inference, M10's presentation in rotation). The run has no TDR, no bugcheck, no live kernel report and no leak in our pool tags. The hashes are equal at the end. A deliberately stuck queue is run once and what happens is recorded. This part has no working reset under Linux either (facts M53). Thus the criterion is a known, documented outcome, not a recovery that may not exist. Temperature inside `docs/hardware.md` throughout |
+| M12 | **Full user mode for applications** | Every API an application can bring with it works on unit A through our Vulkan driver. Each is measured against the same unit under Linux with the same Mesa version. (1) Vulkan: the ICD is registered system-wide, and the Vulkan CTS must-pass list gives the same pass set as RADV under Linux. Every difference is a `facts.md` row with a cause, none is "flaky". (2) Performance: a fixed benchmark set, written down when M12 starts (compute from M8/M9 plus rendering). It is within 10 % of Linux at the same shader clock, or the gap is explained by measurement. (3) OpenGL 4.6 through Zink: `piglit` quick profile with the pass set of Zink on RADV under Linux. (4) OpenCL through a layer on our Vulkan (clvk or rusticl, chosen by an ADR). `clinfo` lists the device, and the layer's own conformance subset passes as it does under Linux. (5) Direct3D 9 to 12 through DXVK and vkd3d-proton. A written list of real applications and benchmarks (at least one per API generation) runs a full pass without a hang. Images are compared against a reference, and frame rates against Proton on the same unit. Hardware video is outside M12, and not for lack of silicon. IP discovery lists hardware id 12 (UVD/VCN) on unit A (E01, `ip-discovery-sysfs.txt`). But amdgpu deliberately adds no driver block for this family's VCN 2.0.3 (`amdgpu_discovery.c`: `case IP_VERSION(2, 0, 3): break;`). It also offers no UVD, VCE or VCN ring under Linux (facts M46). Thus there is no open bring-up to import (rule 7) and no reference to measure against. The desktop itself still composes on WARP until M13. (6) Presentation: the Vulkan WSI presents without a steady-state CPU pixel copy, in user mode and in the kernel driver. The acceptance is that of ADR 0018 point 5. The M10 CPU transport is a diagnostic fallback only. Prerequisite for the application list of (5): a GPU reset that works (`ResetFromTimeout` ends in a running GPU, not in a device restart. ADR 0008 point 7 expired 2026-09-27), measured by the stuck-queue experiment M11 names |
+| M13 | **Native Direct3D user-mode driver: an accelerated desktop** | ADR 0009 (supersedes ADR 0005 point 2). `D3D11CreateDevice` on the hardware adapter succeeds without any DLL next to the application. E16's `-Phase d3d` is the probe, and its HRESULT today is the baseline. DWM composes on our adapter instead of the Basic Render Driver, and the desktop survives M11's 24 hours on it. The route is chosen by measurement when M12 closes, and ADR 0009 records the choice. The candidates: Mesa's `d3d10umd` frontend over Zink on our Vulkan, or over a gallium driver with a WDDM winsys, or something else |
 | O1 | Optional: 40 CU | Only after M5. Mirrors `bc250-40cu-unlock`: two per-bank register writes during gfx init |
-| O2 | Optional research: adaptive CPU/SDMA/GPU execution | [O2.1-O2.3 plan](design/adaptive-cpu-gpu.md): start with shared-memory/copy policy and known buffer operations; promote only after repeatable end-to-end improvement over fixed policies with correct results and acceptable tail latency. Arbitrary game shader migration is deferred. |
+| O2 | Optional research: adaptive CPU/SDMA/GPU execution | [O2.1-O2.3 plan](design/adaptive-cpu-gpu.md): start with shared-memory/copy policy and known buffer operations. Promote only after repeatable end-to-end improvement over fixed policies with accurate results and acceptable tail latency. Arbitrary game shader migration is deferred. |
 
-Status 2026-09-21: M0-M5 closed on unit A (facts M1-M33; M3 by experiment E06: our display-only miniport runs the
+Status 2026-09-21: M0-M5 closed on unit A (facts M1-M33. M3 by experiment E06: our display-only miniport runs the
 lab machine's display, and `D3DKMTEscape` reaches it, which gives M4-M6 their control channel). M2's debugger
 works over KDNET but its host-side server is disabled after it hung the development PC (2026-09-21).
 M4 by experiments E07-E09: AMD's hub code, imported unmodified and run inside the miniport, programs GART and VM
-context 0 with the same register writes amdgpu made on this unit; acknowledged by the hardware, no fault bit,
-picture undisturbed, reversible. The driver does it on command behind gates; doing it at every start comes
+context 0 with the same register writes amdgpu made on this unit. Acknowledged by the hardware, no fault bit,
+picture undisturbed, reversible. The driver does it on command behind gates. Doing it at every start comes
 with M5, whose ring buffer is the first thing that needs a GART mapping. M5 is under way: its first part, the
 firmware through the PSP, works under Windows (E10, facts M34, M35: AMD's `psp_v11_0_8.c` imported unmodified,
-eleven commands accepted, same register traffic and timing as amdgpu on this unit; the PSP itself starts the RLC
+eleven commands accepted, same register traffic and timing as amdgpu on this unit. The PSP itself starts the RLC
 and releases SDMA). M5 is reached (E11, facts M36, M37): amdgpu's GFX and SDMA bring-up for this part, transcribed
 against AMD's unmodified tables and run in stages inside the miniport, makes the same 355 register writes amdgpu
 made (14 of them carrying our addresses), and all eleven ring tests pass with the rings in system memory behind
-our GART. M6 in progress: Windows assigns the miniport a message interrupt and it is silent with no source enabled (E12 part A, facts M38); a second bring-up in the same boot works (M39). The IH ring runs and the GPU interrupts the CPU: fences on the gfx ring, the compute queues and the KIQ each give one vector, the same as under Linux on this machine (E12 run 002, E13, facts M40, M43). M6 is reached (E15, facts M57, M58): a compute dispatch on a kernel-owned MEC queue writes its pattern under Windows, the SDMA ring tests and fences work, and a second bring-up in one device start no longer meets a live KIQ fetcher. One defect found on the way: the SDMA engines keep their ring pointers across a halt, so a re-init has to adopt them (M59); 0.7.0 does, and three bring-ups in one device start now work end to end (E15 run 002, M60). M7 starts from ADR 0008. Its stage A met dxgkrnl for the first time in E16 run 001: the full table starts, is refused before the first VidPN and unloaded without a reason on record, and the display-only driver comes back unharmed (M61, M62).
+our GART. M6 in progress: Windows assigns the miniport a message interrupt and it is silent with no source enabled (E12 part A, facts M38). A second bring-up in the same boot works (M39). The IH ring runs and the GPU interrupts the CPU. Fences on the gfx ring, the compute queues and the KIQ each give one vector. This is the same as under Linux on this machine (E12 run 002, E13, facts M40, M43). M6 is reached (E15, facts M57, M58). A compute dispatch on a kernel-owned MEC queue writes its pattern under Windows, and the SDMA ring tests and fences work. A second bring-up in one device start no longer meets a live KIQ fetcher. One defect found on the way: the SDMA engines keep their ring pointers across a halt, so a re-init has to adopt them (M59). 0.7.0 does, and three bring-ups in one device start now work end to end (E15 run 002, M60). M7 starts from ADR 0008. Its stage A met dxgkrnl for the first time in E16 run 001. The full table starts, is refused before the first VidPN and is unloaded without a reason on record. The display-only driver comes back unharmed (M61, M62).
 
 M8's criterion was set and M9-M13 were written out on 2026-09-21, on request, before any of them was
 started. The order is the order of dependence: M9 needs M8's device, M12 needs M10's swapchain, M11 needs something
 worth soaking, M13 needs M12's Vulkan to stand on. A criterion may be sharpened by an ADR when the milestone before
-it closes; it is never loosened after a run.
+it closes. It is never loosened after a run.
 
 Sizing: this file used to say "M0-M1 days, M2-M3 weeks, M4-M6 the real research, M7-M8 months to years". M0 to M6
 then closed within the repository's first day of commits (99 of them), so calendar estimates are dropped: the first
@@ -69,17 +69,17 @@ M7 is the largest kernel-mode step left, M8 the largest user-mode one, M9 to M11
 M12 is breadth, and M13 is the one milestone whose route is not known yet. The project stays useful at every step because each milestone leaves verified, published knowledge.
 
 M8 reached on unit A, 2026-09-22 (E25, facts M138-M139): all eight E14 compute
-hashes match CPU and Linux with byte-identical SPIR-V; the wrong shader is caught.
+hashes match CPU and Linux with byte-identical SPIR-V. The wrong shader is caught.
 The fix makes the ICD's address32_hi match its WDDM VA heap. Full-WDDM display
 corruption remains open and the lab is returned to display-only after the test.
 
 ## Work order after M8
 
-A full-WDDM repair plan was requested. The work then proceeded with M9 inference first.
+A full-WDDM fix plan was requested. The work then proceeded with M9 inference first.
 Current order is M9, M10 and the remaining main-roadmap work, reusing the E26 desktop fixes.
-The accelerated desktop keeps its existing number M13; [M13.1-M13.7](m13-accelerated-desktop-roadmap.md)
-define its acceptance gates. ADR0009 permits earlier desktop experiments, but does not require them to
-precede M9. Current measurements are facts M145-M151; none closes M13.1 or M9.
+The accelerated desktop keeps its existing number M13. [M13.1-M13.7](m13-accelerated-desktop-roadmap.md)
+define its acceptance gates. ADR 0009 permits earlier desktop experiments, but does not require them to
+precede M9. Current measurements are facts M145-M151. None closes M13.1 or M9.
 
 ## Architecture direction (detail in ADRs)
 
@@ -90,14 +90,14 @@ precede M9. Current measurements are facts M145-M151; none closes M13.1 or M9.
 ## Sparse capability and UMA performance follow-up
 
 Review 2026-09-24: [M12.1 sparse resources](design/sparse-wddm.md) is an
-explicit sub-gate of M12. Current Mesa/WDDM2 ordinary compute is accepted;
-the missing mirrored VA/NULL-PRT policy and zero-page semantics require their
+explicit sub-gate of M12. Current Mesa/WDDM2 ordinary compute is accepted.
+The missing mirrored VA/NULL-PRT policy and zero-page semantics require their
 own implementation and conformance controls. WDDM2 itself is not the blocker.
 This feature remains separate from M9's ordinary-buffer acceptance.
 
 [O2 adaptive execution](design/adaptive-cpu-gpu.md) is accepted for research,
 not committed as an automatic game optimization or a new M9/M13 prerequisite.
-Begin with avoiding copies and measuring CPU/SDMA/GPU crossover points for
+Start with avoiding copies and measuring CPU/SDMA/GPU crossover points for
 known operations. A failed benefit test is a valid reason to keep a fixed path.
 
 ## M10 acceptance (2026-09-25)
@@ -110,7 +110,7 @@ M9 recovery, M11 soak, M12 broad conformance and M13 accelerated DWM remain open
 
 Proceed to M12 without waiting for M11 acceptance. M11 is deferred to the final,
 broader load-testing phase after M12 development and validation. Its existing
-24-hour and deliberate-stuck-queue criteria remain open; accumulated M12 test
+24-hour and deliberate-stuck-queue criteria remain open. Accumulated M12 test
 hours do not by themselves close M11. Preserve the partial runs and do not
 restart the standalone M11 soak during M12 work.
 
@@ -124,20 +124,20 @@ identify and validate the actual installed candidate.
 
 [ADR 0017](adr/0017-graphics-stack-direction-after-m12.md) records the accepted
 direction and the decisions of 2026-09-26: one hardware implementation
-(our KMD, RADV/ACO, WDDM integration); a hosted ICD as M13's route, one Vulkan
+(our KMD, RADV/ACO, WDDM integration). A hosted ICD as M13's route, one Vulkan
 device per D3D runtime device driven through the runtime's callbacks, with the
-`d3d10umd`/Zink build as the bring-up control and native path (facts M531-M541);
+`d3d10umd`/Zink build as the bring-up control and native path (facts M531-M541).
 DXVK as the engine behind a system D3D11 DDI (proposed M14, bounded at 5 % of the
-per-application path); a native D3D12 DDI with vkd3d-proton as the default engine
-after a bounded spike (proposed M15, FL 12_0 Must, FL 12_1 Should); OpenGL through
-Zink/WGL and OpenCL through clvk (ADR 0016); no relicensing.
+per-application path). A native D3D12 DDI with vkd3d-proton as the default engine
+after a bounded spike (proposed M15, FL 12_0 Must, FL 12_1 Should). OpenGL through
+Zink/WGL and OpenCL through clvk (ADR 0016). No relicensing.
 
 Nothing above changes a criterion in this file. The M13 row's list of routes and
-ADR 0009's candidate list are what was known on 2026-09-21; ADR 0017 amends them.
-M14 and M15 are proposed numbers, not milestones of this file; they enter the
+ADR 0009's candidate list are what was known on 2026-09-21. ADR 0017 amends them.
+M14 and M15 are proposed numbers, not milestones of this file. They enter the
 table only with exit criteria, by a later amendment. The reconciled statement of what
 remains in M13, M14 and M15, with the proposed exit criteria M14.1-M14.8 and M15.1-M15.10, is
 [m15-reconciliation.md](m15-reconciliation.md) (2026-09-30). Deployment state stays in
 workspace `STATE.md`, verified results in `facts.md`. The direction is worked out
-in the project's working notes outside this repository; only accepted content and
+in the project's working notes outside this repository. Only accepted content and
 the decisions enter here, through ADRs.
