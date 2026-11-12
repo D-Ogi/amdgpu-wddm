@@ -29,6 +29,23 @@ bool present_note_budget(std::atomic_uint &left) {
     while (count && !left.compare_exchange_weak(count,count-1,std::memory_order_relaxed)) {}
     return count!=0;
 }
+}
+// UMD logging (umd-etw.h): after a rotation each runtime-surface resource holds the allocation of the next one. The
+// rotation is complete when this runs, so no status of the log changes the answer of the DDI; a log without memory
+// only misses the move.
+void log_rotated_mappings(const DXGI_DDI_HRESOURCE *handles,UINT count) noexcept {
+    auto *log=etw::process_allocation_log();
+    if (!log) return;
+    try {
+        std::vector<etw::AllocationMapping> moved; moved.reserve(count);
+        for (UINT i=0;i<count;++i) {
+            const auto *r=reinterpret_cast<const DdiResource *>(handles[i]);
+            if (r->runtime_surface) moved.push_back(runtime_surface_mapping(*r));
+        }
+        (void)log->replace(moved.data(),UINT(moved.size()));
+    } catch (const std::bad_alloc &) {}
+}
+namespace {
 HRESULT rotate_work(DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *args) {
     if (!args) return E_INVALIDARG;
     auto *storage=reinterpret_cast<DdiDeviceHandle *>(args->hDevice);
@@ -37,9 +54,11 @@ HRESULT rotate_work(DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *args) {
     RuntimeDomain::Scope scope(owner.runtime().domain);
     try {
         if (!owner.engine()) return E_FAIL;
-        return ddi_device_status(rotate_present_resources(args->pResources,args->Resources,[&](ID3D11Resource *const *resources,UINT count) {
+        const HRESULT hr=rotate_present_resources(args->pResources,args->Resources,[&](ID3D11Resource *const *resources,UINT count) {
             return owner.engine()->RotateResourceIdentities(resources,count);
-        },&owner.runtime()));
+        },&owner.runtime());
+        if (hr==S_OK) log_rotated_mappings(args->pResources,args->Resources);
+        return ddi_device_status(hr);
     } catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }
     catch (...) { return E_FAIL; }
 }

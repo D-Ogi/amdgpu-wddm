@@ -1179,7 +1179,22 @@ int main() {
     }
     if (rotate_present_resources(rotatingHandles,3,failedRotate)!=E_FAIL || backing[0].allocation.allocation!=31 ||
         backing[2].texture.image.image!=(VkImage)(uintptr_t(23))) fail(__LINE__);
+    // BD-373: the UMD logging table follows the rotation. Each buffer maps its whole allocation at offset 0 before
+    // it, and the allocation of the next buffer after it.
+    auto *umdLog=etw::process_allocation_log();
+    if (!umdLog) fail(__LINE__);
+    const size_t liveBeforeRotation=umdLog->live();
+    for (UINT i=0;i<3;++i) if (umdLog->map(runtime_surface_mapping(rotating[i]))!=S_OK) fail(__LINE__);
     if (rotate_present_resources(rotatingHandles,3,successfulRotate)!=S_OK) fail(__LINE__);
+    log_rotated_mappings(rotatingHandles,3);
+    for (UINT i=0;i<3;++i) {
+        etw::AllocationMapping logged{};
+        if (umdLog->mappings_of(umd_etw_resource(rotating[i]),&logged,1)!=1 ||
+            logged!=etw::AllocationMapping{umd_etw_resource(rotating[i]),31+(i+1)%3,0,8192,etw::usage::none,
+                                           etw::AllocationSemantic::none}) fail(__LINE__);
+        if (umdLog->unmap_resource(umd_etw_resource(rotating[i]))!=1) fail(__LINE__);
+    }
+    if (umdLog->live()!=liveBeforeRotation) fail(__LINE__);
     for (UINT i=0;i<3;++i) {
         UINT next=(i+1)%3;
         if (backing[i].allocation.runtime_resource!=&rotateIdentity[i] || backing[i].allocation.allocation!=31+next ||

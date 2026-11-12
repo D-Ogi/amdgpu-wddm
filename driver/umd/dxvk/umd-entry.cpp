@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "adapter-config.h"
+#include "umd-etw.h"
 #include "../../contract/amdgpu_driver_package.h"
 #include <string>
 #include <vector>
@@ -42,6 +43,9 @@ extern "C" HRESULT APIENTRY OpenAdapter10_2(D3D10DDIARG_OPENADAPTER *args) {
         hr=bc250::umd::decode_adapter_config(&record,bytes,config);if(FAILED(hr))return hr;
         const std::wstring engine=directory+AMDGPU_DXVK_FILE,icd=directory+AMDGPU_D3D11_ICD_FILE;
         config.engine_path=engine.c_str();config.icd_path=icd.c_str();
+        // UMD logging (umd-etw.h): one provider registration per process, at the first adapter open, never in DllMain.
+        // A failed registration costs the trace, not the adapter.
+        if(auto *log=bc250::umd::etw::process_allocation_log())(void)log->register_provider();
         return bc250::umd::open_render_adapter(*args,config);
     } catch(const std::bad_alloc &) {return E_OUTOFMEMORY;}
       catch(...) {return E_FAIL;}

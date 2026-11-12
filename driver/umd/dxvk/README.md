@@ -525,6 +525,49 @@ admission passes with frozen DC65 engine1.4; native runtime fault injection and
 normal rendering with this new pair remain unmeasured. Trim/residency handling
 is not implemented by this change.
 
+## UMD allocation logging (BD-373)
+
+`umd-etw.h` writes the UMD logging events of WDDM 1.2: the provider Microsoft-Windows-D3DUmdLogging
+(A688EE40-D8D9-4736-B6F9-6B74935BA3B1) with the events MapAllocation, UnmapAllocation and RundownAllocation. Each
+event tells which kernel allocation holds a Direct3D resource. The requirement is mandatory for a full graphics
+driver (windows-driver-docs `display/user-mode-driver-logging.md`). The HLK test WGFVidMMWDDM1_2 joins these events
+with the D3D11 runtime events and the DxgKrnl events to find the allocation of each resource. Without them it
+finds no allocation for any resource.
+
+Contract: WDK 10.0.26100 `um/umdprovider.h` (types, provider, payload) and `um/umdetw.h` (descriptors), with the
+`umdprovider/nf-umdprovider-umdetw*.md` pages. The module does not include `umdprovider.h`, because that header
+defines `RegHandle`, `Enabled`, `Rundown` and `EnableCallback` in the global namespace. The module writes the same
+descriptors and the same six-field payload, and its host test compiles the header to check that the types agree.
+
+- One `AllocationLog` for each process (`process_allocation_log`). `OpenAdapter10_2` registers the provider at
+  the first adapter open, not in `DllMain`. The destructor unregisters at `DLL_PROCESS_DETACH`. A live mapping
+  writes no unmap event at unload, because no resource was destroyed.
+- The log keeps a table of live mappings under an SRW lock. The table is always kept, because a capture-state
+  request needs a rundown of every live mapping. The lock is taken only when a resource receives or releases memory:
+  CreateResource and OpenResource of a runtime surface, DestroyResource, and RotateResourceIdentities. No draw,
+  Map or Present takes it. When no session has enabled the provider, the only extra cost of a table change is one
+  relaxed load.
+- An event is written under the table lock. Thus a rundown and a concurrent map or unmap cannot put one mapping
+  into the trace two times, and an unmap cannot come before its map.
+- In this step, the call sites are runtime surfaces only: a shared, primary or displayable texture that the shell
+  creates, and a resource that OpenResource opens. Each maps its whole kernel allocation (the `D3DKMT_HANDLE`) at
+  offset 0, with the size of the allocation. `hD3DAllocation` is the hResource of the DDI, which is the
+  `DdiResource` address. A rotation moves each mapping to the allocation that the buffer holds after it.
+- `AllocationLog::replace` is the seam for memory that the engine owns: a move, a pack (`usage::packed`) or a
+  rename (`usage::renamed`) is one change, all unmaps first. A resource that has a mapping always can move.
+  Engine-private resources are not logged yet (BD-373, second step). The Present shadow of BD-210 is driver
+  memory that is not logged yet.
+
+```powershell
+& .\\bc250-win\\tools\\build\\test-umd-etw.ps1
+```
+
+The host test uses a recording ETW sink. It checks the descriptor and payload of each event, rundown content and
+order, the order of the unmaps and maps of a rotation, one registration for each log, a failed registration, a
+session that is enabled before registration, unload with live mappings, a destroy without a create, and
+concurrent changes during rundowns. `ddi-draw-test` checks the rotation call site. The lab has not yet confirmed
+the events in a real trace.
+
 ## Video DDIs (BD-223)
 
 The runtime asks for the video functions through `RetrieveSubObject`

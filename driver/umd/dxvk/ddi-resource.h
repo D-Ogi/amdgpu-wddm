@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 #include "ddi-entry.h"
+#include "umd-etw.h"
 #include <vector>
 namespace bc250::umd {
 // The plane a D3D11.1 view create argument names: none. That table has no plane field, so the view
@@ -40,6 +41,17 @@ struct ResourceDescription {
     D3D11_TEXTURE3D_DESC texture3d{};
     std::vector<D3D11_SUBRESOURCE_DATA> initial;
 };
+// The UMD logging mapping of a resource with a runtime surface (umd-etw.h): the hResource of the DDI, which is this
+// DdiResource, holds the whole kernel allocation of its surface from offset 0. Only for a resource whose
+// runtime_surface is set.
+inline UINT64 umd_etw_resource(const DdiResource &resource) noexcept {
+    return UINT64(reinterpret_cast<UINT_PTR>(&resource));
+}
+inline etw::AllocationMapping runtime_surface_mapping(const DdiResource &resource) noexcept {
+    const RuntimeSurface &surface=*resource.runtime_surface;
+    return {umd_etw_resource(resource),UINT64(surface.allocation.allocation),0,surface.bytes,etw::usage::none,
+            etw::AllocationSemantic::none};
+}
 HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &input,ResourceDescription &output);
 // The status that CreateResource reports when it does not complete `desc` after the failure `hr`
 // (ddi_create_resource_status): DXGI_DDI_ERR_UNSUPPORTED only for a primary, never device removal for a refusal.

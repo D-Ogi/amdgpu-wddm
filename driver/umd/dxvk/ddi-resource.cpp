@@ -407,6 +407,9 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
                 const auto &initial=desc->pInitialDataUP[0];
                 owner.context()->UpdateSubresource(s->object,0,nullptr,initial.pSysMem,initial.SysMemPitch,initial.SysMemSlicePitch);
             }
+            // UMD logging (umd-etw.h): the resource holds its whole allocation. A table without memory for the entry
+            // writes no event, and the resource is still complete: the mapping is only missing from the trace.
+            if (auto *log=etw::process_allocation_log()) (void)log->map(runtime_surface_mapping(*s));
             return;
         }
         ResourceDescription d;
@@ -490,6 +493,8 @@ void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
         }
         s->runtime_surface=surface; s->object=surface->texture.texture;
         s->dimension=D3D10DDIRESOURCE_TEXTURE2D; s->present_allocation=surface->allocation.allocation;
+        // UMD logging: the opened resource holds the whole allocation it opened, as a created one does.
+        if (auto *log=etw::process_allocation_log()) (void)log->map(runtime_surface_mapping(*s));
     },DdiErrorClass::out_of_memory);
 }
 void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle) {
@@ -497,6 +502,9 @@ void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle) {
         auto *s=static_cast<DdiResource *>(handle.pDrvPrivate);
         if (s && s->runtime_surface) {
             auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
+            // UMD logging: the resource stops using its allocation now, also when the allocation itself lives on
+            // until its queued work retires (nf-umdprovider-umdetwlogunmapallocation.md 48).
+            if (auto *log=etw::process_allocation_log()) log->unmap_resource(umd_etw_resource(*s));
             HRESULT hr=owner.release_surface_handle(*s->runtime_surface);
             // Runtime private storage may disappear now. DeviceOwner retains any
             // unfinished cleanup independently of this DDI handle.

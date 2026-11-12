@@ -62,5 +62,8 @@ template<typename Rotate> HRESULT rotate_present_resources(const DXGI_DDI_HRESOU
     }
     return S_OK;
 }
+// UMD logging of a rotation that rotate_present_resources completed: each resource with a runtime surface now maps
+// the allocation it holds after the rotation (umd-etw.h, AllocationLog::replace).
+void log_rotated_mappings(const DXGI_DDI_HRESOURCE *handles,UINT count) noexcept;
 void install_present_ddi(DXGI1_2_DDI_BASE_FUNCTIONS &);
 }
