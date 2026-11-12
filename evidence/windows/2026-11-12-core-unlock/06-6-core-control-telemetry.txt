@@ -1,0 +1,141 @@
+=== push 2026-11-12T07:17:06Z
+C:\BC250\tmp\bd368d\kmdlab3\bc250kmd.sys
+=== swap 2026-11-12T07:17:08Z
+kept original already there 5C97A127917EE89FD80CF9BD54072ADFBB45C857D509F2ADB24EAD3AC35FABB7
+testsigning: testsigning             Yes
+pnputil disable exit 0 :: 
+device disable verified
+image now 6A2B18AAF889E61F0E8ADD79D6F42406C12D6810660234DB2F25FB261FF4EEDB
+UnconfirmedStarts 0 (StateV2 b1c85315ff874f0bac330bcf3b947323 and legacy)
+=== cold 1 2026-11-12T07:17:18Z
+COLD t0 2026-11-12T07:17:18Z
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD telemetry sample: {"queried_utc": "2026-11-12T07:17:25.758658+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 664, "19": 983, "20": 2424}, "current_a": 0.664, "po
+COLD STOP: soft-off not proved in 150 s (last 94.3 W). No AC cycle.
+=== enable 2026-11-12T07:20:08Z
+
+GPU OK CM_PROB_NONE
+=== read after enable (waits for the confirmation) 2026-11-12T07:20:18Z
+push failed: ssh: connect to host <lab address> port 22: Connection timed out
+=== cold 2 2026-11-12T07:21:06Z
+COLD t0 2026-11-12T07:21:06Z
+COLD telemetry sample: {"queried_utc": "2026-11-12T07:23:01.123113+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 102, "19": 131, "20": 2410}, "current_a": 0.102, "po
+COLD soft-off proved: 13.6 W after 25 s
+{"transport": "LAN", "relay_on": false, "readback_verified": true}
+{"transport": "LAN", "relay_on": true, "readback_verified": true}
+BOOT UP windows boot 2026-11-12T07:23:54Z after 41s
+=== read after cold (waits for the confirmation) 2026-11-12T07:24:19Z
+READ 2026-11-12T07:25:12Z waited 50 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 6A2B18AAF889E61F0E8ADD79D6F42406C12D6810660234DB2F25FB261FF4EEDB
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=28489662 epoch=5 completed=480 age_ms=401 ready_ms=64728
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+
+
+=== telemetry control, six cores 2026-11-12T07:25:13Z
+PLUG power_w 91.6
+TELE 2026-11-12T07:25:18Z
+PROCESSORS logical=12 cores=6
+smu metrics: ok, 78 tables, 1 failures, last 20 ms ago: gfx 824 mV 500 MHz 58.25 C, soc 806 mV 55.75 C, throttler 0x0000
+dpm version=0x000700D8 flags=0x278B temperature_c=68.4 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 power_w=37.1 power_avg_w=36.5
+fan fan=2 rpm=1501 turning=1/5 answered=5/5 duty_pct=92 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=68.0 board_c=46.0 age_ms=939 fresh=1 valid=1 stopped=0 reason=ok samples=81 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=396 local_limit_mb=7904 dedicated_mb=7904 aperture_resident_mb=184 aperture_limit_mb=17592186044415
+dpm version=0x000700D8 flags=0x278B temperature_c=68.0 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 power_w=35.9 power_avg_w=37.1
+fan fan=2 rpm=1496 turning=1/5 answered=5/5 duty_pct=92 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=68.0 board_c=46.0 age_ms=931 fresh=1 valid=1 stopped=0 reason=ok samples=82 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=396 local_limit_mb=7904 dedicated_mb=7904 aperture_resident_mb=184 aperture_limit_mb=17592186044415
+dpm version=0x000700D8 flags=0x278B temperature_c=67.8 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 power_w=35.9 power_avg_w=36.6
+fan fan=2 rpm=1500 turning=1/5 answered=5/5 duty_pct=92 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=68.0 board_c=46.0 age_ms=914 fresh=1 valid=1 stopped=0 reason=ok samples=83 errors=0 retries=0 refusals=0
+  1411     41.651 smu metrics: telemetry mW p43761 a49330 g17225 s853 reject 1 why 4 sp00000000 m67 0
+  1412     41.651 smu metrics: telemetry gfx 818 mV 1000 MHz 63.0 C soc 806 mV 57.5 C thr 0
+  1426     46.682 smu metrics: telemetry mW p53786 a55141 g17225 s10322 reject 1 why 4 sp00000000 m67 0
+  1427     46.682 smu metrics: telemetry gfx 818 mV 1000 MHz 70.0 C soc 1193 mV 57.5 C thr 0
+  1441     51.696 smu metrics: telemetry mW p43821 a46020 g17225 s853 reject 1 why 4 sp00000000 m67 0
+  1442     51.696 smu metrics: telemetry gfx 818 mV 1000 MHz 63.0 C soc 806 mV 57.2 C thr 0
+PLUG power_w 88.3
+=== warm restart 2026-11-12T07:25:23Z
+HBOOT RESTART target=default build=22631 delay=10
+BOOT UP windows boot 2026-11-12T07:25:56Z after 23s
+=== read after warm 2026-11-12T07:26:13Z
+READ 2026-11-12T07:27:17Z waited 61 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 6A2B18AAF889E61F0E8ADD79D6F42406C12D6810660234DB2F25FB261FF4EEDB
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=28118893 epoch=5 completed=470 age_ms=901 ready_ms=67364
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+
+
+=== telemetry 2026-11-12T07:27:18Z
+PLUG power_w 92.3
+TELE 2026-11-12T07:27:23Z
+PROCESSORS logical=12 cores=6
+smu metrics: ok, 80 tables, 1 failures, last 931 ms ago: gfx 824 mV 500 MHz 59.75 C, soc 1106 mV 56.00 C, throttler 0x0000
+dpm version=0x000700D8 flags=0x278B temperature_c=68.1 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 power_w=37.3 power_avg_w=41.2
+fan fan=2 rpm=1465 turning=1/5 answered=5/5 duty_pct=88 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=68.0 board_c=48.0 age_ms=885 fresh=1 valid=1 stopped=0 reason=ok samples=84 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=356 local_limit_mb=7904 dedicated_mb=7904 aperture_resident_mb=184 aperture_limit_mb=17592186044415
+dpm version=0x000700D8 flags=0x278B temperature_c=67.9 gfx_mhz=500 busy_pct=0.0 avg_pct=0.8 src=grbm submit_pct=0.0 power_w=37.1 power_avg_w=36.9
+fan fan=2 rpm=1459 turning=1/5 answered=5/5 duty_pct=88 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=68.0 board_c=48.0 age_ms=864 fresh=1 valid=1 stopped=0 reason=ok samples=85 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=356 local_limit_mb=7904 dedicated_mb=7904 aperture_resident_mb=184 aperture_limit_mb=17592186044415
+dpm version=0x000700D8 flags=0x278B temperature_c=67.6 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 power_w=37.0 power_avg_w=36.5
+fan fan=2 rpm=1461 turning=1/5 answered=5/5 duty_pct=88 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=67.0 board_c=48.0 age_ms=850 fresh=1 valid=1 stopped=0 reason=ok samples=86 errors=0 retries=0 refusals=0
+  1308     36.735 smu metrics: telemetry mW p52126 a53613 g17225 s8514 reject 1 why 4 sp00000000 m67 0
+  1309     36.735 smu metrics: telemetry gfx 818 mV 1000 MHz 70.7 C soc 1206 mV 57.7 C thr 0
+  1323     41.750 smu metrics: telemetry mW p57924 a52342 g17225 s14336 reject 1 why 4 sp00000000 m67 0
+  1324     41.750 smu metrics: telemetry gfx 818 mV 1000 MHz 68.2 C soc 1212 mV 58.2 C thr 0
+  1343     46.764 smu metrics: telemetry mW p65988 a60440 g17225 s22038 reject 1 why 4 sp00000000 m67 0
+  1344     46.764 smu metrics: telemetry gfx 818 mV 1000 MHz 72.7 C soc 1212 mV 58.2 C thr 0
+PLUG power_w 90.6
+=== way back: cpu cores 6, then a warm restart 2026-11-12T07:27:28Z
+SET6 2026-11-12T07:27:31Z
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 806 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 66.7 C
+cpu: cores 1555 1555 3500 1555 1400 1400 1400 933 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+cpu: reads 37 writes 2 refusals 1 reverts 0 (retries 0, refused 0); last queue 0 message 0x2C argument 0x00000077 status 0x00000001
+
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+cpu: reads 57 writes 2 refusals 1 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D 
+argument 0x00000000 status 0x00000001
+  1356     93.397 cpu: core mask 0x77 (6 cores) requested: 0x00000000; the count changes at the next restart
+
+
+HBOOT RESTART target=default build=22631 delay=10
+BOOT UP windows boot 2026-11-12T07:28:01Z after 22s
+=== read after the way back 2026-11-12T07:28:19Z
+READ 2026-11-12T07:29:22Z waited 61 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 6A2B18AAF889E61F0E8ADD79D6F42406C12D6810660234DB2F25FB261FF4EEDB
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=27995834 epoch=5 completed=453 age_ms=257 ready_ms=68170
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+
+
+=== telemetry after the way back 2026-11-12T07:29:23Z
+TELE 2026-11-12T07:29:26Z
+PROCESSORS logical=12 cores=6
+smu metrics: ok, 78 tables, 1 failures, last 952 ms ago: gfx 824 mV 500 MHz 60.50 C, soc 806 mV 56.25 C, throttler 0x0000
+dpm version=0x000700D8 flags=0x278B temperature_c=68.9 gfx_mhz=500 busy_pct=0.0 avg_pct=0.3 src=grbm submit_pct=0.0 power_w=36.4 power_avg_w=41.1
+fan fan=2 rpm=1483 turning=1/5 answered=5/5 duty_pct=89 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=69.0 board_c=48.5 age_ms=906 fresh=1 valid=1 stopped=0 reason=ok samples=82 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=387 local_limit_mb=7904 dedicated_mb=7904 aperture_resident_mb=184 aperture_limit_mb=17592186044415
+dpm version=0x000700D8 flags=0x278B temperature_c=68.6 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 power_w=36.8 power_avg_w=37.0
+fan fan=2 rpm=1468 turning=1/5 answered=5/5 duty_pct=89 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=69.0 board_c=48.5 age_ms=884 fresh=1 valid=1 stopped=0 reason=ok samples=83 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=387 local_limit_mb=7904 dedicated_mb=7904 aperture_resident_mb=184 aperture_limit_mb=17592186044415
+dpm version=0x000700D8 flags=0x278B temperature_c=68.2 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 power_w=36.8 power_avg_w=36.5
+fan fan=2 rpm=1470 turning=1/5 answered=5/5 duty_pct=89 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=68.0 board_c=48.5 age_ms=870 fresh=1 valid=1 stopped=0 reason=ok samples=84 errors=0 retries=0 refusals=0
+  1379     36.678 smu metrics: telemetry mW p61670 a56584 g17225 s17759 reject 1 why 4 sp00000000 m67 0
+  1380     36.678 smu metrics: telemetry gfx 818 mV 1000 MHz 71.5 C soc 1212 mV 57.5 C thr 0
+  1394     41.687 smu metrics: telemetry mW p55579 a54747 g17225 s11858 reject 1 why 4 sp00000000 m67 0
+  1395     41.687 smu metrics: telemetry gfx 818 mV 1000 MHz 70.2 C soc 1199 mV 58.0 C thr 0
+  1408     46.707 smu metrics: telemetry mW p50568 a60194 g17225 s6988 reject 1 why 4 sp00000000 m67 0
+  1409     46.707 smu metrics: telemetry gfx 818 mV 1000 MHz 72.7 C soc 1199 mV 58.0 C thr 0
+=== end 2026-11-12T07:29:29Z

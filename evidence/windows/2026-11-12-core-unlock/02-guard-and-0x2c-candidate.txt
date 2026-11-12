@@ -1,0 +1,133 @@
+BD-368 lab evidence, unit A, Windows 22631, 2026-11-12. Raw tool output per step.
+
+=== R1 release KMD 5C97A127, cold restart 1 after cpu set temp 86 + keep (05:49:46Z) ===
+COLD t0 2026-11-12T05:50:00Z
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD telemetry sample: {"queried_utc": "2026-11-12T05:50:05.802418+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 595, "19": 866, "20": 2414}, "current_a": 0.595, "po
+COLD soft-off proved: 13.5 W after 37 s
+{"transport": "LAN", "relay_on": false, "readback_verified": true}
+{"transport": "LAN", "relay_on": true, "readback_verified": true}
+BOOT UP windows boot 2026-11-12T05:51:10Z after 41s
+READ 2026-11-12T05:54:09Z waited 151 s confirm-line=False
+GPU OK CM_PROB_NONE
+STORE 5C97A127917EE89FD80CF9BD54072ADFBB45C857D509F2ADB24EAD3AC35FABB7
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=28468366 epoch=5 completed=654 age_ms=134 ready_ms=165829
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered, values stored, PENDING (unconfirmed 
+start), confirmed
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 86 C (stored 0 / 0 / 86, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+656      6.086 cpu: the stored settings cap 86 C in force (read back)
+657      6.086 cpu: the stored settings clock (not given) 0 MHz
+658      6.086 cpu: the stored settings undervolt (not given) 0 steps, cap 86 C
+659      6.086 cpu: the stored settings sent 1 of 1 steps, 806 mV back: 0x00000000
+
+
+
+[exited with code 0]
+
+=== R2 release KMD, cold restart 2: the kept cap is gone ===
+
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD soft-off proved: 13.7 W after 37 s
+BOOT UP windows boot 2026-11-12T05:55:37Z after 41s
+READ 2026-11-12T05:56:55Z waited 50 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 5C97A127917EE89FD80CF9BD54072ADFBB45C857D509F2ADB24EAD3AC35FABB7
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=28168184 epoch=5 completed=462 age_ms=901 ready_ms=65245
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+
+
+
+
+[exited with code 0]
+
+=== C0 candidate D71CF9B2 (branch t39/bd368-cpu-confirm 208878e3a) after swap, cold restart, enable ===
+
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD soft-off proved: 13.7 W after 37 s
+BOOT UP windows boot 2026-11-12T05:58:53Z after 41s
+Device enabled successfully.
+
+GPU OK CM_PROB_NONE
+
+
+[exited with code 0]
+
+=== C1 candidate, cold restart, clean start; then cpu set temp 86, keep, cores 8 at 06:02:26Z (mask confirmed by the request) ===
+
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD soft-off proved: 13.6 W after 37 s
+BOOT UP windows boot 2026-11-12T06:00:56Z after 41s
+READ 2026-11-12T06:02:14Z waited 50 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE D71CF9B22A93CFF48A19A07CF926589F290404B89F869D25DAF98213783AF1AF
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=28319890 epoch=5 completed=487 age_ms=236 ready_ms=65130
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+
+
+
+
+[exited with code 0]
+
+=== C2 candidate, WARM restart 1 (shutdown /r) ===
+WARM t0 2026-11-12T06:02:36Z
+HBOOT BCD default                 {current}
+HBOOT BCD displayorder            {current}
+HBOOT BCD toolsdisplayorder       {memdiag}
+HBOOT RESTART target=default build=22631 delay=10
+BOOT UP windows boot 2026-11-12T06:03:08Z after 49s
+READ 2026-11-12T06:04:30Z waited 60 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE D71CF9B22A93CFF48A19A07CF926589F290404B89F869D25DAF98213783AF1AF
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=28282333 epoch=5 completed=442 age_ms=359 ready_ms=68589
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered, values stored, confirmed
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 86 C (stored 0 / 0 / 86, baseline 3500 / 0 / 100)
+cpu: mask 0xFF in force, 0xFF stored, confirmed, 12 processors to Windows
+659      6.101 cpu: the stored settings cap 86 C in force (read back)
+660      6.101 cpu: the stored settings clock (not given) 0 MHz
+661      6.101 cpu: the stored settings undervolt (not given) 0 steps, cap 86 C
+662      6.101 cpu: the stored settings sent 1 of 1 steps, 806 mV back: 0x00000000
+663      6.103 cpu: core mask 0xFF (8 cores) sent: 0x00000000; the count changes at the next restart
+1156     77.214 cpu: the stored settings (mark 0x56000000) confirmed by start-health: 0x00000000
+1157     77.215 cpu: core mask 0xFF confirmed by start-health: 0x00000000
+
+
+
+[exited with code 0]
+
+=== C3 candidate, WARM restart 2 ===
+WARM t0 2026-11-12T06:04:42Z
+HBOOT RESTART target=default build=22631 delay=10
+BOOT UP windows boot 2026-11-12T06:05:14Z after 49s
+READ 2026-11-12T06:06:36Z waited 61 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE D71CF9B22A93CFF48A19A07CF926589F290404B89F869D25DAF98213783AF1AF
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=28596543 epoch=5 completed=486 age_ms=242 ready_ms=68972
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered, values stored, confirmed
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 86 C (stored 0 / 0 / 86, baseline 3500 / 0 / 100)
+cpu: mask 0xFF in force, 0xFF stored, confirmed, 12 processors to Windows
+659      6.181 cpu: the stored settings cap 86 C in force (read back)
+660      6.181 cpu: the stored settings clock (not given) 0 MHz
+661      6.181 cpu: the stored settings undervolt (not given) 0 steps, cap 86 C
+662      6.181 cpu: the stored settings sent 1 of 1 steps, 806 mV back: 0x00000000
+663      6.183 cpu: core mask 0xFF (8 cores) sent: 0x00000000; the count changes at the next restart
+1144     77.502 cpu: the stored settings (mark 0x56000000) confirmed by start-health: 0x00000000
+1145     77.502 cpu: core mask 0xFF confirmed by start-health: 0x00000000
+
+
+
+[exited with code 0]

@@ -2198,3 +2198,12 @@ facts:
     status_text: "MEASURED (unit A, Windows 11 22631, lab-flavour KMDs 02CF4015, 6C948F90 and 8F955FB4 of t38/bd295-cpu-boot-baseline)"
     detail: "The spontaneous refusal was not seen again in one later boot and two device cycles without bit 4. The lab selector LabCpuRevertFault reproduced the other paths: bit 1 refused the stop revert of a 3000 MHz, 2-step trial, and the next start logged the leftover (what 0x1, clock 3000 MHz, undervolt 2 steps) and adopted the boot record as its baseline (3500 MHz, cap 100 C). Bit 2 refused the first leftover restore; the second attempt 1.4 s later sent 3 of 3 steps. Bit 4 refused the first start read stage; the second attempt 3.2 s later answered and the default cap of 87 C went in. A kept 3000 MHz, 2-step setting went in again after a cycle, and a reset sent 3500 MHz and 87 C"
     evidence: "[CPU boot baseline arm](../evidence/windows/2026-11-04-cpu-boot-baseline/README.md)"
+  - id: M963
+    status: MEASURED
+    date: "2026-11-12"
+    claim: "With 8 cores enabled on the stock SMU firmware of unit A, the SMU metrics table keeps its 244-byte length, and the 16-bit field at byte offset 68, which holds the graphics clock in MHz with 6 cores, holds a value of 100 or less (37 in the raw read). The graphics temperature at byte offset 70 and the fields after it keep plausible values. A KMD that reads such a table without its clock reports the socket power of the 8-core state: 36.7 W to 40.5 W at idle with 87 W to 93 W on the wall plug, against 36 W to 37 W at 88 W to 92 W in the 6-core control"
+    status_text: "MEASURED (unit A, Windows 11 22631, lab-flavour KMDs 707E9DC4 and 6A2B18AA; two identical raw reads, 79 tables decoded in one telemetry run)"
+    detail: "The tester.38 parser refuses this table as a clock out of range (reason 6), so the telemetry of an 8-core start had no power value. The candidate parser accepts a stock-layout table whose clock field is 1 to 100 when the temperature is in range, reports the clock as 0 and counts the table (`clock_lost_tables`). The table of the community 8-core firmware (284 bytes) keeps its own layout and its refusals. That the value in the clock field is a core residency is HYPOTHESIS: it follows from the 8-core layout, where two more residency fields come before the clock"
+    evidence: "[Core unlock arms](../evidence/windows/2026-11-12-core-unlock/README.md)"
+    edges:
+      - {"type": "uses", "to": "M961"}

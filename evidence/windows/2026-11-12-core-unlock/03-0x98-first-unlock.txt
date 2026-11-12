@@ -1,0 +1,56 @@
+BD-368 part A, unit A, Windows 22631, stock BIOS P5.00, candidate KMD 5A94C807F310C23FDF0E67C121A030D2C9548EAE783CCC97CA59A4D5DAF6F021
+(branch t39/bd368-core-unlock-0x98 at e32448256, built by scratch\t38\rc4\bd368-build.ps1 -CandOnly cand98). Written 2026-11-12T06:33Z.
+
+== arm 1: candidate installed, two cold restarts, mask still 0x77 (task bcljz4h47) ==
+
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD soft-off proved: 13.6 W after 37 s
+BOOT UP windows boot 2026-11-12T06:20:16Z after 41s
+Device enabled successfully.
+
+GPU OK CM_PROB_NONE
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD soft-off proved: 13.6 W after 37 s
+BOOT UP windows boot 2026-11-12T06:22:09Z after 41s
+READ 2026-11-12T06:23:37Z waited 61 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 5A94C807F310C23FDF0E67C121A030D2C9548EAE783CCC97CA59A4D5DAF6F021
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=27986860 epoch=5 completed=455 age_ms=449 ready_ms=74601
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+
+
+
+
+[exited with code 0]
+
+== arm 2: cpu cores 8 (SMU queue 3 message 0x98, argument SMN 0x0115A870), then a warm restart (task b0razoe6f) ==
+WARM t0 2026-11-12T06:23:58Z
+HBOOT RESTART target=default build=22631 delay=10
+BOOT UP windows boot 2026-11-12T06:24:30Z after 48s
+READ 2026-11-12T06:25:53Z waited 61 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 5A94C807F310C23FDF0E67C121A030D2C9548EAE783CCC97CA59A4D5DAF6F021
+PROCESSORS logical=16 cores=8
+health abi=1 version=0x000700D8 flags=31 generation=28443674 epoch=5 completed=448 age_ms=676 ready_ms=69640
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0xFF in force, 0xFF stored, confirmed, 16 processors to Windows
+661      6.102 cpu: core mask 0xFF (8 cores) sent: 0x00000000; the count changes at the next restart
+1113     77.726 cpu: core mask 0xFF confirmed by start-health: 0x00000000
+
+
+
+[exited with code 0]
+
+== arm 3: scratch\t38\rc4\bd368-8core-check.ps1 -LoadSeconds 60, values copied from the session, the raw output was not kept ==
+PROCESSORS logical=16 cores=8
+smu metrics: telemetry no fresh table s5 fail3 reject 3 why 6 ... m67 0 (table rejected; power_w absent from the dpm telemetry line; fan and tsi inputs valid)
+load: 16 jobs for 60 s, Tctl 87.4 to 87.5 C (cap 87), cores about 2.78 GHz at 931 mV, WHEA events 0 before and 0 after. The load does not verify its results per core.
+
+== arm 4: Task Manager, Performance > CPU, logical processors view, 2026-11-12T06:32Z ==
+Cores: 8, Logical processors: 16, sixteen graphs. Screenshot (not for the repo): scratch\m15\game-runner\shots\game-taskmgr\taskmgr-16-logical-full.png

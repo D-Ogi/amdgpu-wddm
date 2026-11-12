@@ -1,0 +1,115 @@
+=== push 2026-11-12T06:45:05Z
+C:\BC250\tmp\bd368d\kmdlab\bc250kmd.sys
+C:\BC250\tmp\bd368d\labcli\bc250kmd_cli.exe
+=== LabDiagnostics 2026-11-12T06:45:08Z
+
+=== swap 2026-11-12T06:45:09Z
+utc 2026-11-12T06:45:12.4578262Z boot 2026-11-12T06:24:30.5000000Z
+ImagePath \SystemRoot\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_c6dd8f3e130b3751\bc250kmd.sys
+resolved C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_c6dd8f3e130b3751\bc250kmd.sys
+current 5A94C807F310C23FDF0E67C121A030D2C9548EAE783CCC97CA59A4D5DAF6F021
+keep 5C97A127917EE89FD80CF9BD54072ADFBB45C857D509F2ADB24EAD3AC35FABB7 at C:\BC250\tmp\bd368d\kmd-orig.sys
+new signature Valid signer AFCA4B1A82081E848DD6E53A6550D29153FD2EB6
+kept original already there 5C97A127917EE89FD80CF9BD54072ADFBB45C857D509F2ADB24EAD3AC35FABB7
+testsigning: testsigning             Yes
+pnputil disable exit 0 :: 
+device disable verified
+image now 707E9DC494EC311FD1CCFC425D63B5B055EB8CE74CB20C094AC815E1E57DC997
+UnconfirmedStarts 0 (StateV2 b1c85315ff874f0bac330bcf3b947323 and legacy)
+=== cold 1 2026-11-12T06:45:19Z
+COLD t0 2026-11-12T06:45:19Z
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD telemetry sample: {"queried_utc": "2026-11-12T06:45:26.769514+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 671, "19": 984, "20": 2401}, "current_a": 0.671, "po
+COLD soft-off proved: 13.6 W after 148 s
+{"transport": "LAN", "relay_on": false, "readback_verified": true}
+{"transport": "LAN", "relay_on": true, "readback_verified": true}
+BOOT UP windows boot 2026-11-12T06:48:23Z after 41s
+=== enable 2026-11-12T06:48:48Z
+
+=== cold 2 2026-11-12T06:48:49Z
+COLD t0 2026-11-12T06:48:49Z
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD telemetry sample: {"queried_utc": "2026-11-12T06:48:55.031498+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 805, "19": 1315, "20": 2405}, "current_a": 0.805, "p
+COLD soft-off proved: 13.6 W after 49 s
+{"transport": "LAN", "relay_on": false, "readback_verified": true}
+{"transport": "LAN", "relay_on": true, "readback_verified": true}
+BOOT UP windows boot 2026-11-12T06:50:12Z after 41s
+=== read after cold 2026-11-12T06:50:38Z
+READ 2026-11-12T06:51:30Z waited 50 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 707E9DC494EC311FD1CCFC425D63B5B055EB8CE74CB20C094AC815E1E57DC997
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=28749670 epoch=5 completed=473 age_ms=938 ready_ms=65250
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0xFF stored, 12 processors to Windows
+
+
+=== warm restart 2026-11-12T06:51:32Z
+HBOOT BCD default                 {current}
+HBOOT BCD displayorder            {current}
+HBOOT BCD toolsdisplayorder       {memdiag}
+HBOOT RESTART target=default build=22631 delay=10
+BOOT UP windows boot 2026-11-12T06:52:05Z after 23s
+=== read after warm 2026-11-12T06:52:22Z
+READ 2026-11-12T06:53:26Z waited 61 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 707E9DC494EC311FD1CCFC425D63B5B055EB8CE74CB20C094AC815E1E57DC997
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=28141699 epoch=5 completed=463 age_ms=204 ready_ms=67367
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+
+
+=== raw 2026-11-12T06:53:27Z
+RAW 2026-11-12T06:53:30Z
+PROCESSORS logical=12 cores=6
+NO vram line:
+refused: this driver build has no memory commands (driver status 1, NTSTATUS 0x00000000 STATUS_SUCCESS; vram not identified (gate closed), writes off)
+=== end 2026-11-12T06:53:31Z
+WHY 2026-11-12T06:53:49Z boot 2026-11-12T06:52:05Z
+LabDiagnostics=1 EnableVram= EnableMmio=
+log lines 1074, first: log          1427 lines since this driver load, 403 lost to the wrap, 0 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     3      0.000 kmd: BD-167 flavour lab (raw diagnostic escapes, test signing + LabDiagnostics)
+     4      0.000 lab: paging boundary mode 1: PagingBoundaryMode absent, the default (pad)
+     5      0.000 lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)
+     6      0.000 lab: scaled plane selector absent, 0 (the default)
+     7      0.000 lab: queue reset selector absent, 0 (the default)
+    25      1.190 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    55      1.396 wddm: scaled plane 0x0 (LabScaledPlane 0x0, handshake 1)
+    59      1.396 wddm: submit diagnostic v2 12000 ms (setting 0, default), sample every 250 ms; OS TdrDelay unavailable
+   202      1.554 lab: sdma0 receipt bring-up: requested 0x0 applied 0x0 refused 0 adopted 0, bring-ups 1
+   203      1.554 lab: sdma0 receipt bring-up: RPTR 0x00000000_00000000 WPTR 0x00000000_00000000 (read back after the writes)
+   204      1.554 lab: sdma0 receipt bring-up: poll 0x0 rptr_wb 0x0 sw wptr 0x0 dw (sequential reads)
+   205      1.554 lab: sdma0 receipt ring test: result 0
+   206      1.554 lab: sdma0 receipt ring test: RPTR 0x00000000_00000040 WPTR 0x00000000_00000040 valid 0xF (sequential reads)
+   207      1.554 lab: sdma0 receipt ring test: poll 0x40 rptr_wb 0x40 sw wptr 0x10 dw
+   208      1.554 lab: sdma0 receipt ring test: retired 0 pending 0
+   680      5.645 smu metrics: stock layout latched after 3 tables in a row
+   681      5.918 cpu: the boost probe kept one core busy and read 16 core clocks: the highest observed core clock is 3500 MHz
+   682      5.918 cpu: the baseline of this start is clock 3500 MHz, undervolt 0 steps, cap 100 C
+   683      5.918 cpu: the baseline's answers: P-state table top 3200 MHz, per-core (boost) top 3500 MHz
+   684      5.918 cpu: the boot record is written: clock 3500 MHz, cap 100 C, table 3200 MHz, boost 3500 MHz
+   685      5.918 cpu: the read stage answered (0x00000000, attempt 1 of 30): 856 mV, GPU 824 mV, cap 100 C
+   686      5.918 cpu: no temperature cap is stored: the default of 87 C goes in
+   687      6.132 cpu: the default cap cap 87 C in force (read back)
+   688      6.132 cpu: the default cap clock (not given) 0 MHz
+   689      6.132 cpu: the default cap undervolt (not given) 0 steps, cap 87 C
+   690      6.132 cpu: the default cap sent 1 of 1 steps, 806 mV back: 0x00000000
+   697      6.620 smu metrics: telemetry mW p43768 a44298 g17225 s853 reject 1 why 4 sp00000000 m67 0
+   698      6.620 smu metrics: telemetry gfx 818 mV 1000 MHz 62.5 C soc 806 mV 58.2 C thr 0
+   709     11.628 smu metrics: telemetry mW p43896 a43359 g17225 s995 reject 1 why 4 sp00000000 m67 0
+   710     11.628 smu metrics: telemetry gfx 818 mV 1000 MHz 62.0 C soc 806 mV 58.7 C thr 0
+   944     16.103 wddm: gdi diag c1 hash 0xE42A7F930AF58FD5 lab-skipped 0 lab-dropped 0
+   959     16.113 wddm: gdi diag c2 hash 0x39E8D6D975E7AF1E lab-skipped 0 lab-dropped 0
+   994     16.489 wddm: gdi diag c3 hash 0x39E8D6D975E7AF1E lab-skipped 0 lab-dropped 0
+  1010     16.506 wddm: gdi diag c4 hash 0x2D87F3F81A411B8E lab-skipped 0 lab-dropped 0
+  1028     16.651 smu metrics: telemetry mW p61805 a58802 g17819 s17331 reject 1 why 4 sp00000000 m67 0
+  1029     16.651 smu metrics: telemetry gfx 818 mV 1000 MHz 73.7 C soc 1212 mV 58.7 C thr 0
+  1066     16.759 wddm: gdi diag c5 hash 0xDBB6C55BE2A93AA1 lab-skipped 0 lab-dropped 0
+  1094     16.792 wddm: gdi diag c6 hash 0x1C3F61E0F75CFDD4 lab-skipped 0 lab-dropped 0
+  1116     16.823 wddm: gdi diag c7 hash 0x20E22E62271047C6 lab-skipped 0 lab-dropped 0
+  1134     16.840 wddm: gdi diag c8 hash 0x172038394EC338CD lab-skipped 0 lab-dropped 0

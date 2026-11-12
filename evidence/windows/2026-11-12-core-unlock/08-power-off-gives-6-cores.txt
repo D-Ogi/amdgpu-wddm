@@ -1,0 +1,18 @@
+COLD t0 2026-11-12T07:40:12Z
+HBOOT SHUTDOWN target=default build=22631 delay=10
+COLD telemetry sample: {"queried_utc": "2026-11-12T07:40:17.045431+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 577, "19": 847, "20": 2396}, "current_a": 0.577, "po
+COLD soft-off proved: 13.6 W after 37 s
+{"transport": "LAN", "relay_on": false, "readback_verified": true}
+{"transport": "LAN", "relay_on": true, "readback_verified": true}
+BOOT UP windows boot 2026-11-12T07:41:22Z after 41s
+READ 2026-11-12T07:42:50Z waited 61 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 6A2B18AAF889E61F0E8ADD79D6F42406C12D6810660234DB2F25FB261FF4EEDB
+PROCESSORS logical=12 cores=6
+health abi=1 version=0x000700D8 flags=31 generation=28489140 epoch=5 completed=495 age_ms=66 ready_ms=75287
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0x77 stored, 12 processors to Windows
+
+

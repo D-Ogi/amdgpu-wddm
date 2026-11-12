@@ -216,7 +216,7 @@ locks, the worker thread, the registry and the message gaps. A harness for them,
 | 3 | `0x8F` maximum boost clock | set | 2800..4000 MHz |
 | 0 | `0x0C` QueryCorePstate | get | core 0..7 |
 | 0 | `0x3D` GetEnabledSmuFeatures | get | 0 |
-| 0 | `0x2C` SetCoreEnableMask | set | 0x77 or 0xFF |
+| 3 | `0x98` store 0xFF | set | SMN 0x0115A870 (`BC250_CPU_SMN_CORE_ENABLE_MASK`) and no other address |
 
 ### The ranges, and why the top one needs an undervolt
 
@@ -314,15 +314,25 @@ Keep.
 
 ### The core mask
 
-The part is sold with six of its eight cores enabled; the stock mask is `0x77`. Our route is the AMD-named
-queue 0 message, which can write the stock mask back. The community's generic SMN write through queue 3 `0x98`
-can only ever write `0xFF` and hangs the firmware with argument 0, so it stays rejected.
+The part is sold with six of its eight cores enabled; the stock mask is `0x77`. The route is queue 3 message
+`0x98` with the address of the core mask register as its one admitted argument. The firmware stores `0xFF` there,
+and the two cores run after the next warm restart of Windows (M961, unit A, stock BIOS). The AMD-named queue 0
+message `0x2C` was the first route. The firmware accepts it and the processor count does not change in either
+direction (M962), so nothing sends it and the allowlist refuses it.
 
-The mask is a registry value, a two-mark boot guard and the next Windows restart, exactly like the CU mode. The
-core-presence mask is not readable on Windows, so the application shows the processor count and never the mask.
+Three properties of the route shape the surface:
 
-**Nobody has reported a result from `0x2C` on this part.** One lab step settles whether it is a live route or a
-no-op on a harvested die, and either answer closes an open question.
+- A cold boot gives the stock mask back. The driver sends the store at each start that has 8 cores stored, and
+  the cores arrive at the warm restart after that start.
+- The message cannot store `0x77`. The way back to 6 cores is the stored stock mask and a power-off. A request
+  for 6 cores stores the mask and sends nothing.
+- The mask in force is not readable on Windows. The driver reports it from the processor count: 16 logical
+  processors are `0xFF`, 12 are `0x77`, and another count is "not known".
+
+The mask is a stored value, a two-mark boot guard and a restart, like the CU mode. An orderly shutdown or
+restart of Windows takes the pending marks of that start back (BD-369), because the restart that 8 cores need
+often comes in the first minute of a start. A start that ends with a hang or a power cut keeps its mark, and the
+next start puts the stock mask back. The CLI and the application say which restart a stored count still needs.
 
 ### The settings
 
@@ -440,7 +450,8 @@ Nothing below is measured on unit A. Until a row is answered, the driver refuses
 | Is the GPU voltage of `0x37` the one our own `GetGfxVid` reports? | the two readings side by side | nothing; it is the cross-check that the queue means what we think |
 | What is this part's effective CPU clock? | the eight core clocks and the eight P-state clocks | the words the application uses about the clock range |
 | Does a curve-scale step remove the millivolts the model predicts? | the voltage readback at one, two and four steps | the guided search's own arithmetic |
-| Does `SetCoreEnableMask` do anything on a harvested die? | the processor count after a restart | the core card's words |
+| Does `SetCoreEnableMask` do anything on a harvested die? | Answered 2026-11-12: no, in either direction (M962). Message `0x98` enables the cores (M961) | nothing any more |
+| Do the two extra cores compute correctly? | a load that verifies its results per core | the words of the core card about risk |
 | Does the firmware take the maximum boost clock at all? | the core clocks under a load with a 3000 MHz limit | the lab clock range |
 
 The lab steps are in `scratch/tuner/lab-tuner.ps1` (local, outside this repository): the read-only step first, and

@@ -85,6 +85,10 @@ The KMD detects the layout by the DMA length of the firmware. It does not use th
 
 A board with 8 cores unlocked and the stock SMU firmware writes 244 bytes, so its tail stays poisoned.
 It stays on the stock decode, and the overwrite refusal (reason 5) continues to apply.
+On unit A such a table holds a value of 100 or less in the graphics clock field (M963).
+The temperature and the fields after it are valid.
+The stock decode reads that table without its clock: the clock is reported as 0, and the reader counts the table in `clock_lost_tables`.
+A clock field above 100 that is not a valid clock is still refused (reason 6).
 
 These rules apply before the latch:
 

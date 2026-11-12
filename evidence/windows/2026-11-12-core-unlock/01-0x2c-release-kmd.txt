@@ -1,0 +1,11 @@
+8-core mask check, unit A, Windows 11 22631, 0.7.216.112-tester.38 release (KMD 5C97A127), stock BIOS, 2026-11-12T04:33Z
+Before:  cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows (Win32_Processor NumberOfCores 6)
+Set:     bc250kmd_cli cpu cores 8 -> "cpu cores: mask 0xFF; ... done, serial 0", exit 0
+         cpu: mask 0xFF in force, 0xFF stored, PENDING, 12 processors to Windows
+         last queue 0 message 0x2C argument 0x000000FF status 0x00000001
+Restart: warm restart (hboot.ps1 -Op restart, default system), Windows back in about 120 s
+After:   NUMBER_OF_PROCESSORS 12, NumberOfCores 6
+         cpu: mask 0x77 in force, 0xFF stored, 12 processors to Windows; writes 1 (no 0x2C message in this start)
+         state get CoreMask = 119 (the start put the stock mask back: the pending mark of the set was present)
+         core clocks: cores 6 and 7 answer 1400 and 933 MHz before and after (0x43 answers for all 8 ids)
+Restore: bc250kmd_cli cpu cores 6 -> mask 0x77 in force, 0x77 stored

@@ -51,7 +51,8 @@ reason stays readable, because it is the reason the guard exists.
 
 ## The CPU messages that stay out (0.7.210)
 
-The CPU control surface of 0.7.210 admits three setters on queue 3 and the core mask on queue 0. Every other CPU
+The CPU control surface of 0.7.210 admits three setters on queue 3 and the core mask on queue 0 (since 2026-11-12
+the core mask goes through queue 3 message `0x98`, and queue 0 has no setter). Every other CPU
 message a community project sends stays off the allowlist, each with its own reason, and `cpu_test.c` sends every
 one of them in both directions to prove the refusal. The hazard behind this whole table is one report of a
 permanently bricked board: its method was a raised CPU clock with the voltage left to scale freely.
@@ -66,5 +67,6 @@ permanently bricked board: its method was a raised CPU clock with the voltage le
  It leaves the voltage to the firmware at a clock we chose, which is the bricking method with extra steps. The admitted ceiling `0x8F` lowers the firmware's own limit instead, so the firmware keeps choosing the voltage |
 | `0x77`, `0x8E` | The board's protection limits (current, power) | Raising a protection limit is the opposite of a bound. The 300 W supply rule is a rule about the supply, not about the firmware's opinion of it |
 | `0x9A` | An extra-voltage flag | No readback, no documented range, and its name is a promise to add voltage. Nothing in our design needs more voltage than the table's own line |
-| `0x98` | A generic SMN write | It reaches every SMN address with no name and no table. Rule 1 of `CLAUDE.md` forbids it, and the community reports it hanging on argument 0 |
+| `0x98`, other arguments | A store of `0xFF` at an SMN address | It reaches every SMN address with no name. The community reports that it hangs on argument 0. One named address is admitted since 2026-11-12: the core mask register `BC250_CPU_SMN_CORE_ENABLE_MASK`. That store enables 8 cores on the stock BIOS (M961). Every other argument stays refused |
+| `0x2C` queue 0 (`SetCoreEnableMask`) | The AMD-named write of the core mask | Admitted in 0.7.210 and removed on 2026-11-12. The firmware accepts it with `0xFF` and with `0x77`, and the processor count does not change (M962). An admitted message that does nothing is a door with no room behind it |
 | `0x28` to `0x30` | A guarded block of nine entries | They carry a different configuration word in the firmware's own table, which the community reads as a boot flag nobody has. A guarded entry sent without its flag is an untested handler, and untested queue 3 handlers hang the SMU until AC is removed |

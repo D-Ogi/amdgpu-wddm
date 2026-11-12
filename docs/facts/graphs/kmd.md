@@ -353,11 +353,14 @@ flowchart LR
   M836["M836"]
   M917["M917<br/>games"]
   M918["M918"]
+  M961["M961<br/>hardware"]
+  M963["M963"]
   M377 --> M376
   M467 --> M465
   M836 --> M835
+  M963 --> M961
   M917 --> M918
   classDef other stroke-dasharray:4 3
-  class M917 other
+  class M917,M961 other
 ```
 

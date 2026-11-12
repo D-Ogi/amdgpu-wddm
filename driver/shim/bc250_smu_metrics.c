@@ -134,7 +134,7 @@ enum bc250_smu_metrics_parse bc250_smu_metrics_parse(const unsigned char *raw, u
 		return BC250_SMU_METRICS_PARSE_CORE_OVERFLOW;
 	/* BD-368, measured on unit A with eight cores and the stock SMU firmware (stock BIOS, mask by message 0x98):
 	 * the table keeps its 244 bytes, C0Residency[6] lands in GfxclkFrequency, and GfxTemperature and every field
-	 * after it hold their own values (evidence/2026-11-12-smu-metrics-8core-stock). A percentage in the clock
+	 * after it hold their own values (M963, evidence/windows/2026-11-12-core-unlock). A percentage in the clock
 	 * field with a real temperature next to it is that table: the clock is not known, the rest is read. The
 	 * eight-core layout has no such overflow, so there the value stays a refusal. */
 	m.clock_lost = 0u;

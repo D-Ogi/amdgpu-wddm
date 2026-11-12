@@ -95,6 +95,11 @@ No CPU message has ever been sent on unit A.
    exactly like the CU mode. The core-presence mask itself is not readable on Windows, so the GUI shows the
    effect - the processor count - and never the mask.
 
+   Changed on 2026-11-12 after the lab measurement: `SetCoreEnableMask` is accepted and has no effect on this
+   part (M962), and the queue 3 store with the one named address of the core mask register enables the cores
+   (M961). The decision keeps its shape (a stored value, the boot guard, a restart). The message is the other
+   one, and the way back to six cores is a power-off. `design/tuner.md` has the details.
+
 9. **The failure signs are named, and the driver and the app both watch them.** A machine check through the
    WHEA provider in the system event log, clock stretching seen from two independent routes, and a wrong
    checksum from a new CPU load client of ours. Any one of them stops a trial and reverts it.

@@ -122,7 +122,7 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   | `0x50` SetCurveScale | 3 | write | 0, or a negative 16-bit value of at most 40 steps (`BC250_CPU_OC_UV_MAX_STEPS`). The settings gate stops at 16 steps (`BC250_CPU_UV_MAX_STEPS`) without an overclock tier. A positive scale raises the voltage and is refused here, not in the firmware |
   | `0x8B` SetTemperatureCapC | 3 | write | 85 to 100 C (`BC250_CPU_TEMP_MIN_C`, `_MAX_C`; 100 is the firmware default) |
   | `0x36` `0x37` `0x3B` `0x40` `0x42` `0x43` | 3 | read | the voltages, a P-state clock (0 to 7), the cap in force, a SoC DPM clock (0 to 19) and a core clock (0 to 7) |
-  | `0x2C` SetCoreEnableMask | 0 | write | `0x77` (stock, 6 cores) or `0xFF` (8 cores) and nothing else: another pattern suggests a real harvest of defective cores |
+  | `0x98` StoreFF | 3 | write | one argument only: SMN `0x0115A870` (`BC250_CPU_SMN_CORE_ENABLE_MASK`). The firmware stores `0xFF` there, and 8 cores run after the next warm restart (M961). No other address is admitted, and argument 0 never |
   | `0x0C` `0x3D` | 0 | read | a core's P-state (core 0 to 7) and the enabled feature bits |
 
   The two lists refuse each other's numbers, because queue 3's `0x37` and `0x3B` are queue 0's `GetGfxFrequency`

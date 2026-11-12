@@ -1,0 +1,109 @@
+=== set 8 2026-11-12T07:29:57Z
+SET8 2026-11-12T07:29:59Z
+{"abi":1,"command":"set","error":0,"path":"","name":"LabDiagnostics","kind":"setting","type":4,"max_bytes":4,"access":0,"private_read":0,"group":0}
+{"abi":1,"command":"get","path":"","name":"LabDiagnostics","kind":"setting","type":4,"max_bytes":4,"access":0,"private_read":0,"group":0,"result":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":1},"error":0}
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 806 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 66.8 C
+cpu: cores 1555 1555 3500 1555 1400 1400 1400 933 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0xFF in force, 0xFF stored, confirmed, 12 processors to Windows
+cpu: reads 38 writes 2 refusals 1 reverts 0 (retries 0, refused 0); last queue 3 message 0x98 argument 0x0115A870 status 0x00000001
+
+cpu: mask 0xFF in force, 0xFF stored, confirmed, 12 processors to Windows
+
+
+reg.exe : ERROR: The system was unable to find the specified registry key or value.
+At C:\BC250\tmp\bd368-set8.ps1:4 char:1
++ & reg.exe delete 'HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Par ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR: The syst...y key or value.:String) [], Remote 
+   Exception
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+=== warm restart 2026-11-12T07:29:59Z
+HBOOT RESTART target=default build=22631 delay=10
+BOOT UP windows boot 2026-11-12T07:30:32Z after 22s
+=== read after warm 2026-11-12T07:30:49Z
+READ 2026-11-12T07:31:52Z waited 60 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 6A2B18AAF889E61F0E8ADD79D6F42406C12D6810660234DB2F25FB261FF4EEDB
+PROCESSORS logical=16 cores=8
+health abi=1 version=0x000700D8 flags=31 generation=29056615 epoch=5 completed=469 age_ms=30 ready_ms=66944
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0xFF in force, 0xFF stored, confirmed, 16 processors to Windows
+692      6.132 cpu: core mask 0xFF (8 cores) sent: 0x00000000; the count changes at the next restart
+1431     76.227 cpu: core mask 0xFF confirmed by start-health: 0x00000000
+
+
+=== telemetry 2026-11-12T07:31:53Z
+PLUG power_w 92.9
+TELE 2026-11-12T07:31:58Z
+PROCESSORS logical=16 cores=8
+smu metrics: ok, 79 tables, 1 failures, last 938 ms ago: gfx 824 mV 0 MHz 60.75 C, soc 806 mV 56.25 C, throttler 0x0000
+dpm version=0x000700D8 flags=0x278B temperature_c=67.9 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 power_w=36.7 power_avg_w=41.4
+fan fan=2 rpm=1456 turning=1/5 answered=5/5 duty_pct=88 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=68.0 board_c=48.5 age_ms=863 fresh=1 valid=1 stopped=0 reason=ok samples=83 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=356 local_limit_mb=7904 dedicated_mb=7904 aperture_resident_mb=184 aperture_limit_mb=17592186044415
+dpm version=0x000700D8 flags=0x278B temperature_c=67.8 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 power_w=40.5 power_avg_w=37.4
+fan fan=2 rpm=1454 turning=1/5 answered=5/5 duty_pct=88 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=67.0 board_c=48.5 age_ms=853 fresh=1 valid=1 stopped=0 reason=ok samples=84 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=356 local_limit_mb=7904 dedicated_mb=7904 aperture_resident_mb=184 aperture_limit_mb=17592186044415
+dpm version=0x000700D8 flags=0x278B temperature_c=67.4 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 power_w=36.9 power_avg_w=37.6
+fan fan=2 rpm=1456 turning=1/5 answered=5/5 duty_pct=88 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=67.0 board_c=48.5 age_ms=836 fresh=1 valid=1 stopped=0 reason=ok samples=85 errors=0 retries=0 refusals=0
+  1391     36.719 smu metrics: telemetry mW p61777 a58345 g14963 s19685 reject 1 why 4 sp00000000 m67 0
+  1392     36.719 smu metrics: telemetry gfx 824 mV 0 MHz 71.5 C soc 1212 mV 57.5 C thr 0
+  1405     41.746 smu metrics: telemetry mW p47529 a48420 g14364 s7162 reject 1 why 4 sp00000000 m67 0
+  1406     41.746 smu metrics: telemetry gfx 824 mV 0 MHz 66.0 C soc 1193 mV 57.7 C thr 0
+  1419     46.749 smu metrics: telemetry mW p43088 a48504 g14364 s2898 reject 1 why 4 sp00000000 m67 0
+  1420     46.749 smu metrics: telemetry gfx 824 mV 0 MHz 64.7 C soc 912 mV 57.7 C thr 0
+PLUG power_w 87.3
+=== way back: cpu cores 6, then a warm restart 2026-11-12T07:32:03Z
+SET6 2026-11-12T07:32:06Z
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 806 mV (GPU 0 mV), firmware cap 87 C, features 0xDD602C7D, 68.0 C
+cpu: cores 1400 1400 1400 1400 1555 1555 1555 3500 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0x77 in force, 0x77 stored, 16 processors to Windows
+cpu: reads 37 writes 3 refusals 1 reverts 0 (retries 0, refused 0); last queue 0 message 0x2C argument 0x00000077 status 0x00000001
+
+cpu: mask 0x77 in force, 0x77 stored, 16 processors to Windows
+cpu: reads 57 writes 3 refusals 1 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D 
+argument 0x00000000 status 0x00000001
+   692      6.132 cpu: core mask 0xFF (8 cores) sent: 0x00000000; the count changes at the next restart
+  1431     76.227 cpu: core mask 0xFF confirmed by start-health: 0x00000000
+  1433     92.518 cpu: core mask 0x77 (6 cores) requested: 0x00000000; the count changes at the next restart
+
+
+HBOOT RESTART target=default build=22631 delay=10
+BOOT UP windows boot 2026-11-12T07:32:37Z after 22s
+=== read after the way back 2026-11-12T07:32:55Z
+READ 2026-11-12T07:33:58Z waited 61 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 6A2B18AAF889E61F0E8ADD79D6F42406C12D6810660234DB2F25FB261FF4EEDB
+PROCESSORS logical=16 cores=8
+health abi=1 version=0x000700D8 flags=31 generation=28938077 epoch=5 completed=472 age_ms=33 ready_ms=67597
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0x77 in force, 0x77 stored, 16 processors to Windows
+
+
+=== telemetry after the way back 2026-11-12T07:33:59Z
+TELE 2026-11-12T07:34:02Z
+PROCESSORS logical=16 cores=8
+smu metrics: ok, 78 tables, 1 failures, last 591 ms ago: gfx 824 mV 0 MHz 58.25 C, soc 806 mV 56.00 C, throttler 0x0000
+dpm version=0x000700D8 flags=0x278B temperature_c=68.9 gfx_mhz=500 busy_pct=3.2 avg_pct=1.0 src=grbm submit_pct=3.2 power_w=38.6 power_avg_w=40.0
+fan fan=2 rpm=1477 turning=1/5 answered=5/5 duty_pct=90 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=69.0 board_c=48.5 age_ms=548 fresh=1 valid=1 stopped=0 reason=ok samples=82 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=386 local_limit_mb=7904 dedicated_mb=7904 aperture_resident_mb=184 aperture_limit_mb=17592186044415
+dpm version=0x000700D8 flags=0x278B temperature_c=68.6 gfx_mhz=500 busy_pct=6.7 avg_pct=1.8 src=grbm submit_pct=6.4 power_w=36.5 power_avg_w=37.1
+fan fan=2 rpm=1477 turning=1/5 answered=5/5 duty_pct=90 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=68.0 board_c=48.5 age_ms=542 fresh=1 valid=1 stopped=0 reason=ok samples=83 errors=0 retries=0 refusals=0
+vram segments=4 local_resident_mb=386 local_limit_mb=7904 dedicated_mb=7904 aperture_resident_mb=184 aperture_limit_mb=17592186044415
+dpm version=0x000700D8 flags=0x278B temperature_c=68.2 gfx_mhz=500 busy_pct=0.0 avg_pct=0.2 src=grbm submit_pct=0.0 power_w=37.0 power_avg_w=36.5
+fan fan=2 rpm=1477 turning=1/5 answered=5/5 duty_pct=90 duty_proven=0 mode=0xE0 engine=0x60 tsi_c=68.0 board_c=48.5 age_ms=525 fresh=1 valid=1 stopped=0 reason=ok samples=84 errors=0 retries=0 refusals=0
+  1340     36.685 smu metrics: telemetry mW p53741 a58870 g14963 s11364 reject 1 why 4 sp00000000 m67 0
+  1341     36.685 smu metrics: telemetry gfx 824 mV 0 MHz 73.2 C soc 1150 mV 57.7 C thr 0
+  1355     41.686 smu metrics: telemetry mW p42401 a51052 g14364 s2165 reject 1 why 4 sp00000000 m67 0
+  1356     41.686 smu metrics: telemetry gfx 824 mV 0 MHz 64.7 C soc 943 mV 58.0 C thr 0
+  1372     46.704 smu metrics: telemetry mW p58204 a58966 g14963 s16411 reject 1 why 4 sp00000000 m67 0
+  1373     46.704 smu metrics: telemetry gfx 824 mV 0 MHz 72.5 C soc 1162 mV 57.7 C thr 0
+=== end 2026-11-12T07:34:04Z

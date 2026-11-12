@@ -389,7 +389,7 @@ static void plausibility(void)
 	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), STOCK, &m) == BC250_SMU_METRICS_PARSE_OK);
 
 	/* BD-368: the table that unit A wrote with eight cores and the stock SMU firmware (2026-11-12, the 61 words
-	 * of evidence/2026-11-12-smu-metrics-8core-stock). The clock field holds C0Residency[6] (37); the temperature
+	 * of evidence/windows/2026-11-12-core-unlock). The clock field holds C0Residency[6] (37); the temperature
 	 * next to it and every field after it are real. The table is read, without a clock. */
 	{
 		static const unsigned int captured[61] = {

@@ -1,0 +1,56 @@
+=== set 2026-11-12T06:56:48Z
+SET8 2026-11-12T06:56:50Z
+{"abi":1,"command":"set","error":0,"path":"","name":"LabDiagnostics","kind":"setting","type":4,"max_bytes":4,"access":0,"private_read":0,"group":0}
+{"abi":1,"command":"get","path":"","name":"LabDiagnostics","kind":"setting","type":4,"max_bytes":4,"access":0,"private_read":0,"group":0,"result":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":1},"error":0}
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: 806 mV (GPU 824 mV), firmware cap 87 C, features 0xDD602C7D, 65.2 C
+cpu: cores 1555 1555 3500 1555 1400 1400 1400 933 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+cpu: mask 0xFF in force, 0xFF stored, confirmed, 12 processors to Windows
+cpu: reads 38 writes 2 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x98 argument 0x0115A870 status 0x00000001
+
+cpu: mask 0xFF in force, 0xFF stored, confirmed, 12 processors to Windows
+
+
+reg.exe : ERROR: The system was unable to find the specified registry key or value.
+At C:\BC250\tmp\bd368-set8.ps1:4 char:1
++ & reg.exe delete 'HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Par ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR: The syst...y key or value.:String) [], Remote 
+   Exception
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+=== warm restart 2026-11-12T06:56:50Z
+HBOOT RESTART target=default build=22631 delay=10
+BOOT UP windows boot 2026-11-12T06:57:21Z after 22s
+=== read after warm 2026-11-12T06:57:40Z
+READ 2026-11-12T06:58:43Z waited 61 s confirm-line=True
+GPU OK CM_PROB_NONE
+STORE 707E9DC494EC311FD1CCFC425D63B5B055EB8CE74CB20C094AC815E1E57DC997
+PROCESSORS logical=16 cores=8
+health abi=1 version=0x000700D8 flags=31 generation=28597299 epoch=5 completed=486 age_ms=469 ready_ms=68482
+
+cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+cpu: applied clock 0 MHz, undervolt 0 steps, cap 87 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+cpu: mask 0xFF in force, 0xFF stored, confirmed, 16 processors to Windows
+692      6.116 cpu: core mask 0xFF (8 cores) sent: 0x00000000; the count changes at the next restart
+1367     77.290 cpu: core mask 0xFF confirmed by start-health: 0x00000000
+
+
+=== raw 2026-11-12T06:58:44Z
+RAW 2026-11-12T06:58:47Z
+PROCESSORS logical=16 cores=8
+vram length 0x200000000, table offset 0x1FFFEC000
+LOG:
+   710     11.612 smu metrics: telemetry no fresh table s5 fail3 reject 3 why 6 sp00000000 m67 0
+  1229     16.618 smu metrics: telemetry no fresh table s5 fail3 reject 3 why 6 sp00000000 m67 0
+  1262     21.644 smu metrics: telemetry no fresh table s5 fail3 reject 3 why 6 sp00000000 m67 0
+  1275     26.666 smu metrics: telemetry no fresh table s5 fail3 reject 3 why 6 sp00000000 m67 0
+  1311     31.681 smu metrics: telemetry no fresh table s5 fail3 reject 3 why 6 sp00000000 m67 0
+  1329     36.709 smu metrics: telemetry no fresh table s5 fail3 reject 3 why 6 sp00000000 m67 0
+  1343     41.727 smu metrics: telemetry no fresh table s5 fail3 reject 3 why 6 sp00000000 m67 0
+  1356     46.754 smu metrics: telemetry no fresh table s5 fail3 reject 3 why 6 sp00000000 m67 0
+smu metrics: bad table, 0 tables, 3 failures
+PASS 1 words(le32): 05780578 05780578 05780578 05780578 00000125 00000197 00000066 00000068 00000068 00000068 000000E3 162B16C1 05780578 165D16DA 004D002B 00240045 00240024 181F0025 000004E6 01C20457 00000326 00000338 0000108B 0000522F 00000D56 000043CD 0000B675 1644168F 00000000 05780578 05780578 05780578 0035C480 00000004 00000004 00000004 00000004 00000004 0007615F 00122CEF 15F91676 0C820C7A 163116BF 00020004 00020002 00020002 0AD30002 000004E6 01C20457 00000326 00000332 000004D9 00004FA7 00000470 00004113 0000AB2C 15F8166C 00000000 1C6FD2FC 1DEFF7A2 000003EF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF
+PASS 2 words(le32): 05780578 05780578 05780578 05780578 00000125 00000197 00000066 00000068 00000068 00000068 000000E3 162B16C1 05780578 165D16DA 004D002B 00240045 00240024 181F0025 000004E6 01C20457 00000326 00000338 0000108B 0000522F 00000D56 000043CD 0000B675 1644168F 00000000 05780578 05780578 05780578 0035C480 00000004 00000004 00000004 00000004 00000004 0007615F 00122CEF 15F91676 0C820C7A 163116BF 00020004 00020002 00020002 0AD30002 000004E6 01C20457 00000326 00000332 000004D9 00004FA7 00000470 00004113 0000AB2C 15F8166C 00000000 1C6FD2FC 1DEFF7A2 000003EF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF
+=== end 2026-11-12T06:58:54Z

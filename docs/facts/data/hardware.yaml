@@ -952,6 +952,24 @@ facts:
     status_text: "HYPOTHESIS (one external report on one board, not our measurement; L52 asks for our reading)"
     detail: "Source: the dropped linux-crypto series \"crypto: ccp - two PSP init fixes, and the AMD BC-250\" against Linux 7.2.6, with the register values its author read from his board. The offsets are the patch's `pspv_bc250` fields in the ccp driver, not GPU BAR5 registers, so `tools/regcalc` does not cover them. Upstream Linux 7.2 does not match 1022:143e in `sp_pci_table[]`, so stock Linux leaves the function unbound"
     evidence: "[README](../evidence/windows/2026-11-03-psp-143e/README.md)"
+  - id: M961
+    status: MEASURED
+    date: "2026-11-12"
+    claim: "On unit A with the stock BIOS P5.00, SMU queue 3 message 0x98 (`BC250_CPU_MSG_STORE_FF`) with the argument SMN 0x0115A870 (`BC250_CPU_SMN_CORE_ENABLE_MASK`), sent from the Windows KMD, enables the two CPU cores that the part is sold without: after one warm restart of Windows the system has 16 logical processors and 8 cores, where it had 12 and 6. A cold boot gives 6 cores back, so the message must go out again in each boot, and the cores arrive at the warm restart after it"
+    status_text: "MEASURED (unit A, Windows 11 22631, n = 3 unlocks, one board; no per-core verifying load)"
+    detail: "The three unlocks used candidate KMDs 5A94C807, 707E9DC4 and 6A2B18AA of the branch t39/bd368-core-unlock-0x98. The firmware answered each send with status 1. In one arm the message went out in a cold-booted start and the count in that start stayed at 12, because Windows fixes the processor count before the driver starts. A 60 s load on 16 threads held Tctl at 87.4 C to 87.5 C with 0 WHEA events; that load does not check results per core. The shutdown from the 8-core state took 148 s and more than 150 s in two arms and 37 s in a third; the cause is not known"
+    evidence: "[Core unlock arms](../evidence/windows/2026-11-12-core-unlock/README.md)"
+    edges:
+      - {"type": "uses", "to": "M817"}
+  - id: M962
+    status: MEASURED
+    date: "2026-11-12"
+    claim: "On unit A with the stock BIOS P5.00, SMU queue 0 message 0x2C (SetCoreEnableMask) is accepted and does not change the processor count in either direction: with 0xFF and a warm restart the system kept 12 logical processors, and with 0x77 in the 8-core state and a warm restart it kept 16. The way from 8 cores back to 6 is a power-off: after a shutdown and an AC cycle the system had 12 logical processors"
+    status_text: "MEASURED (unit A, Windows 11 22631; 0xFF n = 3, 0x77 n = 1, power-off n = 2)"
+    detail: "The 0xFF samples: the tester.38 release KMD 5C97A127 once and the candidate D71CF9B2 twice, status 0 each time. The 0x77 sample: candidate 6A2B18AA with 16 logical processors before and after. Why the firmware accepts the message without an effect is not measured"
+    evidence: "[Core unlock arms](../evidence/windows/2026-11-12-core-unlock/README.md)"
+    edges:
+      - {"type": "uses", "to": "M961"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"
