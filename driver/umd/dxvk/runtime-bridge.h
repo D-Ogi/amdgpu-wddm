@@ -11,11 +11,15 @@
 #include "adapter-presence.h"
 #include <atomic>
 namespace bc250::umd {
+class EngineMemoryLog;
 struct RuntimeDevice {
     RuntimeDomain domain;
     // BD-327: the engine's pipeline workers of this device (engine-worker-gate.h). The engine's Services.Shell is
     // this object, so that its WorkerScope service finds the gate.
     EngineWorkerGate workers;
+    // BD-373: the UMD logging of the engine's resources (engine-memory-log.h), owned by the device owner, for the
+    // ResolveMemory and MemoryEvents services; null without engine ABI 1.8.
+    EngineMemoryLog *memory_log = nullptr;
     HANDLE hDevice = nullptr;
     HANDLE present_context = nullptr;
     D3D10DDI_HRTCORELAYER hRTCoreLayer = {};

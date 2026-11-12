@@ -10,6 +10,7 @@
 #include "../app-settings/app-settings.h"
 #include "scanout-primary.h"
 #include "engine-memory-allocation.h"
+#include "engine-memory-log.h"
 #include <memory>
 #include <vector>
 namespace bc250::umd {
@@ -65,6 +66,10 @@ public:
     HRESULT ensure_paging_queue();
     // BD-309: the offer path of engine-private resources (initialize fills it). The DXGI resource tests set it.
     EngineOfferPath &offer_path() { return offer_path_; }
+#if BC250_DXVK_ENGINE_ABI_MINOR>=8
+    // BD-373: the UMD logging of the engine's resources; inactive with an engine below ABI 1.8.
+    EngineMemoryLog &memory_log() { return memory_log_; }
+#endif
     // BD-065: the B8G8R8A8 shadows of windowed Blt presents. Their surfaces are owned by surfaces_.
     PresentShadows &present_shadows() { return present_shadows_; }
     // The per-application FrameRateLimit of this device's presents (docs/design/per-app-graphics-settings.md).
@@ -112,6 +117,9 @@ private:
     EngineSession session_;
     IBc250DxvkDevice4 *engine4_=nullptr;
     EngineOfferPath offer_path_{};
+#if BC250_DXVK_ENGINE_ABI_MINOR>=8
+    EngineMemoryLog memory_log_;
+#endif
     ID3D11Device5 *device_=nullptr;
     ID3D11DeviceContext4 *context_=nullptr;
     HMODULE modules_[3]{};

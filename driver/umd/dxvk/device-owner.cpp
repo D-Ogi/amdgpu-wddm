@@ -11,6 +11,18 @@ void APIENTRY engine_worker_scope(void *shell,BOOL enter) {
     EngineWorkerGate::bind(enter && shell ? &static_cast<RuntimeDevice *>(shell)->workers : nullptr);
 }
 #endif
+#if BC250_DXVK_ENGINE_ABI_MINOR>=8
+// BD-373, engine ABI 1.8: Services.ResolveMemory and Services.MemoryEvents. shell is the RuntimeDevice of this owner.
+UINT64 APIENTRY engine_resolve_memory(void *shell,VkDeviceMemory memory,UINT64 *bytes) {
+    const EngineMemoryLog *log=shell ? static_cast<RuntimeDevice *>(shell)->memory_log : nullptr;
+    if (!log) { if (bytes) *bytes=0; return 0; }
+    return log->resolve(memory,bytes);
+}
+void APIENTRY engine_memory_events(void *shell,const BC250_DXVK_MEMORY_EVENT *events,UINT32 count) {
+    const EngineMemoryLog *log=shell ? static_cast<RuntimeDevice *>(shell)->memory_log : nullptr;
+    if (log) log->events(events,count);
+}
+#endif
 }
 HRESULT DeviceOwner::retain_code_modules(const void *engineEntry,const void *icdEntry) {
     if (!runtime_.domain.entered() || retained_module_count()) return E_UNEXPECTED;
@@ -72,6 +84,11 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
 #if BC250_DXVK_ENGINE_ABI_MINOR>=7
     own.WorkerScope=engine_worker_scope;
 #endif
+#if BC250_DXVK_ENGINE_ABI_MINOR>=8
+    own.ResolveMemory=engine_resolve_memory;
+    own.MemoryEvents=engine_memory_events;
+    runtime_.memory_log=&memory_log_;
+#endif
     if (SUCCEEDED(hr)) { step_="session"; hr=session_.open(funcs,instance_.info(),level,own); }
     if (SUCCEEDED(hr)) {
         step_="engine";
@@ -85,6 +102,16 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
             offer_path_.engine=engine5;
         offer_path_.query=reinterpret_cast<PFN_bc250GetMemoryAllocation>(get(VK_NULL_HANDLE,kMemoryAllocationQueryName));
         offer_path_.device=session_.device();
+#if BC250_DXVK_ENGINE_ABI_MINOR>=8
+        // BD-373: optional. An engine below ABI 1.8 has no IBc250DxvkDevice6, and its resources are not logged; a
+        // process without the provider's log (no memory for it) logs nothing either.
+        IBc250DxvkDevice6 *engine6=nullptr;
+        if (SUCCEEDED(session_.engine()->QueryInterface(__uuidof(IBc250DxvkDevice6),reinterpret_cast<void **>(&engine6)))) {
+            memory_log_.bind(offer_path_.query,offer_path_.device);
+            memory_log_.start(engine6,etw::process_allocation_log());
+            engine6->Release();
+        }
+#endif
     }
     if (SUCCEEDED(hr)) {
         hr=session_.engine()->GetD3D11Device(__uuidof(ID3D11Device5),reinterpret_cast<void **>(&device_));
@@ -245,6 +272,11 @@ HRESULT DeviceOwner::close() {
     if (context_) { context_->Release(); context_=nullptr; }
     if (device_) { device_->Release(); device_=nullptr; }
     if (engine4_) { engine4_->Release(); engine4_=nullptr; }
+#if BC250_DXVK_ENGINE_ABI_MINOR>=8
+    // BD-373: out of the process log's reporters before the engine's final Release (IBc250DxvkDevice6).
+    memory_log_.stop();
+    memory_log_.bind(nullptr,VK_NULL_HANDLE);
+#endif
     if (offer_path_.engine) offer_path_.engine->Release();
     offer_path_={};
     step_="close-session";

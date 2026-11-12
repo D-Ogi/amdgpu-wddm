@@ -553,20 +553,31 @@ descriptors and the same six-field payload, and its host test compiles the heade
   creates, and a resource that OpenResource opens. Each maps its whole kernel allocation (the `D3DKMT_HANDLE`) at
   offset 0, with the size of the allocation. `hD3DAllocation` is the hResource of the DDI, which is the
   `DdiResource` address. A rotation moves each mapping to the allocation that the buffer holds after it.
-- `AllocationLog::replace` is the seam for memory that the engine owns: a move, a pack (`usage::packed`) or a
-  rename (`usage::renamed`) is one change, all unmaps first. A resource that has a mapping always can move.
-  Engine-private resources are not logged yet (BD-373, second step). The Present shadow of BD-210 is driver
-  memory that is not logged yet.
+- `AllocationLog::replace` moves the mappings of a resource as one change, all unmaps first. A resource that has a
+  mapping always can move.
+- The memory of the engine's own resources is not in the table. A Map with DISCARD gives a buffer new memory, and
+  an application can do that thousands of times in each frame. The engine (ABI 1.8, `IBc250DxvkDevice6`) keeps the
+  memory of each resource that the shell tracks, and it writes events only when a session is on (`engine-memory-log.h`).
+  CreateResource of an engine resource starts the tracking, with the hResource as the cookie. DestroyResource ends
+  it before the release. For the kernel allocation of its memory, the engine calls `ResolveMemory`, which asks the
+  ICD (`bc250GetMemoryAllocation`, BD-309). Its events come through `MemoryEvents` to `write_external`. The log
+  calls each engine (`MemoryReporter`) at an enable change and after its own rundown. A range that is not a whole
+  allocation is `usage::packed`. The storage of a Map with DISCARD is `usage::renamed`. When no session is on, a
+  rename of a tracked buffer costs about 11 ns more than an untracked one, of 70 ns for Map and Unmap (x64 engine
+  host test on the development PC, 2026-11-12). It takes no lock and makes no kernel call and no shell call.
+  An engine before 1.8 has no `IBc250DxvkDevice6`, and the shell then logs no engine resource. The staging and
+  upload memory of the engine and the Present shadow of BD-210 are driver memory that is not logged yet.
 
 ```powershell
-& .\\bc250-win\\tools\\build\\test-umd-etw.ps1
+& .\\bc250-win\\tools\\build\\test-umd-etw.ps1 -DxvkSource <DXVK fork tree>
 ```
 
 The host test uses a recording ETW sink. It checks the descriptor and payload of each event, rundown content and
 order, the order of the unmaps and maps of a rotation, one registration for each log, a failed registration, a
-session that is enabled before registration, unload with live mappings, a destroy without a create, and
-concurrent changes during rundowns. `ddi-draw-test` checks the rotation call site. The lab has not yet confirmed
-the events in a real trace.
+session that is enabled before registration, unload with live mappings, a destroy without a create, concurrent
+changes during rundowns, and the calls to a reporter. With `-DxvkSource` it also checks the conversion of engine
+events and the ICD query. `ddi-draw-test` checks the rotation call site. The engine's host test checks the engine
+half. The lab has not yet confirmed the events in a real trace.
 
 ## Video DDIs (BD-223)
 

@@ -41,6 +41,16 @@ void scanout_primary_note(const ScanoutPrimaryDecision &decision,const ScanoutSo
         left==1 ? " budget-spent" : "");
     OutputDebugStringA(text);
 }
+// UMD logging of a resource whose memory the engine owns (BD-373, engine ABI 1.8): the engine keeps its memory and
+// writes its events (engine-memory-log.h), with the hResource as the cookie, as the shell's own table has it. Cookie
+// 0 ends tracking, before the last release. Logging is optional: a failure leaves the resource complete.
+void track_engine_memory(DeviceOwner &owner,const DdiResource &s,bool track) noexcept {
+#if BC250_DXVK_ENGINE_ABI_MINOR>=8
+    if (s.object) (void)owner.memory_log().track(s.object,track ? umd_etw_resource(s) : 0);
+#else
+    (void)owner; (void)s; (void)track;
+#endif
+}
 }
 HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &s,ResourceDescription &out) {
     // Shared/primary ownership belongs to the runtime allocation/import path.
@@ -436,7 +446,7 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
             // The engine refuses a format or a flag combination it cannot build with E_INVALIDARG (BD-330).
             report_ddi_error(owner,create_refusal(*desc,hr),DdiErrorClass::unsupported);
         } else if (!s->object) report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::unsupported);
-        else s->dimension=d.dimension;
+        else { s->dimension=d.dimension; track_engine_memory(owner,*s,true); }
     },DdiErrorClass::unsupported);
 }
 SIZE_T APIENTRY opened_size(D3D10DDI_HDEVICE,const D3D10DDIARG_OPENRESOURCE *) { return sizeof(DdiResource); }
@@ -510,7 +520,10 @@ void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle) {
             // unfinished cleanup independently of this DDI handle.
             *s={};
             if (ddi_device_status(hr)==D3DDDIERR_DEVICEREMOVED) report_ddi_error(owner,hr);
-        } else if (s && s->object) { s->object->Release(); *s={}; }
+        } else if (s && s->object) {
+            track_engine_memory(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,*s,false);
+            s->object->Release(); *s={};
+        }
     });
 }
 }
