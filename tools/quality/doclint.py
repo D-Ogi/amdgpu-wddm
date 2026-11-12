@@ -12,8 +12,9 @@ The rules are in `docs/style.md`. Two sources of findings:
   - the project rules of this file: no em dash or en dash in prose, and no spelling that
     `docs/glossary.yaml` names under `instead_of`. One term, one meaning.
 
-The gate is a ratchet, not a rewrite order. `doclint_baseline.txt` records the count each
-document had when the gate landed. The gate fails when
+The gate is a ratchet. `doclint_baseline.txt` records the count each document had when the gate
+landed, and it is a list of debt to pay (BD-375), not a permitted state: a change to a document
+with a baseline line brings that document to zero (docs/style.md). The gate fails when
 
   - a document in the baseline has more findings than its line allows, or
   - a document outside the baseline has any finding at all (a new document starts clean).

@@ -53,18 +53,24 @@ twice, and a reader cannot tell whether the second one is a third step.
 ## The gate
 
 `tools/quality/doclint.py` runs in `tools/quality/quick.ps1` and in CI. It reads `README.md`,
-everything under `docs/`, and every Markdown file under `driver/` and `tools/`.
+everything under `docs/` except `docs/archive/`, and every Markdown file under `driver/` and `tools/`.
 
-The gate is a ratchet, and not an order to rewrite anything.
-`tools/quality/doclint_baseline.txt` records the findings each document had on 2026-10-07. A
-document in that file must not get worse. A document outside it must have no finding at all.
+`tools/quality/doclint_baseline.txt` records the findings each document had on 2026-10-07. The rules
+of the gate:
+
+- No document may get worse.
+- A new document starts clean: a document outside the baseline must have no finding at all.
+- A change to a document that has baseline findings brings that document to zero findings in the
+  same work.
+- The baseline is a list of debt to pay (BD-375). It is not a permitted state.
+- The records under `docs/archive/` are outside the gate. A baseline line for one of them is an
+  error (see `docs/archive/README.md`).
+
+The commands:
 
 - `python tools/quality/doclint.py` is the gate.
 - `python tools/quality/doclint.py --files docs/build.md` reads the named documents.
-- `python tools/quality/doclint.py --prune` lowers a baseline line after a document improves.
-
-No document has to be rewritten for this gate. A document that is edited for another reason
-should come out lower than its line, and `--prune` then writes the lower number.
+- `python tools/quality/doclint.py --prune` lowers or deletes a baseline line after a document improves.
 
 The rule engine is `tools/quality/third_party/ste_lint.py`, a vendored MIT linter with its
 provenance beside it. Its advisory findings, passive voice and compound tense, are printed and

@@ -99,7 +99,8 @@ try {
  # counts next to it, and a rate normalised to another clock must say which numbers the model made.
  Check 'claim-shares' { & python "$repo\tools\quality\claim_shares.py" --root $repo --out "$Out\claim-shares" }
  # The documentation style ratchet of docs/style.md: a document in tools\quality\doclint_baseline.txt
- # must not get worse, and a document outside it must be clean. It never asks for a rewrite.
+ # must not get worse, and a document outside it must be clean. The baseline is debt to pay (BD-375):
+ # a change to a document with a baseline line brings that document to zero. docs\archive is outside the gate.
  Check 'doclint' { & python "$repo\tools\quality\doclint.py" --root $repo --out "$Out\doclint" }
  # Status maps and release tool controls run in Full (required by build-release.ps1), not KmdPackage.
  Check 'status-map' { & python "$repo\tools\quality\kmd_status_profile.py" --repo $repo --profile $Profile --kits $Kits --out "$Out\status-map"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\docs" -p 'test_*.py' } }
