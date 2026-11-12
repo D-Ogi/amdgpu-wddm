@@ -740,7 +740,9 @@ graphics.cpu.cores.title|mt|22777135|Núcleos del procesador
 graphics.cpu.cores.6|mt|00842292|6 núcleos (estándar)
 graphics.cpu.cores.8|mt|b977c4a8|8 núcleos
 graphics.cpu.cores.apply|mt|1797bc97|Usar este número de núcleos
-graphics.cpu.cores.note|mt|39ab5add|La placa viene con seis de sus ocho núcleos activados. Ocho núcleos requieren un reinicio de Windows, y nadie probó los otros dos en esta placa.
+graphics.cpu.cores.note|mt|c45ff674|La placa viene con seis de sus ocho núcleos activados. Los ocho núcleos se activan tras un reinicio de Windows. Después de un apagado completo, el controlador los activa de nuevo y hace falta un reinicio más. Los seis núcleos solo vuelven tras un apagado completo.
+graphics.cpu.cores.wait-restart|mt|86263c3f|Hay 8 núcleos guardados. Reinicie Windows para activarlos. Use Reiniciar, no Apagar.
+graphics.cpu.cores.wait-poweroff|mt|679c778c|Hay 6 núcleos guardados. Apague el equipo y enciéndalo de nuevo para volver a ellos. Un reinicio mantiene 8 núcleos.
 tuner.curve.delta.line|mt-safe|fe6d3468|estándar
 tuner.curve.delta.under|mt|513a58af|{0} mV menos
 tuner.curve.delta.over|mt|90207f8b|{0} mV más
@@ -818,7 +820,7 @@ tuner.refuse.curve-not-applied|mt|28020c45|El controlador todavía no usó la co
 tuner.curve.preview.standard|mt|0c38511f|el voltaje estándar vuelve en cada velocidad
 tuner.note.curve-risk|mt|28bb65b2|Menos voltaje hace que el chip gráfico esté más frío y silencioso a la misma velocidad. Si es demasiado bajo, se nota porque un juego o la pantalla se congelan, no con un mensaje, y la configuración se revierte sola al terminar la prueba.
 tuner.note.cpu-risk|mt|0e0c4e70|Estos valores del procesador provienen de placas de otras personas. Una velocidad demasiado alta o un voltaje demasiado bajo se nota porque el equipo se congela. La aplicación solo reduce el voltaje y lo vuelve a leer después de cada cambio.
-tuner.note.cores-risk|mt|8be50b28|Ocho núcleos generan más calor y consumen más energía que seis. Nadie ha probado los otros dos núcleos en esta placa.
+tuner.note.cores-risk|mt|9540b34f|Ocho núcleos generan más calor y consumen más energía que seis. Los otros dos núcleos se han probado en una sola placa.
 
 # ---- case fan control (docs/design/fan.md Part B) ----
 perf.fan.title|mt|5c8d61f3|Ventilador del gabinete

@@ -391,7 +391,11 @@ namespace AmdgpuWddmControl
             r8.CheckedChanged += (s, e) => { if (r8.Checked) { _coresEdit = CpuTuning.FullCores; ShowPage(_page, null, false); } };
             card.Add(Ui.WrapRow(card.Inner, r6, r8, Explain("cpu-cores", Strings.T("graphics.cpu.cores.title"))));
             card.Add(Ui.Dim(Strings.T("graphics.cpu.cores.note"), card.Inner));
-            if (u.Has(CpuState.FlagCorePending)) card.Add(Ui.Label(Strings.T("cu.choice.after-restart"), null, Theme.Warn, card.Inner));
+            // The reset a stored count waits for (BD-368). CoreMask is the count that runs, read from the processors
+            // of this boot. Eight cores come up at a restart; six return only at a power-off, where the firmware
+            // starts from its own six.
+            string wait = CpuTuning.CoresWaitKey(u.CoreMask, u.CoreMaskStored);
+            if (wait != null) card.Add(Ui.Label(Strings.T(wait), null, Theme.Warn, card.Inner));
             var use = Ui.Button(Strings.T("graphics.cpu.cores.apply"), (s, e) => RunAction("core-mask", new Recovery.PlanArgs { Cores = chosen }));
             use.Enabled = chosen != CpuTuning.CoresFor(stored);
             card.Add(Ui.WrapRow(card.Inner, use));

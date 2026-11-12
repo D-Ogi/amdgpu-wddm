@@ -723,7 +723,9 @@ graphics.cpu.cores.title|mt|22777135|プロセッサコア
 graphics.cpu.cores.6|mt|00842292|6 コア（標準）
 graphics.cpu.cores.8|mt|b977c4a8|8 コア
 graphics.cpu.cores.apply|mt|1797bc97|このコア数を使う
-graphics.cpu.cores.note|mt|39ab5add|このボードは 8 コアのうち 6 コアが有効な状態で出荷されます。8 コアには Windows の再起動が必要で、残りの 2 コアをこのボードで試した人はいません。
+graphics.cpu.cores.note|mt|c45ff674|このボードは 8 コアのうち 6 コアが有効な状態で出荷されます。8 コアは Windows の再起動後に有効になります。電源を完全に切った後は、ドライバーが再び有効にし、もう一度再起動が必要です。6 コアに戻るのは電源を完全に切った後だけです。
+graphics.cpu.cores.wait-restart|mt|86263c3f|8 コアが保存されています。有効にするには Windows を再起動してください。「シャットダウン」ではなく「再起動」を使ってください。
+graphics.cpu.cores.wait-poweroff|mt|679c778c|6 コアが保存されています。戻すには、シャットダウンしてからもう一度起動してください。再起動では 8 コアのままです。
 tuner.curve.delta.line|mt|fe6d3468|標準
 tuner.curve.delta.under|mt|513a58af|{0} mV 低い
 tuner.curve.delta.over|mt|90207f8b|{0} mV 高い
@@ -801,7 +803,7 @@ tuner.refuse.curve-not-applied|mt|28020c45|ドライバーはまだテスト中�
 tuner.curve.preview.standard|mt|0c38511f|すべての速度で標準の電圧に戻ります
 tuner.note.curve-risk|mt|28bb65b2|電圧を下げると、同じ速度でもグラフィックスチップの温度が下がり静かになります。下げすぎるとメッセージではなくゲームや画面のフリーズとして現れ、テストが終わると設定は自動的に戻ります。
 tuner.note.cpu-risk|mt|0e0c4e70|これらのプロセッサーの数値は他の人のボードから得られたものです。速度が高すぎたり電圧が低すぎたりすると、コンピューターのフリーズとして現れます。アプリは電圧を下げるだけで、変更のたびに読み戻します。
-tuner.note.cores-risk|mt|8be50b28|8 コアは 6 コアより発熱が多く、消費電力も大きくなります。このボードで残りの 2 コアを試した人はいません。
+tuner.note.cores-risk|mt|9540b34f|8 コアは 6 コアより発熱が多く、消費電力も大きくなります。残りの 2 コアは 1 枚のボードでのみ試験されています。
 
 # ---- case fan control (docs/design/fan.md Part B) ----
 perf.fan.title|mt|5c8d61f3|ケース ファン

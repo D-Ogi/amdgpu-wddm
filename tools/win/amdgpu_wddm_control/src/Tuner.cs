@@ -220,6 +220,16 @@ namespace AmdgpuWddmControl
         public static uint MaskFor(uint cores) { return cores == FullCores ? MaskFull : MaskStock; }
         public static uint CoresFor(uint mask) { return mask == MaskFull ? FullCores : StockCores; }
 
+        // The line for a stored count that waits for a reset, or null when the running count is the stored one or is
+        // not known (inForce 0). Eight cores come up at a Windows restart. Six return only at a power-off: no message
+        // gives the firmware its stock mask back, and a cold boot starts from it (BD-368).
+        public static string CoresWaitKey(uint inForce, uint stored)
+        {
+            if (inForce == MaskStock && stored == MaskFull) return "graphics.cpu.cores.wait-restart";
+            if (inForce == MaskFull && stored == MaskStock) return "graphics.cpu.cores.wait-poweroff";
+            return null;
+        }
+
         // The clock choices the window offers: the whole admitted band on the 100 MHz grid, highest first.
         public static uint[] ClockChoices()
         {

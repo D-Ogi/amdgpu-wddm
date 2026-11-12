@@ -723,7 +723,9 @@ graphics.cpu.cores.title|mt|22777135|프로세서 코어
 graphics.cpu.cores.6|mt|00842292|6 코어(표준)
 graphics.cpu.cores.8|mt|b977c4a8|8 코어
 graphics.cpu.cores.apply|mt|1797bc97|이 코어 수 사용
-graphics.cpu.cores.note|mt|39ab5add|이 보드는 8개 코어 중 6개가 켜진 상태로 출하됩니다. 8개 코어는 Windows를 다시 시작해야 하며, 나머지 두 개를 이 보드에서 시험한 사람은 없습니다.
+graphics.cpu.cores.note|mt|c45ff674|이 보드는 8개 코어 중 6개가 켜진 상태로 출하됩니다. 8개 코어는 Windows를 다시 시작하면 켜집니다. 전원을 완전히 끈 뒤에는 드라이버가 다시 켜며 한 번 더 다시 시작해야 합니다. 6개 코어로는 전원을 완전히 끈 뒤에만 돌아갑니다.
+graphics.cpu.cores.wait-restart|mt|86263c3f|8개 코어가 저장되어 있습니다. 켜려면 Windows를 다시 시작하십시오. '시스템 종료'가 아니라 '다시 시작'을 사용하십시오.
+graphics.cpu.cores.wait-poweroff|mt|679c778c|6개 코어가 저장되어 있습니다. 돌아가려면 시스템을 종료한 뒤 다시 켜십시오. 다시 시작하면 8개 코어가 유지됩니다.
 tuner.curve.delta.line|mt|fe6d3468|표준
 tuner.curve.delta.under|mt|513a58af|{0} mV 낮음
 tuner.curve.delta.over|mt|90207f8b|{0} mV 높음
@@ -801,7 +803,7 @@ tuner.refuse.curve-not-applied|mt|28020c45|드라이버가 아직 테스트 중�
 tuner.curve.preview.standard|mt|0c38511f|모든 속도에서 표주 전입으로 돌아갑니다
 tuner.note.curve-risk|mt|28bb65b2|전입을 낮추면 같은 속도에서도 그래픽 칩이 더 시원하고 조용해집니다. 너무 낮으면 메시지가 아니라 게임이나 화면이 멈추는 형태로 나타나며, 테스트가 끝나면 설정은 저절로 돌아갑니다.
 tuner.note.cpu-risk|mt|0e0c4e70|이 프로세서 값은 다른 사람의 부드에서 나왔습니다. 속도가 너무 높거나 전입이 너무 낮으면 코퓨터가 멈추는 형태로 나타납니다. 이 앱은 전입을 낮추기만 하고 변경할 때마다 다시 읽습니다.
-tuner.note.cores-risk|mt|8be50b28|8코어는 6코어보다 열이 많고 전력을 더 많이 사용합니다. 이 부드에서 나머지 두 코어를 시험한 사람은 없습니다.
+tuner.note.cores-risk|mt|9540b34f|8코어는 6코어보다 열이 많고 전력을 더 많이 사용합니다. 나머지 두 코어는 보드 한 대에서만 시험했습니다.
 
 # ---- case fan control (docs/design/fan.md Part B) ----
 perf.fan.title|mt|5c8d61f3|케이스 팬

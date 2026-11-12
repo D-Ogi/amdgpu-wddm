@@ -725,7 +725,9 @@ graphics.cpu.cores.title|rev|22777135|Rdzenie procesora
 graphics.cpu.cores.6|rev|00842292|6 rdzeni (standard)
 graphics.cpu.cores.8|rev|b977c4a8|8 rdzeni
 graphics.cpu.cores.apply|rev|1797bc97|Użyj tej liczby rdzeni
-graphics.cpu.cores.note|rev|39ab5add|Płyta jest dostarczana z włączonymi sześcioma z ośmiu rdzeni. Osiem rdzeni wymaga ponownego uruchomienia systemu Windows, a nikt nie przetestował pozostałych dwóch na tej płycie.
+graphics.cpu.cores.note|mt|c45ff674|Płyta jest dostarczana z włączonymi sześcioma z ośmiu rdzeni. Osiem rdzeni włącza się po ponownym uruchomieniu systemu Windows. Po całkowitym wyłączeniu zasilania sterownik włącza je ponownie i potrzebne jest jeszcze jedno ponowne uruchomienie. Sześć rdzeni wraca dopiero po wyłączeniu zasilania.
+graphics.cpu.cores.wait-restart|mt|86263c3f|Zapisano 8 rdzeni. Uruchom ponownie system Windows, aby je włączyć. Użyj opcji Uruchom ponownie, nie Zamknij.
+graphics.cpu.cores.wait-poweroff|mt|679c778c|Zapisano 6 rdzeni. Zamknij system i włącz komputer ponownie, aby do nich wrócić. Ponowne uruchomienie zostawia 8 rdzeni.
 tuner.curve.delta.line|rev|fe6d3468|standard
 tuner.curve.delta.under|rev|513a58af|{0} mV mniej
 tuner.curve.delta.over|rev|90207f8b|{0} mV więcej
@@ -803,7 +805,7 @@ tuner.refuse.curve-not-applied|rev|28020c45|Sterownik jeszcze nie użył testowa
 tuner.curve.preview.standard|rev|0c38511f|przy każdym taktowaniu wraca standardowe napięcie
 tuner.note.curve-risk|rev|28bb65b2|Mniejsze napięcie sprawia, że układ graficzny jest przy tym samym taktowaniu chłodniejszy i cichszy. Zbyt niskie objawia się zawieszeniem gry lub obrazu, a nie komunikatem; po zakończeniu testu ustawienie wraca samo.
 tuner.note.cpu-risk|rev|0e0c4e70|Te wartości procesora pochodzą z płyt innych osób. Zbyt wysokie taktowanie lub zbyt niskie napięcie objawia się zawieszeniem komputera. Aplikacja tylko obniża napięcie i po każdej zmianie odczytuje je ponownie.
-tuner.note.cores-risk|rev|8be50b28|Osiem rdzeni daje więcej ciepła i pobiera więcej mocy niż sześć. Nikt nie przetestował dwóch dodatkowych rdzeni na tej płycie.
+tuner.note.cores-risk|rev|9540b34f|Osiem rdzeni daje więcej ciepła i pobiera więcej mocy niż sześć. Dwa dodatkowe rdzenie sprawdzono tylko na jednej płycie.
 
 # ---- case fan control (docs/design/fan.md Part B) ----
 perf.fan.title|rev|5c8d61f3|Wentylator obudowy

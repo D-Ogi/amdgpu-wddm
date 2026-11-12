@@ -259,6 +259,10 @@ static partial class UnitTests
         Check(CpuTuning.ValidCores(6) && CpuTuning.ValidCores(8) && !CpuTuning.ValidCores(7), "the two core counts");
         Equal(CpuTuning.MaskFull, CpuTuning.MaskFor(8), "8 cores is the full mask");
         Equal(CpuTuning.StockCores, CpuTuning.CoresFor(CpuTuning.MaskStock), "the stock mask is 6 cores");
+        Equal("graphics.cpu.cores.wait-restart", CpuTuning.CoresWaitKey(CpuTuning.MaskStock, CpuTuning.MaskFull), "8 stored on a 6-core boot waits for a restart");
+        Equal("graphics.cpu.cores.wait-poweroff", CpuTuning.CoresWaitKey(CpuTuning.MaskFull, CpuTuning.MaskStock), "6 stored on an 8-core boot waits for a power-off");
+        Check(CpuTuning.CoresWaitKey(CpuTuning.MaskFull, CpuTuning.MaskFull) == null && CpuTuning.CoresWaitKey(CpuTuning.MaskStock, CpuTuning.MaskStock) == null, "a stored count that runs waits for nothing");
+        Check(CpuTuning.CoresWaitKey(0, CpuTuning.MaskFull) == null && CpuTuning.CoresWaitKey(CpuTuning.MaskStock, 0) == null, "an unknown count gives no line");
         var choices = CpuTuning.ClockChoices();
         Equal(CpuTuning.MaxMHz, choices[0], "the clock list starts at the highest admitted clock");
         Equal(CpuTuning.MinMHz, choices[choices.Length - 1], "the clock list ends at the lowest admitted");

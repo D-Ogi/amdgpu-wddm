@@ -264,8 +264,8 @@ namespace AmdgpuWddmControl
                         return No(p, "That core count is chosen already.", "tuner.refuse.cpu-cores-already");
                     p.Change = "the processor is asked for " + CpuTuning.CoresFor(request.CoreMask) + " cores";
                     p.Preview.Add(Strings.T(request.CoreMask == CpuTuning.MaskFull ? "graphics.cpu.cores.8" : "graphics.cpu.cores.6"));
-                    p.Notes.Add("The two extra cores are untested on this board. If Windows does not reach the desktop, "
-                        + "the driver puts the stock count back at the next start.");
+                    p.Notes.Add("The two extra cores were measured on one board only. If Windows does not reach the desktop, "
+                        + "power the computer off and on: it starts with six cores, and the driver stores the stock count.");
                     if (request.CoreMask == CpuTuning.MaskFull) p.PlainNotes.Add(Strings.T("tuner.note.cores-risk"));
                     p.Effect = "at the next restart of Windows";
                     p.OfferRestart = true;

@@ -741,7 +741,9 @@ graphics.cpu.cores.title|src|-|Processor cores
 graphics.cpu.cores.6|src|-|6 cores (standard)
 graphics.cpu.cores.8|src|-|8 cores
 graphics.cpu.cores.apply|src|-|Use this number of cores
-graphics.cpu.cores.note|src|-|The board ships with six of its eight cores on. Eight cores need a restart of Windows, and nobody has tested the other two on this board.
+graphics.cpu.cores.note|src|-|The board ships with six of its eight cores on. Eight cores come up at a restart of Windows. After a full power-off the driver turns them on again and one more restart brings them up. Six cores return only after a power-off.
+graphics.cpu.cores.wait-restart|src|-|8 cores are stored. Restart Windows to turn them on. Use Restart, not Shut down.
+graphics.cpu.cores.wait-poweroff|src|-|6 cores are stored. Shut the machine down and start it again to return to them. A restart keeps 8 cores.
 tuner.curve.delta.line|src|-|standard
 tuner.curve.delta.under|src|-|{0} mV less
 tuner.curve.delta.over|src|-|{0} mV more
@@ -819,7 +821,7 @@ tuner.refuse.curve-not-applied|src|-|The driver has not used the setting under t
 tuner.curve.preview.standard|src|-|the standard voltage comes back at every speed
 tuner.note.curve-risk|src|-|Less voltage makes the graphics chip cooler and quieter at the same speed. Too little shows up as a game or the screen freezing, not as a message, and the setting goes back by itself when the test ends.
 tuner.note.cpu-risk|src|-|These processor numbers come from other people’s boards. A speed that is too high or a voltage that is too low shows up as the computer freezing. The app only lowers the voltage and reads it back after every change.
-tuner.note.cores-risk|src|-|Eight cores make more heat and use more power than six. Nobody has tested the other two cores on this board.
+tuner.note.cores-risk|src|-|Eight cores make more heat and use more power than six. The other two cores were tested on one board only.
 
 # ---- case fan control (docs/design/fan.md Part B) ----
 perf.fan.title|src|-|Case fan
