@@ -138,6 +138,22 @@ Nothing of this application has run on a board.
 | Can the application write to the EFI System Partition? | not measured |
 | How long does a start take with the unlock row, and with the other rows? | not measured |
 | Does the firmware load an unsigned application with Secure Boot on? | not measured. With Secure Boot on, it should refuse the image and go on with its boot order |
+| Does a Fast Startup session or a hibernated session resume when the processor count changed since it was saved? | not measured. See the next section |
+
+## Hibernation and Fast Startup
+
+Windows saves its kernel session at a hibernation, and with Fast Startup also at each shutdown. The saved session
+holds the processor count of the start that made it. The application runs before the Windows Boot Manager reads
+that session, so two cases need a measurement before the installation on a system that has either feature on:
+
+- The session was saved with 16 logical processors and the next start is cold. The application sends the message
+  and resets, and the resume then finds 16 processors again. A start on which the application does not act (a
+  failed mark, a pressed key, a refused message) resumes that session on 12 processors.
+- The session was saved with 12 logical processors, for example at the shutdown directly after the installation,
+  and the next start comes up with 16.
+
+Until both cases have evidence, the installation steps tell the user to make one restart after the installation
+and not to use hibernation, and the tool's README says so.
 
 ## The installation
 

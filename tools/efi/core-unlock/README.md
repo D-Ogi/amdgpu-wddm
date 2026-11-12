@@ -42,6 +42,12 @@ step 3.
 4. Run `efibootmgr` and record the number of the new entry.
 5. Make sure that the new entry is first in `BootOrder` and that the Windows Boot Manager entry stays in it.
 
+6. Start Windows and restart it one time, so that the session Windows keeps for Fast Startup has the same processor
+   count as the next start.
+
+CAUTION: Do not use hibernation while the entry is installed. A resume of a session that was saved with a different
+processor count is not measured (`docs/design/efi-core-unlock.md`, "Hibernation and Fast Startup").
+
 To change the reset method, remove the entry and create it again with the new option.
 
 ## Remove it
