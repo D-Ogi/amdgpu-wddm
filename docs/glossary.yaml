@@ -15,6 +15,11 @@
 #     - term: <the word>
 #       means: "<one sentence, the single meaning>"
 #       instead_of: ["<banned spelling>", ...]        # optional
+#       names: ["<fixed spelling>", ...]               # optional
+#
+# A `names` spelling is the fixed name of a technical thing. doclint.py does not apply the
+# word rules to the words inside it (exact case, prose only). Use it when a name contains a
+# word that is also a plain verb, never to silence a finding in ordinary prose.
 #
 # Add a term when the same thing gets a second name in review. Keep the list short enough
 # that a reader finishes it.
@@ -68,3 +73,18 @@ terms:
   - term: and the rest
     means: "Name the items, or say how many there are. A list that trails off tells nobody what is in it."
     instead_of: ["etc."]
+  - term: read-modify-write
+    means: "A register access that reads the value, changes some bits and writes the value back."
+    names: ["read-modify-write", "read-modify-writes"]
+  - term: halt
+    means: "The state of a CP, MEC or SDMA engine in which its halt bit is set and it runs no microcode."
+    names: ["halt", "halts", "halted", "halting", "Halt", "HALT"]
+  - term: display-only
+    means: "A WDDM driver that implements only the display half, with no rendering DDI."
+    names: ["display-only"]
+  - term: CONFIRMED
+    means: "The status of a fact in the facts graph that a second, independent measurement supports."
+    names: ["CONFIRMED"]
+  - term: CP fetch
+    means: "The read of the next command words from a ring or an indirect buffer by the command processor."
+    names: ["CP fetch"]

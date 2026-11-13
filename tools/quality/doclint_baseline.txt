@@ -16,7 +16,6 @@
 # document has to be rewritten; a document that is touched anyway should come out lower.
 #
 # To look at one document: python tools/quality/doclint.py --files <path>
-1	docs/00-goal-and-roadmap.md
 8	docs/01-evidence-rules.md
 4	docs/02-register-addressing.md
 3	docs/adr/0002-amd-headers-and-code-as-source-of-truth.md
@@ -25,7 +24,7 @@
 3	docs/adr/0005-vulkan-first-user-mode.md
 10	docs/adr/0006-m3-display-only-miniport-first.md
 8	docs/adr/0007-bring-up-through-gated-escapes.md
-18	docs/adr/0008-full-wddm-behind-a-gate-in-stages.md
+17	docs/adr/0008-full-wddm-behind-a-gate-in-stages.md
 6	docs/adr/0009-native-d3d-umd-is-a-goal.md
 4	docs/adr/0010-performance-decisions-before-they-set.md
 5	docs/adr/0011-present-is-a-flip.md
@@ -40,10 +39,10 @@
 5	docs/adr/0020-operator-tuning-in-the-smu-owner.md
 15	docs/d3d12-shared-resources.md
 8	docs/design/adaptive-cpu-gpu.md
-22	docs/design/bc250-open-test-pack.md
+21	docs/design/bc250-open-test-pack.md
 33	docs/design/cu-mode.md
 25	docs/design/d3d12-ddi-engine.md
-2	docs/design/dp-audio.md
+1	docs/design/dp-audio.md
 1	docs/design/dpm.md
 12	docs/design/fan.md
 11	docs/design/gfx-submit-root-serialization.md
@@ -51,7 +50,6 @@
 5	docs/design/hang-detector.md
 4	docs/design/iommu-dma-remapping.md
 14	docs/design/paging-journal.md
-2	docs/design/paging-node.md
 11	docs/design/paging-queue-storage.md
 28	docs/design/recent-launches.md
 14	docs/design/rejected-options.md
@@ -62,12 +60,10 @@
 21	docs/design/startup-clock-ownership.md
 16	docs/design/tuner.md
 13	docs/design/umd-contract-stage-d.md
-14	docs/design/vidpn-flip.md
+13	docs/design/vidpn-flip.md
 3	docs/design/vsync-arm-status.md
 10	docs/design/vsync-diagnostic-samples.md
-2	docs/design/vsync-interrupt-route.md
 20	docs/design/wddm-start-confirmation.md
-2	docs/design/wddm-startup.md
 2	docs/dxvk-engine-commit-map.md
 38	docs/gui/interfaces.md
 19	docs/hardware.md
@@ -81,20 +77,19 @@
 3	docs/testing/release-notes/0.7.204.101-tester.11.md
 3	docs/testing/release-notes/0.7.205.100-tester.11.md
 9	driver/README.md
-2	driver/amdgpu-import/PROVENANCE.md
 8	driver/amdgpu-import/README.md
 21	driver/contract/README-winsys.md
 29	driver/contract/README.md
 3	driver/icd/README-rt-node-address.md
 9	driver/icd/README.md
 23	driver/icd/mesa-wddm2-runtime-queues/README.md
-2	driver/kmd/README.md
+1	driver/kmd/README.md
 1	driver/kmd/gfx-copy-provenance.md
 6	driver/kmd/test/ih_consume_test.md
 1	driver/kmd/test/vsync_vector_test.md
-3	driver/shim/README.md
+1	driver/shim/README.md
 6	driver/shim/test/README.md
-26	driver/shim/test/sdma_faults_report.md
+25	driver/shim/test/sdma_faults_report.md
 23	driver/umd/d3d12/README.md
 29	driver/umd/d3d12/engine-ddi/README.md
 30	driver/umd/d3d12/engine-ddi/SLOTS.md
@@ -108,7 +103,7 @@
 4	tools/fwinfo/README.md
 15	tools/packagecheck/README.md
 2	tools/release/README.md
-18	tools/runcompare/README.md
+17	tools/runcompare/README.md
 25	tools/win/README.md
 6	tools/win/amdgpu_wddm_control/README.md
 6	tools/win/amdgpu_wddm_setup/README.md
@@ -125,7 +120,7 @@
 12	tools/win/gpuload/README.md
 27	tools/win/gui-trials/T2.md
 7	tools/win/kd/README.md
-16	tools/win/kmtprobe/README.md
+15	tools/win/kmtprobe/README.md
 5	tools/win/lab-runner/README.md
 8	tools/win/lab-runner/etw/README.md
 20	tools/win/redirblt-probe/README.md

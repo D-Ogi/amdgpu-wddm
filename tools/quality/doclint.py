@@ -66,6 +66,7 @@ def load_glossary(path):
       - term: adapter
         means: "one meaning, in one sentence"
         instead_of: ["graphics card", "video card"]
+        names: ["read-modify-write"]
 
     No pyyaml: the facts graph parses its own data files the same way, and CI installs
     nothing. Anything outside the subset is an error, never a silently ignored line.
@@ -80,10 +81,10 @@ def load_glossary(path):
             continue
         m = re.match(r'^  - term: (.+)$', line)
         if m:
-            term = {'term': m.group(1).strip(), 'means': '', 'instead_of': []}
+            term = {'term': m.group(1).strip(), 'means': '', 'instead_of': [], 'names': []}
             terms.append(term)
             continue
-        m = re.match(r'^    (means|instead_of):(.*)$', line)
+        m = re.match(r'^    (means|instead_of|names):(.*)$', line)
         if not m or term is None:
             raise GlossaryError(f'{where}: not a glossary line: {line[:60]}')
         key, rest = m.group(1), m.group(2).strip()
@@ -96,10 +97,10 @@ def load_glossary(path):
             try:
                 value = json.loads(rest)
             except json.JSONDecodeError as e:
-                raise GlossaryError(f'{where}: instead_of takes a JSON list of strings ({e})')
-            if not isinstance(value, list) or not all(isinstance(v, str) and v for v in value):
-                raise GlossaryError(f'{where}: instead_of takes a JSON list of strings')
-            term['instead_of'] = value
+                raise GlossaryError(f'{where}: {key} takes a JSON list of strings ({e})')
+            if not isinstance(value, list) or not all(isinstance(v, str) and v.strip() for v in value):
+                raise GlossaryError(f'{where}: {key} takes a JSON list of strings')
+            term[key] = value
     for term in terms:
         if not term['means']:
             raise GlossaryError(f'{path}: term {term["term"]!r} has no means')
@@ -118,6 +119,53 @@ def glossary_rules(terms):
                                  + r'(?!\w)', re.I)
             rules.append((pattern, spelling, term['term']))
     return rules
+
+
+def name_pattern(terms):
+    """One pattern for every `names` spelling of the glossary, longest first, or None.
+
+    A name is the fixed spelling of a technical thing: read-modify-write, the halt state of an
+    engine, the fact status CONFIRMED. The words inside it are not the writer's choice, so the
+    word rules (one verb for one action) must not read them. The match is exact in case.
+    """
+    names = sorted({n for term in terms for n in term['names']}, key=lambda n: (-len(n), n))
+    if not names:
+        return None
+    return re.compile(r'(?<!\w)(?:' + '|'.join(r'\s+'.join(re.escape(w) for w in n.split())
+                                                  for n in names) + r')(?!\w)')
+
+
+def mask_names(text, pattern):
+    """The text with every glossary name blanked to the letter x, columns and lines kept.
+
+    Only prose is touched: a code fence and an inline code span are operands already. Each
+    letter becomes x (X for a capital), so a name stays one word of the same length for the
+    sentence-length rule and for the columns of every other finding.
+    """
+    if pattern is None:
+        return text
+
+    def blank(m):
+        return re.sub(r'[^\W\d_]', lambda c: 'X' if c.group(0).isupper() else 'x', m.group(0))
+
+    out = []
+    in_fence = False
+    for raw_line in text.split('\n'):
+        if ste_lint.CODE_FENCE.match(raw_line.strip()):
+            in_fence = not in_fence
+            out.append(raw_line)
+            continue
+        if in_fence:
+            out.append(raw_line)
+            continue
+        parts, at = [], 0
+        for code in ste_lint.INLINE_CODE.finditer(raw_line):
+            parts.append(pattern.sub(blank, raw_line[at:code.start()]))
+            parts.append(code.group(0))
+            at = code.end()
+        parts.append(pattern.sub(blank, raw_line[at:]))
+        out.append(''.join(parts))
+    return '\n'.join(out)
 
 
 # ------------------------------------------------------------------ project findings
@@ -156,9 +204,9 @@ def project_findings(text, filename, rules):
     return findings
 
 
-def findings_for(path, rules, filename=None):
+def findings_for(path, rules, filename=None, names=None):
     """Every hard finding of one document, in document order."""
-    text = path.read_text(encoding='utf-8')
+    text = mask_names(path.read_text(encoding='utf-8'), names)
     name = filename if filename is not None else str(path)
     hard, _ = ste_lint.lint(text, name)
     hard = [f for f in hard if f['level'] == 'advisory-free']
@@ -247,20 +295,22 @@ def main(argv=None):
     root = pathlib.Path(args.root).resolve()
     baseline_path = pathlib.Path(args.baseline) if args.baseline else root / BASELINE
     glossary_path = pathlib.Path(args.glossary) if args.glossary else root / GLOSSARY
-    rules = glossary_rules(load_glossary(glossary_path))
+    terms = load_glossary(glossary_path)
+    rules = glossary_rules(terms)
+    names = name_pattern(terms)
 
     if args.files:
         bad = 0
         for name in args.files:
             path = pathlib.Path(name)
-            found = findings_for(path, rules, filename=path.as_posix())
+            found = findings_for(path, rules, filename=path.as_posix(), names=names)
             for f in found:
                 print(f'{f["file"]}:{f["line"]}:{f["col"]} {f["rule"]}: {f["message"]} [{f["match"]}]')
             print(f'{path.as_posix()}: {len(found)} findings')
             bad += len(found)
         return 1 if bad else 0
 
-    counts = {name: len(findings_for(root / name, rules, filename=name))
+    counts = {name: len(findings_for(root / name, rules, filename=name, names=names))
               for name in in_scope(root)}
 
     if args.list:
@@ -308,7 +358,7 @@ def main(argv=None):
             print(f'FAIL {name}: {count} findings, {allowed} allowed')
         print()
         for name in [n for n, _ in new] + [n for n, _, _ in worse]:
-            for f in findings_for(root / name, rules, filename=name):
+            for f in findings_for(root / name, rules, filename=name, names=names):
                 print(f'{f["file"]}:{f["line"]}:{f["col"]} {f["rule"]}: {f["message"]} '
                       f'[{f["match"]}]')
         print('\ndocs/style.md states the rules. The baseline never rises: fix the text.')

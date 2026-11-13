@@ -191,6 +191,35 @@ class DocLintGate(unittest.TestCase):
             code, text = t.run()
             self.assertEqual(code, 0, text)
 
+    def test_glossary_name_is_not_read_by_the_word_rules(self):
+        names = ('  - term: read-modify-write\n    means: "A register access."\n'
+                 '    names: ["read-modify-write"]\n')
+        rotation = 'The driver does a read-modify-write of the register. Then we change the mode.\n'
+        with tree() as t:
+            t.doc('docs/a.md', rotation)
+            code, text = t.run()
+            self.assertEqual(code, 1)
+            self.assertIn('synonym-rotation', text)
+            t.glossary.write_text(GLOSSARY + names, encoding='utf-8')
+            code, text = t.run()
+            self.assertEqual(code, 0, text)
+            # The name hides only itself: the same verb in plain prose is still a finding.
+            t.doc('docs/a.md', rotation + 'We modify the value.\n')
+            code, text = t.run()
+            self.assertEqual(code, 1)
+            self.assertIn("[modify]", text)
+            # Exact case, and never inside a longer word.
+            t.doc('docs/a.md', 'We change the mode. A Read-Modify-Write is slow.\n')
+            code, text = t.run()
+            self.assertEqual(code, 1)
+
+    def test_name_masking_keeps_lines_columns_and_code(self):
+        pattern = doclint.name_pattern([{'names': ['CP fetch', 'halt']}])
+        text = 'A CP fetch after the un-halt.\n`halt` stays.\n```\nhalt\n```\nHalting is prose.\n'
+        masked = doclint.mask_names(text, pattern)
+        self.assertEqual(masked, 'A XX xxxxx after the un-xxxx.\n`halt` stays.\n```\nhalt\n```\nHalting is prose.\n')
+        self.assertEqual(doclint.mask_names(text, None), text)
+        self.assertIsNone(doclint.name_pattern([{'names': []}]))
     def test_dash_rule(self):
         with tree() as t:
             t.doc('docs/a.md', 'The fan — the loud one — is off.\n')
