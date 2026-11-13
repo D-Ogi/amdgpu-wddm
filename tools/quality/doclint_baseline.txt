@@ -17,7 +17,6 @@
 #
 # To look at one document: python tools/quality/doclint.py --files <path>
 2	docs/dxvk-engine-commit-map.md
-1	docs/testing/release-notes/0.7.202.100-tester.11.md
 2	docs/testing/release-notes/0.7.203.100-tester.11.md
 2	docs/testing/release-notes/0.7.204.100-tester.11.md
 2	docs/testing/release-notes/0.7.204.101-tester.11.md
