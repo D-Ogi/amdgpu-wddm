@@ -206,6 +206,8 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 		size_t n2 = ar_build_tpm2(&plan, tpm2, sizeof(tpm2));
 		CHECK(n2 == 64u);
 		CHECK(!memcmp(tpm2, "TPM2", 4) && tpm2[8] == 4);
+		/* The OEM table ID is the one the install call checks in the root table list. */
+		CHECK(!memcmp(tpm2 + 16, AR_TPM2_TABLE_ID, 8));
 		CHECK(tpm2[4] == 64 && tpm2[5] == 0 && tpm2[6] == 0 && tpm2[7] == 0);
 		CHECK(tpm2[36] == 0 && tpm2[37] == 0);
 		CHECK(!memcmp(tpm2 + 40, "\x40\x50\x34\x12\x00\x00\x00\x00", 8));

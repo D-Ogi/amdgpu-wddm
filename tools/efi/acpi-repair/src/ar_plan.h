@@ -112,6 +112,7 @@ const char *ar_stub_name(unsigned index);
 #define AR_OEM_ID		"BC250"
 #define AR_IDLE_TABLE_ID	"CPUIDLE"
 #define AR_STUB_TABLE_ID	"AMLSTUB"
+#define AR_TPM2_TABLE_ID	"BC250TPM"
 
 /* The bytes of the table, 0 when the plan does not ask for it or it does not fit in capacity. */
 size_t ar_build_idle(const struct ar_plan *plan, unsigned char *out, size_t capacity);

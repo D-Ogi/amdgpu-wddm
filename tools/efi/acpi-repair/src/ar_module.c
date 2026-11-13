@@ -237,7 +237,7 @@ static void ar_module_run(struct stage *stage)
 		else if (!apply)
 			stage_sayf(stage, AR_NAME, "the TPM2 table of %u bytes passed its check", (unsigned)bytes);
 		else
-			(void)install(stage, installer, buffer, bytes, "the TPM2 table", "TPM2");
+			(void)install(stage, installer, buffer, bytes, "the TPM2 table", AR_TPM2_TABLE_ID);
 	}
 	stage_free(stage, buffer);
 }
