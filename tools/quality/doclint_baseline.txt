@@ -98,7 +98,6 @@
 3	tools/win/gpu-timeline/README.md
 12	tools/win/gpuload/README.md
 7	tools/win/kd/README.md
-15	tools/win/kmtprobe/README.md
 5	tools/win/lab-runner/README.md
 8	tools/win/lab-runner/etw/README.md
 1	tools/win/smartplug/README.md

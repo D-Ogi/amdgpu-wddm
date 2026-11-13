@@ -17,12 +17,12 @@ physical pages, and the `RESULT` line is what tells it where to look.
 | Step | D3DKMT call | KMD DDI |
 |---|---|---|
 | 1 | `EnumAdapters2`, `QueryAdapterInfo(ADAPTERREGISTRYINFO, UMDRIVERNAME)`, `OpenAdapterFromLuid` | none |
-| 2 | `QueryAdapterInfo(QUERY_GPUMMU_CAPS, NODEMETADATA 0, DRIVERVERSION, WDDM_2_0_CAPS)` | `DxgkDdiGetNodeMetadata`; the rest is dxgkrnl answering from our caps |
+| 2 | `QueryAdapterInfo(QUERY_GPUMMU_CAPS, NODEMETADATA 0, DRIVERVERSION, WDDM_2_0_CAPS)` | `DxgkDdiGetNodeMetadata`. The rest is dxgkrnl answering from our caps |
 | 3 | `CreateDevice`, `CreatePagingQueue` | `DxgkDdiCreateDevice` |
 | 4 | `CreateAllocation2` | `DxgkDdiCreateAllocation` |
 | 5 | `ReserveGpuVirtualAddress` (with `--reserve`), `MapGpuVirtualAddress` | `DxgkDdiBuildPagingBuffer` (`UPDATE_PAGE_TABLE`, `FLUSH_TLB`) |
 | 6 | `MakeResident` | `DxgkDdiBuildPagingBuffer` (`TRANSFER`, `FILL`) |
-| 7 | `Lock2`, write, `Unlock2` | none in GpuMmu; needs the allocation marked `CpuVisible` |
+| 7 | `Lock2`, write, `Unlock2` | none in GpuMmu. Needs the allocation marked `CpuVisible` |
 | 9 | `FreeGpuVirtualAddress`, `DestroyAllocation2`, `DestroyPagingQueue`, `DestroyDevice`, `CloseAdapter` | the matching Destroy DDIs |
 
 Exit criterion of stage B: the VA we asked for is the VA we got, and the pattern shows up at the physical
@@ -32,8 +32,8 @@ address the page tables point at. Met in E18 runs 002 and 003 (facts M73, M74).
 
 | # | D3DKMT call | KMD DDI |
 |---|---|---|
-| C1 | `CreateContextVirtual`, node 0, `ClientHint = VULKAN`, `Flags.DisableGpuTimeout = 1` | `DxgkDdiCreateContext` with `Flags.VirtualAddressing`; drags in `CreateProcess`, `GetRootPageTableSize`, `SetRootPageTable` |
-| C2 | `CreateSynchronizationObject2(D3DDDI_MONITORED_FENCE)`, initial value 0 | none; hands back the fence's CPU VA and GPU VA |
+| C1 | `CreateContextVirtual`, node 0, `ClientHint = VULKAN`, `Flags.DisableGpuTimeout = 1` | `DxgkDdiCreateContext` with `Flags.VirtualAddressing`. Drags in `CreateProcess`, `GetRootPageTableSize`, `SetRootPageTable` |
+| C2 | `CreateSynchronizationObject2(D3DDDI_MONITORED_FENCE)`, initial value 0 | none. Hands back the fence's CPU VA and GPU VA |
 | C3 | a second allocation, one page, mapped at `--cmdva`, made resident | `DxgkDdiCreateAllocation`, `BuildPagingBuffer` |
 | C4 | `Lock2`, write `--nops` dwords of PM4, `Unlock2` | none |
 | C5 | `SubmitCommand`, `BroadcastContextCount = 1`, `NumPrimaries = 0` | **`DxgkDdiSubmitCommandVirtual`** |
@@ -50,7 +50,7 @@ whether dxgkrnl's own signal path reaches the fence through our miniport - witho
 by a fence write we performed ourselves.
 
 The NOP encoding is `PACKET3(PACKET3_NOP, total - 2)` from `driver/amdgpu-import/nvd.h:48,55`, with the dword
-count as `gfx_v10_0.c:9505` computes it; the rest of the page is padded with the PACKET2 NOP `0xFFFF1000` of
+count as `gfx_v10_0.c:9505` computes it. The rest of the page is padded with the PACKET2 NOP `0xFFFF1000` of
 `driver/shim/bc250_gfx.c:68`.
 
 ### `--scratch <hex32>`: did the CP execute the buffer's content (H4)
@@ -83,7 +83,7 @@ SCRATCH asked=0xBC250B01 reg=0x30100 uconfig=0x0040 submit=ok
 
 #### Reading GC.SCRATCH_REG0 back on the target, today
 
-Both of these exist now; no new verb is needed.
+Both of these exist now. No new verb is needed.
 
 ```
 bc250kmd_cli read 30100                 # -> "read 0x30100 BC250B01"
@@ -98,11 +98,11 @@ is installed in the full WDDM table too (`driver/kmd/wddm.c:2061`, inside `WddmB
 with the `EnableFullWddm` gate open.
 
 The independent route is `bc250rd_cli sweep <reglist.txt> [prefix]`, which reads through the witness driver
-rather than through `bc250kmd`; `GC.SCRATCH_REG0 0x30100` is line 2942 of `tools/win/bc250rd/reglist.txt`.
+rather than through `bc250kmd`. `GC.SCRATCH_REG0 0x30100` is line 2942 of `tools/win/bc250rd/reglist.txt`.
 It reads a whole list rather than one register, so it is the cross-check, not the everyday command.
 
 Seed with a value the CP would not produce by itself, submit, read back: `0xCAFEDEAD` still there means the
-content was never executed; the `--scratch` value means it was.
+content was never executed. The `--scratch` value means it was.
 
 ## The private driver data
 
@@ -137,9 +137,9 @@ python tools\win\target.py run "C:\BC250\tmp\kmtprobe.exe --submit --scratch BC2
 python tools\win\target.py run "C:\BC250\bc250kmd_cli.exe read 30100"
 ```
 
-`target.py run` is enough for a single command; for a run that has to be wrapped (gate, evidence capture,
+`target.py run` is enough for a single command. For a run that has to be wrapped (gate, evidence capture,
 guard-log dump around it) write a `.ps1` next to the experiment and use `target.py ps <script.ps1>`, because
-inline PowerShell through Git Bash gets mangled.
+inline PowerShell through Git Bash is mangled.
 
 The gate has to be open (`EnableFullWddm`) and the driver started, or `EnumAdapters2` will list a
 display-only adapter that has no paging queue to give.
@@ -150,14 +150,14 @@ display-only adapter that has no paging queue to give.
 |---|---|
 | `--match <text>` | substring of adapter string / chip type / UMD name, default `bc250` |
 | `--luid H:L` | pick by LUID in hex instead, exactly as the listing prints it |
-| `--size <bytes>` | default `0x10000`; `0x`, `K`, `M`, `G` accepted, rounded up to 4 KB |
-| `--va <address>` | address to ask for, default `0x10000000`; `0` lets VidMm choose |
+| `--size <bytes>` | default `0x10000`. `0x`, `K`, `M`, `G` accepted, rounded up to 4 KB |
+| `--va <address>` | address to ask for, default `0x10000000`. `0` lets VidMm choose |
 | `--vamin`, `--vamax` | range bounds, only consulted with `--va 0` |
 | `--reserve` | reserve the range first (64 KB-aligned base) and map inside it |
 | `--resident-first` | `MakeResident` before the map instead of after it |
 | `--no-write` | lock but leave the contents alone |
 | `--submit` | stage C: context, monitored fence, a page of PM4 NOPs, `SubmitCommand`, bounded fence wait |
-| `--cmdva <address>` | where the command buffer is mapped, default `0x20000000`; may not overlap `--va` |
+| `--cmdva <address>` | where the command buffer is mapped, default `0x20000000`. May not overlap `--va` |
 | `--nops <dwords>` | PM4 dwords in the command buffer, default 16, at least 2, rounded up to 8 |
 | `--scratch <hex32>` | with `--submit`: lead the stream with the driver's own IB ring test packet, writing this value to `GC.SCRATCH_REG0` |
 | `--hold <s>` | keep everything alive so the witness can read |
@@ -188,12 +188,12 @@ working:
 ```
 
 `submit` is `ok` (the fence reached 1), `timeout` (every call succeeded, the fence did not move) or `failed`
-(a call failed); `ms` is how long the wait took.
+(a call failed). `ms` is how long the wait took.
 
 ## Hazards
 
 - The first `MapGpuVirtualAddress` is the first time VidMm asks our `BuildPagingBuffer` for real work. Stage A
-  answers every operation inertly, so a map can "succeed" with no PTE behind it; the witness, not the
+  answers every operation inertly, so a map can "succeed" with no PTE behind it. The witness, not the
   `NTSTATUS`, is what settles that. See `scratch/tmp/kmtprobe_kmd_patch.md` for the gap list.
 - `--hold` keeps an allocation resident in the VRAM carve-out. Harmless at 64 KB, worth a thought at 1 GB.
 - `--submit` is the first thing in this project that asks the scheduler to run a command buffer. The context
