@@ -39,7 +39,7 @@ starts the Windows Boot Manager. The application changes no firmware setting and
 
 The application shares four files with the driver and copies none of them. `driver/shim/bc250_smu.c` is the SMU
 transport. `driver/shim/bc250_cpu.c` holds the allowlist, the argument check and the mailbox registers of queue 3.
-`driver/kmd/board_identity.c` identifies the board. `driver/shim/include/bc250_mmio_bar.h` names the register BAR.
+`driver/common/board/board_identity.c` identifies the board. `driver/shim/include/bc250_mmio_bar.h` names the register BAR.
 That last header is new: the index and the length of the BAR were local to `driver/kmd/mmio.c` before.
 
 ## The decision table
