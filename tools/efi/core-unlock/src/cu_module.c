@@ -138,10 +138,16 @@ static int op_marker_delete(void *context)
 
 static int op_key_window(void *context)
 {
-	struct stage *stage = ((struct unlock *)context)->stage;
+	struct unlock *u = context;
+	struct stage *stage = u->stage;
 	EFI_SIMPLE_TEXT_INPUT_PROTOCOL *in = stage->st->ConIn;
 	EFI_INPUT_KEY key;
 	unsigned waited;
+	if (!u->options.key) {
+		/* A board without a person at it: a key that the firmware invents must not stop the unlock. */
+		stage_say(stage, CU_NAME, "no key window, by the load option key=0");
+		return 0;
+	}
 	if (in == NULL) return 0;
 	/* Keys pressed before the window, at the firmware's own prompt for example, do not count. */
 	in->Reset(in, 0);

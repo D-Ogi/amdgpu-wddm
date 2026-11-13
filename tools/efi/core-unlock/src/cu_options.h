@@ -19,10 +19,11 @@ enum cu_reset_method {
 struct cu_options {
 	enum cu_reset_method reset;
 	int report;		/* report=1: write the read-only report before the decision. Default 0 */
+	int key;		/* key=0: no key window before the unlock. Default 1 */
 };
 
-/* "reset=warm", "reset=fadt", "reset=none", "report=0" or "report=1". A value that is not one of these keeps the
- * default and stays unclaimed, so the core reports it. */
+/* "reset=warm", "reset=fadt", "reset=none", "report=0" or "report=1", "key=0" or "key=1". A value that is not one
+ * of these keeps the default and stays unclaimed, so the core reports it. */
 void cu_options_read(struct stage_options *options, struct cu_options *out);
 const char *cu_reset_method_name(enum cu_reset_method method);
 

@@ -111,6 +111,7 @@ An option is `name=value`. An option that no module understands is counted on th
 | `next=<path>` | `\EFI\Microsoft\Boot\bootmgfw.efi` | the image that the stage starts after its work, on the volume of the stage |
 | `reset=warm`, `reset=fadt`, `reset=none` | `warm` | the reset of the core unlock |
 | `report=1` | 0 | the read-only report of the core unlock |
+| `key=0` | 1 | no key window before the unlock |
 | `acpi.idle=0` | 1 | no idle state table |
 | `acpi.stubs=0` | 1 | no method stub table |
 | `sb.mode=audit`, `sb.mode=enforce` | `audit` | report each verdict, or refuse an image that is not allowed |

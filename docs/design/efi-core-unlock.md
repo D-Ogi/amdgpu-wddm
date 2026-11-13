@@ -59,7 +59,9 @@ stock mask.
 | BC-250 | 12 | unreadable | not read | start Windows | the marker cannot be read |
 | BC-250 | other or not known | any | not read | start Windows | the count is not 12 or 16 |
 
-The key window opens only on the unlock row, for 1.5 s. Every other start costs no wait.
+The key window opens only on the unlock row, for 1.5 s. Every other start costs no wait. The load option `key=0`
+switches the window off. The default is the window, so a person at the board can stop the unlock. A board with
+no person at it uses `key=0`: a key that the firmware reports by itself then cannot stop the unlock.
 
 ## The loop guard
 

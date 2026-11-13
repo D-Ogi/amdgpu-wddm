@@ -29,6 +29,7 @@ image alone. The Secure Boot tests read two signed images of the Windows install
 | `reset=fadt` | no | the reset after the unlock message is the reset register of the ACPI FADT |
 | `reset=none` | no | no reset. The cores come at the next warm restart of Windows |
 | `report=1` | 0 | write the read-only report to `core-unlock-report.txt` beside the image |
+| `key=0` | 1 | no key window before the unlock. Use it on a board with no person at it |
 | `acpi.idle=0` | 1 | do not install the idle state table |
 | `acpi.stubs=0` | 1 | do not install the method stub table |
 | `acpi.apply=0` | 1 | build and check the tables of the ACPI module, and install and remove none |
