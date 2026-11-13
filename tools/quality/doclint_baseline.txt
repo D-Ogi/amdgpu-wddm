@@ -65,7 +65,6 @@
 1	tools/release/README.md
 6	tools/win/amdgpu_wddm_control/README.md
 6	tools/win/amdgpu_wddm_setup/README.md
-9	tools/win/bc250rd/README.md
 3	tools/win/cumode/README.md
 3	tools/win/d3d11errors/README.md
 2	tools/win/d3d11mt/README.md
