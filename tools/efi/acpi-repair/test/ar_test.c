@@ -217,6 +217,16 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 	}
 	plan.crb_base = 0;
 
+	/* The servicer experiment: the same device with the identifier that tpm.sys binds to. */
+	plan.hid_msft = 1;
+	{
+		unsigned char t[512];
+		size_t nb = ar_build_stubs(&plan, t, sizeof(t));
+		CHECK(nb > 0 && memcmp(t, t + 0, 0) == 0);
+		CHECK(memcmp(t + nb - 15u, "\x08_HID\x0dMSFT0101", 15) == 0);
+	}
+	plan.hid_msft = 0;
+
 	/* Device on and no stub needed: the table is still built, and it holds the device alone. */
 	{
 		enum ar_stubs keep = plan.stubs;

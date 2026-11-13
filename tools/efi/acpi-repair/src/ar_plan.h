@@ -52,6 +52,7 @@ struct ar_input {
 	int want_stubs;
 	/* 1: the SSDT also carries the experiment device of the TPM work: Device(TPM0) with _HID "BC250001". */
 	int want_device;
+	int want_hid_msft;
 };
 
 enum ar_idle {
@@ -100,6 +101,7 @@ struct ar_plan {
 	enum ar_stubs stubs;
 	unsigned stub_mask;		/* bit i: ar_stub_name(i) gets an empty method */
 	int device;			/* 1: ar_build_stubs writes the experiment device */
+	int hid_msft;			/* 1: the device carries _HID MSFT0101 instead of the experiment ID */
 	unsigned long long crb_base;	/* the reserved page that _CRS describes, 0 when no page is reserved */
 };
 

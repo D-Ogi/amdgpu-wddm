@@ -362,6 +362,7 @@ void ar_plan_make(const struct ar_input *in, struct ar_plan *plan)
 {
 	memset(plan, 0, sizeof(*plan));
 	plan->device = in->want_device;
+	plan->hid_msft = in->want_hid_msft;
 	plan_idle(in, plan);
 	if (plan->idle != AR_IDLE_REPAIR) plan->targets = plan->copied = plan->derived = plan->left_out = 0;
 	plan_stubs(in, plan);
@@ -415,7 +416,7 @@ size_t ar_build_stubs(const struct ar_plan *plan, unsigned char *out, size_t cap
 	if (plan->device) {
 		size_t scope = efl_amlw_scope_begin(&w, "\\_SB_");
 		size_t mark = efl_amlw_device_begin(&w, "TPM0");
-		efl_amlw_name_string(&w, "_HID", "BC250001");
+		efl_amlw_name_string(&w, "_HID", plan->hid_msft ? "MSFT0101" : "BC250001");
 		if (plan->crb_base != 0) {
 			/* Memory32Fixed (0x86) of the reserved page, then the end tag: the CRB window of the TPM work. */
 			unsigned char crs[12];

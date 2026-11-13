@@ -159,6 +159,8 @@ static void ar_module_run(struct stage *stage)
 	int want_stubs = stage_option_flag(&stage->options, "acpi.stubs", 1);
 	/* The TPM experiment: a device of our own in the stub table. Off unless the load option asks for it. */
 	int want_device = stage_option_flag(&stage->options, "acpi.ssdt.dev", 0);
+	/* The servicer experiment: the device becomes the one tpm.sys binds to. */
+	int want_hid_msft = stage_option_flag(&stage->options, "acpi.ssdt.tpm", 0);
 	int apply = stage_option_flag(&stage->options, "acpi.apply", 1);
 
 	if (!stage_board_bc250(stage)) {
@@ -176,6 +178,7 @@ static void ar_module_run(struct stage *stage)
 	input.want_idle = want_idle;
 	input.want_stubs = want_stubs;
 	input.want_device = want_device;
+	input.want_hid_msft = want_hid_msft;
 	ar_plan_make(&input, &plan);
 	if (plan.device) {
 		/* The page that _CRS describes. EfiReservedMemoryType is kept by the operating system and never reused. */
