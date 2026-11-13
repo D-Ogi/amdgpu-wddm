@@ -25,12 +25,12 @@ between the two reads as a "bracket change", which is the error bar of the point
 
 | File | What it does |
 |---|---|
-| `gpu-timeline.c` | The sampler: one batch of register reads per period at the asked rate, into a GTL1 file, with a probe, a bounded run and a `selftest` that opens no device |
+| `gpu-timeline.c` | The sampler. It makes one batch of register reads per period at the asked rate, into a GTL1 file. It has a probe, a bounded run and a `selftest` that opens no device |
 | `gtl_regs.h` | The generated register sets: 17 registers in the full set, 9 in the lite set |
 | `gen_regs.py` | Writes `gtl_regs.h` from `tools/regcalc`, against `bc250rd`'s allow-list and the M25 deny list |
 | `build.ps1` | Builds the sampler, writes the provenance of the exact artifact, and runs every gate below |
-| `analyze.py` | The split per second and per frame: idle, pipeline (fed or draining), command processor alone with its reason (sync, drain, poll, write, fetch, parse, other), and the top raw bit combinations of each class |
-| `test_analyze.py` | The analyzer's unit tests: the C selftest file with exact shares, a random timeline with known truth sampled as the lab samples it, the lite set, failed reads and the file format |
+| `analyze.py` | The split per second and per frame. The classes are idle, pipeline (fed or draining), and command processor alone with its reason (sync, drain, poll, write, fetch, parse, other). It also gives the top raw bit combinations of each class |
+| `test_analyze.py` | The analyzer's unit tests. They cover the C selftest file with exact shares. They cover a random timeline with known truth, sampled as the lab samples it. They also cover the lite set, failed reads and the file format |
 | `gtl-host.py` | The development-PC side: push, run, stop and pull, through `tools/win/target.py` |
 | `lab/gtl-run.ps1` | The lab side: the preflight, the probe, one bounded run, and a receipt with the hashes |
 | `lab/test-invoke-gtl.ps1` | The host check of the lab wrapper's process handling under Windows PowerShell 5.1, the lab's shell |
