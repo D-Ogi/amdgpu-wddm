@@ -22,7 +22,7 @@
 #include "stage.h"
 #include "board_identity.h"
 
-#define STAGE_VERSION		"2"
+#define STAGE_VERSION		"3"
 #define STAGE_LINE_CHARS	256u
 #define STAGE_DEVPATH_MAX_BYTES	4096u
 #define STAGE_SMBIOS_MAX_BYTES	(1024u * 1024u)	/* the bound driver/kmd/board_memory_identity.c sets on 'RSMB' */

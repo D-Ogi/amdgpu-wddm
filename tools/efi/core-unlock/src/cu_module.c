@@ -13,6 +13,7 @@
 #include "efl_acpi.h"
 #include "efl_text.h"
 #include "stage.h"
+#include "cu_bar.h"
 #include "cu_decide.h"
 #include "cu_options.h"
 #include "cu_report.h"
@@ -22,19 +23,12 @@
 #include "bc250_mmio_bar.h"
 
 #define CU_NAME			"core-unlock"
-#define CU_VERSION		"2"
+#define CU_VERSION		"3"
 #define CU_KEY_WINDOW_MS	1500u
 #define CU_KEY_POLL_MS		10u
 #define CU_RESET_PAUSE_MS	1000u	/* the console lines stay readable for this long before a reset */
 #define CU_RESET_WAIT_MS	1000u	/* a reset register write that has not reset the board by then did not work */
 #define CU_MARKER_MAX_BYTES	64u
-
-/* The type 0 configuration header (PCI Local Bus Specification 3.0, section 6.1). */
-#define PCI_COMMAND		0x04u
-#define PCI_COMMAND_MEMORY	0x0002u
-#define PCI_BAR0		0x10u
-#define PCI_BAR_IO		0x1u
-#define PCI_BAR_ADDRESS_MASK	(~0xFu)
 
 static const EFI_GUID mp_services_guid = EFI_MP_SERVICES_PROTOCOL_GUID;
 
@@ -161,77 +155,226 @@ static int op_key_window(void *context)
 
 /* ---- the register BAR -------------------------------------------------------------------------- */
 
+/* The access path that cu_bar_choose gave. Every access stays inside BC250_BAR5_LENGTH. */
+struct bar_access {
+	struct stage *stage;
+	struct cu_bar_choice choice;
+	EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *bridge;	/* for CU_BAR_PATH_BRIDGE */
+};
+
 static int bar_read32(void *context, unsigned offset, unsigned *value)
 {
-	struct stage *stage = context;
+	struct bar_access *a = context;
+	EFI_STATUS status;
 	UINT32 v = 0;
 	if ((offset & 3u) || offset >= BC250_BAR5_LENGTH) return -1;
-	if (EFI_ERROR(stage->gpu->Mem.Read(stage->gpu, EfiPciIoWidthUint32, BC250_BAR5_INDEX, offset, 1, &v))) return -1;
+	if (a->choice.path == CU_BAR_PATH_PCI_IO)
+		status = a->stage->gpu->Mem.Read(a->stage->gpu, EfiPciIoWidthUint32, (UINT8)a->choice.index, offset, 1, &v);
+	else if (a->choice.path == CU_BAR_PATH_BRIDGE && a->bridge != NULL)
+		status = a->bridge->Mem.Read(a->bridge, EfiPciIoWidthUint32, a->choice.address + offset, 1, &v);
+	else
+		return -1;
+	if (EFI_ERROR(status)) return -1;
 	*value = v;
 	return 0;
 }
 
 static int bar_write32(void *context, unsigned offset, unsigned value)
 {
-	struct stage *stage = context;
+	struct bar_access *a = context;
+	EFI_STATUS status;
 	UINT32 v = value;
 	if ((offset & 3u) || offset >= BC250_BAR5_LENGTH) return -1;
-	return EFI_ERROR(stage->gpu->Mem.Write(stage->gpu, EfiPciIoWidthUint32, BC250_BAR5_INDEX, offset, 1, &v)) ? -1 : 0;
+	if (a->choice.path == CU_BAR_PATH_PCI_IO)
+		status = a->stage->gpu->Mem.Write(a->stage->gpu, EfiPciIoWidthUint32, (UINT8)a->choice.index, offset, 1, &v);
+	else if (a->choice.path == CU_BAR_PATH_BRIDGE && a->bridge != NULL)
+		status = a->bridge->Mem.Write(a->bridge, EfiPciIoWidthUint32, a->choice.address + offset, 1, &v);
+	else
+		return -1;
+	return EFI_ERROR(status) ? -1 : 0;
 }
 
 static void bar_stall(void *context, unsigned usec)
 {
-	((struct stage *)context)->bs->Stall(usec);
+	((struct bar_access *)context)->stage->bs->Stall(usec);
 }
 
-static unsigned le32(const unsigned char *p)
+static void bar_regs(struct bar_access *a, struct cu_regs *regs)
 {
-	return (unsigned)p[0] | ((unsigned)p[1] << 8) | ((unsigned)p[2] << 16) | ((unsigned)p[3] << 24);
+	regs->context = a;
+	regs->read32 = bar_read32;
+	regs->write32 = bar_write32;
+	regs->stall_us = bar_stall;
 }
 
-/* The register BAR is identified twice, as driver/kmd/mmio.c does: by what the configuration header says BAR5
- * holds, and by the resource of the expected length at that very address that the PCI bus driver reports. The
- * memory decode must already be on: this module does not change the function's command register. */
-static int bar_identified(struct stage *stage)
+static unsigned config16(const unsigned char *config, unsigned offset)
 {
-	EFL_ACPI_QWORD_ADDRESS_DESCRIPTOR *resource = NULL;
-	UINT64 supports = 0;
-	unsigned bar = le32(stage->gpu_config + PCI_BAR0 + 4u * BC250_BAR5_INDEX);
-	unsigned command = (unsigned)stage->gpu_config[PCI_COMMAND] | ((unsigned)stage->gpu_config[PCI_COMMAND + 1] << 8);
-	int ok;
-	if (!(command & PCI_COMMAND_MEMORY)) {
-		stage_say(stage, CU_NAME, "the GPU function's memory decode is off");
+	return (unsigned)config[offset] | ((unsigned)config[offset + 1u] << 8);
+}
+
+static unsigned config32(const unsigned char *config, unsigned offset)
+{
+	return config16(config, offset) | (config16(config, offset + 2u) << 16);
+}
+
+/* The dump of a descriptor list: every field of every descriptor up to the end tag. Log lines only. */
+static void dump_list(struct stage *stage, const char *what, const struct cu_bar_list *list)
+{
+	unsigned i;
+	for (i = 0; i < list->count; i++) {
+		const struct cu_bar_resource *r = &list->resource[i];
+		if (!r->address_space) {
+			stage_sayf(stage, CU_NAME, "bar: %s descriptor %u: tag 0x%x, %u bytes, not an address space descriptor",
+				   what, i, r->tag, r->bytes);
+			continue;
+		}
+		stage_sayf(stage, CU_NAME, "bar: %s descriptor %u: tag 0x%x, %u bytes, type %u, general 0x%x, specific 0x%x, "
+			   "granularity 0x%llx", what, i, r->tag, r->bytes, r->type, r->general, r->specific, r->granularity);
+		stage_sayf(stage, CU_NAME, "bar: %s descriptor %u: minimum 0x%llx, maximum 0x%llx, translation 0x%llx, "
+			   "length 0x%llx", what, i, r->minimum, r->maximum, r->translation, r->length);
+	}
+	if (list->complete)
+		stage_sayf(stage, CU_NAME, "bar: %s: %u descriptors, end tag at byte %u", what, list->seen, list->end_offset);
+	else
+		stage_sayf(stage, CU_NAME, "bar: %s: %u descriptors, no end tag within %u bytes", what, list->seen,
+			   CU_BAR_LIST_MAX_BYTES);
+}
+
+/* GetBarAttributes for each BarIndex of a type 0 header. UEFI 2.10 section 14.4 calls BarIndex "the BAR index of
+ * the standard PCI Configuration header", but the reference implementation (EDK2 PciBusDxe, PciParseBar) counts
+ * a 64-bit BAR as one index, so BarIndex and the dword of the header are not the same thing on this GPU. Only the
+ * descriptor that names the address of BAR5 selects an index. */
+static void scan_indexes(struct stage *stage, struct cu_bar_findings *f)
+{
+	unsigned i;
+	for (i = 0; i < CU_BAR_INDEXES; i++) {
+		char what[24];
+		UINT64 supports = 0;
+		VOID *resources = NULL;
+		struct cu_bar_list list;
+		EFI_STATUS status = stage->gpu->GetBarAttributes(stage->gpu, (UINT8)i, &supports, &resources);
+		f->index[i] = CU_BAR_MATCH_NONE;
+		stage_sayf(stage, CU_NAME, "bar: BarIndex %u: status 0x%llx, supports 0x%llx, resources %s", i,
+			   (unsigned long long)status, (unsigned long long)supports,
+			   EFI_ERROR(status) || resources == NULL ? "none" : "given");
+		if (EFI_ERROR(status) || resources == NULL) continue;
+		cu_bar_parse(resources, CU_BAR_LIST_MAX_BYTES, &list);
+		efl_format(what, sizeof(what), "BarIndex %u", i);
+		dump_list(stage, what, &list);
+		if (f->config == CU_BAR_CONFIG_OK) f->index[i] = cu_bar_match(&list, f->address, BC250_BAR5_LENGTH);
+		stage->bs->FreePool(resources);
+	}
+}
+
+/* The root bridges of the GPU function's segment, with their windows. Returns the one that cu_bar_choose can
+ * select: the only one that holds BAR5, else the only one of the segment. */
+static EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *scan_bridges(struct stage *stage, struct cu_bar_findings *f)
+{
+	static const EFI_GUID bridge_guid = EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_GUID;
+	EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *only = NULL, *holding = NULL;
+	EFI_HANDLE *handles = NULL;
+	UINTN count = 0, i, segment = 0, bus = 0, device = 0, function = 0;
+	unsigned only_index = 0, holding_index = 0;
+	if (EFI_ERROR(stage->gpu->GetLocation(stage->gpu, &segment, &bus, &device, &function))) {
+		stage_say(stage, CU_NAME, "bar: the GPU function has no location: no root bridge");
+		return NULL;
+	}
+	if (EFI_ERROR(stage->bs->LocateHandleBuffer(ByProtocol, &bridge_guid, NULL, &count, &handles))) count = 0;
+	stage_sayf(stage, CU_NAME, "bar: %u root bridges, the GPU function is on segment %u", (unsigned)count,
+		   (unsigned)segment);
+	for (i = 0; i < count && f->bridges < CU_BAR_MAX_BRIDGES; i++) {
+		EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *bridge = NULL;
+		VOID *resources = NULL;
+		struct cu_bar_list list;
+		EFI_STATUS status;
+		char what[24];
+		if (EFI_ERROR(stage->bs->HandleProtocol(handles[i], &bridge_guid, (VOID **)&bridge)) || bridge == NULL) continue;
+		if (bridge->SegmentNumber != segment) {
+			stage_sayf(stage, CU_NAME, "bar: root bridge %u: segment %u, not the GPU function's", (unsigned)i,
+				   (unsigned)bridge->SegmentNumber);
+			continue;
+		}
+		f->bridges++;
+		only = bridge;
+		only_index = (unsigned)i;
+		status = bridge->Configuration(bridge, &resources);
+		stage_sayf(stage, CU_NAME, "bar: root bridge %u: segment %u, configuration status 0x%llx", (unsigned)i,
+			   (unsigned)bridge->SegmentNumber, (unsigned long long)status);
+		if (EFI_ERROR(status) || resources == NULL) continue;
+		/* The buffer belongs to the firmware and is not freed here. */
+		cu_bar_parse(resources, CU_BAR_LIST_MAX_BYTES, &list);
+		efl_format(what, sizeof(what), "root bridge %u", (unsigned)i);
+		dump_list(stage, what, &list);
+		if (list.complete) f->bridges_described++;
+		if (f->config == CU_BAR_CONFIG_OK && cu_bar_window_holds(&list, f->address, BC250_BAR5_LENGTH)) {
+			f->bridges_holding++;
+			holding = bridge;
+			holding_index = (unsigned)i;
+		}
+	}
+	if (handles != NULL) stage->bs->FreePool(handles);
+	f->bridge = f->bridges_holding == 1u ? holding_index : only_index;
+	return f->bridges_holding == 1u ? holding : only;
+}
+
+/* The register BAR is identified twice, as driver/kmd/mmio.c does: by the address that the configuration header
+ * gives for BAR5, and by a known register value read through the access path to that address. The firmware's
+ * descriptors only select the path. The memory decode must already be on: this module does not change the
+ * function's command register, and it writes no configuration register. Returns 1 when both proofs hold. */
+static int bar_identify(struct stage *stage, struct bar_access *a)
+{
+	const unsigned char *config = stage->gpu_config;
+	struct cu_bar_findings f;
+	struct cu_regs regs;
+	EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *bridge;
+	enum cu_bar_control control;
+	unsigned value = 0;
+
+	memset(&f, 0, sizeof(f));
+	memset(a, 0, sizeof(*a));
+	a->stage = stage;
+	stage_sayf(stage, CU_NAME, "bar: function %x:%x, command 0x%x, status 0x%x", config16(config, 0),
+		   config16(config, 2), config16(config, 4), config16(config, 6));
+	stage_sayf(stage, CU_NAME, "bar: configuration BAR0 to BAR5: 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x",
+		   config32(config, 0x10), config32(config, 0x14), config32(config, 0x18), config32(config, 0x1C),
+		   config32(config, 0x20), config32(config, 0x24));
+	f.config = cu_bar_config_address(config, STAGE_PCI_CONFIG_BYTES, &f.address);
+	stage_sayf(stage, CU_NAME, "bar: %s, address 0x%llx", cu_bar_config_text(f.config), f.address);
+	scan_indexes(stage, &f);
+	bridge = scan_bridges(stage, &f);
+
+	a->choice = cu_bar_choose(&f);
+	if (a->choice.path == CU_BAR_PATH_BRIDGE) a->bridge = bridge;
+	if (a->choice.path == CU_BAR_PATH_PCI_IO)
+		stage_sayf(stage, CU_NAME, "bar: %s: BarIndex %u", cu_bar_reason_text(a->choice.reason), a->choice.index);
+	else if (a->choice.path == CU_BAR_PATH_BRIDGE)
+		stage_sayf(stage, CU_NAME, "bar: %s: root bridge %u", cu_bar_reason_text(a->choice.reason), a->choice.bridge);
+	else {
+		stage_sayf(stage, CU_NAME, "bar: not identified: %s", cu_bar_reason_text(a->choice.reason));
 		return 0;
 	}
-	if ((bar & PCI_BAR_IO) || (bar & PCI_BAR_ADDRESS_MASK) == 0) {
-		stage_sayf(stage, CU_NAME, "BAR%u is not a memory BAR (0x%x)", (unsigned)BC250_BAR5_INDEX, bar);
+
+	/* The positive control, before any write: a register whose value is known from Linux on this unit. */
+	bar_regs(a, &regs);
+	control = cu_bar_control_read(&regs, &value);
+	stage_sayf(stage, CU_NAME, "bar: control %s at BAR5 + 0x%x reads 0x%x, known 0x%x: %s", CU_BAR_CONTROL_NAME,
+		   cu_bar_control_offset(), value, CU_BAR_CONTROL_VALUE, cu_bar_control_text(control));
+	if (control != CU_BAR_CONTROL_OK) {
+		a->choice.path = CU_BAR_PATH_NONE;
 		return 0;
 	}
-	if (EFI_ERROR(stage->gpu->GetBarAttributes(stage->gpu, BC250_BAR5_INDEX, &supports, (VOID **)&resource)) ||
-	    resource == NULL) {
-		stage_sayf(stage, CU_NAME, "BAR%u has no resource descriptor", (unsigned)BC250_BAR5_INDEX);
-		return 0;
-	}
-	ok = resource->Desc == EFL_ACPI_QWORD_DESCRIPTOR && resource->ResType == EFL_ACPI_RESOURCE_MEMORY &&
-	     resource->AddrLen == BC250_BAR5_LENGTH && resource->AddrRangeMin == (bar & PCI_BAR_ADDRESS_MASK);
-	if (!ok)
-		stage_sayf(stage, CU_NAME, "BAR%u is not the register BAR: length 0x%llx at 0x%llx",
-			   (unsigned)BC250_BAR5_INDEX, (unsigned long long)resource->AddrLen,
-			   (unsigned long long)resource->AddrRangeMin);
-	stage->bs->FreePool(resource);
-	return ok;
+	stage_sayf(stage, CU_NAME, "bar: the register BAR is identified at 0x%llx", a->choice.address);
+	return 1;
 }
 
 static int op_unlock(void *context)
 {
 	struct stage *stage = ((struct unlock *)context)->stage;
+	struct bar_access access;
 	struct cu_regs regs;
 	struct cu_unlock_report report;
-	if (stage->gpu == NULL || !bar_identified(stage)) return -1;
-	regs.context = stage;
-	regs.read32 = bar_read32;
-	regs.write32 = bar_write32;
-	regs.stall_us = bar_stall;
+	if (stage->gpu == NULL || !bar_identify(stage, &access)) return -1;
+	bar_regs(&access, &regs);
 	(void)cu_unlock_send(&regs, &report);
 	stage_sayf(stage, CU_NAME, "queue 3: CPU %u mV, temperature %d mC%s", report.millivolts, report.temperature_mc,
 		   report.temperature_valid ? "" : " (not read)");
@@ -355,4 +498,17 @@ static void cu_module_run(struct stage *stage)
 	(void)cu_run(&ops, u.options.reset != CU_RESET_NONE);
 }
 
-const struct stage_module cu_module = { CU_NAME, "unlock", cu_module_run, NULL, NULL, NULL, NULL };
+/* The load options unlock=0 probe=1: the dump, the identification of the register BAR and its control read.
+ * The control is a read of a named register. Nothing is written and no message is sent. */
+static void cu_module_probe(struct stage *stage)
+{
+	struct bar_access access;
+	if (!stage_board_bc250(stage) || stage->gpu == NULL) {
+		stage_say(stage, CU_NAME, "probe: not a BC-250, no register access");
+		return;
+	}
+	stage_say(stage, CU_NAME, bar_identify(stage, &access) ? "probe: the register BAR is identified, no message sent"
+							      : "probe: the register BAR is not identified, no message sent");
+}
+
+const struct stage_module cu_module = { CU_NAME, "unlock", cu_module_run, cu_module_probe, NULL, NULL, NULL };

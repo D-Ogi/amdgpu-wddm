@@ -10,12 +10,15 @@
  * Security2 protocol that is installed at that moment, EFI_ACCESS_DENIED gives no image handle, and
  * EFI_SECURITY_VIOLATION gives one. It is a model, not the AMI firmware: the lab steps of the design page stay
  * necessary. The core unlock binding is not run here, because it reads CPU registers: each test gives unlock=0.
+ * Its probe runs here: the dump and the identification of the register BAR over a model of the PCI I/O and the
+ * PCI Root Bridge I/O protocols.
  */
 #include <setjmp.h>
 #include "efl_test.h"
 #include "efi.h"
 #include "efl_text.h"
 #include "stage.h"
+#include "cu_bar.h"
 
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st);
 
@@ -26,6 +29,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st);
 #define FW_PROTOCOLS	12u
 #define FW_LOG_BYTES	(256u * 1024u)
 #define SDT_HEADER	36u
+#define FW_BARS		6u
+#define FW_BAR5		0xFE800000ull	/* test data: the address of BAR5 in the model */
 
 struct fw_file { char path[96]; unsigned char *data; size_t bytes; };
 struct fw_open { EFI_FILE_PROTOCOL protocol; struct fw_file *file; UINT64 position; };
@@ -65,9 +70,20 @@ static struct {
 	unsigned char pci[64];
 	unsigned char *variable_dbx;	/* the dbx variable of the firmware, or NULL */
 	size_t variable_dbx_bytes;
+	/* The register BAR: the descriptor list of each BarIndex, the index that Mem.Read takes, the windows of the
+	 * root bridge, and the value of the control register. */
+	unsigned char bar_list[FW_BARS][64];
+	size_t bar_bytes[FW_BARS];
+	unsigned register_index;
+	unsigned char bridge_list[64];
+	size_t bridge_bytes;
+	unsigned control_value;
+	unsigned mem_reads, mem_writes, bridge_reads;
 } fw;
 
-static int fw_handle_image, fw_handle_device, fw_handle_security, fw_handle_gpu, fw_handle_child;
+static int fw_handle_image, fw_handle_device, fw_handle_security, fw_handle_gpu, fw_handle_child, fw_handle_bridge;
+static EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL fw_bridge;
+static const EFI_GUID guid_bridge = EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_GUID;
 static EFI_SYSTEM_TABLE fw_st;
 static EFI_BOOT_SERVICES fw_bs;
 static EFI_RUNTIME_SERVICES fw_rt;
@@ -522,6 +538,119 @@ static EFI_STATUS EFIAPI pci_location(EFI_PCI_IO_PROTOCOL *this, UINTN *segment,
 	return EFI_SUCCESS;
 }
 
+/* GetBarAttributes gives a copy of the list of the model in pool memory, which the caller frees. An index without
+ * a list is not valid, as in edk2. */
+static EFI_STATUS EFIAPI pci_bar_attributes(EFI_PCI_IO_PROTOCOL *this, UINT8 index, UINT64 *supports, VOID **resources)
+{
+	(void)this;
+	if (index >= FW_BARS || fw.bar_bytes[index] == 0) return EFI_UNSUPPORTED;
+	if (supports != NULL) *supports = 0;
+	if (resources != NULL) {
+		if (fw_allocate(EfiBootServicesData, fw.bar_bytes[index], resources) != EFI_SUCCESS) return EFI_OUT_OF_RESOURCES;
+		memcpy(*resources, fw.bar_list[index], fw.bar_bytes[index]);
+	}
+	return EFI_SUCCESS;
+}
+
+/* A read of the register BAR gives the control value at the control register and 0 elsewhere. */
+static EFI_STATUS mem_read(unsigned long long offset, VOID *buffer)
+{
+	UINT32 v = offset == cu_bar_control_offset() ? fw.control_value : 0u;
+	memcpy(buffer, &v, sizeof(v));
+	fw.mem_reads++;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI pci_mem_read(EFI_PCI_IO_PROTOCOL *this, EFI_PCI_IO_PROTOCOL_WIDTH width, UINT8 index,
+				      UINT64 offset, UINTN count, VOID *buffer)
+{
+	(void)this;
+	if (width != EfiPciIoWidthUint32 || count != 1u || index != fw.register_index) return EFI_UNSUPPORTED;
+	return mem_read(offset, buffer);
+}
+
+static EFI_STATUS EFIAPI pci_mem_write(EFI_PCI_IO_PROTOCOL *this, EFI_PCI_IO_PROTOCOL_WIDTH width, UINT8 index,
+				       UINT64 offset, UINTN count, VOID *buffer)
+{
+	(void)this; (void)width; (void)index; (void)offset; (void)count; (void)buffer;
+	fw.mem_writes++;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI bridge_mem_read(EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *this, EFI_PCI_IO_PROTOCOL_WIDTH width,
+					 UINT64 address, UINTN count, VOID *buffer)
+{
+	(void)this;
+	if (width != EfiPciIoWidthUint32 || count != 1u || address < FW_BAR5) return EFI_INVALID_PARAMETER;
+	fw.bridge_reads++;
+	return mem_read(address - FW_BAR5, buffer);
+}
+
+static EFI_STATUS EFIAPI bridge_mem_write(EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *this, EFI_PCI_IO_PROTOCOL_WIDTH width,
+					  UINT64 address, UINTN count, VOID *buffer)
+{
+	(void)this; (void)width; (void)address; (void)count; (void)buffer;
+	fw.mem_writes++;
+	return EFI_SUCCESS;
+}
+
+/* The windows of the root bridge belong to the firmware: the caller does not free them. */
+static EFI_STATUS EFIAPI bridge_configuration(EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *this, VOID **resources)
+{
+	(void)this;
+	if (fw.bridge_bytes == 0) return EFI_UNSUPPORTED;
+	*resources = fw.bridge_list;
+	return EFI_SUCCESS;
+}
+
+/* One QWORD memory descriptor at list + at, as edk2 PciIoGetBarAttributes fills it. Returns the next offset. */
+static size_t qword_memory(unsigned char *list, size_t at, unsigned long long minimum, unsigned long long length)
+{
+	memset(list + at, 0, 46);
+	list[at] = 0x8A;
+	list[at + 1] = 0x2B;
+	list[at + 6] = 32;
+	put64(list + at + 14, minimum);
+	put64(list + at + 22, length ? length - 1u : 0u);
+	put64(list + at + 38, length);
+	return at + 46u;
+}
+
+static size_t end_tag(unsigned char *list, size_t at)
+{
+	list[at] = 0x79;
+	list[at + 1] = 0;
+	return at + 2u;
+}
+
+/* The BARs of unit A (lspci of evidence/linux/2026-09-22-E21-linux-reference-4): two 64-bit prefetchable memory
+ * BARs, an I/O BAR, and BAR5 as a 32-bit memory BAR, with the memory decode on. */
+static void unit_a_bars(void)
+{
+	static const unsigned bars[6] = { 0xC000000Cu, 0, 0xD000000Cu, 0, 0x0000E001u, (unsigned)FW_BAR5 };
+	unsigned i;
+	fw.pci[4] = 0x06; fw.pci[5] = 0x04;
+	for (i = 0; i < 6; i++) {
+		fw.pci[16 + 4 * i] = (unsigned char)bars[i];
+		fw.pci[17 + 4 * i] = (unsigned char)(bars[i] >> 8);
+		fw.pci[18 + 4 * i] = (unsigned char)(bars[i] >> 16);
+		fw.pci[19 + 4 * i] = (unsigned char)(bars[i] >> 24);
+	}
+}
+
+/* One BarIndex of the model with one memory descriptor. */
+static void bar_descriptor(unsigned index, unsigned long long minimum, unsigned long long length)
+{
+	fw.bar_bytes[index] = end_tag(fw.bar_list[index], qword_memory(fw.bar_list[index], 0, minimum, length));
+}
+
+/* A root bridge of segment 0 with one memory window. */
+static void add_bridge(unsigned long long minimum, unsigned long long length)
+{
+	fw.bridge_bytes = end_tag(fw.bridge_list, qword_memory(fw.bridge_list, 0, minimum, length));
+	add_protocol(&fw_handle_bridge, &guid_bridge, &fw_bridge);
+}
+
 static size_t add_structure(unsigned char *t, size_t at, const unsigned char *formatted, size_t bytes,
 			    const char *const *strings, unsigned count)
 {
@@ -625,6 +754,13 @@ static int new_firmware(const char *acpi_dir)
 	fw_acpi_sdt.GetAcpiTable = fw_get_table;
 	fw_pci.Pci.Read = pci_read;
 	fw_pci.GetLocation = pci_location;
+	fw_pci.GetBarAttributes = pci_bar_attributes;
+	fw_pci.Mem.Read = pci_mem_read;
+	fw_pci.Mem.Write = pci_mem_write;
+	fw_bridge.Mem.Read = bridge_mem_read;
+	fw_bridge.Mem.Write = bridge_mem_write;
+	fw_bridge.Configuration = bridge_configuration;
+	fw_bridge.SegmentNumber = 0;
 
 	/* The file path of the stage image: one media file path node and the end node. */
 	fw_image_path[0] = EFI_DP_TYPE_MEDIA;
@@ -1102,6 +1238,82 @@ static void test_probe(const char *acpi_dir, const char *fixtures)
 	CHECK(fw.pool_live == 0);
 }
 
+/* The probe of core-unlock: unlock=0 probe=1 identifies the register BAR and reads the control register only. */
+static void test_probe_bar(const char *acpi_dir, const char *fixtures)
+{
+	int reset;
+	/* The decode is off in the plain model: the dump runs, nothing is read through a BAR. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(said("core-unlock: bar: function 1002:13FE") && said("the GPU function's memory decode is off"));
+	CHECK(said("bar: BarIndex 5: status 0x8000000000000003") && said("probe: the register BAR is not identified"));
+	CHECK(fw.mem_reads == 0 && fw.mem_writes == 0 && fw.pool_live == 0);
+
+	/* The edk2 numbering: a 64-bit BAR is one index, so BAR5 of unit A is BarIndex 3. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	unit_a_bars();
+	bar_descriptor(0, 0xC0000000ull, 0x10000000ull);
+	bar_descriptor(1, 0xD0000000ull, 0x200000ull);
+	bar_descriptor(3, FW_BAR5, 0x80000ull);
+	fw.register_index = 3;
+	fw.control_value = CU_BAR_CONTROL_VALUE;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(said("configuration BAR0 to BAR5: 0xC000000C 0x0 0xD000000C 0x0 0xE001 0xFE800000"));
+	CHECK(said("bar: BarIndex 3 descriptor 0: minimum 0xFE800000, maximum 0x7FFFF, translation 0x0, length 0x80000"));
+	CHECK(said("bar: BarIndex 3: 1 descriptors, end tag at byte 46"));
+	CHECK(said("one PCI I/O BarIndex describes BAR5: BarIndex 3") && said("identified at 0xFE800000"));
+	CHECK(said("probe: the register BAR is identified, no message sent"));
+	CHECK(fw.mem_reads == 1 && fw.mem_writes == 0 && fw.bridge_reads == 0 && fw.pool_live == 0);
+
+	/* The failure of kit r2: BarIndex 5 has a descriptor of length 0. Without a root bridge: refused. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	unit_a_bars();
+	bar_descriptor(5, 0x300000ull, 0);
+	fw.register_index = 5;
+	fw.control_value = CU_BAR_CONTROL_VALUE;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(said("bar: BarIndex 5 descriptor 0: minimum 0x300000, maximum 0x0, translation 0x0, length 0x0"));
+	CHECK(said("bar: 0 root bridges") && said("no single root bridge serves its address"));
+	CHECK(fw.mem_reads == 0 && fw.mem_writes == 0 && fw.pool_live == 0);
+
+	/* The same firmware with one root bridge whose window holds BAR5: the control reads through the bridge. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	unit_a_bars();
+	bar_descriptor(5, 0x300000ull, 0);
+	add_bridge(0xC0000000ull, 0x3F000000ull);
+	fw.control_value = CU_BAR_CONTROL_VALUE;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(said("bar: root bridge 0 descriptor 0: minimum 0xC0000000") && said("one root bridge serves its address"));
+	CHECK(said("reads 0x44, known 0x44: the control register has its known value"));
+	CHECK(said("probe: the register BAR is identified, no message sent"));
+	CHECK(fw.bridge_reads == 1 && fw.mem_writes == 0 && fw.pool_live == 0);
+
+	/* The control register reads another value: refused. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	unit_a_bars();
+	add_bridge(0xC0000000ull, 0x3F000000ull);
+	fw.control_value = 0xFFFFFFFFu;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(said("does not have its known value") && said("probe: the register BAR is not identified"));
+	CHECK(fw.bridge_reads == 1 && fw.mem_writes == 0);
+
+	/* A descriptor at the address of BAR5 with another length: refused before any read. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	unit_a_bars();
+	bar_descriptor(3, FW_BAR5, 0x40000ull);
+	add_bridge(0xC0000000ull, 0x3F000000ull);
+	fw.register_index = 3;
+	fw.control_value = CU_BAR_CONTROL_VALUE;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 probe=1", &reset) == EFI_SUCCESS && said("has another length"));
+	CHECK(fw.mem_reads == 0 && fw.mem_writes == 0 && fw.pool_live == 0);
+}
+
 unsigned firmware_tests(const char *acpi_dir, const char *fixture_dir, unsigned *check_count)
 {
 	size_t bytes = 0;
@@ -1113,6 +1325,7 @@ unsigned firmware_tests(const char *acpi_dir, const char *fixture_dir, unsigned 
 		test_core(acpi_dir, fixture_dir);
 		test_log(acpi_dir, fixture_dir);
 		test_probe(acpi_dir, fixture_dir);
+		test_probe_bar(acpi_dir, fixture_dir);
 		test_acpi(acpi_dir, fixture_dir);
 		test_secure_boot(acpi_dir, fixture_dir);
 	}

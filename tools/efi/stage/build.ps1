@@ -51,7 +51,7 @@ function Sources([string]$directory, [string[]]$names) { $names | ForEach-Object
 # The pure code of each part: it builds for the firmware and for the host tests.
 $libPure = Sources 'lib' @('efl_sha256.c', 'efl_smbios.c', 'efl_text.c', 'acpi\efl_acpi.c', 'acpi\efl_aml.c', 'acpi\efl_amlw.c')
 $corePure = Sources 'stage\src' @('stage_options.c')
-$unlockPure = Sources 'core-unlock\src' @('cu_decide.c', 'cu_run.c', 'cu_smu.c', 'cu_msr.c', 'cu_report.c', 'cu_options.c')
+$unlockPure = Sources 'core-unlock\src' @('cu_bar.c', 'cu_decide.c', 'cu_run.c', 'cu_smu.c', 'cu_msr.c', 'cu_report.c', 'cu_options.c')
 $repairPure = Sources 'acpi-repair\src' @('ar_plan.c')
 $securePure = Sources 'secure-boot\src' @('sb_der.c', 'sb_rsa.c', 'sb_x509.c', 'sb_pe.c', 'sb_pkcs7.c', 'sb_siglist.c',
     'sb_verify.c', 'sb_policy.c')

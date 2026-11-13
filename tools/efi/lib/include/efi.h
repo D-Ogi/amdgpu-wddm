@@ -282,21 +282,41 @@ struct EFI_PCI_IO_PROTOCOL {
 	VOID *RomImage;
 };
 
-/* The ACPI QWORD address space descriptor that GetBarAttributes returns (ACPI 6.5 section 6.4.3.5.1). */
-#define EFL_ACPI_QWORD_DESCRIPTOR	0x8Au
-#define EFL_ACPI_RESOURCE_MEMORY		0x00u
-typedef struct __attribute__((packed)) {
-	UINT8 Desc;
-	UINT16 Len;
-	UINT8 ResType;
-	UINT8 GenFlag;
-	UINT8 SpecificFlag;
-	UINT64 AddrSpaceGranularity;
-	UINT64 AddrRangeMin;
-	UINT64 AddrRangeMax;
-	UINT64 AddrTranslationOffset;
-	UINT64 AddrLen;
-} EFL_ACPI_QWORD_ADDRESS_DESCRIPTOR;
+/* GetBarAttributes gives its resources as a list of ACPI resource descriptors that ends with an end tag. The
+ * stage reads the list as bytes (core-unlock/src/cu_bar.c), so that a descriptor of another type than QWORD reads
+ * as what it is. */
+
+/* ---- PCI Root Bridge I/O (UEFI 2.10 section 14.2) ---------------------------------------------- */
+
+#define EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_GUID \
+	{ 0x2F707EBB, 0x4A1A, 0x11D4, { 0x9A, 0x38, 0x00, 0x90, 0x27, 0x3F, 0xC1, 0x4D } }
+typedef struct EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL;
+/* The width values are the same as those of EFI_PCI_IO_PROTOCOL_WIDTH. */
+typedef struct {
+	EFI_STATUS (EFIAPI *Read)(EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This, EFI_PCI_IO_PROTOCOL_WIDTH Width, UINT64 Address,
+				  UINTN Count, VOID *Buffer);
+	EFI_STATUS (EFIAPI *Write)(EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This, EFI_PCI_IO_PROTOCOL_WIDTH Width,
+				   UINT64 Address, UINTN Count, VOID *Buffer);
+} EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_ACCESS;
+struct EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL {
+	EFI_HANDLE ParentHandle;
+	VOID *PollMem;
+	VOID *PollIo;
+	EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_ACCESS Mem;
+	EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_ACCESS Io;
+	EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_ACCESS Pci;
+	VOID *CopyMem;
+	VOID *Map;
+	VOID *Unmap;
+	VOID *AllocateBuffer;
+	VOID *FreeBuffer;
+	VOID *Flush;
+	VOID *GetAttributes;
+	VOID *SetAttributes;
+	/* The resources of the root bridge. The buffer belongs to the firmware: the caller does not free it. */
+	EFI_STATUS (EFIAPI *Configuration)(EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This, VOID **Resources);
+	UINT32 SegmentNumber;
+};
 
 /* ---- MP Services (PI Specification volume 2) ------------------------------------------------- */
 
