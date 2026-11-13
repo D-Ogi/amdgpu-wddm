@@ -443,11 +443,17 @@ size_t ar_build_tpm2(const struct ar_plan *plan, unsigned char *out, size_t capa
 	if (!plan->device || base == 0) return 0;
 	efl_amlw_init(&w, out, capacity);
 	efl_amlw_table_begin(&w, "TPM2", 4, AR_OEM_ID, "BC250TPM", 1, "BCST", 1);
-	/* PlatformClass 0 in the low half of the flags, then the control address, then start method 7 (CRB). */
+	/* PlatformClass 0 in the low half of the flags, the control area of locality 0 (page + 0x40), start method 7
+	 * (CRB), then the 12 zero bytes of the start method specific parameters that revision 4 defines. */
 	body[0] = body[1] = body[2] = body[3] = 0;
-	for (k = 0; k < 8; k++) body[4 + k] = (unsigned char)(base >> (8 * k));
+	for (k = 0; k < 8; k++) body[4 + k] = (unsigned char)((base + 0x40ull) >> (8 * k));
 	body[12] = 7; body[13] = 0; body[14] = 0; body[15] = 0;
 	efl_amlw_bytes(&w, body, sizeof(body));
+	{
+		unsigned char params[12];
+		for (k = 0; k < sizeof(params); k++) params[k] = 0;
+		efl_amlw_bytes(&w, params, sizeof(params));
+	}
 	return efl_amlw_table_end(&w);
 }
 
