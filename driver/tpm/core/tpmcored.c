@@ -103,6 +103,13 @@ static int restart_failed_tpm(void)
 	return restarted;
 }
 
+static DWORD WINAPI restart_thread(LPVOID unused)
+{
+	(void)unused;
+	say("tpm restarts asked: %d", restart_failed_tpm());
+	return 0;
+}
+
 /* One overlapped DeviceIoControl that the stop event can interrupt. Returns 1 with *bytes set, 0 on failure or
  * stop. */
 static int ioctl_wait(HANDLE dev, DWORD code, const void *in, DWORD in_bytes, void *out, DWORD out_bytes, DWORD *bytes)
@@ -180,7 +187,13 @@ static void run(void)
 			continue;
 		}
 		say("connected to the filter");
-		restart_failed_tpm();
+		/* The restart waits for the start of tpm.sys, and tpm.sys waits for answers from serve(): it must run on
+		 * its own thread, or the two wait for each other. */
+		{
+			HANDLE t = CreateThread(NULL, 0, restart_thread, NULL, 0, NULL);
+			if (t != NULL) CloseHandle(t);
+			else say("restart thread failed (%lu)", GetLastError());
+		}
 		serve(dev);
 		CloseHandle(dev);
 	}
