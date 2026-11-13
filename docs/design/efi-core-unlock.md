@@ -1,8 +1,12 @@
 # The EFI core unlock
 
 The code: [`tools/efi/core-unlock/`](../../tools/efi/core-unlock/). The build and the installation steps:
-[its README](../../tools/efi/core-unlock/README.md). The route it uses: [the core mask in the tuner page](tuner.md)
-and the facts M961 and M962.
+[the README of the stage](../../tools/efi/stage/README.md). The route it uses:
+[the core mask in the tuner page](tuner.md) and the facts M961 and M962.
+
+The core unlock is the first module of the EFI stage, `bc250-stage.efi`. [The stage page](efi-resident-stage.md)
+describes the core, the other modules and the load options of all modules. In this page, "the application" is the
+stage with this module.
 
 ## What it is
 
@@ -10,7 +14,7 @@ The BC-250 is sold with 6 of its 8 CPU cores enabled. The Windows driver enables
 message `BC250_CPU_MSG_STORE_FF`, and the cores arrive at the next warm restart (M961). A cold boot gives the stock
 mask back. So with the driver alone, every cold boot needs one extra Windows restart for 8 cores.
 
-`core-unlock.efi` is a UEFI application that sends the same message before Windows starts. It then resets the
+The core unlock sends the same message from the UEFI stage, before Windows starts. It then resets the
 board, and the firmware starts with 8 cores. The next start of the application sees 16 logical processors and
 starts the Windows Boot Manager. The application changes no firmware setting and writes no NVRAM variable.
 
@@ -21,14 +25,16 @@ starts the Windows Boot Manager. The application changes no firmware setting and
 | `src/cu_decide.c` | the decision table below, a pure function of four observations | yes, every combination |
 | `src/cu_run.c` | the steps of one start, over a table of operations | yes, with recorded operations |
 | `src/cu_smu.c` | the message, over the shim's transport and policy | yes, against a model of queue 3 |
-| `src/cu_acpi.c` | the FADT reset register and the MADT processor count | yes, with synthetic tables |
-| `src/cu_smbios.c` | the SMBIOS table in the form the driver's identity check reads | yes, with the driver's check |
-| `src/cu_text.c` | the load options, the device paths and the console lines | yes |
-| `src/cu_aml.c` | the name scan of a DSDT or SSDT for the report | yes, with the stored tables of unit A |
+| `src/cu_options.c` | the load options of this module, read from the options of the stage | yes |
 | `src/cu_msr.c` | the register list of the report and the CPUID check before each read | yes, with a model of CPUID |
 | `src/cu_report.c` | the text of the report | yes, with the stored tables of unit A |
 | `src/report_uefi.c` | the UEFI binding of the report: MP Services, the register reads, GOP, the report file | no, the lab runs it |
-| `src/main.c` | the UEFI binding: the operations, the reset and the start of Windows | no, the lab runs it |
+| `src/cu_module.c` | the UEFI binding of the module: the operations and the reset | no, the lab runs it |
+| `../lib/acpi/efl_acpi.c` | shared: the FADT reset register and the MADT processor count | yes, with synthetic tables |
+| `../lib/acpi/efl_aml.c` | shared: the name scan of a DSDT or SSDT for the report | yes, with the stored tables of unit A |
+| `../lib/efl_smbios.c` | shared: the SMBIOS table in the form the driver's identity check reads | yes, with the driver's check |
+| `../lib/efl_text.c` | shared: the device paths and the console lines | yes |
+| `../stage/src/main.c` | the core of the stage: the board identity and the start of Windows | no, the lab runs it |
 
 The application shares four files with the driver and copies none of them. `driver/shim/bc250_smu.c` is the SMU
 transport. `driver/shim/bc250_cpu.c` holds the allowlist, the argument check and the mailbox registers of queue 3.
@@ -206,7 +212,7 @@ and not to use hibernation, and the tool's README says so.
 
 ## The installation
 
-The installation puts `core-unlock.efi` in its own directory on the EFI System Partition. It adds one firmware
+The installation puts `bc250-stage.efi` in its own directory on the EFI System Partition. It adds one firmware
 boot entry for it, first in the boot order, and leaves the Windows Boot Manager entry in place. Explicit consent
 covers this one entry and no other NVRAM variable. The removal deletes the entry and the directory. The README of
 the tool gives the steps.
