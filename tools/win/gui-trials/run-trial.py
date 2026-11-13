@@ -37,6 +37,8 @@ STAGES = {'L1': {'view'}, 'L3': {'startup-and-click'},
                    'request-24', 'observe-24'}, 'L-OFF': {'repair'}}
 TERMINAL = {'evidence-ready', 'failed', 'stopped', 'recovery-required'}
 SUPPORT = ['gui-trial-common.ps1', 'gui-trial-firewall.ps1']
+# BD-376: the temperature levels of the one definition, staged beside the scripts (gui-trial-common.ps1 reads them).
+THERMAL_LEVELS = WIN / 'lab-thermal/thermal-levels.json'
 
 
 def utc():
@@ -136,7 +138,7 @@ class LabIO:
         return result.stdout
 
     def stage(self):
-        files = [HERE / name for name in SUPPORT] + [HERE / (self.config['trial'] + '.ps1')]
+        files = [HERE / name for name in SUPPORT] + [THERMAL_LEVELS, HERE / (self.config['trial'] + '.ps1')]
         files.append(self.output / 'config.json')
         for file in files:
             if not file.is_file():

@@ -147,6 +147,25 @@ function ConvertFrom-GuiTemperatureText([string]$Text) {
     if($value -lt -20 -or $value -gt 130){throw 'Implausible thermal reading'}
     return $value
 }
+# BD-376: the temperature levels come from thermal-levels.json, which run-trial.py stages beside this file from the
+# one definition (tools/win/lab-thermal). No level is written in this file.
+function Read-GuiThermalLevels([string]$Path) {
+    $levels=[IO.File]::ReadAllText($Path)|ConvertFrom-Json
+    if($levels.schema -cne 'bc250.lab-thermal-levels.v1'){throw 'thermal-levels.json has an unknown schema'}
+    return $levels
+}
+# One reading against the stop rule. HotSince is the QPC of the first reading of the current hot run, -1 for none.
+# A reading at or above stop_at_once_c stops at once; a run of readings at or above stop_held_c stops when it has
+# lasted stop_held_s; a reading below stop_held_c ends the run.
+function Step-GuiThermalHold($Levels,[double]$Celsius,[long]$Qpc,[long]$Frequency,[long]$HotSince) {
+    if($Celsius -ge $Levels.stop_at_once_c){return @{stop=('temperature-at-or-above-'+$Levels.stop_at_once_c+'C');hot_since=$HotSince}}
+    if($Celsius -lt $Levels.stop_held_c){return @{stop='';hot_since=[long]-1}}
+    $since=if($HotSince -ge 0){$HotSince}else{$Qpc}
+    if(($Qpc-$since) -ge [long]($Levels.stop_held_s*$Frequency)){
+        return @{stop=('temperature-at-or-above-'+$Levels.stop_held_c+'C-for-'+$Levels.stop_held_s+'s');hot_since=$since}
+    }
+    return @{stop='';hot_since=$since}
+}
 function Read-GuiTemperature($C,$Boundary,[int]$Sequence) {
     $deadline=[Math]::Min([long]$Boundary.work_deadline_qpc,(Get-GuiQpc)+3*[Diagnostics.Stopwatch]::Frequency)
     $stem='thermal-'+$Sequence
@@ -278,9 +297,10 @@ function Invoke-GuiSupervisor($C,[string]$Script,[string]$ConfigPath) {
             Enable-GuiOffline $C $b
             Add-GuiEvent $C 'stage' @{name='offline-ready';action='record local management continuity and half-scale screenshot'}
         }
-        $thermalSequence=0; $nextThermal=0L
+        $thermalSequence=0; $nextThermal=0L; $hotSince=[long]-1
         if($C.trial -eq 'L-CU') {
-            if((Read-GuiTemperature $C $b $thermalSequence) -ge 87){throw 'Thermal stop before GUI'}
+            $thermal=Read-GuiThermalLevels ($PSScriptRoot+'\thermal-levels.json')
+            if((Read-GuiTemperature $C $b $thermalSequence) -ge $thermal.start_below_c){throw 'Thermal stop before GUI'}
             $thermalSequence++; $nextThermal=(Get-GuiQpc)+2*$freq
         }
         $ps=$env:WINDIR+'\System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -297,7 +317,8 @@ function Invoke-GuiSupervisor($C,[string]$Script,[string]$ConfigPath) {
                 if(-not $stopReason -and $now -ge $b.work_deadline_qpc){$stopReason='work-deadline'}
                 if(-not $stopReason -and $C.trial -eq 'L-CU' -and $now -ge $nextThermal) {
                     try {
-                        if((Read-GuiTemperature $C $b $thermalSequence) -ge 87){$stopReason='temperature-at-or-above-87C'}
+                        $hold=Step-GuiThermalHold $thermal (Read-GuiTemperature $C $b $thermalSequence) (Get-GuiQpc) $freq $hotSince
+                        $hotSince=$hold.hot_since; $stopReason=$hold.stop
                     } catch {$stopReason='thermal-reading-unavailable'}
                     $thermalSequence++; $nextThermal=(Get-GuiQpc)+2*$freq
                 }
@@ -391,7 +412,7 @@ function Invoke-GuiTrial {
         }
         Assert-GuiInputs $C
         Set-GuiAcl $C
-        $scripts=@($Script,($PSScriptRoot+'\gui-trial-common.ps1'),($PSScriptRoot+'\gui-trial-firewall.ps1'))|ForEach-Object {
+        $scripts=@($Script,($PSScriptRoot+'\gui-trial-common.ps1'),($PSScriptRoot+'\gui-trial-firewall.ps1'),($PSScriptRoot+'\thermal-levels.json'))|ForEach-Object {
             [pscustomobject]@{path=$_;sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash}
         }
         foreach($guard in @($false,$true)) {

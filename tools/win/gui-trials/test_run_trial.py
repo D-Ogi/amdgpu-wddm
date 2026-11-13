@@ -183,6 +183,21 @@ class ContractTests(unittest.TestCase):
             self.assertIn('New-Item', commands[0])
             self.assertNotIn('-Force', commands[0])
 
+    def test_stage_pushes_the_thermal_levels_of_the_one_definition(self):
+        # BD-376: gui-trial-common.ps1 reads thermal-levels.json beside itself; the copy is the repository file.
+        self.assertEqual(r.THERMAL_LEVELS, r.WIN / 'lab-thermal/thermal-levels.json')
+        self.assertTrue(r.THERMAL_LEVELS.is_file())
+        with tempfile.TemporaryDirectory(dir=TEMP) as td:
+            root = Path(td)
+            for name in r.SUPPORT + ['L1.ps1', 'config.json']: (root / name).write_text('fixture')
+            io = object.__new__(r.LabIO); io.config = config(); io.output = root
+            pushed = []
+            class Target:
+                def push(self, files, directory, timeout=30): pushed.extend(files)
+            io.target = Target(); io.run = lambda command: 'reserved'
+            with patch.object(r, 'HERE', root): io.stage()
+            self.assertIn(r.THERMAL_LEVELS, pushed)
+
     def test_replayed_events_deduplicate(self):
         with tempfile.TemporaryDirectory(dir=TEMP) as td:
             trial = r.Trial(config(), Path(td), FakeIO())
