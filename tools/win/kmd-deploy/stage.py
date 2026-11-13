@@ -32,6 +32,12 @@ from kmdcommon import (ATTEMPTS, BASE, LAB_BASELINE, MODES, OPS, POWERSHELL, WOR
 import build_helpers  # noqa: E402
 
 SAFE_NAME = re.compile(r'^[a-zA-Z0-9_./-]+$')
+# BD-376: the temperature levels of the lab tools have one definition; preflight.ps1 and postflight.ps1 read the
+# copy that the stage puts beside them. The repository copy of this kit reads the definition of its own repository;
+# an operator copy outside a repository reads the one of the workspace checkout.
+THERMAL_LEVELS = next((path for path in (BASE.parent / 'lab-thermal/thermal-levels.json',
+                                         REPO / 'tools/win/lab-thermal/thermal-levels.json') if path.is_file()),
+                      BASE.parent / 'lab-thermal/thermal-levels.json')
 
 
 def stage_helpers(attempt, helper_dir, helpers):
@@ -195,6 +201,7 @@ def freeze(args):
     for path in sorted((TEMPLATE / TRANSITION).iterdir()):
         if path.name != 'identity.ps1':
             copy_verified(path, attempt / TRANSITION / path.name, digest(path))
+    copy_verified(THERMAL_LEVELS, attempt / TRANSITION / THERMAL_LEVELS.name, digest(THERMAL_LEVELS))
     (attempt / TRANSITION / 'identity.ps1').write_bytes(generated_identity(candidate, rollback, baseline, prefix).encode('utf-8'))
     ident = identity(attempt / TRANSITION / 'identity.ps1')
     helper_binding = stage_helpers(attempt, helper_dir, helpers)
