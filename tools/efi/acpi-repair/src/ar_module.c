@@ -181,15 +181,22 @@ static void ar_module_run(struct stage *stage)
 	input.want_hid_msft = want_hid_msft;
 	ar_plan_make(&input, &plan);
 	if (plan.device) {
-		/* The page that _CRS describes. EfiReservedMemoryType is kept by the operating system and never reused. */
+		/* The page that _CRS describes. acpi.ssdt.tpm.nvs=1 takes EfiACPIMemoryNVS, the type that firmware TPMs use
+		 * (AMD CRB ranges live in ACPI NVS; see the tpm_crb thread of 2019 and the 2026 memremap patch). edk2
+		 * accepts the type in AllocatePages: CoreInternalAllocatePages rejects only EfiConventionalMemory,
+		 * EfiPersistentMemory, EfiUnacceptedMemoryType and the gap below MEMORY_TYPE_OEM_RESERVED_MIN
+		 * (MdeModulePkg/Core/Dxe/Mem/Page.c). */
 		EFI_PHYSICAL_ADDRESS page = 0;
-		EFI_STATUS st = ((EFI_ALLOCATE_PAGES)stage->bs->AllocatePages)(AllocateAnyPages, EfiReservedMemoryType, 1, &page);
+		EFI_MEMORY_TYPE type = stage_option_flag(&stage->options, "acpi.ssdt.tpm.nvs", 0)
+					      ? EfiACPIMemoryNVS : EfiReservedMemoryType;
+		EFI_STATUS st = ((EFI_ALLOCATE_PAGES)stage->bs->AllocatePages)(AllocateAnyPages, type, 1, &page);
 		if (EFI_ERROR(st) || page == 0 || page > 0xFFFFFFFFull) {
 			stage_say(stage, AR_NAME, "the reserved page for the experiment device is not available: no device");
 			plan.device = 0;
 		} else {
 			plan.crb_base = (unsigned long long)page;
-			stage_sayf(stage, AR_NAME, "the experiment device describes the reserved page at 0x%llx", plan.crb_base);
+			stage_sayf(stage, AR_NAME, "the experiment device describes the %s page at 0x%llx",
+				   type == EfiACPIMemoryNVS ? "NVS" : "reserved", plan.crb_base);
 		}
 	}
 	stage_sayf(stage, AR_NAME, "idle states: %s", ar_idle_text(plan.idle));
