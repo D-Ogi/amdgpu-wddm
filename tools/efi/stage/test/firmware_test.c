@@ -1,0 +1,878 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+/*
+ * Host tests of the UEFI bindings of the BC-250 stage: the core (stage/src/main.c), the ACPI module binding and
+ * the Secure Boot module binding. They run the real efi_main against a model of the firmware in this file: a
+ * console, pool memory, a volume with files, the handle database with ReinstallProtocolInterface, LoadImage with
+ * its call of the Security2 protocol, the ACPI table and SDT protocols over real root tables, a PCI function and
+ * an SMBIOS table.
+ *
+ * The model follows the edk2 behaviour that the bindings rely on (commit 8628578dacd3): LoadImage asks the
+ * Security2 protocol that is installed at that moment, EFI_ACCESS_DENIED gives no image handle, and
+ * EFI_SECURITY_VIOLATION gives one. It is a model, not the AMI firmware: the lab steps of the design page stay
+ * necessary. The core unlock binding is not run here, because it reads CPU registers: each test gives unlock=0.
+ */
+#include <setjmp.h>
+#include "efl_test.h"
+#include "efi.h"
+#include "efl_text.h"
+
+EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st);
+
+/* ---- the model ----------------------------------------------------------------------------------- */
+
+#define FW_FILES	8u
+#define FW_TABLES	24u
+#define FW_PROTOCOLS	12u
+#define FW_LOG_BYTES	(64u * 1024u)
+#define SDT_HEADER	36u
+
+struct fw_file { char path[96]; unsigned char *data; size_t bytes; };
+struct fw_open { EFI_FILE_PROTOCOL protocol; const struct fw_file *file; UINT64 position; };
+struct fw_protocol { EFI_HANDLE handle; EFI_GUID guid; VOID *interface; };
+struct fw_table { unsigned char *bytes; size_t length; UINTN key; };
+
+static struct {
+	char log[FW_LOG_BYTES];
+	size_t log_bytes;
+	long pool_live;
+	struct fw_file file[FW_FILES];
+	unsigned files;
+	struct fw_protocol protocol[FW_PROTOCOLS];
+	unsigned protocols;
+	/* LoadImage and StartImage. */
+	unsigned loads, loads_from_buffer, starts, unloads, firmware_checks;
+	int buffer_is_file;		/* the last load from a buffer had the bytes of the file */
+	int stage_check_at_start;	/* the Security2 protocol at StartImage was not the firmware's */
+	EFI_STATUS firmware_check_status, start_status;
+	/* The handle database. */
+	unsigned reinstalls;
+	int refuse_put_back;		/* ReinstallProtocolInterface refuses the firmware's own Security2 */
+	int child_hooks;		/* the started image installs a Security2 of its own and does not unwind */
+	unsigned stalls, resets;
+	jmp_buf reset;
+	/* The ACPI tables. */
+	struct fw_table table[FW_TABLES];
+	unsigned tables;
+	UINTN next_key;
+	unsigned installs, uninstalls;
+	unsigned char rsdp[36], *xsdt, *dsdt;
+	unsigned char pci[64];
+	unsigned char *variable_dbx;	/* the dbx variable of the firmware, or NULL */
+	size_t variable_dbx_bytes;
+} fw;
+
+static int fw_handle_image, fw_handle_device, fw_handle_security, fw_handle_gpu, fw_handle_child;
+static EFI_SYSTEM_TABLE fw_st;
+static EFI_BOOT_SERVICES fw_bs;
+static EFI_RUNTIME_SERVICES fw_rt;
+static EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL fw_console;
+static EFI_LOADED_IMAGE_PROTOCOL fw_loaded;
+static EFI_SIMPLE_FILE_SYSTEM_PROTOCOL fw_fs;
+static EFI_SECURITY2_ARCH_PROTOCOL fw_security2, fw_child_security2;
+static EFI_ACPI_TABLE_PROTOCOL fw_acpi_table;
+static EFI_ACPI_SDT_PROTOCOL fw_acpi_sdt;
+static EFI_PCI_IO_PROTOCOL fw_pci;
+static EFI_CONFIGURATION_TABLE fw_config[2];
+static unsigned char fw_device_path[4] = { EFI_DP_TYPE_END, EFI_DP_END_ENTIRE, 4, 0 };
+static unsigned char fw_image_path[160];
+static unsigned char fw_smbios_entry[24], fw_smbios[512];
+static CHAR16 fw_options[128];
+
+static const EFI_GUID guid_loaded = EFI_LOADED_IMAGE_PROTOCOL_GUID, guid_device_path = EFI_DEVICE_PATH_PROTOCOL_GUID;
+static const EFI_GUID guid_fs = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID, guid_security2 = EFI_SECURITY2_ARCH_PROTOCOL_GUID;
+static const EFI_GUID guid_acpi_table = EFI_ACPI_TABLE_PROTOCOL_GUID, guid_acpi_sdt = EFI_ACPI_SDT_PROTOCOL_GUID;
+static const EFI_GUID guid_pci = EFI_PCI_IO_PROTOCOL_GUID, guid_acpi20 = EFI_ACPI_20_TABLE_GUID;
+static const EFI_GUID guid_smbios3 = EFI_SMBIOS3_TABLE_GUID;
+
+static void narrow(const CHAR16 *wide, char *out, size_t capacity)
+{
+	size_t i;
+	for (i = 0; i + 1u < capacity && wide[i]; i++) out[i] = (char)wide[i];
+	out[i] = 0;
+}
+
+static void put64(unsigned char *p, unsigned long long v)
+{
+	unsigned i;
+	for (i = 0; i < 8; i++) p[i] = (unsigned char)(v >> (8u * i));
+}
+
+static void fix_sum(unsigned char *bytes, size_t length, size_t at)
+{
+	unsigned char sum = 0;
+	size_t i;
+	bytes[at] = 0;
+	for (i = 0; i < length; i++) sum = (unsigned char)(sum + bytes[i]);
+	bytes[at] = (unsigned char)(0u - sum);
+}
+
+/* -- console, memory, time -- */
+
+static EFI_STATUS EFIAPI fw_output(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *this, const CHAR16 *text)
+{
+	(void)this;
+	for (; *text; text++)
+		if (fw.log_bytes + 1u < FW_LOG_BYTES) fw.log[fw.log_bytes++] = (char)*text;
+	fw.log[fw.log_bytes] = 0;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fw_allocate(EFI_MEMORY_TYPE type, UINTN size, VOID **buffer)
+{
+	(void)type;
+	*buffer = malloc(size ? size : 1u);
+	if (*buffer == NULL) return EFI_OUT_OF_RESOURCES;
+	fw.pool_live++;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fw_free(VOID *buffer)
+{
+	free(buffer);
+	fw.pool_live--;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fw_stall(UINTN microseconds)
+{
+	(void)microseconds;
+	fw.stalls++;
+	return EFI_SUCCESS;
+}
+
+static VOID EFIAPI fw_reset_system(EFI_RESET_TYPE type, EFI_STATUS status, UINTN size, VOID *data)
+{
+	(void)type; (void)status; (void)size; (void)data;
+	fw.resets++;
+	longjmp(fw.reset, 1);	/* a reset does not return */
+}
+
+/* -- the volume -- */
+
+static const struct fw_file *find_file(const char *path)
+{
+	unsigned i;
+	for (i = 0; i < fw.files; i++)
+		if (!strcmp(fw.file[i].path, path)) return &fw.file[i];
+	return NULL;
+}
+
+static EFI_STATUS EFIAPI file_close(EFI_FILE_PROTOCOL *this)
+{
+	free(this);
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI file_read(EFI_FILE_PROTOCOL *this, UINTN *size, VOID *buffer)
+{
+	struct fw_open *open = (struct fw_open *)this;
+	UINT64 left = open->file->bytes - open->position;
+	if (*size > left) *size = left;
+	memcpy(buffer, open->file->data + open->position, *size);
+	open->position += *size;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI file_get_position(EFI_FILE_PROTOCOL *this, UINT64 *position)
+{
+	*position = ((struct fw_open *)this)->position;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI file_set_position(EFI_FILE_PROTOCOL *this, UINT64 position)
+{
+	struct fw_open *open = (struct fw_open *)this;
+	open->position = position > open->file->bytes ? open->file->bytes : position;	/* ~0 is the end */
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI file_open(EFI_FILE_PROTOCOL *this, EFI_FILE_PROTOCOL **out, const CHAR16 *name, UINT64 mode,
+				   UINT64 attributes)
+{
+	static const struct fw_file root = { "", NULL, 0 };
+	struct fw_open *open;
+	const struct fw_file *file = &root;
+	char path[96];
+	(void)attributes;
+	if (this != NULL) {
+		narrow(name, path, sizeof(path));
+		file = find_file(path);
+		if (file == NULL) return EFI_NOT_FOUND;
+		if (mode != EFI_FILE_MODE_READ) return EFI_WRITE_PROTECTED;	/* the stage writes no file in these tests */
+	}
+	open = calloc(1, sizeof(*open));
+	open->protocol.Open = file_open;
+	open->protocol.Close = file_close;
+	open->protocol.Read = file_read;
+	open->protocol.GetPosition = file_get_position;
+	open->protocol.SetPosition = file_set_position;
+	open->file = file;
+	*out = &open->protocol;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fs_open_volume(EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *this, EFI_FILE_PROTOCOL **root)
+{
+	(void)this;
+	return file_open(NULL, root, NULL, EFI_FILE_MODE_READ, 0);
+}
+
+/* -- the handle database -- */
+
+static struct fw_protocol *find_protocol(EFI_HANDLE handle, const EFI_GUID *guid)
+{
+	unsigned i;
+	for (i = 0; i < fw.protocols; i++)
+		if ((handle == NULL || fw.protocol[i].handle == handle) && !memcmp(&fw.protocol[i].guid, guid, sizeof(*guid)))
+			return &fw.protocol[i];
+	return NULL;
+}
+
+static void add_protocol(EFI_HANDLE handle, const EFI_GUID *guid, VOID *interface)
+{
+	struct fw_protocol *p = &fw.protocol[fw.protocols++];
+	p->handle = handle;
+	p->guid = *guid;
+	p->interface = interface;
+}
+
+static EFI_STATUS EFIAPI fw_handle_protocol(EFI_HANDLE handle, const EFI_GUID *guid, VOID **interface)
+{
+	struct fw_protocol *p = find_protocol(handle, guid);
+	if (p == NULL) return EFI_UNSUPPORTED;
+	*interface = p->interface;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fw_locate_protocol(const EFI_GUID *guid, VOID *registration, VOID **interface)
+{
+	struct fw_protocol *p = find_protocol(NULL, guid);
+	(void)registration;
+	if (p == NULL) return EFI_NOT_FOUND;
+	*interface = p->interface;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fw_locate_handle_buffer(EFI_LOCATE_SEARCH_TYPE type, const EFI_GUID *guid, VOID *key,
+						 UINTN *count, EFI_HANDLE **buffer)
+{
+	EFI_HANDLE *list = NULL;
+	unsigned i, n = 0;
+	(void)type; (void)key;
+	fw_allocate(EfiBootServicesData, FW_PROTOCOLS * sizeof(EFI_HANDLE), (VOID **)&list);
+	for (i = 0; i < fw.protocols; i++)
+		if (!memcmp(&fw.protocol[i].guid, guid, sizeof(*guid))) list[n++] = fw.protocol[i].handle;
+	if (n == 0) {
+		fw_free(list);
+		return EFI_NOT_FOUND;
+	}
+	*count = n;
+	*buffer = list;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fw_reinstall(EFI_HANDLE handle, const EFI_GUID *guid, VOID *old, VOID *new)
+{
+	struct fw_protocol *p = find_protocol(handle, guid);
+	if (p == NULL || p->interface != old) return EFI_NOT_FOUND;
+	if (fw.refuse_put_back && new == &fw_security2) return EFI_ACCESS_DENIED;
+	p->interface = new;
+	fw.reinstalls++;
+	return EFI_SUCCESS;
+}
+
+/* -- images -- */
+
+static EFI_STATUS EFIAPI fw_firmware_check(const EFI_SECURITY2_ARCH_PROTOCOL *this, const EFI_DEVICE_PATH_PROTOCOL *file,
+					   VOID *buffer, UINTN bytes, BOOLEAN boot_policy)
+{
+	(void)file; (void)buffer; (void)bytes; (void)boot_policy;
+	if (this != &fw_security2) failures++;	/* the firmware's function gets the firmware's structure */
+	fw.firmware_checks++;
+	return fw.firmware_check_status;
+}
+
+static EFI_STATUS EFIAPI fw_load_image(BOOLEAN boot_policy, EFI_HANDLE parent, EFI_DEVICE_PATH_PROTOCOL *path,
+				       VOID *buffer, UINTN size, EFI_HANDLE *image)
+{
+	struct fw_protocol *security = find_protocol(NULL, &guid_security2);
+	const struct fw_file *file;
+	unsigned short wide[96];
+	char name[96];
+	EFI_STATUS status = EFI_SUCCESS;
+	(void)parent;
+	*image = NULL;
+	fw.loads++;
+	if (!efl_devpath_file((const unsigned char *)path, 4096, wide, 96)) return EFI_NOT_FOUND;
+	narrow(wide, name, sizeof(name));
+	file = find_file(name);
+	if (buffer != NULL) {
+		fw.loads_from_buffer++;
+		fw.buffer_is_file = file != NULL && file->bytes == size && !memcmp(file->data, buffer, size);
+	} else {
+		if (file == NULL) return EFI_NOT_FOUND;
+		buffer = file->data;
+		size = file->bytes;
+	}
+	if (security != NULL) {
+		EFI_SECURITY2_ARCH_PROTOCOL *check = security->interface;
+		status = check->FileAuthentication(check, path, buffer, size, boot_policy);
+	}
+	if (status == EFI_ACCESS_DENIED) return status;
+	*image = &fw_handle_child;
+	return status == EFI_SUCCESS ? EFI_SUCCESS : EFI_SECURITY_VIOLATION;
+}
+
+static EFI_STATUS EFIAPI fw_start_image(EFI_HANDLE image, UINTN *exit_size, CHAR16 **exit_data)
+{
+	struct fw_protocol *security = find_protocol(NULL, &guid_security2);
+	(void)exit_size; (void)exit_data;
+	if (image != &fw_handle_child) failures++;
+	fw.starts++;
+	fw.stage_check_at_start = security != NULL && security->interface != &fw_security2;
+	if (fw.child_hooks && security != NULL) security->interface = &fw_child_security2;
+	return fw.start_status;
+}
+
+static EFI_STATUS EFIAPI fw_unload_image(EFI_HANDLE image)
+{
+	if (image != &fw_handle_child) failures++;
+	fw.unloads++;
+	return EFI_SUCCESS;
+}
+
+/* -- variables: read only -- */
+
+static EFI_STATUS EFIAPI fw_get_variable(CHAR16 *name, EFI_GUID *vendor, UINT32 *attributes, UINTN *size, VOID *data)
+{
+	char text[16];
+	(void)vendor; (void)attributes;
+	narrow(name, text, sizeof(text));
+	if (strcmp(text, "dbx") != 0 || fw.variable_dbx == NULL) return EFI_NOT_FOUND;
+	if (*size < fw.variable_dbx_bytes) {
+		*size = fw.variable_dbx_bytes;
+		return EFI_BUFFER_TOO_SMALL;
+	}
+	memcpy(data, fw.variable_dbx, fw.variable_dbx_bytes);
+	*size = fw.variable_dbx_bytes;
+	return EFI_SUCCESS;
+}
+
+/* -- ACPI: the root tables are built again after each change, at a new address, as a firmware can do -- */
+
+static void build_roots(void)
+{
+	size_t length = SDT_HEADER + 8u * fw.tables;
+	unsigned i;
+	free(fw.xsdt);
+	fw.xsdt = calloc(1, length);
+	memcpy(fw.xsdt, "XSDT", 4);
+	fw.xsdt[4] = (unsigned char)length;
+	fw.xsdt[5] = (unsigned char)(length >> 8);
+	fw.xsdt[8] = 1;
+	for (i = 0; i < fw.tables; i++) put64(fw.xsdt + SDT_HEADER + 8u * i, (unsigned long long)(size_t)fw.table[i].bytes);
+	fix_sum(fw.xsdt, length, 9);
+	memset(fw.rsdp, 0, sizeof(fw.rsdp));
+	memcpy(fw.rsdp, "RSD PTR ", 8);
+	fw.rsdp[15] = 2;
+	fw.rsdp[20] = 36;
+	put64(fw.rsdp + 24, (unsigned long long)(size_t)fw.xsdt);
+	fix_sum(fw.rsdp, 20, 8);
+	fix_sum(fw.rsdp, 36, 32);
+}
+
+static void add_table(const unsigned char *bytes, size_t length, int sum)
+{
+	struct fw_table *t = &fw.table[fw.tables++];
+	t->bytes = malloc(length);
+	memcpy(t->bytes, bytes, length);
+	if (sum) fix_sum(t->bytes, length, 9);
+	t->length = length;
+	t->key = ++fw.next_key;
+	build_roots();
+}
+
+static EFI_STATUS EFIAPI fw_install_table(EFI_ACPI_TABLE_PROTOCOL *this, VOID *table, UINTN size, UINTN *key)
+{
+	(void)this;
+	if (fw.tables == FW_TABLES || size < SDT_HEADER) return EFI_OUT_OF_RESOURCES;
+	add_table(table, size, 1);
+	*key = fw.next_key;
+	fw.installs++;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fw_uninstall_table(EFI_ACPI_TABLE_PROTOCOL *this, UINTN key)
+{
+	unsigned i;
+	(void)this;
+	for (i = 0; i < fw.tables; i++)
+		if (fw.table[i].key == key) {
+			/* The memory of the table is given back, and its bytes are destroyed. */
+			memset(fw.table[i].bytes, 0xDD, fw.table[i].length);
+			free(fw.table[i].bytes);
+			memmove(&fw.table[i], &fw.table[i + 1u], (fw.tables - i - 1u) * sizeof(fw.table[0]));
+			fw.tables--;
+			fw.uninstalls++;
+			build_roots();
+			return EFI_SUCCESS;
+		}
+	return EFI_NOT_FOUND;
+}
+
+static EFI_STATUS EFIAPI fw_get_table(UINTN index, VOID **table, UINT32 *version, UINTN *key)
+{
+	if (index >= fw.tables) return EFI_NOT_FOUND;
+	*table = fw.table[index].bytes;
+	*version = 1u << 5;
+	*key = fw.table[index].key;
+	return EFI_SUCCESS;
+}
+
+static int has_table(const char *oem_table_id)
+{
+	unsigned i;
+	for (i = 0; i < fw.tables; i++)
+		if (!strncmp((const char *)fw.table[i].bytes + 16, oem_table_id, strlen(oem_table_id))) return 1;
+	return 0;
+}
+
+/* -- the board -- */
+
+static EFI_STATUS EFIAPI pci_read(EFI_PCI_IO_PROTOCOL *this, EFI_PCI_IO_PROTOCOL_WIDTH width, UINT32 offset, UINTN count,
+				  VOID *buffer)
+{
+	(void)this;
+	if (width != EfiPciIoWidthUint32 || offset + 4u * count > sizeof(fw.pci)) return EFI_INVALID_PARAMETER;
+	memcpy(buffer, fw.pci + offset, 4u * count);
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI pci_location(EFI_PCI_IO_PROTOCOL *this, UINTN *segment, UINTN *bus, UINTN *device, UINTN *function)
+{
+	(void)this;
+	*segment = 0; *bus = 1; *device = 0; *function = 0;
+	return EFI_SUCCESS;
+}
+
+static size_t add_structure(unsigned char *t, size_t at, const unsigned char *formatted, size_t bytes,
+			    const char *const *strings, unsigned count)
+{
+	unsigned i;
+	memcpy(t + at, formatted, bytes);
+	at += bytes;
+	for (i = 0; i < count; i++) {
+		size_t n = strlen(strings[i]) + 1u;
+		memcpy(t + at, strings[i], n);
+		at += n;
+	}
+	if (count == 0) t[at++] = 0;
+	t[at++] = 0;
+	return at;
+}
+
+/* The SMBIOS table of a BC-250, with the strings that driver/kmd/board_identity.c accepts, behind a 3.0 entry
+ * point. */
+static void build_smbios(void)
+{
+	static const char *const bios[] = { "American Megatrends Inc.", "P5.00", "05/03/2022" };
+	static const char *const board[] = { "ASRock", "AMD BC-250" };
+	unsigned char b0[0x12] = { 0, 0x12, 0, 0, 1, 2, 0, 0, 3 };
+	unsigned char b1[0x1B] = { 1, 0x1B, 1, 0 };
+	unsigned char b2[0x08] = { 2, 0x08, 2, 0, 1, 2 };
+	unsigned char end[4] = { 127, 4, 3, 0 };
+	size_t at = 0;
+	unsigned i;
+	for (i = 0; i < 16; i++) b1[8 + i] = (unsigned char)(0x10 + i);
+	at = add_structure(fw_smbios, at, b0, sizeof(b0), bios, 3);
+	at = add_structure(fw_smbios, at, b1, sizeof(b1), NULL, 0);
+	at = add_structure(fw_smbios, at, b2, sizeof(b2), board, 2);
+	at = add_structure(fw_smbios, at, end, sizeof(end), NULL, 0);
+	memset(fw_smbios_entry, 0, sizeof(fw_smbios_entry));
+	memcpy(fw_smbios_entry, "_SM3_", 5);
+	fw_smbios_entry[6] = 24;
+	fw_smbios_entry[7] = 3;
+	fw_smbios_entry[8] = 4;
+	fw_smbios_entry[10] = 1;
+	fw_smbios_entry[12] = (unsigned char)at;
+	fw_smbios_entry[13] = (unsigned char)(at >> 8);
+	put64(fw_smbios_entry + 16, (unsigned long long)(size_t)fw_smbios);
+	fix_sum(fw_smbios_entry, 24, 5);
+}
+
+/* ---- one start of the stage ---------------------------------------------------------------------- */
+
+static void add_file(const char *path, const char *dir, const char *name)
+{
+	struct fw_file *f = &fw.file[fw.files];
+	snprintf(f->path, sizeof(f->path), "%s", path);
+	f->data = efl_test_load(dir, name, &f->bytes);
+	if (f->data == NULL) {
+		failures++;
+		printf("FAIL firmware model: %s/%s did not read\n", dir, name);
+		return;
+	}
+	fw.files++;
+}
+
+static void free_firmware(void)
+{
+	unsigned i;
+	for (i = 0; i < fw.files; i++) free(fw.file[i].data);
+	for (i = 0; i < fw.tables; i++) free(fw.table[i].bytes);
+	free(fw.xsdt);
+	free(fw.dsdt);
+	free(fw.variable_dbx);
+	memset(&fw, 0, sizeof(fw));
+}
+
+/* A new firmware: a BC-250 with the stock ACPI tables of acpi_dir, and a Security2 protocol. */
+static int new_firmware(const char *acpi_dir)
+{
+	static const char *const stock[] = { "FACP.aml", "APIC.aml", "SSDT1.aml", "SSDT2.aml" };
+	static const char image_file[] = "\\EFI\\BC250\\bc250-stage.efi";
+	size_t bytes, i, n = sizeof(image_file);
+	unsigned char *data;
+
+	free_firmware();
+	fw_console.OutputString = fw_output;
+	fw_bs.AllocatePool = fw_allocate;
+	fw_bs.FreePool = fw_free;
+	fw_bs.Stall = fw_stall;
+	fw_bs.HandleProtocol = fw_handle_protocol;
+	fw_bs.LocateProtocol = fw_locate_protocol;
+	fw_bs.LocateHandleBuffer = fw_locate_handle_buffer;
+	fw_bs.ReinstallProtocolInterface = fw_reinstall;
+	fw_bs.LoadImage = fw_load_image;
+	fw_bs.StartImage = fw_start_image;
+	fw_bs.UnloadImage = fw_unload_image;
+	fw_rt.GetVariable = fw_get_variable;
+	fw_rt.ResetSystem = fw_reset_system;
+	fw_st.ConOut = &fw_console;
+	fw_st.BootServices = &fw_bs;
+	fw_st.RuntimeServices = &fw_rt;
+	fw_fs.OpenVolume = fs_open_volume;
+	fw_security2.FileAuthentication = fw_firmware_check;
+	fw_acpi_table.InstallAcpiTable = fw_install_table;
+	fw_acpi_table.UninstallAcpiTable = fw_uninstall_table;
+	fw_acpi_sdt.GetAcpiTable = fw_get_table;
+	fw_pci.Pci.Read = pci_read;
+	fw_pci.GetLocation = pci_location;
+
+	/* The file path of the stage image: one media file path node and the end node. */
+	fw_image_path[0] = EFI_DP_TYPE_MEDIA;
+	fw_image_path[1] = EFI_DP_MEDIA_FILEPATH;
+	fw_image_path[2] = (unsigned char)(4u + 2u * n);
+	fw_image_path[3] = 0;
+	for (i = 0; i < n; i++) {
+		fw_image_path[4u + 2u * i] = (unsigned char)image_file[i];
+		fw_image_path[5u + 2u * i] = 0;
+	}
+	memcpy(fw_image_path + 4u + 2u * n, fw_device_path, 4);
+	memset(&fw_loaded, 0, sizeof(fw_loaded));
+	fw_loaded.DeviceHandle = &fw_handle_device;
+	fw_loaded.FilePath = (EFI_DEVICE_PATH_PROTOCOL *)fw_image_path;
+
+	add_protocol(&fw_handle_image, &guid_loaded, &fw_loaded);
+	add_protocol(&fw_handle_device, &guid_device_path, fw_device_path);
+	add_protocol(&fw_handle_device, &guid_fs, &fw_fs);
+	add_protocol(&fw_handle_security, &guid_security2, &fw_security2);
+	add_protocol(&fw_handle_security, &guid_acpi_table, &fw_acpi_table);
+	add_protocol(&fw_handle_security, &guid_acpi_sdt, &fw_acpi_sdt);
+	add_protocol(&fw_handle_gpu, &guid_pci, &fw_pci);
+
+	/* The GPU function of a BC-250, as core-unlock/test/host_test.c builds it. */
+	fw.pci[0] = 0x02; fw.pci[1] = 0x10; fw.pci[2] = 0xFE; fw.pci[3] = 0x13; fw.pci[44] = 0x22; fw.pci[45] = 0x10;
+	build_smbios();
+
+	/* The stock tables. The FADT of the model names the DSDT of the model. */
+	fw.dsdt = efl_test_load(acpi_dir, "DSDT.aml", &bytes);
+	if (fw.dsdt == NULL) return 0;
+	for (i = 0; i < sizeof(stock) / sizeof(stock[0]); i++) {
+		data = efl_test_load(acpi_dir, stock[i], &bytes);
+		if (data == NULL) return 0;
+		if (i == 0 && bytes >= 148u) {
+			memset(data + 40, 0, 4);
+			put64(data + 140, (unsigned long long)(size_t)fw.dsdt);
+		}
+		add_table(data, bytes, i == 0);
+		free(data);
+	}
+	fw_config[0].VendorGuid = guid_acpi20;
+	fw_config[0].VendorTable = fw.rsdp;
+	fw_config[1].VendorGuid = guid_smbios3;
+	fw_config[1].VendorTable = fw_smbios_entry;
+	fw_st.NumberOfTableEntries = 2;
+	fw_st.ConfigurationTable = fw_config;
+	return 1;
+}
+
+/* Runs efi_main with these load options. *reset says that the stage restarted the board. */
+static EFI_STATUS run_stage(const char *options, int *reset)
+{
+	EFI_STATUS status = EFI_ABORTED;
+	size_t i;
+	for (i = 0; options[i] && i + 1u < sizeof(fw_options) / sizeof(fw_options[0]); i++) fw_options[i] = (unsigned char)options[i];
+	fw_options[i] = 0;
+	fw_loaded.LoadOptions = fw_options;
+	fw_loaded.LoadOptionsSize = (UINT32)((i + 1u) * sizeof(CHAR16));
+	fw_config[0].VendorTable = fw.rsdp;
+	fw.log_bytes = 0;
+	fw.log[0] = 0;
+	*reset = 0;
+	if (setjmp(fw.reset) == 0)
+		status = efi_main(&fw_handle_image, &fw_st);
+	else
+		*reset = 1;
+	return status;
+}
+
+static int said(const char *text)
+{
+	return strstr(fw.log, text) != NULL;
+}
+
+static VOID *security2_now(void)
+{
+	struct fw_protocol *p = find_protocol(NULL, &guid_security2);
+	return p ? p->interface : NULL;
+}
+
+#define NEXT "\\EFI\\Microsoft\\Boot\\bootmgfw.efi"
+#define BESIDE "\\EFI\\BC250\\"
+
+/* ---- the tests ----------------------------------------------------------------------------------- */
+
+static void test_acpi(const char *acpi_dir, const char *fixtures)
+{
+	unsigned char *bad;
+	size_t bytes;
+	int reset;
+
+	/* A BC-250 with the stock tables: two tables are installed and the stock CPU table is removed. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 sb=0", &reset) == EFI_SUCCESS && !reset);
+	CHECK(said("board BC-250") && said("idle states: table of") && said("method stubs: table of"));
+	CHECK(fw.installs == 2 && fw.uninstalls == 1 && said("the stock CPU table is removed"));
+	CHECK(has_table("CPUIDLE") && has_table("AMLSTUB") && !has_table("AMD CPU"));
+	CHECK(fw.loads == 1 && fw.starts == 1 && fw.loads_from_buffer == 0);
+	CHECK(fw.pool_live == 0);
+	/* A second start on the same firmware finds nothing to do. */
+	CHECK(run_stage("unlock=0 sb=0", &reset) == EFI_SUCCESS && fw.installs == 2 && fw.uninstalls == 1);
+	CHECK(said("no SSDT with the header of the stock CPU table") && said("no called method is without a definition"));
+	CHECK(fw.pool_live == 0);
+
+	/* The off switches of the two tables. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 sb=0 acpi.stubs=0", &reset) == EFI_SUCCESS && fw.installs == 1 && has_table("CPUIDLE"));
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 sb=0 acpi=0", &reset) == EFI_SUCCESS && fw.installs == 0 && fw.uninstalls == 0);
+	CHECK(said("acpi: off by the load option"));
+
+	/* Another PCI function: not a BC-250, and nothing is installed. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.pci[2] = 0xFF;
+	CHECK(run_stage("unlock=0 sb=0", &reset) == EFI_SUCCESS && fw.installs == 0 && said("not a BC-250: nothing done"));
+	CHECK(fw.starts == 1);
+
+	/* A definition block with a wrong checksum in the root table: the set is not whole, and nothing is installed. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	bad = efl_test_load(acpi_dir, "SSDT2.aml", &bytes);
+	if (bad != NULL) {
+		bad[bytes - 1u] ^= 1u;
+		add_table(bad, bytes, 0);
+		free(bad);
+		CHECK(run_stage("unlock=0 sb=0", &reset) == EFI_SUCCESS && fw.installs == 0 && fw.uninstalls == 0);
+		CHECK(said("the table set is not whole") && said("a name collision cannot be excluded"));
+		CHECK(has_table("AMD CPU") && fw.starts == 1);
+	}
+
+	/* No ACPI table protocol. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	find_protocol(NULL, &guid_acpi_table)->guid.Data1 ^= 1u;
+	CHECK(run_stage("unlock=0 sb=0", &reset) == EFI_SUCCESS && fw.installs == 0 && said("no ACPI table protocol"));
+	/* No SDT protocol: the new table is installed and the stock table stays. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	find_protocol(NULL, &guid_acpi_sdt)->guid.Data1 ^= 1u;
+	CHECK(run_stage("unlock=0 sb=0", &reset) == EFI_SUCCESS && fw.installs == 2 && fw.uninstalls == 0);
+	CHECK(said("no ACPI SDT protocol") && has_table("AMD CPU"));
+}
+
+static void test_secure_boot(const char *acpi_dir, const char *fixtures)
+{
+	int reset;
+
+	/* Audit, the default: the image starts from its path, the hook sees the load, and the protocol of the
+	 * firmware is back after the unwind. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_file(BESIDE "db.esl", fixtures, "db_root.esl");
+	CHECK(run_stage("unlock=0 acpi=0", &reset) == EFI_SUCCESS && !reset);
+	CHECK(said("mode audit") && said("the image check is in place"));
+	CHECK(said("the next image, ") && said("allowed: a signature leads to a certificate of db"));
+	CHECK(said("the firmware asked the image check 1 time(s)"));
+	CHECK(fw.loads == 1 && fw.loads_from_buffer == 0 && fw.starts == 1 && fw.firmware_checks == 1);
+	CHECK(fw.stage_check_at_start == 1 && fw.reinstalls == 2 && security2_now() == &fw_security2);
+	CHECK(fw.pool_live == 0);
+	/* Audit refuses nothing: an image that db does not allow starts, and the console says what it is. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed_other.efi");
+	add_file(BESIDE "db.esl", fixtures, "db_root.esl");
+	CHECK(run_stage("unlock=0 acpi=0", &reset) == EFI_SUCCESS && fw.starts == 1 && said("not allowed: the signature is valid"));
+	/* Audit without any file. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 acpi=0", &reset) == EFI_SUCCESS && fw.starts == 1 && said("no db.esl beside the stage"));
+
+	/* Enforce with sound inputs: the image is loaded from the bytes that the gate verified. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_file(BESIDE "db.esl", fixtures, "db_root.esl");
+	add_file(BESIDE "dbx.esl", fixtures, "empty.esl");
+	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce", &reset) == EFI_SUCCESS && !reset);
+	CHECK(said("mode enforce: an image that is not allowed does not start"));
+	CHECK(fw.loads == 1 && fw.loads_from_buffer == 1 && fw.buffer_is_file == 1 && fw.starts == 1);
+	CHECK(security2_now() == &fw_security2 && fw.pool_live == 0);
+
+	/* Enforce, an image that db does not allow: no load, no start, EFI_ACCESS_DENIED. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed_other.efi");
+	add_file(BESIDE "db.esl", fixtures, "db_root.esl");
+	add_file(BESIDE "dbx.esl", fixtures, "empty.esl");
+	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce", &reset) == EFI_ACCESS_DENIED);
+	CHECK(fw.loads == 0 && fw.starts == 0 && said("a module refused the next image"));
+	CHECK(security2_now() == &fw_security2 && fw.pool_live == 0);
+	/* Enforce, an image that dbx forbids by a certificate digest. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_file(BESIDE "db.esl", fixtures, "db_root.esl");
+	add_file(BESIDE "dbx.esl", fixtures, "dbx_inter_hash.esl");
+	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce", &reset) == EFI_ACCESS_DENIED && fw.loads == 0);
+	CHECK(said("forbidden: a certificate of its signature is in dbx"));
+	/* Enforce, the next image is not there. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(BESIDE "db.esl", fixtures, "db_root.esl");
+	add_file(BESIDE "dbx.esl", fixtures, "empty.esl");
+	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce", &reset) == EFI_ACCESS_DENIED && fw.loads == 0);
+
+	/* Enforce with a defect in its inputs: every case refuses, and the hook is not installed. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_file(BESIDE "db.esl", fixtures, "db_root.esl");
+	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce", &reset) == EFI_ACCESS_DENIED);
+	CHECK(fw.loads == 0 && fw.reinstalls == 0 && said("dbx.esl is not beside the stage") && !said("mode audit"));
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_file(BESIDE "dbx.esl", fixtures, "empty.esl");
+	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce", &reset) == EFI_ACCESS_DENIED && fw.loads == 0);
+	CHECK(said("db.esl is not beside the stage") && !said("mode audit"));
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_file(BESIDE "db.esl", fixtures, "bad.esl");
+	add_file(BESIDE "dbx.esl", fixtures, "empty.esl");
+	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce", &reset) == EFI_ACCESS_DENIED && fw.loads == 0);
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_file(BESIDE "db.esl", fixtures, "db_root.esl");
+	add_file(BESIDE "dbx.esl", fixtures, "dbx_unknown.esl");
+	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce", &reset) == EFI_ACCESS_DENIED && fw.loads == 0);
+	CHECK(said("dbx has entries of a type that this stage does not read"));
+
+	/* The dbx variable of a firmware that has one is read and used. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_file(BESIDE "db.esl", fixtures, "db_root.esl");
+	add_file(BESIDE "dbx.esl", fixtures, "empty.esl");
+	fw.variable_dbx = efl_test_load(fixtures, "dbx_leaf.esl", &fw.variable_dbx_bytes);
+	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce", &reset) == EFI_ACCESS_DENIED && fw.loads == 0);
+	CHECK(said("the dbx variable of the firmware: 1 certificates") && said("forbidden: a certificate"));
+	/* A dbx variable that is not well formed is a defect of the inputs. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_file(BESIDE "db.esl", fixtures, "db_root.esl");
+	add_file(BESIDE "dbx.esl", fixtures, "empty.esl");
+	fw.variable_dbx = efl_test_load(fixtures, "bad.esl", &fw.variable_dbx_bytes);
+	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce", &reset) == EFI_ACCESS_DENIED && fw.loads == 0);
+	CHECK(said("the dbx variable of the firmware did not read"));
+
+	/* The firmware's own check answers EFI_SECURITY_VIOLATION: the loaded image is unloaded and not started. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.firmware_check_status = EFI_SECURITY_VIOLATION;
+	CHECK(run_stage("unlock=0 acpi=0", &reset) == EFI_SECURITY_VIOLATION);
+	CHECK(fw.loads == 1 && fw.unloads == 1 && fw.starts == 0 && security2_now() == &fw_security2);
+
+	/* A firmware without the Security2 protocol: the gate is the only check. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	find_protocol(NULL, &guid_security2)->guid.Data1 ^= 1u;
+	CHECK(run_stage("unlock=0 acpi=0", &reset) == EFI_SUCCESS && fw.starts == 1 && fw.reinstalls == 0);
+	CHECK(said("the firmware has no Security2 protocol"));
+
+	/* The next image returns, and the firmware does not take its protocol back: the stage must not return. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.refuse_put_back = 1;
+	fw.start_status = EFI_ABORTED;
+	(void)run_stage("unlock=0 acpi=0", &reset);
+	CHECK(reset == 1 && fw.resets == 1 && fw.stalls == 1 && fw.starts == 1);
+	CHECK(said("the firmware did not take its Security2 protocol back") && said("restart in 10 seconds"));
+
+	/* The next image put a Security2 of its own in front of the stage's and returned. Its function can call
+	 * into the stage, so the stage says so and does not return. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.child_hooks = 1;
+	fw.start_status = EFI_ABORTED;
+	(void)run_stage("unlock=0 acpi=0", &reset);
+	CHECK(reset == 1 && fw.resets == 1 && said("another image changed the Security2 protocol after the stage"));
+
+	/* The module off: the firmware is not touched. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 acpi=0 sb=0", &reset) == EFI_SUCCESS && fw.reinstalls == 0 && fw.starts == 1);
+	CHECK(fw.firmware_checks == 1 && said("secure-boot: off by the load option"));
+}
+
+static void test_core(const char *acpi_dir, const char *fixtures)
+{
+	int reset;
+	/* The load option next= names another image, and a load option that no module reads is counted. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file("\\EFI\\BOOT\\BOOTX64.EFI", fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 next=\\EFI\\BOOT\\BOOTX64.EFI color=blue", &reset) == EFI_SUCCESS);
+	CHECK(fw.loads == 1 && fw.starts == 1 && said("1 load option(s) not understood"));
+	/* The next image is not there: the error of LoadImage goes back to the firmware. */
+	if (!new_firmware(acpi_dir)) return;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0", &reset) == EFI_NOT_FOUND && fw.starts == 0 && said("did not load"));
+	/* The status of an image that returns goes back to the firmware. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.start_status = EFI_ABORTED;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0", &reset) == EFI_ABORTED && fw.pool_live == 0);
+}
+
+unsigned firmware_tests(const char *acpi_dir, const char *fixture_dir, unsigned *check_count)
+{
+	size_t bytes = 0;
+	unsigned char *probe = efl_test_load(fixture_dir, "signed.efi", &bytes);
+	if (probe == NULL || !new_firmware(acpi_dir)) {
+		printf("SKIP bindings: the firmware model needs the stock ACPI tables in %s and the fixtures in %s\n",
+		       acpi_dir ? acpi_dir : "(no directory given)", fixture_dir ? fixture_dir : "(no directory given)");
+	} else {
+		test_core(acpi_dir, fixture_dir);
+		test_acpi(acpi_dir, fixture_dir);
+		test_secure_boot(acpi_dir, fixture_dir);
+	}
+	free(probe);
+	free_firmware();
+	*check_count = checks;
+	return failures;
+}

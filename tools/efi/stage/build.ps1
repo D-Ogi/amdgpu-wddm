@@ -58,8 +58,9 @@ $securePure = Sources 'secure-boot\src' @('sb_der.c', 'sb_rsa.c', 'sb_x509.c', '
 $pure = @($libPure) + @($corePure) + @($unlockPure) + @($repairPure) + @($securePure)
 # The UEFI bindings: the core and one file for each module.
 $bindings = @(Sources 'stage\src' @('main.c')) + @(Sources 'core-unlock\src' @('cu_module.c', 'report_uefi.c')) +
-    @(Sources 'acpi-repair\src' @('ar_module.c')) + @(Sources 'secure-boot\src' @('sb_module.c')) +
-    @(Sources 'lib' @('efl_libc.c'))
+    @(Sources 'acpi-repair\src' @('ar_module.c')) + @(Sources 'secure-boot\src' @('sb_module.c'))
+# The small C library of the UEFI image. The host tests use the C library of the host.
+$libc = @(Sources 'lib' @('efl_libc.c'))
 # The repository sources that the stage shares with the driver. They keep their own warning level: they are the
 # driver's code, built the same way here and there.
 $shared = @((Join-Path $shim 'bc250_smu.c'), (Join-Path $shim 'bc250_cpu.c'), (Join-Path $shim 'bc250_oc.c'),
@@ -67,7 +68,7 @@ $shared = @((Join-Path $shim 'bc250_smu.c'), (Join-Path $shim 'bc250_cpu.c'), (J
 $tests = @((Join-Path $efiRoot 'stage\test\host_main.c'), (Join-Path $efiRoot 'stage\test\stage_test.c'),
     (Join-Path $efiRoot 'lib\test\lib_test.c'), (Join-Path $efiRoot 'core-unlock\test\host_test.c'),
     (Join-Path $efiRoot 'core-unlock\test\report_test.c'), (Join-Path $efiRoot 'acpi-repair\test\ar_test.c'),
-    (Join-Path $efiRoot 'secure-boot\test\sb_test.c'))
+    (Join-Path $efiRoot 'secure-boot\test\sb_test.c'), (Join-Path $efiRoot 'stage\test\firmware_test.c'))
 
 $includes = @("-I$efiRoot\lib", "-I$efiRoot\lib\acpi", "-I$efiRoot\stage\src", "-I$efiRoot\core-unlock\src",
     "-I$efiRoot\acpi-repair\src", "-I$efiRoot\secure-boot\src",
@@ -87,7 +88,7 @@ $clang = Join-Path $Llvm 'clang.exe'
 $efiFlags = @('--target=x86_64-unknown-windows', '-std=c11', '-O2', '-ffreestanding', '-fno-builtin', '-nostdlibinc',
     '-fno-stack-protector', '-mno-stack-arg-probe', '-mno-red-zone', '-fno-ident',
     "-I$efiRoot\lib\include", "-I$efiRoot\lib\include\libc") + $includes
-Build-Objects $clang $efiFlags $objStage ($pure + $bindings) $strict
+Build-Objects $clang $efiFlags $objStage ($pure + $bindings + $libc) $strict
 Build-Objects $clang $efiFlags $objStage $shared $relaxed
 
 Write-Host 'link (UEFI image)'
@@ -115,7 +116,8 @@ foreach ($control in @($SignedImage, $SecondSignedImage)) {
 # the compiler.
 $env:PATH = "$Mingw;$env:PATH"
 $hostFlags = @('-std=c11', '-O1', '-g', '-fsanitize=address', '-fno-omit-frame-pointer', "-I$efiRoot\lib\include", "-I$efiRoot\lib\test") + $includes
-Build-Objects $hostCc $hostFlags $objHost ($pure + $tests) $strict
+# The bindings are in the host build too: firmware_test.c runs them against a model of the firmware.
+Build-Objects $hostCc $hostFlags $objHost ($pure + $bindings + $tests) $strict
 Build-Objects $hostCc $hostFlags $objHost $shared $relaxed
 $test = Join-Path $Out 'host_test.exe'
 Invoke-Tool $hostCc (@('-fsanitize=address', '-o', $test) + (Get-ChildItem "$objHost\*.o").FullName)
@@ -146,18 +148,67 @@ Write-Host 'run (host tests)'
 $code = $LASTEXITCODE
 Write-Host "bc250-stage host tests exit code $code"
 
-# A second parser for the tables that the ACPI repair built: the ACPICA disassembler must read each one whole.
+# A second parser for the tables that the ACPI repair built: ACPICA loads each one into a namespace together with
+# the stock DSDT and the other tables, as an operating system does. The stock CPU table is not in that set,
+# because the repair removes it. The load fails on a name that is defined twice. A scope whose target is not in
+# the set shows as an External of a guessed type, and a target that is there shows as ProcessorObj.
+$stock = Join-Path $repo 'evidence\linux\2026-09-21-E01-recon-binaries\acpi'
 $built = @(Get-ChildItem "$tables\*.aml" -ErrorAction SilentlyContinue)
 if (-not (Test-Path $Iasl)) { Write-Host "SKIP the ACPICA check of the built tables: no $Iasl" }
 elseif ($built.Count -eq 0) { Write-Host 'SKIP the ACPICA check of the built tables: the tests wrote no table' }
 else {
-    foreach ($table in $built) {
-        $log = & $Iasl -d $table.FullName 2>&1 | Out-String
-        $dsl = [IO.Path]::ChangeExtension($table.FullName, '.dsl')
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $dsl) -or $log -match 'Error|could not') {
-            Write-Host "FAIL the ACPICA disassembler refused $($table.Name):`n$log"
-            $code = 1
-        } else { Write-Host "ACPICA read $($table.Name): $((Get-Content $dsl | Measure-Object -Line).Lines) lines of ASL" }
+    $space = Join-Path $Out 'namespace'
+    Remove-Item $space -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force $space | Out-Null
+    Copy-Item (Join-Path $stock 'DSDT.aml'), (Join-Path $stock 'SSDT1.aml'), (Join-Path $stock 'SSDT2.aml') $space
+    Copy-Item $built.FullName $space
+    Copy-Item (Join-Path $tables 'ar-idle.aml') (Join-Path $space 'copy-of-idle.aml')
+
+    # Loads one table with the others as its namespace. Returns the exit code, the log and the External lines.
+    function Read-InNamespace([string]$table, [string[]]$others) {
+        $argv = @(); foreach ($other in $others) { $argv += '-e'; $argv += $other }
+        Push-Location $space
+        try {
+            Remove-Item ([IO.Path]::ChangeExtension($table, '.dsl')) -ErrorAction SilentlyContinue
+            $log = & $Iasl @argv -d $table 2>&1 | Out-String
+            $exit = $LASTEXITCODE
+            $dsl = [IO.Path]::ChangeExtension($table, '.dsl')
+            $lines = if (Test-Path $dsl) { @(Get-Content $dsl) } else { @() }
+        } finally { Pop-Location }
+        [pscustomobject]@{ Exit = $exit; Log = $log; Lines = $lines; Externals = @($lines | Where-Object { $_ -match '^\s*External \(' }) }
     }
+    function Test-Loaded($result) { $result.Exit -eq 0 -and $result.Lines.Count -gt 0 -and $result.Log -notmatch 'AE_|Could not' }
+
+    # The controls first: the method must see the two defects that it is here to find.
+    $blind = $false
+    $control = Read-InNamespace 'SSDT1.aml' @('DSDT.aml', 'SSDT2.aml')
+    if (@($control.Externals | Where-Object { $_ -match 'C000' -and $_ -notmatch 'ProcessorObj' }).Count -eq 0) {
+        Write-Host 'FAIL the ACPICA control: the stock CPU table does not show its missing target'; $code = 1; $blind = $true
+    }
+    $control = Read-InNamespace 'ar-idle.aml' @('DSDT.aml', 'SSDT2.aml', 'copy-of-idle.aml')
+    if ((Test-Loaded $control) -or $control.Log -notmatch 'AE_ALREADY_EXISTS') {
+        Write-Host 'FAIL the ACPICA control: a name that is defined twice does not stop the load'; $code = 1; $blind = $true
+    }
+    if (-not $blind) { Write-Host 'ACPICA controls: the missing target of the stock CPU table and a double definition are both found' }
+
+    foreach ($idle in @($built | Where-Object { $_.Name -like 'ar-idle*' })) {
+        $result = Read-InNamespace $idle.Name @('DSDT.aml', 'SSDT2.aml', 'ar-stubs.aml')
+        $guessed = @($result.Externals | Where-Object { $_ -notmatch 'ProcessorObj' })
+        if (-not (Test-Loaded $result) -or $result.Externals.Count -eq 0 -or $guessed.Count -ne 0) {
+            Write-Host "FAIL ACPICA did not load $($idle.Name) into the stock namespace:`n$($result.Log)`n$($guessed -join "`n")"
+            $code = 1
+        } else {
+            Write-Host "ACPICA loaded $($idle.Name): $($result.Externals.Count) scopes, each on a Processor object of the DSDT, $($result.Lines.Count) lines of ASL"
+        }
+    }
+    $result = Read-InNamespace 'ar-stubs.aml' @('DSDT.aml', 'SSDT2.aml', 'ar-idle.aml')
+    if (-not (Test-Loaded $result)) { Write-Host "FAIL ACPICA did not load ar-stubs.aml into the stock namespace:`n$($result.Log)"; $code = 1 }
+    else { Write-Host "ACPICA loaded ar-stubs.aml: $($result.Lines.Count) lines of ASL" }
+    # With the stubs in the namespace, the DSDT has no method without a definition.
+    $result = Read-InNamespace 'DSDT.aml' @('SSDT2.aml', 'ar-idle.aml', 'ar-stubs.aml')
+    $unknown = @($result.Lines | Where-Object { $_ -match 'Unknown method' })
+    if ($result.Exit -ne 0 -or $result.Lines.Count -eq 0 -or $unknown.Count -ne 0) {
+        Write-Host "FAIL the DSDT still has methods without a definition:`n$($unknown -join "`n")"; $code = 1
+    } else { Write-Host 'ACPICA read the DSDT with the built tables: no method without a definition' }
 }
 exit $code

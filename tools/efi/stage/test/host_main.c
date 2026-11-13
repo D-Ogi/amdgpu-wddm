@@ -2,7 +2,7 @@
 /*
  * The runner of the host tests of the BC-250 stage. Each part of the stage has its own test file and gives its
  * counts to this runner. The firmware is not here: the tests run the pure code of each part against models and
- * stored tables.
+ * stored tables, and the UEFI bindings against a model of the firmware (firmware_test.c).
  *
  *   host_test <evidence ACPI directory> <unit A ACPI dump directory> <fixture directory> <output directory>
  *             [<real signed image> [<second real signed image>]]
@@ -15,6 +15,7 @@ unsigned cu_tests(const char *evidence_dir, unsigned *check_count);
 unsigned stage_tests(unsigned *check_count);
 unsigned lib_tests(unsigned *check_count);
 unsigned ar_tests(const char *evidence_dir, const char *dump_dir, const char *out_dir, unsigned *check_count);
+unsigned firmware_tests(const char *acpi_dir, const char *fixture_dir, unsigned *check_count);
 unsigned sb_tests(const char *fixture_dir, const char *real_image, const char *second_image, unsigned *check_count);
 
 static unsigned total_checks, total_failures;
@@ -43,6 +44,8 @@ int main(int argc, char **argv)
 	report("acpi-repair", failed, count);
 	failed = sb_tests(fixtures, real_image, second_image, &count);
 	report("secure-boot", failed, count);
+	failed = firmware_tests(evidence, fixtures, &count);
+	report("bindings", failed, count);
 	printf("bc250-stage host tests: %u checks, %u failures\n", total_checks, total_failures);
 	return total_failures ? 1 : 0;
 }
