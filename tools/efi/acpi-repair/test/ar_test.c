@@ -187,11 +187,22 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 	/* The TPM experiment: the same table with Device(TPM0) { Name(_HID, "BC250001") } after the stubs. */
 	plan.device = 1;
 	stub_bytes = ar_build_stubs(&plan, stubs, sizeof(stubs));
-	CHECK(stub_bytes == 36u + 3u * 7u + 7u + 15u);
+	CHECK(stub_bytes == 36u + 3u * 7u + 7u + 7u + 15u);
 	CHECK(ar_table_sound(stubs, stub_bytes));
-	CHECK(stubs[36u + 21u] == 0x5B && stubs[36u + 22u] == 0x82 && !memcmp(stubs + 36u + 24u, "TPM0", 4));
-	CHECK(!memcmp(stubs + 36u + 28u, "\x08_HID\x0d" "BC250001", 15));
+	CHECK(stubs[36u + 21u] == 0x10 && stubs[36u + 28u] == 0x5B && stubs[36u + 29u] == 0x82 && !memcmp(stubs + 36u + 31u, "TPM0", 4));
+	CHECK(!memcmp(stubs + 36u + 35u, "\x08_HID\x0d" "BC250001", 15));
 	CHECK(ar_build_stubs(&plan, stubs, 50) == 0);		/* no room for the device */
+	/* Device on and no stub needed: the table is still built, and it holds the device alone. */
+	{
+		enum ar_stubs keep = plan.stubs;
+		unsigned keep_mask = plan.stub_mask;
+		plan.stubs = AR_STUBS_NOTHING_MISSING;
+		plan.stub_mask = 0;
+		CHECK(ar_build_stubs(&plan, stubs, sizeof(stubs)) == 36u + 7u + 7u + 15u);
+		CHECK(ar_table_sound(stubs, 36u + 7u + 7u + 15u));
+		plan.stubs = keep;
+		plan.stub_mask = keep_mask;
+	}
 	plan.device = 0;
 	/* The table goes back to the stub-only form that the second-plan checks below expect. */
 	stub_bytes = ar_build_stubs(&plan, stubs, sizeof(stubs));

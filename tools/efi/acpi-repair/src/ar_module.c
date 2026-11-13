@@ -32,6 +32,17 @@ static struct ar_plan plan;
 
 /* Fills the input from the firmware's tables. 0 when the root tables do not read. input.complete says that every
  * table of the root table mapped with a right checksum and that every definition block is in the input. */
+/* 1 when the table holds the given text, used to prove that what the log says was built is in the built bytes. */
+static int ar_table_holds(const unsigned char *table, size_t bytes, const char *text)
+{
+	size_t n = 0, i;
+	while (text[n] != 0) n++;
+	if (bytes < n) return 0;
+	for (i = 0; i + n <= bytes; i++)
+		if (!memcmp(table + i, text, n)) return 1;
+	return 0;
+}
+
 static int collect(struct stage *stage)
 {
 	struct efl_acpi acpi;
@@ -168,8 +179,7 @@ static void ar_module_run(struct stage *stage)
 	ar_plan_make(&input, &plan);
 	stage_sayf(stage, AR_NAME, "idle states: %s", ar_idle_text(plan.idle));
 	stage_sayf(stage, AR_NAME, "method stubs: %s", ar_stubs_text(plan.stubs));
-	if (plan.device) stage_say(stage, AR_NAME, "experiment device TPM0 with _HID BC250001 is in the stub table");
-	if (plan.idle != AR_IDLE_REPAIR && plan.stubs != AR_STUBS_REPAIR) return;
+	if (plan.idle != AR_IDLE_REPAIR && plan.stubs != AR_STUBS_REPAIR && !plan.device) return;
 	if (!apply) stage_say(stage, AR_NAME, "acpi.apply=0: the tables are built and checked, and none is installed or removed");
 
 	buffer = stage_alloc(stage, AR_TABLE_MAX_BYTES);
@@ -193,12 +203,14 @@ static void ar_module_run(struct stage *stage)
 		else if (install(stage, installer, buffer, bytes, "idle states", AR_IDLE_TABLE_ID))
 			remove_stock(stage, installer, stock_header);
 	}
-	if (plan.stubs == AR_STUBS_REPAIR) {
+	if (plan.stubs == AR_STUBS_REPAIR || plan.device) {
 		unsigned s;
 		for (s = 0; s < AR_STUBS; s++)
 			if (plan.stub_mask & (1u << s))
 				stage_sayf(stage, AR_NAME, "method %s is called and not defined: an empty method", ar_stub_name(s));
 		bytes = ar_build_stubs(&plan, buffer, AR_TABLE_MAX_BYTES);
+		if (bytes != 0 && plan.device && ar_table_holds(buffer, bytes, "BC250001"))
+			stage_say(stage, AR_NAME, "experiment device TPM0 with _HID BC250001 is in the built table");
 		if (bytes == 0 || !ar_check_stubs(&plan, buffer, bytes))
 			stage_say(stage, AR_NAME, "method stubs: the built table failed its own check: not installed");
 		else if (!apply)
