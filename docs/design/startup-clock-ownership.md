@@ -25,7 +25,7 @@ precede successful clock preparation. A later CLI operation is not readiness.
 `cyan_skillfish_od_edit_dpm_table` extracted from the pinned MIT source. Its
 settings are per-call state instead of AMD's file-global state. The wrapper
 adds the project's1500MHz/900mV ceiling,85C check, and readback of frequency and
-encoded VID. M437 first reads the current MHz/VID and checks any required
+encoded VID. M437 first reads the current MHz/VID and confirms any required
 voltage increase before the imported frequency-first commit. Voltage reduction
 follows frequency change. Its command-order controls and limits are in
 [M437 evidence](../../evidence/windows/2026-09-24-E27-m9-recovery/clock-transition-order/RESULT.md).
@@ -139,7 +139,7 @@ is removed. Explicit bounded operating-point selection remains available.
 Build the KMD CLI/DLL first. Pass its bc250control.dll to the reader and monitor
 builds with `-ControlDll`. Deploy these together only after native owner startup
 is ready and the old reader writer is retired. The new reader SYS already
-refuses the legacy mailbox IOCTL. M441 performs the coordinated handover after checked reader unload/refusal. An offline owner returns DEVICE_NOT_READY, not a legacy fallback.
+refuses the legacy mailbox IOCTL. M441 performs the coordinated handover after confirmed reader unload/refusal. An offline owner returns DEVICE_NOT_READY, not a legacy fallback.
 
 ## M441 measured integration and remaining lifecycle work
 

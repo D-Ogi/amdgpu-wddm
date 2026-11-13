@@ -16,7 +16,7 @@ Deliverables:
 - `driver\shim\test\README.md` - new file (there was none). What the suite is and
   how an expected failure is written.
 
-State today: **161 checks, 0 failures, 15 expected failures over 7 established defects, exit 0.**
+State today: **161 checks, 0 failures, 15 expected failures over 7 confirmed defects, exit 0.**
 
 ## The matrix
 
@@ -29,7 +29,7 @@ State today: **161 checks, 0 failures, 15 expected failures over 7 established d
 | 2b | ring buffer returns `cpu == NULL`, engine 0 and engine 1 | refusal **PASS**, **DEFECT D-02** (the refused object is unfreeable) |
 | 2c | fence page returns `cpu == NULL` | refusal **PASS**, **DEFECT D-03** (leaked, and a retry leaks a second page) |
 | 3 | `slot = ring->me & 1`, a caller with `me = 2` | **DEFECT D-07** |
-| 4a | preserved wptr all-ones (both halves, low half, high half) | **PASS** - `BC250_EINVAL`, ring not enabled, no write outside the established set |
+| 4a | preserved wptr all-ones (both halves, low half, high half) | **PASS** - `BC250_EINVAL`, ring not enabled, no write outside the confirmed set |
 | 4b | preserved wptr not dword aligned / not a whole 16-dword submission / one dword | **PASS** - `BC250_EINVAL` |
 | 4c | preserved wptr past the end of the ring | **PASS** - adopted on purpose. `buf_mask` wraps it (0x2040 -> dword 0x10 of 0x800) |
 | 4d | preserved wptr wildly large (0x7FFF_FFFF_FFC0) | **PASS** - adopted, programmed back, published into the shadow before `RB_ENABLE`, indexing stays in the ring |
@@ -336,7 +336,7 @@ alone. The transcription rule wins.
   engine 1 (`rptr` 0 behind the corrupt `wptr`), halted both engines and disabled both rings.
   `driver/kmd/gfx.c`'s `Fini()` turns that into pages that stay - by design (`bc250_sdma.h:56-60`),
   and it means a corrupt preserved write pointer costs the driver its three SDMA pages permanently.
-- **No error path writes a register outside the established set.** The set is not typed anywhere: the
+- **No error path writes a register outside the confirmed set.** The set is not typed anywhere: the
   suite learns it from a successful `bc250_sdma_hw_init()` in the same process (74 distinct
   registers over 90 writes), which is the sequence the replay compares with unit A's trace. Every
   error path - the adoption refusals, the failed setups, the undo after them - stayed inside it.
@@ -362,7 +362,7 @@ alone. The transcription rule wins.
 
 All seven defects are fixed. Host suite results:
 
-- `run_sdma_faults.ps1` before: **161 checks, 0 failures, 15 expected failures over 7 established
+- `run_sdma_faults.ps1` before: **161 checks, 0 failures, 15 expected failures over 7 confirmed
   defects, exit 0** (the baseline above, reconfirmed by re-running the report's own commit before
   touching anything). After: **158 checks, 0 failures, 0 expected failures, 0 XPASS, exit 0.** The
   drop from 161 to 158 is 2a's three checks that only ran on the path D-01 closes (what an accepted,
@@ -391,7 +391,7 @@ Per defect:
   `sdma_faults.c` all now look an allocation up by `mc` when `cpu` is NULL, matching `bc250_shim.h`'s
   updated contract comment. Note for the lead: this is wider than "fix it in `bc250_sdma.c` or its
   header" - see "Disagreements" below for why D-02 could not be closed from `bc250_sdma.c` alone.
-  Neither shipped backend can produce a `cpu == NULL` success today (established by reading both
+  Neither shipped backend can produce a `cpu == NULL` success today (confirmed by reading both
   `bc250_shim_mem_alloc()`s), so this is currently a no-behavior-change hardening of the free path,
   not a change reachable on unit A.
 - **D-03** (`bc250_sdma_fence_page_alloc`): the refusal now frees the page (which D-02 makes possible)
@@ -405,7 +405,7 @@ Per defect:
 - **D-05** (`bc250_sdma_start`): a guard loop refuses to enable any engine whose ring has no `funcs`
   or no `ring_size`, before anything is written. Case 6a's "both engines were enabled on a ring that
   does not exist" check documented the defect's own effect. It is now "neither engine was enabled",
-  and the refusal writes zero registers (stronger than merely staying inside the established set).
+  and the refusal writes zero registers (stronger than merely staying inside the confirmed set).
 - **D-06** (`bc250_sdma_teardown`): nulls `ring->ring` and `ring->wptr_cpu_addr` and zeroes
   `ring->gpu_addr` for both instances after freeing their ring buffers, matching the rule
   `bc250_gfx.c` already states for the CP rings. `bc250_sdma_ring_test()` on a torn-down ring now
@@ -441,10 +441,10 @@ Per defect:
   failing forever with no defect id attached, which is worse than either leaving them alone or fixing
   them, so I updated the expected value to match the new, intended behaviour. None of the three checks
   were weakened - each now asserts a stronger and more specific condition than before (for example D-05's
-  register check moved from "no write outside the established set" to "no write at all").
+  register check moved from "no write outside the confirmed set" to "no write at all").
 - **`check_defect()` is now unused.** With all seven flipped to plain `check()`, nothing calls it, so
   `/W4` sees an unreferenced static function (C4505). I kept the function (the suite's README
-  documents it as the mechanism for the *next* established set) and wrapped it in
+  documents it as the mechanism for the *next* confirmed defect) and wrapped it in
   `#pragma warning(push/pop)` with `4505` disabled, rather than deleting suite infrastructure that is
   still current per the README. Worth a second opinion if the lead would rather remove it until it is
   needed again.

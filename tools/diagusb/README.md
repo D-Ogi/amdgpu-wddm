@@ -229,7 +229,7 @@ Three ways, in order of convenience:
 - A `--net` host key with a passphrase does not work (found in E13): sshd cannot load it and serves only the
   RSA and ECDSA keys that `ssh-keygen -A` makes at every boot, so the host key changes with every boot. The
   unit A stick now carries a separately installed host key without a passphrase, pinned on the client side
-  (E28, M334). A stick built from `build_usb.py` with such a `--net` key still has the old problem: check
+  (E28, M334). A stick built from `build_usb.py` with such a `--net` key still has the old problem: confirm
   the machine behind the address (GPU `1002:13fe`, the stick's kernel command line) and re-learn the key for
   that boot. Never switch host key checking off.
 - `bc250.mode=off` ("shell only") starts no network. A session driven over SSH needs `full`, `noload`

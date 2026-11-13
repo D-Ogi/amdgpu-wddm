@@ -90,4 +90,4 @@ terms:
     names: ["CP fetch"]
   - term: confirm
     means: "To record that a start, a setting or a review item passed its check. The check is the act, and the confirmation is the record."
-    names: ["confirm", "confirms", "confirmed", "confirming", "confirmation", "unconfirmed", "Confirm", "Confirmed", "Confirmation"]
+    names: ["confirm", "confirms", "confirmed", "confirming", "confirmation", "unconfirmed", "Confirm", "Confirms", "Confirmed", "Confirming", "Confirmation", "Unconfirmed"]

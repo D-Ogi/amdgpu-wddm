@@ -44,7 +44,7 @@ rect, `SubRectCnt = 1`:
 
 The token's two surface fields have no documented source. A and C bracket them. `EventId` = update id and the
 client rect as the dirty region are inferences from the Windows 7 page and from Mesa's `gldrv.h` callback,
-not documentation. A `STATUS_SUCCESS` alone validates none of them: only the trace rows below and the colour
+not documentation. A `STATUS_SUCCESS` alone confirms none of them: only the trace rows below and the colour
 on the screen do.
 
 Exit codes: 0 the sequence ran (a refusal is a result), 1 a step before the variants failed, 2 bad arguments,

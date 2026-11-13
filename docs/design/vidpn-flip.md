@@ -625,7 +625,7 @@ step, not this one.**
    a handle directly.
 3. Option B needs the pitch question above actually answered from the allocation's own data, not assumed from
    the mode set, before any write sequence - this one or a new one that also programs `DCSURF_SURFACE_PITCH` -
-   can flip to an allocation whose stride was never independently checked to be 7680.
+   can flip to an allocation whose stride was never independently confirmed to be 7680.
 
 The two are not in tension: the mapped-copy path is a strict improvement on 0.7.25 either way, and needs no
 revisiting if a later step adds a real flip-to-CDD-allocation path - that step would just mean

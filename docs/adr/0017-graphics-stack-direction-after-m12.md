@@ -54,7 +54,7 @@ The same notes settled what comes after M13
    M12 path and the performance reference.
 5. **Native Direct3D 12 (proposed M15): vkd3d-proton through the public Vulkan API** is the default engine
    behind a native D3D12 DDI (project decision). Feature level 12_0 is Must, 12_1 is Should, 12_2 is not a target
-   (its features need RDNA2-class hardware). A bounded spike on the hosted contract checks the engine before
+   (its features need RDNA2-class hardware). A bounded spike on the hosted contract confirms the engine before
    any broad DDI work: a native D3D12 device, the runtime's monitored fence imported into vkd3d-proton as a
    timeline semaphore, descriptor-heap handles passed through, residency through the runtime callbacks. If it
    fails, the written reason decides whether the DDI goes directly onto RADV internals. An own PAL-like hardware
@@ -81,7 +81,7 @@ The same notes settled what comes after M13
 ## Consequences
 
 - ADR 0009 point 2 is amended: the hosted ICD is the route under implementation for M13.3 and M13.4. Point 3
-  is satisfied as far as the direction goes. The route is established as M13's route when M13.3 passes with the
+  is satisfied as far as the direction goes. The route is confirmed as M13's route when M13.3 passes with the
   evidence its gate requires, and this ADR is then amended with that evidence.
 - The `hKMResource` zero of M534 is closed as an investigation (M535) and is not a blocker for the hosted
   route: the hosted driver owns the runtime allocations itself. It is not explained. It is reopened if a

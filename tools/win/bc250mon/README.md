@@ -55,7 +55,7 @@ before it stopped talking (ADR 0006 points 3 and 4, `driver/kmd/README.md`):
 Only SCM error 1060 produces `not installed`. A missing or damaged store produces an error.
 An initialized store does not prove that a driver start occurred. Startup records remain readable with Code 43.
 
-**Checking a start** (ADR 0006 point 3). Full WDDM uses a typed KMD
+**Confirming a start** (ADR 0006 point 3). Full WDDM uses a typed KMD
 snapshot through `bc250control.dll`. The monitor requires 60 seconds of fresh,
 advancing completed-primary witnesses for one device-start generation and
 visibility epoch. Missing samples, gaps over 15 seconds, stale progress or an
@@ -282,7 +282,7 @@ as it differs from the lab's expectation.
 
 | Row | Source | Amber | Red |
 |---|---|---|---|
-| `CU` | `BC250_ESCAPE_RUN_CU_MODE` op READ through `Bc250CuMode`: the mode this start applied, the units the registers count, and the `pending` or `confirmed` mark. Without a snapshot, `Parameters\CuModeLastApplied`, marked as a driver record | the counted units differ from the expectation. 40 applied and nobody checked it. The registers name different WGPs on the shader arrays (`VALID` without `CONSISTENT`). This start did not run the CU stage | a request for 40 units that applied 24, or 0 units applied (the stock restore failed) |
+| `CU` | `BC250_ESCAPE_RUN_CU_MODE` op READ through `Bc250CuMode`: the mode this start applied, the units the registers count, and the `pending` or `confirmed` mark. Without a snapshot, `Parameters\CuModeLastApplied`, marked as a driver record | the counted units differ from the expectation. 40 applied and nobody confirmed it. The registers name different WGPs on the shader arrays (`VALID` without `CONSISTENT`). This start did not run the CU stage | a request for 40 units that applied 24, or 0 units applied (the stock restore failed) |
 | `CU setting` | `Parameters\CuMode` and `CuDisableWgp`, against the encoded request in `CuModePending` and `CuModeConfirmed`: what the next start applies | the units the setting gives (the mode less two per masked WGP) differ from the expectation. The mark on disk names another request, so the next start is pending. An absent `CuMode` reads `the next start harvests to 24` | - |
 | `CU reason` | `Parameters\CuModeLastReason` or the snapshot, by the name of `enum bc250_cu_reason`. The row appears only when the reason is not `none` | any other reason | the five reasons that make the driver write `CuMode = 24` durably: `PENDING_UNCONFIRMED`, `POWER_GATING`, `STOCK_UNEXPECTED`, `READBACK`, `RESTORE_FAILED` |
 | `CU snapshot` | why the escape gave no answer. The row appears only then | always | - |

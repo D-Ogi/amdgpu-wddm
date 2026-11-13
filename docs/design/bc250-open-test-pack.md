@@ -126,7 +126,7 @@ overhead and a declared unavailable/not-run outcome if instrumentation fails.
 
 ## Runner rules
 
-1. Check identities, versions, hashes, capabilities, workload prerequisites,
+1. Confirm identities, versions, hashes, capabilities, workload prerequisites,
    operating point, temperature and the operator STOP flag before admission.
 2. A fence timeout, TDR, frozen present, unexpected black image or oracle mismatch
    ends the entire profile immediately. Do not start another workload afterward.

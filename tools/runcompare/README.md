@@ -101,7 +101,7 @@ is there. It is small and meant to be edited.
 M71), but nobody has yet checked the list against them: `EXPECTED_ORDER_OBSERVED` in
 `runcompare.py` is still `None`. Until it is set, the list is a reading of the DDI table
 `driver/kmd/wddm.c` built at stage A and of the WDK, not a measurement, and every line that
-prints a name from it says so. To check it, correct the list from what one of those runs
+prints a name from it says so. To confirm it, correct the list from what one of those runs
 shows and set `EXPECTED_ORDER_OBSERVED` to that run's id. The wording changes by itself.
 
 Two things the log cannot give this section. First, it carries no object handle, so creations
