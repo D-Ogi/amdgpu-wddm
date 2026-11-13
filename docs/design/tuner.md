@@ -1,6 +1,6 @@
 # The Tuner: a GPU voltage curve, a CPU undervolt and the core mask
 
-KMD 0.7.213.1 (written as 0.7.210 on `tuner/vf-cpu` with the review fixes of 0.7.211; neither number was
+KMD 0.7.213.1 (written as 0.7.210 on `tuner/vf-cpu` with the review fixes of 0.7.211, and neither number was
 released). Decision:
 [ADR 0020](../adr/0020-operator-tuning-in-the-smu-owner.md). Limits: [`../hardware.md`](../hardware.md). The
 clock governor this page builds on: [`dpm.md`](dpm.md).
@@ -27,7 +27,7 @@ Four rules hold for every control on this page. They are in the code, not in the
 3. **Nothing reaches the registry before a keep.** A machine that hangs under a candidate boots with the last
    value somebody kept.
 4. **A kept value still faces the boot guard.** The next start writes a pending mark before it applies the value
-   and a confirmed mark after the start is healthy. A start that finds the pending mark of an earlier start drops
+   and a final mark after the start is healthy. A start that finds the pending mark of an earlier start drops
    the value and runs the shipped settings. One bad keep costs the setting, never the machine.
 
 ## The GPU voltage curve
@@ -76,7 +76,7 @@ shipped table.
 | Set | The candidate becomes active at the next tick. The window starts. |
 | Set again inside a window | The new candidate replaces the old one and the window restarts. The revert target stays the stored curve. |
 | Keep inside the window | The candidate becomes the stored curve, the eleven values reach the registry, and the guard's marks follow. |
-| Keep before the governor's tick | Refused with `UNTRIED`, because the candidate has run on nothing. The governor applies it within 25 ms; the application offers Keep only once the reply says it did. |
+| Keep before the governor's tick | Refused with `UNTRIED`, because the candidate has run on nothing. The governor applies it within 25 ms. The application offers Keep only once the reply says it did. |
 
 | Cancel | The stored curve comes back at the next tick. |
 | The window ends | The same as a cancel, without anybody asking. |
@@ -90,8 +90,8 @@ All `REG_DWORD` under `Services\bc250kmd\Parameters`.
 | Value | Meaning |
 |---|---|
 | `DpmCurve1000` .. `DpmCurve2000` | The stored voltage of that level, in millivolts. Absent means the table's line. |
-| `DpmCurvePending` | A start applied the stored curve and was never confirmed healthy. |
-| `DpmCurveConfirmed` | The checksum of the curve a healthy start confirmed. |
+| `DpmCurvePending` | A start applied the stored curve and was never marked healthy. |
+| `DpmCurveConfirmed` | The checksum of the curve a healthy start marked. |
 | `DpmCurveTrialMs` | The window a set gets when it asks for none. |
 | `DpmCurveLastReason` | 0 none, 1 the stored curve runs, 2 refused, 3 an unconfirmed start, 4 the registry refused the mark, 5 this start does not govern. |
 
@@ -228,7 +228,7 @@ locks, the worker thread, the registry and the message gaps. A harness for them,
 
 The release range is a **limit** before it is ever a raise: lowering the firmware's ceiling lowers the voltage the
 firmware chooses, so it cannot reach the hazard. 3500 MHz is the highest limit the release build takes. It is also
-the stock boost clock the community's two tools report; nothing on unit A has measured it. The 3600 MHz this
+the stock boost clock the community's two tools report. Nothing on unit A has measured it. The 3600 MHz this
 document carried until 0.7.211 had no source at all. The lab range is the standing hardware pre-approval of
 2026-10-05, and `bc250_cpu_settings_check` refuses it without at least `BC250_CPU_LAB_MIN_UV_STEPS` undervolt
 steps in the same request.
@@ -307,14 +307,14 @@ are the driver's.
 ### The guided undervolt search
 
 "Find my setting" walks one step at a time, with a load window per step. The judgement is the shim's
-(`bc250_cpu_search_next`); the load is the caller's. The search stops at the first failure sign, steps one back,
+(`bc250_cpu_search_next`). The load is the caller's. The search stops at the first failure sign, steps one back,
 and offers the deepest step that passed. It also stops when the voltage does not move at all, because then the
 firmware is not taking the scale and a deeper step would say nothing. Nothing is persisted: a person presses
 Keep.
 
 ### The core mask
 
-The part is sold with six of its eight cores enabled; the stock mask is `0x77`. The route is queue 3 message
+The part is sold with six of its eight cores enabled. The stock mask is `0x77`. The route is queue 3 message
 `0x98` with the address of the core mask register as its one admitted argument. The firmware stores `0xFF` there,
 and the two cores run after the next warm restart of Windows (M961, unit A, stock BIOS). The AMD-named queue 0
 message `0x2C` was the first route. The firmware accepts it and the processor count does not change in either
@@ -344,7 +344,7 @@ that ends with a hang or a power cut keeps its mark, and the next start puts the
 | `CpuMaxMHz`, `CpuUvSteps`, `CpuTempC` | the stored settings, applied at start, absent for none. An absent `CpuTempC` gives the default cap of 87 C. |
 | `CpuTrialMs` | the window a set gets when it asks for none |
 | `CpuPending`, `CpuConfirmed` | the two guard marks of the stored settings |
-| `CpuLastReason` | 0 none, 1 applied, 2 refused, 3 an unconfirmed start, 4 the registry refused the mark, 5 `CpuTune` is 0, 6 queue 3 did not answer, 7 the firmware or the voltage readback refused |
+| `CpuLastReason` | 0 none, 1 applied, 2 refused, 3 an unconfirmed start, 4 the registry refused the mark. 5 `CpuTune` is 0, 6 queue 3 did not answer, 7 the firmware or the voltage readback refused |
 | `CoreMask` | 119 (`0x77`, stock) or 255 (`0xFF`) |
 | `CoreMaskPending`, `CoreMaskConfirmed` | the mask's two guard marks |
 
@@ -352,8 +352,8 @@ that ends with a hang or a power cut keeps its mark, and the next start puts the
 
 | Escape | Size | Flags | Who |
 |---|---|---|---|
-| `BC250_ESCAPE_RUN_DPM_CURVE` (28) | 360 bytes | `NoAdapterSynchronization` for every operation | read: anybody; set, keep, cancel, reset: an administrator |
-| `BC250_ESCAPE_RUN_CPU` (29) | 296 bytes | read and keep: `NoAdapterSynchronization`; everything else: `HardwareAccess` | read: anybody; everything else, the readback included, an administrator |
+| `BC250_ESCAPE_RUN_DPM_CURVE` (28) | 360 bytes | `NoAdapterSynchronization` for every operation | read: anybody. Set, keep, cancel, reset: an administrator |
+| `BC250_ESCAPE_RUN_CPU` (29) | 296 bytes | read and keep: `NoAdapterSynchronization`. Everything else: `HardwareAccess` | read: anybody. Everything else, the readback included, an administrator |
 
 The curve escape touches no hardware: a curve reaches the SMU through the governor's next tick. The CPU escape
 does send mailbox messages, which is why its write operations take the adapter, exactly as a clock set does.
@@ -362,7 +362,7 @@ Keep is the exception, from 0.7.213: it copies the applied settings into the sto
 the Parameters key - each one flushed to the disk - and ends the trial. It sends no message and reads no register,
 so it takes `NoAdapterSynchronization` and never suspends the GPU scheduler over seven registry flushes. For one
 release the driver still admits the `HardwareAccess` word keep asked for up to 0.7.212, so an older CLI, DLL or
-control application keeps working; a tool of this release sends the new word, and sends it again with the old one
+control application keeps working. A tool of this release sends the new word, and sends it again with the old one
 when a driver of 0.7.212 or older refuses it (`Status` REFUSED, `NtStatus` `STATUS_INVALID_PARAMETER`), so a keep
 is not lost on a machine whose device restart is still pending.
 
@@ -406,7 +406,7 @@ part is then running a setting nobody chose to keep.
 
 The "Advanced tuning" card is closed when the page opens, and shows one line per surface instead: standard, a
 test runs, or an own setting is in use. It opens by itself while a trial runs or a way back is owed, and cannot be
-closed then. While it is open, the page reads both escapes every 2 s (READ only, `NoAdapterSynchronization`); a
+closed then. While it is open, the page reads both escapes every 2 s (READ only, `NoAdapterSynchronization`). A
 closed card reads nothing.
 
 One card stays outside the disclosure: "Processor temperature limit (throttling)" (`TunerView.CpuLimit`). It shows
@@ -419,8 +419,8 @@ What the open cards show (`tools/win/amdgpu_wddm_control/src/TunerView.cs`, pure
 
 | Card | Rows |
 |---|---|
-| Graphics voltage | in use now, saved for every start, the clock and voltage of the governor's level and the temperature (`LevelMHz`, `LevelMv`, `TemperatureMc`), the chart with a ring at that level and a dashed line at the ceiling, one row per speed with the difference from standard and the voltage in use when an edit differs |
-| Processor | the readback (voltage, temperature, temperature cap, the clock of each core that answered, the P-state clocks, the processor count), then what is in force, what is saved, and the standard: the clock and undervolt this start recorded with the default cap (what "Standard processor settings" puts back), then the three pickers over the driver's own lists |
+| Graphics voltage | in use now, saved for every start, the clock and voltage of the governor's level and the temperature (`LevelMHz`, `LevelMv`, `TemperatureMc`). The panel also has the chart with a ring at that level and a dashed line at the ceiling. It has one row per speed with the difference from standard and the voltage in use when an edit differs |
+| Processor | the readback (voltage, temperature, temperature cap, the clock of each core that answered, the P-state clocks, the processor count). Then what is in force, what is saved, and the standard. The standard is the clock and undervolt this start recorded with the default cap (what "Standard processor settings" puts back). Then the three pickers over the driver's own lists |
 
 How a trial ended is said in a sentence, not left to the reader: kept, stopped, gone back by itself at the end of
 the window, or reset. The curve's own counters (`Keeps`, `Cancels`, `Reverts`) tell the four apart. The processor
@@ -447,8 +447,8 @@ Nothing below is measured on unit A. Until a row is answered, the driver refuses
 | Question | What answers it | What it blocks |
 |---|---|---|
 | Does queue 3 answer a getter at all? | `cpu readback`: the CPU voltage, the GPU voltage and the firmware cap | every CPU setter of that start |
-| Does a revert ever come back refused? | the plug watts and `cpu` after a trial at 87 C | nothing; it says whether the retry loop is theory or practice |
-| Is the GPU voltage of `0x37` the one our own `GetGfxVid` reports? | the two readings side by side | nothing; it is the cross-check that the queue means what we think |
+| Does a revert ever come back refused? | the plug watts and `cpu` after a trial at 87 C | nothing. It says whether the retry loop is theory or practice |
+| Is the GPU voltage of `0x37` the one our own `GetGfxVid` reports? | the two readings side by side | nothing. It is the cross-check that the queue means what we think |
 | What is this part's effective CPU clock? | the eight core clocks and the eight P-state clocks | the words the application uses about the clock range |
 | Does a curve-scale step remove the millivolts the model predicts? | the voltage readback at one, two and four steps | the guided search's own arithmetic |
 | Does `SetCoreEnableMask` do anything on a harvested die? | Answered 2026-11-12: no, in either direction (M962). Message `0x98` enables the cores (M961) | nothing any more |
