@@ -36,7 +36,7 @@ else except the disk's EFI system partition (which it backs up first).
   other lettered volume. The dry run lists every partition that would go.
 - `bcdboot` is called with `/s` on the target disk's own EFI partition. Measured: in that form it does not
   touch the firmware boot menu of the PC it runs on (it even says that `/addlast` is ignored "when custom
-  volume is specified"); the script still compares the firmware entries before and after. It does write
+  volume is specified"). The script still compares the firmware entries before and after. It does write
   the fallback loader `EFI\Boot\bootx64.efi`, which is what a board that has never seen the disk boots.
 - Applying an image with DISM runs nothing from the installation media: no Setup, no `$OEM$` scripts.
   The system starts unactivated, which is enough for driver work.
@@ -46,7 +46,7 @@ else except the disk's EFI system partition (which it backs up first).
 - OpenSSH server is not part of the image and cannot be added as a Windows capability without a network,
   so the Win32-OpenSSH release zip from Microsoft's GitHub project is installed instead.
 - Drivers needed for first contact must be injected offline. For unit A that is the ASUS USB-AC58 Wi-Fi
-  adapter (`USB\VID_0B05&PID_19AA`), which neither the image nor Realtek's generic package covers; the
+  adapter (`USB\VID_0B05&PID_19AA`), which neither the image nor Realtek's generic package covers. The
   vendor's Windows 10 x64 package does. Driver binaries are not kept in this repository.
 - Test signing is switched on in the offline BCD, so the first boot already accepts test-signed drivers.
   Secure Boot is off on unit A (facts M14).
