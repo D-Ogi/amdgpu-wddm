@@ -7,12 +7,17 @@
  * 1. The Authenticode digest of the image in dbx: forbidden.
  * 2. For each signature whose digest is that of the image and whose signer signed it: walk from the signer's
  *    certificate up through the certificates of the signature, to the top. A certificate on the way that is in
- *    dbx, or that a dbx certificate signed: forbidden. Else a certificate on the way that is in db, or that a db
+ *    dbx (whole, or by the digest of its signed part), or that a dbx certificate signed: forbidden. Else a certificate on the way that is in db, or that a db
  *    certificate signed: allowed by signature.
  * 3. The digest of the image in db: allowed by digest.
  * 4. Otherwise not allowed.
  *
- * What it does not do is in sb_x509.h (no dates, no key usage) and in sb_siglist.h (two entry types).
+ * A database that is not well formed gives SB_BAD_DATABASE for every image: a list that cannot be read to its
+ * end can hide a forbidden entry. A dbx entry with a revocation time forbids at every time: the stage does not
+ * read time stamps, so it cannot say that an image was signed before the revocation. That is stricter than the
+ * UEFI rule.
+ *
+ * What it does not do is in sb_x509.h (no dates, no key usage) and in sb_siglist.h (the entry types).
  */
 #ifndef SB_VERIFY_H
 #define SB_VERIFY_H
@@ -31,7 +36,8 @@ enum sb_verdict {
 	SB_NOT_SIGNED,			/* no signature of the supported kind, and the digest is not in db */
 	SB_NOT_TRUSTED,			/* a valid signature, and no certificate of it leads to db */
 	SB_BAD_SIGNATURE,		/* each signature is for other bytes, or does not verify */
-	SB_NOT_AN_IMAGE			/* not a sound PE image */
+	SB_NOT_AN_IMAGE,		/* not a sound PE image */
+	SB_BAD_DATABASE			/* db or dbx is not a well-formed signature database */
 };
 
 struct sb_result {

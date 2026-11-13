@@ -21,6 +21,10 @@ static const unsigned char guid_sha256[GUID_BYTES] = {		/* c1c41626-504c-4092-ac
 	0x26, 0x16, 0xC4, 0xC1, 0x4C, 0x50, 0x92, 0x40, 0xAC, 0xA9, 0x41, 0xF9, 0x36, 0x93, 0x43, 0x28
 };
 
+static const unsigned char guid_x509_sha256[GUID_BYTES] = {	/* 3bd2a492-96c0-4079-b420-fcf98ef103ed */
+	0x92, 0xA4, 0xD2, 0x3B, 0xC0, 0x96, 0x79, 0x40, 0xB4, 0x20, 0xFC, 0xF9, 0x8E, 0xF1, 0x03, 0xED
+};
+
 static size_t le32(const unsigned char *p)
 {
 	return (size_t)p[0] | ((size_t)p[1] << 8) | ((size_t)p[2] << 16) | ((size_t)p[3] << 24);
@@ -53,6 +57,9 @@ int sb_siglist_next(struct sb_sig_cursor *cursor, enum sb_sig_type *type, struct
 		else if (!memcmp(list, guid_sha256, GUID_BYTES)) {
 			if (entry_bytes != GUID_BYTES + SHA256_BYTES) return -1;
 			cursor->type = SB_SIG_SHA256;
+		} else if (!memcmp(list, guid_x509_sha256, GUID_BYTES)) {
+			if (entry_bytes != GUID_BYTES + SB_X509_SHA256_DATA_BYTES) return -1;
+			cursor->type = SB_SIG_X509_SHA256;
 		} else
 			cursor->type = SB_SIG_OTHER;
 		cursor->entries.p = list + LIST_HEADER_BYTES + header_bytes;
@@ -80,6 +87,7 @@ int sb_siglist_count(const unsigned char *database, size_t bytes, struct sb_sigl
 	while ((more = sb_siglist_next(&cursor, &type, &data)) == 1) {
 		if (type == SB_SIG_X509) out->x509++;
 		else if (type == SB_SIG_SHA256) out->sha256++;
+		else if (type == SB_SIG_X509_SHA256) out->x509_sha256++;
 		else out->other++;
 	}
 	return more == 0;

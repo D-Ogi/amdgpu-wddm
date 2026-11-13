@@ -35,6 +35,20 @@ static int cert_listed(const unsigned char *database, size_t bytes, const struct
 	return 0;
 }
 
+/* 1 when the database holds the SHA-256 digest of the signed part of this certificate. */
+static int cert_digest_listed(const unsigned char *database, size_t bytes, const struct sb_cert *cert)
+{
+	unsigned char digest[EFL_SHA256_BYTES];
+	struct sb_sig_cursor cursor;
+	enum sb_sig_type type;
+	struct sb_span data;
+	efl_sha256(cert->tbs.p, cert->tbs.n, digest);
+	sb_siglist_open(&cursor, database, bytes);
+	while (sb_siglist_next(&cursor, &type, &data) == 1)
+		if (type == SB_SIG_X509_SHA256 && !memcmp(data.p, digest, EFL_SHA256_BYTES)) return 1;
+	return 0;
+}
+
 /* 1 when a certificate of the database signed cert. */
 static int cert_issued_by(const unsigned char *database, size_t bytes, const struct sb_cert *cert)
 {
@@ -59,7 +73,8 @@ static enum chain walk(const struct sb_pkcs7 *p7, const struct sb_cert *signer, 
 	for (depth = 0; depth < MAX_CHAIN; depth++) {
 		struct sb_span cursor = p7->certificates;
 		int found = 0;
-		if (cert_listed(d->dbx, d->dbx_bytes, &current) || cert_issued_by(d->dbx, d->dbx_bytes, &current))
+		if (cert_listed(d->dbx, d->dbx_bytes, &current) || cert_digest_listed(d->dbx, d->dbx_bytes, &current) ||
+		    cert_issued_by(d->dbx, d->dbx_bytes, &current))
 			return CHAIN_FORBIDDEN;
 		if (!allowed && (cert_listed(d->db, d->db_bytes, &current) || cert_issued_by(d->db, d->db_bytes, &current)))
 			allowed = 1;
@@ -79,6 +94,7 @@ static enum chain walk(const struct sb_pkcs7 *p7, const struct sb_cert *signer, 
 }
 void sb_verify_image(const unsigned char *image, size_t bytes, const struct sb_databases *d, struct sb_result *out)
 {
+	struct sb_siglist_count count;
 	struct sb_pe pe;
 	const unsigned char *signature;
 	size_t cursor = 0, signature_bytes;
@@ -86,6 +102,10 @@ void sb_verify_image(const unsigned char *image, size_t bytes, const struct sb_d
 	int more;
 
 	memset(out, 0, sizeof(*out));
+	if (!sb_siglist_count(d->db, d->db_bytes, &count) || !sb_siglist_count(d->dbx, d->dbx_bytes, &count)) {
+		out->verdict = SB_BAD_DATABASE;
+		return;
+	}
 	if (!sb_pe_read(image, bytes, &pe)) {
 		out->verdict = SB_NOT_AN_IMAGE;
 		return;
@@ -138,6 +158,7 @@ const char *sb_verdict_text(enum sb_verdict verdict)
 	case SB_NOT_TRUSTED: return "not allowed: the signature is valid and leads to no certificate of db";
 	case SB_BAD_SIGNATURE: return "not allowed: no signature of the image verifies";
 	case SB_NOT_AN_IMAGE: return "not allowed: not a sound PE image";
+	case SB_BAD_DATABASE: return "not allowed: db or dbx is not a well-formed signature database";
 	}
 	return "not allowed";
 }
