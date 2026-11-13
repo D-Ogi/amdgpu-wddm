@@ -1,7 +1,7 @@
 # d3d11mt
 
 A multithreaded D3D11 client with an exact result. The project requires that multithreading on the system
-D3D11 path be tested with our own clients before any game is trusted to exercise it; this is that client. It renders
+D3D11 path be tested with our own clients before any game is trusted to exercise it. This is that client. It renders
 offscreen only, so it runs over SSH in session 0 as well as on the desktop, and it creates its device without
 `D3D11_CREATE_DEVICE_SINGLETHREADED`: the runtime's thread-safe device is the subject.
 
@@ -37,7 +37,7 @@ The shaders use integer arithmetic only, so every conforming implementation writ
 tile size and the round counts, never on how the tiles are split between threads: `--threads 1 --tiles 32` and
 `--threads 4 --tiles 8` must agree, which makes a single-threaded run the oracle of a multithreaded one.
 
-Reference checksums from the development PC (RTX 4090 native driver and WARP agree bit for bit; native reports
+Reference checksums from the development PC (RTX 4090 native driver and WARP agree bit for bit. Native reports
 `driver_command_lists` true, WARP false, so both the driver's and the runtime's command lists are covered):
 
 | Arguments | Checksum |
