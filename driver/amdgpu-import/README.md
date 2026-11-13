@@ -1,7 +1,7 @@
 # driver/amdgpu-import/
 
 AMD's IP-block code from Linux, **unmodified** (ADR 0002). Three earlier attempts at this driver
-derived their register addresses and init sequences by hand and all three got them wrong; the
+derived their register addresses and init sequences by hand and all three got them wrong. The
 information is published by AMD under MIT inside the kernel, so we import it instead of reading it
 and retyping it.
 
@@ -13,7 +13,7 @@ Files here are in one of two categories, and `PROVENANCE.md` says which:
   `driver/kmd/build.ps1`'s non-recursive `*.c` glob over this directory can only ever pick up files
   that really compile. Currently `gfx_v10_0.c` and `sdma_v5_0.c`, which call about ninety
   kernel functions each that no shim can honestly provide (see `PROVENANCE.md` for the reasoning).
-  A reference-only file is still byte-identical and still carries a `PROVENANCE.md` row; the only
+  A reference-only file is still byte-identical and still carries a `PROVENANCE.md` row. The only
   difference is that no build line names it.
 
 ## Rules
@@ -29,7 +29,7 @@ Files here are in one of two categories, and `PROVENANCE.md` says which:
 4. Every file is listed in `PROVENANCE.md` with its kernel path, tag, commit and the license notice
    the file itself carries - checked by reading the file, not assumed. `THIRD-PARTY.md` at the
    repository root points here.
-5. Only MIT-licensed AMD files. GPL-only kernel parts cannot be imported; where the imports need a
+5. Only MIT-licensed AMD files. GPL-only kernel parts cannot be imported. Where the imports need a
    helper that lives in a GPL-2.0 kernel header (`lower_32_bits`, `min`, `ARRAY_SIZE`), the shim
    defines it from its documented behaviour instead of copying it.
 
@@ -42,12 +42,12 @@ git -C $env:BC250_ROOT\ref\linux-src show v6.18:drivers/gpu/drm/amd/amdgpu/<file
 Use `git show`, not a copy out of the working tree: that checkout has `core.autocrlf=true` and a
 copy would carry CRLF. Then:
 
-- read the top of the file and confirm the MIT notice yourself, add the row to `PROVENANCE.md`;
+- read the top of the file and confirm the MIT notice yourself, add the row to `PROVENANCE.md`.
 - put every register header it includes into `third_party/linux-amdgpu/` (flat) with a row in that
   directory's `PROVENANCE.md`, and add a forwarding header under `driver/shim/include/` if the
-  include path is a `gc/...`-style one;
+  include path is a `gc/...`-style one.
 - add whatever the file needs to `driver/shim/include/amdgpu.h`, marking each definition as copied
-  from amdgpu (naming the source file) or as ours;
+  from amdgpu (naming the source file) or as ours.
 - compile it, both user mode and with the WDK kernel flags: `pwsh driver\shim\test\run.ps1`.
 
 ## What is here now
@@ -55,7 +55,7 @@ copy would carry CRLF. Then:
 **M4, GART (compiled).** `gfxhub_v2_0.c`, `mmhub_v2_0.c` (GART and VM setup of the two memory
 hubs), their headers, `cyan_skillfish_reg_init.c` (the register base table of this exact SoC) and
 `soc15_common.h` (the register access macros). Together they are the whole register-writing part of
-amdgpu's GART bring-up; `driver/shim/test` replays it against unit A's own trace.
+amdgpu's GART bring-up. `driver/shim/test` replays it against unit A's own trace.
 
 **M5 part A, PSP (compiled).** `psp_v11_0_8.c`, `psp_v11_0_8.h`, `psp_gfx_if.h`.
 
