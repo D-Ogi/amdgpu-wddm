@@ -913,7 +913,7 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
 // allocation, a record the shared decoder declines, and a record whose pitch or size this engine's linear image of
 // the same description disagrees with.
 // BD-373: a resource record with the S26R magic is the other wire form, ENGINE LAYOUT (open_engine_layout below):
-// a buffer is opened over the adopted allocation, a texture record is refused by name until engine ABI V15.
+// a buffer or a LINEAR texture of the engine (ABI 1.11, V15) is opened over the adopted allocation.
 // Calc answers the private sizes the open constructs, the same records a create builds, so a runtime that calls
 // Calc and then Open sees one shape.
 D3D12DDI_HEAP_AND_RESOURCE_SIZES APIENTRY calc_opened_heap_and_resource(D3D12DDI_HDEVICE,
@@ -1092,11 +1092,97 @@ HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* a
     return S_OK;
 }
 
+// BD-373 step 4: the engine's LINEAR image of a texture plan, its layouts and its create facts, before any memory
+// exists (engine ABI 1.11 QueryLinearImageLayouts). The layouts are the engine's order, layer-major then mip, the
+// order of the contract's LayoutHash.
+struct EngineLayoutImage {
+    BC250_VKD3D_LINEAR_IMAGE_INFO info;
+    BC250_VKD3D_LINEAR_IMAGE_CREATE create;
+    BC250_VKD3D_SUBRESOURCE_LAYOUT* layouts = nullptr;
+    uint32_t count = 0;
+    EngineLayoutImage() noexcept : info{}, create{} {}
+    EngineLayoutImage(const EngineLayoutImage&) = delete;
+    EngineLayoutImage& operator=(const EngineLayoutImage&) = delete;
+    ~EngineLayoutImage() { delete[] layouts; }
+};
+
+HRESULT query_engine_layout_image(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, EngineLayoutImage* out,
+                                  EngineLinearImage* image) noexcept {
+    *image = EngineLinearImage{};
+    if (!c->funcs.QueryLinearImageLayouts || !c->funcs.CreateLinearPlacedResource2) return E_NOTIMPL;
+    const uint32_t count = uint32_t{desc.MipLevels} * desc.DepthOrArraySize;
+    out->layouts = new (std::nothrow) BC250_VKD3D_SUBRESOURCE_LAYOUT[count]();
+    if (!out->layouts) return E_OUTOFMEMORY;
+    out->count = count;
+    out->info.Size = sizeof(out->info);
+    out->create.Size = sizeof(out->create);
+    const HRESULT hr = c->funcs.QueryLinearImageLayouts(c->device, &desc, &out->info, &out->create, count, out->layouts);
+    if (FAILED(hr)) {
+        log_line("engine layout open: the engine has no linear image for format %d, %llux%u, %u mips, %u layers: "
+                 "%08lx",
+                 static_cast<int>(desc.Format), static_cast<unsigned long long>(desc.Width), desc.Height,
+                 unsigned{desc.MipLevels}, unsigned{desc.DepthOrArraySize}, static_cast<unsigned long>(hr));
+        return hr;
+    }
+    uint64_t hash = BC250_SR_FNV_BASIS;
+    for (uint32_t i = 0; i < count; ++i) {
+        const BC250_VKD3D_SUBRESOURCE_LAYOUT& l = out->layouts[i];
+        hash = Bc250SharedResourceLayoutAdd(hash, l.Offset, l.Size, l.RowPitch, l.ArrayPitch, l.DepthPitch);
+    }
+    image->vk_format = out->create.VkFormat;
+    image->create_flags = out->create.CreateFlags;
+    image->create_usage = out->create.CreateUsage;
+    image->memory_type_bits = out->info.MemoryTypeBits;
+    image->memory_size = out->info.MemorySize;
+    image->memory_alignment = out->info.MemoryAlignment;
+    image->layout_hash = hash;
+    return S_OK;
+}
+
+// The engine's LINEAR image at offset 0 of the backing. The bound image must be the one the query described: the
+// match rule proved that one, and the memory was adopted for it.
+HRESULT place_engine_layout_image(DeviceContext* c, Backing* b, const D3D12_RESOURCE_DESC1& desc,
+                                  D3D12_RESOURCE_STATES state, const EngineLayoutImage& queried,
+                                  ID3D12Resource** out) noexcept {
+    *out = nullptr;
+    EngineLayoutImage bound;
+    bound.layouts = new (std::nothrow) BC250_VKD3D_SUBRESOURCE_LAYOUT[queried.count]();
+    if (!bound.layouts) return E_OUTOFMEMORY;
+    bound.count = queried.count;
+    bound.info.Size = sizeof(bound.info);
+    bound.create.Size = sizeof(bound.create);
+    ID3D12Resource* engine = nullptr;
+    HRESULT hr = c->funcs.CreateLinearPlacedResource2(c->device, b->heap, 0, &desc, static_cast<UINT32>(state), nullptr,
+                                                      __uuidof(ID3D12Resource), reinterpret_cast<void**>(&engine),
+                                                      &bound.info, &bound.create, bound.count, bound.layouts);
+    if (SUCCEEDED(hr) && !engine) hr = E_UNEXPECTED;
+    if (FAILED(hr)) {
+        log_line("engine layout open: the engine refused the linear image on the adopted memory: %08lx",
+                 static_cast<unsigned long>(hr));
+        return hr;
+    }
+    if (std::memcmp(&bound.info, &queried.info, sizeof(bound.info)) ||
+        std::memcmp(&bound.create, &queried.create, sizeof(bound.create)) ||
+        std::memcmp(bound.layouts, queried.layouts, sizeof(*bound.layouts) * bound.count)) {
+        log_line("engine layout open: the bound linear image differs from the query (memory %llu/%llu, VkFormat "
+                 "%u/%u)",
+                 static_cast<unsigned long long>(bound.info.MemorySize),
+                 static_cast<unsigned long long>(queried.info.MemorySize), bound.create.VkFormat,
+                 queried.create.VkFormat);
+        engine->Release();
+        return E_FAIL;
+    }
+    *out = engine;
+    return S_OK;
+}
+
 // BD-373: the open of the ENGINE LAYOUT form (S26R + BC2A). The adapter (shared-resource.h) decides with the
 // contract's rule whether this engine can bind the record's resource on the allocation, and says what to bind; the
-// steps here are the engine's, in the order and with the release rules of open_shared_surface. Buffers only: the
-// adapter refuses a texture record by name. The buffer is an ordinary placed buffer at offset 0 of an engine heap
-// over the whole adopted allocation, so its bytes are the creator's bytes.
+// steps here are the engine's, in the order and with the release rules of open_shared_surface. A buffer is an
+// ordinary placed buffer at offset 0 of an engine heap over the whole adopted allocation, so its bytes are the
+// creator's bytes. A texture is the engine's LINEAR image of the record's description at offset 0 of that heap: the
+// engine answers its layouts first, the adapter matches them with the creator's record, and only then is the memory
+// adopted.
 HRESULT open_engine_layout(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* args, D3D12DDI_HHEAP hheap,
                            D3D12DDI_HRTRESOURCE rt, D3D12DDI_HRESOURCE hres, const char** why) noexcept {
     *why = "arguments";
@@ -1110,15 +1196,25 @@ HRESULT open_engine_layout(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* ar
                                  first->PrivateDriverDataSize, c->identity, &plan, why);
     if (FAILED(hr)) return hr;
 
-    // The memory types are not narrowed (0, as a MemoryRequest's): the shell picks a device-local type for a buffer,
-    // and CreateHeapFromMemory checks it.
+    EngineLayoutImage queried;
+    if (plan.texture) {
+        *why = kWhyEngineLayoutLinear;
+        EngineLinearImage image{};
+        hr = query_engine_layout_image(c, plan.desc, &queried, &image);
+        if (FAILED(hr)) return hr == E_OUTOFMEMORY ? hr : E_NOTIMPL;
+        hr = match_engine_layout_texture(&plan, c->identity, image, why);
+        if (FAILED(hr)) return hr;
+    }
+
+    // A buffer: the memory types are not narrowed (0, as a MemoryRequest's), the shell picks a device-local type and
+    // CreateHeapFromMemory checks it. A texture: the engine image's types (the match set them).
     *why = "adopt";
     AdoptRequest adopt{};
     adopt.size = sizeof(adopt);
-    adopt.flags = kMemoryDedicated | kMemoryShareable;
+    adopt.flags = kMemoryDedicated | kMemoryShareable | (plan.texture ? kMemoryLinearSurface : 0u);
     adopt.rt_owner = rt;
     adopt.allocation = first->hAllocation;
-    adopt.memory_type_bits = 0;
+    adopt.memory_type_bits = plan.memory_type_bits;
     adopt.byte_size = plan.allocation_bytes;
     adopt.alignment = plan.address_alignment;
     ImportedMemory memory{};
@@ -1160,11 +1256,29 @@ HRESULT open_engine_layout(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* ar
     b->dedicated = true;
     b->adopted = true;
 
+    ID3D12Resource* engine = nullptr;
+    if (plan.texture) {
+        *why = "engine image placement";
+        hr = place_engine_layout_image(c, b, plan.desc, static_cast<D3D12_RESOURCE_STATES>(args->InitialResourceState),
+                                       queried, &engine);
+        if (FAILED(hr)) {
+            backing_release(b);
+            return hr;
+        }
+        heap->AddRef();
+        new (hheap.pDrvPrivate) HeapRecord{{Tag::Heap, 0, heap, c}, b};
+        c->live.fetch_add(1);
+        // No render-target initialisation: the texture holds its creator's content (open_shared_surface).
+        construct_resource(static_cast<ResourceRecord*>(hres.pDrvPrivate), c, engine, b, 0, plan.desc, rt,
+                           ResourceKind::Opened, plan.desc.Format);
+        *why = "";
+        return S_OK;
+    }
+
     // Not place(): its fit check uses the engine's allocation info, which rounds a buffer up to 64 KiB, and the
     // allocation of a shared buffer can be a few pages. The engine's own check is the one that applies: offset 0 +
     // Width <= the heap size (shared-resource.h, kOpenerBufferAlignment), which the match rule already proved.
     *why = "engine buffer placement";
-    ID3D12Resource* engine = nullptr;
     hr = c->device8->CreatePlacedResource1(heap, 0, &plan.desc,
                                            static_cast<D3D12_RESOURCE_STATES>(args->InitialResourceState), nullptr,
                                            __uuidof(ID3D12Resource), reinterpret_cast<void**>(&engine));

@@ -675,9 +675,9 @@ optional even in RuntimeBacked: null means no shared open is served, and the slo
 
 The ENGINE LAYOUT open (BD-373, added within r5). A resource record with the S26R magic goes to the adapter in
 `shared-resource.h`, never to the LINEAR SURFACE decoder. The adapter reads the record and its BC2A allocation blob
-with `driver/contract/bc250_shared_resource.h` and `bc250_shared_resource_alloc.h`, makes the record of the buffer
-this engine places for the same description, and lets `Bc250SharedResourceMatchWhy` decide. Only buffers open in
-this revision. A texture record is refused with `engine layout texture`. The adopt request of a buffer has
+with `driver/contract/bc250_shared_resource.h` and `bc250_shared_resource_alloc.h`, makes the record of the
+resource this engine binds for the same description, and lets `Bc250SharedResourceMatchWhy` decide. Buffers and 2D
+textures open. The adopt request of a buffer has
 `kMemoryDedicated | kMemoryShareable` without `kMemoryLinearSurface`, `memory_type_bits` 0, `byte_size` the whole
 allocation (BC2A `alloc_size`) and `alignment` 64 KiB: vkd3d-proton places a buffer as a range of the heap's own
 VkBuffer, and a heap over borrowed memory that allows buffers needs a GPU virtual address of the heap alignment.
@@ -685,6 +685,17 @@ The shell selects the memory type from its own buffer of that size and refuses a
 that buffer needs. engine-ddi then creates the heap over the memory and places the buffer at offset 0 with
 `CreatePlacedResource1`, without the 64 KiB rounding of `GetResourceAllocationInfo`, because a shared buffer's
 allocation can be a few pages. A placed resource on the opened heap and a tile mapping into it are refused.
+
+A texture record opens as the engine's LINEAR image of the record's description, with its mip levels and array
+layers (engine ABI 1.11, V15). Before anything is adopted, engine-ddi asks `QueryLinearImageLayouts` for the
+image's VkFormat, create flags, usage, memory requirements and the layout of every subresource. It hashes the
+layouts in the contract's order, and the adapter (`match_engine_layout_texture`) compares that image's record with
+the creator's. An engine without such an image refuses with `engine layout linear image`. A mismatch refuses with
+the contract's reason, for example `record vulkan format` or `record layout`. The adopt request of a texture has
+`kMemoryDedicated | kMemoryShareable | kMemoryLinearSurface`, the image's memory types and alignment, and
+`byte_size` the whole allocation. `CreateLinearPlacedResource2` places the image at offset 0 of the heap over the
+memory. The bound image must give the layouts, the memory requirements and the create facts of the query, or the
+open fails. As on the LINEAR SURFACE form, the texture is not initialised, because it holds the creator's content.
 
 The match rule compares the creator's DeviceUuid with the opener's. engine-ddi has no Vulkan query of its own, so
 the shell calls `set_device_identity` once after `create_device_context` with `VkPhysicalDeviceIDProperties` of the

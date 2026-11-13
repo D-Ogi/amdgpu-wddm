@@ -210,13 +210,15 @@ with `D3D12_HEAP_FLAG_SHARED`, `ID3D12CompatibilityDevice::CreateSharedResource`
 `ID3D12Device::OpenSharedHandle` of a resource all take that path.
 
 The open also reads the ENGINE LAYOUT form (`driver/contract/bc250_shared_resource.h`,
-BD-373) for buffers: a buffer that the D3D11 shell created and shared opens as a
-D3D12 buffer over the same memory. The contract's match rule decides, with the
-device UUID that the shell gives engine-ddi (`set_device_identity`). A texture
-record of that form is refused by name until engine ABI V15. A D3D12 create of a
-shared buffer still fails.
+BD-373): a buffer or a 2D texture that the D3D11 shell created and shared opens as a
+D3D12 resource over the same memory. A texture can have mip levels and array layers.
+It opens as the engine's LINEAR image of the same description (engine ABI 1.11,
+V15), and only when that image has the creator's layout. The contract's match rule
+decides, with the device UUID that the shell gives engine-ddi
+(`set_device_identity`). A D3D12 create of a shared buffer or of a texture outside
+the LINEAR SURFACE form still fails.
 
-Every other shape still fails: buffers created by D3D12, mip chains, arrays, 3D textures, MSAA,
+Every other shape of a D3D12 create still fails: buffers, mip chains, arrays, 3D textures, MSAA,
 block-compressed and typeless formats, depth-stencil, cross-adapter surfaces,
 CPU-visible shared heaps, a shared heap with no resource and a placed resource on
 one. They fail with `E_OUTOFMEMORY`, one of the two failures a creation DDI may

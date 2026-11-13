@@ -946,8 +946,8 @@ HRESULT RuntimeHeapImports::adopt(const engine_ddi::AdoptRequest* request,engine
     report_={};report_.stage=ImportStage::Request;
     if(!active_.load() || !domain_.entered() || !initialized_)return E_UNEXPECTED;
     drain(false);
-    // Two forms (engine-ddi.h, AdoptRequest): the linear surface of the LINEAR SURFACE form, with the image's memory
-    // types, and (BD-373) the buffer of the ENGINE LAYOUT form, with no memory types: the engine places a buffer in
+    // Two forms (engine-ddi.h, AdoptRequest): a linear image (the surface of the LINEAR SURFACE form or a texture of
+    // the ENGINE LAYOUT form), with the image's memory types, and (BD-373) the buffer of the ENGINE LAYOUT form, with no memory types: the engine places a buffer in
     // memory of any type a buffer can use, so the types come from a buffer of this device, as allocate() takes them.
     constexpr uint32_t surface_flags=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryShareable|
         engine_ddi::kMemoryLinearSurface;

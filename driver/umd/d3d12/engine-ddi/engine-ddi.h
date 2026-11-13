@@ -16,7 +16,8 @@
 // change: a shared surface is the same linear image the linear primary already is (1.3 V13). Added within r5,
 // additively: set_pso_policy, asynchronous pipeline-state compilation on a worker pool (off unless set), and
 // set_device_identity, the device UUID that the open of an ENGINE LAYOUT shared resource compares (BD-373).
-// The ENGINE LAYOUT open of a buffer adopts with kMemoryDedicated|kMemoryShareable alone (AdoptRequest).
+// The ENGINE LAYOUT open of a buffer adopts with kMemoryDedicated|kMemoryShareable alone, the open of a texture
+// with kMemoryLinearSurface as well (AdoptRequest). The texture open needs engine ABI 1.11 (V15).
 // The shell (namespace native12) owns everything else:
 //   - the adapter, device state and FillDDITable composition;
 //   - queues and their WDDM contexts, fences and queue Signal/Wait;
@@ -220,9 +221,9 @@ struct MemoryRequest {
 // must map, make resident and import into the engine's VkDevice without allocating anything. The record it
 // builds is borrowed: the shell never deallocates it, because it never allocated it, and the runtime destroys
 // it as soon as pfnDestroyHeapAndResource returns. Two forms (BD-373):
-//   - a linear surface (the LINEAR SURFACE form): flags kMemoryDedicated|kMemoryShareable|kMemoryLinearSurface, as
-//     the shareable create's second attempt is, so the shell applies the same rules; memory_type_bits is the
-//     image's.
+//   - a linear surface (the LINEAR SURFACE form) or a LINEAR texture of the ENGINE LAYOUT form (engine ABI 1.11):
+//     flags kMemoryDedicated|kMemoryShareable|kMemoryLinearSurface, as the shareable create's second attempt is,
+//     so the shell applies the same rules; memory_type_bits and alignment are the engine image's.
 //   - a buffer (the ENGINE LAYOUT form): flags kMemoryDedicated|kMemoryShareable; memory_type_bits is 0, not
 //     narrowed, and the shell picks a device-local type a buffer can use; byte_size is the whole kernel allocation;
 //     alignment is the address alignment of the engine heap that allows buffers (64 KiB).

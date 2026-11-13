@@ -1,27 +1,27 @@
 {
   "schema": 2,
   "description": "The engine ABI engine-ddi builds against. tools/build/build-engine-ddi.ps1 refuses a header whose SHA-256 differs, and an engine DLL that is not the one its -Flavour pins. The release and the lab flavour (BD-167) are two builds of one source line, so each pins its own DLL; tools/build/engine_abi.py selects one, with the semantics of tools/release/release_flavour.py.",
-  "abi_version": "1.10",
-  "header_revision": "Urgent creations (V14, r7), ABI 1.10",
+  "abi_version": "1.11",
+  "header_revision": "Linear mip chains and arrays (V15, r8-draft), ABI 1.11",
   "repository": "vkd3d-proton fork of this project",
-  "branch": "",
-  "commit": "507890134f8e3e1313d45f03c6bbe7ddde8bda7a",
+  "branch": "amdgpu-wddm/linear-mips-v15",
+  "commit": "940b4bc42351e39c02700434df2eab9320b11292",
   "source_checkout": "scratch/forksync/vkd3d-proton",
   "header_path": "libs/ddi/bc250_vkd3d_engine.h",
-  "header_sha256": "a87e47a9bf6327b784165ce0fb2046347e2d135c0716dd8c69823a5e108f2928",
+  "header_sha256": "b3c6cce8e0eba79b3686c2ca0559e6ea5481e19cda6a6127e07c65f66b5bcf33",
   "vulkan_headers_path": "khronos/Vulkan-Headers/include",
   "vulkan_headers_commit": "ee2ec5fd83dafce291024683b50dc89219333076",
   "engine_dll": "amdgpu_wddm_vkd3d.dll",
   "flavours": {
     "release": {
-      "engine_dll_dir": "scratch/build-train/tester.33/artifacts/release/engine12-x64-rel",
-      "engine_dll_sha256": "74d9a96d7f4244fb8eaed44943e8c66f5e0c5c59b10d6f139703a01f0cd61fd6",
-      "engine_dll_recipe": "tools/build/build-vkd3d.ps1; canonical engine12 d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6"
+      "engine_dll_dir": "scratch/t39/bd373s3-build/rule2/engine-release-x64/libs/ddi",
+      "engine_dll_sha256": "40e96c3c1d842493843f5d535309632081dfb2cd9b828981cb86a96f2bf7fd0c",
+      "engine_dll_recipe": "tools/build/build-vkd3d.ps1 -Config ddi-engine-lto -Compiler clang-cl -Version 0.7.216.113-tester.39; amdgpu-wddm/linear-mips-v15 940b4bc42351e39c02700434df2eab9320b11292"
     },
     "lab": {
-      "engine_dll_dir": "scratch/build-train/tester.33/artifacts/lab/engine12-x64-lab",
-      "engine_dll_sha256": "e872950e1fbeac1600eda551b9618ab5ba16b3b2a96417e8e0b024a476540003",
-      "engine_dll_recipe": "tools/build/build-vkd3d.ps1; canonical engine12 d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6"
+      "engine_dll_dir": "scratch/t39/bd373s3-build/rule2/engine-lab-x64/libs/ddi",
+      "engine_dll_sha256": "3103ebf2ebcbb7958d30434c2b6d0f5171de5556ca1e076abc4cd9779a2b05f0",
+      "engine_dll_recipe": "tools/build/build-vkd3d.ps1 -Config ddi-engine-lto -Compiler clang-cl -Version 0.7.216.113-tester.39; amdgpu-wddm/linear-mips-v15 940b4bc42351e39c02700434df2eab9320b11292"
     }
   }
 }

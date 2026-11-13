@@ -6,8 +6,10 @@
 // that the open borrowed its memory - one adopt, no allocate callback, the handle the runtime gave - that the opened
 // resource reads and writes like any other texture, and that its destroy frees the import without deallocating an
 // allocation this driver never created. Every malformed record is refused with nothing constructed.
-// BD-373: the same for a buffer of the ENGINE LAYOUT form (S26R + BC2A, engine_layout_open below).
+// BD-373: the same for a buffer and a LINEAR texture of the ENGINE LAYOUT form (S26R + BC2A, engine_layout_open
+// below).
 #include "harness.h"
+#include "../shared-resource.h"
 
 #include "../../../../contract/bc250_shared_resource_alloc.h"
 #include "../../../../contract/bc250_shared_surface.h"
@@ -610,6 +612,68 @@ BC250_SHARED_RESOURCE buffer_record(uint32_t width) {
     return r;
 }
 
+// BD-373 step 4: the record of a 64x64 R8G8B8A8_UNORM texture with mips and layers, as a creator on this device writes
+// it: the D3D11 description, and the create info, memory and LayoutHash of the engine's own LINEAR image of the
+// description that the open builds (opened_texture_desc, engine ABI 1.11 QueryLinearImageLayouts). The match then
+// holds on any adapter that has that image. On E_NOTIMPL (the adapter has no such image) *record still gets a valid
+// record with a made-up layout, for the refusal.
+HRESULT texture_record(Device& device, uint32_t mips, uint32_t layers, BC250_SHARED_RESOURCE* record) {
+    BC250_SHARED_RESOURCE r{};
+    r.Magic = BC250_SHARED_RESOURCE_MAGIC;
+    r.Version = BC250_SHARED_RESOURCE_VERSION;
+    r.Bytes = BC250_SHARED_RESOURCE_BYTES;
+    r.Dimension = BC250_SHARED_RESOURCE_TEXTURE2D;
+    r.Width = r.Height = 64;
+    r.MipLevels = mips;
+    r.ArraySize = layers;
+    r.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    r.SampleCount = 1;
+    r.BindFlags = BC250_SR_BIND_SHADER_RESOURCE;
+    r.SharingMode = BC250_SR_VK_SHARING_EXCLUSIVE;
+    r.ImageType = BC250_SR_VK_IMAGE_TYPE_2D;
+    r.ExtentWidth = r.ExtentHeight = 64;
+    r.ExtentDepth = 1;
+    r.VkMipLevels = mips;
+    r.VkArrayLayers = layers;
+    r.VkSamples = BC250_SR_VK_SAMPLE_COUNT_1;
+    r.Tiling = BC250_SR_VK_TILING_LINEAR;
+    r.CreatorApi = BC250_SR_CREATOR_D3D11;
+    std::memcpy(r.DeviceUuid, kDeviceUuid, sizeof(kDeviceUuid));
+    // The made-up image of a refusal: valid for the shape rule, matched by no engine.
+    r.CreateUsage = VK_IMAGE_USAGE_SAMPLED_BIT;
+    r.VkFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    r.MemorySize = 65536;
+    r.MemoryAlignment = 4096;
+    r.MemoryTypeBits = 0x1;
+    r.LayoutHash = 1;
+    *record = r;
+
+    const D3D12_RESOURCE_DESC1 desc = engine_ddi::opened_texture_desc(r);
+    const uint32_t count = mips * layers;
+    BC250_VKD3D_SUBRESOURCE_LAYOUT layouts[64]{};
+    if (count > 64 || !device.context->funcs.QueryLinearImageLayouts) return E_NOTIMPL;
+    BC250_VKD3D_LINEAR_IMAGE_INFO info{};
+    info.Size = sizeof(info);
+    BC250_VKD3D_LINEAR_IMAGE_CREATE create{};
+    create.Size = sizeof(create);
+    const HRESULT hr =
+        device.context->funcs.QueryLinearImageLayouts(device.context->device, &desc, &info, &create, count, layouts);
+    if (FAILED(hr)) return hr;
+    uint64_t hash = BC250_SR_FNV_BASIS;
+    for (uint32_t i = 0; i < count; ++i)
+        hash = Bc250SharedResourceLayoutAdd(hash, layouts[i].Offset, layouts[i].Size, layouts[i].RowPitch,
+                                            layouts[i].ArrayPitch, layouts[i].DepthPitch);
+    r.CreateFlags = create.CreateFlags;
+    r.CreateUsage = create.CreateUsage;
+    r.VkFormat = create.VkFormat;
+    r.MemorySize = info.MemorySize;
+    r.MemoryAlignment = info.MemoryAlignment;
+    r.MemoryTypeBits = info.MemoryTypeBits;
+    r.LayoutHash = hash;
+    *record = r;
+    return S_OK;
+}
+
 void engine_layout_open(Env& env) {
     StubMemory m;
     if (!load_stub(env, m) || !m.address) return;
@@ -734,6 +798,27 @@ void engine_layout_open(Env& env) {
                m.frees - frees, engine_ddi::harness_pending_releases(device.context));
     }
 
+    // A buffer whose size is not a page multiple, with the binds of a vertex buffer that shaders read (the lab's
+    // buffer-100 case of shared-interop): 100 bytes in a one-page allocation.
+    {
+        BC250_SHARED_RESOURCE record100 = buffer_record(100);
+        record100.BindFlags = BC250_SR_BIND_VERTEX_BUFFER | BC250_SR_BIND_SHADER_RESOURCE;
+        bc250_umd_alloc_private small_blob{};
+        check(Bc250SharedResourceAllocInit(&small_blob, &record100) == 1 && small_blob.alloc_size == 4096,
+              "engine layout open: the BC2A blob of a 100-byte buffer is one page");
+        const uint32_t adoptions = m.adoptions, frees = m.frees;
+        Opened o;
+        hr = open_blobs(env, device, 0x50000012u, &small_blob, sizeof(small_blob), &record100, sizeof(record100), o);
+        checkf(hr == S_OK && m.adoptions == adoptions + 1 && m.last_adopt_byte_size == 4096,
+               "engine layout open: a 100-byte vertex and shader-resource buffer in one page opens (hr %08lx, %llu "
+               "bytes adopted)",
+               static_cast<unsigned long>(hr), static_cast<unsigned long long>(m.last_adopt_byte_size));
+        if (hr == S_OK) {
+            destroy_opened(env, device, o);
+            checkf(m.frees == frees + 1, "engine layout open: the 100-byte buffer returns its memory once");
+        }
+    }
+
     // Two opens of one handle adopt twice, as on the LINEAR SURFACE form.
     {
         Opened a, b;
@@ -766,34 +851,6 @@ void engine_layout_open(Env& env) {
         bc250_umd_alloc_private one_page = blob;
         one_page.alloc_size = one_page.va_size = 4096;
         refused_record(record, one_page, sizeof(record), "an allocation below the record's memory");
-        // A LINEAR texture record of a valid shape: refused by name until engine ABI V15.
-        BC250_SHARED_RESOURCE texture{};
-        texture.Magic = BC250_SHARED_RESOURCE_MAGIC;
-        texture.Version = BC250_SHARED_RESOURCE_VERSION;
-        texture.Bytes = BC250_SHARED_RESOURCE_BYTES;
-        texture.Dimension = BC250_SHARED_RESOURCE_TEXTURE2D;
-        texture.Width = texture.Height = 128;
-        texture.MipLevels = 2;
-        texture.ArraySize = 1;
-        texture.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        texture.SampleCount = 1;
-        texture.BindFlags = BC250_SR_BIND_SHADER_RESOURCE;
-        texture.CreateUsage = VK_IMAGE_USAGE_SAMPLED_BIT;
-        texture.ImageType = BC250_SR_VK_IMAGE_TYPE_2D;
-        texture.VkFormat = VK_FORMAT_R8G8B8A8_UNORM;
-        texture.ExtentWidth = texture.ExtentHeight = 128;
-        texture.ExtentDepth = 1;
-        texture.VkMipLevels = 2;
-        texture.VkArrayLayers = 1;
-        texture.VkSamples = BC250_SR_VK_SAMPLE_COUNT_1;
-        texture.Tiling = BC250_SR_VK_TILING_LINEAR;
-        texture.MemorySize = kBytes;
-        texture.MemoryAlignment = 4096;
-        texture.MemoryTypeBits = 0x7;
-        texture.LayoutHash = 1;
-        texture.CreatorApi = BC250_SR_CREATOR_D3D11;
-        std::memcpy(texture.DeviceUuid, kDeviceUuid, sizeof(kDeviceUuid));
-        refused_record(texture, blob, sizeof(texture), "a texture record");
         // The adopt refused by the shell: the open fails and the device lives.
         m.refuse_adopt = true;
         const uint32_t refusals = m.adopt_refusals;
@@ -803,6 +860,80 @@ void engine_layout_open(Env& env) {
                "engine layout open: a shell that refuses the adopt fails the open (hr %08lx)",
                static_cast<unsigned long>(hr));
         m.refuse_adopt = false;
+    }
+
+    // BD-373 step 4: LINEAR textures. One mip and one layer goes through the V15 entries on every adapter; 7 mips x 4
+    // layers needs linear mips and arrays (RADV has them, NVIDIA does not: a SKIP line, and the open is refused by name
+    // with nothing adopted).
+    struct TextureShape {
+        uint32_t mips, layers;
+    };
+    for (const TextureShape shape : {TextureShape{1, 1}, TextureShape{7, 4}}) {
+        char what[96];
+        std::snprintf(what, sizeof(what), "engine layout texture 64x64, %u mips, %u layers", shape.mips, shape.layers);
+        BC250_SHARED_RESOURCE texture{};
+        const HRESULT query = texture_record(device, shape.mips, shape.layers, &texture);
+        bc250_umd_alloc_private texture_blob{};
+        check(Bc250SharedResourceWhyOk(Bc250SharedResourceRecordWhy(&texture)) &&
+                  Bc250SharedResourceAllocInit(&texture_blob, &texture) == 1,
+              "fixture: the texture record and its BC2A blob are valid");
+        const D3DKMT_HANDLE texture_handle = 0x50000021u;
+        if (query == E_NOTIMPL) {
+            std::printf("SKIP  %s: QueryLinearImageLayouts E_NOTIMPL, this adapter has no linear image of this shape; "
+                        "the open must refuse it\n",
+                        what);
+            const uint32_t adoptions = m.adoptions;
+            Opened o;
+            hr = open_blobs(env, device, texture_handle, &texture_blob, sizeof(texture_blob), &texture, sizeof(texture), o);
+            checkf(hr == E_OUTOFMEMORY && m.adoptions == adoptions && !device.shell.device_errors,
+                   "%s: without an engine image the open is refused with nothing adopted (hr %08lx)", what,
+                   static_cast<unsigned long>(hr));
+            if (SUCCEEDED(hr)) destroy_opened(env, device, o);
+            continue;
+        }
+        checkf(query == S_OK, "%s: QueryLinearImageLayouts (hr %08lx)", what, static_cast<unsigned long>(query));
+        if (query != S_OK) continue;
+
+        const uint32_t adoptions = m.adoptions, allocations = m.allocations, frees = m.frees;
+        Opened o;
+        hr = open_blobs(env, device, texture_handle, &texture_blob, sizeof(texture_blob), &texture, sizeof(texture), o);
+        checkf(hr == S_OK && m.adoptions == adoptions + 1 && m.allocations == allocations &&
+                   m.last_adopt_handle == texture_handle &&
+                   m.last_adopt_flags == (engine_ddi::kMemoryDedicated | engine_ddi::kMemoryShareable |
+                                          engine_ddi::kMemoryLinearSurface) &&
+                   m.last_adopt_byte_size == texture_blob.alloc_size &&
+                   m.last_adopt_alignment == texture.MemoryAlignment && m.last_adopt_type_bits == texture.MemoryTypeBits,
+               "%s: one adopt of the whole allocation with the image's types and alignment (hr %08lx, flags %x, %llu "
+               "bytes, alignment %llu, types %x)",
+               what, static_cast<unsigned long>(hr), m.last_adopt_flags,
+               static_cast<unsigned long long>(m.last_adopt_byte_size),
+               static_cast<unsigned long long>(m.last_adopt_alignment), m.last_adopt_type_bits);
+        if (hr == S_OK) {
+            Buffer beside;
+            const HRESULT placed = create_placed_buffer(env, device, o.as_buffer(), 0, 4096, beside);
+            checkf(placed == E_OUTOFMEMORY, "%s: a buffer placed on the opened texture's heap is refused (hr %08lx)",
+                   what, static_cast<unsigned long>(placed));
+            if (SUCCEEDED(placed)) destroy_buffer(env, device, beside);
+            destroy_opened(env, device, o);
+            checkf(m.frees == frees + 1 && !engine_ddi::harness_pending_releases(device.context),
+                   "%s: the destroy returns the borrowed memory once (%u frees)", what, m.frees - frees);
+        }
+
+        // The match rule against the engine image: another layout and another VkFormat are refused with nothing
+        // adopted; the creator's own create flags and usage are not compared.
+        BC250_SHARED_RESOURCE other = texture;
+        other.LayoutHash ^= 1;
+        refused_record(other, texture_blob, sizeof(other), "a texture record with another layout");
+        other = texture;
+        other.VkFormat = VK_FORMAT_B8G8R8A8_UNORM;
+        refused_record(other, texture_blob, sizeof(other), "a texture record with another VkFormat");
+        other = texture;
+        other.CreateFlags = 0;
+        other.CreateUsage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        hr = open_blobs(env, device, texture_handle, &texture_blob, sizeof(texture_blob), &other, sizeof(other), o);
+        checkf(hr == S_OK, "%s: the creator's own create flags and usage do not refuse the open (hr %08lx)", what,
+               static_cast<unsigned long>(hr));
+        if (hr == S_OK) destroy_opened(env, device, o);
     }
 
     checkf(m.frees == m.allocations + m.adoptions,
