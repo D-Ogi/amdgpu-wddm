@@ -4921,6 +4921,114 @@
         }
       ],
       "workspace_from_kits": false
+    },
+    {
+      "recipe": "tools/build/build-umd-d3d12.ps1",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "bindings": {
+        "tools/build/build-umd-d3d12.ps1": "8457c492970ed671846202196b4c9b73158d7507",
+        "tools/build": "fc7361188a3994139befceb1839436be9ca9ffd6",
+        "tools/quality": "43a95c92da36666f7c51a7d3fcc56a48862b0636",
+        "tools/release/installer": "72e370cb2e4a864c3cba7f4bcd5fdd5296ed77ad",
+        "tools/firmware": "c0c6e66c0b944e1b33d65d0e26d8398ea813e699"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/toolchain/nuget/microsoft.windows.wdk.x64/c/Include/10.0.26100.0/um",
+          "required": true,
+          "parameter": "DdiInclude"
+        },
+        {
+          "path": "{root}/toolchain/nuget/microsoft.direct3d.d3d12.1.619.6/build/native/include",
+          "required": true,
+          "parameter": "ApiInclude"
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
+      "recipe": "tools/build/build-umd-dxvk.ps1",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "bindings": {
+        "tools/build/build-umd-dxvk.ps1": "fef4d14a4e90fcf9a5e1eebc819bdff4896cec1f",
+        "tools/build": "fc7361188a3994139befceb1839436be9ca9ffd6",
+        "tools/quality": "43a95c92da36666f7c51a7d3fcc56a48862b0636",
+        "tools/release/installer": "72e370cb2e4a864c3cba7f4bcd5fdd5296ed77ad",
+        "tools/firmware": "c0c6e66c0b944e1b33d65d0e26d8398ea813e699"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/ref/ddi-display",
+          "required": true
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
+      "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "bindings": {
+        "tools/win/amdgpu_wddm_control/build.ps1": "cb850855be6a2446351f706b83200cf3680af213",
+        "tools/build": "fc7361188a3994139befceb1839436be9ca9ffd6",
+        "tools/quality": "43a95c92da36666f7c51a7d3fcc56a48862b0636",
+        "tools/release/installer": "72e370cb2e4a864c3cba7f4bcd5fdd5296ed77ad",
+        "tools/firmware": "c0c6e66c0b944e1b33d65d0e26d8398ea813e699",
+        "driver/kmd/test": "14a3ee2fb2f858d7591fbba80a1c76a86bd36455",
+        "driver/state": "d11313e11da4e9185e80ac4da9a20a08d94c44a4",
+        "tools/win/bc250kmd_cli": "38352c2680383118031feb7f45b0bd8ea42c4743",
+        "tools/win/amdgpu_wddm_control": "06b7e2420d04027ccdbcd17428de73809c2effee"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        }
+      ],
+      "workspace_from_kits": true
     }
   ]
 }
