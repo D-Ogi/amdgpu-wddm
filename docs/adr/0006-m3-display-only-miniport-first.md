@@ -1,19 +1,19 @@
 # ADR 0006: M3 is a display-only miniport of our own, built for a lab without a kernel debugger
 
-Date: 2026-09-21. Status: **accepted** the same day. The condition was that experiment E05 shows that a
-display-only driver can own `1002:13FE` on unit A and keep the firmware's display; run 001 showed it (facts M26).
+Date: 2026-09-21. Status: **accepted** the same day. The condition was that experiment E05 proves that a
+display-only driver can own `1002:13FE` on unit A and keep the firmware's display. Run 001 proved it (facts M26).
 Historical since M7 (noted 2026-09-27): points 1 and 2 describe the M3 driver (display-only, CPU copy into the
-firmware framebuffer, no MMIO) and no longer describe the driver; points 3 to 5 (boot-loop guard, breadcrumbs
+firmware framebuffer, no MMIO) and no longer describe the driver. Points 3 to 5 (boot-loop guard, breadcrumbs
 and log, one install and one rollback path) and point 6 remain in force.
 
 ## Context
 
 - Milestone M3 asks for a WDDM miniport that binds to the GPU and keeps the screen alive. Nothing in M3
   needs an engine: the firmware has already trained the DisplayPort link and set a mode, and amdgpu's own
-  init shows that display bring-up is two thirds of all register traffic (facts M24). We want none of that yet.
+  init proves that display bring-up is two thirds of all register traffic (facts M24). We want none of that yet.
 - WDDM offers exactly this shape: a kernel-mode display-only driver (`DxgkInitializeDisplayOnlyDriver`),
   which takes over the firmware framebuffer through `DxgkCbAcquirePostDisplayOwnership` and presents by
-  copying into it. Microsoft's KMDOD sample does it; E05 runs that sample, unmodified, as an instrument.
+  copying into it. Microsoft's KMDOD sample does it. E05 runs that sample, unmodified, as an instrument.
 - The sample is MS-PL. Our repository is PolyForm Noncommercial (ADR 0004). We do not mix them: the sample
   stays outside the repo, and our miniport is written from the documented DDI, with the sample's observed
   behaviour on this board as the acceptance test.
@@ -26,19 +26,19 @@ and log, one install and one rollback path) and point 6 remain in force.
 
 1. **M3 is a display-only miniport written by us in C**, in `driver/kmd/`, built with the same direct
    `cl` / `link` flow as `tools/win/bc250rd` (no Visual Studio project system), test-signed with the lab
-   certificate. One source mode, the one the firmware left; present is a CPU copy into the framebuffer
+   certificate. One source mode, the one the firmware left. Present is a CPU copy into the framebuffer
    reported by post-display ownership. DDIs we do not implement return an honest failure code.
 2. **M3 performs no MMIO.** It maps nothing but the framebuffer. `tools/win/bc250rd` remains the instrument
    for register reads and the SMU mailbox while M3 is in use. Hardware access enters the miniport in M4,
    one path at a time, each behind a registry gate that defaults to off (driver/README rule).
 3. **Boot-loop guard.** `DxgkDdiStartDevice` counts start attempts in the driver's registry key before it
-   does anything else; user mode (`bc250mon`, once the desktop is up) clears the counter. At two uncleared
+   does anything else. User mode (`bc250mon`, once the desktop is up) clears the counter. At two uncleared
    starts the driver refuses to start and Windows falls back to the Basic Display driver. A broken build
    can therefore cost one bad boot, not a dead machine.
 4. **Breadcrumbs instead of a debugger.** The driver writes a "last stage reached" value to its registry key
    at each step of start-up and each first use of a DDI (cheap, synchronous enough, survives a power cycle),
    and logs through a TraceLogging provider captured by an autologger session to a file. `bc250mon` gets a
-   provider that shows both on the overlay.
+   provider that reports both on the overlay.
 5. **One install path, one rollback path, both scripts**: `pnputil /add-driver ... /install` and
    `pnputil /delete-driver ... /uninstall /force`, wrapped so that each install first records the state
    (device, driver store entry, register sweep) and announces itself on the overlay. The recovery boot
@@ -53,7 +53,7 @@ and log, one install and one rollback path) and point 6 remain in force.
 
 - How experiments in M4-M6 (GART, interrupt ring, first SDMA command) are driven from user mode while the
   miniport owns the device. `KMDDOD_INITIALIZATION_DATA` has a `DxgkDdiEscape` slot (`dispmprt.h`, WDK
-  10.0.26100); whether `D3DKMTEscape` from an elevated tool actually reaches a display-only driver is to be
+  10.0.26100). Whether `D3DKMTEscape` from an elevated tool actually reaches a display-only driver is to be
   measured with the M3 driver itself (a version query, nothing more). If it does, escape is the control
   channel. If not: a registry-driven self-test at start, or a second, software-only control driver like
   `bc250rd` that shares no state. Decide at the start of M4.
@@ -62,7 +62,7 @@ and log, one install and one rollback path) and point 6 remain in force.
 - Whether the wired NIC can be connected, which would give us KDNET and make point 4 a convenience
   instead of the only source of truth.
 
-## Update, 2026-09-21 (after acceptance; the text above is left as decided)
+## Update, 2026-09-21 (after acceptance, the text above is left as decided)
 
 - The wired NIC is connected. KDNET works over the on-board RTL8168 and the recovery boot entry has
   network and SSH over that path (facts M27). The context line "the lab has no kernel debugger" is no longer
@@ -71,9 +71,9 @@ and log, one install and one rollback path) and point 6 remain in force.
 - Baseline for the escape question, measured before our driver exists: `D3DKMTEscape` with a driver-private
   request returns `STATUS_INVALID_PARAMETER` from Basic Display and `STATUS_NOT_SUPPORTED` from the KMDOD
   sample on the same device (`evidence/windows/2026-09-21-escape-probe/`). Neither implements an escape of
-  ours, so this does not answer the question; the M3 driver does.
+  ours, so this does not answer the question. The M3 driver does.
 - It did (E06, facts M29): `D3DKMTEscape` reaches `DxgkDdiEscape` of our display-only driver. Escape is the
-  control channel for M4; no second control driver is needed.
+  control channel for M4. No second control driver is needed.
 
 ## Consequences
 
