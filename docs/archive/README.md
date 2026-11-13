@@ -37,6 +37,7 @@ the survey text does not carry these corrections. Read the check before you act 
 | `research/m13-present-baseline.md` | M13: the working full-WDDM desktop baseline on the CPU renderer and its controls | Status note, checkpoint M406-M412. Later steps are in the workspace `STATE.md` and `facts.md` |
 | `research/g0-cpu-copy-coverage.md` | G0 CPU-copy evidence coverage after M679: a source-bound review and a plan for the measurement gaps | Review. The later G0 status is in `research/g0-implementation-status.md` |
 | `research/g0-implementation-status.md` | GPU desktop G0: implemented and measured on unit A (DWM050/M723), audited by M724 | Status record |
+| `design/wddm-startup-progress-2026-09.md` | The milestone sections M233 to M462 of `docs/design/wddm-startup.md`: progress of the startup work, with each candidate's results | Progress record, 2026-09. Some words and numbers lost their spaces before the text came into the repository |
 | `research/2026-09-27-windowed-present-under-dwm.md` | Windowed present of a device-local image under DWM composition, for the E45 result (M598) | Research note, 2026-09-27, with its correction of the same day |
 | `research/h264-encoder-literature-motion-estimation.md` | M15.11: what the literature does for GPU motion estimation, against our `cs_me.hlsl`. Ranked levers | Literature survey, 2026-10-06. Check next to it |
 | `research/h264-encoder-literature-motion-estimation-check.md` | The independent re-check of that survey, source by source | Check record, newer than the survey |
