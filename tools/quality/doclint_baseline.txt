@@ -86,7 +86,6 @@
 11	driver/umd/mft-h264/README.md
 10	driver/umd/router/README.md
 4	tools/build/README.md
-16	tools/diagusb/README.md
 3	tools/firmware/README.md
 4	tools/fwinfo/README.md
 15	tools/packagecheck/README.md

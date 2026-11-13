@@ -22,7 +22,7 @@ path" below).
 - **Phase A** - `amdgpu` is blacklisted on the kernel command line, so the GPU is still exactly as
   the BIOS left it. The probe maps BAR5 through `/sys/bus/pci/devices/*/resource5` and reads the
   registers listed in `bc250/probes.json` as single 32-bit accesses. It also reads the byte offsets
-  the previous driver attempt used, to show what is really at those addresses.
+  the previous driver attempt used, to display what is really at those addresses.
 - **Phase B** - `modprobe amdgpu`, then the kernel's view: `dmesg`, the IP discovery table, the
   firmware versions, and the same registers again, both raw and through amdgpu's own debugfs
   addressing. The two lists next to each other are the positive control for phase A.
@@ -38,7 +38,7 @@ Phase A is read-only with two deliberate exceptions, both restored immediately a
 | Register | Why |
 | --- | --- |
 | `GRBM_GFX_INDEX` | Selects which shader engine / shader array the per-bank registers are read from. Without it, `CC_GC_SHADER_ARRAY_CONFIG` and friends return whatever bank was last selected. Every driver, Linux included, writes this before such a read. Set back to broadcast (`0xE0000000`) in a `finally` block. |
-| `SCRATCH_REG0` | A scratch register with no hardware meaning; `amdgpu` uses it for its own ring test. Two patterns are written and read back, which is the cheapest proof that the BAR is decoded and writable at all. The original value is restored. |
+| `SCRATCH_REG0` | A scratch register with no hardware meaning. `amdgpu` uses it for its own ring test. Two patterns are written and read back, which is the cheapest proof that the BAR is decoded and writable at all. The original value is restored. |
 
 No other register is written, in any mode. `test_only_two_registers_are_ever_written` in
 `test_diagusb.py` holds that line.
@@ -51,7 +51,7 @@ No other register is written, in any mode. `test_only_two_registers_are_ever_wri
 | raw probe only | `noload` | Phase A only, `amdgpu` is never loaded. The two writes above still happen. |
 | strictly read-only | `readonly` | Phase A with no MMIO writes at all, no `amdgpu`. |
 | shell only | `off` | No diagnostics, just a root shell. Use it to look at results from an earlier run. |
-| reference capture | `noload` plus `mmiotrace` | No driver, mmiotrace limited to BAR5; then run `bc250/sweep.py` over SSH. The kernel command line names BAR5's physical address (`lspci`: Region 5). |
+| reference capture | `noload` plus `mmiotrace` | No driver, mmiotrace limited to BAR5. Then run `bc250/sweep.py` over SSH. The kernel command line names BAR5's physical address (`lspci`: Region 5). |
 | network only | `network` | Networking and SSH only: no GPU probe, no `amdgpu` (see "Network-only reference capture"). |
 
 ## Build
@@ -163,16 +163,16 @@ then file count and total bytes compared against the source.
 2. Plug in a monitor and, if you have one, a keyboard. A keyboard is not required: the codes
    advance on their own every 20 seconds.
 3. Boot the stick and pick a menu entry (the default runs after 5 seconds).
-4. Wait. Phase A is quick, phase B can take a minute; `modprobe` is given 180 seconds before the
+4. Wait. Phase A is quick, phase B can take a minute. `modprobe` is given 180 seconds before the
    probe gives up on it and writes what it has.
-5. The screen shows the verdict lines on the left and one QR code at a time on the right. Any key:
+5. The screen displays the verdict lines on the left and one QR code at a time on the right. Any key:
    next code. `Q`: drop to a shell.
 6. `poweroff` when done, or just cut the power - the stick is remounted read-only after the run.
 
 Wi-Fi is optional and only enabled if the stick was built with `--net`. The ASUS USB-AC58 dongle
 (USB ID `0b05:19aa`) is supported by the in-kernel `rtw88_8822bu` driver, so it works without any
 extra firmware package. Wired Ethernet is configured by DHCP in any case. The `NET` line above the
-verdict is live: it shows `no address yet` until DHCP succeeds, then `ssh root@<ip> (<interface>)`.
+verdict is live: it displays `no address yet` until DHCP succeeds, then `ssh root@<ip> (<interface>)`.
 
 Measured on unit A (M10): WPA2-PSK association, DHCP and SSH work with the stock Alpine kernel. Before that,
 with the dongle passed through to a QEMU guest, the driver bound, firmware 30.20.0 loaded from the modloop and
@@ -202,18 +202,18 @@ Three ways, in order of convenience:
   ```
 
   The address is on the QR screen in the `NET` line, refreshed on every redraw (so a Wi-Fi
-  association that completes minutes later still shows up). The results are under `/media/*/bc250`.
+  association that completes minutes later still appears). The results are under `/media/*/bc250`.
 
 ## Known limitations
 
-- What has been measured on unit A is in `docs/facts.md` with its evidence (E01 onward); a statement in this
+- What has been measured on unit A is in `docs/facts.md` with its evidence (E01 onward). A statement in this
   README about the hardware without a fact ID is an expectation, not a measurement.
 - Phase A needs the GPU's BAR5 to be unclaimed. If something has bound to the device (the blacklist
   did not take, or a mode was booted that loads `amdgpu` first), the `mmap` fails with `EINVAL` and
-  the run says so in `report.json`; phase B still runs. This was reproduced in QEMU against a BAR
+  the run says so in `report.json`. Phase B still runs. This was reproduced in QEMU against a BAR
   held by `bochs-drm`.
 - Phase B depends on `amdgpu` loading. If it hangs the machine there is no way to report that from
-  inside; this is why the QR codes are generated twice, once after phase A alone, and why
+  inside. This is why the QR codes are generated twice, once after phase A alone, and why
   `report.json` and `phaseB-started.txt` are flushed to the stick before the module is loaded. If
   the machine hangs, reboot into "shell only" and read `bc250/results/` from the stick.
 - The QR codes are drawn straight into `/dev/fb0`, never through a graphics library. They are kept
@@ -222,14 +222,14 @@ Three ways, in order of convenience:
   exactly on a scanline boundary produces an empty rectangle, so the code lands in memory and is
   never displayed. Do not "tidy up" that margin.
 - FAT32 on the stick is remounted read-write for the duration of the run. Pulling the power in the
-  middle of it can leave the filesystem dirty; the results are flushed with `fsync` plus `sync`
+  middle of it can leave the filesystem dirty. The results are flushed with `fsync` plus `sync`
   after every file, so at worst the last file is missing.
-- QEMU proves the boot path, the launcher and the QR display, not the GPU probe; the GPU probe has run on
+- QEMU proves the boot path, the launcher and the QR display, not the GPU probe. The GPU probe has run on
   unit A (E01).
 - A `--net` host key with a passphrase does not work (found in E13): sshd cannot load it and serves only the
   RSA and ECDSA keys that `ssh-keygen -A` makes at every boot, so the host key changes with every boot. The
   unit A stick now carries a separately installed host key without a passphrase, pinned on the client side
-  (E28, M334). A stick built from `build_usb.py` with such a `--net` key still has the old problem: confirm
+  (E28, M334). A stick built from `build_usb.py` with such a `--net` key still has the old problem: check
   the machine behind the address (GPU `1002:13fe`, the stick's kernel command line) and re-learn the key for
   that boot. Never switch host key checking off.
 - `bc250.mode=off` ("shell only") starts no network. A session driven over SSH needs `full`, `noload`
@@ -243,15 +243,15 @@ steer the boot (both used in E13, both possible from Linux and from Windows, whe
 drive letter):
 
 - which entry boots: `set default=<n>` in `boot/grub/grub.cfg` (keep the original next to it and
-  restore it afterwards);
-- whether the stick boots at all: rename `efi/boot/bootx64.efi` away and the firmware goes on to Windows;
-  rename it back for the next Linux session. The unit A stick uses `bootx64.off` since E28 to E30 (for
-  example `evidence/linux/2026-09-24-E30-startup-thermal-bios/e30-switch-linux.ps1`); E13 used
-  `bootx64.efi.off`. With either name the firmware went on to Windows; the scripts check the exact name before
+  restore it afterwards).
+- whether the stick boots at all: rename `efi/boot/bootx64.efi` away and the firmware goes on to Windows.
+  Rename it back for the next Linux session. The unit A stick uses `bootx64.off` since E28 to E30 (for
+  example `evidence/linux/2026-09-24-E30-startup-thermal-bios/e30-switch-linux.ps1`). E13 used
+  `bootx64.efi.off`. With either name the firmware went on to Windows. The scripts check the exact name before
 they rename, so use the one the stick actually carries.
 
 After a warm restart (`reboot`) out of the stick, Windows came up with the wired NIC not working
-(E13, once: the Realtek adapter "Not Present", and KDNET sits on the same NIC); after a manual
+(E13, once: the Realtek adapter "Not Present", and KDNET sits on the same NIC). After a manual
 hardware reset it worked. Expect to need that reset, or shut the stick down with `poweroff` and start
 the machine cold.
 
@@ -262,5 +262,5 @@ the machine cold.
 Use the network-only GRUB entry (`bc250.mode=network`) to start the existing SSH/network service without
 running `diag.py`, its GPU probes, `qrshow.py`, or automatically loading amdgpu. This leaves module loading to
 the reference-capture script. Unlike `off`, it brings up networking. The current unit A stick uses a separately
-pinned unencrypted host key prepared through the trusted Windows connection; do not disable SSH host-key
+pinned unencrypted host key prepared through the trusted Windows connection. Do not disable SSH host-key
 checking.
