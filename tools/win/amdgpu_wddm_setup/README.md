@@ -10,10 +10,10 @@ window shows them in plain words. Contract: `docs/gui/interfaces-setup.md`.
 |---|---|
 | Welcome | What the release is, where its files come from (this package or a prepared folder, checked before use), the entry to prepare an offline folder |
 | Checking | The engine's plan run (`-Plan`): read only, nothing changes |
-| Review | Checks that need attention, what the run will do (restarts, firmware source), what it will change (Windows test mode, BitLocker paused for those restarts) as plain information, the settings each run keeps, changes or sets (from the engine's settings-impact plan), the release notes. It asks for nothing: see "Nothing is asked of the user" below |
+| Review | Checks that need attention. What the run will do (restarts, firmware source). What it will change (Windows test mode, BitLocker paused for those restarts) as plain information. The settings each run keeps, changes or sets (from the engine's settings-impact plan). The release notes. It asks for nothing: see "Nothing is asked of the user" below |
 | Install | Stages as the engine reports them, cancel while the engine allows it |
 | Restart | A planned restart: a 15-second countdown and then the restart, with "Restart now" and "Later" offered and neither required. After sign-in the release's RunOnce entry starts the window with `--continue` |
-| Done | One of five outcomes (A3): success, information, problem, cancelled, restart; whether anything changed; the next step (retry, repair from Nagi Control App, support file) |
+| Done | One of five outcomes (A3): success, information, problem, cancelled, restart. Whether anything changed. The next step (retry, repair from Nagi Control App, support file) |
 | Prepare | `--prepare-offline`: a destination, an optional firmware folder, the copy, the result |
 
 The step rail marks the step in which a run stopped: a refusal at Check shows Check as current and stopped, and
@@ -93,7 +93,7 @@ Each run gets a fresh invocation id and its own folder (`--run-root`, default `%
 starts Windows PowerShell 5.1 from System32 hidden, with `-Gui -InvocationId <id> -EventsFile -ResultFile`, reads the
 complete event lines as they come and, at the end, the terminal result. A result counts only if its invocation id is
 this run's (A2): a stale or missing result reads "the installer stopped before it finished", and the window then says
-that changes may have been made; "nothing changed" is said only on a bound result that reports no change (A3).
+that changes may have been made. The window says "nothing changed" only on a bound result that reports no change (A3).
 Cancel writes `<events>.cancel`, and only while the engine says it can stop. The window cannot be closed while the engine runs.
 
 The window reads the events every 250 ms. An event changes the progress screen in place (`src/WorkingView.cs`): the
@@ -104,7 +104,7 @@ then stays the same control. Until 2026-10-14 each batch of events built the who
 of 10 s against the window, which is not shown. The strip must stay one control with one window handle, and no
 event may build the screen again. The strip is drawn again only when its value changes or its band moves.
 
-The window starts as the invoking user (`asInvoker`) and relaunches itself elevated at once (one UAC prompt);
+The window starts as the invoking user (`asInvoker`) and relaunches itself elevated at once (one UAC prompt).
 `--prepare-offline` stays unelevated.
 
 ## Start
@@ -185,7 +185,7 @@ monitor, and after a screen or DPI change. Six render runs name the screen the w
 directions of the rule.
 
 Translations: `strings/strings.<lang>.txt`. A new or redone translation gets `?` as its hash and `strings/stamp.ps1`
-stamps it; a line whose English text changed fails G-STR until it is retranslated. Polish, Brazilian Portuguese (`pt`, for
+stamps it. A line whose English text changed fails G-STR until it is retranslated. Polish, Brazilian Portuguese (`pt`, for
 every `pt-*` Windows), Spanish (`es`, neutral Latin American, for every `es-*` Windows), Japanese and Korean are
 machine-translated (`mt`) until a reviewer marks them `rev`.
 
