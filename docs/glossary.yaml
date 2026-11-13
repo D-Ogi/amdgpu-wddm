@@ -88,3 +88,6 @@ terms:
   - term: CP fetch
     means: "The read of the next command words from a ring or an indirect buffer by the command processor."
     names: ["CP fetch"]
+  - term: confirm
+    means: "To record that a start, a setting or a review item passed its check. The check is the act, and the confirmation is the record."
+    names: ["confirm", "confirms", "confirmed", "confirming", "confirmation", "unconfirmed", "Confirm", "Confirmed", "Confirmation"]
