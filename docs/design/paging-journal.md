@@ -25,7 +25,7 @@ whole and a map symbol finds it. One record per:
 | `gfx-submit` | one GFX IB reached the ring (0.7.193.1) | the IB1 GPU VA | the KMD context object | the page table root | |
 
 An update record also carries the page table level, the entry index (StartIndex + slice start), the slice's entry
-count and how many of those entries have the Windows Valid bit: a slice with `Valid 0` zeroes its entries, i.e. it
+count and how many of those entries have the Windows Valid bit: a slice with `Valid 0` zeroes its entries, that is, it
 unmaps. The VA comes from `FirstPteVirtualAddress` (WDDM 2.0's field of the request) plus the slice's offset at that
 level's span (4 KiB << 9L for this driver's 512-entry tables).
 
@@ -39,7 +39,7 @@ driver, or one whose slice has no valid entry, has the bits clear. Record size a
 Trial 245's 0x116 (`scratch\m15\game-recon\bsod-245\REPORT-245.md`, local) had the unmap and the destroy of
 the faulting page in the journal and still could not name a cause: every record word that could have said who
 asked for the operation was zero, and the pending GFX job named a sequence, a fence and a node but no context.
-So the fields each kind left unused now carry identity. The record layout, size and field order do not move;
+So the fields each kind left unused now carry identity. The record layout, size and field order do not move.
 `g_PagingJournal.Version` goes to 2 so that a reader need not guess, and a version 1 ring is read exactly as
 before.
 
@@ -52,7 +52,7 @@ An `update` record with no `hAllocation` - which is every unmap, and the only pa
 faulting page - puts `DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE.hProcess` where the allocation handle would be and
 sets `BC250_PJ_FLAG_PROCESS` (bit 6, below KMD183's segment mask) to say so.
 
-A `destroy` by a System worker means VidMm deferred the destroy; a destroy on the application's own submit
+A `destroy` by a System worker means VidMm deferred the destroy. A destroy on the application's own submit
 thread means the user-mode side released the memory itself. That difference is what separates "VidMm freed it
 late" from "somebody freed memory a queued job still names", which is the open question of 245.
 
@@ -65,7 +65,7 @@ matched against.
 ### Write rate and ring coverage
 
 One record per GFX submit makes the journal's busiest writer the game, not VidMm. Measured on 245 (Witcher 3
-DX12 LOW, native 1080p, GPU DWM; `d245.journal.json`, 1024 records over 10.723 s):
+DX12 LOW, native 1080p, GPU DWM, `d245.journal.json`, 1024 records over 10.723 s):
 
 | | records/s |
 |---|---|
@@ -75,14 +75,14 @@ DX12 LOW, native 1080p, GPU DWM; `d245.journal.json`, 1024 records over 10.723 s
 | GFX submits, the 20.8 ms before the hang (10 jobs) | about 480 |
 | GFX submits at the game's frame rate (27.6 fps, several jobs a frame) | about 300 |
 
-At 300 GFX submits a second the 1024-record ring holds about 1.8 s of a paging burst (271 + 300 = 571/s); at
+At 300 GFX submits a second the 1024-record ring holds about 1.8 s of a paging burst (271 + 300 = 571/s). At
 the 480/s submit burst measured just before the hang it holds about 1.4 s. So the ring no longer guarantees the
 last 2 s of a game under a paging burst, where before this revision it held 3.8 s of the same burst. 2048
-records (147 KB of nonpaged image data instead of 74 KB) would restore 2 s at the 480/s submit rate; the cost
+records (147 KB of nonpaged image data instead of 74 KB) would restore 2 s at the 480/s submit rate. The cost
 is that the two stamp walks, which run under the journal's spin lock at DISPATCH_LEVEL on every paging submit,
 double their worst-case bound. The ring is left at 1024 here because the fault class this instrumentation is
 for happens inside microseconds of its submit (245: 29 us after the previous job's end-of-pipe, 2.08 ms after
-the destroy), well inside 1.4 s; the trade is recorded so that the next duration criterion can make it
+the destroy), well inside 1.4 s. The trade is recorded so that the next duration criterion can make it
 knowingly.
 
 Each GPU-path record stores its position in the paging buffer (`DmaBufferGpuVirtualAddress + DmaBufferWriteOffset`
@@ -94,14 +94,14 @@ SDMA sequence S. The SDMA ring walk of the dump reader (`sdmawalk.py`) and the l
 name the same S.
 
 A fill or transfer that built a prefix and then failed (BD-235: a 64 MiB virtual fill that stopped after 2528
-pages) keeps its record with the bytes it built, so that a dump shows how far it came. The OS submits the words of
+pages) keeps its record with the bytes it built, so that a dump reveals how far it came. The OS submits the words of
 a build only after `SUCCESS` or `INSUFFICIENT_DMA_BUFFER`, so such a record also carries `BC250_PJ_FLAG_FAILED`
 (bit 8) and the builder's NTSTATUS in `Index`, and both stamps pass it: its `Fence` and `Seq` stay 0, also when a
 later submission reuses the same buffer range (from BD-235 Q3a. Before, that submission took the record). The CLI
 prints `FAILED build 0x........, not submitted`. Host test: `paging-journal`, with the control
 `paging-journal-stamp-failed`.
 
-Times are `KeQueryInterruptTime()` taken under the journal's spin lock, so they rise with record indices; the log's
+Times are `KeQueryInterruptTime()` taken under the journal's spin lock, so they rise with record indices. The log's
 `Milliseconds` are `(Time - GuardInit's start) / 10000`.
 
 ## How it is read
@@ -112,22 +112,22 @@ Times are `KeQueryInterruptTime()` taken under the journal's spin lock, so they 
   escape per interval, printing the records added since the previous read. It replaced a loop that spawned the
   CLI once a second: next to the desktop's present heartbeat that loop left the lab's sshd accepting no new
   connection for as long as it ran (2026-09-30), while a single long process never did. Up to 0.7.182.1 the
-  follow mode still found and opened the adapter for every read; from 0.7.183.1 it opens it once and holds it.
+  follow mode still found and opened the adapter for every read. From 0.7.183.1 it opens it once and holds it.
   A failed read drops the handle and the next interval reopens it, so a PnP disable/enable of the adapter no
   longer ends the sampler, and a journal whose total fell below the cursor (a reloaded driver) is read again
   from its oldest record.
-- Flags: up to 0.7.183.1 every read was a `HardwareAccess` escape, for which dxgkrnl takes the adapter lock; a
+- Flags: up to 0.7.183.1 every read was a `HardwareAccess` escape, for which dxgkrnl takes the adapter lock. A
   game's threads then waited behind each sampler read (WrResource waits readied by bc250kmd_cli on Witcher 3's main
   thread, 1.2-1.3 ms per frame, lab profile of 2026-10-01). From 0.7.184.1 the driver also answers
   `GET_PAGING_JOURNAL` and `GET_LOG` with `NoAdapterSynchronization` alone, in any power phase: both copy
   driver-image rings under their own spin locks and touch no hardware (`display.c`, `SoftwareReadEscape`). The CLI
-  sends them that way and falls back to `HardwareAccess` against an older driver; `journal follow` counts the
+  sends them that way and falls back to `HardwareAccess` against an older driver. `journal follow` counts the
   escapes of each kind in its final line. `log summary` keeps `HardwareAccess` for its first page, because the
   summary walks state a stop frees and reads display registers. `tools/win/bc250kmd_cli/test_escape_flags.py`
   keeps the driver's and the CLI's lists equal. Because the summary is a Level Two escape, nothing may ask for it
   on a repeating schedule: `tools/win/lab-runner/kmdlog-stream.ps1` sends `log summary` once, at the start of a
   session, and reads the header line afterwards with `log 0`, which prints the same line from a `GET_LOG` page (it
-  polled `log summary` every 500 ms until 0.7.213; `tools/win/lab-runner/test_lab_runner.py` now fails if a summary
+  polled `log summary` every 500 ms until 0.7.213, and `tools/win/lab-runner/test_lab_runner.py` now fails if a summary
   returns to the loop). The overlay's graphics panel
   (`tools/win/bc250mon/src/GraphicsPipelineProvider.cs`) was the last shipped exception: it polled `log summary only`
   every 5 s while that panel was open, at a measured 300 ms stall each time, and from 0.7.213 it reads the ring with
@@ -143,7 +143,7 @@ Times are `KeQueryInterruptTime()` taken under the journal's spin lock, so they 
 
 ## Costs and limits
 
-- 74 KB of nonpaged image data; one spin lock acquisition per record and per stamp, each walk bounded by the ring
+- 74 KB of nonpaged image data. One spin lock acquisition per record and per stamp, each walk bounded by the ring
   (1024 records) at DISPATCH_LEVEL or below. Nothing is logged, no register is touched.
 - A fill or transfer whose build failed after a prefix keeps `Fence 0` and `Seq 0` and is marked failed (from BD-235
   Q3a). Before Q3a, the next submission of the same buffer range claimed it, and only the times told the two apart.
