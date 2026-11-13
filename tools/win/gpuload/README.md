@@ -14,9 +14,9 @@ back to back, which is mostly process start-up and device creation, and left the
   CPU reference `GlExpected`, with a new seed per batch, so a slot still holding an older batch's words fails.
   A run that reports load is a run in which the GPU did the work.
 - **Busy self-report**: the share of GPU time with a batch in flight, from the timestamps alone (overlaps never
-  counted twice, gaps counted as idle), once a second and for the whole run. This is the load's own view; a clock
+  counted twice, gaps counted as idle), once a second and for the whole run. This is the load's own view. A clock
   governor sampling `GRBM_STATUS.GUI_ACTIVE` also sees every other client.
-- **Headless**: no window, no swap chain; runs from an SSH session in session 0. The graphics-and-compute queue
+- **Headless**: no window, no swap chain. Runs from an SSH session in session 0. The graphics-and-compute queue
   family is preferred (the ring the games and the desktop use).
 
 ```
@@ -32,9 +32,9 @@ accounting, the work controller under a clock that doubles, the report lines), a
 
 ## Contract
 
-Exit codes: **0** ran for `--seconds`, every check matched; **1** a check failed (`--negative-control` expects one
-iteration more than the GPU ran, so it must end here); **2** usage, or the stop file existed before the start;
-**3** Vulkan or system error, including device loss and a fence wait over 5 s; **4** the stop file appeared, the run
+Exit codes: **0** ran for `--seconds`, every check matched. **1** a check failed (`--negative-control` expects one
+iteration more than the GPU ran, so it must end here). **2** usage, or the stop file existed before the start.
+**3** Vulkan or system error, including device loss and a fence wait over 5 s. **4** the stop file appeared, the run
 drained the queue and ended early, every check so far matched.
 
 Once the device exists, the last stdout line is the result line, also on exit 3. Every line is flushed as written,
@@ -45,17 +45,17 @@ gpuload t=3.0 batches=151 iters=48211 batch_ms=19.87 busy_pct=99.4
 gpuload result=ok stop=duration seconds=30.0 batches=1502 checked=1502 mismatches=0 busy_pct=99.1 busy_min_1s_pct=97.8 gpu_ms=29811.5 iters=51034
 ```
 
-`result` is `ok`, `FAILED` (mismatch), `stopped` (stop file) or `error`; `stop` is `duration`, `stop-file`,
+`result` is `ok`, `FAILED` (mismatch), `stopped` (stop file) or `error`. `stop` is `duration`, `stop-file`,
 `mismatch`, `fence-timeout`, `device-lost` or `vulkan`. `batch_ms` is the mean new GPU time per batch in that second,
 `busy_min_1s_pct` the lowest whole-second share. Calibration batches are checked but not counted. The DPM kit parses
-these lines with `ConvertFrom-GpuLoadReport` (`scratch\dpm\dpm-trial\dpm-lib.ps1`, outside this repository); its test
+these lines with `ConvertFrom-GpuLoadReport` (`scratch\dpm\dpm-trial\dpm-lib.ps1`, outside this repository). Its test
 reads `--format-sample`, which prints one line of each kind from the code above.
 
 ## Positive and negative control
 
 On the development PC (RTX 4090, 2026-10-02): `--seconds 5` calibrated to 562811 iterations for 20 ms, 251 batches,
-every check matched, busy 100.0 % in every second, exit 0; `--negative-control` failed all 8 checks of the first
-batch, exit 1; a stop file created 3 s into a 30 s run ended it 73 ms later with exit 4; a stop file present at the
+every check matched, busy 100.0 % in every second, exit 0. `--negative-control` failed all 8 checks of the first
+batch, exit 1. A stop file created 3 s into a 30 s run ended it 73 ms later with exit 4. A stop file present at the
 start, exit 2.
 
 Unit A: the DPM trial's load step, `scratch\dpm\dpm-trial` (`dpm-step.ps1 -LoadKind sustained`).
