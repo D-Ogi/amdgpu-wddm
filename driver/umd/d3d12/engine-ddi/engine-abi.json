@@ -5,23 +5,23 @@
   "header_revision": "Linear mip chains and arrays (V15, r8-draft), ABI 1.11",
   "repository": "vkd3d-proton fork of this project",
   "branch": "amdgpu-wddm/linear-mips-v15",
-  "commit": "940b4bc42351e39c02700434df2eab9320b11292",
+  "commit": "6e3e7afa004a374984b583746fe4d1f243ac5cde",
   "source_checkout": "scratch/forksync/vkd3d-proton",
   "header_path": "libs/ddi/bc250_vkd3d_engine.h",
-  "header_sha256": "b3c6cce8e0eba79b3686c2ca0559e6ea5481e19cda6a6127e07c65f66b5bcf33",
+  "header_sha256": "cbab38b408d345932c59ea2007e5b7ac94a55bb52a2ec80258c35a813dc56ead",
   "vulkan_headers_path": "khronos/Vulkan-Headers/include",
   "vulkan_headers_commit": "ee2ec5fd83dafce291024683b50dc89219333076",
   "engine_dll": "amdgpu_wddm_vkd3d.dll",
   "flavours": {
     "release": {
-      "engine_dll_dir": "scratch/t39/bd373s3-build/rule2/engine-release-x64/libs/ddi",
-      "engine_dll_sha256": "40e96c3c1d842493843f5d535309632081dfb2cd9b828981cb86a96f2bf7fd0c",
-      "engine_dll_recipe": "tools/build/build-vkd3d.ps1 -Config ddi-engine-lto -Compiler clang-cl -Version 0.7.216.113-tester.39; amdgpu-wddm/linear-mips-v15 940b4bc42351e39c02700434df2eab9320b11292"
+      "engine_dll_dir": "scratch/t39/bd373s3-build/rule6/engine-release-x64/libs/ddi",
+      "engine_dll_sha256": "6f286de6012379e9729e1f578091cae5f417785d163296a1fa2a6c23163906e8",
+      "engine_dll_recipe": "tools/build/build-vkd3d.ps1 -Config ddi-engine-lto -Compiler clang-cl -Version 0.7.216.113-tester.39; amdgpu-wddm/linear-mips-v15 6e3e7afa004a374984b583746fe4d1f243ac5cde"
     },
     "lab": {
-      "engine_dll_dir": "scratch/t39/bd373s3-build/rule2/engine-lab-x64/libs/ddi",
-      "engine_dll_sha256": "3103ebf2ebcbb7958d30434c2b6d0f5171de5556ca1e076abc4cd9779a2b05f0",
-      "engine_dll_recipe": "tools/build/build-vkd3d.ps1 -Config ddi-engine-lto -Compiler clang-cl -Version 0.7.216.113-tester.39; amdgpu-wddm/linear-mips-v15 940b4bc42351e39c02700434df2eab9320b11292"
+      "engine_dll_dir": "scratch/t39/bd373s3-build/rule6/engine-lab-x64/libs/ddi",
+      "engine_dll_sha256": "8c33ec42a2df7d1ac0d58fd40c2fe4c8b51c58ca343e34be51a6e3d118d6f0ff",
+      "engine_dll_recipe": "tools/build/build-vkd3d.ps1 -Config ddi-engine-lto -Compiler clang-cl -Version 0.7.216.113-tester.39; amdgpu-wddm/linear-mips-v15 6e3e7afa004a374984b583746fe4d1f243ac5cde"
     }
   }
 }
