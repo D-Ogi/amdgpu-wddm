@@ -26,7 +26,7 @@ corrections the survey text does not.
 | Path | Contents |
 |---|---|
 | `src/mft_h264.*` | the transform object: `IMFTransform`, the asynchronous event model, `ICodecAPI`, `IMFShutdown`, `IMFRealTimeClientEx`, `IMFAttributes`, the D3D11 device manager and the input sample paths |
-| `src/mft_register.*` | one source of truth for the registration: name, flags, media types and the attribute blob, used by the live object, by the local registration of the test and by `tools/mftreg` |
+| `src/mft_register.*` | one source of truth for the registration: name, flags, media types and the attribute blob. The live object, the local registration of the test and `tools/mftreg` use it |
 | `src/encoder.*` | frame level: GOP structure, rate control, the join between the GPU half and the CPU half |
 | `src/gpu_pipeline.*` | the Direct3D 11 host side: buffers, views, dispatches, the reference ping-pong, timestamp queries |
 | `src/h264_*`, `src/bitwriter.h`, `src/mb_layout.h` | the CPU half: the clause 9.2 variable length code tables, slice and macroblock syntax, the bit writer with start code emulation prevention |
@@ -76,18 +76,18 @@ what it reconstructs is by definition what a conformant decoder reconstructs.
 
 | Stage | What it establishes |
 |---|---|
-| `--selftest` | the H.264 tables are structurally sound: prefix freeness and Kraft sums of every `coeff_token`, `total_zeros` and `run_before` table, zig-zag scans are permutations, tables 8-14, 8-15 and 9-4 round trip, the bit writer round trips 45150 bits exactly, no start code emulation, SPS and PPS build, the declared level follows the frame size and the bitrate, the colour description reaches the SPS, and an odd frame size is refused rather than rounded down |
-| `--encode` | the GPU reconstruction is sample-for-sample identical to the inbox decoder's output, and the non-zero coefficient counts the shaders report agree with the CPU's own count of the levels (a wrong `nC` context makes a different but still parseable bitstream, which a decoder cannot see) |
-| `--mft` | the asynchronous hardware MFT contract end to end: found through `MFTEnumEx` with `MFT_ENUM_FLAG_HARDWARE`, streaming refused before `MF_TRANSFORM_ASYNC_UNLOCK`, `MF_MT_MPEG_SEQUENCE_HEADER` on the output type, `ICodecAPI` round trips including the packed UINT64 quantiser, CABAC refused honestly, the `NeedInput`/`HaveOutput`/`DrainComplete` sequence, a key frame at the start of a new segment after a drain, D3D11 texture input, `DllCanUnloadNow` answering S_FALSE while an object of ours lives, an odd frame size refused during negotiation, the VUI repeating the input type's colour description, `MFT_ENUM_ADAPTER_LUID` naming the client's own adapter as the documented 8 byte blob, and every access unit decoded |
-| `--texin` | the four Direct3D 11 input shapes a capture client actually delivers: BGRA and NV12, each as a plain texture and as one slice of a texture array, plus `IMFRealTimeClientEx` |
+| `--selftest` | the H.264 tables are structurally sound. Prefix freeness and Kraft sums hold for every `coeff_token`, `total_zeros` and `run_before` table. Zig-zag scans are permutations. Tables 8-14, 8-15 and 9-4 round trip. The bit writer round trips 45150 bits exactly. There is no start code emulation. SPS and PPS build. The declared level follows the frame size and the bitrate. The colour description reaches the SPS. An odd frame size is refused rather than rounded down |
+| `--encode` | the GPU reconstruction is sample-for-sample identical to the inbox decoder's output. The non-zero coefficient counts the shaders report agree with the CPU's own count of the levels. A wrong `nC` context makes a different but still parseable bitstream, which a decoder cannot see |
+| `--mft` | the asynchronous hardware MFT contract end to end. `MFTEnumEx` with `MFT_ENUM_FLAG_HARDWARE` finds the transform. Streaming is refused before `MF_TRANSFORM_ASYNC_UNLOCK`. `MF_MT_MPEG_SEQUENCE_HEADER` is on the output type. `ICodecAPI` round trips, including the packed UINT64 quantiser. CABAC is refused honestly. The `NeedInput`/`HaveOutput`/`DrainComplete` sequence runs. A key frame starts a new segment after a drain. D3D11 texture input works. `DllCanUnloadNow` answers S_FALSE while an object of ours lives. An odd frame size is refused during negotiation. The VUI repeats the input type's colour description. `MFT_ENUM_ADAPTER_LUID` names the client's own adapter as the documented 8 byte blob. Every access unit is decoded |
+| `--texin` | the four Direct3D 11 input shapes a capture client actually delivers. These are BGRA and NV12, each as a plain texture and as one slice of a texture array. It also covers `IMFRealTimeClientEx` |
 | `--compare` | our quality, size and speed against the inbox software `H264 Encoder MFT` on the same source at the same settings |
-| `--sinkwriter` | an ordinary `MFCreateSinkWriterFromURL` pipeline to `.mp4`, with the client's D3D11 device manager on the writer, reaches the transform and the file plays. The writer chooses the encoder, so on a machine without a BC-250 it chooses another one: the case then says it is not applicable rather than failing |
+| `--sinkwriter` | an ordinary `MFCreateSinkWriterFromURL` pipeline to `.mp4`, with the client's D3D11 device manager on the writer, reaches the transform and the file plays. The writer chooses the encoder. On a machine without a BC-250 it chooses another one. The case then says it is not applicable rather than failing |
 
 ### Where the GPU time goes
 
 `BC250_MFT_STAGE_TIMING` in the environment turns on per-stage GPU timing, off by default and read
 once in `GpuEncoder::Initialize`. `1` places one timestamp query per stage of the picture (import,
-motion, mode, deblock); `2` places one after every dispatch, which `--encode` then prints dispatch by
+motion, mode, deblock). `2` places one after every dispatch, which `--encode` then prints dispatch by
 dispatch with its thread group count. Every mark is one more query inside the command stream, so
 level 2 reports a total above the same picture's uninstrumented cost: it says where the time goes, it
 does not quote a throughput. `--encode` also reports, always, how long the thread spent recording the
@@ -99,7 +99,7 @@ deblocking filter as one dispatch for the whole picture instead of one dispatch 
 clause 8.7, and `BC250_MFT_SERIAL_DEBLOCK` drives it one **macroblock** at a time in raster order,
 which is clause 8.7 read literally, is the narrowest shape and wins over the other. All three produce
 the same bytes, which `sweep.ps1` holds them to. They exist so that a lab machine on which one shape
-misbehaves can be bisected without a rebuild; `mfthost.exe --deblock-mode rows|waves|serial` picks the
+misbehaves can be bisected without a rebuild. `mfthost.exe --deblock-mode rows|waves|serial` picks the
 same three from the command line, which is what the sweep's two schedule cases use.
 
 `BC250_MFT_STAGE_TIMING`, these two switches, `BC250_MFT_DEPTH` below and `BC250_MFT_TRACE` are
@@ -202,8 +202,8 @@ table was measured with it, a build of today runs one dispatch per wavefront unl
 the single dispatch, and nobody has yet measured what the default costs. The first and the third step
 are in both shapes.
 
-The ms/picture column is the time the encoder held the thread, which starts after the picture exists;
-the test's own picture generation (0.80 ms at 720p, 1.62 ms at 1080p) is reported separately and is not
+The ms/picture column is the time the encoder held the thread, which starts after the picture exists.
+The test's own picture generation (0.80 ms at 720p, 1.62 ms at 1080p) is reported separately and is not
 in it. That is why the pipelined figure can be smaller than the GPU figure beside it: the GPU runs during
 that time as well. A pipeline brings the thread's own cost down towards the GPU's, never below the GPU's
 share of the wall clock, and the honest reading of 1.11 against 1.25 is that this encoder is GPU bound on
@@ -234,7 +234,7 @@ inbox encoder's within 1 %, our luma is 0.3 to 1.1 dB behind it and our chroma 1
 says where it comes from: on the intra picture we are 1.4 dB behind on luma and 3 dB **ahead** on
 chroma, and from there every predicted picture loses a little more, down to 3.1 dB behind on luma by
 picture 34 of a 60 picture group. In the 60 picture constant bit rate runs the chroma gap reaches
--8.47 dB on Cb and -9.45 dB on Cr at picture 30, with means of -3.82 and -4.98 dB; the decoder oracle
+-8.47 dB on Cb and -9.45 dB on Cr at picture 30, with means of -3.82 and -4.98 dB. The decoder oracle
 rules out any drift between our reconstruction and a conformant decoder's, so that is allocation and
 prediction. That is prediction, not quantisation: this encoder has one 16x16
 motion vector per macroblock and no intra macroblock in a P picture, so a region a single vector cannot
@@ -296,8 +296,7 @@ SDK 10.0.26100.0. Two clean builds into two empty directories gave those three h
   and 6.97 ms, while two retained runs of 2026-10-05 before this revision put the inbox at 4.69 ms
   and at 7.05 ms for the same work. Repeats on a shared development PC decide no speed ratio.
 - sink writer: 6 of 6 repeat runs exit 0, each writing the same 179781 bytes, all 6 pictures through
-  our transform, and `ffprobe` reads the file as `h264 / Constrained Baseline / 1280x720 / yuv420p /
-  6 frames`. That run predates the adapter restriction recorded above: with the restriction in force
+  our transform, and `ffprobe` reads the file as `h264 / Constrained Baseline / 1280x720 / yuv420p / 6 frames`. That run predates the adapter restriction recorded above: with the restriction in force
   this machine has no adapter our transform will encode on, the writer chooses another encoder, and
   the case reports itself as not applicable here.
 
@@ -312,7 +311,7 @@ SDK 10.0.26100.0. Two clean builds into two empty directories gave those three h
   halves measured on unit A on 2026-10-06 were 22 to 24 ms of GPU against 3.5 ms of CPU, so overlapping
   them removes about a tenth. The case rests on the two shader changes, which took GPU busy from 4.17 to
   1.19 ms at 720p and from 7.50 to 2.00 ms at 1080p on a 4090, a factor of 3.5 to 3.75. Scaling unit A's
-  22 to 24 ms by that gives roughly 6 to 7 ms at 720p and 11 to 12 ms at 1080p: inside the 16.7 ms a
+  22 to 24 ms by that gives roughly 6 to 7 ms at 720p and 11 to 12 ms at 1080p. That is inside the 16.7 ms a
   1080p60 recording needs, and above an 8 ms GPU budget. And that extrapolation is optimistic for one
   named reason: the sub-pel change raised `cs_me`'s group shared memory from 1552 bytes to about 9.8 KB
   per 32-thread group, which on a 64 KB compute unit caps six groups where the 4090's larger shared
