@@ -619,9 +619,11 @@ void test_device_queries(Env& env, Device& device) {
         checkf(false, "CheckExistingResourceAllocationInfo: DEFAULT buffer (hr %08lx)", static_cast<unsigned long>(hr));
     }
 
-    // ImplicitShaderCacheControl: the engine takes the flags as hints (CLEAR deletes this program's archive files),
-    // and the slot reports no device error whatever the engine answers.
-    env.core.pfnImplicitShaderCacheControl(device.h(), D3D12DDI_IMPLICIT_SHADER_CACHE_CONTROL_FLAG_0080_CLEAR);
+    // ImplicitShaderCacheControl: the engine takes the flags as hints, and the slot reports no device error whatever
+    // the engine answers. DISABLE, then ENABLE, so the disk cache of this process is on again after the test. CLEAR is
+    // not sent: it stops the lookups and the stores for the life of the process, and test_disk_cache runs later in it.
+    env.core.pfnImplicitShaderCacheControl(device.h(), D3D12DDI_IMPLICIT_SHADER_CACHE_CONTROL_FLAG_0080_DISABLE);
+    env.core.pfnImplicitShaderCacheControl(device.h(), D3D12DDI_IMPLICIT_SHADER_CACHE_CONTROL_FLAG_0080_ENABLE);
     checkf(device.shell.device_errors == errors_before, "device queries: no device error reported (%u new)",
            device.shell.device_errors - errors_before);
 }
