@@ -41,7 +41,11 @@ struct ar_table {
 struct ar_input {
 	struct ar_table dsdt;
 	unsigned ssdts;
-	struct ar_table ssdt[AR_MAX_SSDTS];	/* every SSDT of the root table, in its order */
+	struct ar_table ssdt[AR_MAX_SSDTS];	/* every SSDT and PSDT of the root table, in its order */
+	/* 1 when dsdt and ssdt are the whole set of definition blocks: the root table listed every table, each one
+	 * mapped with a right checksum, and each one is here. With 0 the plan does nothing: a table that it cannot
+	 * see can define a name that a built table would define a second time. */
+	int complete;
 	unsigned cpus;				/* the enabled processor entries of the MADT, in its order */
 	struct ar_cpu cpu[AR_MAX_CPUS];
 	int want_idle;				/* 0: the load option turned this repair off */
@@ -57,6 +61,7 @@ enum ar_idle {
 	AR_IDLE_ALREADY_PRESENT,	/* a processor of the DSDT already has _CST */
 	AR_IDLE_NO_PROCESSORS,		/* the MADT lists no enabled processor, or more than AR_MAX_CPUS */
 	AR_IDLE_NO_PROCESSOR_OBJECT,	/* an enabled processor has no Processor object in the DSDT */
+	AR_IDLE_TABLES_INCOMPLETE,	/* the set of definition blocks is not whole, or one of them does not scan */
 	AR_IDLE_COUNT
 };
 
@@ -65,6 +70,7 @@ enum ar_stubs {
 	AR_STUBS_OFF,
 	AR_STUBS_NOT_STOCK_DSDT,	/* the DSDT does not have the header of the stock DSDT */
 	AR_STUBS_NOTHING_MISSING,	/* each method is defined, or the DSDT does not name it */
+	AR_STUBS_TABLES_INCOMPLETE,	/* the set of definition blocks is not whole, or one of them does not scan */
 	AR_STUBS_COUNT
 };
 

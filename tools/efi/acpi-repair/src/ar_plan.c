@@ -61,6 +61,7 @@ static const char *const idle_text[AR_IDLE_COUNT] = {
 	"a processor already has _CST: left alone",
 	"the MADT gives no usable list of enabled processors: left alone",
 	"an enabled processor has no Processor object in the DSDT: left alone",
+	"the ACPI tables cannot be read whole, so a name collision cannot be excluded: left alone",
 };
 
 static const char *const stubs_text[AR_STUBS_COUNT] = {
@@ -68,6 +69,7 @@ static const char *const stubs_text[AR_STUBS_COUNT] = {
 	"off by the load option",
 	"the DSDT does not have the header of the stock DSDT: left alone",
 	"no called method is without a definition: nothing to repair",
+	"the ACPI tables cannot be read whole, so a name collision cannot be excluded: left alone",
 };
 
 const char *ar_idle_text(enum ar_idle state)
@@ -220,6 +222,16 @@ static int parse_stock(const struct ar_table *t, struct ar_plan *plan)
 
 /* ---- the plan -------------------------------------------------------------------------------------- */
 
+/* 1 when the input is the whole set of definition blocks and each one is a sound table. */
+static int tables_whole(const struct ar_input *in)
+{
+	unsigned i;
+	if (!in->complete || in->ssdts > AR_MAX_SSDTS || !ar_table_sound(in->dsdt.bytes, in->dsdt.length)) return 0;
+	for (i = 0; i < in->ssdts; i++)
+		if (!ar_table_sound(in->ssdt[i].bytes, in->ssdt[i].length)) return 0;
+	return 1;
+}
+
 /* 1 when the two threads of the core of position k are neighbours in the list and in their APIC IDs. */
 static int thread_pair(const struct ar_input *in, unsigned k)
 {
@@ -237,7 +249,8 @@ static void plan_idle(const struct ar_input *in, struct ar_plan *plan)
 
 	plan->stock_ssdt = -1;
 	if (!in->want_idle) { plan->idle = AR_IDLE_OFF; return; }
-	for (i = 0; i < in->ssdts && i < AR_MAX_SSDTS; i++)
+	if (!tables_whole(in)) { plan->idle = AR_IDLE_TABLES_INCOMPLETE; return; }
+	for (i = 0; i < in->ssdts; i++)
 		if (header_is(&in->ssdt[i], "SSDT", stock_oem_id, stock_oem_table_id)) {
 			plan->stock_ssdt = (int)i;
 			break;
@@ -248,10 +261,14 @@ static void plan_idle(const struct ar_input *in, struct ar_plan *plan)
 	plan->stock_exact = !memcmp(digest, stock_table_sha256, sizeof(digest));
 
 	/* The defect is that no table defines the objects that the stock table extends. */
-	for (i = 0; i <= in->ssdts && i <= AR_MAX_SSDTS; i++) {
+	for (i = 0; i <= in->ssdts; i++) {
 		const struct ar_table *t = i == 0 ? &in->dsdt : &in->ssdt[i - 1u];
 		if (i > 0 && (int)(i - 1u) == plan->stock_ssdt) continue;
-		if (t->bytes == NULL || !efl_aml_scan_watch(t->bytes, t->length, watch, 1, &scan)) continue;
+		/* A table that does not scan, or whose object list is cut, can hide a definition. */
+		if (!efl_aml_scan_watch(t->bytes, t->length, watch, 1, &scan) || scan.dropped) {
+			plan->idle = AR_IDLE_TABLES_INCOMPLETE;
+			return;
+		}
 		if (scan.watched[0]) { plan->idle = AR_IDLE_TARGETS_EXIST; return; }
 		/* A processor that has _CST in another table needs no repair, and a second _CST would collide. */
 		if (i > 0)
@@ -314,10 +331,14 @@ static void plan_stubs(const struct ar_input *in, struct ar_plan *plan)
 	static struct efl_aml_scan scan;
 	unsigned defined[AR_STUBS] = { 0 }, i, s;
 	if (!in->want_stubs) { plan->stubs = AR_STUBS_OFF; return; }
+	if (!tables_whole(in)) { plan->stubs = AR_STUBS_TABLES_INCOMPLETE; return; }
 	if (!header_is(&in->dsdt, "DSDT", dsdt_oem_id, dsdt_oem_table_id)) { plan->stubs = AR_STUBS_NOT_STOCK_DSDT; return; }
-	for (i = 0; i <= in->ssdts && i <= AR_MAX_SSDTS; i++) {
+	for (i = 0; i <= in->ssdts; i++) {
 		const struct ar_table *t = i == 0 ? &in->dsdt : &in->ssdt[i - 1u];
-		if (t->bytes == NULL || !efl_aml_scan_watch(t->bytes, t->length, stub_names, AR_STUBS, &scan)) continue;
+		if (!efl_aml_scan_watch(t->bytes, t->length, stub_names, AR_STUBS, &scan)) {
+			plan->stubs = AR_STUBS_TABLES_INCOMPLETE;
+			return;
+		}
 		for (s = 0; s < AR_STUBS; s++) defined[s] += scan.watched[s];
 	}
 	for (s = 0; s < AR_STUBS; s++)

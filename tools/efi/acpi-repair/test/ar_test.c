@@ -85,6 +85,7 @@ static void stock_input(const struct stock *s, struct ar_input *in)
 	in->ssdt[1].bytes = s->ssdt2;
 	in->ssdt[1].length = s->ssdt2_bytes;
 	in->ssdts = 2;
+	in->complete = 1;
 	in->cpus = madt_cpus(s->apic, s->apic_bytes, in->cpu, AR_MAX_CPUS);
 	in->want_idle = 1;
 	in->want_stubs = 1;
@@ -290,11 +291,40 @@ static void test_variants(const char *dir, const char *out_dir)
 	fix_checksum(changed, s.ssdt1_bytes);
 	ar_plan_make(&in, &plan);
 	CHECK(plan.idle == AR_IDLE_NOT_STOCK);
-	/* A wrong checksum: the table is not taken as the stock table at all. */
+	/* A wrong checksum in any definition block: the set does not read whole, so nothing is built. */
 	memcpy(changed, s.ssdt1, s.ssdt1_bytes);
 	changed[9] ^= 1u;
 	ar_plan_make(&in, &plan);
-	CHECK(plan.idle == AR_IDLE_NO_STOCK_TABLE);
+	CHECK(plan.idle == AR_IDLE_TABLES_INCOMPLETE && plan.stubs == AR_STUBS_TABLES_INCOMPLETE);
+	CHECK(ar_build_idle(&plan, table, sizeof(table)) == 0 && ar_build_stubs(&plan, table, sizeof(table)) == 0);
+	stock_input(&s, &in);
+	memcpy(changed, s.ssdt2, s.ssdt2_bytes);
+	changed[s.ssdt2_bytes - 1u] ^= 1u;
+	in.ssdt[1].bytes = changed;
+	ar_plan_make(&in, &plan);
+	CHECK(plan.idle == AR_IDLE_TABLES_INCOMPLETE && plan.stubs == AR_STUBS_TABLES_INCOMPLETE);
+	/* The caller says that the root table did not give every table. */
+	stock_input(&s, &in);
+	in.complete = 0;
+	ar_plan_make(&in, &plan);
+	CHECK(plan.idle == AR_IDLE_TABLES_INCOMPLETE && plan.stubs == AR_STUBS_TABLES_INCOMPLETE && plan.targets == 0);
+	/* More definition blocks than the input holds. */
+	stock_input(&s, &in);
+	in.ssdts = AR_MAX_SSDTS + 1u;
+	ar_plan_make(&in, &plan);
+	CHECK(plan.idle == AR_IDLE_TABLES_INCOMPLETE && plan.stubs == AR_STUBS_TABLES_INCOMPLETE);
+	/* A definition block that is sound as a table and does not scan as AML: its signature is not DSDT or SSDT. */
+	stock_input(&s, &in);
+	memcpy(changed, s.ssdt2, s.ssdt2_bytes);
+	changed[0] = 'X';
+	fix_checksum(changed, s.ssdt2_bytes);
+	in.ssdt[1].bytes = changed;
+	ar_plan_make(&in, &plan);
+	CHECK(plan.idle == AR_IDLE_TABLES_INCOMPLETE && plan.stubs == AR_STUBS_TABLES_INCOMPLETE);
+	/* The option turns a repair off before the table set matters. */
+	in.want_idle = in.want_stubs = 0;
+	ar_plan_make(&in, &plan);
+	CHECK(plan.idle == AR_IDLE_OFF && plan.stubs == AR_STUBS_OFF);
 
 	/* Another table defines C000: the stock table is not defective on this firmware. */
 	stock_input(&s, &in);
@@ -382,6 +412,7 @@ static void test_foreign(void)
 	in.cpu[0].uid = 1;
 	in.cpu[1].uid = 2;
 	in.cpu[1].apic_id = 1;
+	in.complete = 1;
 	in.want_idle = in.want_stubs = 1;
 	ar_plan_make(&in, &plan);
 	CHECK(plan.idle == AR_IDLE_NO_STOCK_TABLE && plan.stubs == AR_STUBS_NOT_STOCK_DSDT);
@@ -391,7 +422,7 @@ static void test_foreign(void)
 	memset(&in, 0, sizeof(in));
 	in.want_idle = in.want_stubs = 1;
 	ar_plan_make(&in, &plan);
-	CHECK(plan.idle == AR_IDLE_NO_STOCK_TABLE && plan.stubs == AR_STUBS_NOT_STOCK_DSDT);
+	CHECK(plan.idle == AR_IDLE_TABLES_INCOMPLETE && plan.stubs == AR_STUBS_TABLES_INCOMPLETE);
 	CHECK(ar_table_sound(NULL, 0) == 0 && ar_table_sound(dsdt, 20) == 0);
 	CHECK(ar_idle_text(AR_IDLE_COUNT) != NULL && ar_stubs_text(AR_STUBS_COUNT) != NULL && ar_stub_name(AR_STUBS) != NULL);
 }

@@ -30,25 +30,42 @@ static struct efl_acpi_madt_cpu madt[EFL_ACPI_MAX_MADT_CPUS];
 static struct ar_input input;
 static struct ar_plan plan;
 
-/* Fills the input from the firmware's tables. 0 when the root tables do not read. */
+/* Fills the input from the firmware's tables. 0 when the root tables do not read. input.complete says that every
+ * table of the root table mapped with a right checksum and that every definition block is in the input. */
 static int collect(struct stage *stage)
 {
 	struct efl_acpi acpi;
-	unsigned count = 0, dropped = 0, cpus = 0, i, local = 0;
+	unsigned count = 0, dropped = 0, cpus = 0, i, local = 0, dsdts = 0, unread = 0;
 	memset(&input, 0, sizeof(input));
 	stage_acpi(stage, &acpi);
 	if (efl_acpi_tables(&acpi, tables, EFL_ACPI_MAX_TABLES, &count, &dropped) != EFL_ACPI_OK) return 0;
 	for (i = 0; i < count; i++) {
-		if (tables[i].bytes == NULL) continue;	/* a table with a wrong checksum is not used */
-		if (!memcmp(tables[i].signature, "DSDT", 4)) {
+		int dsdt = !memcmp(tables[i].signature, "DSDT", 4);
+		/* A PSDT is a definition block as an SSDT is (ACPI 6.5, the table signatures). */
+		int ssdt = !memcmp(tables[i].signature, "SSDT", 4) || !memcmp(tables[i].signature, "PSDT", 4);
+		if (tables[i].bytes == NULL) {
+			/* A wrong checksum: the table is not used. Its signature is then not trusted either, so it
+			 * counts as a definition block that did not read. */
+			unread++;
+			continue;
+		}
+		if (dsdt) {
 			input.dsdt.bytes = tables[i].bytes;
 			input.dsdt.length = tables[i].length;
-		} else if (!memcmp(tables[i].signature, "SSDT", 4) && input.ssdts < AR_MAX_SSDTS) {
-			input.ssdt[input.ssdts].bytes = tables[i].bytes;
-			input.ssdt[input.ssdts].length = tables[i].length;
-			input.ssdts++;
+			dsdts++;
+		} else if (ssdt) {
+			if (input.ssdts < AR_MAX_SSDTS) {
+				input.ssdt[input.ssdts].bytes = tables[i].bytes;
+				input.ssdt[input.ssdts].length = tables[i].length;
+				input.ssdts++;
+			} else
+				unread++;
 		}
 	}
+	input.complete = dropped == 0 && unread == 0 && dsdts == 1u;
+	if (!input.complete)
+		stage_sayf(stage, AR_NAME, "the table set is not whole: %u tables did not map or fit, %u did not read, %u DSDT",
+			   dropped, unread, dsdts);
 	if (efl_acpi_madt_list(&acpi, madt, EFL_ACPI_MAX_MADT_CPUS, &count, &dropped) != EFL_ACPI_OK) count = 0;
 	/* The Local APIC entries when the table has one, else the x2APIC entries: the rule of the processor count. */
 	for (i = 0; i < count; i++)
