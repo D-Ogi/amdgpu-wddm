@@ -66,3 +66,4 @@
 6	tools/win/triage/README.md
 1	tools/win/vkfillcheck/README.md
 2	tools/wininstall/README.md
+10	docs/testing/THIRD-PARTY.md

@@ -27,7 +27,7 @@ Four rules hold for every control on this page. They are in the code, not in the
 3. **Nothing reaches the registry before a keep.** A machine that hangs under a candidate boots with the last
    value somebody kept.
 4. **A kept value still faces the boot guard.** The next start writes a pending mark before it applies the value
-   and a final mark after the start is healthy. A start that finds the pending mark of an earlier start drops
+   and a confirmed mark after the start is healthy. A start that finds the pending mark of an earlier start drops
    the value and runs the shipped settings. One bad keep costs the setting, never the machine.
 
 ## The GPU voltage curve
@@ -90,8 +90,8 @@ All `REG_DWORD` under `Services\bc250kmd\Parameters`.
 | Value | Meaning |
 |---|---|
 | `DpmCurve1000` .. `DpmCurve2000` | The stored voltage of that level, in millivolts. Absent means the table's line. |
-| `DpmCurvePending` | A start applied the stored curve and was never marked healthy. |
-| `DpmCurveConfirmed` | The checksum of the curve a healthy start marked. |
+| `DpmCurvePending` | A start applied the stored curve and was never confirmed healthy. |
+| `DpmCurveConfirmed` | The checksum of the curve a healthy start confirmed. |
 | `DpmCurveTrialMs` | The window a set gets when it asks for none. |
 | `DpmCurveLastReason` | 0 none, 1 the stored curve runs, 2 refused, 3 an unconfirmed start, 4 the registry refused the mark, 5 this start does not govern. |
 
@@ -344,7 +344,7 @@ that ends with a hang or a power cut keeps its mark, and the next start puts the
 | `CpuMaxMHz`, `CpuUvSteps`, `CpuTempC` | the stored settings, applied at start, absent for none. An absent `CpuTempC` gives the default cap of 87 C. |
 | `CpuTrialMs` | the window a set gets when it asks for none |
 | `CpuPending`, `CpuConfirmed` | the two guard marks of the stored settings |
-| `CpuLastReason` | 0 none, 1 applied, 2 refused, 3 an unconfirmed start, 4 the registry refused the mark. 5 `CpuTune` is 0, 6 queue 3 did not answer, 7 the firmware or the voltage readback refused |
+| `CpuLastReason` | 0 none. 1 applied. 2 refused. 3 an unconfirmed start. 4 the registry refused the mark. 5 `CpuTune` is 0. 6 queue 3 did not answer. 7 the firmware or the voltage readback refused |
 | `CoreMask` | 119 (`0x77`, stock) or 255 (`0xFF`) |
 | `CoreMaskPending`, `CoreMaskConfirmed` | the mask's two guard marks |
 

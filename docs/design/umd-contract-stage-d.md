@@ -16,7 +16,7 @@ kernel side that **does not use the contract at all**: `grep`ing `driver/kmd/` f
 `DXGKQAITYPE_UMDRIVERPRIVATE` outright (`wddm.c:1483-1488`, the `default:` arm's own comment names
 it). `Bc250WddmCreateAllocation` parses a different, GDI-shaped private struct,
 `BC250_WDDM_ALLOCATION_PRIVATE` (`wddm.c:138-146`), whose own comment already says what this note
-states: *"This is our own private data, not the user-mode contract of ADR 0008 point 8
+confirms: *"This is our own private data, not the user-mode contract of ADR 0008 point 8
 (driver/contract/): stage A has no user-mode driver to agree with, and the blob dies with this
 stage."* `Bc250WddmCreateContext` sets `DmaBufferPrivateDataSize = 0` (`wddm.c:1601`), so a context
 today is never handed a `bc250_umd_context_private` to fill in the first place, and
@@ -86,7 +86,7 @@ not just the mechanical guard above:
 
 ### 1b. Per-node fence: D3DKMT monitored fences vs the KMD's internal fence slots
 
-Established, not a gap: these are already two different, non-overlapping things and the contract
+Confirmed, not a gap: these are already two different, non-overlapping things and the contract
 already models the user-visible one correctly. `bc250_umd_submit_private.fence_va`/`fence_value`
 (`bc250_umd_submit.h:254-255`) is a GPU VA the IB itself writes - a D3DKMT monitored fence
 (`D3DDDI_MONITORED_FENCE`, `README-winsys.md`'s synchronisation table) - and needs no KMD
@@ -104,7 +104,7 @@ Resolved by 1a: not exposed. See `submittable_node_mask` (section 2) and README-
 
 ### 1d. VMID/VA layout assumptions from ADR 0012 and M73
 
-Established, no gap: VMID assignment is per-process and entirely invisible to a UMD (ADR 0012 point
+Confirmed, no gap: VMID assignment is per-process and entirely invisible to a UMD (ADR 0012 point
 2, *"a context that keeps its VMID and root pays no flush at all"* - the flush is emitted by the
 KMD on the ring, never by the UMD). The one VA-layout assumption that *is* UMD-visible was already
 in the contract before this review: `BC250_UMD_A_EXACT_VA` (`bc250_umd_submit.h:64-69`) and the
@@ -116,7 +116,7 @@ change.**
 
 ### 1e. Allocation private data for VRAM vs GART
 
-Established at the header level, real gap at the kernel level. `bc250_umd_alloc_private.preferred_heap`
+Confirmed at the header level, real gap at the kernel level. `bc250_umd_alloc_private.preferred_heap`
 (`bc250_umd_submit.h:89-91`) already carries `AMDGPU_GEM_DOMAIN_VRAM`/`_GTT` field-for-field from
 RADV's own call (`radv_amdgpu_bo.c:566-592`) - nothing to add there. The real gap is that
 `Bc250WddmCreateAllocation` (`wddm.c:1767-1823`) does not know this struct exists: it parses only
@@ -239,7 +239,7 @@ against real DDI call shapes, not against this host-only harness.
   Mesa-invisible field.
 - `driver\kmd\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250kmd-contract -UmdStub P:\BC-250\scratch\build\bc250umd-0724`: clean, `/W4 /WX`, 0 errors / 0 warnings, both
   packages signed, version 0.7.24.1 unchanged. Expected: `driver/kmd` does not include any
-  `driver/contract` header (established by grep before touching anything), so this is a pure
+  `driver/contract` header (confirmed by grep before touching anything), so this is a pure
   regression check that editing the contract did not disturb the driver build.
 - `python tools\packagecheck\packagecheck.py ... --expect-version 0.7.24`: **PASS, 0 errors, 0
   warnings, 21 checks passed**.
