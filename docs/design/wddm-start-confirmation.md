@@ -350,7 +350,7 @@ flush must fail a negative-control test.
 
 On the lab, leave a genuine newly admitted start at counter1 and observe the
 monitor change it to zero only after the required interval. Record generation,
-completion progress and checked persistence status, plus retained OS/DWM
+completion progress and confirmed persistence status, plus retained OS/DWM
 identity and the operator's input/display result. Do not manufacture a fresh start
 by changing only the registry counter. No repeated OS restart is needed to
 confirm the first warm PnP path. AC-cold and power-resume tests remain separate.
