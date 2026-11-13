@@ -887,7 +887,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -953,7 +953,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -1019,7 +1019,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -1085,7 +1085,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -1151,7 +1151,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "dxvk",
-      "commit": "4cf4e386ffda0cd32a5360004607bee56f293653",
+      "commit": "4a6c0c02ccfc0677e406340e509cecae390a14c5",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -1251,7 +1251,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "dxvk",
-      "commit": "4cf4e386ffda0cd32a5360004607bee56f293653",
+      "commit": "4a6c0c02ccfc0677e406340e509cecae390a14c5",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -1351,7 +1351,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "dxvk",
-      "commit": "4cf4e386ffda0cd32a5360004607bee56f293653",
+      "commit": "4a6c0c02ccfc0677e406340e509cecae390a14c5",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -1452,7 +1452,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "dxvk",
-      "commit": "4cf4e386ffda0cd32a5360004607bee56f293653",
+      "commit": "4a6c0c02ccfc0677e406340e509cecae390a14c5",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -1553,7 +1553,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -1597,7 +1597,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -1641,7 +1641,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -1685,7 +1685,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -3156,7 +3156,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3202,7 +3202,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3302,7 +3302,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3348,7 +3348,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3450,7 +3450,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "290f53c38487bda688c6919ed7b89b2f43e8d5d2",
+      "commit": "6e3e7afa004a374984b583746fe4d1f243ac5cde",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -3520,7 +3520,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "290f53c38487bda688c6919ed7b89b2f43e8d5d2",
+      "commit": "6e3e7afa004a374984b583746fe4d1f243ac5cde",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -3590,7 +3590,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "290f53c38487bda688c6919ed7b89b2f43e8d5d2",
+      "commit": "6e3e7afa004a374984b583746fe4d1f243ac5cde",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -3660,7 +3660,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "290f53c38487bda688c6919ed7b89b2f43e8d5d2",
+      "commit": "6e3e7afa004a374984b583746fe4d1f243ac5cde",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
