@@ -128,6 +128,8 @@ typedef enum {
 	EfiACPIReclaimMemory = 9, EfiACPIMemoryNVS = 10
 } EFI_MEMORY_TYPE;
 typedef enum { AllHandles = 0, ByRegisterNotify = 1, ByProtocol = 2 } EFI_LOCATE_SEARCH_TYPE;
+typedef enum { AllocateAnyPages = 0, AllocateMaxAddress = 1, AllocateAddress = 2 } EFI_ALLOCATE_TYPE;
+typedef EFI_STATUS (EFIAPI *EFI_ALLOCATE_PAGES)(EFI_ALLOCATE_TYPE, EFI_MEMORY_TYPE, UINTN, EFI_PHYSICAL_ADDRESS *);
 
 typedef struct {
 	EFI_TABLE_HEADER Hdr;

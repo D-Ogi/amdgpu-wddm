@@ -177,6 +177,18 @@ static void ar_module_run(struct stage *stage)
 	input.want_stubs = want_stubs;
 	input.want_device = want_device;
 	ar_plan_make(&input, &plan);
+	if (plan.device) {
+		/* The page that _CRS describes. EfiReservedMemoryType is kept by the operating system and never reused. */
+		EFI_PHYSICAL_ADDRESS page = 0;
+		EFI_STATUS st = ((EFI_ALLOCATE_PAGES)stage->bs->AllocatePages)(AllocateAnyPages, EfiReservedMemoryType, 1, &page);
+		if (EFI_ERROR(st) || page == 0 || page > 0xFFFFFFFFull) {
+			stage_say(stage, AR_NAME, "the reserved page for the experiment device is not available: no device");
+			plan.device = 0;
+		} else {
+			plan.crb_base = (unsigned long long)page;
+			stage_sayf(stage, AR_NAME, "the experiment device describes the reserved page at 0x%llx", plan.crb_base);
+		}
+	}
 	stage_sayf(stage, AR_NAME, "idle states: %s", ar_idle_text(plan.idle));
 	stage_sayf(stage, AR_NAME, "method stubs: %s", ar_stubs_text(plan.stubs));
 	if (plan.idle != AR_IDLE_REPAIR && plan.stubs != AR_STUBS_REPAIR && !plan.device) return;
