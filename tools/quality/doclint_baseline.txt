@@ -43,7 +43,6 @@
 28	driver/contract/README.md
 3	driver/icd/README-rt-node-address.md
 1	driver/kmd/gfx-copy-provenance.md
-6	driver/kmd/test/ih_consume_test.md
 1	driver/kmd/test/vsync_vector_test.md
 1	driver/shim/README.md
 5	driver/shim/test/README.md
