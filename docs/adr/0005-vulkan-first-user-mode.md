@@ -1,7 +1,7 @@
 # ADR 0005: Vulkan first in user mode, Direct3D by translation
 
-Date: 2026-09-21. Status: accepted (direction only; the exit criteria that follow from it are M8, M10 and M12 in
-`docs/00-goal-and-roadmap.md`, set the same day). Point 2's second sentence ("A native D3D UMD is not a goal") and
+Date: 2026-09-21. Status: accepted (direction only). The exit criteria that follow from it are M8, M10 and M12 in
+`docs/00-goal-and-roadmap.md`, set the same day. Point 2's second sentence ("A native D3D UMD is not a goal") and
 the first consequence's "acceptable" are superseded by ADR 0009: the WARP desktop is a stage, M13 ends it.
 
 ## Context
@@ -37,6 +37,6 @@ driver is shaped, so the direction is recorded now.
 - RADV's assumptions about the amdgpu kernel interface (context and BO semantics, syncobj, VA management
   in user space) become requirements for our private KMD-UMD interface. They are to be collected from the
   RADV winsys before the KMD's escape and submission interface is designed.
-- License: RADV is MIT and may be combined with our code; our winsys stays under the project license
+- License: RADV is MIT and may be combined with our code. Our winsys stays under the project license
   unless the licensor decides to offer it upstream (ADR 0004).
-- Nothing here is measured. It is a plan; the first fact it needs is E02 (MMIO under Windows at all).
+- Nothing here is measured. It is a plan. The first fact it needs is E02 (MMIO under Windows at all).
