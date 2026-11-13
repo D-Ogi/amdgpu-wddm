@@ -6,8 +6,8 @@ running a complete conformance or stress suite after each edit.
 ## Fast profile
 
 Run tools/quality/quick.cmd [workspace] [output-cache] [repository]. Workspace
-defaults to BC250_ROOT or the repository parent. MSVC is discovered with vswhere;
-outputs stay under the selected workspace. The current KMD build, E34 UMD build
+defaults to BC250_ROOT or the repository parent. MSVC is discovered with vswhere.
+Outputs stay under the selected workspace. The current KMD build, E34 UMD build
 and E35 checked RADV wrapper invoke this profile and propagate failures.
 
 - Compiler contract policy: audit generated commands for48 KMD,108 RADV and24
@@ -16,7 +16,7 @@ and E35 checked RADV wrapper invoke this profile and propagate failures.
 - ABI:4096 actual Mesa allocation-producer/KMD-parser cases, packing/parser checks.
 - Regression:7 cases against the actual pipe_surface_equal implementation.
 - Static analysis: actual compile commands for KMD umd_blob.c and UMD Device.cpp.
-  C6xxx and C28xxx findings block. This scope is explicit; it is not every file.
+  C6xxx and C28xxx findings block. This scope is explicit. It is not every file.
 
 Observed runs take a few seconds: approximately3-4seconds with cached analysis,
 5-7seconds after relevant changes. Full builds remain incremental where Ninja
@@ -45,12 +45,12 @@ to the tool they cover.
 | `capshare --self-test` and `amdgpu_wddm_conformance --selftest` | Need their client built first, and each build runs them already |
 
 Analysis cache keys include commands, compiler tools, include search inventory,
-source and compiler-reported header hashes. Changed dependencies trigger analysis;
-failed runs leave no passing cache. Controls verify header invalidation and a real
+source and compiler-reported header hashes. Changed dependencies trigger analysis.
+Failed runs leave no passing cache. Controls check header invalidation and a real
 C6001 failure. ABI/compiler checks are short enough to run each time.
 
 MSVC /we4013 complements existing fatal argument diagnostics. The missing winsys
-prototype and four-argument call were repaired; UMD fixes cover null/null surface
+prototype and four-argument call were repaired. UMD repairs cover null/null surface
 comparison, SAL parameter names and missing D3D11 constants. No global warning
 suppression or automatic acceptance baseline was introduced. M537/M538 hold evidence.
 
@@ -60,7 +60,7 @@ After quick, run a bounded test of the exact candidate on the lab. The generic
 run-smoke.ps1 installs nothing: a separate bounded deployment script selects and
 restores the ICD. It checks STOP, finite duration, output oracle, exit status,
 unchanged boot and live process module path/hash. Its JSON config names the test,
-arguments, expected modules and pass expression; never equate exit0 with correct
+arguments, expected modules and pass expression. Never equate exit0 with valid
 pixels or buffers without the oracle.
 
 artifact_gate.py --receipt <receipt.json> --artifact module.dll=<candidate.dll>
@@ -68,20 +68,20 @@ artifact_gate.py --receipt <receipt.json> --artifact module.dll=<candidate.dll>
 Rebuilding after a test requires a new runtime receipt. Run this check immediately
 before staging the artifact. It is a supported gate, not protection against a
 human deliberately bypassing the deployment workflow. No CI service is installed.
-Kernel identity needs its own device/driver witness; user-process module discovery
+Kernel identity needs its own device/driver witness. User-process module discovery
 does not attest a SYS. M538's receipt covers the tested ICD only, not the new UMD.
 
 ## Broader coverage
 
 Full conformance, long stress, Linux performance comparison and release acceptance
 remain separate explicit profiles. Expand static-analysis coverage by affected
-component and cache per translation unit; current quick intentionally names its
+component and cache per translation unit. Current quick intentionally names its
 two analyzed files. Hosted ABI/thread/lifetime checks remain separate from the
 standalone ICD smoke. Neither quick nor smoke means certification or G0 success.
 
 Build recipes in tools/build and the separate Mesa repository are maintained independently. Integration
-accepts BC250_RADV_SOURCE, BC250_RADV_BUILD, BC250_UMD_SOURCE and BC250_UMD_BUILD;
-source/build pairs must correspond and builds emit compile_commands.json. Use
+accepts BC250_RADV_SOURCE, BC250_RADV_BUILD, BC250_UMD_SOURCE and BC250_UMD_BUILD.
+The source/build pairs must correspond and builds emit compile_commands.json. Use
 those overrides when migrating from the current scratch-tree defaults. The two
 UMD variables have no default: without them, or with a variable that names no
 directory, quick.ps1 refuses the run before its first gate and prints one line

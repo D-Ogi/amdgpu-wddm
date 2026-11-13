@@ -43,7 +43,6 @@
 10	docs/design/vsync-diagnostic-samples.md
 2	docs/dxvk-engine-commit-map.md
 8	docs/init-sequence.md
-11	docs/research/build-quality-gates.md
 10	docs/testing/THIRD-PARTY.md
 1	docs/testing/release-notes/0.7.202.100-tester.11.md
 2	docs/testing/release-notes/0.7.203.100-tester.11.md
