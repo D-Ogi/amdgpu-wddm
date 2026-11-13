@@ -364,7 +364,7 @@ static partial class UnitTests
         var doc = File.ReadAllText(Path.Combine(root, @"docs\design\dpm.md"));
         Check(doc.Contains("`DpmMode`") && doc.Contains("`DpmMaxMHz`"), "DPM setting names in docs/design/dpm.md");
         Check(doc.Contains(@"Services\bc250kmd\Parameters"), "DPM registry path in docs/design/dpm.md");
-        Check(Regex.IsMatch(doc, @"absent = 2000"), "default ceiling 2000 in docs/design/dpm.md");
+        Check(Regex.IsMatch(doc, @"(?i)\babsent = 2000\b"), "default ceiling 2000 in docs/design/dpm.md");
     }
 
     static void Redaction()
