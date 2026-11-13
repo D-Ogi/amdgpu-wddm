@@ -1,12 +1,11 @@
 # What amdgpu does to unit A during init, and what that means for our driver
 
 Source: the register trace of experiment E03 (`evidence/linux/2026-09-21-E03-init-trace/amdgpu-events.txt`),
-summarized by `tools/trace/summarize_init.py` into `init-sequence-unitA.generated.md` (the full phase table;
-regenerate, do not edit). This page is the reading of that table. Everything below is MEASURED in the sense
-"these host register accesses happened in this order on unit A"; what each step *means* is taken from the
+summarized by `tools/trace/summarize_init.py` into `init-sequence-unitA.generated.md` (the full phase table, which you regenerate and do not edit). This page is the reading of that table. Everything below is MEASURED in the sense
+"these host register accesses happened in this order on unit A". What each step *means* is taken from the
 amdgpu source and marked as such where it matters.
 
-Limits of the instrument: the trace shows host MMIO only. It does not show what PSP, SMU, RLC and the CP
+Limits of the instrument: the trace records host MMIO only. It does not record what PSP, SMU, RLC and the CP
 microcode do in response, nor register writes that travel inside command packets on a ring (KIQ, gfx, SDMA).
 
 ## The sequence
@@ -18,7 +17,7 @@ microcode do in response, nor register writes that travel inside command packets
 | 0.000 | `MM_INDEX` / `MM_DATA` walk, `0xFFFF0000` upward, 2560 reads | 2560 | reads 10 KiB from the top of VRAM through the index/data pair: the IP discovery table |
 | 0.038 | `REMAP_HDP_*_FLUSH_CNTL`, doorbell aperture enable | 3 | NBIO setup |
 | 0.039 | `GCVM_*` / `GCMC_*` and the same for `MMVM_*` / `MMMC_*` | 280 | GART: page table base registers (`LO32 = 0x6FE00001`, `HI32 = 0x4`), VM context 0 range, system aperture, fault handling, L2 control. **Both hubs (GC and MMHUB) get the same values** |
-| 0.039 - 0.251 | 99 844 reads of `MMVM_INVALIDATE_ENG17_SEM`, every one returns 0 | 0 | **artifact of our instrument, not of amdgpu**: the first MMHUB TLB flush tries to take the invalidation semaphore (`gmc_v10_0_flush_gpu_tlb`, `usec_timeout` = 100000 polls) and never gets it, because our pre-driver sweep had read that register and a read acquires the semaphore (facts M25). amdgpu gives up after 0.21 s, flushes anyway and writes 0, which releases it: all 20 later flushes get it at the first read. `dmesg.txt` line 817 carries the matching timeout; the E01 session, which did no full sweep before the driver, has none |
+| 0.039 - 0.251 | 99 844 reads of `MMVM_INVALIDATE_ENG17_SEM`, every one returns 0 | 0 | **artifact of our instrument, not of amdgpu**. The first MMHUB TLB flush tries to take the invalidation semaphore (`gmc_v10_0_flush_gpu_tlb`, `usec_timeout` = 100000 polls) and never gets it. The reason is that our pre-driver sweep had read that register, and a read acquires the semaphore (facts M25). amdgpu gives up after 0.21 s, flushes anyway and writes 0, which releases it: all 20 later flushes get it at the first read. `dmesg.txt` line 817 carries the matching timeout. The E01 session, which did no full sweep before the driver, has none |
 | 0.25 | `*_INVALIDATE_ENG17_REQ` / `_SEM` rounds | ~70 | TLB flushes while GART tables are filled |
 | 0.253 | `IH_RB_*`, `INTERRUPT_CNTL*`, `BIF_IH_DOORBELL_RANGE` | 15 | interrupt handler ring |
 | 0.253 | `MP0_SMN_C2PMSG_69/70/71`, then `_64 = 0x20000` | 4 | PSP: ring address low/high, size `0x1000`, "create ring" |
@@ -28,7 +27,7 @@ microcode do in response, nor register writes that travel inside command packets
 | 0.550 | GC golden settings: `GE_FAST_CLKS`, `CGTT_*`, `CB_HW_CONTROL_3/4`, `CH_PIPE_STEER`, `DB_DEBUG*`, `GB_ADDR_CONFIG = 0x44`, `GL2C_*`, `PA_SC_*`, `SQ_*`, `TA_CNTL_AUX`, `UTCL1_CTRL`, `VGT_*` | ~40 | `gfx_v10_0_init_golden_registers` for Cyan Skillfish |
 | 0.550 | `GRBM_GFX_INDEX` broadcasts, `SH_MEM_*` per VMID through `GRBM_GFX_CNTL`, `GDS_VMID*` | ~150 | constants init, per-VMID shader memory windows |
 | 0.550 | `RLC_CNTL = 0` ... `RLC_CNTL = 1`, `RLC_CSIB_*`, `CP_MEC_CNTL = 0`, `CP_ME_CNTL = 0` | ~15 | RLC restart with the clear-state buffer, **CP and MEC un-halted by plain register writes** |
-| 0.550 | `CP_HQD_*` under `GRBM_GFX_CNTL` select, doorbell ranges | ~50 | KIQ queue brought up by direct MMIO; every other queue is then mapped *through* KIQ packets (invisible here) |
+| 0.550 | `CP_HQD_*` under `GRBM_GFX_CNTL` select, doorbell ranges | ~50 | KIQ queue brought up by direct MMIO. Every other queue is then mapped *through* KIQ packets (invisible here) |
 | 0.550 | `SCRATCH_REG0 = 0xCAFEDEAD` x 11 | 11 | ring tests: each ring is asked to overwrite the scratch register |
 | 0.550 | `SDMA0_*` / `SDMA1_*`, `BIF_SDMA*_DOORBELL_RANGE` | ~90 | both SDMA engines: ring base, rptr address, doorbells, un-halt |
 | 1.56 | interrupt enables (`CP_INT_CNTL_RING0`, `CPC_INT_CNTL`, `SDMA*_CNTL`), `*VM_CONTEXT1-15_CNTL` | ~60 | late init: per-process VM contexts enabled, fault interrupts on |
@@ -57,8 +56,8 @@ microcode do in response, nor register writes that travel inside command packets
    (roadmap: control write), since a working driver writes it eleven times in a row with no side effect.
 6. The 0.21 s of semaphore polling at the first MMHUB TLB flush is **not** part of amdgpu's normal init here.
    It is damage done by our own instrument: the pre-driver sweep of this very session had read
-   `MMVM_INVALIDATE_ENG17_SEM`, and a read acquires that semaphore (facts M25, measured later under Windows;
-   the E01 session, without a full sweep before the driver, shows no timeout). Lessons for the driver: take
-   the semaphore the way amdgpu does, with a bounded wait, and release it; lesson for the method: a register
+   `MMVM_INVALIDATE_ENG17_SEM`, and a read acquires that semaphore (facts M25, measured later under Windows).
+   The E01 session, without a full sweep before the driver, has no timeout. Lessons for the driver: take
+   the semaphore the way amdgpu does, with a bounded wait, and release it. Lesson for the method: a register
    read can change state, so sweeps need an allow-list that knows about side effects, and a trace taken after
    a sweep describes a machine the sweep has already touched.
