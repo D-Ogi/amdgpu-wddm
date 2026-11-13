@@ -25,12 +25,13 @@ Each contract in this page comes from one of these sources. The revision is the 
 | edk2, `MdePkg/Include` (`Uefi/UefiSpec.h`, `Guid/GlobalVariable.h`, `Guid/ImageAuthentication.h`, `Protocol/AcpiTable.h`, `Protocol/AcpiSystemDescriptionTable.h`, `Protocol/Security2.h`) | commit `8628578dacd38b327d4f9acf820c6914f4b3a48f` | the interfaces and GUIDs of the UEFI Specification 2.10 and of the PI Specification, as the headers state them |
 | edk2, `MdeModulePkg/Core/Dxe/Image/Image.c` | the same commit | when the firmware core calls the Security2 protocol, and what each status does |
 | edk2, `MdeModulePkg/Universal/SecurityStubDxe/SecurityStub.c` | the same commit | the Security2 call without a file buffer |
-| edk2, `MdeModulePkg/Core/RuntimeDxe/Runtime.c` | the same commit | what the firmware converts at `SetVirtualAddressMap` |
 | edk2, `SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c` | the same commit | the sequence of the db and dbx checks, and the sequence of the Authenticode digest |
 | ACPI Specification | 6.5 | the table header, the AML encodings, `_CST` and `_CSD` |
 | Microsoft, "Windows Authenticode Portable Executable Signature Format" | version 1.0, 2008 | the Authenticode digest and the signature structure |
 | Microsoft, "PE Format" | learn.microsoft.com, read 2026-11-13 | the PE headers and the attribute certificate table |
 | Microsoft, "Secure boot" (OEM guidance), `windows-hardware/manufacture/desktop/secure-boot-landing` | `ms.date` 2026-03-10, repository commit `3abfddf4` | what Windows requires of `SecureBoot` and `SetupMode` |
+| Microsoft, "The TESTSIGNING boot configuration option", `windows-hardware/drivers/install/the-testsigning-boot-configuration-option` | `ms.date` 2025-04-16, repository commit `16aec560` | the test-signing mode and Secure Boot |
+| Microsoft, "Virtualization-based Security (VBS)", `windows-hardware/design/device-experiences/oem-vbs` | `ms.date` 2023-03-17, repository commit `d4e5a03b` | what VBS and memory integrity require of the platform |
 | Microsoft, "Implementing processor power management for Windows 7" (archived) | `ms.date` 2017-06-01, repository commit `d950d3ea` | what Windows requires of processor objects, `_CST`, `_CSD`, `_PSS`, `_PCT` and `_PPC` |
 | RFC 5280, RFC 2315, RFC 8017, FIPS 180-4, ITU-T X.690 | the published texts | certificates, SignedData, RSA signature verification, SHA-256, DER |
 
@@ -47,8 +48,7 @@ The stage has a core, three modules and a shared library. Each directory is one 
 | `stage/` | core | the console, the load options, the volume of the stage, the board identity, the start of Windows |
 | `core-unlock/` | module `core-unlock` | the two CPU cores, with the warm reset |
 | `acpi-repair/` | module `acpi` | the corrected ACPI tables |
-| `secure-boot/` | module `secure-boot` | the image check and the reported mode |
-| `secure-boot/rt/` | runtime driver `bc250-sbvar.efi` | the Secure Boot variables in RAM, for the reported mode only |
+| `secure-boot/` | module `secure-boot` | the image check |
 | `lib/` | shared library | the UEFI header, the small C library, text and device paths, SMBIOS, SHA-256 |
 | `lib/acpi/` | shared ACPI table library | the root table walk, the AML name scan, the AML writer |
 
@@ -94,15 +94,9 @@ the firmware starts the stage again, the core unlock finds all cores, and the ot
 | The stage image, its data and its pool memory | loader code and loader data | the stage | no. The operating system takes this memory back |
 | The check in the Security2 protocol | a pointer into the stage image | the firmware protocol | no. Boot services end, and nothing calls the protocol later |
 | The installed ACPI tables | ACPI memory of the firmware | the firmware. `InstallAcpiTable` copies the table | yes, as data. The operating system reads them |
-| `bc250-sbvar.efi`, in the reported mode only | runtime services code and data | the firmware loads it as a runtime driver | yes, as code. It serves the variable calls |
 
-So the default start leaves no code of this project in memory. The only resident data are the ACPI tables, and
-the firmware owns them. Resident code exists only when the operator asks for `sb.reported=1`.
-
-The runtime driver holds one static block with the variables. The block has offsets and no pointer. The driver
-keeps three pointers to the variable functions of the firmware, and it converts them in the event group of
-`SetVirtualAddressMap`. It leaves the conversion of the runtime services table to the firmware, as the edk2
-runtime core does. The driver refuses to start when the firmware did not load it into runtime services code.
+So no start leaves code of this project in memory. The only resident data are the ACPI tables, and the firmware
+owns them.
 
 ## The load options
 
@@ -119,7 +113,6 @@ An option is `name=value`. An option that no module understands is counted on th
 | `acpi.idle=0` | 1 | no idle state table |
 | `acpi.stubs=0` | 1 | no method stub table |
 | `sb.mode=audit`, `sb.mode=enforce` | `audit` | report each verdict, or refuse an image that is not allowed |
-| `sb.reported=1` | 0 | serve the Secure Boot variables to the operating system. Needs `sb.mode=enforce` |
 
 ## The failure policy
 
@@ -239,8 +232,7 @@ The PI Specification defines the hook. The firmware core calls `FileAuthenticati
 `EFI_ACCESS_DENIED` from that call means that the core does not load the image.
 
 The module puts its own function into that protocol and keeps the function of the firmware. Its function gives
-the verdict and then calls the function of the firmware. So the check covers the Windows Boot Manager, the
-runtime driver, and every other image that something loads through `LoadImage` before ExitBootServices. At the
+the verdict and then calls the function of the firmware. So the check covers the Windows Boot Manager and every other image that something loads through `LoadImage` before ExitBootServices. At the
 unwind, the module puts the function of the firmware back.
 
 The module does not rely on the hook alone. Before the start, the core gives the bytes of the Windows Boot Manager
@@ -259,32 +251,32 @@ firmware creates them. `PK`, `KEK`, `db` and `dbx` are non-volatile authenticate
 The firmware of the BC-250 has no Secure Boot code. It has none of the six variables, and Windows says "Variable
 is currently undefined". Three ways exist to give Windows the variables.
 
-| Way | NVRAM write | Decision |
-|---|---|---|
-| `SetVariable` with the non-volatile attribute | yes | not allowed without explicit consent. Not used |
-| `SetVariable` with only the volatile attributes | not known. The AMI variable code has a list of names that it handles in a special way, and `SecureBoot`, `PK` and `KEK` are in it. What it stores for these names is not measured | not used. The stage calls `SetVariable` nowhere |
-| A runtime driver that answers `GetVariable` for these names from RAM | no. The driver has no write path of its own | used, in the reported mode only |
+| Way | NVRAM write |
+|---|---|
+| `SetVariable` with the non-volatile attribute | yes. Not allowed without explicit consent |
+| `SetVariable` with only the volatile attributes | not known. The AMI variable code has a list of names that it handles in a special way, and `SecureBoot`, `PK` and `KEK` are in it. What it stores for these names is not measured |
+| A runtime driver that answers `GetVariable` for these names from RAM | no |
 
-So the design works from volatile state. `bc250-sbvar.efi` puts three functions into the runtime services table,
-in front of the functions of the firmware.
-
-- `GetVariable` and `GetNextVariableName` answer for the names of the store, and pass every other name on.
-- `SetVariable` returns `EFI_WRITE_PROTECTED` for a name of the store. For every other name it passes the call of
-  the operating system on, unchanged. The stage and the driver start no write.
-
-The store holds `SecureBoot` = 1, `SetupMode` = 0, and `PK`, `KEK`, `db` and `dbx` from the files beside the stage.
-Each variable has only the two volatile attribute bits. No variable claims to be non-volatile or authenticated.
-One more variable, `Bc250StageSecureBoot` under a vendor GUID of this project, says in plain text where the
-variables come from. The module does not start the reported mode when the firmware has one of the six variables.
+So a report without an NVRAM write is possible in principle, through the third way. The stage does not do it.
+Point (b) gives the reason.
 
 ### Point (b): the conflict with the test-signed driver
 
-The driver of this project is test-signed. Windows does not allow its test-signing mode while Secure Boot is on
-(study source S6 of the Secure Boot study of 2026-11-13). So a start with `SecureBoot` = 1 gives a Windows that
-refuses the driver.
+The driver of this project is test-signed. Windows loads a test-signed kernel driver only in its test-signing
+mode, which is the boot option `testsigning`. While Windows reads Secure Boot as on, it refuses that option. The
+Microsoft page of the option says that Secure Boot must be off before the option is set. `bcdedit` answers "The
+value is protected by Secure Boot policy". So a start with `SecureBoot` = 1 gives a Windows that does not load the
+driver of this project.
 
-For that reason the report is a separate mode, and it is off by default. The default mode verifies and reports
-only. Windows then reads no Secure Boot variable, as it does without the stage, and the driver loads.
+### The reported mode is not built
+
+A mode that served `SecureBoot` = 1 from RAM was studied and is not in the stage. The project rule of 2026-11-13
+is: no Secure Boot emulation while Windows refuses the test-signed driver under it. Point (b) shows that Windows
+refuses it. Such a mode would also give no protection, and a program that sends the Secure Boot state to a server
+would send a value that the firmware did not make.
+
+One condition opens the topic again: a production-signed driver, which Windows loads without the test-signing
+mode. The work then starts from point (a), with a lab test of the third way and a new decision by the owner.
 
 ### What each mode gives, and what it does not give
 
@@ -293,7 +285,6 @@ only. Windows then reads no Secure Boot variable, as it does without the stage, 
 | `sb=0` | nothing changes | no check |
 | `sb.mode=audit` (default) | a console line with the verdict and the digest of each image that the stage starts. Nothing is refused | no protection. Windows reports Secure Boot as not available |
 | `sb.mode=enforce` | an image that `db` does not allow, or that `dbx` forbids, does not start through the stage | no report to Windows. No check of what the Windows Boot Manager loads later. Windows makes those checks only when it reads `SecureBoot` = 1 |
-| `sb.mode=enforce sb.reported=1` | the same check, and Windows reads `SecureBoot` = 1. The Windows loader then enforces its own signature rules on the kernel and the boot drivers | no test-signed driver: the driver of this project does not load. No firmware Secure Boot. No protected variables: Windows cannot write `dbx` updates, and it logs that |
 
 In every mode the root of trust is a set of files on the EFI System Partition that nobody signed: the stage
 itself, `db.esl` and `dbx.esl`. The firmware starts the stage without a check. So no mode protects against an
@@ -307,17 +298,37 @@ The stage has no code that makes a statement for a remote party. It makes no TPM
 measurement and no attestation. The TPM is out of scope. The stage does not copy the keys or the name of another
 vendor: the operator supplies every database.
 
-The reported mode changes what the local Windows reads. A program in that Windows that sends the Secure Boot
-state to a server sends the value that the stage served. The stage cannot prevent that. The design therefore
-keeps the mode off by default, labels the variables with their origin, and does not hide the missing
-authentication attribute from a program that reads the attributes. A request to hide that origin, or to satisfy a
-remote check, is outside this design.
+The stage gives no Secure Boot variable to the operating system. In each mode, Windows reads the same Secure Boot
+state as without the stage. A request to make Windows or a remote check read another state is outside this
+design.
+
+## SVM and IOMMU
+
+The owner put the Setup options "SVM Mode" and "IOMMU" into tester.39, as the way to VBS and memory integrity.
+The owner changes them by hand in the Setup menu of unit A. The stage does not set them. This section lists what
+the tables and the stage must give for that work.
+
+| Point | Status |
+|---|---|
+| The firmware gives no IVRS table with the options at their defaults | MEASURED, M13, M47. The ACPI dump of unit A has 15 tables, and IVRS is not one of them |
+| The firmware gives no WSMT table | read from the same dump: WSMT is not one of the 15 tables. Windows names WSMT as a missing requirement of VBS (M870) |
+| The firmware gives an IVRS table when "IOMMU" is on, and the table is correct | open measurement. Copy the tables with the option on, and read the IVRS device entries against the PCI devices, the IOAPIC and the HPET |
+| The CPU table and the DSDT are the same with the two options on | open measurement. The ACPI module identifies the CPU table by its content. A changed table makes the module do nothing and say so |
+| The MADT has the two unlocked processors as enabled, with correct APIC IDs | open measurement, row L54. The hypervisor starts each processor of the MADT |
+| SVM is on for the two unlocked cores after the warm reset | open measurement. Read the SVM disable bit of the `VM_CR` register on each of the 8 processors, with the option on |
+| VBS starts with SVM and IOMMU on and without Secure Boot | open measurement. The Microsoft VBS page lists Secure Boot as a requirement. The stage does not report Secure Boot |
+| The memory of the stage does not disturb the start of the hypervisor | open measurement. The stage keeps only loader memory, and the firmware owns the installed tables |
+
+The stage must not add a WSMT table. That table is a statement about the SMM code of the firmware, and this
+project cannot examine that code. The stage also builds no IVRS table: a wrong IVRS table can stop the start or
+damage data, and the firmware has its own builder. When the IVRS table of the firmware has a defect, the defect
+goes into the facts first, and a correction is a new decision.
 
 ## The test plan
 
 ### Host tests
 
-`pwsh tools\efi\stage\build.ps1` builds the two images and the host tests and runs the tests. The tests need no
+`pwsh tools\efi\stage\build.ps1` builds the image and the host tests and runs the tests. The tests need no
 firmware.
 
 | Part | What the test checks |
@@ -331,14 +342,24 @@ firmware.
 | Secure Boot, images | a chain of three keys made at run time. Each certificate of the chain is the `db` entry in turn. Changed image bytes, a changed signature and another signer. A certificate without the CA flag, and two signatures. `dbx` by digest and by certificate |
 | Secure Boot, robustness | each byte of a signed image changed in turn, and each length of the file. No change of a signed byte is allowed |
 | Secure Boot, real image | optional: a real signed UEFI image must pass under the issuer of its signer. This is the positive control on bytes that this project did not make |
-| variable store | the status and size rules of `GetVariable` and `GetNextVariableName`, against a model of the firmware |
 
 The test keys are made at each run and are never written to a file. The repository holds no private key.
 
 ### Lab steps
 
 The lab runs the UEFI bindings, which the host cannot test. Each step starts the stage from the GRUB of the lab
-stick. No step makes a firmware boot entry. The steps are in the report of the work package and in the README.
+stick. No step makes a firmware boot entry. [The README of the stage](../../tools/efi/stage/README.md) gives the GRUB
+entry.
+
+1. Copy `bc250-stage.efi` to `\EFI\BC250\` on the EFI System Partition of the Windows disk. Start it with
+   `unlock=0 acpi=0 sb=0`. Read the console: the core runs, no module runs, and Windows starts.
+2. Start it with `unlock=0 sb=0 report=1`. Read the lines of the ACPI module. In Windows, examine the processor
+   devices and the idle states.
+3. Put `db.esl` beside the stage. Start it with `unlock=0 acpi=0`. Read the verdict lines and the count of hook
+   calls.
+4. Start it with `unlock=0 acpi=0 sb.mode=enforce`. Windows must start. Then put the digest of the boot manager
+   into `dbx.esl`: the stage must refuse the boot manager, and the firmware goes on with its boot order.
+5. Start it with all modules and `reset=warm`.
 
 ## What is measured and what is not
 
@@ -352,6 +373,22 @@ stick. No step makes a firmware boot entry. The steps are in the report of the w
 | The tables and the APIC IDs of a start with 8 cores, and on BIOS P5.00 | not measured. Row L54 |
 | The AMI firmware core calls Security2 for `LoadImage` | not measured. The module prints the count at each start |
 | `LoadImage` from a buffer with a device path starts the Windows Boot Manager on this firmware | not measured |
-| The AMI runtime core relocates the runtime driver and converts the table at `SetVirtualAddressMap` | not measured. Row L56 tests it under Linux first |
-| Windows accepts `PK`, `KEK` and `db` without the non-volatile and authenticated attributes | not measured |
 | The signature check on real images | tested on the host with one real image when the build gets one |
+
+## Open questions
+
+Each question has the measurement that answers it.
+
+1. Does the AMI firmware core call Security2 at `LoadImage`, and does the firmware have the two ACPI protocols?
+   Lab steps 2 and 3 answer it: the stage prints the protocol result and the count of hook calls.
+2. Does `LoadImage` from a verified buffer with a device path start the Windows Boot Manager on this firmware?
+   Lab step 4 answers it.
+3. Are the MADT and the CPU table the same after a start with 8 cores, and on BIOS P5.00? Row L54 answers it.
+4. Is the I/O address of the C2 state in the stock `_CST` the address that the CPU uses? The report of lab step 2
+   reads the C-state base address register, and the two values must agree.
+5. What are the real P-state frequencies and voltages? Row L55 answers the frequencies. The `_PCT` contract needs
+   an AMD source.
+6. Do Windows and Linux use the idle states of the new table? Row L56 answers it for Linux, and lab step 2 for
+   Windows.
+
+The question about a runtime driver at `SetVirtualAddressMap` went away with the reported mode.
