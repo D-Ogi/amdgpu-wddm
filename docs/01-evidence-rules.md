@@ -4,18 +4,18 @@ Short version: a claim about the hardware is worth exactly as much as the file i
 
 ## Where facts live
 
-Facts are kept as a graph in `docs/facts/data/*.yaml`, one file per area, each fact with its ID, status, claim, detail, evidence, date and edges to other facts (`uses`, `supports`, `refutes`, `supersedes`). `docs/facts.md` and the pages under `docs/facts/` are generated from those files by `tools/facts/gen_facts.py`: edit the YAML and run `--write`; the quality gate's `--check` confirms that every cited `evidence/` path exists and that the pages are current. Format and workflow: `docs/facts/README.md`.
+Facts are kept as a graph in `docs/facts/data/*.yaml`, one file per area. Each fact has its ID, status, claim, detail, evidence, date and edges to other facts (`uses`, `supports`, `refutes`, `supersedes`). `docs/facts.md` and the pages under `docs/facts/` are generated from those files by `tools/facts/gen_facts.py`: edit the YAML and run `--write`. The quality gate's `--check` confirms that every cited `evidence/` path exists and that the pages are current. Format and workflow: `docs/facts/README.md`.
 
 ## Statuses
 
 | Status | Meaning |
 |---|---|
 | `HYPOTHESIS` | Believed, not measured by us. May come from kernel source, prior art or reasoning. Says so |
-| `MEASURED` | Observed once on our hardware; evidence file linked. Not yet cross-checked |
-| `CONFIRMED` | Measured, and a positive control or an independent second method agrees (typically: Linux and Windows on the same unit, or raw MMIO and the kernel's debugfs) |
+| `MEASURED` | Observed once on our hardware. Evidence file linked. Not yet cross-checked |
+| `CONFIRMED` | Measured, and a positive control or an independent second method agrees. Typical pairs are Linux and Windows on the same unit, or raw MMIO and the kernel's debugfs |
 | `REFUTED` | Was believed or claimed (by us or by prior art) and a measurement contradicts it. Kept in the list so it is not re-believed |
 
-An entry states: the claim, the status, the evidence path(s), the date, and the unit (board serial suffix or our nickname for it) when it could be unit-specific.
+An entry states the claim, the status, the evidence path(s) and the date. It also states the unit (board serial suffix or our nickname for it) when the fact could be unit-specific.
 
 ## Positive control first
 
@@ -36,7 +36,7 @@ All of these must be answered in the experiment write-up, with evidence:
 6. Reference: what does Linux read and write for this register on the same unit (debugfs or `umr`), at which point of init?
 7. Ordering: does Linux touch it only after some other step (PSP/TMR setup, RLC safe mode, GFXOFF disable)?
 
-Only when all seven are answered and the write still has no effect may a fact say the register is not writable from the host in that state. Wording stays factual: "write of X at state Y read back Z", never "impossible".
+A fact may say the register is not writable from the host in that state only when all seven are answered. The write must still have no effect. Wording stays factual: "write of X at state Y read back Z", never "impossible".
 
 ## Experiments
 
