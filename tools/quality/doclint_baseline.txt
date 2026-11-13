@@ -63,7 +63,7 @@
 19	docs/hardware.md
 8	docs/init-sequence.md
 11	docs/research/build-quality-gates.md
-21	docs/testing/INSTALL.md
+1	docs/testing/INSTALL.md
 10	docs/testing/THIRD-PARTY.md
 1	docs/testing/release-notes/0.7.202.100-tester.11.md
 2	docs/testing/release-notes/0.7.203.100-tester.11.md

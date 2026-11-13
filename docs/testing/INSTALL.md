@@ -8,7 +8,7 @@ Use this package only on a BC-250. The installer stops on every other computer a
 
 ## What you need
 
-- An ASRock BC-250 with Windows 11 x64 installed and working on Microsoft Basic Display Adapter. The driver is
+- An ASRock BC-250 with Windows 11 x64 installed and working on `Microsoft Basic Display Adapter`. The driver is
   tested on Windows 11 23H2 (build 22631), 24H2 (build 26100) and 25H2 (build 26200), and on the general builds
   after them. An older Windows 11 (build 22000 to 22630) gets a line that advises an update, and the installation
   continues. An Insider build (Canary, Dev or Beta) and an LTSC edition each get a line of the same kind. A PC in the
@@ -65,7 +65,7 @@ A modified BIOS can have the option. If the preflight shows Secure Boot `on`, tu
 
 1. Restart the BC-250 and push `Del` (or `F2`) to open the BIOS setup.
 2. Find the Secure Boot setting. It is usually under Security > Secure Boot. Set it to Disabled. Some modified
-   BIOS versions have no switch for it: set OS Type to "Other OS", or delete the Secure Boot keys.
+   BIOS versions have no switch for it: set OS Type to "Other OS", or remove the Secure Boot keys.
 3. Save and exit (usually `F10`).
 
 To read the setting yourself, open PowerShell as administrator and type `Confirm-SecureBootUEFI`:
@@ -210,7 +210,7 @@ for example `install.cmd -Console -DryRun`:
    with the switches you want. With no switch `install.cmd` opens the setup window instead, so type
    `install.cmd -Console` when you want the console.
 2. Read the preflight table. Every line must show `ok` or `warn`. A `fail` line stops the installer, and the
-   installer tells you what to correct. When it stops at preflight, it has changed nothing.
+   installer tells you what to change. When it stops at preflight, it has changed nothing.
 3. Phase 1: the installer makes a System Restore point (if System Protection is on), turns on test signing and,
    if BitLocker is on, pauses BitLocker for the restarts it needs. It asks you nothing: it prints
    what it changes as it changes it. The restart comes after a 15-second countdown. Press Enter to restart at
@@ -232,8 +232,8 @@ or `uninstall.cmd` must then restart Windows before it uses the GPU.
 
 To install a newer package, unpack it to a new folder and start its setup window or its `install.cmd`. You do not
 have to uninstall first. The installer shows `upgrading <old> -> <new>`, keeps the files that did not change,
-replaces the others and restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing;
-use `install.cmd -Repair` to install it again.
+replaces the others and restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing.
+Use `install.cmd -Repair` to install it again.
 
 An upgrade keeps the settings you changed: the driver settings (for example `DpmMaxMHz` and `CuMode`), `DwmForceCpu`,
 the D3D11 allowlist and the application profiles. The installer writes a new default only over a value that the
@@ -304,14 +304,14 @@ Without internet on the BC-250:
 
 ## The start confirmation after logon
 
-The driver counts each start that is not confirmed. After two unconfirmed starts, Windows uses Microsoft Basic Display
-Adapter again, to prevent a start loop. The same confirmation keeps the automatic clock control (DPM) on: if a start
-is not confirmed, the next start runs at the fixed 1000 MHz clock, and DPM stays off until you set it again in the
+The driver counts each start that is not confirmed. After two unconfirmed starts, Windows uses `Microsoft Basic Display Adapter`
+again, to prevent a start loop. The same confirmation keeps the automatic clock control (DPM) on: if a start
+is not confirmed, the next start runs at the base 1000 MHz clock, and DPM stays off until you set it again in the
 control application. You do not have to do anything for it, and nothing is shown on the screen.
 
 The driver accepts the confirmation when it has shown the desktop for one minute, has completed at least one new
 picture in that time, and has no picture that it was asked to show and did not show. A desktop where nothing moves is
-a correct start: the GPU desktop draws a new picture when something on the screen changes, for example the clock of
+a normal start: the GPU desktop draws a new picture when something on the screen changes, for example the clock of
 the taskbar. Up to tester.31 the driver also wanted a new picture in the last 15 seconds, and a small blue window with
 a countdown ("Nagi start check") was shown for two minutes after each logon to make the desktop draw. That window is
 gone.
@@ -325,7 +325,7 @@ confirmed:
   only from an administrator, which is why this task does not run as the user who logs on.
 - "amdgpu-wddm startup confirm" runs the same confirmation when Windows starts, before anybody signs in, also as the
   Local System account. Without it, a PC that waits at the sign-in screen (no automatic sign-in) and that Windows
-  Update restarts twice falls back to the basic display driver at the third start. When you sign in during this
+  Update restarts twice falls back to the `Microsoft Basic Display Adapter` driver at the third start. When you sign in during this
   run, the two confirmations wait for the same start, and the one that comes second only reports that the start is
   already confirmed. Its lines in the log start with `startup:`.
 - "amdgpu-wddm start window" runs as the user who logs on, with that user's own rights (the Users group,
@@ -346,8 +346,8 @@ which looks for the driver for up to half a minute and stays silent when the dri
 switched off for safety is already recorded as such, so that notice appears at once. The other case waits out the
 half minute, because a driver still inside its own start looks the same from outside. No setting switches it off.
 
-- The driver was switched off for safety (two starts did not finish their check, so Windows now uses its basic
-  display driver: no games, low performance). The notice says that in plain words and offers three buttons:
+- The driver was switched off for safety (two starts did not finish their check, so Windows now uses its
+  `Microsoft Basic Display Adapter` driver: no games, low performance). The notice says that in plain words and offers three buttons:
   "Turn the graphics driver back on...", "Open Nagi Control App" and "Close".
 - The driver did not start for another reason. The notice says so and offers "Open Nagi Control App" and
   "Close".
@@ -377,13 +377,13 @@ longer have to run the release installer again for this.
 | Licence texts | `C:\Program Files\amdgpu-wddm\licenses` (the package's `licenses\` and `THIRD-PARTY.md`) |
 | Graphics registration | the GPU's software key: `UserModeDriverName`, `VulkanDriverName`, `OpenGLDriverName`, `OpenGLVersion`, `OpenGLFlags`. For 32-bit applications: `UserModeDriverNameWow` and `VulkanDriverNameWow`. This release writes no `OpenGLDriverNameWow`, `OpenGLVersionWow` or `OpenGLFlagsWow`: it has no 32-bit OpenGL driver (see "What this release does" below). The first entry of each `UserModeDriverName` value, the Direct3D 9 entry, holds `<>`. Also `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers`. `uninstall.cmd` puts back an `OpenGL` value from before the install, with the registry type it had. It removes the ones it added, even when the installer state file is gone. An `OpenGL` value that belongs to another driver stays. It does all that whether or not Windows still shows the GPU, because the files the values name go with the install |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
-| GPU firmware | Eight binaries beside the KMD image in Driver Store. `LICENSE.amdgpu` is in the installed `licenses` folder. The installer downloads or retrieves pinned copies before staging. The repair set retains them for offline repair. |
+| GPU firmware | Eight binaries beside the KMD image in Driver Store. `LICENSE.amdgpu` is in the installed `licenses` folder. The installer downloads or gets pinned copies before staging. The repair set retains them for offline repair. |
 | Shortcuts of Nagi Control App | Start menu and desktop, for all users: "Nagi Control App", "Nagi Control App (recovery)" in the Start menu and "Nagi Control App" on the desktop. Both places are written by default. The setup window has a box for each place. On the command line `-NoStartMenuShortcut` and `-NoDesktopShortcut` leave one out. `-StartMenuShortcut` and `-DesktopShortcut` ask for a place an earlier run left out. The box you clear holds over the restarts of the installation. `uninstall.cmd` removes all three |
 | Start confirmation | three scheduled tasks. Two run at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on and starts the control application's sign-in notice. "amdgpu-wddm startup confirm" runs the same confirmation as the Local System account when Windows starts, before any logon |
 | Settings of the person who signs in | `HKCU\Software\amdgpu-wddm\Control` of that account (language, the switches of the control application). The application itself writes this key when you change a setting. The installer does not. No administrator rights, nothing for other accounts. `uninstall.cmd` removes the key of the account that runs it, and leaves the keys of other accounts |
 | Shortcuts of an earlier release | earlier releases named the shortcuts "amdgpu-wddm Control". An install over such a release and `uninstall.cmd` remove those old shortcuts when they point at the control application. A file of that name that points elsewhere stays |
 | Nagi wallpaper | for each person who signs in after the installation is checked, Nagi Control App sets the Nagi wallpaper once (position Fill). It saves the previous background of that person first. The setup window has a box for it, on by default. `install.cmd -NoWallpaper` leaves it out. In Nagi Control App, Settings, "Nagi wallpaper" sets it again or restores the previous background. A slideshow or Windows Spotlight comes back as its last picture only. `uninstall.cmd` changes nobody's background and keeps the picture in `%LOCALAPPDATA%\amdgpu-wddm\wallpaper` |
-| Nagi on the start screen | while Windows starts, the driver draws Nagi above the ring of dots. She is there for about half a second, between the ring of dots and the black screen that follows it, so you may miss her if you look away (`docs/design/boot-logo.md`). The setup window has a box for it, on by default, and `install.cmd -NoBootLogo` leaves her out. The answer is the driver setting `BootLogo` in the shared driver state. No value of your own is on, and 0 is off. An installation over an earlier one keeps the answer you gave it. In Nagi Control App the same switch is on the Display page. `uninstall.cmd` removes the value |
+| Nagi on the start screen | While Windows starts, the driver draws Nagi above the ring of dots. She is there for about half a second, between the ring of dots and the black screen that follows it. You may miss her if you look away (`docs/design/boot-logo.md`). The setup window has a box for it, on by default, and `install.cmd -NoBootLogo` leaves her out. The answer is the driver setting `BootLogo` in the shared driver state. No value of your own is on, and 0 is off. An installation over an earlier one keeps the answer you gave it. In Nagi Control App the same switch is on the `Display` page. `uninstall.cmd` removes the value |
 | Installer state and logs | `C:\ProgramData\amdgpu-wddm` (the Control application keeps its setting backups and action log in its `control` folder) |
 
 If you type the `bcdedit` command yourself, keep the quotation marks around `'{current}'` in PowerShell.
@@ -455,7 +455,7 @@ the whole description.
   GPU route, the desktop compositor (DWM) stopped and started again every few seconds while you typed in it. So the
   driver sends these two programs to the processor. The Windows Security app (`SecHealthUI.exe`) runs on the GPU
   again: the earlier releases kept it on the processor, because DWM stopped and started again while its window was
-  open, and the fix of that DWM fault removes the need. An entry in the `Allow` list puts a program back on the GPU,
+  open, and the repair of that DWM fault removes the need. An entry in the `Allow` list puts a program back on the GPU,
   these two included. `Mode` `allowlist` gives the
   behaviour of the earlier releases: the CPU route for every program, and the GPU only for the programs in
   `Allow`. A program on the CPU route gets Direct3D feature level 10_0 only. A program that needs feature level
@@ -476,7 +476,7 @@ the whole description.
 
 ## If something fails
 
-- Preflight `fail`: correct the item that the table names, then run `install.cmd` again.
+- Preflight `fail`: change the item that the table names, then run `install.cmd` again.
 - Windows shows "Smart App Control blocked an app that may be unsafe" after you start the setup, the installer
   stops with "Smart App Control did not turn off", or a step stops with "An Application Control policy has blocked
   this file": Smart App Control is on. Turn it off by hand (see "Smart App Control and SmartScreen"), then start the
@@ -484,19 +484,18 @@ the whole description.
 - Preflight `fail` on `GPU firmware`, or the installer stops at the firmware step: the computer cannot reach the
   download addresses, or a file has a different SHA256. Connect the computer to the internet, or use
   `-FirmwareDir` (see "GPU firmware").
-- The installer stops with `stopped at step: ...`: the message names the step and the cause. Correct the cause if
+- The installer stops with `stopped at step: ...`: the message names the step and the cause. Remove the cause if
   you can, then run `install.cmd` again from the same `files` folder of the package. The installer skips the steps that are
   complete and continues at the step that failed.
-- The installer stops at the step that adds the release test certificate, with `Windows refused to add the
-  certificate to LocalMachine\Root` (or `TrustedPublisher`): setup runs as administrator, so Windows itself refused
+- The installer stops at the step that adds the release test certificate, with `Windows refused to add the certificate to LocalMachine\Root` (or `TrustedPublisher`): setup runs as administrator, so Windows itself refused
   the change. Usually an antivirus program protects the certificate store, or a policy locks the store. Allow the
   change in the antivirus program, or run the `certutil -addstore` commands that the message shows in an
   administrator command prompt. Then run setup again.
 - A file that Windows uses (for example a user-mode driver that the desktop has loaded) cannot be overwritten. The
-  installer renames it to `<name>.old-<time>`, copies the new file and deletes the old copy at the next restart.
+  installer renames it to `<name>.old-<time>`, copies the new file and removes the old copy at the next restart.
 - The screen stays black after a restart: wait two minutes. If it stays black, restart the computer with the power
-  button. After two failed starts, Windows uses Microsoft Basic Display Adapter again.
-- Windows uses Microsoft Basic Display Adapter again (no games, low performance, the picture is slow): at the next
+  button. After two failed starts, Windows uses `Microsoft Basic Display Adapter` again.
+- Windows uses `Microsoft Basic Display Adapter` again (no games, low performance, the picture is slow): at the next
   sign-in a notice says so and offers "Turn the graphics driver back on..." (see "If the graphics driver did not start,
   you see it at the sign-in"). The same button is on the home page of Nagi Control App and in "Support: actions"
   on its Recovery page.
@@ -516,8 +515,7 @@ the whole description.
   its last lines. Send them with the report: they hold the problem code of the device, the driver's own record
   of the start and of the stop, the event-log entries of that start, and the setup log sections of the
   graphics device. Nothing is sent by itself.
-- After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a
-  session`, and the desktop runs on the CPU route: run `install.cmd -Repair`. It sets the switches of the release back
+- After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a session`, and the desktop runs on the CPU route: run `install.cmd -Repair`. It sets the switches of the release back
   and restarts Windows. You can also open Nagi Control App: its home page shows the notice about this state, and
   "Turn it all back on" there opens the same things as the repair: the GPU desktop path and the automatic clock.
   The driver removes its own record of the clock at the next start. "Reopen the GPU desktop path" in "Support: actions" on the Recovery page opens
@@ -531,8 +529,8 @@ the whole description.
   number, or turn one pair of cores off on the map, and make a bug report.
 - Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks, often after the screen went
   black for a moment, or `verify.cmd` shows `[warn] DWM restarted in this session`: WinUI pointer-input loss after the
-  desktop compositor (DWM) is terminated and restarted reproduces on this Windows build also with Microsoft Basic
-  Display; restart Windows to recover. If the compositor crashed, make a bug report: a crash can still be a driver
+  desktop compositor (DWM) is stopped and restarted reproduces on this Windows build also with `Microsoft Basic Display`.
+  Restart Windows to recover. If the compositor crashed, make a bug report: a crash can still be a driver
   defect. `verify.cmd` reports only a replacement it saw: the start-confirm task records the compositor at each
   logon, and without that record the line says `unknown history`.
 
@@ -540,8 +538,8 @@ the whole description.
 
 1. Run `uninstall.cmd` as administrator (in the package's `files` folder or in `C:\Program Files\amdgpu-wddm`).
 2. The uninstaller asks nothing: starting it is the answer. It removes the driver, the files, the registry values,
-   the tasks and the certificate. The GPU goes back to Microsoft Basic Display Adapter. The uninstaller keeps
-   `C:\ProgramData\amdgpu-wddm\control` (the Control application's setting backups and action log). Delete it
+   the tasks and the certificate. The GPU goes back to `Microsoft Basic Display Adapter`. The uninstaller keeps
+   `C:\ProgramData\amdgpu-wddm\control` (the Control application's setting backups and action log). Remove it
    yourself if you do not need it.
 3. Test signing goes off again where the installer turned it on. `uninstall.cmd -KeepTestSigning` leaves it on, for
    a tester who installs another build of ours next.
@@ -566,13 +564,13 @@ The zip file contains these files:
 
 | File | Contents |
 |---|---|
-| `driver-state.txt` | driver version; clock control (mode, maximum, clocks, voltage, temperature, load, throttle reason); start health; desktop composition (CPU or GPU); video memory statistics |
+| `driver-state.txt` | driver version. Clock control (mode, maximum, clocks, voltage, temperature, load, throttle reason). Start health. Desktop composition (CPU or GPU). VRAM statistics |
 | `driver-log.txt` | the driver's internal log ring |
-| `installed-files.txt` | release version and folder; Device Manager status and problem code; the GPU's driver key (INF version and date, driver name values); driver, Vulkan manifest and library files with file version and SHA-256 |
+| `installed-files.txt` | release version and folder. Device Manager status and problem code. The GPU's driver key (INF version and date, driver name values). Driver, Vulkan manifest and library files with file version and SHA-256 |
 | `settings.txt` | the shared driver settings, their read status, and the Direct3D 12 application profiles |
 | `system.txt` | Windows build, test signing state, application version, UTC time |
-| `events.txt` | System log entries of the last 24 hours from the display driver, DirectX kernel, DWM, crash reporting, power and Plug and Play, and application errors that name the driver, DWM, Direct3D or Vulkan |
-| `dxdiag.txt` | `dxdiag /t` output (only if you select it; it takes about one minute) |
+| `events.txt` | System log entries of the last 24 hours. The sources are the GPU driver, DirectX kernel, DWM, crash reporting, power and Plug and Play. It also holds application errors that name the driver, DWM, Direct3D or Vulkan |
+| `dxdiag.txt` | `dxdiag /t` output (only if you select it, and it takes about one minute) |
 | `d3d12-caps.json`, `vulkan-summary.txt` | Direct3D 12 and Vulkan capabilities (only if you select them) |
 
 Before the preview, the application removes from every file: your user name, your profile path (shown as
@@ -581,7 +579,7 @@ number, machine ID, product ID or UUID. It also removes the account name of ever
 the security identifiers, and the computer name of an event entry. Versions, hashes and hardware IDs stay, because
 we need them.
 If you find personal data in the preview, do not send the file, and tell us in the bug report so that we can
-correct the application.
+repair the application.
 
 ## Optional Windows tuning
 
