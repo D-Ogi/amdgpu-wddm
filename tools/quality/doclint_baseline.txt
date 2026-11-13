@@ -65,7 +65,6 @@
 10	docs/design/vsync-diagnostic-samples.md
 20	docs/design/wddm-start-confirmation.md
 2	docs/dxvk-engine-commit-map.md
-38	docs/gui/interfaces.md
 19	docs/hardware.md
 8	docs/init-sequence.md
 11	docs/research/build-quality-gates.md
