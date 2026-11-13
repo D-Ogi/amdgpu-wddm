@@ -15,7 +15,7 @@ OS paging remains on the original physical path.
 
 M420 selects aperture2 for OS paging DMA and observes nonzero addresses with
 passing shader/model regressions. M421 supplies a typed64-byte private record
-and mixed ring consumer; host tests and WDK build pass. The native builder is
+and mixed ring consumer. Host tests and WDK build pass. The native builder is
 not yet implemented and the M421 DEV image is not deployed. See
 [M420](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07130-paging-dma-va/RESULT.md)
 and [M421](../../evidence/windows/2026-09-24-E27-m9-recovery/paging-native-records/RESULT.md).
@@ -25,8 +25,8 @@ and [M421](../../evidence/windows/2026-09-24-E27-m9-recovery/paging-native-recor
 Ordinary TransferVirtual/FillVirtual should consume GPU virtual addresses in
 the paging context and rely on ordered GPU page-table updates. Their builder
 should emit bounded command bytes without a per-operation page-graph allocation.
-This can remove the ordinary path's allocation failure and large capture cost;
-it does not automatically solve table-copy aliasing or every transfer dependency.
+This can remove the ordinary path's allocation failure and large capture cost.
+It does not automatically solve table-copy aliasing or every transfer dependency.
 Do not silently substitute empty work for the existing capture path.
 
 ## Established inputs
@@ -39,7 +39,7 @@ Do not silently substitute empty work for the existing capture path.
   DmaBufferVirtualAddress describe the OS DMA buffer's GPU address.
 - WddmPublishPagingRecordCore already writes command bytes into that DMA buffer.
   Private records identify exact accepted ranges and are retained with submission.
-  The OS buffer is a candidate IB backing; validate address/context and lifetime
+  The OS buffer is a candidate IB backing. Validate address/context and lifetime
   instead of inventing another allocating per-operation IB pool.
 - Current node1 copies private physical commands directly into SDMA0 and appends
   a fence. Its interrupt/DPC completion and one-in-flight ownership stay useful.
@@ -61,14 +61,14 @@ requirements alone. See [M12.1](sparse-wddm.md) for that integration boundary.
 ## Next implementation and positive controls
 
 1. Done for VMID0 in M417. Exercise the new INDIRECT path using an owned, retained diagnostic IB at
-   VMID0. Place distinctive fill/copy commands inside it, verify every output
+   VMID0. Place distinctive fill/copy commands inside it, validate every output
    byte and the outer fence. Existing direct-ring control is the comparison.
 2. Reserve a distinct paging VMID in both normal submission and diagnostic
    policies. Initialize its root, limits, invalidation engine and ownership
-   from the existing AMD helpers. Put root/TLB changes in GPU command order;
-   do not introduce long DISPATCH_LEVEL CPU polling.
+   from the existing AMD helpers. Put root/TLB changes in GPU command order.
+   Do not introduce long DISPATCH_LEVEL CPU polling.
 3. Establish a valid nonzero-VMID IB mapping and CSA/preemption policy. In Linux,
-   amdgpu_sdma_get_csa_mc_addr returns0 for VMID0 or disabled gfx.mcbp; that rule
+   amdgpu_sdma_get_csa_mc_addr returns0 for VMID0 or disabled gfx.mcbp. That rule
    is not proof that any arbitrary nonzero-VMID Windows submission can use0.
    A known-pattern alias control must distinguish VA translation from accidentally
    accessing the same MC address. Include system-backed pages and a later mapping.
@@ -83,8 +83,8 @@ requirements alone. See [M12.1](sparse-wddm.md) for that integration boundary.
    release execution ownership. Stop/device-generation code retains resources
    until retirement is established. Then test actual residency and inference.
 
-The scope includes overlap/table hazards and unsupported physical delivery;
-those cannot be declared solved by testing disjoint copy/fill. Existing graph
+The scope includes overlap/table hazards and unsupported physical delivery.
+Those cannot be declared solved by testing disjoint copy/fill. Existing graph
 handling remains until an explicit replacement is proved. A current main Mesa
 upgrade and working model outputs do not close this DMA resource contract.
 
@@ -92,7 +92,7 @@ upgrade and working model outputs do not close this DMA resource contract.
 
 The local Microsoft `display/system-paging-process.md` (same110f60ea snapshot)
 identifies OS-owned paging DMA buffers and the paging process address space.
-Use its CPU_VIRTUAL initialization contract; the private diagnostic root from
+Use its CPU_VIRTUAL initialization contract. The private diagnostic root from
 M419 is not a substitute for the OS root or its memory ownership.
 
 Local `ref/ddi-display/d3dkmddi.md`, DXGKCB_CREATECONTEXTALLOCATION, explicitly
@@ -100,7 +100,7 @@ limits GPU context allocations to non-system contexts. Therefore do not use
 that callback as the system paging CSA solution. Establish valid backing and
 mapping for the system-context path before enabling native IB submission.
 An embedded, aligned CSA region in the retained OS DMA allocation is a candidate
-requiring proof; a zero CSA is not justified by the VMID0 control. Keep CSA and
+requiring proof. A zero CSA is not justified by the VMID0 control. Keep CSA and
 IB payload outside each other's ranges and retain both until actual completion.
 
 Typed private records must distinguish direct VMID0 packets from VMID2 IB
@@ -114,18 +114,18 @@ page-table publication or silently weaken alias/overlap semantics.
 ## M422 - Native ordinary OS integration measured
 
 [Candidate131](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07131-native-os-paging/RESULT.md) implements steps4-5 for admitted system-context
-ordinary copy/fill, with per-page DMA identity and GPU permission checks.
+ordinary copy/fill, with per-page DMA identity and GPU permission validation.
 Native21transfers/89fills execute alongside physical table/alias commands,
 with matching shader/model and1GiB mixed-path readback. CSA storage is mapped
-and writable; forced preemption/restoration is still unproved. Large residency
-transfers remain on the physical path; diagnose admission before removing
+and writable. Forced preemption/restoration is still unproved. Large residency
+transfers remain on the physical path. Diagnose admission before removing
 capture resources. Logical page-table publication and full M9 gates remain.
 
 
 ### M423 - Fragmented native DMA admission fixed
 
-[Candidate132](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07132-exact-dma-disjoint/RESULT.md) checks actual pages when coarse DMA/data bounds
+[Candidate132](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07132-exact-dma-disjoint/RESULT.md) validates actual pages when coarse DMA/data bounds
 overlap. It admits1GiB residency transfers natively, with0capture plans in
-64MiB/model/1GiB controls, correct full GPU readbacks and noTDR. This supersedes
+64MiB/model/1GiB controls, accurate full GPU readbacks and noTDR. This supersedes
 M422's measured large-transfer exclusion. Preallocated arenas and physical
-fallback still exist; complete resource/cache/lifetime/startup gates stay open.
+fallback still exist. Complete resource/cache/lifetime/startup gates stay open.
