@@ -60,7 +60,7 @@ functions.
 | Function | When the core calls it |
 |---|---|
 | `run` | once, before Windows starts. This is the work of the module |
-| `probe` | in place of `run`, when the module is off and `probe=1` is set. It says which protocols the firmware has for the module, and it changes nothing |
+| `probe` | in place of `run`, when the module is off and `probe=1` is set. It says which protocols the firmware has for the module, and it changes nothing. The probe of the core unlock also identifies the register BAR and reads one named register (refer to [the core unlock page](efi-core-unlock.md)) |
 | `gate` | once, with the bytes of the next image. The answer is pass, bind or deny |
 | `loaded` | after the firmware loaded that image, with the status |
 | `unwind` | when the image did not start or returned |
@@ -116,7 +116,7 @@ An option is `name=value`. An option that no module understands is counted on th
 | `acpi.stubs=0` | 1 | no method stub table |
 | `sb.mode=audit`, `sb.mode=enforce` | `audit` | report each verdict, or refuse an image that is not allowed |
 | `acpi.apply=0` | 1 | the ACPI module builds and checks its tables, and installs and removes none |
-| `probe=1` | 0 | a module that is off says which protocols the firmware has for it |
+| `probe=1` | 0 | a module that is off says which protocols the firmware has for it. The core unlock also gives its register BAR lines |
 | `log=0`, `log=1`, `log=line` | `1` | the log file: none, written before the next image starts, or written after each line |
 
 ### The log file
@@ -422,7 +422,7 @@ Each step uses `log=line` and reads `bc250-stage.log` in Windows after the start
 
 1. Copy `bc250-stage.efi` to `\EFI\BC250\` on the EFI System Partition of the Windows disk. Start it with
    `unlock=0 acpi=0 sb=0 probe=1`. Read the log: the core runs, no module runs, the probe lines give the presence
-   of the four protocols, and Windows starts.
+   of the four protocols and the register BAR lines of the core unlock, and Windows starts.
 2. Start it with `unlock=0 sb=0 acpi.apply=0`. Read the plan of the ACPI module. Then start it with
    `unlock=0 sb=0`. Read the lines of the ACPI module. In Windows, examine the processor devices, the idle
    states and the ACPI errors of the System log.

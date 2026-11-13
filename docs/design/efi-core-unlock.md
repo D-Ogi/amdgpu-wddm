@@ -25,11 +25,12 @@ starts the Windows Boot Manager. The application changes no firmware setting and
 | `src/cu_decide.c` | the decision table below, a pure function of four observations | yes, every combination |
 | `src/cu_run.c` | the steps of one start, over a table of operations | yes, with recorded operations |
 | `src/cu_smu.c` | the message, over the shim's transport and policy | yes, against a model of queue 3 |
+| `src/cu_bar.c` | the identification of the register BAR: the descriptor parse, the access path and the positive control | yes, with test descriptors and a model of the control read |
 | `src/cu_options.c` | the load options of this module, read from the options of the stage | yes |
 | `src/cu_msr.c` | the register list of the report and the CPUID check before each read | yes, with a model of CPUID |
 | `src/cu_report.c` | the text of the report | yes, with the stored tables of unit A |
 | `src/report_uefi.c` | the UEFI binding of the report: MP Services, the register reads, GOP, the report file | no, the lab runs it |
-| `src/cu_module.c` | the UEFI binding of the module: the operations and the reset | no, the lab runs it |
+| `src/cu_module.c` | the UEFI binding of the module: the operations, the dump of the register BAR and the reset | the probe only, against a model of the firmware. The lab runs the rest |
 | `../lib/acpi/efl_acpi.c` | shared: the FADT reset register and the MADT processor count | yes, with synthetic tables |
 | `../lib/acpi/efl_aml.c` | shared: the name scan of a DSDT or SSDT for the report | yes, with the stored tables of unit A |
 | `../lib/efl_smbios.c` | shared: the SMBIOS table in the form the driver's identity check reads | yes, with the driver's check |
@@ -100,12 +101,60 @@ earlier command is done. Then it clears the response, writes the argument and wr
 the response again.
 
 The argument check admits one argument for the store, the named register. It never admits 0, which hangs the
-firmware. The register BAR is identified twice, as `driver/kmd/mmio.c` does it: by the BAR in the configuration
-header, and by a memory resource of `BC250_BAR5_LENGTH` at that address. The application does not turn on the
-memory decode of the GPU function. When the decode is off, it sends nothing.
+firmware. Before step 1, the application identifies the register BAR. Refer to the next section.
 
 Boot services have no monotonic clock that every firmware has. The clock of the transport is therefore the sum of
 the stalls that it asked for. The transport also bounds each poll by its iteration count, so each poll ends.
+
+## The register BAR
+
+The application identifies the register BAR with two proofs, as `driver/kmd/mmio.c` does it. The first proof is
+the address that BAR5 of the configuration header holds. The second proof is a positive control: a read of a known
+register through the access path to that address. The application sends a message only when both proofs hold.
+
+| Step | What | A refusal when |
+|---|---|---|
+| 1 | The configuration header that the board identity read: the command register and BAR4 and BAR5 | the memory decode is off. BAR4 is a 64-bit memory BAR, so BAR5 is its upper half. BAR5 is not a 32-bit memory BAR. BAR5 holds no address |
+| 2 | `GetBarAttributes` of the PCI I/O protocol for each BarIndex from 0 to 5. The resource descriptors are read as bytes up to the end tag | a memory descriptor at the address of BAR5 has a length that is not 0 and not `BC250_BAR5_LENGTH`. More than one BarIndex has the exact descriptor |
+| 3 | The access path. One BarIndex with a memory descriptor of `BC250_BAR5_LENGTH` at the address: PCI I/O `Mem.Read` and `Mem.Write` with that BarIndex. No such BarIndex: the PCI Root Bridge I/O protocol at the address. The root bridge must be the only root bridge of the GPU function's segment that has a memory window that holds BAR5. A segment with one root bridge and no complete window list also counts | no BarIndex has the descriptor and no single root bridge serves the address |
+| 4 | The positive control: one read of `GB_ADDR_CONFIG` (offset from `SOC15_REG_OFFSET` over the AMD headers) through the access path | the read fails, or the value is not `0x00000044` |
+
+The control value is the value of unit A before the driver, under Linux and under Windows (facts M5 and M18). It is
+not the golden value of amdgpu. `GB_ADDR_CONFIG` is a named register of the sweeps of those facts, so the read is
+not a read of an unknown address (fact M16).
+
+The application does not change the command register, writes no configuration register, and does not size a BAR.
+The descriptors of the firmware only select the access path. A firmware that gives no descriptor, or a descriptor
+of length 0, does not stop the unlock. A descriptor that contradicts the configuration header does.
+
+Before each refusal or message, the log has a dump of what the firmware said: the vendor and device ID, the
+command and status registers, the six BAR dwords of the header, and for each BarIndex the status of
+`GetBarAttributes`, its `Supports` value and each field of each descriptor up to the end tag. The root bridges of
+the segment follow, with their windows. The lines start with `core-unlock: bar:`. With `unlock=0 probe=1`, the
+module runs the dump, the identification and the control read, and sends no message.
+
+### Why kit r2 step s5a stopped
+
+The log of kit r2 step s5a on unit A, BIOS P3.00, has the line "BAR5 is not the register BAR: length 0x0 at
+0x300000". The code of that kit called `GetBarAttributes` with BarIndex 5 and read the answer as one QWORD
+descriptor.
+
+What the sources prove:
+
+- UEFI 2.10 section 14.4 calls BarIndex "the BAR index of the standard PCI Configuration header". EDK2
+  `PciBusDxe` (commit `8628578dacd3`) counts a 64-bit BAR as one index (`PciParseBar` returns the offset after the upper dword, and the
+  loop of `GatherDeviceInfo` adds 1 to the index). Unit A has two 64-bit BARs before BAR5 (lspci of
+  `evidence/linux/2026-09-22-E21-linux-reference-4`). Thus in EDK2, BAR5 is BarIndex 3, and BarIndex 5 has no BAR:
+  `PciIoGetBarAttributes` returns `EFI_UNSUPPORTED`.
+- The firmware of unit A answered BarIndex 5 with success. Thus its PCI bus driver does not behave as EDK2 does
+  here.
+- The code of kit r2 also used BarIndex 5 for `Mem.Read` and `Mem.Write`. With the EDK2 numbering, that is not the
+  register BAR either.
+- The kit r2 code did not log the descriptor type. A DWORD descriptor read as a QWORD descriptor also gives
+  wrong numbers.
+
+What is a hypothesis: that the firmware numbers BarIndex as EDK2 does, and that 0x300000 with length 0 is the empty
+entry of an index that has no BAR. The dump of kit r3 tells.
 
 ## The reset
 
@@ -186,7 +235,9 @@ Nothing of this application has run on a board.
 | Question | State |
 |---|---|
 | Does queue 3 answer before the operating system starts? | not measured |
-| Does the BIOS leave the GPU function's memory decode on? | not measured |
+| Does the BIOS leave the GPU function's memory decode on? | the log of kit r2 step s5a passed the decode check once. Not in the facts |
+| Which BarIndex has the register BAR, and does the firmware fill its descriptor? | not measured. The dump of kit r3 tells |
+| Does `GB_ADDR_CONFIG` read `0x00000044` before the operating system starts? | not measured. Steps `s1` and `s5a` of kit r3 read it |
 | Which reset keeps the mask: `reset=warm`, `reset=fadt` or neither? | not measured. A Windows restart keeps it (M961) |
 | Does the firmware have the MP Services protocol, and what does it count with 6 and with 8 cores? | not measured |
 | Does the MADT list 12 or 16 enabled processors in each state? | not measured |
