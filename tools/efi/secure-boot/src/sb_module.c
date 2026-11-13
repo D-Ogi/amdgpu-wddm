@@ -1,38 +1,52 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /*
  * The Secure Boot check as a module of the BC-250 stage (docs/design/efi-resident-stage.md, "The Secure Boot
- * module"). This file is the UEFI binding. The verdict on an image comes from sb_verify.c.
+ * module"). This file is the UEFI binding. The verdict on an image comes from sb_verify.c, and the rule for the
+ * inputs of the enforce mode from sb_policy.c.
  *
  * The module checks an image at two places:
- * - The gate: the core gives it the bytes of the Windows Boot Manager before the start.
- * - The hook: it replaces the FileAuthentication function of the firmware's EFI_SECURITY2_ARCH_PROTOCOL (PI
- *   Specification, volume 2), which the firmware core calls for each image that LoadImage loads. The firmware's
- *   own function still runs after the check.
+ * - The gate: the core gives it the bytes of the next image before the start.
+ * - The hook: the module puts its own EFI_SECURITY2_ARCH_PROTOCOL (PI Specification, volume 2) in the place of
+ *   the firmware's, with ReinstallProtocolInterface. The firmware core calls the protocol for each image that
+ *   LoadImage loads. The module's function gives the verdict and then calls the function of the firmware. The
+ *   module does not write into the structure of the firmware, which can be in read-only memory.
  *
  * sb.mode=audit (the default) reports each verdict and refuses nothing. sb.mode=enforce refuses an image that is
- * not allowed. The module gives no Secure Boot variable to the operating system, and it calls SetVariable nowhere.
+ * not allowed, and it refuses every image when its inputs have a defect. The module gives no Secure Boot variable
+ * to the operating system. It reads the db and dbx variables of the firmware when they are there, and it calls
+ * SetVariable nowhere.
  */
 #include <stddef.h>
 #include <string.h>
 #include "efi.h"
 #include "efl_text.h"
 #include "stage.h"
+#include "sb_policy.h"
 #include "sb_siglist.h"
 #include "sb_verify.h"
 
 #define SB_NAME			"secure-boot"
 #define SB_DATABASE_MAX_BYTES	(1024u * 1024u)
+#define SB_UNWIND_WAIT_US	10000000u
+
 static const EFI_GUID security2_guid = EFI_SECURITY2_ARCH_PROTOCOL_GUID;
+/* EFI_IMAGE_SECURITY_DATABASE_GUID (edk2 MdePkg/Include/Guid/ImageAuthentication.h, commit 8628578dacd3). */
+static const EFI_GUID database_guid = { 0xD719B2CB, 0x3D3A, 0x4596, { 0xA3, 0xBC, 0xDA, 0xD0, 0x0E, 0x67, 0x65, 0x6F } };
+
 enum { MODE_AUDIT = 0, MODE_ENFORCE = 1 };
 static const char *const mode_names[] = { "audit", "enforce" };
 
 static struct stage *sb_stage;
 static int mode;
+static const char *defect;		/* enforce mode: the reason why every image is refused, or NULL */
 static unsigned char *db, *dbx;
 static struct sb_databases databases;
-static EFI_SECURITY2_ARCH_PROTOCOL *security2;
-static EFI_SECURITY2_FILE_AUTHENTICATION firmware_check;
 static unsigned hook_calls;
+
+/* The hook. security2_handle is not NULL while the module's protocol is installed. */
+static EFI_HANDLE security2_handle;
+static EFI_SECURITY2_ARCH_PROTOCOL *firmware_security2;
+static EFI_SECURITY2_ARCH_PROTOCOL stage_security2;
 
 static void say_verdict(struct stage *stage, const char *what, size_t bytes, const struct sb_result *result)
 {
@@ -45,38 +59,122 @@ static void say_verdict(struct stage *stage, const char *what, size_t bytes, con
 	}
 	digest[2u * sizeof(result->digest)] = 0;
 	stage_sayf(stage, SB_NAME, "%s, %u bytes: %s", what, (unsigned)bytes, sb_verdict_text(result->verdict));
-	if (result->verdict != SB_NOT_AN_IMAGE) stage_sayf(stage, SB_NAME, "  Authenticode SHA-256 %s", digest);
+	if (result->verdict != SB_NOT_AN_IMAGE && result->verdict != SB_BAD_DATABASE)
+		stage_sayf(stage, SB_NAME, "  Authenticode SHA-256 %s", digest);
 }
 
 /* ---- the databases ------------------------------------------------------------------------------- */
 
-/* Reads one database file beside the stage. 1 when it is there and well formed, 0 when it is absent, -1 when it
- * is there and cannot be used. */
-static int read_database(struct stage *stage, const char *name, unsigned char **data, size_t *bytes)
+static enum sb_source checked(struct stage *stage, const char *what, unsigned char **data, size_t *bytes)
 {
-	unsigned short path[STAGE_PATH_CHARS];
 	struct sb_siglist_count count;
-	enum stage_read read;
-	*data = NULL;
-	*bytes = 0;
-	if (!stage_sibling(stage, name, path, STAGE_PATH_CHARS)) return 0;
-	read = stage_read_file(stage, path, SB_DATABASE_MAX_BYTES, data, bytes);
-	if (read == STAGE_READ_ABSENT) return 0;
-	if (read != STAGE_READ_OK) {
-		stage_sayf(stage, SB_NAME, "%s did not read", name);
-		return -1;
-	}
 	if (!sb_siglist_count(*data, *bytes, &count)) {
-		stage_sayf(stage, SB_NAME, "%s is not a well-formed signature list", name);
+		stage_sayf(stage, SB_NAME, "%s is not a well-formed signature database", what);
 		stage_free(stage, *data);
 		*data = NULL;
 		*bytes = 0;
-		return -1;
+		return SB_SOURCE_BROKEN;
 	}
-	stage_sayf(stage, SB_NAME, "%s: %u certificates, %u SHA-256 digests", name, count.x509, count.sha256);
-	if (count.other)
-		stage_sayf(stage, SB_NAME, "%s: %u entries of a type that this stage does not read", name, count.other);
+	stage_sayf(stage, SB_NAME, "%s: %u certificates, %u image digests, %u certificate digests", what, count.x509,
+		   count.sha256, count.x509_sha256);
+	if (count.other) stage_sayf(stage, SB_NAME, "%s: %u entries of a type that this stage does not read", what, count.other);
+	return SB_SOURCE_GOOD;
+}
+
+/* One database file beside the stage. */
+static enum sb_source read_file(struct stage *stage, const char *name, unsigned char **data, size_t *bytes)
+{
+	unsigned short path[STAGE_PATH_CHARS];
+	enum stage_read read;
+	*data = NULL;
+	*bytes = 0;
+	if (!stage_sibling(stage, name, path, STAGE_PATH_CHARS)) return SB_SOURCE_ABSENT;
+	read = stage_read_file(stage, path, SB_DATABASE_MAX_BYTES, data, bytes);
+	if (read == STAGE_READ_ABSENT) return SB_SOURCE_ABSENT;
+	if (read != STAGE_READ_OK) {
+		stage_sayf(stage, SB_NAME, "%s did not read", name);
+		return SB_SOURCE_BROKEN;
+	}
+	return checked(stage, name, data, bytes);
+}
+
+/* One database variable of the firmware. GetVariable only: nothing is written. */
+static enum sb_source read_variable(struct stage *stage, const char *what, const CHAR16 *name, unsigned char **data,
+				    size_t *bytes)
+{
+	EFI_GUID vendor = database_guid;
+	CHAR16 copy[8];
+	UINTN size = 0;
+	EFI_STATUS status;
+	size_t i;
+	*data = NULL;
+	*bytes = 0;
+	for (i = 0; i + 1u < sizeof(copy) / sizeof(copy[0]) && name[i]; i++) copy[i] = name[i];
+	copy[i] = 0;
+	status = stage->st->RuntimeServices->GetVariable(copy, &vendor, NULL, &size, NULL);
+	if (status == EFI_NOT_FOUND) return SB_SOURCE_ABSENT;
+	if (status != EFI_BUFFER_TOO_SMALL || size == 0 || size > SB_DATABASE_MAX_BYTES) {
+		stage_sayf(stage, SB_NAME, "%s did not read, status 0x%llx", what, (unsigned long long)status);
+		return SB_SOURCE_BROKEN;
+	}
+	*data = stage_alloc(stage, (size_t)size);
+	if (*data == NULL) return SB_SOURCE_BROKEN;
+	status = stage->st->RuntimeServices->GetVariable(copy, &vendor, NULL, &size, *data);
+	if (EFI_ERROR(status)) {
+		stage_sayf(stage, SB_NAME, "%s did not read, status 0x%llx", what, (unsigned long long)status);
+		stage_free(stage, *data);
+		*data = NULL;
+		return SB_SOURCE_BROKEN;
+	}
+	*bytes = (size_t)size;
+	return checked(stage, what, data, bytes);
+}
+
+/* The file and the variable as one database: the lists of the one after the lists of the other. Frees both
+ * parts. NULL with 0 bytes when both are empty. 0 when there is no memory for the whole. */
+static int join(struct stage *stage, unsigned char *first, size_t first_bytes, unsigned char *second,
+		size_t second_bytes, unsigned char **whole, size_t *whole_bytes)
+{
+	*whole = NULL;
+	*whole_bytes = first_bytes + second_bytes;
+	if (*whole_bytes != 0) {
+		*whole = stage_alloc(stage, *whole_bytes);
+		if (*whole != NULL) {
+			if (first_bytes) memcpy(*whole, first, first_bytes);
+			if (second_bytes) memcpy(*whole + first_bytes, second, second_bytes);
+		}
+	}
+	stage_free(stage, first);
+	stage_free(stage, second);
+	if (*whole_bytes != 0 && *whole == NULL) {
+		*whole_bytes = 0;
+		return 0;
+	}
 	return 1;
+}
+
+static void read_databases(struct stage *stage)
+{
+	unsigned char *file, *variable;
+	size_t file_bytes, variable_bytes;
+	struct sb_siglist_count count;
+	struct sb_inputs inputs;
+	int whole;
+
+	memset(&inputs, 0, sizeof(inputs));
+	inputs.db_file = read_file(stage, "db.esl", &file, &file_bytes);
+	inputs.db_firmware = read_variable(stage, "the db variable of the firmware", u"db", &variable, &variable_bytes);
+	whole = join(stage, file, file_bytes, variable, variable_bytes, &db, &databases.db_bytes);
+	inputs.dbx_file = read_file(stage, "dbx.esl", &file, &file_bytes);
+	inputs.dbx_firmware = read_variable(stage, "the dbx variable of the firmware", u"dbx", &variable, &variable_bytes);
+	whole = join(stage, file, file_bytes, variable, variable_bytes, &dbx, &databases.dbx_bytes) && whole;
+	databases.db = db;
+	databases.dbx = dbx;
+	if (sb_siglist_count(dbx, databases.dbx_bytes, &count)) inputs.dbx_unread = count.other;
+
+	if (inputs.db_file == SB_SOURCE_ABSENT) stage_say(stage, SB_NAME, "no db.esl beside the stage");
+	if (inputs.dbx_file == SB_SOURCE_ABSENT) stage_say(stage, SB_NAME, "no dbx.esl beside the stage");
+	defect = whole ? sb_enforce_defect(&inputs) : "no memory for the databases";
 }
 
 /* ---- the hook ------------------------------------------------------------------------------------ */
@@ -85,8 +183,9 @@ static EFI_STATUS EFIAPI check_file(const EFI_SECURITY2_ARCH_PROTOCOL *this, con
 				    VOID *buffer, UINTN bytes, BOOLEAN boot_policy)
 {
 	struct sb_result result;
+	(void)this;
 	/* Without a buffer the call is the question "may this device path be connected", not an image check. */
-	if (buffer == NULL) return firmware_check(this, file, buffer, bytes, boot_policy);
+	if (buffer == NULL) return firmware_security2->FileAuthentication(firmware_security2, file, buffer, bytes, boot_policy);
 	hook_calls++;
 	sb_verify_image(buffer, bytes, &databases, &result);
 	say_verdict(sb_stage, "image at LoadImage", bytes, &result);
@@ -94,40 +193,88 @@ static EFI_STATUS EFIAPI check_file(const EFI_SECURITY2_ARCH_PROTOCOL *this, con
 		stage_say(sb_stage, SB_NAME, "refused");
 		return EFI_ACCESS_DENIED;	/* the firmware core does not load the image */
 	}
-	return firmware_check(this, file, buffer, bytes, boot_policy);
+	return firmware_security2->FileAuthentication(firmware_security2, file, buffer, bytes, boot_policy);
+}
+
+/* The one handle that carries the protocol, or NULL. */
+static EFI_HANDLE security2_owner(struct stage *stage, EFI_SECURITY2_ARCH_PROTOCOL *interface)
+{
+	EFI_HANDLE *handles = NULL, owner = NULL;
+	UINTN count = 0, i, owners = 0;
+	if (EFI_ERROR(stage->bs->LocateHandleBuffer(ByProtocol, &security2_guid, NULL, &count, &handles))) return NULL;
+	for (i = 0; i < count; i++) {
+		VOID *found = NULL;
+		if (!EFI_ERROR(stage->bs->HandleProtocol(handles[i], &security2_guid, &found)) && found == interface) {
+			owner = handles[i];
+			owners++;
+		}
+	}
+	if (handles != NULL) stage->bs->FreePool(handles);
+	return owners == 1u ? owner : NULL;
 }
 
 static void hook(struct stage *stage)
 {
-	if (EFI_ERROR(stage->bs->LocateProtocol(&security2_guid, NULL, (VOID **)&security2)) || security2 == NULL ||
-	    security2->FileAuthentication == NULL) {
-		security2 = NULL;
+	EFI_SECURITY2_ARCH_PROTOCOL *found = NULL;
+	EFI_HANDLE owner;
+	EFI_STATUS status;
+
+	/* The line comes first: when the firmware stops in the next call, the console says where. */
+	stage_say(stage, SB_NAME, "putting the image check in front of the Security2 protocol of the firmware");
+	if (EFI_ERROR(stage->bs->LocateProtocol(&security2_guid, NULL, (VOID **)&found)) || found == NULL ||
+	    found->FileAuthentication == NULL) {
 		stage_say(stage, SB_NAME, "the firmware has no Security2 protocol: only the image that the stage starts is checked");
 		return;
 	}
-	firmware_check = security2->FileAuthentication;
-	security2->FileAuthentication = check_file;
+	owner = security2_owner(stage, found);
+	if (owner == NULL) {
+		stage_say(stage, SB_NAME, "the Security2 protocol is not on exactly one handle: only the image that the stage "
+					  "starts is checked");
+		return;
+	}
+	firmware_security2 = found;
+	stage_security2.FileAuthentication = check_file;
+	status = stage->bs->ReinstallProtocolInterface(owner, &security2_guid, firmware_security2, &stage_security2);
+	if (EFI_ERROR(status)) {
+		stage_sayf(stage, SB_NAME, "the firmware did not take the image check, status 0x%llx: only the image that the "
+					   "stage starts is checked", (unsigned long long)status);
+		firmware_security2 = NULL;
+		return;
+	}
+	security2_handle = owner;
+	stage_say(stage, SB_NAME, "the image check is in place");
+}
+
+/* Puts the protocol of the firmware back. The module's structure is in the image of the stage, and the firmware
+ * frees that image when the stage returns. So when the firmware does not take its own protocol back, the stage
+ * must not return: it restarts the board. */
+static void unhook(struct stage *stage)
+{
+	EFI_STATUS status;
+	if (security2_handle == NULL) return;
+	status = stage->bs->ReinstallProtocolInterface(security2_handle, &security2_guid, &stage_security2, firmware_security2);
+	security2_handle = NULL;
+	if (!EFI_ERROR(status)) return;
+	stage_sayf(stage, SB_NAME, "the firmware did not take its Security2 protocol back, status 0x%llx",
+		   (unsigned long long)status);
+	stage_say(stage, SB_NAME, "the stage cannot return with its check in the firmware: restart in 10 seconds");
+	stage->bs->Stall(SB_UNWIND_WAIT_US);
+	stage->st->RuntimeServices->ResetSystem(EfiResetCold, EFI_SUCCESS, 0, NULL);
+	for (;;) {}
 }
 
 /* ---- the module ---------------------------------------------------------------------------------- */
 
 static void sb_module_run(struct stage *stage)
 {
-	int have_db, have_dbx;
 	sb_stage = stage;
 	mode = (int)stage_option_choice(&stage->options, "sb.mode", mode_names, 2u, MODE_AUDIT);
-
-	have_db = read_database(stage, "db.esl", &db, &databases.db_bytes);
-	have_dbx = read_database(stage, "dbx.esl", &dbx, &databases.dbx_bytes);
-	databases.db = db;
-	databases.dbx = dbx;
-	if (have_db == 0) stage_say(stage, SB_NAME, "no db.esl beside the stage: no image can be allowed");
-	if (have_dbx == 0) stage_say(stage, SB_NAME, "no dbx.esl beside the stage: no image is forbidden");
-	/* The stage fails open on a defect of its own inputs: without a usable db, or with a dbx that is there and
-	 * does not read, enforce would refuse or allow for the wrong reason. */
-	if (mode == MODE_ENFORCE && (have_db != 1 || have_dbx < 0)) {
-		stage_say(stage, SB_NAME, "sb.mode=enforce needs a usable db.esl and no broken dbx.esl: the mode is audit");
-		mode = MODE_AUDIT;
+	read_databases(stage);
+	if (mode == MODE_ENFORCE && defect != NULL) {
+		/* Fail closed: the operator asked for a refusal, and the inputs cannot give a sound verdict. */
+		stage_sayf(stage, SB_NAME, "mode enforce: %s", defect);
+		stage_say(stage, SB_NAME, "mode enforce with a defect in its inputs: the next image is refused");
+		return;
 	}
 	stage_sayf(stage, SB_NAME, "mode %s: %s", mode_names[mode],
 		   mode == MODE_ENFORCE ? "an image that is not allowed does not start"
@@ -139,6 +286,10 @@ static enum stage_gate sb_module_gate(struct stage *stage, const unsigned char *
 {
 	struct sb_result result;
 	hook_calls = 0;
+	if (mode == MODE_ENFORCE && defect != NULL) {
+		stage_sayf(stage, SB_NAME, "the next image is refused: %s", defect);
+		return STAGE_GATE_DENY;
+	}
 	if (image == NULL) {
 		stage_say(stage, SB_NAME, "the next image did not read, so it is not checked");
 		return mode == MODE_ENFORCE ? STAGE_GATE_DENY : STAGE_GATE_PASS;
@@ -153,18 +304,19 @@ static void sb_module_loaded(struct stage *stage, EFI_STATUS status)
 {
 	(void)status;
 	/* The self-check of the hook: the load that the core just did must have come through it. */
-	if (security2 != NULL)
+	if (security2_handle != NULL)
 		stage_sayf(stage, SB_NAME, "the firmware asked the image check %u time(s) for this load%s", hook_calls,
-			   hook_calls ? "" : ": this firmware core does not call Security2, the gate is the only check");
+			   hook_calls ? "" : ": this firmware core does not call it, and the gate is the only check");
 }
 
 static void sb_module_unwind(struct stage *stage)
 {
-	if (security2 != NULL && security2->FileAuthentication == check_file) security2->FileAuthentication = firmware_check;
-	security2 = NULL;
+	unhook(stage);
+	firmware_security2 = NULL;
 	stage_free(stage, db);
 	stage_free(stage, dbx);
 	db = dbx = NULL;
+	defect = NULL;
 	memset(&databases, 0, sizeof(databases));
 }
 

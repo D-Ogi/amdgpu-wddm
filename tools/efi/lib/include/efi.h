@@ -141,7 +141,8 @@ typedef struct {
 	VOID *CloseEvent;
 	VOID *CheckEvent;
 	VOID *InstallProtocolInterface;
-	VOID *ReinstallProtocolInterface;
+	EFI_STATUS (EFIAPI *ReinstallProtocolInterface)(EFI_HANDLE Handle, const EFI_GUID *Protocol, VOID *OldInterface,
+							VOID *NewInterface);
 	VOID *UninstallProtocolInterface;
 	EFI_STATUS (EFIAPI *HandleProtocol)(EFI_HANDLE Handle, const EFI_GUID *Protocol, VOID **Interface);
 	VOID *Reserved;
