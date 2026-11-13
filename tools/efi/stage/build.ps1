@@ -204,6 +204,16 @@ else {
     $result = Read-InNamespace 'ar-stubs.aml' @('DSDT.aml', 'SSDT2.aml', 'ar-idle.aml')
     if (-not (Test-Loaded $result)) { Write-Host "FAIL ACPICA did not load ar-stubs.aml into the stock namespace:`n$($result.Log)"; $code = 1 }
     else { Write-Host "ACPICA loaded ar-stubs.aml: $($result.Lines.Count) lines of ASL" }
+    # The stub table with the TPM device of trial s8 loads in place of ar-stubs.aml, and ACPICA reads the _DSM of
+    # the device as a serialized method with four arguments that compares Arg0 with the PPI UUID.
+    if (Test-Path (Join-Path $tables 'ar-stubs-tpm.aml')) {
+        $result = Read-InNamespace 'ar-stubs-tpm.aml' @('DSDT.aml', 'SSDT2.aml', 'ar-idle.aml')
+        $text = $result.Lines -join "`n"
+        if (-not (Test-Loaded $result) -or $text -notmatch 'Method \(_DSM, 4, Serialized\)' -or
+            $text -notmatch '(?i)3dddfaa6-361b-4eb4-a424-8d10089d1653') {
+            Write-Host "FAIL ACPICA did not read the TPM _DSM of ar-stubs-tpm.aml:`n$($result.Log)"; $code = 1
+        } else { Write-Host "ACPICA loaded ar-stubs-tpm.aml: Method (_DSM, 4, Serialized) with the PPI UUID, $($result.Lines.Count) lines of ASL" }
+    } else { Write-Host 'FAIL the tests wrote no ar-stubs-tpm.aml'; $code = 1 }
     # With the stubs in the namespace, the DSDT has no method without a definition.
     $result = Read-InNamespace 'DSDT.aml' @('SSDT2.aml', 'ar-idle.aml', 'ar-stubs.aml')
     $unknown = @($result.Lines | Where-Object { $_ -match 'Unknown method' })
