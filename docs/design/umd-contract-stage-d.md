@@ -2,7 +2,7 @@
 
 Read-only survey plus the decisions taken from it, 2026-09-22, against bc250kmd 0.7.24 and
 `driver/contract/` as it stood before this review (caps blob version 2, submit blobs version 1).
-Every claim carries a `file:line`; lines marked **DECISION** are this note's own choice, not
+Every claim carries a `file:line`. Lines marked **DECISION** are this note's own choice, not
 something measured. Style follows `docs/design/paging-node.md`.
 
 ## 0. Why this review, and what it found in one paragraph
@@ -16,7 +16,7 @@ kernel side that **does not use the contract at all**: `grep`ing `driver/kmd/` f
 `DXGKQAITYPE_UMDRIVERPRIVATE` outright (`wddm.c:1483-1488`, the `default:` arm's own comment names
 it). `Bc250WddmCreateAllocation` parses a different, GDI-shaped private struct,
 `BC250_WDDM_ALLOCATION_PRIVATE` (`wddm.c:138-146`), whose own comment already says what this note
-confirms: *"This is our own private data, not the user-mode contract of ADR 0008 point 8
+states: *"This is our own private data, not the user-mode contract of ADR 0008 point 8
 (driver/contract/): stage A has no user-mode driver to agree with, and the blob dies with this
 stage."* `Bc250WddmCreateContext` sets `DmaBufferPrivateDataSize = 0` (`wddm.c:1601`), so a context
 today is never handed a `bc250_umd_context_private` to fill in the first place, and
@@ -44,8 +44,7 @@ ADR 0013 point 3: *"The ICD exposes node 1 as its transfer queue family."* Measu
   (`paging-node.md` section 2, **DECISION**: *"the paging node's SDMA submissions carry only
   physical addresses and never reprogram a VMID"*), reusing `VidMmTranslate()` against the *paging
   process's* root, not a submitting process's VMID-mapped address space.
-- Node 1 is reachable **only** from `Bc250WddmSubmitCommand` (`wddm.c:2035-2041`, `hContext ==
-  NULL`, VidMm's own paging queue) - never from `Bc250WddmSubmitCommandVirtual`, which is what a
+- Node 1 is reachable **only** from `Bc250WddmSubmitCommand` (`wddm.c:2035-2041`, `hContext == NULL`, VidMm's own paging queue) - never from `Bc250WddmSubmitCommandVirtual`, which is what a
   UMD's `D3DKMTSubmitCommand` on a GPU-VA context reaches. The guard is explicit
   (`wddm.c:2061-2065`, comment): *"node == BC250_WDDM_NODE_3D: this hardware path is GfxSubmitIb's
   ... node 1's own path (GfxSubmitPaging, SDMA0, no VMID) only exists behind
@@ -63,14 +62,14 @@ accident.
 
 **DECISION, and the recommendation the task asked for:** M8's RADV winsys does not expose node 1 as
 a queue family. `BC250_UMD_F_...` / the new `submittable_node_mask` (section 2) says so
-explicitly, and README-winsys.md is corrected (section 4) to state RADV uses the gfx ring only,
+explicitly, and README-winsys.md is updated (section 4) to state RADV uses the gfx ring only,
 matching what is already true on Linux for other reasons (fact M50: RADV drops `AMD_IP_COMPUTE`
 outright for `FAMILY_NV`/GFX1013, and every dispatch already goes through the gfx ring). Reasons,
 not just the mechanical guard above:
 
 1. Building a VMID-addressed submit path for node 1 is real, undone work - ADR 0012's
    VMID-per-process/many-in-flight machinery (`gfx.c`'s ring allocator, the LRU VMID table, the
-   `emit_vm_flush` sequence) exists for node 0 only; node 1 would need its own copy or a
+   `emit_vm_flush` sequence) exists for node 0 only. Node 1 would need its own copy or a
    generalization, and `paging-node.md` section 5 explicitly chose **not** to generalize node 0
    and node 1's fence/channel state for exactly the reason that doing so would risk node 0's
    byte-for-byte regression bar. The same reasoning applies to the submit path itself.
@@ -87,7 +86,7 @@ not just the mechanical guard above:
 
 ### 1b. Per-node fence: D3DKMT monitored fences vs the KMD's internal fence slots
 
-Confirmed, not a gap: these are already two different, non-overlapping things and the contract
+Established, not a gap: these are already two different, non-overlapping things and the contract
 already models the user-visible one correctly. `bc250_umd_submit_private.fence_va`/`fence_value`
 (`bc250_umd_submit.h:254-255`) is a GPU VA the IB itself writes - a D3DKMT monitored fence
 (`D3DDDI_MONITORED_FENCE`, `README-winsys.md`'s synchronisation table) - and needs no KMD
@@ -105,7 +104,7 @@ Resolved by 1a: not exposed. See `submittable_node_mask` (section 2) and README-
 
 ### 1d. VMID/VA layout assumptions from ADR 0012 and M73
 
-Confirmed, no gap: VMID assignment is per-process and entirely invisible to a UMD (ADR 0012 point
+Established, no gap: VMID assignment is per-process and entirely invisible to a UMD (ADR 0012 point
 2, *"a context that keeps its VMID and root pays no flush at all"* - the flush is emitted by the
 KMD on the ring, never by the UMD). The one VA-layout assumption that *is* UMD-visible was already
 in the contract before this review: `BC250_UMD_A_EXACT_VA` (`bc250_umd_submit.h:64-69`) and the
@@ -117,7 +116,7 @@ change.**
 
 ### 1e. Allocation private data for VRAM vs GART
 
-Confirmed at the header level, real gap at the kernel level. `bc250_umd_alloc_private.preferred_heap`
+Established at the header level, real gap at the kernel level. `bc250_umd_alloc_private.preferred_heap`
 (`bc250_umd_submit.h:89-91`) already carries `AMDGPU_GEM_DOMAIN_VRAM`/`_GTT` field-for-field from
 RADV's own call (`radv_amdgpu_bo.c:566-592`) - nothing to add there. The real gap is that
 `Bc250WddmCreateAllocation` (`wddm.c:1767-1823`) does not know this struct exists: it parses only
@@ -134,7 +133,7 @@ mechanical dispatch - M8 work, not this review's.
 
 ### 1f. The `ac_gpu_info` fields: from the blob vs from D3DKMT queries
 
-Already fully enumerated and correct; this review re-verified it rather than finding a gap.
+Already fully enumerated and accurate. This review re-verified it rather than finding a gap.
 `README-winsys.md`'s "Device and adapter" table already separates the two: the caps blob answers
 the one-time `ac_query_gpu_info()` set (`README.md`'s whole subject), while
 `ac_drm_query_heap_info` (live, `QueryVideoMemoryInfo`), `ac_drm_query_info(TIMESTAMP)`
@@ -163,8 +162,7 @@ __u32 submittable_node_mask;   /* bit N: node N accepts a UMD/VMID-addressed Sub
 __u32 reserved_v3[15];
 ```
 
-`BC250_UMD_PRIVATE_SIZE_V3 = 1472` (was 1408). `offsetof(..., submittable_node_mask) ==
-BC250_UMD_PRIVATE_SIZE_V2` is asserted, the same pattern version 2 used against version 1
+`BC250_UMD_PRIVATE_SIZE_V3 = 1472` (was 1408). `offsetof(..., submittable_node_mask) == BC250_UMD_PRIVATE_SIZE_V2` is asserted, the same pattern version 2 used against version 1
 (`bc250_umd_private.h:330-335`). `bc250_caps_unitA.c` sets `b->submittable_node_mask = 0x1u` for
 unit A (section 5).
 
@@ -183,8 +181,8 @@ __u32 reserved_v2[3];
 ```
 
 `BC250_UMD_CONTEXT_SIZE_V2 = 80` (was 64). `bc250_umd_alloc_private` and `bc250_umd_submit_private`
-are unchanged - section 1 found no gap in either that a header field would close; the submission
-blob's existing `ip_type` field already carries what `SubmitCommandVirtual` would need to validate
+are unchanged - section 1 found no gap in either that a header field would close. The submission
+blob's existing `ip_type` field already carries what `SubmitCommandVirtual` would need to check
 per open question 8, and adding a second, redundant node-naming field to every submission (rather
 than once per context) would cost more than it catches.
 
@@ -228,21 +226,20 @@ against real DDI call shapes, not against this host-only harness.
 - `driver/contract/README.md`, "Files" table: `bc250_umd_private.h` line updated to "version 3,
   1472 bytes".
 - `driver/contract/README.md`, "Not done" section: add the three concrete kernel-side gaps this
-  review found and did not close (1a's guard already exists and is correct; 1e's `CreateAllocation`
-  dispatch; the fact that `CreateContext`/`SubmitCommandVirtual` do not read any contract struct
-  yet at all), so the next session does not have to re-derive them by reading `wddm.c` again.
+  review found and did not close. The first is 1a's guard, which already exists and is accurate. The second is 1e's
+  `CreateAllocation` dispatch. The third is the fact that `CreateContext`/`SubmitCommandVirtual` do not read any
+  contract struct yet at all. That way the next session does not have to re-derive them by reading `wddm.c` again.
 
 ## 5. Test and build results
 
 - `pwsh driver\contract\test\run.ps1 -Out P:\BC-250\scratch\contract-stage-d`: **165 checks, 0
-  failures**; **177 matched, 0 mismatched** against `radv-info.txt`; kernel-mode compile probe
-  (`/kernel /Zp8`, all four structs) compiled clean; blob reported as **1472 bytes** (was 1408).
+  failures**. **177 matched, 0 mismatched** against `radv-info.txt`. Kernel-mode compile probe
+  (`/kernel /Zp8`, all four structs) compiled clean. Blob reported as **1472 bytes** (was 1408).
   Unchanged from before this review except the size, exactly as expected for an additive,
   Mesa-invisible field.
-- `driver\kmd\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250kmd-contract
-  -UmdStub P:\BC-250\scratch\build\bc250umd-0724`: clean, `/W4 /WX`, 0 errors / 0 warnings, both
+- `driver\kmd\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250kmd-contract -UmdStub P:\BC-250\scratch\build\bc250umd-0724`: clean, `/W4 /WX`, 0 errors / 0 warnings, both
   packages signed, version 0.7.24.1 unchanged. Expected: `driver/kmd` does not include any
-  `driver/contract` header (confirmed by grep before touching anything), so this is a pure
+  `driver/contract` header (established by grep before touching anything), so this is a pure
   regression check that editing the contract did not disturb the driver build.
 - `python tools\packagecheck\packagecheck.py ... --expect-version 0.7.24`: **PASS, 0 errors, 0
   warnings, 21 checks passed**.
@@ -253,7 +250,7 @@ against real DDI call shapes, not against this host-only harness.
 1. **Whether `submittable_node_mask` should ever gain bit 1.** Answered by building the VMID-
    addressed submit path for node 1 (`paging-node.md` section 8 point 2's deferred IB/VMID route)
    and giving it a positive control - `paging-node.md`'s own E24 H4. Until that experiment exists
-   and passes, bit 1 stays clear. No lab time needed to keep the current answer; lab time needed
+   and passes, bit 1 stays clear. No lab time needed to keep the current answer. Lab time needed
    only to change it.
 2. **`Bc250WddmCreateAllocation`'s magic dispatch (section 1e).** Not a lab question - it is a code
    change (branch on `private->Magic`, GDI struct vs `bc250_umd_alloc_private`) that can be written
@@ -265,8 +262,7 @@ against real DDI call shapes, not against this host-only harness.
    `kmtprobe` already used for stage B (fact M73).
 3. **Whether `DxgkDdiCreateContext`'s future `node_ordinal` check should be enforced now that the
    field exists.** Not done in this pass: enforcing it means `CreateContext` reading
-   `pCreateContext->PrivateDriverData` at all, which it does not today (`DmaBufferPrivateDataSize =
-   0`, section 0). Wiring that up is the same M8 kernel work as 1e and is not "unambiguous" in the
+   `pCreateContext->PrivateDriverData` at all, which it does not today (`DmaBufferPrivateDataSize = 0`, section 0). Wiring that up is the same M8 kernel work as 1e and is not "unambiguous" in the
    sense the task asked for - it is the first line of the UMD/KMD contract actually being read by
    the kernel, and deserves its own reviewed change once RADV's winsys exists to write the other
    end of it.
