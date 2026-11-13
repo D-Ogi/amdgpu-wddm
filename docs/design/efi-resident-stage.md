@@ -169,7 +169,8 @@ load, which is the state without this module.
 | The `_CSD` object of a processor that has a stock scope | a copy of the firmware's bytes of that scope |
 | The `_CSD` object of a processor after the stock scopes | built: `{ 6, 0, position / 2, 0xFE, 2, 0 }`. The module builds it only when each stock scope obeys the same rule. The two processors of the pair must also have neighbour APIC IDs in the MADT at run time |
 | The target of a scope | the `Processor` object of the DSDT whose processor ID is the processor UID of the MADT entry, read at run time |
-| The names and the argument count of the stubs | M966. A stub is built only for a name that the DSDT in RAM contains and that no table in RAM defines |
+| The names of the stubs | M966. A stub is built only for a name that the DSDT in RAM contains and that no table in RAM defines |
+| The argument count of a stub | the call sites of the DSDT in RAM. AML does not encode the count of a call. A name gets a stub with one argument only when one `ArgN` or `LocalN` operand follows the name at each place. That is the form of each call in the stock DSDT (M966). The count is not a measured fact |
 
 No number in an installed table is a number of this project. A processor that the rule does not cover gets no
 scope, and the console says how many were left out.
@@ -185,7 +186,7 @@ nothing.
    the digest of M965 and a `_CSD` of the stock form, and nothing else.
 4. The table set is whole. The root table lists each table, each one maps with a correct checksum, and each
    DSDT, SSDT and PSDT scans to its end. A table that the module cannot read can define a name a second time.
-5. No table of that set defines `C000`, and no processor has `_CST` in another table.
+5. No table of that set defines `C000`, and no processor has `_CST` or `_CSD` in a table.
 6. Each enabled processor of the MADT has exactly one `Processor` object in the DSDT.
 7. For the stubs: the DSDT has the header of the stock DSDT (OEM ID `ALASKA`, OEM table ID `A M I `).
 
@@ -262,6 +263,10 @@ carries the protocol. The edk2 core then reads the protocol again, because a new
 notification. The function of the module gives the verdict and then calls the function of the firmware. The
 module prints one console line before this step, so a firmware that stops there leaves a trace. So the check covers the Windows Boot Manager and every other image that something loads through `LoadImage` before ExitBootServices. At the
 unwind, the module installs the structure of the firmware again.
+
+An image that the stage starts can install a Security2 protocol of its own and return without an unwind. The
+function of that image can then call into the stage. The module finds that at its unwind, says so, and restarts
+the board as the failure policy tells. An image for `next=` must put the protocol back before it returns.
 
 The module does not rely on the hook alone. Before the start, the core gives the bytes of the Windows Boot Manager
 to the gate of the module. In `enforce` mode the gate answers "bind": the core then loads the image from that
@@ -367,11 +372,13 @@ firmware.
 | ACPI module, unit A | the plan and both tables from the ACPI dump of unit A outside the repository. The test says SKIP when the dump is not there |
 | ACPI module, changed tables | 16 processors in pairs and not in pairs. A shorter stock table and one changed byte. A table that defines the target, and a second run |
 | ACPI module, table set | a wrong checksum in a definition block, and a block that does not scan. A root table that did not give each table. In each case nothing is built |
-| ACPI module, result | a name scan of each built table, its length field and its checksum. The ACPICA disassembler reads each built table as a second parser |
+| ACPI module, result | a name scan of each built table, its length field and its checksum |
+| ACPI module, namespace | ACPICA loads each built table with the stock DSDT and the other tables. Each scope must be on a `Processor` object, no name can have two definitions, and the DSDT must have no method without a definition. Two controls come first: the missing target of the stock CPU table, and a table that is loaded twice |
 | Secure Boot, images | a chain of three keys made at run time. Each certificate of the chain is the `db` entry in turn. Changed image bytes, a changed signature and another signer. A certificate without the CA flag, and two signatures. `dbx` by digest and by certificate |
 | Secure Boot, robustness | each byte of a signed image changed in turn, and each length of the file. No change of a signed byte is allowed |
 | Secure Boot, databases | the digest of a certificate in `dbx`, and a database that is not well formed. An unknown entry type and an empty list. Each defect of the enforce inputs |
 | Secure Boot, real images | necessary: the Windows Boot Manager and the Windows loader of the build PC must pass under the issuer of their signer. This is the positive control on bytes and signatures that this project did not make. The build fails without them |
+| UEFI bindings | the real entry point of the stage against a model of the firmware in the test. The start from the path and from the verified buffer. A refused image and each defect of the enforce inputs. An image that the firmware does not start. The hook and its unwind, with a firmware that does not take its protocol back. The installation of the tables and the removal of the stock table |
 | Secure Boot, fixtures | the signature check of Windows reads the signed fixture and refuses the changed fixture. This is the control of the fixtures, by code that this project did not write |
 
 The test keys are made at each run and are never written to a file. The repository holds no private key. The
@@ -379,7 +386,8 @@ host tests run with the address sanitizer of the compiler, so a read outside a b
 
 ### Lab steps
 
-The lab runs the UEFI bindings, which the host cannot test. Each step starts the stage from the GRUB of the lab
+The lab runs the UEFI bindings on the real firmware. The host runs them only against a model, which follows the
+edk2 behaviour and not the AMI firmware. Each step starts the stage from the GRUB of the lab
 stick. No step makes a firmware boot entry. [The README of the stage](../../tools/efi/stage/README.md) gives the GRUB
 entry.
 
