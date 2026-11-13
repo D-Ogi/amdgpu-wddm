@@ -11,10 +11,10 @@ the CPU waits for the GPU between any two packets, which is the opposite of what
 
 ## Decision
 
-1. The ring gets an allocator that honours the read pointer and wraps, and submissions queue behind one another;
-   each carries its own fence sequence, and the EOP interrupt (facts M79) completes every sequence it has passed.
+1. The ring gets an allocator that honours the read pointer and wraps, and submissions queue behind one another.
+   Each carries its own fence sequence, and the EOP interrupt (facts M79) completes every sequence it has passed.
 2. VMIDs 1 to 15 are held per process (per root page table) and reassigned least-recently-used, as amdgpu's
-   `amdgpu_vmid_grab` does; a context that keeps its VMID and root pays no flush at all.
+   `amdgpu_vmid_grab` does. A context that keeps its VMID and root pays no flush at all.
 3. When a VMID does change hands, the root and the flush go down the ring in front of the indirect buffer
    (gfx_v10's `emit_vm_flush`, imported through the shim per hard rule 7), not by MMIO from the CPU.
 4. Submission moves off the mutex: what `SubmitCommandVirtual` does per packet must be legal and cheap at
@@ -23,7 +23,7 @@ the CPU waits for the GPU between any two packets, which is the opposite of what
 
 ## Consequences
 
-- Internal to `gfx.c`, `wddm.c` and the shim; user mode sees none of it. Reversible, and for that reason scheduled
+- Internal to `gfx.c`, `wddm.c` and the shim. User mode sees none of it. Reversible, and for that reason scheduled
   after the things that are not (ADR 0013), but before any performance work above it.
 - Needs from Linux: the PM4 stream of a real VM flush and how VMIDs move between processes (wishlist).
 - The escape-driven engines (E17, E19 controls) keep working: they submit through the same allocator.
