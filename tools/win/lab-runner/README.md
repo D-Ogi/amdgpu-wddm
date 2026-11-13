@@ -10,10 +10,12 @@ development PC, and only text leaves the lab, never a full-resolution image.
 
 These two rules are project decisions. Do not tune them.
 
-**The thermal stop.** The runner stops the session when the KMD temperature (Tctl) stays at or above 87 C
-for 10 s, or at once at 89 C (2026-10-04). A scene load spikes the temperature for a few seconds, so
-a single hot sample is not a stop. An unreadable sample is -1 and never a temperature: only a readable
-sample below 87 C ends a hot stretch. `test_lab_runner.py` holds this rule against the script.
+**The thermal stop.** The runner stops the session when the KMD temperature (Tctl) stays at or above 92 C
+for 10 s, or at once at 97 C (the levels of 2026-11-10). A session starts only below 80 C. A scene load
+spikes the temperature for a few seconds, so a single hot sample is not a stop. An unreadable sample is -1
+and never a temperature: only a readable sample below 92 C ends a hot stretch. The runner reads these
+levels from `thermal-levels.json`, which the kit stages beside it. The one definition of the levels is
+[`../lab-thermal`](../lab-thermal/README.md). `test_lab_runner.py` holds the rule against the script.
 
 **No upscaler and no dynamic resolution.** A measured session runs at the native resolution with the
 upscaler off and the resolution scale at 100 percent (2026-10-01). The runner does not read the
