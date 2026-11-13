@@ -37,6 +37,26 @@ checks `--help` and a bad argument, and writes `SHA256SUMS.txt`. The default out
 5. In `texture-mips-nt-open`, D3D11 creates a shared 64x64 texture with 7 mips and D3D12 opens it. By default the
    open must fail with both devices alive. On a driver that opens such textures (engine ABI 1.11 on an adapter with
    linear mips), `--texture-open-expected` makes the case pass when the open succeeds with 7 mips.
+6. D3D12 creates three shared buffers: `d12-buffer-100`, `d12-buffer-4096-uav` and `d12-buffer-65536-uav`. Each
+   is a committed buffer on a DEFAULT heap with `D3D12_HEAP_FLAG_SHARED` and an NT handle. The `-uav` buffers allow
+   unordered access. The D3D12 shell of this driver refuses a shared buffer today. Thus by default, a create that
+   fails with `E_OUTOFMEMORY` passes as `<buffer>-12to12`, and the other cases of that buffer do not run. With
+   `--buffer-open-expected` the create must succeed. D3D12 writes a pattern into each buffer. Then there are three
+   cases for each buffer:
+   - `<buffer>-12to12`: D3D12 opens the handle, checks `GetDesc` and compares every byte. A process has one D3D12
+     device for each adapter, so the device that opens the buffer is the device that created it. The open still goes
+     to the driver. By default, a refusal passes and an open with different bytes fails. With
+     `--buffer-open-expected` the open must succeed.
+   - `<buffer>-12to12-back`: only after an open. D3D12 writes a second pattern through the opened resource and
+     reads it through the resource that created the buffer.
+   - `<buffer>-12to11`: D3D11 opens the handle with `OpenSharedResource1`. The D3D11 runtime refused this open with
+     `E_INVALIDARG` on the development PC (the driver of another vendor, 2026-11-13). Its debug layer gave no reason.
+     The case passes on this result with both devices alive. If the open succeeds, the case fails and prints the
+     D3D11 description.
+7. `buffer-create-cost` creates 256 committed buffers of 4096 bytes on a DEFAULT heap and measures the time of each
+   create. It prints the mean, the median, the longest time and the time of the first create. The case passes when
+   each create succeeds. To find the cost of the record of the D3D12 driver, the lab compares two runs: one with the
+   lab switch `engine-layout-buffers` and one without it.
 
 Each byte of a pattern is a function of its index and of the case, so a shifted, short or stale copy shows. A
 failed case names the step, the HRESULT, the count of bytes that differ and the first one.

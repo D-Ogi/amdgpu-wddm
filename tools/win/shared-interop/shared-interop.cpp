@@ -3,7 +3,9 @@
 // (BD-373). The buffer part: D3D11 writes a pattern and D3D12 reads every byte, then D3D12 writes a second pattern and
 // D3D11 reads every byte, with a shared fence for the order in both directions. The texture part opens a shared
 // texture of 7 mips: with --texture-open-expected the open must succeed (engine ABI 1.11), else it must fail, and both
-// devices must live.
+// devices must live. The created-buffer part (step 5): D3D12 creates shared buffers, D3D12 opens them and reads every
+// byte in both directions (with --buffer-open-expected the open must succeed), and the D3D11 open of them must be
+// refused (the runtime's rule). The last case times 256 creates of a committed GPU-only buffer.
 // A console process with no window. Every wait has a timeout, and a watchdog ends the run at 55 s.
 // Output: one "CASE <name> PASS|FAIL <detail>" line per case, then "SHARED-INTEROP PASS|FAIL cases=<n> failed=<n>".
 // The debugger output of this process (OutputDebugString of the drivers, for example the D3D12 shell's
@@ -17,6 +19,7 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
@@ -519,12 +522,246 @@ void texture_case(Gpu& g, bool open_expected) {
     }
 }
 
+// The text of a failed compare: the step or "read", the count of bytes that differ and the first one.
+std::string compare_text(const std::string& why, size_t bad, UINT bytes, size_t at, unsigned got, unsigned want) {
+    char text[256];
+    std::snprintf(text, sizeof(text), "%s; %zu of %u bytes differ", why.empty() ? "read" : why.c_str(), bad, bytes);
+    std::string detail = text;
+    if (bad && bad != bytes) {
+        std::snprintf(text, sizeof(text), " (first at %zu: 0x%02x, want 0x%02x)", at, got, want);
+        detail += text;
+    }
+    return detail;
+}
+
+// D3D12 copies a D3D12 buffer to a READBACK buffer after the queue waits for the shared fence value wait_shared (0: no
+// wait), and compares every byte with the pattern of seed. Returns the count of bytes that differ (bytes when the
+// read did not occur, with *why set).
+size_t read12(Gpu& g, ID3D12Resource* r, UINT bytes, UINT64 wait_shared, uint32_t seed, std::string& why,
+              size_t* at, unsigned* got, unsigned* want) {
+    ComPtr<ID3D12Resource> readback = buffer12(g, D3D12_HEAP_TYPE_READBACK, bytes, D3D12_RESOURCE_STATE_COPY_DEST);
+    if (!readback) {
+        why = "READBACK buffer";
+        return bytes;
+    }
+    if (!submit12(g, [&](ID3D12GraphicsCommandList* l) { l->CopyBufferRegion(readback.Get(), 0, r, 0, bytes); },
+                  wait_shared, 0, why))
+        return bytes;
+    void* cpu = nullptr;
+    const D3D12_RANGE range{0, bytes};
+    if (FAILED(readback->Map(0, &range, &cpu)) || !cpu) {
+        why = "READBACK map";
+        return bytes;
+    }
+    const size_t bad = compare(static_cast<const uint8_t*>(cpu), bytes, seed, at, got, want);
+    const D3D12_RANGE none{0, 0};
+    readback->Unmap(0, &none);
+    return bad;
+}
+
+// D3D12 copies the bytes of an UPLOAD buffer into a D3D12 buffer and signals the shared fence value signal_shared.
+bool write12(Gpu& g, ID3D12Resource* r, const std::vector<uint8_t>& bytes, UINT64 signal_shared, std::string& why) {
+    const UINT size = static_cast<UINT>(bytes.size());
+    ComPtr<ID3D12Resource> upload = buffer12(g, D3D12_HEAP_TYPE_UPLOAD, size, D3D12_RESOURCE_STATE_GENERIC_READ);
+    void* cpu = nullptr;
+    if (!upload || FAILED(upload->Map(0, nullptr, &cpu)) || !cpu) {
+        why = "UPLOAD buffer";
+        return false;
+    }
+    std::memcpy(cpu, bytes.data(), size);
+    upload->Unmap(0, nullptr);
+    return submit12(g, [&](ID3D12GraphicsCommandList* l) { l->CopyBufferRegion(r, 0, upload.Get(), 0, size); }, 0,
+                    signal_shared, why);
+}
+
+struct CreatedCase {
+    const char* name;
+    UINT bytes;
+    bool uav;   // D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+};
+
+// BD-373 step 5: D3D12 creates the shared buffer (a committed DEFAULT buffer with D3D12_HEAP_FLAG_SHARED and an NT
+// handle) and writes the first pattern into it. By default a create that fails with E_OUTOFMEMORY passes and ends the
+// cases of that buffer (the D3D12 shell refuses a shared buffer today).
+//   <name>-12to12       D3D12 opens the handle and reads every byte. In one process D3D12CreateDevice gives one
+//                       device per adapter, so the creator's device is the opener; the open still goes through the
+//                       driver's OpenHeapAndResource. By default a refusal passes and an open with other bytes fails.
+//                       With --buffer-open-expected (a driver that writes the ENGINE LAYOUT record of a D3D12 buffer,
+//                       or another vendor's driver as a positive control) the open must succeed.
+//   <name>-12to12-back  only after an open: D3D12 writes the second pattern through the opened resource and reads it
+//                       through the creator's resource.
+//   <name>-12to11       D3D11 opens the handle with OpenSharedResource1. The D3D11 runtime refused this open of a
+//                       buffer with E_INVALIDARG on the development PC (another vendor's driver, 2026-11-13; its debug
+//                       layer gives no reason, and the same runtime admits an NT handle only for a 2D texture at
+//                       create). The case holds that rule: the open must be refused with both devices alive. An open
+//                       fails the case and prints the D3D11 description, because then the D3D11 binds of the record
+//                       (driver/umd/d3d12/shared-buffer-record.h) have a reader.
+void created_case(Gpu& g, const CreatedCase& c, bool open_expected, uint32_t seed) {
+    char name[96];
+    char text[256];
+    std::vector<uint8_t> first(c.bytes), second(c.bytes);
+    fill(first.data(), first.size(), seed);
+    fill(second.data(), second.size(), seed + 1000);
+
+    std::snprintf(name, sizeof(name), "%s-12to12", c.name);
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Width = c.bytes;
+    desc.Height = 1;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.SampleDesc = {1, 0};
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.Flags = c.uav ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
+    ComPtr<ID3D12Resource> r12;
+    HRESULT hr = g.d12->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_SHARED, &desc, D3D12_RESOURCE_STATE_COMMON,
+                                                nullptr, IID_PPV_ARGS(&r12));
+    if (!r12) {
+        // The D3D12 shell documents this refusal (driver/umd/d3d12/README.md, "Shared resources"): E_OUTOFMEMORY,
+        // the device lives. By default it passes; with --buffer-open-expected it fails.
+        const std::string gone = removed(g);
+        report(name, !open_expected && hr == E_OUTOFMEMORY && gone.empty(),
+               "d3d12 shared CreateCommittedResource %08lx (Width %u, flags 0x%x; expected: %s)%s%s",
+               static_cast<unsigned long>(hr), c.bytes, static_cast<unsigned>(desc.Flags),
+               open_expected ? "created" : "created, or E_OUTOFMEMORY with both devices live", gone.empty() ? "" : "; ",
+               gone.c_str());
+        return;
+    }
+    std::string why;
+    bool ok = write12(g, r12.Get(), first, 0, why);
+    HANDLE handle = nullptr;
+    if (ok && FAILED(hr = g.d12->CreateSharedHandle(r12.Get(), nullptr, GENERIC_ALL, nullptr, &handle))) {
+        std::snprintf(text, sizeof(text), "d3d12 CreateSharedHandle %08lx", static_cast<unsigned long>(hr));
+        why = text;
+        ok = false;
+    }
+    if (!ok) {
+        report(name, false, "%s", why.c_str());
+        return;
+    }
+
+    ComPtr<ID3D12Resource> opened;
+    hr = g.d12->OpenSharedHandle(handle, IID_PPV_ARGS(&opened));
+    size_t at = 0, bad = c.bytes;
+    unsigned got = 0, want = 0;
+    std::string desc_text;
+    if (opened) {
+        const D3D12_RESOURCE_DESC d = opened->GetDesc();
+        std::snprintf(text, sizeof(text), "GetDesc dimension %d width %llu flags 0x%x", static_cast<int>(d.Dimension),
+                      static_cast<unsigned long long>(d.Width), static_cast<unsigned>(d.Flags));
+        desc_text = text;
+        bad = read12(g, opened.Get(), c.bytes, 0, seed, why, &at, &got, &want);
+        if (d.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER || d.Width != c.bytes || d.Flags != desc.Flags)
+            why = "the description differs";
+    }
+    std::string gone = removed(g);
+    if (!opened)
+        report(name, !open_expected && gone.empty(), "open %08lx (expected: %s)%s%s", static_cast<unsigned long>(hr),
+               open_expected ? "opened" : "refused or opened, both devices live", gone.empty() ? "" : "; ",
+               gone.c_str());
+    else if (!why.empty() || bad || !gone.empty())
+        report(name, false, "opened; %s; %s%s%s", compare_text(why, bad, c.bytes, at, got, want).c_str(),
+               desc_text.c_str(), gone.empty() ? "" : "; ", gone.c_str());
+    else
+        report(name, true, "opened, %u bytes equal; %s", c.bytes, desc_text.c_str());
+
+    if (opened) {
+        std::snprintf(name, sizeof(name), "%s-12to12-back", c.name);
+        why.clear();
+        bad = write12(g, opened.Get(), second, 0, why) ? read12(g, r12.Get(), c.bytes, 0, seed + 1000, why, &at, &got,
+                                                                &want)
+                                                       : c.bytes;
+        gone = removed(g);
+        if (!why.empty() || bad || !gone.empty())
+            report(name, false, "%s%s%s", compare_text(why, bad, c.bytes, at, got, want).c_str(),
+                   gone.empty() ? "" : "; ", gone.c_str());
+        else
+            report(name, true, "%u bytes equal", c.bytes);
+        opened.Reset();
+    }
+
+    std::snprintf(name, sizeof(name), "%s-12to11", c.name);
+    ComPtr<ID3D11Buffer> b11;
+    hr = g.d11->OpenSharedResource1(handle, IID_PPV_ARGS(&b11));
+    CloseHandle(handle);
+    desc_text.clear();
+    if (b11) {
+        D3D11_BUFFER_DESC bd{};
+        b11->GetDesc(&bd);
+        std::snprintf(text, sizeof(text), "; GetDesc ByteWidth %u Usage %d BindFlags 0x%x CPUAccessFlags 0x%x "
+                      "MiscFlags 0x%x StructureByteStride %u", bd.ByteWidth, static_cast<int>(bd.Usage), bd.BindFlags,
+                      bd.CPUAccessFlags, bd.MiscFlags, bd.StructureByteStride);
+        desc_text = text;
+    }
+    gone = removed(g);
+    report(name, hr == E_INVALIDARG && !b11 && gone.empty(),
+           "d3d11 OpenSharedResource1 %08lx (expected: E_INVALIDARG, the runtime's rule for a D3D12 buffer)%s%s%s",
+           static_cast<unsigned long>(hr), desc_text.c_str(), gone.empty() ? "" : "; ", gone.c_str());
+}
+
+// The cost of a committed GPU-only buffer create, which the ENGINE LAYOUT record of the D3D12 shell changes (the
+// lab switch engine-layout-buffers writes it for every such buffer). The case creates kCostBuffers buffers of 4096
+// bytes with unordered access, times each create with QueryPerformanceCounter, and prints the mean, the median and
+// the longest. It passes when every create succeeds; the lab compares two runs, the switch off and on.
+constexpr int kCostBuffers = 256;
+
+void create_cost_case(Gpu& g) {
+    const char* name = "buffer-create-cost";
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Width = 4096;
+    desc.Height = 1;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.SampleDesc = {1, 0};
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    LARGE_INTEGER frequency{};
+    QueryPerformanceFrequency(&frequency);
+    std::vector<ComPtr<ID3D12Resource>> buffers(kCostBuffers);
+    std::vector<double> us;
+    us.reserve(kCostBuffers);
+    HRESULT hr = S_OK;
+    for (ComPtr<ID3D12Resource>& b : buffers) {
+        LARGE_INTEGER t0{}, t1{};
+        QueryPerformanceCounter(&t0);
+        hr = g.d12->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COMMON, nullptr,
+                                            IID_PPV_ARGS(&b));
+        QueryPerformanceCounter(&t1);
+        if (FAILED(hr)) break;
+        us.push_back(static_cast<double>(t1.QuadPart - t0.QuadPart) * 1e6 / static_cast<double>(frequency.QuadPart));
+    }
+    buffers.clear();
+    const std::string gone = removed(g);
+    if (us.size() != static_cast<size_t>(kCostBuffers) || !gone.empty()) {
+        report(name, false, "create %zu of %d failed with %08lx%s%s", us.size() + 1, kCostBuffers,
+               static_cast<unsigned long>(hr), gone.empty() ? "" : "; ", gone.c_str());
+        return;
+    }
+    double sum = 0, longest = 0;
+    for (const double v : us) {
+        sum += v;
+        if (v > longest) longest = v;
+    }
+    std::vector<double> sorted = us;
+    std::sort(sorted.begin(), sorted.end());
+    report(name, true, "%d creates of 4096 bytes: mean %.1f us, median %.1f us, longest %.1f us, first %.1f us",
+           kCostBuffers, sum / kCostBuffers, sorted[kCostBuffers / 2], longest, us[0]);
+}
+
 void usage(FILE* to) {
-    std::fprintf(to, "usage: shared-interop.exe [--adapter <index>] [--texture-open-expected] [--help]\n"
+    std::fprintf(to, "usage: shared-interop.exe [--adapter <index>] [--texture-open-expected]\n"
+                     "                          [--buffer-open-expected] [--help]\n"
                      "  D3D11 creates shared buffers, D3D12 opens them on the same adapter and reads every byte,\n"
-                     "  then the reverse through a shared fence; one negative shared-texture open.\n"
+                     "  then the reverse through a shared fence; one negative shared-texture open; D3D12 creates\n"
+                     "  shared buffers that D3D12 opens and D3D11 must not; the cost of a D3D12 buffer create.\n"
                      "  --adapter <index>          the DXGI adapter (default: the first hardware adapter)\n"
                      "  --texture-open-expected    the texture open must succeed (a driver that opens textures)\n"
+                     "  --buffer-open-expected     the D3D12 open of a D3D12 shared buffer must succeed\n"
                      "  exit 0 every case passed, 1 a case failed, 2 bad arguments, 3 no device of one API\n");
 }
 
@@ -533,6 +770,7 @@ void usage(FILE* to) {
 int main(int argc, char** argv) {
     int adapter_index = -1;
     bool texture_open_expected = false;
+    bool buffer_open_expected = false;
     for (int i = 1; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--help")) {
             usage(stdout);
@@ -540,6 +778,8 @@ int main(int argc, char** argv) {
         }
         if (!std::strcmp(argv[i], "--texture-open-expected")) {
             texture_open_expected = true;
+        } else if (!std::strcmp(argv[i], "--buffer-open-expected")) {
+            buffer_open_expected = true;
         } else if (!std::strcmp(argv[i], "--adapter") && i + 1 < argc) {
             char* end = nullptr;
             adapter_index = static_cast<int>(std::strtol(argv[++i], &end, 10));
@@ -648,5 +888,13 @@ int main(int argc, char** argv) {
     for (const BufferCase& c : cases) buffer_case(g, c, Form::Kmt, seed++);
     buffer_nt_case(g, cases[1]);
     texture_case(g, texture_open_expected);
+    const CreatedCase created[] = {
+        {"d12-buffer-100", 100, false},
+        {"d12-buffer-4096-uav", 4096, true},
+        {"d12-buffer-65536-uav", 65536, true},
+    };
+    seed = 101;
+    for (const CreatedCase& c : created) created_case(g, c, buffer_open_expected, seed++);
+    create_cost_case(g);
     summary_and_exit(0);
 }
