@@ -478,3 +478,15 @@ Each question has the measurement that answers it.
    Windows.
 
 The question about a runtime driver at `SetVirtualAddressMap` went away with the reported mode.
+
+## The software TPM: the licence decision
+
+The project decided on 2026-11-13 that libtpms (LGPL) may enter this repository as a third-party component for the
+software TPM of the stage. The conditions that follow from that decision:
+
+- the library stays in `third_party/libtpms` with its own licence text, unmodified, or our changes are published.
+- a PROVENANCE line names the LGPL and the upstream revision.
+- the object files that relink the stage image against the library are published beside the source.
+- the PolyForm Noncommercial conditions of this repository apply to everything else, unchanged.
+
+The library, its size in the image and its POSIX assumptions are checked before any code uses it.
