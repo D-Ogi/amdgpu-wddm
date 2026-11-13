@@ -32,9 +32,9 @@ checks `--help` and a bad argument, and writes `SHA256SUMS.txt`. The default out
    `D3D11_RESOURCE_MISC_SHARED_NTHANDLE` returns `E_INVALIDARG` before a driver gets the call. The case passes on
    this result with both devices alive. Thus a D3D11 buffer has no NT handle, and the legacy handle is the buffer
    path to D3D12.
-5. `texture-mips-nt-open` is the negative case. D3D11 creates a shared 64x64 texture with 7 mips, and the D3D12 open
-   of it must fail with both devices alive. On a driver that opens such textures, `--texture-open-expected` makes
-   the case pass when the open succeeds with 7 mips.
+5. In `texture-mips-nt-open`, D3D11 creates a shared 64x64 texture with 7 mips and D3D12 opens it. By default the
+   open must fail with both devices alive. On a driver that opens such textures (engine ABI 1.11 on an adapter with
+   linear mips), `--texture-open-expected` makes the case pass when the open succeeds with 7 mips.
 
 Each byte of a pattern is a function of its index and of the case, so a shifted, short or stale copy shows. A
 failed case names the step, the HRESULT, the count of bytes that differ and the first one.
@@ -49,6 +49,12 @@ CASE <name> PASS|FAIL <detail>
 SHARED-INTEROP PASS|FAIL cases=<n> failed=<n>
 ```
 
+The program also reads the debugger output of its own process through the DBWIN buffer, as a debug viewer does. It
+prints each line as `DEBUG <text>`, at most 200 lines. The line that names why an open was refused is
+`DEBUG amdgpu_wddm_d3d12 engine-ddi: OpenHeapAndResource: <hr> reported as <hr>, declined at <step>; ...`. The first
+line of the run is `DEBUG-CAPTURE on`, or `DEBUG-CAPTURE off <reason>` when a debugger is attached or another DBWIN
+reader runs: then the lines go to that reader. After `DEBUG-CAPTURE on` the program writes one line of its own, which comes back as `DEBUG shared-interop: capture check`: without it, the channel does not work.
+
 Exit codes: 0 every case passed, 1 a case failed, 2 the arguments were wrong, 3 no device of one of the two APIs.
 
 ## Bounds
@@ -57,5 +63,4 @@ Each GPU wait and each fence wait has a timeout of 5 s. If a D3D12 submission wa
 come, the program signals that value from the CPU, so the queue does not stay blocked for the next case. A watchdog
 ends the run after 55 s with a FAIL line.
 
-The driver's own diagnostics (the open's refusal line, the device identity stage) are on the debugger channel. The
-adapter LUID and the device lines let a lab kit match them with this run.
+The adapter LUID and the device lines let a lab kit match the `DEBUG` lines and other driver logs with this run.

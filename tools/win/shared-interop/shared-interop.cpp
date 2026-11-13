@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: MIT
 // shared-interop.exe: D3D11 creates shared resources, D3D12 opens them on the same adapter, in one process
 // (BD-373). The buffer part: D3D11 writes a pattern and D3D12 reads every byte, then D3D12 writes a second pattern and
-// D3D11 reads every byte, with a shared fence for the order in both directions. The texture part is one negative case
-// until the D3D12 open of ENGINE LAYOUT textures exists: the open must fail and both devices must live.
+// D3D11 reads every byte, with a shared fence for the order in both directions. The texture part opens a shared
+// texture of 7 mips: with --texture-open-expected the open must succeed (engine ABI 1.11), else it must fail, and both
+// devices must live.
 // A console process with no window. Every wait has a timeout, and a watchdog ends the run at 55 s.
 // Output: one "CASE <name> PASS|FAIL <detail>" line per case, then "SHARED-INTEROP PASS|FAIL cases=<n> failed=<n>".
+// The debugger output of this process (OutputDebugString of the drivers, for example the D3D12 shell's
+// "OpenHeapAndResource: ... declined at <step>" line) is read through the DBWIN buffer and printed as "DEBUG <text>",
+// at most kDebugLines lines. When a debugger is attached or another DBWIN reader (DebugView) runs, the probe prints
+// "DEBUG-CAPTURE off <reason>" and the lines go there.
 // Exit codes: 0 every case passed, 1 a case failed, 2 the arguments were wrong, 3 no device of one API.
 #include <windows.h>
 #include <d3d11_4.h>
@@ -52,8 +57,70 @@ void report(const char* name, bool pass, const char* format, ...) {
 }
 
 void summary_and_exit(int code) {
+    Sleep(250); // the DEBUG lines of the last case: the reader thread prints them as they arrive
     out("SHARED-INTEROP %s cases=%d failed=%d\n", g_failed || code ? "FAIL" : "PASS", g_cases, g_failed);
     std::exit(g_failed ? 1 : code);
+}
+
+// The DBWIN protocol of OutputDebugString without a debugger: the writer waits for DBWIN_BUFFER_READY, writes its
+// process id and the text into the DBWIN_BUFFER section, and sets DBWIN_DATA_READY. One reader per session.
+constexpr int kDebugLines = 200;
+
+struct DbwinBuffer {
+    DWORD process_id;
+    char text[4096 - sizeof(DWORD)];
+};
+
+struct DebugCapture {
+    HANDLE buffer_ready = nullptr;
+    HANDLE data_ready = nullptr;
+    HANDLE section = nullptr;
+    const DbwinBuffer* view = nullptr;
+};
+
+DWORD WINAPI debug_reader(void* parameter) {
+    const DebugCapture* capture = static_cast<const DebugCapture*>(parameter);
+    const DWORD self = GetCurrentProcessId();
+    int lines = 0;
+    for (;;) {
+        SetEvent(capture->buffer_ready);
+        if (WaitForSingleObject(capture->data_ready, INFINITE) != WAIT_OBJECT_0) return 0;
+        if (capture->view->process_id != self || lines >= kDebugLines) continue;
+        char text[sizeof(capture->view->text)];
+        std::memcpy(text, capture->view->text, sizeof(text));
+        text[sizeof(text) - 1] = 0;
+        size_t n = std::strlen(text);
+        while (n && (text[n - 1] == '\n' || text[n - 1] == '\r')) text[--n] = 0;
+        if (++lines == kDebugLines)
+            out("DEBUG %s\nDEBUG-CAPTURE stopped after %d lines\n", text, kDebugLines);
+        else
+            out("DEBUG %s\n", text);
+    }
+}
+
+void start_debug_capture() {
+    if (IsDebuggerPresent()) {
+        out("DEBUG-CAPTURE off a debugger is attached\n");
+        return;
+    }
+    static DebugCapture capture;
+    capture.buffer_ready = CreateEventA(nullptr, FALSE, FALSE, "DBWIN_BUFFER_READY");
+    const bool other = capture.buffer_ready && GetLastError() == ERROR_ALREADY_EXISTS;
+    capture.data_ready = other ? nullptr : CreateEventA(nullptr, FALSE, FALSE, "DBWIN_DATA_READY");
+    capture.section = capture.data_ready ? CreateFileMappingA(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0,
+                                                              sizeof(DbwinBuffer), "DBWIN_BUFFER")
+                                         : nullptr;
+    capture.view = capture.section ? static_cast<const DbwinBuffer*>(
+                                         MapViewOfFile(capture.section, FILE_MAP_READ, 0, 0, sizeof(DbwinBuffer)))
+                                   : nullptr;
+    if (!capture.view || !CreateThread(nullptr, 0, debug_reader, &capture, 0, nullptr)) {
+        out("DEBUG-CAPTURE off %s (error %lu)\n", other ? "another DBWIN reader runs" : "no DBWIN objects",
+            static_cast<unsigned long>(GetLastError()));
+        return;
+    }
+    out("DEBUG-CAPTURE on\n");
+    // The positive control of the channel: this line must come back as "DEBUG shared-interop: capture check".
+    OutputDebugStringA("shared-interop: capture check\n");
 }
 
 DWORD WINAPI watchdog(void*) {
@@ -489,6 +556,7 @@ int main(int argc, char** argv) {
         out("SHARED-INTEROP FAIL cases=0 failed=0 (no watchdog thread)\n");
         return 1;
     }
+    start_debug_capture();
 
     Gpu g;
     ComPtr<IDXGIFactory1> factory;
