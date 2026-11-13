@@ -72,10 +72,14 @@ SHARED-INTEROP PASS|FAIL cases=<n> failed=<n>
 ```
 
 The program also reads the debugger output of its own process through the DBWIN buffer, as a debug viewer does. It
-prints each line as `DEBUG <text>`, at most 200 lines. The line that names why an open was refused is
+prints a line as `DEBUG <text>`, at most 200 lines. By default it prints only the lines that name a refusal or a
+failure: lines that contain `declined`, `refus`, `fail`, `error`, `denied`, `invalid` or `not supported`, without
+case. It counts the other lines, for example the format lines of the D3D11 device, and gives the count at the end in
+the line `DEBUG-CAPTURE hidden <n> lines ...`. With `--debug-all` it prints every line. The line that names why an open
+was refused is
 `DEBUG amdgpu_wddm_d3d12 engine-ddi: OpenHeapAndResource: <hr> reported as <hr>, declined at <step>; ...`. The first
-line of the run is `DEBUG-CAPTURE on`, or `DEBUG-CAPTURE off <reason>` when a debugger is attached or another DBWIN
-reader runs: then the lines go to that reader. After `DEBUG-CAPTURE on` the program writes one line of its own, which comes back as `DEBUG shared-interop: capture check`: without it, the channel does not work.
+line of the run is `DEBUG-CAPTURE on (<filter>)`, or `DEBUG-CAPTURE off <reason>` when a debugger is attached or
+another DBWIN reader runs: then the lines go to that reader. After `DEBUG-CAPTURE on` the program writes one line of its own, which comes back as `DEBUG shared-interop: capture check`: without it, the channel does not work.
 
 Exit codes: 0 every case passed, 1 a case failed, 2 the arguments were wrong, 3 no device of one of the two APIs.
 

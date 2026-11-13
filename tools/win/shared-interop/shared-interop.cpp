@@ -10,8 +10,10 @@
 // Output: one "CASE <name> PASS|FAIL <detail>" line per case, then "SHARED-INTEROP PASS|FAIL cases=<n> failed=<n>".
 // The debugger output of this process (OutputDebugString of the drivers, for example the D3D12 shell's
 // "OpenHeapAndResource: ... declined at <step>" line) is read through the DBWIN buffer and printed as "DEBUG <text>",
-// at most kDebugLines lines. When a debugger is attached or another DBWIN reader (DebugView) runs, the probe prints
-// "DEBUG-CAPTURE off <reason>" and the lines go there.
+// at most kDebugLines lines. By default the probe prints only the lines that name a refusal or a failure (see
+// is_refusal_line) and the capture check, and at the end one "DEBUG-CAPTURE hidden <n> lines" line; --debug-all prints
+// every line (for example the CheckFormatSupport lines of the D3D11 device). When a debugger is attached or another
+// DBWIN reader (DebugView) runs, the probe prints "DEBUG-CAPTURE off <reason>" and the lines go there.
 // Exit codes: 0 every case passed, 1 a case failed, 2 the arguments were wrong, 3 no device of one API.
 #include <windows.h>
 #include <d3d11_4.h>
@@ -20,6 +22,7 @@
 #include <wrl/client.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
@@ -59,8 +62,14 @@ void report(const char* name, bool pass, const char* format, ...) {
     out("CASE %s %s %s\n", name, pass ? "PASS" : "FAIL", detail);
 }
 
+bool g_debug_all = false;           // --debug-all: print every captured line, not only the refusals
+bool g_debug_on = false;            // the capture runs
+std::atomic<int> g_debug_hidden{0}; // captured lines that the filter did not print
+
 void summary_and_exit(int code) {
     Sleep(250); // the DEBUG lines of the last case: the reader thread prints them as they arrive
+    if (g_debug_on && !g_debug_all)
+        out("DEBUG-CAPTURE hidden %d lines that name no refusal (--debug-all prints them)\n", g_debug_hidden.load());
     out("SHARED-INTEROP %s cases=%d failed=%d\n", g_failed || code ? "FAIL" : "PASS", g_cases, g_failed);
     std::exit(g_failed ? 1 : code);
 }
@@ -81,6 +90,18 @@ struct DebugCapture {
     const DbwinBuffer* view = nullptr;
 };
 
+// A line that the default capture prints: a refusal or a failure of a driver or the runtime, or the capture check.
+// The words are compared without case.
+bool is_refusal_line(const char* text) {
+    static const char* const kWords[] = {"declined", "refus", "fail", "error", "denied", "invalid", "not supported",
+                                         "capture check"};
+    std::string lower(text);
+    for (char& c : lower) c = static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+    for (const char* word : kWords)
+        if (lower.find(word) != std::string::npos) return true;
+    return false;
+}
+
 DWORD WINAPI debug_reader(void* parameter) {
     const DebugCapture* capture = static_cast<const DebugCapture*>(parameter);
     const DWORD self = GetCurrentProcessId();
@@ -94,6 +115,10 @@ DWORD WINAPI debug_reader(void* parameter) {
         text[sizeof(text) - 1] = 0;
         size_t n = std::strlen(text);
         while (n && (text[n - 1] == '\n' || text[n - 1] == '\r')) text[--n] = 0;
+        if (!g_debug_all && !is_refusal_line(text)) {
+            ++g_debug_hidden;
+            continue;
+        }
         if (++lines == kDebugLines)
             out("DEBUG %s\nDEBUG-CAPTURE stopped after %d lines\n", text, kDebugLines);
         else
@@ -121,7 +146,8 @@ void start_debug_capture() {
             static_cast<unsigned long>(GetLastError()));
         return;
     }
-    out("DEBUG-CAPTURE on\n");
+    g_debug_on = true;
+    out("DEBUG-CAPTURE on (%s)\n", g_debug_all ? "every line" : "refusal lines only");
     // The positive control of the channel: this line must come back as "DEBUG shared-interop: capture check".
     OutputDebugStringA("shared-interop: capture check\n");
 }
@@ -755,13 +781,14 @@ void create_cost_case(Gpu& g) {
 
 void usage(FILE* to) {
     std::fprintf(to, "usage: shared-interop.exe [--adapter <index>] [--texture-open-expected]\n"
-                     "                          [--buffer-open-expected] [--help]\n"
+                     "                          [--buffer-open-expected] [--debug-all] [--help]\n"
                      "  D3D11 creates shared buffers, D3D12 opens them on the same adapter and reads every byte,\n"
                      "  then the reverse through a shared fence; one negative shared-texture open; D3D12 creates\n"
                      "  shared buffers that D3D12 opens and D3D11 must not; the cost of a D3D12 buffer create.\n"
                      "  --adapter <index>          the DXGI adapter (default: the first hardware adapter)\n"
                      "  --texture-open-expected    the texture open must succeed (a driver that opens textures)\n"
                      "  --buffer-open-expected     the D3D12 open of a D3D12 shared buffer must succeed\n"
+                     "  --debug-all                print every captured debugger line, not only the refusal lines\n"
                      "  exit 0 every case passed, 1 a case failed, 2 bad arguments, 3 no device of one API\n");
 }
 
@@ -780,6 +807,8 @@ int main(int argc, char** argv) {
             texture_open_expected = true;
         } else if (!std::strcmp(argv[i], "--buffer-open-expected")) {
             buffer_open_expected = true;
+        } else if (!std::strcmp(argv[i], "--debug-all")) {
+            g_debug_all = true;
         } else if (!std::strcmp(argv[i], "--adapter") && i + 1 < argc) {
             char* end = nullptr;
             adapter_index = static_cast<int>(std::strtol(argv[++i], &end, 10));
