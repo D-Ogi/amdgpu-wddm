@@ -1,98 +1,151 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
-/*
- * The CRB handshake of the TCG PC Client Platform TPM Profile 2.0, servicing side.
- *
- * The requester drives it: it writes the command into the data buffer, sets CRB_CTRL_CMD_SIZE, then sets
- * CRB_CTRL_START to CRB_START_CMD_READY. The servicer reads the command, answers through the callback, writes the
- * answer into the data buffer, sets CRB_CTRL_RSP_SIZE, and clears CRB_CTRL_START. The requester polls START until
- * it reads 0. Nothing here is an interrupt and nothing waits: the caller calls crb_poll until it returns 0.
- */
+/* The TPM side of the PTP CRB interface. The contract is in crb.h. */
+#include <string.h>
 #include "crb.h"
 
-static void copy_in(volatile unsigned char *dst, const unsigned char *src, size_t n)
+crb_u32 crb_read32(const struct crb *c, unsigned offset)
 {
+	return *(volatile const crb_u32 *)(const void *)(c->window + offset);
+}
+
+void crb_write32(struct crb *c, unsigned offset, crb_u32 value)
+{
+	*(volatile crb_u32 *)(void *)(c->window + offset) = value;
+}
+
+static crb_u32 be32(const volatile unsigned char *p)
+{
+	return ((crb_u32)p[0] << 24) | ((crb_u32)p[1] << 16) | ((crb_u32)p[2] << 8) | (crb_u32)p[3];
+}
+
+/* The data buffer gets bytes one at a time: it is uncached memory, and a byte loop has no alignment demand. */
+static void put_bytes(struct crb *c, const unsigned char *src, size_t bytes)
+{
+	volatile unsigned char *dst = c->window + CRB_DATA_BUFFER;
 	size_t i;
-	for (i = 0; i < n; i++) dst[i] = (unsigned char)src[i];
+	for (i = 0; i < bytes; i++) dst[i] = src[i];
 }
 
-static void copy_out(unsigned char *dst, const volatile unsigned char *src, size_t n)
+static void finish(struct crb *c)
 {
+	/* The response bytes are in the buffer before START is clear: the requester reads the response after it sees
+	 * START = 0 (PTP CRB handshake). */
+	crb_write32(c, CRB_CTRL_START, 0);
+	c->busy = 0;
+}
+
+/* The answer to a command that does not fit: tag TPM_ST_NO_SESSIONS, size 10, TPM_RC_COMMAND_SIZE. */
+static void answer_bad_size(struct crb *c)
+{
+	static const unsigned char rsp[CRB_TPM_HEADER_BYTES] = {
+		0x80, 0x01, 0x00, 0x00, 0x00, 0x0A,
+		(CRB_TPM_RC_COMMAND_SIZE >> 24) & 0xFFu, (CRB_TPM_RC_COMMAND_SIZE >> 16) & 0xFFu,
+		(CRB_TPM_RC_COMMAND_SIZE >> 8) & 0xFFu, CRB_TPM_RC_COMMAND_SIZE & 0xFFu,
+	};
+	put_bytes(c, rsp, sizeof(rsp));
+	finish(c);
+}
+
+void crb_reset(struct crb *c, volatile void *window, crb_u64 page_phys)
+{
+	crb_u64 buffer = page_phys + CRB_DATA_BUFFER;
+	unsigned o;
+
+	memset(c, 0, sizeof(*c));
+	c->window = (volatile unsigned char *)window;
+	for (o = 0; o < CRB_DATA_BUFFER; o += 4) crb_write32(c, o, 0);
+	crb_write32(c, CRB_INTERFACE_ID, CRB_INTERFACE_ID_VALUE);
+	crb_write32(c, CRB_VID_DID, 0);		/* no vendor identity is claimed; the core reports its own */
+	crb_write32(c, CRB_LOC_STATE, CRB_LOC_STATE_VALID | CRB_LOC_STATE_ESTABLISHED);
+	crb_write32(c, CRB_CTRL_STS, CRB_STS_IDLE);
+	crb_write32(c, CRB_CMD_SIZE, CRB_DATA_BYTES);
+	crb_write32(c, CRB_CMD_LADDR, (crb_u32)buffer);
+	crb_write32(c, CRB_CMD_HADDR, (crb_u32)(buffer >> 32));
+	crb_write32(c, CRB_RSP_SIZE, CRB_DATA_BYTES);
+	crb_write32(c, CRB_RSP_LADDR, (crb_u32)buffer);
+	crb_write32(c, CRB_RSP_HADDR, (crb_u32)(buffer >> 32));
+}
+
+static void serve_locality(struct crb *c)
+{
+	crb_u32 ctrl = crb_read32(c, CRB_LOC_CTRL);
+
+	if (ctrl == 0) return;
+	crb_write32(c, CRB_LOC_CTRL, 0);
+	if (ctrl & (CRB_LOC_CTRL_REQUEST | CRB_LOC_CTRL_SEIZE)) {
+		/* Locality 0 is the only one, so a request is granted at once and nothing is seized from anybody. */
+		c->count.locality_requests++;
+		crb_write32(c, CRB_LOC_STS, CRB_LOC_STS_GRANTED);
+		crb_write32(c, CRB_LOC_STATE, CRB_LOC_STATE_VALID | CRB_LOC_STATE_ESTABLISHED | CRB_LOC_STATE_ASSIGNED);
+	} else if (ctrl & CRB_LOC_CTRL_RELINQUISH) {
+		c->count.locality_relinquish++;
+		crb_write32(c, CRB_LOC_STS, 0);
+		crb_write32(c, CRB_LOC_STATE, CRB_LOC_STATE_VALID | CRB_LOC_STATE_ESTABLISHED);
+	}
+	/* RESET_ESTABLISHMENT: the bit stays 1, as no dynamic launch can clear it on this platform. */
+}
+
+static void serve_request(struct crb *c)
+{
+	crb_u32 req = crb_read32(c, CRB_CTRL_REQ);
+
+	if (req == 0 || c->busy) return;	/* the PTP forbids both requests while a command runs */
+	if (req & CRB_REQ_CMD_READY) {
+		c->count.ready++;
+		crb_write32(c, CRB_CTRL_STS, 0);
+	} else if (req & CRB_REQ_GO_IDLE) {
+		c->count.idle++;
+		crb_write32(c, CRB_CTRL_STS, CRB_STS_IDLE);
+	}
+	crb_write32(c, CRB_CTRL_REQ, 0);	/* the TPM clears the bit when the state change is complete */
+}
+
+enum crb_poll_result crb_poll(struct crb *c, unsigned char *command, size_t capacity, size_t *command_bytes)
+{
+	crb_u32 size;
 	size_t i;
-	for (i = 0; i < n; i++) dst[i] = (unsigned char)src[i];
-}
+	const volatile unsigned char *buffer = c->window + CRB_DATA_BUFFER;
 
-uint32_t crb_read32(const struct crb *c, unsigned locality, unsigned offset)
-{
-	return *crb_reg(c, locality, offset);
-}
-
-void crb_write32(struct crb *c, unsigned locality, unsigned offset, uint32_t value)
-{
-	*crb_reg(c, locality, offset) = value;
-}
-
-void crb_reset(struct crb *c)
-{
-	c->locality = 0;
-	c->response_bytes = 0;
-	c->failed = 0;
-	crb_write32(c, 0, CRB_INTERFACE_ID, CRB_INTF_ID_CRB);
-	crb_write32(c, 0, CRB_CTRL_EXT, 0);
-	crb_write32(c, 0, CRB_LOC_STATE, CRB_LOC_STATE_ESTABLISHED);
-	crb_write32(c, 0, CRB_LOC_CTRL, 0);
-	crb_write32(c, 0, CRB_LOC_STS, 0);
-	crb_write32(c, 0, CRB_CTRL_REQ, 0);
-	crb_write32(c, 0, CRB_CTRL_STS, 0);
-	crb_write32(c, 0, CRB_CTRL_CANCEL, 0);
-	crb_write32(c, 0, CRB_CTRL_START, 0);
-	crb_write32(c, 0, CRB_INT_ENABLE, 0);
-	crb_write32(c, 0, CRB_INT_STS, 0);
-	crb_write32(c, 0, CRB_CMD_SIZE, 0);
-	crb_write32(c, 0, CRB_RSP_SIZE, 0);
-}
-
-int crb_poll(struct crb *c)
-{
-	unsigned char command[CRB_DATA_BYTES];
-	unsigned char response[CRB_DATA_BYTES];
-	unsigned locality;
-	uint32_t start, size, rsp;
-	long got;
-
-	if (c == NULL || c->window == NULL || c->command == NULL) return -1;
-	locality = c->locality;
-	if (locality >= CRB_LOCALITIES) return -1;
-	start = crb_read32(c, locality, CRB_CTRL_START);
-	if ((start & CRB_START_CMD_READY) == 0) return 0;
-	size = crb_read32(c, locality, CRB_CMD_SIZE);
-	if (size == 0 || size > CRB_DATA_BYTES) {
-		/* A size that the window cannot hold is a defect of the requester, and it gets an empty answer. */
-		crb_write32(c, locality, CRB_RSP_SIZE, 0);
-		crb_write32(c, locality, CRB_CTRL_START, 0);
-		c->failed = 1;
-		c->response_bytes = 0;
-		return 1;
+	*command_bytes = 0;
+	serve_locality(c);
+	serve_request(c);
+	if (c->busy) {
+		/* The PTP lets the TPM finish a command that software cancels; the core cannot stop one, so a
+		 * cancel only counts. Software clears CANCEL itself after START goes to 0. */
+		if (crb_read32(c, CRB_CTRL_CANCEL) & CRB_CANCEL) c->count.cancels++;
+		return CRB_POLL_NOTHING;
 	}
-	copy_out(command, c->window + (size_t)locality * CRB_LOCALITY_STRIDE + CRB_DATA_BUFFER, size);
-	got = c->command(c->context, command, size, response, sizeof(response));
-	if (got <= 0) {
-		crb_write32(c, locality, CRB_RSP_SIZE, 0);
-		crb_write32(c, locality, CRB_CTRL_START, 0);
-		c->failed = 1;
-		c->response_bytes = 0;
-		return 1;
+	if (!(crb_read32(c, CRB_CTRL_START) & CRB_START)) return CRB_POLL_NOTHING;
+
+	c->busy = 1;
+	/* With CapCRBIdleBypass = 0 the requester must send cmdReady first. A START in the idle state is served
+	 * anyway and counted: refusing it would hang the requester, and a counter shows the deviation. */
+	if (crb_read32(c, CRB_CTRL_STS) & CRB_STS_IDLE) {
+		c->count.start_while_idle++;
+		crb_write32(c, CRB_CTRL_STS, 0);
 	}
-	rsp = (uint32_t)got;
-	if (rsp > CRB_DATA_BYTES) rsp = CRB_DATA_BYTES;
-	copy_in(c->window + (size_t)locality * CRB_LOCALITY_STRIDE + CRB_DATA_BUFFER, response, rsp);
-	crb_write32(c, locality, CRB_RSP_SIZE, rsp);
-	crb_write32(c, locality, CRB_CTRL_START, 0);
-	c->failed = 0;
-	c->response_bytes = rsp;
-	return 1;
+	/* The command length is commandSize in the header (big endian, bytes 2..5), not CMD_SIZE: CMD_SIZE is the
+	 * size of the buffer, which the TPM states. */
+	size = be32(buffer + 2);
+	if (size < CRB_TPM_HEADER_BYTES || size > CRB_DATA_BYTES || size > capacity) {
+		c->count.bad_size++;
+		answer_bad_size(c);
+		return CRB_POLL_NOTHING;
+	}
+	for (i = 0; i < size; i++) command[i] = buffer[i];
+	*command_bytes = size;
+	c->count.commands++;
+	return CRB_POLL_COMMAND;
 }
 
-size_t crb_response_bytes(const struct crb *c)
+void crb_complete(struct crb *c, const unsigned char *response, size_t response_bytes)
 {
-	return c->response_bytes;
+	if (!c->busy) return;
+	if (response == NULL || response_bytes < CRB_TPM_HEADER_BYTES || response_bytes > CRB_DATA_BYTES) {
+		c->count.bad_size++;
+		answer_bad_size(c);
+		return;
+	}
+	put_bytes(c, response, response_bytes);
+	finish(c);
 }

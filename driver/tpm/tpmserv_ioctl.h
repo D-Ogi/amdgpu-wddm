@@ -1,0 +1,44 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+/*
+ * The interface between the kernel filter tpmserv.sys and the user-mode TPM core service. The filter owns the CRB
+ * page; the service owns the TPM state and the cryptography. The filter hands out each command once through
+ * GET_COMMAND and takes its answer through PUT_RESPONSE.
+ *
+ * The control device lives from DriverEntry to driver unload, not with the TPM device node: a restart of the TPM
+ * device node keeps the handle of the service valid, and a command that was out when the service closed its handle
+ * goes out again to the next GET_COMMAND.
+ *
+ * Only the LocalSystem account and the Administrators group can open the device (SDDL in tpmserv.c).
+ */
+#ifndef BC250_TPMSERV_IOCTL_H
+#define BC250_TPMSERV_IOCTL_H
+
+#define TPMSERV_DEVICE_NAME	L"\\Device\\Bc250TpmServicer"
+#define TPMSERV_SYMLINK_NAME	L"\\DosDevices\\Bc250TpmServicer"
+#define TPMSERV_USER_PATH	L"\\\\.\\Bc250TpmServicer"
+
+#define TPMSERV_DEVICE_TYPE	0x8BC2u
+
+/* Output: the command bytes (at most TPMSERV_MAX_COMMAND). Pends until a command is there. */
+#define IOCTL_TPMSERV_GET_COMMAND \
+	CTL_CODE(TPMSERV_DEVICE_TYPE, 0x801, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+/* Input: the response bytes of the command that GET_COMMAND gave. STATUS_INVALID_DEVICE_STATE if no command is out. */
+#define IOCTL_TPMSERV_PUT_RESPONSE \
+	CTL_CODE(TPMSERV_DEVICE_TYPE, 0x802, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+/* Output: struct tpmserv_status. Never pends. */
+#define IOCTL_TPMSERV_GET_STATUS \
+	CTL_CODE(TPMSERV_DEVICE_TYPE, 0x803, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+#define TPMSERV_MAX_COMMAND	0xF80u	/* the CRB data buffer; see crb.h */
+
+#define TPMSERV_STATUS_VERSION	1u
+struct tpmserv_status {
+	unsigned int version;		/* TPMSERV_STATUS_VERSION */
+	unsigned int attached;		/* 1 while the filter has a started TPM device with a mapped page */
+	unsigned long long page;	/* the physical address of the CRB page, 0 when not attached */
+	unsigned int commands, bad_size, start_while_idle, cancels;
+	unsigned int ready, idle, locality_requests, locality_relinquish;
+	unsigned int redelivered;	/* commands given out again after the service closed its handle */
+};
+
+#endif
