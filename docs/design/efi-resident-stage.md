@@ -479,14 +479,17 @@ Each question has the measurement that answers it.
 
 The question about a runtime driver at `SetVirtualAddressMap` went away with the reported mode.
 
-## The software TPM: the licence decision
+## The software TPM: the licence
 
-The project decided on 2026-11-13 that libtpms (LGPL) may enter this repository as a third-party component for the
-software TPM of the stage. The conditions that follow from that decision:
+The core is libtpms. Its `LICENSE` file at commit `165c303c` is permissive, in three parts: BSD 3-clause for the
+IBM TPM 1.2 and library code, BSD 2-clause for the TCG reference implementation of TPM 2.0 (Microsoft and TCG),
+and the TCG licence for the other TPM 2 code. The whole tree has no LGPL or GPL text. The only GNU text is the
+Autoconf macro under `m4/`, which carries the Autoconf exception. The repository therefore carries the licence
+in `third_party/libtpms/LICENSE`, unchanged, one PROVENANCE line, and the copyright notices in a binary
+distribution. No relink obligation follows.
 
-- the library stays in `third_party/libtpms` with its own licence text, unmodified, or our changes are published.
-- a PROVENANCE line names the LGPL and the upstream revision.
-- the object files that relink the stage image against the library are published beside the source.
-- the PolyForm Noncommercial conditions of this repository apply to everything else, unchanged.
-
-The library, its size in the image and its POSIX assumptions are checked before any code uses it.
+The core is POSIX-only as shipped. The gates are `TPM_POSIX` and `openssl/bn.h` in `tpm_radix.h`, the
+`endian.h` test in `TpmProfile_Common.h`, the same test in `CompilerDependencies_gcc.h`, `regex.h` in
+`RuntimeProfile.c`, and the file layer in `tpm_nvfile.c` and `tpm_library.c`. The state comes from
+`TPMLIB_SetState`/`TPMLIB_GetState` and the `tpm_nvram_loaddata`/`tpm_nvram_storedata` callbacks, so the core
+never writes a file by itself: the stage writes one file on the stick, with a SHA-256 proof and an undo.
