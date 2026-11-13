@@ -51,7 +51,7 @@ UINT64 layout_hash(VkDevice device,const RuntimeImageDispatch &vk,VkImage image,
             const VkImageSubresource sub{VK_IMAGE_ASPECT_COLOR_BIT,mip,layer};
             VkSubresourceLayout l{};
             vk.layout(device,image,&sub,&l);
-            hash=Bc250SharedResourceLayoutAdd(hash,l.offset,l.size,l.rowPitch,l.arrayPitch,l.depthPitch);
+            hash=Bc250SharedResourceLayoutAdd(hash,l.offset,l.rowPitch,l.arrayPitch,l.depthPitch);
         }
     }
     return hash;

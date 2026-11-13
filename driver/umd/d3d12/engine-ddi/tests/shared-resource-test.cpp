@@ -87,7 +87,7 @@ BC250_SHARED_RESOURCE d3d11_texture() {
     r.MemorySize = 64 * 64 * 4;
     r.MemoryAlignment = 4096;
     r.MemoryTypeBits = 0x7;
-    r.LayoutHash = Bc250SharedResourceLayoutAdd(BC250_SR_FNV_BASIS, 0, 64 * 64 * 4, 256, 0, 0);
+    r.LayoutHash = Bc250SharedResourceLayoutAdd(BC250_SR_FNV_BASIS, 0, 256, 0, 0);
     r.CreatorApi = BC250_SR_CREATOR_D3D11;
     std::memcpy(r.DeviceUuid, kDevice, sizeof(kDevice));
     return r;
@@ -100,7 +100,7 @@ uint64_t layout_hash_of(uint32_t mips, uint32_t layers, uint64_t* memory) {
     for (uint32_t layer = 0; layer < layers; ++layer)
         for (uint32_t mip = 0; mip < mips; ++mip) {
             const uint64_t edge = 64u >> mip ? 64u >> mip : 1u, pitch = ((edge * 4 + 255) / 256) * 256;
-            hash = Bc250SharedResourceLayoutAdd(hash, offset, pitch * edge, pitch, pitch * edge, pitch * edge);
+            hash = Bc250SharedResourceLayoutAdd(hash, offset, pitch, pitch * edge, pitch * edge);
             offset += pitch * edge;
         }
     if (memory) *memory = offset;

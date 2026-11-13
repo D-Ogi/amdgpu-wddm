@@ -73,15 +73,45 @@ int main()
     check(Bc250SharedResourceWhyOk(Bc250SharedResourceRecordWhy(&record)), "the test record is a record of this form");
     const unsigned char *rb = reinterpret_cast<const unsigned char *>(&record);
     check(rb[0] == 'S' && rb[1] == '2' && rb[2] == '6' && rb[3] == 'R' && rb[8] == 240 && rb[12] == 2, "S26R bytes");
-    // The hash is FNV-1a 64 of the eight bytes of each value, low byte first. The pin is the basis times the prime to the\n    // eighth power (eight zero bytes), computed outside this header.
+    // The hash is FNV-1a 64 of the eight bytes of each value, low byte first. The pin is the basis times the prime to the
+    // eighth power (eight zero bytes), computed outside this header.
     check(Bc250SharedResourceHash(BC250_SR_FNV_BASIS, 0) == 0x47FE0D7EAF8E51E3ull, "FNV-1a 64 of eight zero bytes");
     {
-        // The one hash step: the five values of one subresource, in their order.
+        // The one hash step: the four values of one subresource, in their order. The size is not one of them.
         unsigned long long h = BC250_SR_FNV_BASIS;
-        for (unsigned long long v : {0x8000ull, 0x2000ull, 0x100ull, 0x8000ull, 0ull}) h = Bc250SharedResourceHash(h, v);
-        check(Bc250SharedResourceLayoutAdd(BC250_SR_FNV_BASIS, 0x8000, 0x2000, 0x100, 0x8000, 0) == h, "LayoutAdd order");
-        check(Bc250SharedResourceLayoutAdd(BC250_SR_FNV_BASIS, 0x2000, 0x8000, 0x100, 0x8000, 0) != h,
-              "LayoutAdd sees the order of offset and size");
+        for (unsigned long long v : {0x8000ull, 0x100ull, 0x8000ull, 0ull}) h = Bc250SharedResourceHash(h, v);
+        check(Bc250SharedResourceLayoutAdd(BC250_SR_FNV_BASIS, 0x8000, 0x100, 0x8000, 0) == h, "LayoutAdd order");
+        check(Bc250SharedResourceLayoutAdd(BC250_SR_FNV_BASIS, 0x100, 0x8000, 0x8000, 0) != h,
+              "LayoutAdd sees the order of offset and rowPitch");
+    }
+    {
+        // The RADV vector (lab, unit A, 2026-11-13, engine V15 QueryLinearImageLayouts): a LINEAR R8G8B8A8 64x64
+        // image with 7 mips and 1 layer, memory 32512, the smallest mip first. RADV gives size 32512 for every mip,
+        // the size of the layer. The rows of each mip (rows x rowPitch) tile the memory exactly, and the size would
+        // claim that mip 0 runs past it: the reason LayoutAdd does not take the size.
+        struct L { unsigned long long offset, size, row_pitch, array_pitch; unsigned rows; };
+        const L radv[7] = {{16128, 32512, 256, 32512, 64}, {7936, 32512, 256, 32512, 32}, {3840, 32512, 256, 32512, 16},
+                           {1792, 32512, 256, 32512, 8},   {768, 32512, 256, 32512, 4},   {256, 32512, 256, 32512, 2},
+                           {0, 32512, 256, 32512, 1}};
+        const unsigned long long memory = 32512;
+        bool tiled = true;
+        for (int m = 0; m < 7; ++m) {
+            const unsigned long long end = radv[m].offset + radv[m].rows * radv[m].row_pitch;
+            tiled = tiled && end <= memory && (m == 0 ? end == memory : end == radv[m - 1].offset);
+        }
+        check(tiled, "RADV vector: the rows of the 7 mips tile the 32512 bytes, no overlap");
+        check(radv[0].offset + radv[0].size > memory, "RADV vector: offset + size of mip 0 is past the memory");
+        unsigned long long h = BC250_SR_FNV_BASIS, again = BC250_SR_FNV_BASIS;
+        for (const L &l : radv) {
+            h = Bc250SharedResourceLayoutAdd(h, l.offset, l.row_pitch, l.array_pitch, 0);
+            again = Bc250SharedResourceHash(Bc250SharedResourceHash(Bc250SharedResourceHash(
+                        Bc250SharedResourceHash(again, l.offset), l.row_pitch), l.array_pitch), 0);
+        }
+        check(h == again && h != BC250_SR_FNV_BASIS, "RADV vector: LayoutHash of offset, rowPitch, arrayPitch, depthPitch");
+        // 100x60, 7 mips: memory 46080, mip 0 at 15360 with rowPitch 512 (60 rows end at the memory end), mip 6 at
+        // 0 with rowPitch 256. RADV gives size 46080 for every mip.
+        check(15360ull + 60ull * 512ull == 46080ull && 0ull + 1ull * 256ull <= 15360ull,
+              "RADV vector 100x60: mip 0 ends at the memory end, mip 6 is first");
     }
 
     // Versions: a writer writes 2 with its CreatorApi; a reader reads 1 (CreatorApi 0) and 2, and refuses 3.

@@ -661,8 +661,8 @@ HRESULT texture_record(Device& device, uint32_t mips, uint32_t layers, BC250_SHA
     if (FAILED(hr)) return hr;
     uint64_t hash = BC250_SR_FNV_BASIS;
     for (uint32_t i = 0; i < count; ++i)
-        hash = Bc250SharedResourceLayoutAdd(hash, layouts[i].Offset, layouts[i].Size, layouts[i].RowPitch,
-                                            layouts[i].ArrayPitch, layouts[i].DepthPitch);
+        hash = Bc250SharedResourceLayoutAdd(hash, layouts[i].Offset, layouts[i].RowPitch, layouts[i].ArrayPitch,
+                                            layouts[i].DepthPitch);
     r.CreateFlags = create.CreateFlags;
     r.CreateUsage = create.CreateUsage;
     r.VkFormat = create.VkFormat;

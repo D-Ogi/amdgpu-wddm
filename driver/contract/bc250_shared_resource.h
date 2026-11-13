@@ -170,8 +170,9 @@ typedef struct _BC250_SHARED_RESOURCE {
     unsigned long long MemorySize, MemoryAlignment;
     unsigned int MemoryTypeBits, CreatorApi;
 
-    /* FNV-1a 64 of the VkSubresourceLayout of every subresource: start at BC250_SR_FNV_BASIS, then
-     * Bc250SharedResourceLayoutAdd for each subresource, layer-major then mip (for each layer, every mip from 0).
+    /* FNV-1a 64 of four fields of the VkSubresourceLayout of every subresource (not size): start at
+     * BC250_SR_FNV_BASIS, then Bc250SharedResourceLayoutAdd for each subresource, layer-major then mip (for each
+     * layer, every mip from 0).
      * 0 for a buffer. */
     unsigned long long LayoutHash;
 
@@ -199,15 +200,21 @@ static __inline unsigned long long Bc250SharedResourceHash(unsigned long long Ha
     return Hash;
 }
 
-/* The one hash step of LayoutHash: adds the VkSubresourceLayout of one subresource, in the order offset, size,
- * rowPitch, arrayPitch, depthPitch. Every writer and every opener adds its subresources with this function. */
+/* The one hash step of LayoutHash: adds the VkSubresourceLayout of one subresource, in the order offset, rowPitch,
+ * arrayPitch, depthPitch. Every writer and every opener adds its subresources with this function.
+ * VkSubresourceLayout.size is not in the hash. Vulkan defines it as the size of the subresource (Vulkan-Docs
+ * 01aaacd, chapters/resources.adoc, VkSubresourceLayout), but RADV gives the size of the whole layer for every mip
+ * level of a GFX9 or later image (radv_GetImageSubresourceLayout2, Mesa e52641e85 and upstream b492b11ecf5). The
+ * lab measured it on a LINEAR 64x64 image with 7 mips: every mip reported 32512, the memory size, also mip 0 at
+ * offset 16128. A value with two meanings cannot be part of the proof that two layouts are equal. The extent of a
+ * mip of a LINEAR image follows from its offset, its rowPitch and its row count, and the match rule compares the
+ * extent and the mip count. */
 static __inline unsigned long long Bc250SharedResourceLayoutAdd(unsigned long long Hash, unsigned long long Offset,
-                                                                unsigned long long Size, unsigned long long RowPitch,
+                                                                unsigned long long RowPitch,
                                                                 unsigned long long ArrayPitch,
                                                                 unsigned long long DepthPitch)
 {
     Hash = Bc250SharedResourceHash(Hash, Offset);
-    Hash = Bc250SharedResourceHash(Hash, Size);
     Hash = Bc250SharedResourceHash(Hash, RowPitch);
     Hash = Bc250SharedResourceHash(Hash, ArrayPitch);
     return Bc250SharedResourceHash(Hash, DepthPitch);

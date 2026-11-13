@@ -210,7 +210,7 @@ int main() {
         UINT64 h=BC250_SR_FNV_BASIS;
         for (UINT layer=0;layer<3;++layer) for (UINT mip=0;mip<4;++mip) {
             const UINT64 pitch=256u>>mip;
-            h=Bc250SharedResourceLayoutAdd(h,UINT64(layer)*32768u+UINT64(mip)*8192u,8192u,pitch<64 ? 64 : pitch,32768u,0);
+            h=Bc250SharedResourceLayoutAdd(h,UINT64(layer)*32768u+UINT64(mip)*8192u,pitch<64 ? 64 : pitch,32768u,0);
         }
         check(rec.LayoutHash==h,"LayoutHash through Bc250SharedResourceLayoutAdd");
     }

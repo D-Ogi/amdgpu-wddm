@@ -1127,7 +1127,7 @@ HRESULT query_engine_layout_image(DeviceContext* c, const D3D12_RESOURCE_DESC1& 
     uint64_t hash = BC250_SR_FNV_BASIS;
     for (uint32_t i = 0; i < count; ++i) {
         const BC250_VKD3D_SUBRESOURCE_LAYOUT& l = out->layouts[i];
-        hash = Bc250SharedResourceLayoutAdd(hash, l.Offset, l.Size, l.RowPitch, l.ArrayPitch, l.DepthPitch);
+        hash = Bc250SharedResourceLayoutAdd(hash, l.Offset, l.RowPitch, l.ArrayPitch, l.DepthPitch);
     }
     image->vk_format = out->create.VkFormat;
     image->create_flags = out->create.CreateFlags;
