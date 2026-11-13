@@ -929,7 +929,7 @@
         },
         "engine": {
           "repo": "vkd3d-proton",
-          "commit": "47cf677139bb3f9b1e6e199d5a85dfa33a373076",
+          "commit": "6e3e7afa004a374984b583746fe4d1f243ac5cde",
           "paths": [
             "libs/ddi"
           ]
@@ -995,7 +995,7 @@
         },
         "engine": {
           "repo": "vkd3d-proton",
-          "commit": "47cf677139bb3f9b1e6e199d5a85dfa33a373076",
+          "commit": "6e3e7afa004a374984b583746fe4d1f243ac5cde",
           "paths": [
             "libs/ddi"
           ]
@@ -1061,7 +1061,7 @@
         },
         "engine": {
           "repo": "vkd3d-proton",
-          "commit": "47cf677139bb3f9b1e6e199d5a85dfa33a373076",
+          "commit": "6e3e7afa004a374984b583746fe4d1f243ac5cde",
           "paths": [
             "libs/ddi"
           ]
@@ -1127,7 +1127,7 @@
         },
         "engine": {
           "repo": "vkd3d-proton",
-          "commit": "47cf677139bb3f9b1e6e199d5a85dfa33a373076",
+          "commit": "6e3e7afa004a374984b583746fe4d1f243ac5cde",
           "paths": [
             "libs/ddi"
           ]
