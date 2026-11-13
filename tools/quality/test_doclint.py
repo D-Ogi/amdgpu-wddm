@@ -220,6 +220,24 @@ class DocLintGate(unittest.TestCase):
         self.assertEqual(masked, 'A XX xxxxx after the un-xxxx.\n`halt` stays.\n```\nhalt\n```\nHalting is prose.\n')
         self.assertEqual(doclint.mask_names(text, None), text)
         self.assertIsNone(doclint.name_pattern([{'names': []}]))
+
+    def test_quotation_and_link_target_are_operands(self):
+        text = ('The tool prints "Done; fix it now" and [the page](docs/a-b.md).\n'
+                '`"in code"` stays.\n```\n"in a fence"\n```\nNo "open quote\n')
+        masked = doclint.mask_quotes(text)
+        self.assertEqual(masked, 'The tool prints "' + 'x' * len('Done; fix it now') + '" and [the page](xxxxxxxxxxx).\n'
+                                 '`"in code"` stays.\n```\n"in a fence"\n```\nNo "open quote\n')
+        self.assertEqual(doclint.mask_quotes('A „Zitat; hier“ and “a; b”.\n'), 'A „xxxxxxxxxxx“ and “xxxx”.\n')
+        # The quoted message hides its semicolon and its verb; the same words in prose stay findings.
+        with tree() as t:
+            t.doc('docs/a.md', 'The page shows "Display; Start".\n')
+            code, text = t.run()
+            self.assertEqual(code, 0, text)
+            t.doc('docs/a.md', 'The page shows the list; we display it.\n')
+            code, text = t.run()
+            self.assertEqual(code, 1)
+            self.assertIn('semicolon', text)
+
     def test_dash_rule(self):
         with tree() as t:
             t.doc('docs/a.md', 'The fan — the loud one — is off.\n')

@@ -66,6 +66,14 @@ of the gate:
 - The records under `docs/archive/` are outside the gate. A baseline line for one of them is an
   error (see `docs/archive/README.md`).
 
+The gate reads prose only. These parts are operands, and no rule reads their words:
+
+- A code fence and inline code.
+- A name from the `names` list of the glossary.
+- A quotation in double quotes on one line: a UI label, a message of a program, the subject of a
+  commit. It counts as one word. Put only verbatim text in double quotes.
+- The target of a Markdown link.
+
 The commands:
 
 - `python tools/quality/doclint.py` is the gate.

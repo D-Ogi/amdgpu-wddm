@@ -168,6 +168,50 @@ def mask_names(text, pattern):
     return '\n'.join(out)
 
 
+# A quotation in double quotes on one line ("...", “...”, „...”) and the target of a Markdown link or image.
+QUOTED = re.compile(r'"[^"\n]+"|“[^”\n]+”|„[^”“\n]+[”“]')
+LINK_TARGET = re.compile(r'(?<=\]\()[^)\s]+(?=(?:\s+"[^"\n]*")?\))')
+
+
+def mask_quotes(text):
+    """The text with every quotation and link target blanked to one word, columns and lines kept.
+
+    A quotation is a verbatim operand: a UI label, a message of a program, the subject of a commit.
+    Its words are not the writer's words, so no rule may read them, and as one word it counts as one
+    word in the sentence-length rule. A link target is a path, not prose. The quote marks stay, so
+    the sentence around the quotation reads as before. Code fences and inline code are operands
+    already and stay as they are.
+    """
+    def blank_inner(m):
+        s = m.group(0)
+        return s[0] + 'x' * (len(s) - 2) + s[-1]
+
+    def blank_all(m):
+        return 'x' * len(m.group(0))
+
+    def prose(segment):
+        return QUOTED.sub(blank_inner, LINK_TARGET.sub(blank_all, segment))
+
+    out = []
+    in_fence = False
+    for raw_line in text.split('\n'):
+        if ste_lint.CODE_FENCE.match(raw_line.strip()):
+            in_fence = not in_fence
+            out.append(raw_line)
+            continue
+        if in_fence:
+            out.append(raw_line)
+            continue
+        parts, at = [], 0
+        for code in ste_lint.INLINE_CODE.finditer(raw_line):
+            parts.append(prose(raw_line[at:code.start()]))
+            parts.append(code.group(0))
+            at = code.end()
+        parts.append(prose(raw_line[at:]))
+        out.append(''.join(parts))
+    return '\n'.join(out)
+
+
 # ------------------------------------------------------------------ project findings
 
 def project_findings(text, filename, rules):
@@ -206,7 +250,7 @@ def project_findings(text, filename, rules):
 
 def findings_for(path, rules, filename=None, names=None):
     """Every hard finding of one document, in document order."""
-    text = mask_names(path.read_text(encoding='utf-8'), names)
+    text = mask_quotes(mask_names(path.read_text(encoding='utf-8'), names))
     name = filename if filename is not None else str(path)
     hard, _ = ste_lint.lint(text, name)
     hard = [f for f in hard if f['level'] == 'advisory-free']

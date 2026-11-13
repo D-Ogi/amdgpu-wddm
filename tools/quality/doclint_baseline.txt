@@ -17,6 +17,7 @@
 #
 # To look at one document: python tools/quality/doclint.py --files <path>
 2	docs/dxvk-engine-commit-map.md
+10	docs/testing/THIRD-PARTY.md
 20	driver/contract/README-winsys.md
 28	driver/contract/README.md
 23	driver/umd/d3d12/README.md
@@ -24,5 +25,4 @@
 30	driver/umd/d3d12/engine-ddi/SLOTS.md
 28	driver/umd/d3d12/engine-ddi/shader-container/README.md
 1	tools/release/README.md
-6	tools/win/amdgpu_wddm_control/README.md
-10	docs/testing/THIRD-PARTY.md
+5	tools/win/amdgpu_wddm_control/README.md
