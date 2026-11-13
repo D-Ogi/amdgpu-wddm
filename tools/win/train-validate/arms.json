@@ -16,10 +16,9 @@
     "lab_zip": "C:\\BC250\\tmp\\train-{release}\\{pkg_name}.zip"
   },
   "limits": {
-    "note": "Project rules. The runner holds them; do not tune them here.",
+    "note": "Project rules. The runner holds them; do not tune them here. The temperature levels are not here: they come from tools/win/lab-thermal/thermal-levels.json.",
     "trial_bound_s": 170,
     "game_bound_s": 1200,
-    "tctl_start_max_c": 80.0,
     "tctl_poll_s": 20,
     "tctl_cool_max_s": 420,
     "host_grace_s": 45,

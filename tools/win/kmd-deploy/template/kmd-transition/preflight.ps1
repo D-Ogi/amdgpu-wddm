@@ -61,7 +61,10 @@ $result.clock = (& $cli clock read | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'Clock query failed' }
 $result.temperature = (& C:\BC250\bc250rd\bc250rd_cli.exe temp 1 1 | Out-String)
 if ($LASTEXITCODE -ne 0 -or $result.temperature -notmatch 'Tctl\s+([0-9]+(?:\.[0-9]+)?)') { throw 'Temperature unavailable' }
-if ([double]$Matches[1] -ge 85) { throw 'Temperature limit' }
+# BD-376: start_below_c of thermal-levels.json, which stage.py puts beside this script from the one definition.
+$thermal = [IO.File]::ReadAllText("$PSScriptRoot\thermal-levels.json") | ConvertFrom-Json
+if ($thermal.schema -cne 'bc250.lab-thermal-levels.v1') { throw 'thermal-levels.json has an unknown schema' }
+if ([double]$Matches[1] -ge $thermal.start_below_c) { throw 'Temperature limit' }
 $parameters = [ordered]@{}
 $key = Get-Item 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
 foreach ($name in $key.GetValueNames()) { $parameters[$name] = @{ value = $key.GetValue($name); kind = $key.GetValueKind($name).ToString() } }

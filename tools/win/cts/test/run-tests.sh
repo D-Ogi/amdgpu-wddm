@@ -25,6 +25,8 @@ cmd.exe //d //c "$(win "$HERE/build-fake.cmd")" "$(win "$WORK")" > "$WORK/fake-b
   || { cat "$WORK/fake-build.log"; exit 1; }
 cp "$WORK/fake-deqp.exe" "$ROOT/bin/deqp-vk.exe"
 cp "$CTS/run-batch.ps1" "$ROOT/"
+# As target.py ps does: the temperature levels go beside the script (BD-376).
+cp "$CTS/../lab-thermal/thermal-levels.json" "$ROOT/"
 printf 'a.case1\na.case2\na.case3\na.case4\n' > "$ROOT/lists/four.txt"
 printf 'a.case1\na.missing2\na.case3\n' > "$ROOT/lists/miss.txt"
 # The direct route copies the ICD and the forwarder next to each other; the fake loads neither. A release ICD

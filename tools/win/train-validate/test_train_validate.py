@@ -25,6 +25,9 @@ import runner as runner_module
 import summary as summary_module
 from manifest import GAME_KINDS, HOST_KINDS, TRIAL_KINDS, ManifestError, Package
 from runner import BOUND, Completed, FAIL, OPERATOR, PASS, SKIPPED, THERMAL, WARN, Runner
+from manifest import thermal_levels
+
+LEVELS = thermal_levels.load()
 
 HERE = Path(__file__).resolve().parent
 LAB = HERE / "lab"
@@ -95,7 +98,7 @@ def small_manifest(**overrides) -> dict:
                    "kit": "{repo}/lab", "caps": "{ws}/caps", "pathtrace": "{ws}/pt",
                    "plug": "{ws}/plug.py", "lab_root": "C:\\L\\{release}",
                    "lab_pkg": "C:\\L\\{release}\\{pkg_name}", "lab_zip": "C:\\L\\{release}\\{pkg_name}.zip"},
-        "limits": {"trial_bound_s": 170, "game_bound_s": 1200, "tctl_start_max_c": 80.0,
+        "limits": {"trial_bound_s": 170, "game_bound_s": 1200,
                    "tctl_poll_s": 20, "tctl_cool_max_s": 60, "host_grace_s": 45,
                    "min_poll_s": 10},
         "sets": {"standard": ["smoke", "demo", "game"]},
@@ -1069,13 +1072,36 @@ class ArmLoop(unittest.TestCase):
             ("gate.ps1", Completed(0, GATE_OK)),
         ])
         self.assertEqual(records["demo"].verdict, THERMAL)
-        self.assertIn("87 C", records["demo"].reason)
+        self.assertIn(LEVELS.describe(), records["demo"].reason)
+
+    def test_a_stop_line_of_the_current_kits_is_a_thermal_stop(self):
+        # game-kit-r3 and a5-r4 print "STOP THERMAL <reading> C >= <level> C" (BD-376).
+        held = thermal_levels.number(LEVELS.stop_held_c)
+        once = thermal_levels.number(LEVELS.stop_at_once_c)
+        for line in (f"STOP THERMAL 92.5 C held 10.2 s >= {held} C", f"Tctl 98 >= {once}"):
+            with self.subTest(line=line):
+                self.assertTrue(any(mark.search(line) for mark in runner_module.THERMAL_MARKS))
+        other = thermal_levels.number(LEVELS.stop_held_c - 5)
+        self.assertFalse(runner_module.THERMAL_MARKS[2].search(f"tctl 88 >= {other}"),
+                         "a comparison with a number that is not a stop level is not a stop")
+
+    def test_the_manifest_holds_no_temperature_level_of_its_own(self):
+        data = small_manifest()
+        data["limits"]["tctl_start_max_c"] = 80.0
+        with self.assertRaisesRegex(ManifestError, "lab-thermal"):
+            manifest.check_manifest(data)
+        self.assertNotIn("tctl_start_max_c", manifest.load_manifest()["limits"])
+
+    def test_the_plan_takes_the_start_line_from_the_thermal_levels(self):
+        self.assertEqual(self.plan.limits["tctl_start_max_c"], LEVELS.measured_start_below_c)
+        self.assertEqual(self.plan.limits["thermal_stop"], LEVELS.describe())
 
     def test_the_arm_waits_while_the_machine_cools_and_never_polls_faster_than_the_minimum(self):
-        temperatures = iter(["Tctl 88.0 C", "Tctl 84.0 C", "Tctl 70.0 C"])
+        line = LEVELS.measured_start_below_c
+        temperatures = iter([f"Tctl {line + 8} C", f"Tctl {line + 4} C", f"Tctl {line - 10} C"])
         _, shell, records = self.run_with([
             ("mon.py stop?", Completed(0, "no stop request")),
-            ("temp.py", lambda step: Completed(0, next(temperatures, "Tctl 70.0 C"))),
+            ("temp.py", lambda step: Completed(0, next(temperatures, f"Tctl {line - 10} C"))),
             ("vk-smoke.ps1", Completed(0, "smoke ok")),
             ("gate.ps1", Completed(0, GATE_OK)),
         ], arms=[self.plan.by_id("smoke")])
@@ -1086,7 +1112,7 @@ class ArmLoop(unittest.TestCase):
     def test_a_machine_that_stays_hot_skips_the_arm(self):
         _, _, records = self.run_with([
             ("mon.py stop?", Completed(0, "no stop request")),
-            ("temp.py", Completed(0, "Tctl 88.0 C")),
+            ("temp.py", Completed(0, f"Tctl {LEVELS.measured_start_below_c + 8} C")),
             ("vk-smoke.ps1", Completed(0, "smoke ok")),
         ], arms=[self.plan.by_id("smoke")])
         self.assertEqual(records["smoke"].verdict, SKIPPED)
@@ -2252,9 +2278,10 @@ class Budgets(unittest.TestCase):
             self.assertGreaterEqual(step.timeout_s, floor, step.text())
 
     def test_a_cool_down_whose_reads_take_ninety_seconds_still_ends_on_its_budget(self):
-        # The lab answers every temperature read after 90 s and reports 85 C. The budget is 60 s here (420 s
+        # The lab answers every temperature read after 90 s, 5 C over the start line. The budget is 60 s here (420 s
         # in the shipped manifest): the gate must end on it, and not make twenty reads of the same lab.
-        run, shell = self.runner_with([("temp.py", Completed(0, "Tctl 85.0 C"))], cost=90)
+        run, shell = self.runner_with([("temp.py", Completed(0, f"Tctl {LEVELS.measured_start_below_c + 5} C"))],
+                                      cost=90)
         ok, why = run.cool_down()
         self.assertFalse(ok)
         self.assertIn("cool-down budget ran out", why)

@@ -47,7 +47,6 @@ param(
     [string]$IcdModulePattern = '(?i)radv|radeon|amdgpu',
     [ValidateRange(20, 175)][int]$BoundSeconds = 170,
     [int]$ThermalCheckSeconds = 20,
-    [double]$ThermalStopC = 87,
     [string]$TempCli = 'C:\BC250\bc250rd\bc250rd_cli.exe',
     [switch]$NoStopFlag
 )
@@ -64,6 +63,14 @@ if (-not $Root) {
     if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'bin\deqp-vk.exe')) { $Root = $PSScriptRoot } else { $Root = 'C:\BC250\cts' }
 }
 if (-not $Results) { $Results = Join-Path $Root 'results' }
+# BD-376: the temperature levels of the one definition (tools/win/lab-thermal). target.py ps pushes
+# thermal-levels.json beside this script; a run from the repository reads the definition itself.
+$levelsPath = @((Join-Path $PSScriptRoot 'thermal-levels.json'),
+    (Join-Path (Split-Path -Parent $PSScriptRoot) 'lab-thermal\thermal-levels.json')) |
+    Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $levelsPath) { throw 'thermal-levels.json is missing beside this script' }
+$thermal = [IO.File]::ReadAllText($levelsPath) | ConvertFrom-Json
+if ($thermal.schema -cne 'bc250.lab-thermal-levels.v1') { throw 'thermal-levels.json has an unknown schema' }
 $bin = Join-Path $Root 'bin'
 $deqp = Join-Path $bin 'deqp-vk.exe'
 
@@ -192,7 +199,7 @@ try {
     if ($remaining.Count -gt 0) {
         if (Test-OwnerStop) { throw 'stop: owner STOP flag set' }
         $t0 = Read-Tctl
-        if ($t0 -ne $null -and $t0 -ge $ThermalStopC) { throw "stop: Tctl $t0 C before start" }
+        if ($t0 -ne $null -and $t0 -ge $thermal.start_below_c) { throw "stop: Tctl $t0 C before start" }
         $info.tctl_start = $t0
 
         [IO.File]::WriteAllLines("$stem.caselist.txt", [string[]]$remaining, $utf8)
@@ -226,6 +233,9 @@ try {
             $copyErr = $child.StandardError.BaseStream.CopyToAsync($errFile)
             $nextThermal = $clock.Elapsed.TotalSeconds + [Math]::Max($ThermalCheckSeconds, 5)
             $nextStop = $clock.Elapsed.TotalSeconds + 20
+            # The stop rule of thermal-levels.json: stop_at_once_c at the first reading, or a hot run of readings at
+            # or above stop_held_c that lasts stop_held_s. An unreadable reading does not end a hot run.
+            $hotSince = $null
             while (-not $child.HasExited) {
                 $now = $clock.Elapsed.TotalSeconds
                 if ($now -ge $BoundSeconds) { $killed = 'bound'; break }
@@ -242,7 +252,11 @@ try {
                 }
                 if ($ThermalCheckSeconds -gt 0 -and $now -ge $nextThermal) {
                     $tc = Read-Tctl; $info.tctl_last = $tc
-                    if ($tc -ne $null -and $tc -ge $ThermalStopC) { $killed = 'thermal'; break }
+                    if ($tc -ne $null) {
+                        if ($tc -lt $thermal.stop_held_c) { $hotSince = $null } elseif ($null -eq $hotSince) { $hotSince = $now }
+                    }
+                    if (($tc -ne $null -and $tc -ge $thermal.stop_at_once_c) -or
+                        ($null -ne $hotSince -and $now - $hotSince -ge $thermal.stop_held_s)) { $killed = 'thermal'; break }
                     $nextThermal = $now + $ThermalCheckSeconds
                 }
                 if ($now -ge $nextStop) {

@@ -174,8 +174,11 @@ What the runner does, with the complete description in the script header:
   Finished cases accumulate in `cases.tsv` and the next call runs only the rest. A crashed case keeps the
   status `Crash` with its exit code. Cases that deqp never started become `NotRun` only after a clean
   `#endSession`.
-- **Safety.** Tctl comes from one `bc250rd_cli` spawn every 20 s, and the run stops at 87 C. The runner also
-  reads the overlay STOP flag every 20 s. A second runner meets `runner.lock` and stops.
+- **Safety.** Tctl comes from one `bc250rd_cli` spawn every 20 s. A batch does not start at or above 87 C. The
+  run stops at 97 C at once, or when the readings stay at or above 92 C for 10 s. These levels come from
+  `thermal-levels.json`, the one definition in [`../lab-thermal`](../lab-thermal/README.md). `target.py ps` pushes
+  the file beside the runner. The runner also reads the overlay STOP flag every 20 s. A second runner meets
+  `runner.lock` and stops.
 
 Each batch writes `results/<RunId>/batch-NNNN/`: the per-attempt `.qpa`, `.caselist.txt`, `.stdout.txt`,
 `.stderr.txt` and `.json`, then `cases.tsv`, `summary.json` and `summary.txt`.

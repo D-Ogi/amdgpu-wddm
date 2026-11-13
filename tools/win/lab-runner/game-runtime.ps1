@@ -7,6 +7,12 @@ if(!$DryRun){. "$d\durable.ps1"}
 # scratch\m15\game-runner\profiles (BC250_TRIAL_GAME_PROFILE; default witcher3, the values this script hardcoded).
 # -DryRun prints the launch plan and, without -Offline, the read-only gates of this machine; it starts and writes nothing.
 $stageConfig=if($DryRun -and !(Test-Path -LiteralPath "$d\config.json")){[pscustomobject]@{}}else{Get-Content "$d\config.json" -Raw|ConvertFrom-Json}
+# BD-376: the temperature levels, from the thermal-levels.json that the kit stages beside this script; a dry run
+# from the repository reads the one definition itself (tools/win/lab-thermal). No level is written in this script.
+$levelsPath=@((Join-Path $d 'thermal-levels.json'),(Join-Path (Split-Path -Parent $d) 'lab-thermal\thermal-levels.json'))|Where-Object{Test-Path -LiteralPath $_}|Select-Object -First 1
+if(!$levelsPath){throw 'thermal-levels.json is missing beside this script'}
+$thermal=Get-Content -LiteralPath $levelsPath -Raw|ConvertFrom-Json
+if($thermal.schema -cne 'bc250.lab-thermal-levels.v1'){throw 'thermal-levels.json has an unknown schema'}
 $gp=Get-Content -LiteralPath $(if($ProfilePath){$ProfilePath}else{Join-Path $d 'game-profile.json'}) -Raw|ConvertFrom-Json
 $gameApi=if($Api){$Api}elseif($stageConfig.game_profile){[string]$stageConfig.game_profile.api}else{[string]$gp.api}
 if(!$gp.apis.$gameApi){throw ('Game API '+$gameApi+' is not in profile '+$gp.id)}
@@ -698,6 +704,7 @@ if($DryRun){
  'saves '+$(if($saves){'"'+$(if($Offline){[string]$gp.saves}else{$saves})+'"'}else{'none'})
  'modules '+($watch -join ',')
  'witness '+$witness.module+' '+$witness.sha256
+ 'thermal: start below '+$thermal.measured_start_below_c+' C; stop at '+$thermal.stop_held_c+' C held '+$thermal.stop_held_s+' s or at '+$thermal.stop_at_once_c+' C at once ('+$levelsPath+')'
  'bound '+$bound+' s; control '+$(if(!$control.enabled){'off'}elseif($witcherMenu){'after the menu transition'}else{'open '+$gp.readiness.control_after_window_seconds+' s after the first game window'})
  if(!$witcherMenu){'readiness: a game process with a window, '+$witness.module+' loaded and '+$gp.readiness.min_jobs+' KMD jobs'}
  if($control.enabled){'before readiness the channel takes only tap or hold of Space 39, Esc 01, Enter 1C, and shot, ocr, note, wait, quit'}
@@ -723,7 +730,7 @@ if($DryRun){
  $mb=Get-AvailableMemoryMiB
  Gate 'available memory' ($mb -ge 3500) ([string]$mb+' MB of 3500 (the low-memory pre-step otherwise)')
  $tempNow=Temp-Now
- Gate 'temperature' ($tempNow -ge 0 -and $tempNow -lt 80) ('tctl '+$tempNow+' through '+(Temp-Where))
+ Gate 'temperature' ($tempNow -ge 0 -and $tempNow -lt $thermal.measured_start_below_c) ('tctl '+$tempNow+' through '+(Temp-Where)+', start below '+$thermal.measured_start_below_c+' C; stop at '+$thermal.stop_held_c+' C held '+$thermal.stop_held_s+' s or '+$thermal.stop_at_once_c+' C at once')
  if($launchMode -eq 'steam'){
   $sp=@(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($steamClient)) -ErrorAction SilentlyContinue).Count
   Gate 'steam client running' ([bool]$sp) ([string]$sp+' processes')
@@ -766,7 +773,7 @@ try{
  $result.temperature_before=Temp-Now
  $result.temperature_source=$script:TempSource
  Note ('temperature_before '+$result.temperature_before+' through '+(Temp-Where))
- if($result.temperature_before -lt 0 -or $result.temperature_before -ge 80){throw ('Temperature before launch unreadable or at the limit: '+$result.temperature_before)}
+ if($result.temperature_before -lt 0 -or $result.temperature_before -ge $thermal.measured_start_below_c){throw ('Temperature before launch unreadable or at the limit: '+$result.temperature_before)}
  Router-Gate
  Registry-Gate
  # Started outside the Steam client: the game's Steam module needs its application id (066 ended in it).
@@ -1054,12 +1061,13 @@ try{
    Note ('t='+$t+' tctl='+$temp+' tsrc='+$script:TempSource+' ws_mb='+$ws+' threads='+$threads+' responding='+$result.responding_last)
   }catch{Note ('sample failed: '+$_.Exception.Message)}
   # The thermal guard outside the sample's try: -1 is unreadable, never cool; two in a row end the session.
-  # Rule of 2026-10-04: stop when Tctl stays >= 87 C for 10 s, or at once at >= 89 C (scene loads spike for a
-  # few seconds). An unreadable sample (-1) keeps the hot run: only a readable sample below 87 C ends it.
+  # The levels of thermal-levels.json: stop when Tctl stays at or above stop_held_c for stop_held_s, or at once at
+  # stop_at_once_c (scene loads spike for a few seconds). An unreadable sample (-1) keeps the hot run: only a
+  # readable sample below stop_held_c ends it.
   $nowUtc=[DateTime]::UtcNow
-  if($temp -ge 87){if(!$hotSince){$hotSince=$nowUtc}}elseif($temp -ge 0){$hotSince=$null}
+  if($temp -ge $thermal.stop_held_c){if(!$hotSince){$hotSince=$nowUtc}}elseif($temp -ge 0){$hotSince=$null}
   $hotSeconds=if($hotSince){($nowUtc-$hotSince).TotalSeconds}else{0}
-  if($temp -ge 89 -or $hotSeconds -ge 10){$result.stop_reason='thermal';Note ('t='+$t+' thermal stop at '+$temp+' C, hot for '+[math]::Round($hotSeconds,1)+' s');break}
+  if($temp -ge $thermal.stop_at_once_c -or $hotSeconds -ge $thermal.stop_held_s){$result.stop_reason='thermal';Note ('t='+$t+' thermal stop at '+$temp+' C, hot for '+[math]::Round($hotSeconds,1)+' s');break}
   if($temp -lt 0){$tempUnreadable++}else{$tempUnreadable=0}
   if($tempUnreadable -ge 2){$result.stop_reason='thermal-unreadable';Note ('t='+$t+' temperature unreadable twice, stop');break}
   if(Stop-Requested){$result.stop_reason='owner-stop';break}

@@ -21,8 +21,9 @@ the host tests cannot answer. Every trial outside the HLK job ends inside three 
 ## Before the first trial
 
 1. Read the lab state in `STATE.md` and check which driver is installed.
-2. Check the thermal rule, which is the campaign's and not a new one: stop when Tctl holds 87
-   degrees Celsius for 10 seconds, or at once at 89, and cool the board down between trials.
+2. Check the thermal rule, which is the campaign's and not a new one: stop when Tctl holds 92
+   degrees Celsius for 10 seconds, or at once at 97, and cool the board down between trials. The
+   levels have one definition, `tools/win/lab-thermal/thermal-levels.json`.
 3. Put the driver under test in place. An installed package is one way. A single-image arm is the
    other: the shared KMD lab kit puts the image in the driver store folder the service loads from,
    keeps the original by hash and gives it back afterwards. Check the SHA256 of the loaded KMD
@@ -204,7 +205,7 @@ goes into the facts graph with this evidence.
 | `fallback` above 0 | the same line | an item gave up the per-row engine path for a dispatch, which is the capacity contract working, not a fault |
 | the refusal classes | the same line | each count names one admission rule of `bc250_gdi_refusal`. A nonzero count is a case the host tests do not cover |
 | `red-first` above 0 | the same line | a ColorFill reached a red-first destination, where the colour format of the contract is not certain |
-| The temperature | `temp.py`, and the thermal guard | stop at 87 degrees Celsius. An HLK pass runs longer than any other trial here |
+| The temperature | `temp.py`, and the thermal guard | stop at 92 degrees Celsius held 10 seconds, or at 97 at once. An HLK pass runs longer than any other trial here |
 
 ## Limits of this plan
 

@@ -134,22 +134,29 @@ PASS_EXIT = "; exit $LASTEXITCODE"
 # BD-051: the in-process KMD reader. A lab script that polls the driver dot-sources it from its own directory, so a
 # poll starts no bc250kmd_cli process inside the ssh session.
 KMD_READER = Path(__file__).resolve().parent / "kmdread" / "kmd-reader.ps1"
+# BD-376: the temperature levels of the lab tools. A lab script that refuses a start or stops a run on temperature
+# reads them from its own directory.
+THERMAL_LEVELS = Path(__file__).resolve().parent / "lab-thermal" / "thermal-levels.json"
+COMPANIONS = (KMD_READER, THERMAL_LEVELS)
 
 
 def script_companions(local_path):
-    """The files that `run_script` pushes beside a script: kmd-reader.ps1 when the script names it. A copy beside the
-    script (a frozen kit) comes first, else the one of this repository."""
+    """The files that `run_script` pushes beside a script: kmd-reader.ps1 and thermal-levels.json, each when the
+    script names it. A copy beside the script (a frozen kit) comes first, else the one of this repository."""
     path = Path(local_path)
     try:
         text = path.read_text(encoding="utf-8-sig", errors="replace")
     except OSError:
         return []
-    if path.name.lower() == "kmd-reader.ps1" or "kmd-reader.ps1" not in text:
-        return []
-    for candidate in (path.with_name("kmd-reader.ps1"), KMD_READER):
-        if candidate.is_file():
-            return [str(candidate)]
-    return []
+    found = []
+    for companion in COMPANIONS:
+        if path.name.lower() == companion.name or companion.name not in text:
+            continue
+        for candidate in (path.with_name(companion.name), companion):
+            if candidate.is_file():
+                found.append(str(candidate))
+                break
+    return found
 INLINE_STATUS = ("\n$bc250Ok = $?; $bc250Code = $LASTEXITCODE\n"
                  "if ($bc250Ok) { exit 0 } elseif ($bc250Code) { exit $bc250Code } else { exit 1 }\n")
 

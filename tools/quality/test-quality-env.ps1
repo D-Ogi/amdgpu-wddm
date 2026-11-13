@@ -10,6 +10,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $base = Join-Path ([IO.Path]::GetFullPath($Out)) ('quality-env-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force $base | Out-Null
 $passed = 0
+$budgetSeconds = 570; $budgetEnd = [DateTime]::UtcNow.AddSeconds($budgetSeconds)
 function Assert([bool]$Ok, [string]$What) { if (-not $Ok) { throw "FAIL: $What" }; $script:passed++ }
 
 # A child pwsh with some variables removed or changed. Returns the exit code and the output lines.
@@ -21,7 +22,14 @@ function Invoke-Child([string]$Command, [hashtable]$Change) {
     $p = [Diagnostics.Process]::Start($psi)
     $err = $p.StandardError.ReadToEndAsync()
     $text = $p.StandardOutput.ReadToEndAsync()
-    if (-not $p.WaitForExit(240000)) { $p.Kill($true); $p.WaitForExit(); throw 'FAIL: the child did not end in 240 s' }
+    # One time budget for the whole test, not one limit per child: the gate's deadline (600 s in gate-inputs.json)
+    # is the authority. A limit of 240 s per child stopped the lab package of tester.39 rc1 at 333 s, in a full
+    # suite beside two other builds, although the gate still had 267 s.
+    $left = [int][Math]::Max(1000, ($script:budgetEnd - [DateTime]::UtcNow).TotalMilliseconds)
+    if (-not $p.WaitForExit($left)) {
+        $p.Kill($true); $p.WaitForExit()
+        throw "FAIL: a child did not end in the test's time budget ($script:budgetSeconds s from the start): $($Command.Substring(0, [Math]::Min(120, $Command.Length)))"
+    }
     return [pscustomobject]@{ Code = $p.ExitCode; Lines = @(($text.Result + $err.Result) -split "`r?`n" | Where-Object { $_ -match '\S' }) }
 }
 

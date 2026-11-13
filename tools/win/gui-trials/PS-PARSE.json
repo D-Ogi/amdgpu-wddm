@@ -1,5 +1,5 @@
 {
-    "powershell":  "5.1.26100.9444",
+    "powershell":  "5.1.26100.9818",
     "mode":  "parse-only",
     "lab_contacted":  false,
     "files":  [
@@ -35,7 +35,7 @@
                   },
                   {
                       "file":  "gui-trial-common.ps1",
-                      "sha256":  "B9CD5605712D737A34797004297FF98921215B50F23F310305045FC3D015CF1D",
+                      "sha256":  "EB26E29DE0B112BDF0E4B1449AB7A0048C2038800F871F563FE6C6A631C29877",
                       "parse_errors":  0
                   },
                   {

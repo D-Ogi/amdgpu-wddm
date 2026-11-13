@@ -1,0 +1,11 @@
+{
+  "schema": "bc250.lab-thermal-levels.v1",
+  "rule_date": "2026-11-10",
+  "note": "The one definition of the temperature levels of the lab tools. Tctl in degrees Celsius, as the kernel driver reports it. Every runner and tool that refuses a start or stops a run on temperature reads this file; no tool holds a number of its own. README.md in this directory gives the contract.",
+  "driver_throttle_c": 87,
+  "start_below_c": 87,
+  "measured_start_below_c": 80,
+  "stop_held_c": 92,
+  "stop_held_s": 10,
+  "stop_at_once_c": 97
+}

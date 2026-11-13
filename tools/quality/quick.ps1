@@ -162,6 +162,9 @@ try {
 # The lab's sshd watch (BD-051) under Windows PowerShell 5.1 against a stand-in sshd on 127.0.0.1: log-only heals, a
 # stub for the forensics, no service restarted.
 Check 'lab-emerg-watch' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Out\lab-emerg-watch").FullName; & python -B -m unittest discover -s "$repo\tools\win\lab-emerg" -p 'test_*.py' }
+# The development file swap: its lab script under Windows PowerShell 5.1 on a fake DriverStore tree (swap, double
+# swap, restore, records, refusals) and its parse check.
+Check 'dev-swap' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Out\dev-swap").FullName; & python -B -m unittest discover -s "$repo\tools\win\dev-swap" -p 'test_*.py' }
  # BD-051: no new polling loop that starts a process each round (spawn_loop_baseline.txt is the ratchet; 600 s in
  # gate-inputs.json: it parses about 1600 scripts, 43 s alone on six PowerShell processes). The in-process KMD reader
  # that replaces those loops is tested against the CLI on a fake driver built from bc250kmd_cli.c.
@@ -178,6 +181,8 @@ Check 'lab-emerg-watch' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -For
  # than the message claimed rather than less.)
  Check 'kmd-deploy' { $env:BC250_ROOT=$Workspace; $env:BC250_KMD_DEPLOY_WORK=(New-Item -ItemType Directory -Force "$Out\kmd-deploy").FullName; & python "$repo\tools\win\kmd-deploy\check-offline.py" --quick }
  Check 'lab-runner' { & python -m unittest discover -s "$repo\tools\win\lab-runner" }
+ # BD-376: the one definition of the lab temperature levels, and the gate against a level held by a tool itself.
+ Check 'lab-thermal' { & python -B -m unittest discover -s "$repo\tools\win\lab-thermal" }
  Check 'target-boot' { & python -m unittest discover -s "$repo\tools\win" -p "test_target*.py" }
  Check 'train-validate' { & python -m unittest discover -s "$repo\tools\win\train-validate" }
  Check 'gpu-timeline' { & python -m unittest discover -s "$repo\tools\win\gpu-timeline" -p 'test_*.py' }

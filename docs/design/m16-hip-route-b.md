@@ -2383,7 +2383,7 @@ own user-mode path, and the measured `LDS_SIZE` behaviour of a PM4 dispatch.
   (fact M53), and the kernel driver's own recovery is a soft one that only kills the hung job's waves
   when hang recovery is enabled. Without it the result is a bugcheck. Review the queue design before
   another trial, as the route document requires.
-- Thermal: the standing 87 C rules of the lab apply unchanged. The trial is far too short to heat the
+- Thermal: the standing levels of the lab (`tools/win/lab-thermal`) apply unchanged. The trial is far too short to heat the
   part, and that is one more reason to keep it short.
 
 ---

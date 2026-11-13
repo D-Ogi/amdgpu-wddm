@@ -281,8 +281,9 @@ full reset hangs unit A.
 ### 5.1 Rules for every trial
 
 - **Bound.** Each trial ends within 180 s of its start.
-- **Kill criteria.** Stop the trial when SSH does not answer 90 s after the trigger, or when Tctl is
-  87 C or more. Stop it also when the owner sets the STOP flag of the overlay.
+- **Kill criteria.** Stop the trial when SSH does not answer 90 s after the trigger, or at the thermal
+  stop of `tools/win/lab-thermal` (Tctl 92 C held 10 s, or 97 C at once). Stop it also when the owner
+  sets the STOP flag of the overlay.
 - **Recovery.** Use the emergency channel first. Cut AC with the smart plug only when the lab is hung.
   Wait for the boot with `target.py boot --os windows --after-now --bound <s>` in the background.
   Copy the dumps and the guard log before any other step. After an unclean end, set `DpmMode` 1, open

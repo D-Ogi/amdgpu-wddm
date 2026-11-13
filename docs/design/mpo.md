@@ -362,7 +362,7 @@ A2 is the acceptance arm of the Cyberpunk 2077 symptom. It is a game session (at
 check calls. Use the kit with `--arms '5' --hold` (or the selector that A1 found), then the benchmark of the
 2026-10-22 runs (`pt-run.ps1 -Demo cp2077-bench -CpProfile linux-high -Width 1920 -Height 1080 -Fullscreen
 -PresentMon <PresentMon-2.6.0-x64.exe> -Seconds 420`), then `--restore`. The thermal stop of game sessions applies
-(Tctl 87 C for 10 s, or 89 C at once), with the camera fire watch.
+(Tctl 92 C for 10 s, or 97 C at once, from `tools/win/lab-thermal`), with the camera fire watch.
 
 | Read | Baseline (2026-10-22, 1920x1080 on 1920x1200) | Pass |
 | --- | --- | --- |

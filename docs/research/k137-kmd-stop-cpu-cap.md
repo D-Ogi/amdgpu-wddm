@@ -246,7 +246,8 @@ restart leaves it and carries the hang risk of C9, so plan one warm restart for 
    every boot that the lab takes for another reason records a fresh state, and a test needs only a device restart.
    **Not run. Still worth the startup task, now with the seven-kernel probe of section 9.**
 
-Safety: the 87 C and 89 C thermal stops and the 300 W PSU limit apply. The KMD stays the only SMU owner. Do not
+Safety: the thermal stops of `tools/win/lab-thermal` (92 C held 10 s, 97 C at once) and the 300 W PSU limit
+apply. The KMD stays the only SMU owner. Do not
 send the droop calibration messages.
 
 ## 8. Related defects

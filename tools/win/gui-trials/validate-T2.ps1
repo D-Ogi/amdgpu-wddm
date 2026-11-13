@@ -41,7 +41,7 @@ function Import-PureFunction([string]$Name,[string]$File) {
     $parameters=@($node.Parameters|ForEach-Object {$_.Extent.Text}) -join ','
     Set-Item -LiteralPath ('Function:script:'+$Name) -Value ([scriptblock]::Create(('param('+$parameters+')'+[char]10+$node.Body.Extent.Text.Substring(1,$node.Body.Extent.Text.Length-2))))
 }
-foreach($n in @('Get-GuiField','Get-GuiStages','Test-GuiMutating','ConvertTo-GuiArgument','ConvertFrom-GuiTemperatureText','Assert-GuiMutationClosure')){
+foreach($n in @('Get-GuiField','Get-GuiStages','Test-GuiMutating','ConvertTo-GuiArgument','ConvertFrom-GuiTemperatureText','Assert-GuiMutationClosure','Read-GuiThermalLevels','Step-GuiThermalHold')){
     Import-PureFunction $n 'gui-trial-common.ps1'
 }
 foreach($n in @('ConvertTo-GuiIpNumber','ConvertFrom-GuiIpNumber','Get-GuiCidr','Get-GuiOfflineRanges','Get-GuiFirewallNames')){
@@ -75,7 +75,28 @@ $c.offline.local_subnets=@('10.0.0.0/8')
 Assert-Throws {Get-GuiOfflineRanges $c} 'reject subnet wider than interface prefix'
 $sample='dpm version=0x000700C6 flags=0x3 temperature_c=86.9 gfx_mhz=1500 busy_pct=1.0 avg_pct=1.0 src=grbm submit_pct=0.0'
 Assert-Check ((ConvertFrom-GuiTemperatureText $sample) -eq 86.9) 'real telemetry format'
-Assert-Check ((ConvertFrom-GuiTemperatureText ($sample.Replace('86.9','87.0'))) -ge 87) '87C stops inclusively'
+Assert-Check ((ConvertFrom-GuiTemperatureText ($sample.Replace('86.9','87.0'))) -eq 87.0) 'a whole-degree reading'
+# BD-376: the stop rule against the levels of the one definition (tools/win/lab-thermal), whatever their values.
+$levelsPath=Join-Path (Split-Path -Parent $Directory) 'lab-thermal\thermal-levels.json'
+$tl=Read-GuiThermalLevels $levelsPath
+$fixtureLevels=Join-Path $env:TEMP 'thermal-levels-bad.json'
+[IO.File]::WriteAllText($fixtureLevels,'{"schema":"other"}')
+Assert-Throws {Read-GuiThermalLevels $fixtureLevels} 'levels of an unknown schema refused'
+$f=[long]1000
+$h=Step-GuiThermalHold $tl ($tl.stop_held_c-0.1) 0 $f -1
+Assert-Check ($h.stop -eq '' -and $h.hot_since -eq -1) 'below stop_held_c: no stop, no hot run'
+$h=Step-GuiThermalHold $tl $tl.stop_held_c 5000 $f -1
+Assert-Check ($h.stop -eq '' -and $h.hot_since -eq 5000) 'stop_held_c starts the hot run inclusively'
+$h=Step-GuiThermalHold $tl $tl.stop_held_c (5000+[long]($tl.stop_held_s*$f)-1) $f 5000
+Assert-Check ($h.stop -eq '') 'a hot run shorter than stop_held_s does not stop'
+$h=Step-GuiThermalHold $tl ($tl.stop_held_c+0.5) (5000+[long]($tl.stop_held_s*$f)) $f 5000
+Assert-Check ($h.stop -like 'temperature-at-or-above-*C-for-*s') 'a hot run of stop_held_s stops'
+$h=Step-GuiThermalHold $tl ($tl.stop_held_c-0.1) 9000 $f 5000
+Assert-Check ($h.stop -eq '' -and $h.hot_since -eq -1) 'one reading below stop_held_c ends the hot run'
+$h=Step-GuiThermalHold $tl $tl.stop_at_once_c 0 $f -1
+Assert-Check ($h.stop -eq ('temperature-at-or-above-'+$tl.stop_at_once_c+'C')) 'stop_at_once_c stops at the first reading'
+$h=Step-GuiThermalHold $tl $tl.driver_throttle_c 0 $f -1
+Assert-Check ($h.stop -eq '') 'the driver throttle level alone does not stop a trial'
 Assert-Throws {ConvertFrom-GuiTemperatureText ($sample.Replace('86.9','86.9(stale)'))} 'stale temperature refused'
 Assert-Throws {ConvertFrom-GuiTemperatureText 'vram segments=1'} 'missing temperature refused'
 Assert-Throws {ConvertFrom-GuiTemperatureText ($sample+[char]10+$sample)} 'ambiguous multiple samples refused'

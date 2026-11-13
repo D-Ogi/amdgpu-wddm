@@ -37,7 +37,7 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from manifest import GAME_KINDS, Plan, PlannedArm, PlannedStep, TRIAL_KINDS
+from manifest import GAME_KINDS, Plan, PlannedArm, PlannedStep, TRIAL_KINDS, thermal_levels
 
 PASS, WARN, FAIL, BOUND, THERMAL, SKIPPED, OPERATOR = "PASS", "WARN", "FAIL", "BOUND", "THERMAL", "SKIPPED", "OPERATOR"
 # A baselined arm that produced no number to compare. It is not a pass: the arm ran and said nothing.
@@ -229,10 +229,14 @@ REFUSED_MARKS = (
     "is still running: wait for its end",
     "a session holds the lock",
 )
+# The stop lines of the lab runners. A line that compares Tctl with a stop level names a level of the one
+# definition (tools/win/lab-thermal), so the numbers come from there.
+_LEVELS = thermal_levels.load()
 THERMAL_MARKS = (
     re.compile(r"end:\s*reason\s*thermal", re.I),
-    re.compile(r"thermal stop", re.I),
-    re.compile(r"tctl[^\n]*>=\s*8[79]", re.I),
+    re.compile(r"thermal stop|stop thermal", re.I),
+    re.compile(r"tctl[^\n]*>=\s*(?:%s)\b" % "|".join(
+        re.escape(thermal_levels.number(level)) for level in (_LEVELS.stop_held_c, _LEVELS.stop_at_once_c)), re.I),
 )
 STALL_MARKS = (
     re.compile(r"kex_exchange_identification", re.I),
@@ -394,8 +398,8 @@ class Runner:
         return None, text
 
     def cool_down(self) -> tuple[bool, str]:
-        """Wait until Tctl is under the start line. The project rule is to cool below 87 C between trials;
-        a trial does not start above the manifest's start line either (80 C, as every native trial slot).
+        """Wait until Tctl is under the start line of a measured run (measured_start_below_c of the thermal
+        levels, tools/win/lab-thermal), which is under the start line of every run (start_below_c).
 
         The budget is one deadline over the whole gate, the ssh calls included, so a lab that takes 90 s to
         answer each read cannot turn a 420 s cool-down into forty minutes.
@@ -640,7 +644,7 @@ class Runner:
 
         if any(mark.search(text) for mark in THERMAL_MARKS) and record.verdict in (SKIPPED, FAIL):
             record.verdict = THERMAL
-            record.reason = "the arm ended on the thermal stop (Tctl 87 C held 10 s, or 89 C at once)"
+            record.reason = f"the arm ended on the thermal stop ({self.plan.limits['thermal_stop']})"
         wanted = [arm.arm["expect"]] if arm.arm.get("expect") else []
         wanted += list(arm.arm.get("expect_all", ()))
         if record.verdict == SKIPPED:

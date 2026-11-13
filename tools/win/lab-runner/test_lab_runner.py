@@ -1,4 +1,4 @@
-"""Offline host tests of the lab game runner: the game profiles, and the two session rules the runner carries.
+"""Offline host tests of the lab game runner: the game profiles, and the session rules the runner carries.
 
     python -m unittest discover -s tools/win/lab-runner
 
@@ -85,14 +85,23 @@ class Profiles(unittest.TestCase):
 class SessionRules(unittest.TestCase):
     """The two rules a measured session must keep. Both are project decisions, not tuning."""
 
-    def test_thermal_stop_is_87_c_held_10_s_or_89_c_at_once(self):
-        # 2026-10-04: stop when Tctl stays at or above 87 C for 10 s, or at once at 89 C.
-        self.assertRegex(RUNTIME, r'\$temp\s+-ge\s+87')
-        self.assertRegex(RUNTIME, r'\$temp\s+-ge\s+89\s+-or\s+\$hotSeconds\s+-ge\s+10')
+    def test_the_thermal_stop_reads_the_levels_of_the_one_definition(self):
+        # BD-376: the levels come from thermal-levels.json beside the script (tools/win/lab-thermal), never from
+        # a number in the script. The hold starts at stop_held_c, the stop is stop_held_s of it or stop_at_once_c.
+        self.assertIn("Join-Path $d 'thermal-levels.json'", RUNTIME)
+        self.assertIn("'bc250.lab-thermal-levels.v1'", RUNTIME)
+        self.assertRegex(RUNTIME, r'if\(\$temp\s+-ge\s+\$thermal\.stop_held_c\)\{if\(!\$hotSince\)')
+        self.assertRegex(RUNTIME, r'\$temp\s+-ge\s+\$thermal\.stop_at_once_c\s+-or\s+'
+                                  r'\$hotSeconds\s+-ge\s+\$thermal\.stop_held_s')
         self.assertRegex(RUNTIME, r"stop_reason\s*=\s*'thermal'")
 
+    def test_a_session_starts_only_below_the_measured_start_line(self):
+        self.assertRegex(RUNTIME, r'temperature_before\s+-ge\s+\$thermal\.measured_start_below_c\)\{throw')
+        self.assertRegex(RUNTIME, r"Gate 'temperature' \(\$tempNow -ge 0 -and \$tempNow -lt "
+                                  r"\$thermal\.measured_start_below_c\)")
+
     def test_an_unreadable_temperature_does_not_clear_the_hot_run(self):
-        # A failed read is -1, never a temperature: only a readable sample below 87 C ends the hot stretch.
+        # A failed read is -1, never a temperature: only a readable sample below stop_held_c ends the hot stretch.
         self.assertRegex(RUNTIME, r'elseif\(\$temp\s+-ge\s+0\)\{\$hotSince=\$null\}')
 
     def test_every_temperature_note_says_which_source_answered(self):

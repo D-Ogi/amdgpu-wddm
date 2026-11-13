@@ -10,10 +10,18 @@ import hashlib
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+# BD-376: the temperature levels of the lab tools have one definition, tools/win/lab-thermal.
+sys.path.insert(0, str(HERE.parent / "lab-thermal"))
+import thermal_levels  # noqa: E402
+
+# The limits that come from the thermal levels and never from arms.json: an arm starts only below the measured
+# start line, so that the arms start from a comparable state.
+THERMAL_LIMITS = ("tctl_start_max_c",)
 PLACEHOLDER = re.compile(r"\{([a-z_0-9]+)\}")
 # Arms that run a workload on the lab. The three-minute trial bound applies to these.
 TRIAL_KINDS = ("lab", "lab-read", "promote")
@@ -285,6 +293,16 @@ def check_manifest(data: dict) -> None:
                 raise ManifestError(f"set {name} names {arm_id}, which is not an arm")
     if int(limits["tctl_poll_s"]) < int(limits["min_poll_s"]):
         raise ManifestError("the temperature poll interval is under the minimum: the lab sshd penalises that")
+    own = [name for name in THERMAL_LIMITS if name in limits]
+    if own:
+        raise ManifestError(f"limits hold {', '.join(own)}: a temperature level comes only from "
+                            f"tools/win/lab-thermal/thermal-levels.json")
+
+
+def plan_limits(limits: dict) -> dict:
+    """The limits of arms.json with the thermal levels added from their one definition."""
+    levels = thermal_levels.load()
+    return dict(limits, tctl_start_max_c=levels.measured_start_below_c, thermal_stop=levels.describe())
 
 
 def expand(template: str, values: dict) -> str:
@@ -418,7 +436,7 @@ def build(package: Package, data: dict | None = None, arm_ids: list[str] | None 
     }
     for key, template in data["config"].items():
         values[key] = expand(template, values)
-    limits = data["limits"]
+    limits = plan_limits(data["limits"])
     wanted = arm_ids or data["sets"]["standard"]
     index = {arm["id"]: arm for arm in data["arms"]}
     unknown = [arm_id for arm_id in wanted if arm_id not in index]

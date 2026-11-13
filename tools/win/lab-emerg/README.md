@@ -147,7 +147,7 @@ investigation and the KMD work, not part of the protocol:
 | `boot-events.ps1`, `kmd-state.ps1` | unit A | Boot and shutdown events, and the driver's registry state |
 | `restart-listener-task.ps1` | unit A | Print the listener hash, stop the task, start it again, report its state |
 | `sshd-heal.sh` | this PC | When an authenticated ssh command does not answer: capture the forensics through the channel, restart sshd, ask again. Exit 0 ssh answers, 1 healed, 2 still down |
-| `guard-http.sh` | this PC | Temperature guard for a game session with no held ssh session. It reads the KMD dpm line every 30 s and ends the game after two readings above 87 C. `RESET_FLOOR=1` also resets the DPM floor |
+| `guard-http.sh` | this PC | Temperature guard for a game session with no held ssh session. It reads the KMD dpm line every 30 s. It ends the game at a reading of 97 C or more, or at the second reading in a row of 92 C or more. The levels come from [`../lab-thermal`](../lab-thermal/README.md). `RESET_FLOOR=1` also resets the DPM floor |
 
 The two shell scripts find `lab-emerg.py` and `target.py` from their own location, so they work from either copy
 of the kit. They poll every 30 s on purpose. Never go faster: the lab's sshd penalises fast probing, and a
