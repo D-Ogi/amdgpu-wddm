@@ -115,12 +115,12 @@ foreach ($control in @($SignedImage, $SecondSignedImage)) {
 # The address sanitizer stops the test at a read or a write outside a buffer. Its run-time library is a DLL beside
 # the compiler.
 $env:PATH = "$Mingw;$env:PATH"
-$hostFlags = @('-std=c11', '-O1', '-g', '-fsanitize=address', '-fno-omit-frame-pointer', "-I$efiRoot\lib\include", "-I$efiRoot\lib\test") + $includes
+$hostFlags = @('-std=c11', '-O1', '-g', '-fsanitize=address,undefined', '-fno-sanitize-recover=undefined', '-fno-omit-frame-pointer', "-I$efiRoot\lib\include", "-I$efiRoot\lib\test") + $includes
 # The bindings are in the host build too: firmware_test.c runs them against a model of the firmware.
 Build-Objects $hostCc $hostFlags $objHost ($pure + $bindings + $tests) $strict
 Build-Objects $hostCc $hostFlags $objHost $shared $relaxed
 $test = Join-Path $Out 'host_test.exe'
-Invoke-Tool $hostCc (@('-fsanitize=address', '-o', $test) + (Get-ChildItem "$objHost\*.o").FullName)
+Invoke-Tool $hostCc (@('-fsanitize=address,undefined', '-fno-sanitize-recover=undefined', '-o', $test) + (Get-ChildItem "$objHost\*.o").FullName)
 
 Write-Host 'fixtures (Secure Boot tests)'
 # New throwaway keys at each run. Only public data is written, under -Out.
