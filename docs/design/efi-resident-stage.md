@@ -115,6 +115,7 @@ An option is `name=value`. An option that no module understands is counted on th
 | `acpi.idle=0` | 1 | no idle state table |
 | `acpi.stubs=0` | 1 | no method stub table |
 | `sb.mode=audit`, `sb.mode=enforce` | `audit` | report each verdict, or refuse an image that is not allowed |
+| `sb.windows=1` | 0 | with `sb.mode=enforce` only: the operating system reads a Secure Boot state from this stage (see "The reported mode: sb.windows"). Ignored in every other mode |
 | `acpi.apply=0` | 1 | the ACPI module builds and checks its tables, and installs and removes none |
 | `probe=1` | 0 | a module that is off says which protocols the firmware has for it. The core unlock also gives its register BAR lines |
 | `log=0`, `log=1`, `log=line` | `1` | the log file: none, written before the next image starts, or written after each line |
@@ -332,15 +333,33 @@ Microsoft page of the option says that Secure Boot must be off before the option
 value is protected by Secure Boot policy". So a start with `SecureBoot` = 1 gives a Windows that does not load the
 driver of this project.
 
-### The reported mode is not built
+### The reported mode: sb.windows
 
-A mode that served `SecureBoot` = 1 from RAM was studied and is not in the stage. The project rule of 2026-11-13
-is: no Secure Boot emulation while Windows refuses the test-signed driver under it. Point (b) shows that Windows
-refuses it. Such a mode would also give no protection, and a program that sends the Secure Boot state to a server
-would send a value that the firmware did not make.
+`sb.windows=1` with `sb.mode=enforce` gives the operating system the state that this firmware does not have. The
+filter answers `SecureBoot` = 1, `SetupMode` = 0, and `PK`, `KEK`, `db` and `dbx` from the four files beside the
+stage (`pk.esl`, `kek.esl`, `db.esl`, `dbx.esl`, made by `mkesl.py` with test keys). Every other name, and every
+variable that the firmware has, goes to the firmware's own `GetVariable` unchanged. The state lives in memory for
+this start only. The stage has no `SetVariable` call, so no NVRAM variable changes, and no boot entry changes.
 
-One condition opens the topic again: a production-signed driver, which Windows loads without the test-signing
-mode. The work then starts from point (a), with a lab test of the third way and a new decision by the owner.
+The filter runs after the stage returns, when the firmware has freed the image of the stage. The part therefore
+copies two functions into memory of the type `EfiRuntimeServicesCode`: the filter and the notify function of the
+address change event. The state, with its own copies of the four databases, is in memory of the type
+`EfiRuntimeServicesData`. The copy holds one 64-bit slot behind its last byte, and the copied code reaches that
+slot through the addresses of two markers in its own section, so the slot stays right in the copy. The section
+`secure-boot/src/sb_windows.c` gives the details.
+
+At the virtual address change event, the notify function converts its pointers with `ConvertPointer`, writes the
+converted address of the state into the slot, and computes the CRC-32 of the runtime table again. The install code
+reads the patched pointer back. A firmware that keeps its own pointer (a read-only table) gets its state back, and
+the log says "the state is not installed". The module never claims a filter that the read-back does not show.
+
+The mode exists to answer one question on the lab: what does Windows do when it reads Secure Boot as on? The
+expected result is that Windows refuses the test-signed kernel driver of this project (point (b) above), and that
+is part of the test. A start in this mode is one armed start of the kit. The next start without the option has the
+firmware's own state, because nothing is written.
+
+The mode is not a security boundary. It reports a state. It measures nothing and it protects nothing. It
+makes no statement to a remote party: the variables are answers to processes of this machine, for this start.
 
 ### What each mode gives, and what it does not give
 
@@ -349,6 +368,7 @@ mode. The work then starts from point (a), with a lab test of the third way and 
 | `sb=0` | nothing changes | no check |
 | `sb.mode=audit` (default) | a console line with the verdict and the digest of each image that the stage starts. Nothing is refused | no protection. Windows reports Secure Boot as not available |
 | `sb.mode=enforce` | an image that `db` does not allow, or that `dbx` forbids, does not start through the stage | no report to Windows. No check of what the Windows Boot Manager loads later. Windows makes those checks only when it reads `SecureBoot` = 1 |
+| `sb.mode=enforce` with `sb.windows=1` | Windows reads Secure Boot as on, with the kit's four databases, for this start | the test-signed driver does not load. No protection: the state is a report, not a measurement |
 
 In every mode the root of trust is a set of files on the EFI System Partition that nobody signed: the stage
 itself, `db.esl` and `dbx.esl`. The firmware starts the stage without a check. So no mode protects against an
@@ -362,9 +382,9 @@ The stage has no code that makes a statement for a remote party. It makes no TPM
 measurement and no attestation. The TPM is out of scope. The stage does not copy the keys or the name of another
 vendor: the operator supplies every database.
 
-The stage gives no Secure Boot variable to the operating system. In each mode, Windows reads the same Secure Boot
-state as without the stage. A request to make Windows or a remote check read another state is outside this
-design.
+The stage gives no Secure Boot variable to the operating system, except in the mode `sb.windows=1` with
+`sb.mode=enforce`, where the answers are for this machine and this start only (see "The reported mode:
+sb.windows"). A request to make a remote check read another state is outside this design.
 
 ## SVM and IOMMU
 
