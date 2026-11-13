@@ -448,7 +448,8 @@ Bounds and refusals, all before anything starts: a set whose runs plus their exp
 170 s is refused here (one trial stays inside the lab's three minutes); the lab side refuses a wrong directory,
 a client whose hash is not the plan's, an existing result directory, a competing `BC250|DWM|G0|WSI` task that is
 running (the resident overlay and net watchdog are allowed by name), a machine with nobody logged on, and Tctl
-at or above 87 C.
+at or above 87 C. That level is `start_below_c` of `thermal-levels.json`, the one definition of the levels in
+[`../lab-thermal`](../lab-thermal/README.md). `target.py ps` pushes the file beside the task script.
 
 **Four timeouts, in this order**, which `lab\host-checks.ps1` enforces across the files that hold them: the
 client's watchdog asks the loop to stop at `seconds + 15` and kills the process at `seconds + 20`, writing what

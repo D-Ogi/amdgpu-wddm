@@ -359,7 +359,7 @@ def main(argv):
     plan = {"trial": trial, "set": set_name, "dir": REMOTE_DIR, "exe_sha256": sha256(exe),
             "budget_seconds": budget, "deadline_seconds": SET_BUDGET_SECONDS,
             "run_overhead_seconds": RUN_OVERHEAD_SECONDS,
-            "run_worst_case_extra_seconds": RUN_WORST_CASE_EXTRA, "temp_cap_c": 87.0, "runs": runs}
+            "run_worst_case_extra_seconds": RUN_WORST_CASE_EXTRA, "runs": runs}
     plan_path = LAB_WORK / ("plan-%s.json" % trial)
     # Only a real trial leaves a plan file behind: a dry run that wrote one would leave a record of a trial that
     # never happened next to the records of the ones that did.
@@ -385,8 +385,8 @@ def main(argv):
         print("dry run: nothing was sent. The calls would be:")
         print("  mon.py stop? ; mon.py status ... ; mon.py log ...")
         print("  target.py push %s %s --to %s" % (exe, plan_path, REMOTE_DIR))
-        print("  target.py ps lab\\frameloop-task.ps1 -Plan %s\\%s   (one call, the whole set)"
-              % (REMOTE_DIR, plan_path.name))
+        print("  target.py ps lab\\frameloop-task.ps1 -Plan %s\\%s   (one call, the whole set; thermal-levels.json "
+              "goes beside the script)" % (REMOTE_DIR, plan_path.name))
         print("  target.py pull %s\\runs-%s.zip -> %s\\runs\\%s\\" % (REMOTE_DIR, trial, LAB_WORK, trial))
         return 0
 

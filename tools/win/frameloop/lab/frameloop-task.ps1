@@ -44,10 +44,13 @@ $console = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-O
 $consoleSession = if ($console.Count) { $console[0].SessionId } else { 0 }
 if ($consoleSession -le 0) { throw 'No explorer in a session above 0: the desktop is not up' }
 
-# Temperature before the set, with the 87 C cap (CLAUDE.md, 2026-10-01). The reader is a diagnostic
-# tool that may not be deployed; its absence is noted, not fatal.
+# Temperature before the set: no set starts at or above start_below_c of thermal-levels.json, the one definition
+# of the levels (tools/win/lab-thermal), which target.py pushes beside this script (BD-376). The reader is a
+# diagnostic tool that may not be deployed; its absence is noted, not fatal.
 $rd = 'C:\BC250\bc250rd\bc250rd_cli.exe'
-$cap = if ($cfg.temp_cap_c) { [double]$cfg.temp_cap_c } else { 87.0 }
+$thermal = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'thermal-levels.json')) | ConvertFrom-Json
+if ($thermal.schema -cne 'bc250.lab-thermal-levels.v1') { throw 'thermal-levels.json has an unknown schema' }
+$cap = [double]$thermal.start_below_c
 function Read-Tctl {
     if (-not (Test-Path -LiteralPath $rd)) { return $null }
     $raw = & $rd temp 1 1 2>&1 | Out-String
