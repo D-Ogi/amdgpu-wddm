@@ -97,10 +97,10 @@ typedef struct {
 	VOID *GetWakeupTime;
 	VOID *SetWakeupTime;
 	VOID *SetVirtualAddressMap;
-	EFI_STATUS (EFIAPI *ConvertPointer)(UINTN DebugDisposition, VOID **Address);
+	VOID *ConvertPointer;
 	EFI_STATUS (EFIAPI *GetVariable)(CHAR16 *VariableName, EFI_GUID *VendorGuid, UINT32 *Attributes, UINTN *DataSize,
 					 VOID *Data);
-	EFI_STATUS (EFIAPI *GetNextVariableName)(UINTN *VariableNameSize, CHAR16 *VariableName, EFI_GUID *VendorGuid);
+	VOID *GetNextVariableName;
 	VOID *SetVariable_NeverCalled;	/* no NVRAM write: see the head of this file */
 	VOID *GetNextHighMonotonicCount;
 	VOID (EFIAPI *ResetSystem)(EFI_RESET_TYPE ResetType, EFI_STATUS ResetStatus, UINTN DataSize, VOID *ResetData);
@@ -116,13 +116,6 @@ typedef enum {
 	EfiRuntimeServicesCode = 5, EfiRuntimeServicesData = 6, EfiConventionalMemory = 7, EfiUnusableMemory = 8,
 	EfiACPIReclaimMemory = 9, EfiACPIMemoryNVS = 10
 } EFI_MEMORY_TYPE;
-typedef UINTN EFI_TPL;
-#define TPL_NOTIFY		16u
-typedef VOID (EFIAPI *EFI_EVENT_NOTIFY)(EFI_EVENT Event, VOID *Context);
-/* The event group of SetVirtualAddressMap (UEFI 2.10 section 7.1, EFI_EVENT_GROUP_VIRTUAL_ADDRESS_CHANGE). */
-#define EVT_NOTIFY_SIGNAL	0x00000200u
-#define EFI_EVENT_GROUP_VIRTUAL_ADDRESS_CHANGE \
-	{ 0x13FA7698, 0xC831, 0x49C7, { 0x87, 0xEA, 0x8F, 0x43, 0xFC, 0xC2, 0x51, 0x96 } }
 typedef enum { AllHandles = 0, ByRegisterNotify = 1, ByProtocol = 2 } EFI_LOCATE_SEARCH_TYPE;
 
 typedef struct {
@@ -171,11 +164,10 @@ typedef struct {
 	EFI_STATUS (EFIAPI *LocateProtocol)(const EFI_GUID *Protocol, VOID *Registration, VOID **Interface);
 	VOID *InstallMultipleProtocolInterfaces;
 	VOID *UninstallMultipleProtocolInterfaces;
-	EFI_STATUS (EFIAPI *CalculateCrc32)(VOID *Data, UINTN DataSize, UINT32 *Crc32);
+	VOID *CalculateCrc32;
 	VOID *CopyMem;
 	VOID *SetMem;
-	EFI_STATUS (EFIAPI *CreateEventEx)(UINT32 Type, EFI_TPL NotifyTpl, EFI_EVENT_NOTIFY NotifyFunction,
-					   const VOID *NotifyContext, const EFI_GUID *EventGroup, EFI_EVENT *Event);
+	VOID *CreateEventEx;
 } EFI_BOOT_SERVICES;
 
 typedef struct { EFI_GUID VendorGuid; VOID *VendorTable; } EFI_CONFIGURATION_TABLE;
