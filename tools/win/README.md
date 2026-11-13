@@ -82,7 +82,7 @@ every failed native call, so both command lines end with `; exit $LASTEXITCODE` 
 ### Configuration
 
 The addresses and key paths are **not** in this repository. They come from a JSON file outside it, by default
-`<BC250_ROOT>/secrets/client/target.json` (`BC250_TARGET_CONFIG` points elsewhere. `BC250_ROOT` is the
+`<BC250_ROOT>/secrets/client/target.json` (`BC250_TARGET_CONFIG` points elsewhere, and `BC250_ROOT` is the
 workspace root, by default the parent directory of this repository). Importing `target.py` never
 reads it. Only connecting does, so the tests and anything that just imports the module work without it.
 
