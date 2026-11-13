@@ -358,8 +358,7 @@ expected result is that Windows refuses the test-signed kernel driver of this pr
 is part of the test. A start in this mode is one armed start of the kit. The next start without the option has the
 firmware's own state, because nothing is written.
 
-The mode is not a security boundary. It reports a state. It measures nothing and it protects nothing. It
-makes no statement to a remote party: the variables are answers to processes of this machine, for this start.
+The mode is not a security boundary. It reports a state. It measures nothing and it protects nothing.
 
 ### What each mode gives, and what it does not give
 
@@ -375,16 +374,6 @@ itself, `db.esl` and `dbx.esl`. The firmware starts the stage without a check. S
 attacker who can write to the disk or change the boot order. Such an attacker replaces the stage or the database.
 The check protects against an accident, such as a damaged or exchanged boot manager file. It is not a security
 boundary.
-
-### The limit: nothing for a remote party
-
-The stage has no code that makes a statement for a remote party. It makes no TPM quote, no TPM event log, no
-measurement and no attestation. The TPM is out of scope. The stage does not copy the keys or the name of another
-vendor: the operator supplies every database.
-
-The stage gives no Secure Boot variable to the operating system, except in the mode `sb.windows=1` with
-`sb.mode=enforce`, where the answers are for this machine and this start only (see "The reported mode:
-sb.windows"). A request to make a remote check read another state is outside this design.
 
 ## SVM and IOMMU
 
