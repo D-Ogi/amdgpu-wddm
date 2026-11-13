@@ -58,7 +58,6 @@
 3	docs/design/vsync-arm-status.md
 10	docs/design/vsync-diagnostic-samples.md
 2	docs/dxvk-engine-commit-map.md
-19	docs/hardware.md
 8	docs/init-sequence.md
 11	docs/research/build-quality-gates.md
 1	docs/testing/INSTALL.md
