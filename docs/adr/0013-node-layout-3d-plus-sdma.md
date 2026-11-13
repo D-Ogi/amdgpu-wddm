@@ -12,9 +12,9 @@ harder to change with each line of user-mode code written against it.
 
 ## Decision
 
-1. Two nodes: node 0 `DXGK_ENGINE_TYPE_3D` on the gfx ring (graphics and compute; the compute rings of facts M79
+1. Two nodes: node 0 `DXGK_ENGINE_TYPE_3D` on the gfx ring (graphics and compute, where the compute rings of facts M79
    stay a later, additive node), node 1 `DXGK_ENGINE_TYPE_COPY` on SDMA.
-2. Node 1 is the paging node. `BuildPagingBuffer` emits SDMA copies and fills; page table updates stay CPU writes
+2. Node 1 is the paging node. `BuildPagingBuffer` emits SDMA copies and fills. Page table updates stay CPU writes
    through the VidMm path stage B proved (facts M73).
 3. The ICD exposes node 1 as its transfer queue family.
 4. SDMA's seven known defects (`driver/shim/test/sdma_faults.c`) are closed and its trap interrupt is identified on
@@ -24,5 +24,5 @@ harder to change with each line of user-mode code written against it.
 ## Consequences
 
 - Stage D of ADR 0008 starts with SDMA, not with the ICD.
-- Adding the compute node later is additive; removing or renumbering a node is not. Nothing in user mode may
+- Adding the compute node later is additive. Removing or renumbering a node is not. Nothing in user mode may
   hardcode a node ordinal other than through the adapter's reported metadata.
