@@ -41,8 +41,15 @@ struct Event {
     LONGLONG time = 0; UCHAR opcode = 0;
     UINT64 d3d = 0, dxg = 0, offset = 0, size = 0; UINT32 usage = 0, semantic = 0;
 };
-// A point of the program's own sequence, in the clock of the session (QPC)
+// A point of the program's own sequence, in the clock of the session (see now())
 struct Marker { LONGLONG time = 0; std::string what; int buffer = -1; };
+
+// The clock of the event time stamps: the session asks for QPC (Wnode.ClientContext 1), and the consumer reads the
+// time stamps raw (PROCESS_TRACE_MODE_RAW_TIMESTAMP). Without that mode ETW gives system time (FILETIME) to the
+// consumer, which does not compare with QPC markers. OpenTrace reports the clock type in
+// LogfileHeader.ReservedFlags: 1 QPC, 2 system time, 3 CPU cycle counter.
+constexpr ULONG ClockQpc = 1u, ClockSystemTime = 2u;
+ULONG g_clock = ClockQpc;
 
 DWORD g_pid = 0;
 SRWLOCK g_lock = SRWLOCK_INIT;
@@ -63,7 +70,20 @@ void WINAPI on_event(PEVENT_RECORD r) {
     ReleaseSRWLockExclusive(&g_lock);
 }
 
-LONGLONG now() { LARGE_INTEGER t; QueryPerformanceCounter(&t); return t.QuadPart; }
+// The time now in the clock of the event time stamps
+LONGLONG now() {
+    if (g_clock == ClockSystemTime) {
+        FILETIME f; GetSystemTimePreciseAsFileTime(&f);
+        return LONGLONG((ULONGLONG(f.dwHighDateTime) << 32) | f.dwLowDateTime);
+    }
+    LARGE_INTEGER t; QueryPerformanceCounter(&t); return t.QuadPart;
+}
+
+// Ticks of that clock per second
+double ticks_per_second() {
+    if (g_clock == ClockSystemTime) return 1.0e7;
+    LARGE_INTEGER f; QueryPerformanceFrequency(&f); return double(f.QuadPart);
+}
 
 const char *op_name(UCHAR op) {
     return op == OpMap ? "MAP" : op == OpUnmap ? "UNMAP" : op == OpRundown ? "RUNDOWN" : "OTHER";
@@ -89,10 +109,16 @@ public:
         started_ = true;
         EVENT_TRACE_LOGFILEW log{};
         log.LoggerName = const_cast<wchar_t *>(name_.c_str());
-        log.ProcessTraceMode = PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD;
+        log.ProcessTraceMode = PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD
+                             | PROCESS_TRACE_MODE_RAW_TIMESTAMP;
         log.EventRecordCallback = on_event;
         trace_ = OpenTraceW(&log);
         if (trace_ == INVALID_PROCESSTRACE_HANDLE) return GetLastError();
+        // The markers use the clock that the session has; a cycle counter has no user-mode equivalent here
+        // 0: the header does not say; the session has the clock that it asked for
+        clock_ = log.LogfileHeader.ReservedFlags ? log.LogfileHeader.ReservedFlags : ClockQpc;
+        if (clock_ != ClockQpc && clock_ != ClockSystemTime) return ERROR_NOT_SUPPORTED;
+        g_clock = clock_;
         consumer_ = std::thread([this] { ProcessTrace(&trace_, 1u, nullptr, nullptr); });
         return EnableTraceEx2(handle_, &Provider, EVENT_CONTROL_CODE_ENABLE_PROVIDER, TRACE_LEVEL_VERBOSE,
                               0u, 0u, 0u, nullptr);
@@ -103,6 +129,7 @@ public:
     }
     // Lost events make the order incomplete; the result says so
     ULONG lost() const { return lost_; }
+    ULONG clock() const { return clock_; }
     void stop() {
         if (!started_) return;
         started_ = false;
@@ -127,7 +154,7 @@ private:
     TRACEHANDLE handle_ = 0, trace_ = INVALID_PROCESSTRACE_HANDLE;
     std::thread consumer_;
     bool started_ = false;
-    ULONG lost_ = 0;
+    ULONG lost_ = 0, clock_ = 0;
 };
 
 int usage() {
@@ -175,7 +202,6 @@ int main(int argc, char **argv) {
     }
 
     std::vector<Marker> markers;
-    LARGE_INTEGER frequency; QueryPerformanceFrequency(&frequency);
     wchar_t name[64]; std::swprintf(name, 64, L"bc250-umdlog-probe-%lu", g_pid);
     Session session(name);
     if (ULONG status = session.start(); status != ERROR_SUCCESS) {
@@ -212,18 +238,20 @@ int main(int argc, char **argv) {
     // The engine writes them inside the Map call (E2), so the window holds them.
     std::map<UINT64, int> owner;
     for (const Event &e : events) {
-        if (e.opcode == OpRundown) continue;
+        // hD3DAllocation 0 is an allocation of the driver itself, not of a resource
+        if (e.opcode == OpRundown || !e.d3d) continue;
         for (size_t m = 0; m + 1 < markers.size(); m++) {
             if (markers[m].buffer >= 0 && e.time >= markers[m].time && e.time < markers[m + 1].time)
                 owner.emplace(e.d3d, markers[m].buffer);
         }
     }
 
-    std::wprintf(L"adapter %ls (%04X:%04X), %u rounds, %u-byte DYNAMIC buffers\n", ad.Description,
-                 ad.VendorId, ad.DeviceId, rounds, size);
+    std::wprintf(L"adapter %ls (%04X:%04X), %u rounds, %u-byte DYNAMIC buffers, event clock %ls\n", ad.Description,
+                 ad.VendorId, ad.DeviceId, rounds, size, g_clock == ClockSystemTime ? L"system time" : L"QPC");
     size_t next = 0;
     LONGLONG origin = markers.front().time;
-    auto ms = [&](LONGLONG t) { return double(t - origin) * 1000.0 / double(frequency.QuadPart); };
+    const double ticks = ticks_per_second();
+    auto ms = [&](LONGLONG t) { return double(t - origin) * 1000.0 / ticks; };
     for (const Event &e : events) {
         while (next < markers.size() && markers[next].time <= e.time) {
             std::printf("%9.3f ms  -- %s\n", ms(markers[next].time), markers[next].what.c_str()); next++;
@@ -242,6 +270,21 @@ int main(int argc, char **argv) {
     auto check = [&](bool ok, const char *buffer, const std::string &what) {
         std::printf("%s %s: %s\n", ok ? "PASS" : "FAIL", buffer, what.c_str()); pass = pass && ok;
     };
+    // Self-check of the time base: each event comes between the first and the last marker, and at least one MAP or
+    // UNMAP in a discard window. Else the markers and the events do not have one clock, and the checks below cannot
+    // name the buffers. A driver can write some events later (at a flush), so not every event must be in a window.
+    size_t outside = 0, inWindow = 0, mapsAndUnmaps = 0;
+    for (const Event &e : events) {
+        if (e.time < markers.front().time || e.time > markers.back().time) outside++;
+        if (e.opcode == OpRundown) continue;
+        mapsAndUnmaps++;
+        for (size_t m = 0; m + 1 < markers.size(); m++) {
+            if (markers[m].buffer >= 0 && e.time >= markers[m].time && e.time < markers[m + 1].time) { inWindow++; break; }
+        }
+    }
+    check(!events.empty() && outside == 0u && inWindow > 0u, "clock",
+          std::to_string(events.size()) + " events, " + std::to_string(outside) + " outside the run, "
+          + std::to_string(inWindow) + " of " + std::to_string(mapsAndUnmaps) + " MAP and UNMAP events in a discard window");
     std::map<UINT64, int> dxgOwner; bool shared = false;
     for (int b = 0; b < 2; b++) {
         const char *label = b ? "B" : "A";

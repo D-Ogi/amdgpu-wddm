@@ -29,7 +29,14 @@ For each buffer, these checks must pass:
 | Link | Each MAP comes while an earlier instance of the buffer is mapped. |
 | Instances | At the end, 2 to N+2 instances are mapped. |
 
-Two more checks apply to the run: no allocation is an instance of both buffers, and the session lost no event.
+Three more checks apply to the run:
+
+- Clock: each event comes between the first and the last step of the probe, and at least one MAP or UNMAP event
+  comes in a discard step. If this check fails, the events and the steps do not have one time base, and the probe
+  cannot name the buffers. The probe reads the time stamps raw, in the clock of the session (QPC). The first output line names
+  that clock.
+- No allocation is an instance of both buffers.
+- The session lost no event.
 
 ```
 umdlog-probe [--rounds N] [--size BYTES] [--any-adapter]
