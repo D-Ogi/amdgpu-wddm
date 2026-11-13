@@ -257,7 +257,7 @@ an automatic-health result. Preserve the existing display-only policy.
 
 The read path should avoid HardwareAccess. NoAdapterSynchronization does not
 make shared data safe: prove adapter-owned snapshot synchronization explicitly.
-The confirm path rechecks the live identity/readiness and performs checked
+The confirm path rechecks the live identity/readiness and performs confirmed
 persistence at PASSIVE_LEVEL. Do not hold a spin lock across registry I/O.
 Review the exact lifecycle exclusion at implementation time, including ISR/DPC
 writers.

@@ -102,7 +102,7 @@
 14	tools/win/bc250kmd_cli/README.md
 9	tools/win/bc250rd/README.md
 3	tools/win/cumode/README.md
-20	tools/win/d3d11bench/README.md
+3	tools/win/d3d11bench/README.md
 3	tools/win/d3d11errors/README.md
 2	tools/win/d3d11mt/README.md
 20	tools/win/d3d12caps/README.md
