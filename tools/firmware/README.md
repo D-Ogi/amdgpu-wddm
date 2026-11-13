@@ -14,14 +14,14 @@ python tools/firmware/fetch_firmware.py push [DIR]            legacy packages on
 `cyan_skillfish2.json` is the manifest: source repository, pinned commit, download URL templates, the
 target's `remote_dir`, and each file's name, size and SHA-256. `fetch` and `verify` default to
 `<BC250_ROOT>/ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu` (`BC250_ROOT` is the workspace root,
-by default the parent directory of this repository, same convention as `tools/win/target.py`); `push` copies
+by default the parent directory of this repository, same convention as `tools/win/target.py`). `push` copies
 from there to the manifest's `remote_dir` through `tools/win/target.py`, comparing remote SHA-256 first so
-identical files are not rewritten. `fetch` tries the URL templates in manifest order; the kernel.org
+identical files are not rewritten. `fetch` tries the URL templates in manifest order. The kernel.org
 endpoint is the canonical source and the GitLab mirror is the fallback.
 
 PROVENANCE: linux-firmware, amdgpu/cyan_skillfish2_*.bin, redistributable per LICENSE.amdgpu (WHENCE)
 
-The firmware blobs are never committed to this repository (`*.bin` is repository-wide gitignored); the
+The firmware blobs are never committed to this repository (`*.bin` is repository-wide gitignored). The
 manifest carries only names, sizes and hashes, never the files themselves.
 
 New packages require the complete set before Inf2Cat runs. The release ZIP omits
