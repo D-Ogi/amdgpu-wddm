@@ -405,6 +405,10 @@ public:
                 std::memcpy(identity.device_uuid,id.deviceUUID,sizeof(identity.device_uuid));
                 std::memcpy(identity.driver_uuid,id.driverUUID,sizeof(identity.driver_uuid));
                 known=engine_ddi::set_device_identity(context_,&identity);
+                // BD-373 step 5, the lab switch engine-layout-buffers (ddi-trace.h): committed GPU-only buffers carry
+                // the ENGINE LAYOUT record, which needs this identity.
+                if(known==S_OK && imports_ && ddi_experiment("engine-layout-buffers"))
+                    imports_->write_engine_layout_buffers(identity.device_uuid,identity.driver_uuid);
             }
             stage("DeviceIdentity",known);
         }

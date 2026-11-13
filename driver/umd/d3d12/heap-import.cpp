@@ -5,10 +5,12 @@
 #include "present-copy.h"
 #include "ddi-trace.h"
 #include "scanout-mode.h"
+#include "shared-buffer-record.h"
 #include <bc250_host_bootstrap.h>
 #include <d3dkmthk.h>
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <new>
 namespace native12 {
 namespace {
@@ -593,11 +595,24 @@ HRESULT RuntimeHeapImports::refuse_address(const char* why,HRESULT hr,uint64_t b
     return hr;
 }
 
+// The usage of the buffer probe: what the engine's buffers need from the memory of a buffer import.
+static constexpr VkBufferUsageFlags kBufferProbeUsage=VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT|
+    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+
+void RuntimeHeapImports::write_engine_layout_buffers(const uint8_t* device_uuid,const uint8_t* driver_uuid) noexcept {
+    bool identity=false;
+    if(device_uuid)for(unsigned i=0;i<sizeof(device_uuid_);++i)identity=identity || device_uuid[i]!=0;
+    std::memset(device_uuid_,0,sizeof(device_uuid_));std::memset(driver_uuid_,0,sizeof(driver_uuid_));
+    engine_layout_buffers_=identity;
+    if(!identity)return;
+    std::memcpy(device_uuid_,device_uuid,sizeof(device_uuid_));
+    if(driver_uuid)std::memcpy(driver_uuid_,driver_uuid,sizeof(driver_uuid_));
+}
+
 HRESULT RuntimeHeapImports::probe_buffer(uint64_t bytes,VkMemoryRequirements* needs) const noexcept {
     *needs={};
     VkBufferCreateInfo probe_info{};probe_info.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    probe_info.size=bytes;probe_info.usage=VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT|
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;probe_info.sharingMode=VK_SHARING_MODE_EXCLUSIVE;
+    probe_info.size=bytes;probe_info.usage=kBufferProbeUsage;probe_info.sharingMode=VK_SHARING_MODE_EXCLUSIVE;
     VkBuffer probe{};const HRESULT hr=from_vk(create_buffer_(device_,&probe_info,nullptr,&probe));if(FAILED(hr))return hr;
     if(!probe)return E_UNEXPECTED;
     requirements_(device_,probe,needs);destroy_buffer_(device_,probe,nullptr);
@@ -841,7 +856,29 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     VkMemoryRequirements needs{};hr=probe_buffer(request->byte_size,&needs);if(FAILED(hr))return hr;
     bits=needs.memoryTypeBits;if(request->memory_type_bits)bits&=request->memory_type_bits;
     alignment=std::max<uint64_t>(65536,std::max<uint64_t>(request->alignment,needs.alignment));
-    hr=allocation.prepare(std::max<uint64_t>(request->byte_size,needs.size),alignment,access,request->rt_owner.handle);
+    const uint64_t bytes=std::max<uint64_t>(request->byte_size,needs.size);
+    // BD-373 step 5 (lab switch engine-layout-buffers): a committed buffer on a GPU-only heap carries the ENGINE
+    // LAYOUT record, so that a D3D12 opener can open it if the application shares it. The DDI does not say which
+    // buffers are shared, so every such buffer gets it; a heap for placed resources has no resource and gets none.
+    BC250_SHARED_RESOURCE engine_record{};
+    const bool engine_layout=engine_layout_buffers_ && access==AllocationAccess::GpuOnly && request->resource &&
+        request->resource->ResourceType==D3D12DDI_RT_BUFFER && (request->flags&engine_ddi::kMemoryDedicated) &&
+        request->rt_owner.handle;
+    if(engine_layout){
+        EngineLayoutBufferCreate create{};
+        create.width=request->resource->Width;
+        create.unordered_access=(request->resource->Flags&D3D12DDI_RESOURCE_FLAG_0022_UNORDERED_ACCESS)!=0;
+        create.create_usage=kBufferProbeUsage;create.buffer_size=request->byte_size;create.memory_size=bytes;
+        create.memory_alignment=needs.alignment;create.memory_type_bits=bits;
+        std::memcpy(create.device_uuid,device_uuid_,sizeof(create.device_uuid));
+        std::memcpy(create.driver_uuid,driver_uuid_,sizeof(create.driver_uuid));
+        // A buffer that the record cannot describe, or an address alignment above what an opener maps, keeps the
+        // ordinary allocation.
+        if(alignment>BC250_SHARED_RESOURCE_MAX_ALIGNMENT || !engine_layout_buffer_record(create,&engine_record))
+            engine_record={};
+    }
+    hr=engine_record.Magic?allocation.prepare_engine_layout_buffer(engine_record,bytes,alignment,request->rt_owner.handle)
+                          :allocation.prepare(bytes,alignment,access,request->rt_owner.handle);
     if(FAILED(hr))return hr;
     }
     report_.stage=ImportStage::MemoryType;report_.bytes=allocation.held;report_.alignment=alignment;

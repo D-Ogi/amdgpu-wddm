@@ -159,6 +159,10 @@ class RuntimeHeapImports final {
     void end_residency_hold(const D3DKMT_HANDLE* allocations,unsigned count,bool evicted) noexcept;
     std::atomic<bool> active_{true},paging_open_{};
     bool initialized_{};
+    // BD-373 step 5: whether a committed GPU-only buffer gets the ENGINE LAYOUT record (write_engine_layout_buffers),
+    // and the creator identity that the record carries.
+    bool engine_layout_buffers_{};
+    uint8_t device_uuid_[16]{},driver_uuid_[16]{};
     Record* find(D3DKMT_HANDLE) const noexcept;   // under lock_
     // The record an import belongs to, by the cookie it carries, under lock_. One borrowed allocation handle may
     // have several records (BD-075: two opens of the same handle), so the handle no longer identifies an import.
@@ -238,6 +242,12 @@ public:
     uint64_t leaked_reservation_bytes() const noexcept {return leaked_reservation_bytes_.load();}
     // A retirement point of the quarantine outside allocate() and free(): releases what the policy admits.
     void retire_held() noexcept {drain(false);}
+    // BD-373 step 5, the lab switch engine-layout-buffers (ddi-trace.h): from now on every committed buffer on a GPU-only
+    // heap gets the ENGINE LAYOUT record of shared-buffer-record.h, with this device identity in it. A null or all-zero
+    // device UUID turns the record off again, because an opener refuses a record without an identity. Set before the
+    // first allocate(), by the owner that reads the switch (device-engine.cpp).
+    void write_engine_layout_buffers(const uint8_t* device_uuid,const uint8_t* driver_uuid) noexcept;
+    bool engine_layout_buffers() const noexcept {return engine_layout_buffers_;}
     // BD-052, the residency of an imported heap. The runtime owns it: it calls pfnMakeResident and pfnEvict
     // on this device (native-residency-ddi.cpp), and the driver "must no longer create allocations
     // associated with any d3d12 driver handle creation DDIs as resident during creation"

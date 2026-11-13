@@ -126,6 +126,12 @@ inline void ddi_chain_failure(const char* site,HRESULT code,unsigned operation=0
 //     refuses Cached on a PRIMARY allocation (trial 105), so it needs present-noprimary with it.
 //   present-noprimary: the swap-chain buffers are not PRIMARY (heap-import.cpp), which also forfeits the
 //     scanout route. Measured gain of the pair under the CPU compositor, none under the GPU one (K115).
+// One lab name is opt-in because its measurement is still to come:
+//   engine-layout-buffers: every committed buffer on a GPU-only heap carries the ENGINE LAYOUT record and a BC2A blob
+//     with BC250_UMD_A_SHARED, so that a D3D12 opener can open it when the application shares it
+//     (heap-import.cpp, shared-buffer-record.h; BD-373 step 5). The DDI does not say which buffers are shared. Lab:
+//     the probe of the shared-open design must first measure that the runtime keeps the 240 bytes for every such
+//     buffer and what they cost per create; then the record becomes a default with an off switch.
 // One more name asks for a diagnostic rather than a deviation:
 //   replay-log: with deferred replay on, the replay lines also go to a file of their own (replay-log.h), for a
 //     game whose stderr nobody reads. It changes no behaviour; it costs the writes.
@@ -183,6 +189,7 @@ inline constexpr SwitchRow kD3D12Switches[]={
     {"import-residency-release-on",SwitchClass::Lab},
     {"fence-wait-accept-off",SwitchClass::Lab},
     {"shared-create-retry-off",SwitchClass::Lab},
+    {"engine-layout-buffers",SwitchClass::Lab},
     {"raytracing-tier",SwitchClass::Accepted},
     {"recording-bind",SwitchClass::Accepted},
     {"retire-handoff",SwitchClass::Accepted},

@@ -5,6 +5,7 @@
 #include "../../contract/amdgpu_wddm_surface_format.h"
 #include "../../contract/bc250_shared_surface.h"
 #include "../../contract/bc250_scanout_record.h"
+#include "../../contract/bc250_shared_resource.h"
 #include <cstring>
 #include <cstddef>
 #include <cstdint>
@@ -103,6 +104,9 @@ struct AllocationRequest final {
     // The shared surface's own resource record (E26R v3, 64 bytes). It replaces resource on the wire for
     // prepare_shared_surface alone; the primary and the raw forms leave it zero.
     BC250_SURFACE_RESOURCE_PRIVATE texture{};
+    // BD-373 step 5: the ENGINE LAYOUT record (S26R, 240 bytes) of a buffer this shell creates. It replaces resource on
+    // the wire for prepare_engine_layout_buffer alone; every other form leaves it zero.
+    BC250_SHARED_RESOURCE engine_record{};
     uint64_t held{};                            // what the allocation holds: mapped and imported
     D3D12DDI_ALLOCATION_INFO_0022 info{};
     D3D12DDICB_ALLOCATE_0022 args{};
@@ -111,7 +115,7 @@ struct AllocationRequest final {
     AllocationRequest& operator=(const AllocationRequest&)=delete;
     HRESULT prepare(uint64_t bytes,uint64_t alignment,AllocationAccess access,
                     HANDLE runtimeOwner=nullptr) noexcept {
-        blob={};surface={};resource={};texture={};info={};args={};held=0;
+        blob={};surface={};resource={};texture={};engine_record={};info={};args={};held=0;
         constexpr uint64_t page=4096;
         // Do not silently shrink an engine requirement or overflow rounding.
         if(!bytes || alignment<page || (alignment&(alignment-1)) ||
@@ -141,6 +145,27 @@ struct AllocationRequest final {
         info.pPrivateDriverData=&blob;info.PrivateDriverDataSize=sizeof(blob);
         args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
         held=rounded;
+        return S_OK;
+    }
+    // BD-373 step 5: a buffer of the ENGINE LAYOUT form, which another shell can open. The allocation is the raw
+    // GPU-only one of prepare, with two changes: the BC2A blob carries BC250_UMD_A_SHARED, and the resource-level
+    // private data is the 240-byte S26R record (shared-buffer-record.h writes it). The opener's check of the blob,
+    // Bc250SharedResourceAllocWhy, admits it: the flag alone, VRAM, NO_CPU_ACCESS, va_size equal to alloc_size, a page
+    // multiple of at least the record's MemorySize, and an alignment from the record's to 64 KiB. The kernel driver
+    // reads neither the flag nor the record, so the allocation is the one prepare makes.
+    HRESULT prepare_engine_layout_buffer(const BC250_SHARED_RESOURCE& record,uint64_t bytes,uint64_t alignment,
+                                         HANDLE runtimeOwner) noexcept {
+        HRESULT hr=prepare(bytes,alignment,AllocationAccess::GpuOnly,runtimeOwner);
+        if(FAILED(hr))return hr;
+        if(record.Dimension!=BC250_SHARED_RESOURCE_BUFFER ||
+           !Bc250SharedResourceWhyOk(Bc250SharedResourceRecordWhy(&record)) ||
+           alignment>BC250_SHARED_RESOURCE_MAX_ALIGNMENT || alignment<record.MemoryAlignment ||
+           blob.alloc_size<record.MemorySize){
+            blob={};info={};args={};held=0;return E_INVALIDARG;
+        }
+        blob.flags=BC250_UMD_A_SHARED;
+        engine_record=record;
+        args.pPrivateDriverData=&engine_record;args.PrivateDriverDataSize=sizeof(engine_record);
         return S_OK;
     }
     // The primary: the 32-byte LB7A v1 description, which the kernel driver and the compositor's
@@ -178,7 +203,7 @@ struct AllocationRequest final {
                             uint64_t size,HANDLE runtimeOwner=nullptr,bool cpuRead=false,
                             bool primary=true,bool scanout=false,bool driverSurface=false,
                             bool noCpuAccess=false) noexcept {
-        blob={};surface={};resource={};texture={};info={};args={};held=0;
+        blob={};surface={};resource={};texture={};engine_record={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
         // Scan-out needs the SCANOUT_PRIMARY policy bit (BGRA8, RGBA8 and RGB10A2 today; the caller has
         // already checked the caps with bc250_scanout_format_admitted), and it needs the surface to be a
@@ -266,7 +291,7 @@ struct AllocationRequest final {
     // pitch and size are the engine's linear image's, exactly as for a primary, never chosen here.
     HRESULT prepare_shared_surface(uint32_t width,uint32_t height,uint32_t pitch,uint32_t dxgiFormat,
                                    uint64_t size,uint32_t bindFlags,HANDLE runtimeOwner=nullptr) noexcept {
-        blob={};surface={};resource={};texture={};info={};args={};held=0;
+        blob={};surface={};resource={};texture={};engine_record={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
         const auto* row=Bc250SharedSurfaceFormat(dxgiFormat);
         if(!row)return E_NOTIMPL;

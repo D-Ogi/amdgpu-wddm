@@ -208,6 +208,11 @@ int main() {
         assert(row && row->cls == native12::SwitchClass::Lab);
         assert(admit(name, false).kept.empty());
     }
+    // BD-373 step 5: a lab name because its measurement is still to come, so a release shell writes no record.
+    {
+        const native12::SwitchRow* row = native12::switch_row(native12::kD3D12Switches, "engine-layout-buffers");
+        assert(row && row->cls == native12::SwitchClass::Lab && admit("engine-layout-buffers", false).kept.empty());
+    }
     // A mixed list keeps its order. A name with no row is dropped in each flavour, and so is a name that only
     // starts as a row does.
     Admitted mixed = admit("present-cached,import-quarantine-off,x-future,deferred-replay-off,scanout-flip-1280x720", false);

@@ -4,6 +4,7 @@
 #include "device-state.h"
 #include "allocation-request.h"
 #include "scanout-mode.h"
+#include "../../contract/bc250_shared_resource_alloc.h"
 #include <bc250_host_bootstrap.h>
 #include <d3dkmthk.h>
 #include <cassert>
@@ -108,6 +109,10 @@ static bool driver_surface_request=false;
 // BD-133, the D3D9 back buffer: the shared form of the driver's own copy surface of a B8G8R8X8 source (tagged
 // A8R8G8B8), counted apart from the shared surfaces of the wire's v3 record.
 static unsigned own_shared_surfaces=0;
+// BD-373 step 5: committed GPU-only buffers that carried the ENGINE LAYOUT record, and the last record, as an opener
+// decodes it.
+static unsigned engine_layout_buffers=0;
+static BC250_SHARED_RESOURCE engine_layout_record{};
 static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_0022* a){
  assert(d.handle==handle<void*>(1) && !a->hKMResource);
  assert(a->hResource==(driver_surface_request?nullptr:handle<void*>(2)));
@@ -168,6 +173,19 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
   assert(a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY);
   assert(a->pAllocationInfo->VidPnSourceId==D3DDDI_ID_UNINITIALIZED);
   ++surfaces;events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
+ }
+ if(a->PrivateDriverDataSize==BC250_SHARED_RESOURCE_BYTES){
+  // BD-373 step 5: the ENGINE LAYOUT form of a committed GPU-only buffer. Both records must pass the opener's own
+  // checks: the contract's decode of the 240 bytes, and its field check of the BC2A blob against that record.
+  assert(a->pPrivateDriverData && a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE &&
+         !a->pAllocationInfo->VidPnSourceId && a->pAllocationInfo->PrivateDriverDataSize==sizeof(bc250_umd_alloc_private));
+  BC250_SHARED_RESOURCE received{};
+  assert(Bc250SharedResourceWhyOk(Bc250SharedResourceDecodeWhy(a->pPrivateDriverData,a->PrivateDriverDataSize,&received)));
+  unsigned long long bytes=0;
+  assert(Bc250SharedResourceWhyOk(Bc250SharedResourceAllocWhy(a->pAllocationInfo->pPrivateDriverData,
+      a->pAllocationInfo->PrivateDriverDataSize,&received,&bytes)) && bytes==held_bytes());
+  engine_layout_record=received;++engine_layout_buffers;
+  events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
  }
  assert(!a->pPrivateDriverData && !a->PrivateDriverDataSize);
  assert(a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE && !a->pAllocationInfo->VidPnSourceId);
@@ -333,6 +351,44 @@ int main(){
  if(expected_type){D3DKMT_LOCK2 lock{};lock.hAllocation=memory.allocation;assert(owner.dispatch(BC250_HOST_Lock2,&lock)==S_OK && lock.pData==mapped);unlock_on_free=true;}
  assert(owner.free(&memory)==S_OK);assert(events==(expected_type?"AMZIELVNUD":"AMZIEVUD"));unlock_on_free=false;
  assert(!owner.owns_allocation(memory.allocation) && owner.free(&memory)==E_INVALIDARG);
+ }
+ {
+  // BD-373 step 5, the lab switch engine-layout-buffers: a committed buffer on a GPU-only heap carries the ENGINE
+  // LAYOUT record with this device's identity; a CPU-visible heap, a heap without a resource, a Width the record
+  // cannot carry and the switch off keep the ordinary allocation. The memory and the events are the same either way.
+  assert(!owner.engine_layout_buffers());
+  uint8_t device_uuid[16],driver_uuid[16];
+  for(unsigned i=0;i<16;++i){device_uuid[i]=uint8_t(0x20+i);driver_uuid[i]=uint8_t(0x60+i);}
+  uint8_t zero_uuid[16]{};
+  owner.write_engine_layout_buffers(zero_uuid,driver_uuid);assert(!owner.engine_layout_buffers());
+  owner.write_engine_layout_buffers(device_uuid,driver_uuid);assert(owner.engine_layout_buffers());
+  auto allocate_once=[&](unsigned type,bool record){
+   expected_type=type;
+   heap.CPUPageProperty=type==0?D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE:D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE;
+   const unsigned before=engine_layout_buffers;events.clear();
+   assert(owner.allocate(&req,&memory)==S_OK && events=="AMZIE" && memory.memory_type_index==type);
+   assert(engine_layout_buffers==before+(record?1u:0u));
+   assert(owner.free(&memory)==S_OK && events=="AMZIEVUD");
+  };
+  resource.Width=100;
+  resource.Flags=static_cast<decltype(resource.Flags)>(D3D12DDI_RESOURCE_FLAG_0022_UNORDERED_ACCESS);
+  allocate_once(0,true);
+  const BC250_SHARED_RESOURCE& r=engine_layout_record;
+  assert(r.Dimension==BC250_SHARED_RESOURCE_BUFFER && r.Width==100 && r.CreatorApi==BC250_SR_CREATOR_D3D12);
+  assert(r.BindFlags==(BC250_SR_BIND_VERTEX_BUFFER|BC250_SR_BIND_INDEX_BUFFER|BC250_SR_BIND_SHADER_RESOURCE|
+                       BC250_SR_BIND_UNORDERED_ACCESS));
+  assert(r.BufferSize==4096 && r.MemorySize==65536 && r.MemoryAlignment==65536 && r.MemoryTypeBits==15);
+  assert(!std::memcmp(r.DeviceUuid,device_uuid,16) && !std::memcmp(r.DriverUuid,driver_uuid,16));
+  resource.Flags=static_cast<decltype(resource.Flags)>(0);
+  allocate_once(0,true);
+  assert(engine_layout_record.BindFlags==(BC250_SR_BIND_VERTEX_BUFFER|BC250_SR_BIND_INDEX_BUFFER|
+                                          BC250_SR_BIND_SHADER_RESOURCE));
+  allocate_once(1,false);
+  resource.Width=uint64_t(UINT32_MAX)+1;allocate_once(0,false);resource.Width=100;
+  req.resource=nullptr;req.flags=0;allocate_once(0,false);req.resource=&resource;req.flags=engine_ddi::kMemoryDedicated;
+  owner.write_engine_layout_buffers(nullptr,nullptr);assert(!owner.engine_layout_buffers());
+  allocate_once(0,false);
+  resource.Width=0;expected_type=3;
  }
  // Both CPU-visible L0 policies accept the explicit coherent flag, including
  // heaps allowing every resource category. Actual non-buffer resources still fail.

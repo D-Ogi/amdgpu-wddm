@@ -2,6 +2,8 @@
 #include "allocation-request.h"
 #include "scanout-mode.h"
 #include "adapter-contract.h"
+#include "shared-buffer-record.h"
+#include "../../contract/bc250_shared_resource_alloc.h"
 #include "../../kmd/gdi_private.h"
 extern "C" {
 #include "../../kmd/umd_blob.h"
@@ -726,7 +728,85 @@ int main() {
             CHECK(std::strcmp(scanout_mode_list_text(ScanoutModeList(value)),"unknown")!=0);
         CHECK(!std::strcmp(scanout_mode_list_text(ScanoutModeList::Offered),"offered"));
     }
+    {
+        // BD-373 step 5: the ENGINE LAYOUT form of a committed buffer that this shell creates. The record and the
+        // BC2A blob must pass the opener's own checks (the contract's decode, blob check and match rule), so a
+        // D3D11 or a D3D12 opener of this driver takes them.
+        EngineLayoutBufferCreate c{};
+        c.width=100;c.unordered_access=false;c.create_usage=0x20023u;c.buffer_size=65536;c.memory_size=65536;
+        c.memory_alignment=256;c.memory_type_bits=0x7;
+        for(unsigned i=0;i<16;++i){c.device_uuid[i]=uint8_t(0x10+i);c.driver_uuid[i]=uint8_t(0x40+i);}
+        BC250_SHARED_RESOURCE record{};
+        CHECK(engine_layout_buffer_record(c,&record));
+        CHECK(Bc250SharedResourceWhyOk(Bc250SharedResourceRecordWhy(&record)));
+        CHECK(record.Dimension==BC250_SHARED_RESOURCE_BUFFER && record.Width==100 && record.Height==1 &&
+              record.MipLevels==1 && record.ArraySize==1 && !record.Format && record.SampleCount==1 &&
+              record.Usage==BC250_SR_USAGE_DEFAULT && !record.CpuAccessFlags && !record.MiscFlags &&
+              !record.StructureByteStride);
+        CHECK(record.BindFlags==(BC250_SR_BIND_VERTEX_BUFFER|BC250_SR_BIND_INDEX_BUFFER|BC250_SR_BIND_SHADER_RESOURCE));
+        CHECK(record.CreatorApi==BC250_SR_CREATOR_D3D12 && record.BufferSize==65536 && record.MemorySize==65536 &&
+              record.MemoryAlignment==256 && record.MemoryTypeBits==0x7 && !record.LayoutHash);
+        CHECK(!std::memcmp(record.DeviceUuid,c.device_uuid,16) && !std::memcmp(record.DriverUuid,c.driver_uuid,16));
+        c.unordered_access=true;
+        CHECK(engine_layout_buffer_record(c,&record) && (record.BindFlags&BC250_SR_BIND_UNORDERED_ACCESS));
+        // What the record cannot carry: a Width above 32 bits, no identity, requirements the form refuses.
+        BC250_SHARED_RESOURCE none{};
+        auto refused=[&](EngineLayoutBufferCreate bad){
+            none.Magic=1;
+            const bool written=engine_layout_buffer_record(bad,&none);
+            BC250_SHARED_RESOURCE zero{};
+            return !written && !std::memcmp(&none,&zero,sizeof(zero));
+        };
+        EngineLayoutBufferCreate bad=c;bad.width=uint64_t(UINT32_MAX)+1;CHECK(refused(bad));
+        bad=c;bad.width=0;CHECK(refused(bad));
+        bad=c;std::memset(bad.device_uuid,0,16);CHECK(refused(bad));
+        bad=c;bad.memory_alignment=3;CHECK(refused(bad));
+        bad=c;bad.memory_alignment=uint64_t(BC250_SHARED_RESOURCE_MAX_ALIGNMENT)*2;CHECK(refused(bad));
+        bad=c;bad.memory_type_bits=0;CHECK(refused(bad));
+        bad=c;bad.create_usage=0;CHECK(refused(bad));
+        bad=c;bad.buffer_size=50;CHECK(refused(bad));
+        CHECK(!engine_layout_buffer_record(c,nullptr));
+
+        // The wire: the raw GPU-only allocation of prepare, the flag, and the record as resource-level data.
+        AllocationRequest req;
+        CHECK(engine_layout_buffer_record(c,&record));
+        CHECK(req.prepare_engine_layout_buffer(record,65536,65536,reinterpret_cast<HANDLE>(uintptr_t(0x77)))==S_OK);
+        CHECK(req.args.pPrivateDriverData==&req.engine_record && req.args.PrivateDriverDataSize==BC250_SHARED_RESOURCE_BYTES);
+        CHECK(req.args.hResource==reinterpret_cast<HANDLE>(uintptr_t(0x77)) && req.args.NumAllocations==1 && req.held==65536);
+        CHECK(req.info.pPrivateDriverData==&req.blob && req.info.PrivateDriverDataSize==sizeof(req.blob));
+        CHECK(req.blob.flags==BC250_UMD_A_SHARED && req.blob.alloc_size==65536 && req.blob.va_size==65536 &&
+              req.blob.phys_alignment==65536 && req.blob.preferred_heap==AMDGPU_GEM_DOMAIN_VRAM &&
+              req.blob.gem_flags==AMDGPU_GEM_CREATE_NO_CPU_ACCESS);
+        BC250_SHARED_RESOURCE received{};
+        CHECK(Bc250SharedResourceWhyOk(Bc250SharedResourceDecodeWhy(req.args.pPrivateDriverData,
+                                                                    req.args.PrivateDriverDataSize,&received)));
+        unsigned long long allocation=0;
+        CHECK(Bc250SharedResourceWhyOk(Bc250SharedResourceAllocWhy(req.info.pPrivateDriverData,
+                                                                   req.info.PrivateDriverDataSize,&received,&allocation)) &&
+              allocation==65536);
+        // An opener's own record of the same description: another engine's buffer of Width bytes on this adapter.
+        BC250_SHARED_RESOURCE mine=received;
+        mine.CreatorApi=BC250_SR_CREATOR_D3D11;mine.CreateUsage=0x1ffu;mine.BufferSize=100;mine.MemorySize=112;
+        mine.MemoryAlignment=16;mine.MemoryTypeBits=0x1;
+        CHECK(Bc250SharedResourceWhyOk(Bc250SharedResourceMatchWhy(&received,&mine,allocation)));
+        mine.DeviceUuid[0]^=1;
+        CHECK(!Bc250SharedResourceWhyOk(Bc250SharedResourceMatchWhy(&received,&mine,allocation)));
+        // The kernel driver's parser takes the blob as the ordinary GPU-only one: the flag changes no placement.
+        AllocationRequest plain;CHECK(plain.prepare(65536,65536,AllocationAccess::GpuOnly)==S_OK);
+        bc250_umd_alloc_private shared_blob=req.blob;shared_blob.flags=0;
+        CHECK(!std::memcmp(&shared_blob,&plain.blob,sizeof(shared_blob)));
+        // A record this form refuses, or an alignment the opener cannot map, allocates nothing.
+        BC250_SHARED_RESOURCE broken=record;broken.Magic=0;
+        CHECK(req.prepare_engine_layout_buffer(broken,65536,65536,nullptr)==E_INVALIDARG && !req.held && !req.args.pPrivateDriverData);
+        CHECK(req.prepare_engine_layout_buffer(record,65536,131072,nullptr)==E_INVALIDARG && !req.held);
+        broken=record;broken.MemoryAlignment=65536;
+        CHECK(req.prepare_engine_layout_buffer(broken,65536,4096,nullptr)==E_INVALIDARG && !req.held);
+        broken=record;broken.MemorySize=131072;
+        CHECK(req.prepare_engine_layout_buffer(broken,65536,65536,nullptr)==E_INVALIDARG && !req.held);
+        // Every other form leaves the record zero.
+        CHECK(req.prepare(4096,4096,AllocationAccess::GpuOnly)==S_OK && !req.engine_record.Magic && !req.args.pPrivateDriverData);
+    }
     std::printf("native allocation request: %u checks, 0 failures\n",checks);
     std::puts("KMD parser, cache/rounding/refusal gates, shared surface records, scan-out v3 record, pitch pin, "
-              "stand-down table, the adapter scan-out trailer and the desktop-route record passed");
+              "stand-down table, the adapter scan-out trailer, the desktop-route record and the ENGINE LAYOUT buffer passed");
 }
