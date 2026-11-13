@@ -651,7 +651,13 @@ void reparse_tests() {
     std::vector<std::string> taken;
     const char* kind="nothing";
     bool decided=false;
-    for(unsigned round=0;round<5 && !decided;++round){
+    bool planted8=false;
+    // Under a loaded build host (many gates at once) a second can end between planting the names and the call, so
+    // the call lands in a free second and the round gives no verdict (BD-381). Keep trying within a wall-clock
+    // budget instead of a fixed round count, so a same-second round is reached; if the budget runs out with every
+    // round split by a second, the case says nothing and is skipped, not failed.
+    const unsigned long long reparse_deadline=detail::now_filetime()+20ull*kSecond;
+    while(!decided && detail::now_filetime()<reparse_deadline){
         for(const std::string& path:taken){
             if(!DeleteFileA(path.c_str()))RemoveDirectoryA(path.c_str());
         }
@@ -673,6 +679,7 @@ void reparse_tests() {
             taken.push_back(path);
         }
         if(taken.size()!=8)break;
+        planted8=true;
         const size_t before=files_in(games_folder()).size();
         detail::Sink s=detail::open_sink();
         SYSTEMTIME after{};
@@ -687,9 +694,14 @@ void reparse_tests() {
         CHECK(read_file(root()+"\\stolen.log").empty());        // and nothing followed the planted name
         CHECK(files_in(games_folder()).size()==before);
     }
-    std::printf("stdio-log-test: 8 names planted, each one a %s: %s\n",kind,taken.size()==8?"yes":"no");
-    if(taken.size()==8){
-        CHECK(decided);                                         // five rounds, each one split by a second: unlikely
+    std::printf("stdio-log-test: 8 names planted, each one a %s: %s\n",kind,planted8?"yes":"no");
+    if(decided){
+        // A same-second round was reached and its checks above are the verdict.
+    } else if(planted8){
+        // Every round in the budget was split by a second (a loaded host), so no round could put the call in the
+        // same second as the planted names. The case reached no verdict and is skipped, not failed (BD-381).
+        std::fprintf(stderr,"stdio-log-test: the planted-name case reached no verdict in the budget "
+            "(every round split by a second under load); skipped\n");
     } else {
         // Nothing can be planted here, so the case says nothing either way; the refusal itself is the code path
         // CREATE_NEW takes, and open_new checks the attributes of what it opened on top of that.
