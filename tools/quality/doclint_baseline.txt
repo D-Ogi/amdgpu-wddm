@@ -54,7 +54,6 @@
 1	docs/design/scanout-admission.md
 14	docs/design/sdma-virtual-paging.md
 13	docs/design/sparse-wddm.md
-21	docs/design/startup-clock-ownership.md
 16	docs/design/tuner.md
 13	docs/design/umd-contract-stage-d.md
 13	docs/design/vidpn-flip.md
