@@ -92,7 +92,7 @@ the firmware starts the stage again, the core unlock finds all cores, and the ot
 | Item | Memory type | Owner | Stays |
 |---|---|---|---|
 | The stage image, its data and its pool memory | loader code and loader data | the stage | no. The operating system takes this memory back |
-| The check in the Security2 protocol | a pointer into the stage image | the firmware protocol | no. Boot services end, and nothing calls the protocol later |
+| The Security2 protocol of the stage | a structure in the stage image, on the handle of the firmware | the stage | no. Boot services end, and nothing calls the protocol later |
 | The installed ACPI tables | ACPI memory of the firmware | the firmware. `InstallAcpiTable` copies the table | yes, as data. The operating system reads them |
 
 So no start leaves code of this project in memory. The only resident data are the ACPI tables, and the firmware
@@ -122,10 +122,16 @@ starts as it does without the stage.
 - A board that is not a BC-250: the core unlock and the ACPI module do nothing and say so.
 - A table, a file or a protocol that is not there or is not sound: the module says which one, and stops.
 - A built table that fails its own check: it is not installed.
-- A defect in the inputs of the Secure Boot module in `enforce` mode: the mode becomes `audit`, with the reason.
+- An ACPI table set that the module cannot read whole: the module installs nothing and says so.
 
-One case does not fail open, and the operator asks for it. In `sb.mode=enforce`, an image that is not allowed does
-not start. The stage then returns `EFI_ACCESS_DENIED`, and the firmware goes on with its boot order.
+`sb.mode=enforce` does not fail open, and the operator asks for it. An image that is not allowed does not start.
+A defect in the inputs of the mode also refuses the image, with the reason on the console. The mode does not
+become `audit`, because a start after a silent change of the mode looks like a verified start. The stage then
+returns `EFI_ACCESS_DENIED`, and the firmware goes on with its boot order.
+
+One more case does not return to the firmware. When the next image did not start, the stage puts the Security2
+protocol of the firmware back. When the firmware refuses that, the stage prints the reason, waits 10 seconds and
+restarts the board. A return would leave a protocol that points into freed memory.
 
 ## The ACPI module
 
@@ -177,9 +183,11 @@ nothing.
 2. An SSDT has the header of the stock CPU table (OEM ID `AMD`, OEM table ID `AMD CPU`) and a correct checksum.
 3. Every byte of that table has the stock form: scopes `\_PR.C000` and up without a gap, each with the `_CST` of
    the digest of M965 and a `_CSD` of the stock form, and nothing else.
-4. No table defines `C000`, and no processor has `_CST` in another table.
-5. Each enabled processor of the MADT has exactly one `Processor` object in the DSDT.
-6. For the stubs: the DSDT has the header of the stock DSDT (OEM ID `ALASKA`, OEM table ID `A M I `).
+4. The table set is whole. The root table lists each table, each one maps with a correct checksum, and each
+   DSDT, SSDT and PSDT scans to its end. A table that the module cannot read can define a name a second time.
+5. No table of that set defines `C000`, and no processor has `_CST` in another table.
+6. Each enabled processor of the MADT has exactly one `Processor` object in the DSDT.
+7. For the stubs: the DSDT has the header of the stock DSDT (OEM ID `ALASKA`, OEM table ID `A M I `).
 
 The firmware writes parts of the DSDT at each start, so a digest of the whole DSDT cannot identify it. The whole
 CPU table has a digest for the capture with 12 logical processors. The console says if the table in RAM has that
@@ -211,14 +219,31 @@ the one of the UEFI image check.
 1. The Authenticode SHA-256 digest of the image is in `dbx`: forbidden.
 2. For each Authenticode signature of the image that verifies: walk from the certificate of the signer up through
    the certificates of the signature. A certificate on the way that is in `dbx`, or that a `dbx` certificate
-   signed: forbidden. A certificate on the way that is in `db`, or that a `db` certificate signed: allowed.
+   signed: forbidden. `dbx` can name a certificate whole, or by the SHA-256 digest of its signed part. A certificate on the way that is in `db`, or that a `db` certificate signed: allowed.
 3. The digest of the image is in `db`: allowed.
 4. In all other cases the image is not allowed.
 
 The databases are files beside the stage: `db.esl` and `dbx.esl`. Their format is the `EFI_SIGNATURE_LIST` of the
 UEFI `db` variable, so standard tools can make them. `tools/efi/secure-boot/tools/mkesl.py` makes them too. The
-module reads two entry types: an X.509 certificate and a SHA-256 digest. It counts every other entry on the
-console.
+module reads three entry types: an X.509 certificate, a SHA-256 image digest, and the SHA-256 digest of the
+signed part of a certificate with a revocation time. It counts every other entry on the console. An entry with a
+revocation time forbids at every time, because the stage does not read time stamps. That is stricter than the
+UEFI rule.
+
+When the firmware has `db` and `dbx` variables, the module reads them with `GetVariable` and adds their lists to
+the lists of the files. The BC-250 firmware has none. A database that is not well formed allows no image.
+
+### The inputs of the enforce mode
+
+`sb.mode=enforce` starts an image only when each of these conditions is true.
+
+- `db.esl` is beside the stage and is well formed.
+- `dbx.esl` is beside the stage and is well formed. A file with one empty list forbids nothing, and
+  `mkesl.py --empty` makes it. A file that is not there is a defect, because a failed copy looks the same.
+- Each `db` and `dbx` variable of the firmware that exists reads and is well formed.
+- `dbx` has no entry of a type that the stage does not read. Such an entry can forbid the image.
+
+With a defect, the module prints the reason and refuses the next image.
 
 The cryptography is in the stage: SHA-256, DER, X.509, PKCS #7 and RSA signature verification with keys of 2048
 to 4096 bits. The stage has no private key and no signing function. The module does not check certificate dates,
@@ -231,15 +256,18 @@ The PI Specification defines the hook. The firmware core calls `FileAuthenticati
 `EFI_SECURITY2_ARCH_PROTOCOL` for each image that `LoadImage` loads, with the bytes of the image.
 `EFI_ACCESS_DENIED` from that call means that the core does not load the image.
 
-The module puts its own function into that protocol and keeps the function of the firmware. Its function gives
-the verdict and then calls the function of the firmware. So the check covers the Windows Boot Manager and every other image that something loads through `LoadImage` before ExitBootServices. At the
-unwind, the module puts the function of the firmware back.
+The module does not write into the protocol structure of the firmware, which can be in read-only memory. It
+installs a structure of its own in the place of that one, with `ReinstallProtocolInterface` on the handle that
+carries the protocol. The edk2 core then reads the protocol again, because a new installation signals its
+notification. The function of the module gives the verdict and then calls the function of the firmware. The
+module prints one console line before this step, so a firmware that stops there leaves a trace. So the check covers the Windows Boot Manager and every other image that something loads through `LoadImage` before ExitBootServices. At the
+unwind, the module installs the structure of the firmware again.
 
 The module does not rely on the hook alone. Before the start, the core gives the bytes of the Windows Boot Manager
 to the gate of the module. In `enforce` mode the gate answers "bind": the core then loads the image from that
 buffer, so the bytes that start are the bytes that the gate verified. After the load, the module prints how many
-times the firmware called the hook. Zero says that this firmware core does not call Security2, and the gate was
-the only check.
+times the firmware called the hook. Zero says that this firmware core does not call the new structure, and the
+gate was the only check.
 
 ### Point (a): what reports "Secure Boot on" to Windows
 
@@ -337,13 +365,17 @@ firmware.
 | core | the load options: claimed, not understood, dropped |
 | core unlock | the tests of [the core unlock page](efi-core-unlock.md), unchanged |
 | ACPI module, unit A | the plan and both tables from the ACPI dump of unit A outside the repository. The test says SKIP when the dump is not there |
-| ACPI module, changed tables | 16 processors in pairs and not in pairs. A shorter stock table, one changed byte and a wrong checksum. A table that defines the target, and a second run |
+| ACPI module, changed tables | 16 processors in pairs and not in pairs. A shorter stock table and one changed byte. A table that defines the target, and a second run |
+| ACPI module, table set | a wrong checksum in a definition block, and a block that does not scan. A root table that did not give each table. In each case nothing is built |
 | ACPI module, result | a name scan of each built table, its length field and its checksum. The ACPICA disassembler reads each built table as a second parser |
 | Secure Boot, images | a chain of three keys made at run time. Each certificate of the chain is the `db` entry in turn. Changed image bytes, a changed signature and another signer. A certificate without the CA flag, and two signatures. `dbx` by digest and by certificate |
 | Secure Boot, robustness | each byte of a signed image changed in turn, and each length of the file. No change of a signed byte is allowed |
-| Secure Boot, real image | optional: a real signed UEFI image must pass under the issuer of its signer. This is the positive control on bytes that this project did not make |
+| Secure Boot, databases | the digest of a certificate in `dbx`, and a database that is not well formed. An unknown entry type and an empty list. Each defect of the enforce inputs |
+| Secure Boot, real images | necessary: the Windows Boot Manager and the Windows loader of the build PC must pass under the issuer of their signer. This is the positive control on bytes and signatures that this project did not make. The build fails without them |
+| Secure Boot, fixtures | the signature check of Windows reads the signed fixture and refuses the changed fixture. This is the control of the fixtures, by code that this project did not write |
 
-The test keys are made at each run and are never written to a file. The repository holds no private key.
+The test keys are made at each run and are never written to a file. The repository holds no private key. The
+host tests run with the address sanitizer of the compiler, so a read outside a buffer stops the test.
 
 ### Lab steps
 

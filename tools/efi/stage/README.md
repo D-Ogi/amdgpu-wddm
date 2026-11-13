@@ -14,7 +14,8 @@ module.
 
 The script writes `bc250-stage.efi`, `SHA256SUMS` and the host test to
 `P:\BC-250\scratch\build\efi-stage`. Give `-Out <directory>` for another place. Give `-SkipTests` to build the
-image alone. Give `-SignedImage <file>` to add a real signed UEFI image to the Secure Boot tests.
+image alone. The Secure Boot tests read two signed images of the Windows installation of the build PC as controls.
+`-SignedImage <file>` and `-SecondSignedImage <file>` name other ones. The build fails when a control is not there.
 
 ## Load options
 
@@ -31,7 +32,7 @@ image alone. Give `-SignedImage <file>` to add a real signed UEFI image to the S
 | `acpi.idle=0` | 1 | do not install the idle state table |
 | `acpi.stubs=0` | 1 | do not install the method stub table |
 | `sb.mode=audit` | yes | report the verdict on each image, and refuse none |
-| `sb.mode=enforce` | no | do not start an image that the databases do not allow |
+| `sb.mode=enforce` | no | do not start an image that the databases do not allow. A defect in `db.esl` or `dbx.esl` refuses each image |
 
 The stage counts each option that no module understands and prints the count.
 
@@ -53,6 +54,10 @@ Put these files in the directory of `bc250-stage.efi`. Only the stage itself is 
 2. Run `python tools\efi\secure-boot\tools\mkesl.py --out db.esl --cert <certificate>`.
 3. To allow one image by its digest, add `--image <file>` to that command.
 4. To forbid one image, run `python tools\efi\secure-boot\tools\mkesl.py --out dbx.esl --image <file>`.
+5. To forbid a certificate, add `--revoke-cert <certificate>` to that command.
+6. To forbid nothing, run `python tools\efi\secure-boot\tools\mkesl.py --out dbx.esl --empty`.
+
+`sb.mode=enforce` needs the two files. `sb.mode=audit` works without them.
 
 The option `--digest <file>` prints the Authenticode SHA-256 digest of an image and writes nothing.
 
