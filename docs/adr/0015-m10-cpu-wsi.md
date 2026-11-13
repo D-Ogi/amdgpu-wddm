@@ -17,14 +17,14 @@ Wait for successful GPU completion before the CPU reads the image. Copy or swizz
 opaque pixels into a DIB, submit BitBlt, flush GDI and then wait for DwmFlush.
 Release the image for acquisition after that sequence.
 
-Use thread-local GDI object lifetimes. Retired CPU swapchains reject new acquisition;
-already acquired old images retain their normal presentation lifetime. Win32
+Use thread-local GDI object lifetimes. Retired CPU swapchains reject new acquisition.
+Already acquired old images retain their normal presentation lifetime. Win32
 minimum, current and maximum surface extents follow the client window, including
 zero while minimized. Apps resume swapchain creation when the window has area again.
 
 DWM remains the presentation engine. Its primary reaches DCN through the existing
 hardware flip and IH VSync path. CPU Vulkan presentation does not imply CPU Vulkan
-rendering; DWM's llvmpipe rendering remains a separate cost.
+rendering. DWM's llvmpipe rendering remains a separate cost.
 
 ## Scope and consequences
 This explicitly refines ADR0011 point4 for M10 Win32 Vulkan. It does not reinstate
