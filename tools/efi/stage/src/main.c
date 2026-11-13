@@ -28,7 +28,7 @@
 #define STAGE_SMBIOS_MAX_BYTES	(1024u * 1024u)	/* the bound driver/kmd/board_memory_identity.c sets on 'RSMB' */
 #define STAGE_IMAGE_MAX_BYTES	(64u * 1024u * 1024u)	/* a boot manager or a boot loader is a few megabytes */
 #define STAGE_LOG_NAME		"bc250-stage.log"
-#define STAGE_LOG_BYTES		(16u * 1024u)		/* the console lines of one start */
+#define STAGE_LOG_BYTES		(16u * 1024u)		/* the console lines that wait for their write */
 #define STAGE_LOG_FILE_MAX	(256u * 1024u)		/* a larger log file starts again */
 
 static const EFI_GUID loaded_image_guid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
@@ -53,19 +53,23 @@ static int module_on[MODULES];
 
 /* ---- console and log ----------------------------------------------------------------------------- */
 
-/* The log is the console text of this start, kept in memory and written behind the text of earlier starts in a
- * file beside the stage. A board without a person at its screen gives its console back that way. The load option
- * log= chooses the moment of the write. */
-enum { LOG_OFF = 0, LOG_AT_END = 1, LOG_EACH_LINE = 2 };
+/* The log is the console text of this start, written behind the text of earlier starts in a file beside the
+ * stage. A board without a person at its screen gives its console back that way. The load option log= chooses
+ * the moment of the write. log_text holds only the lines that are not yet in the file: a write empties it, and a
+ * line that finds it full causes a write first. So the length of the log has no bound in memory. */
+enum { LOG_UNDECIDED = -1, LOG_OFF = 0, LOG_AT_END = 1, LOG_EACH_LINE = 2 };
 static const char *const log_modes[] = { "0", "1", "line" };
 static char log_text[STAGE_LOG_BYTES];
-static size_t log_used, log_written;
-static unsigned log_lost;		/* lines that did not fit in log_text */
-static int log_mode = LOG_OFF;		/* off until the load options are read */
+static size_t log_used;
+static unsigned log_lost;		/* lines that found log_text full and could not be written first */
+static int log_mode = LOG_UNDECIDED;	/* until the load options are read: lines are kept, none is written */
 
-static void log_keep(const CHAR16 *wide, size_t chars)
+static void log_keep(struct stage *stage, const CHAR16 *wide, size_t chars)
 {
 	size_t i;
+	if (log_mode == LOG_OFF) return;
+	if (log_used + chars > STAGE_LOG_BYTES) stage_log_flush(stage);
+	if (log_mode == LOG_OFF) return;	/* the write failed, and its line said so */
 	if (log_used + chars > STAGE_LOG_BYTES) {
 		log_lost++;
 		return;
@@ -80,10 +84,10 @@ void stage_log_flush(struct stage *stage)
 	EFI_FILE_PROTOCOL *file = NULL;
 	EFI_STATUS status;
 	UINT64 size = 0;
-	UINTN bytes = log_used - log_written;
+	UINTN bytes = log_used;
 	const UINT64 mode = EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE;
 
-	if (log_mode == LOG_OFF || bytes == 0 || stage->root == NULL) return;
+	if (log_mode <= LOG_OFF || bytes == 0 || stage->root == NULL) return;
 	if (!stage_sibling(stage, STAGE_LOG_NAME, path, STAGE_PATH_CHARS)) return;
 	status = stage->root->Open(stage->root, &file, path, mode, 0);
 	if (!EFI_ERROR(status) && file == NULL) status = EFI_NOT_FOUND;
@@ -98,34 +102,40 @@ void stage_log_flush(struct stage *stage)
 			status = stage->root->Open(stage->root, &file, path, mode, 0);
 			if (!EFI_ERROR(status) && file == NULL) status = EFI_NOT_FOUND;
 		}
-		if (!EFI_ERROR(status)) status = file->Write(file, &bytes, log_text + log_written);
+		if (!EFI_ERROR(status)) status = file->Write(file, &bytes, log_text);
+		/* A volume that is full takes fewer bytes and can still answer with success. */
+		if (!EFI_ERROR(status) && bytes != log_used) status = EFI_VOLUME_FULL;
 		if (!EFI_ERROR(status)) status = file->Flush(file);
 		if (file != NULL) file->Close(file);
 	}
 	if (EFI_ERROR(status)) {
 		/* One line on the console, and no second try: a volume that does not take the file stays as it is. */
 		log_mode = LOG_OFF;
-		stage_sayf(stage, NULL, "the log file did not write, status 0x%llx: no log for this start",
+		log_used = 0;
+		stage_sayf(stage, NULL, "the log file did not write, status 0x%llx: no more log for this start",
 			   (unsigned long long)status);
 		return;
 	}
-	log_written = log_used;
+	log_used = 0;
 }
 
 /* Reads the load option log= and writes what the console said before the option was known. */
 static void log_start(struct stage *stage)
 {
 	log_mode = (int)stage_option_choice(&stage->options, "log", log_modes, 3u, LOG_AT_END);
-	if (log_mode == LOG_OFF) return;
-	if (stage->root == NULL || !stage->image_file_known) {
+	if (log_mode != LOG_OFF && (stage->root == NULL || !stage->image_file_known)) {
 		log_mode = LOG_OFF;
 		stage_say(stage, NULL, "no volume or no path of this application: no log file");
+	}
+	if (log_mode == LOG_OFF) {
+		log_used = 0;
 		return;
 	}
 	if (log_mode == LOG_EACH_LINE) stage_log_flush(stage);
 }
 
-void stage_say(struct stage *stage, const char *module, const char *line)
+/* One line: to the console, and to the log when to_log is set. */
+static void say(struct stage *stage, const char *module, const char *line, int to_log)
 {
 	static const char prefix[] = "bc250-stage: ";
 	CHAR16 wide[STAGE_LINE_CHARS + 64u];
@@ -141,8 +151,19 @@ void stage_say(struct stage *stage, const char *module, const char *line)
 	wide[n++] = '\n';
 	wide[n] = 0;
 	if (stage->st->ConOut != NULL) stage->st->ConOut->OutputString(stage->st->ConOut, wide);
-	log_keep(wide, n);
+	if (!to_log) return;
+	log_keep(stage, wide, n);
 	if (log_mode == LOG_EACH_LINE) stage_log_flush(stage);
+}
+
+void stage_say(struct stage *stage, const char *module, const char *line)
+{
+	say(stage, module, line, 1);
+}
+
+void stage_say_console(struct stage *stage, const char *module, const char *line)
+{
+	say(stage, module, line, 0);
 }
 
 void stage_sayf(struct stage *stage, const char *module, const char *format, ...)
@@ -441,9 +462,9 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st)
 	size_t i;
 
 	memset(&stage, 0, sizeof(stage));
-	log_used = log_written = 0;
+	log_used = 0;
 	log_lost = 0;
-	log_mode = LOG_OFF;
+	log_mode = LOG_UNDECIDED;
 	stage.image = image;
 	stage.st = st;
 	stage.bs = st->BootServices;

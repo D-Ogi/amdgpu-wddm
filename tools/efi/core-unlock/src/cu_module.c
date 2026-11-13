@@ -294,6 +294,13 @@ static void op_say(void *context, const char *line)
 
 /* ---- the read-only report ----------------------------------------------------------------------- */
 
+/* A line of the report text goes to the console only. The text has its own file, and the log of the stage keeps
+ * the one line that names that file. */
+static void op_say_report(void *context, const char *line)
+{
+	stage_say_console(((struct unlock *)context)->stage, CU_NAME, line);
+}
+
 /* The load option report=1: the report goes first, so it shows the state that the decision then reads. It does
  * not feed the decision. */
 static void run_report(struct unlock *u)
@@ -306,7 +313,8 @@ static void run_report(struct unlock *u)
 	r.path = u->report_known ? u->report : NULL;
 	r.acpi = &acpi;
 	r.version = CU_VERSION;
-	r.say = op_say;
+	r.say = op_say_report;
+	r.note = op_say;
 	r.say_context = u;
 	report_uefi_run(&r);
 }

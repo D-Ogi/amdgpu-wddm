@@ -17,7 +17,8 @@ struct report_uefi {
 	const unsigned short *path;		/* the report file on that volume, or NULL */
 	const struct efl_acpi *acpi;
 	const char *version;
-	report_say_fn say;
+	report_say_fn say;			/* a line of the report text: the same text goes to the report file */
+	report_say_fn note;			/* a line about the report: what was written, or why not */
 	void *say_context;
 };
 

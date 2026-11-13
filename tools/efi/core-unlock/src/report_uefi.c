@@ -188,17 +188,17 @@ void report_uefi_run(const struct report_uefi *r)
 	collect_processors(bs, &input);
 	collect_graphics(bs, &input);
 	if (EFI_ERROR(bs->AllocatePool(EfiLoaderData, CU_REPORT_BYTES, (VOID **)&text)) || text == NULL) {
-		r->say(r->say_context, "report: no memory for the text");
+		r->note(r->say_context, "report: no memory for the text");
 		return;
 	}
 	chars = cu_report_write(&input, text, CU_REPORT_BYTES, &truncated);
 	say_lines(r, text, chars);
-	if (truncated) r->say(r->say_context, "report: the text is longer than its buffer and ends early");
+	if (truncated) r->note(r->say_context, "report: the text is longer than its buffer and ends early");
 	if (write_file(r, text, chars, &status) == 0)
-		r->say(r->say_context, "report: written to " CU_REPORT_NAME " beside this application");
+		r->note(r->say_context, "report: written to " CU_REPORT_NAME " beside this application");
 	else {
 		efl_format(line, sizeof(line), "report: the file was not written, status 0x%llx", (unsigned long long)status);
-		r->say(r->say_context, line);
+		r->note(r->say_context, line);
 	}
 	bs->FreePool(text);
 }

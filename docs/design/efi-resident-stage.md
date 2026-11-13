@@ -120,13 +120,19 @@ An option is `name=value`. An option that no module understands is counted on th
 
 ### The log file
 
-The console of the stage is on the screen of the board only. So the core keeps the console lines of one start in
-memory and writes them to `bc250-stage.log` beside the stage image. It uses the file protocol of the volume, as
-the core unlock does for its marker. The new lines go behind the lines of earlier starts. A file above 256 KiB
-starts again.
+The console of the stage is on the screen of the board only. So the core writes the console lines to
+`bc250-stage.log` beside the stage image. It uses the file protocol of the volume, as the core unlock does for
+its marker. The new lines go behind the lines of earlier starts. A file above 256 KiB starts again.
+
+The core keeps in memory only the lines that are not yet in the file, at most 16 KiB. A line that finds this
+memory full causes a write first. So the log of one start has no bound. The first build of the log kept the
+whole start in that memory, and the first lab run with `report=1` lost each line after 16 KiB.
+
+The text of the read-only report of the core unlock goes to the console and to its own file,
+`core-unlock-report.txt`. The log gets one line that names that file.
 
 - `log=1` writes the lines before the next image starts, before a module restarts the board, and before the
-  stage returns.
+  stage returns. It also writes when the memory for the lines is full.
 - `log=line` writes after each line. Use it for a first start on a firmware: if the firmware stops in a call, the
   file ends at the line before that call.
 - `log=0` writes no file.
@@ -387,7 +393,7 @@ firmware.
 |---|---|
 | shared library | SHA-256 against the vectors of the standard. The AML writer against the AML name scan |
 | core | the load options: claimed, not understood, dropped |
-| core, log | the log file against the console of the model: before the next image starts, after each line, behind an earlier start, and before a restart. A volume that takes no write, and a file above its bound |
+| core, log | the log file against the console of the model: before the next image starts, after each line, behind an earlier start, and before a restart. A console of more than 60 KiB with `log=line` and with `log=1`. A volume that takes no write or stops in the middle, and a file above its bound. A line for the console only |
 | core unlock | the tests of [the core unlock page](efi-core-unlock.md), unchanged |
 | ACPI module, unit A | the plan and both tables from the ACPI dump of unit A outside the repository. The test says SKIP when the dump is not there |
 | ACPI module, changed tables | 16 processors in pairs and not in pairs. A shorter stock table and one changed byte. A table that defines the target, and a second run |

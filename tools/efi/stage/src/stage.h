@@ -37,6 +37,9 @@ struct stage {
 void stage_say(struct stage *stage, const char *module, const char *line);
 void stage_sayf(struct stage *stage, const char *module, const char *format, ...);
 
+/* One console line that does not go to the log file: for long text that has a file of its own. */
+void stage_say_console(struct stage *stage, const char *module, const char *line);
+
 /* Writes the console lines that are not yet in the log file (bc250-stage.log beside the stage image). The core
  * does this before it starts the next image and before it returns. A module calls it before it restarts the
  * board. Nothing happens when the load option log=0 is set or the volume is not known. */

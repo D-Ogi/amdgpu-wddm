@@ -15,6 +15,7 @@
 #include "efl_test.h"
 #include "efi.h"
 #include "efl_text.h"
+#include "stage.h"
 
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st);
 
@@ -23,7 +24,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st);
 #define FW_FILES	8u
 #define FW_TABLES	24u
 #define FW_PROTOCOLS	12u
-#define FW_LOG_BYTES	(64u * 1024u)
+#define FW_LOG_BYTES	(256u * 1024u)
 #define SDT_HEADER	36u
 
 struct fw_file { char path[96]; unsigned char *data; size_t bytes; };
@@ -38,8 +39,10 @@ static struct {
 	struct fw_file file[FW_FILES];
 	unsigned files;
 	int read_only;			/* the volume takes no write */
+	unsigned write_budget;		/* not 0: the volume takes this many writes and then answers EFI_VOLUME_FULL */
 	unsigned file_writes, file_deletes;
 	int log_at_start;		/* at StartImage the log file had the line "starting the next image" */
+	unsigned extra_checks;		/* LoadImage asks the Security2 protocol this many more times */
 	struct fw_protocol protocol[FW_PROTOCOLS];
 	unsigned protocols;
 	/* LoadImage and StartImage. */
@@ -195,6 +198,7 @@ static EFI_STATUS EFIAPI file_write(EFI_FILE_PROTOCOL *this, UINTN *size, VOID *
 {
 	struct fw_open *open = (struct fw_open *)this;
 	size_t end = (size_t)open->position + *size;
+	if (fw.write_budget && fw.file_writes >= fw.write_budget) return EFI_VOLUME_FULL;
 	if (end > open->file->bytes) {
 		open->file->data = realloc(open->file->data, end);
 		open->file->bytes = end;
@@ -375,6 +379,9 @@ static EFI_STATUS EFIAPI fw_load_image(BOOLEAN boot_policy, EFI_HANDLE parent, E
 	}
 	if (security != NULL) {
 		EFI_SECURITY2_ARCH_PROTOCOL *check = security->interface;
+		unsigned i;
+		/* A firmware can ask more than one time for a load. Each call gives two console lines of the stage. */
+		for (i = 0; i < fw.extra_checks; i++) (void)check->FileAuthentication(check, path, buffer, size, boot_policy);
 		status = check->FileAuthentication(check, path, buffer, size, boot_policy);
 	}
 	if (status == EFI_ACCESS_DENIED) return status;
@@ -1004,6 +1011,56 @@ static void test_log(const char *acpi_dir, const char *fixtures)
 	fw.start_status = EFI_ABORTED;
 	(void)run_stage("unlock=0 acpi=0", &reset);
 	CHECK(reset == 1 && file_has(LOG_FILE, "restart in 10 seconds") && log_is_console());
+
+	/* A long console: 400 calls of the image check give more than 60 KiB, well above the 16 KiB that the core
+	 * keeps in memory. The whole console must be in the file, with each way of writing. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.extra_checks = 400;
+	CHECK(run_stage("unlock=0 acpi=0 log=line", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(fw.log_bytes > 60000u && log_is_console() && fw.log_at_start == 1 && !said("did not fit in the log"));
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.extra_checks = 400;
+	CHECK(run_stage("unlock=0 acpi=0 log=1", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(fw.log_bytes > 60000u && log_is_console() && fw.log_at_start == 1 && !said("did not fit in the log"));
+	/* With log=1 the file is written when the memory is full, not at each line. */
+	CHECK(fw.file_writes >= 4u && fw.file_writes <= 12u);
+	/* log=0 with the same console: no file, and no line about lost lines. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.extra_checks = 400;
+	CHECK(run_stage("unlock=0 acpi=0 log=0", &reset) == EFI_SUCCESS && find_file(LOG_FILE) == NULL);
+	CHECK(fw.file_writes == 0 && !said("did not fit in the log"));
+	/* A volume that stops taking writes in the middle: one line says so, and the start goes on. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.extra_checks = 400;
+	fw.write_budget = 3;
+	CHECK(run_stage("unlock=0 acpi=0 log=1", &reset) == EFI_SUCCESS && fw.starts == 1 && fw.file_writes == 3);
+	CHECK(said("the log file did not write") && !said("did not fit in the log"));
+
+	/* A line for the console only is on the console and not in the file. The log state is the state of the
+	 * last start, so this start is one with log=line. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 log=line", &reset) == EFI_SUCCESS);
+	{
+		static const char image_file[] = "\\EFI\\BC250\\bc250-stage.efi";
+		struct stage again;
+		size_t i;
+		memset(&again, 0, sizeof(again));
+		again.st = &fw_st;
+		again.bs = &fw_bs;
+		for (i = 0; i < sizeof(image_file); i++) again.image_file[i] = (unsigned char)image_file[i];
+		again.image_file_known = 1;
+		(void)fs_open_volume(&fw_fs, &again.root);
+		stage_say_console(&again, "core-unlock", "a line of long text");
+		stage_say(&again, "core-unlock", "a line for the log");
+		again.root->Close(again.root);
+		CHECK(said("core-unlock: a line of long text") && said("core-unlock: a line for the log"));
+		CHECK(file_has(LOG_FILE, "a line for the log") && !file_has(LOG_FILE, "a line of long text"));
+	}
 
 	/* A load that fails leaves the reason in the file. */
 	if (!new_firmware(acpi_dir)) return;
