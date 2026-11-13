@@ -291,7 +291,7 @@ An earlier version of this table invented three names (`opened surface records`,
 
 | Asked for | Refused by | The name in the log |
 |---|---|---|
-| a shared buffer, mip chain, array, MSAA, 3D or typeless texture | the envelope, before any callback | the create is never retried. The runtime's own `E_INVALIDARG`, reported as `E_OUTOFMEMORY` |
+| a shared mip chain, array, MSAA, 3D or typeless texture | the envelope, before any callback | the create is never retried. The runtime's own `E_INVALIDARG`, reported as `E_OUTOFMEMORY` |
 | a format with no COMPOSED row and no sRGB sibling, including block-compressed and NV12 | the envelope | as above |
 | `SHARED_CROSS_ADAPTER` (resource flag 0x4, and `D3D12DDI_HEAP_FLAGS` has no such bit) | `linear_surface_shape` | as above |
 | a shared texture on a CPU-visible or system-wide coherent heap, or in the L0 pool | `shared_surface_shape` | as above |
@@ -381,8 +381,9 @@ is eight formats: `R8G8B8A8_UNORM` and its sRGB form, `B8G8R8A8_UNORM` and its s
 its sRGB form, `R10G10B10A2_UNORM` and `R16G16B16A16_FLOAT`. Tier 1 adds nine typeless formats, tier 2 adds
 `NV12`, tier 3 adds `R11G11B10_FLOAT`. The five COMPOSED rows of the surface format table, with the sRGB view of
 each 8-bit row, cover six of tier 0's eight - the two `B8G8R8X8` forms have no DXGI entry in our table - and none
-of tier 1's or tier 2's. The driver also shares no buffer, and `A8_UNORM` is one row it shares that no tier asks
-for. Four of the eight, not six, until the sRGB gap above was closed: this arithmetic became true on 2026-10-06
+of tier 1's or tier 2's. `A8_UNORM` is one row that the driver shares and that no tier asks for. Buffers are not part of the
+tiers. A D3D12 shared buffer opens in D3D12 through the ENGINE LAYOUT record (BD-373,
+`driver/umd/d3d12/shared-buffer-record.h`), and the D3D11 runtime refuses its open with `E_INVALIDARG`. Four of the eight, not six, until the sRGB gap above was closed: this arithmetic became true on 2026-10-06
 and was wrong before it.
 
 Tier 2 is a format promise and nothing else. The earlier note here that it "adds keyed-mutex shapes" is not in

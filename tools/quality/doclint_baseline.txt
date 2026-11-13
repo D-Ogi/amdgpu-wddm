@@ -19,7 +19,6 @@
 10	docs/testing/THIRD-PARTY.md
 20	driver/contract/README-winsys.md
 28	driver/contract/README.md
-23	driver/umd/d3d12/README.md
 29	driver/umd/d3d12/engine-ddi/README.md
 30	driver/umd/d3d12/engine-ddi/SLOTS.md
 28	driver/umd/d3d12/engine-ddi/shader-container/README.md

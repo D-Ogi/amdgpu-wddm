@@ -1,17 +1,17 @@
 # Native D3D12 UMD
 
-PROVENANCE: Microsoft graphics-driver-samples (MIT), revision de4a2161991eda254013da6c18226f5ea06e4a9c, CosUmd12 adapter negotiation pattern; exact declarations from WDK10.0.26100 d3d12umddi.h.
+PROVENANCE: Microsoft graphics-driver-samples (MIT), revision de4a2161991eda254013da6c18226f5ea06e4a9c, CosUmd12 adapter negotiation pattern. The exact declarations come from WDK10.0.26100 d3d12umddi.h.
 
 This UMD targets interface R8/build 0092. Its current implementation connects
 system D3D12 runtime callbacks to an inline vkd3d-proton engine and hosted RADV.
 The immediate target is a native buffer copy with upload, GPU execution, fence
-completion and readback. This document describes the code and its host checks;
-it does not establish successful public device creation, rendering or game support.
+completion and readback. This document describes the code and its host checks.
+It does not establish successful public device creation, rendering or game support.
 
 Build with `tools/build/build-umd-d3d12.ps1`. The recipe builds
 `amdgpu_wddm_d3d12.dll`, runs its host gates and retains existing DLLs by hash.
 It performs no registration or deployment. The engine ABI and library are pinned
-by [engine-ddi/engine-abi.json](engine-ddi/engine-abi.json); the engine sub-build
+by [engine-ddi/engine-abi.json](engine-ddi/engine-abi.json). The engine sub-build
 checks those pins and runs under PowerShell 7. Only production engine code is
 linked into the UMD.
 
@@ -42,7 +42,7 @@ Before that query the shell resolves the adapter's instance policy once and
 chains it, as `bc250_host_policy`, into the query instance and into every device
 instance, so both are given the same answer. The policy decides on sparse
 binding in the hosted ICD, which the reported tiled resources tier and feature
-level 12_0 and above depend on; the process environment is not asked. Sparse
+level 12_0 and above depend on. The policy does not read the process environment. Sparse
 binding is on when the DWORD `AmdgpuWddmSparseBinding` in the adapter's
 software key is 1 or the system names that value as not found, and off when it
 is 0. Any other value, an unspecified failure of the query or a key that cannot
@@ -75,16 +75,16 @@ claim kernel object reclamation, and destructors never retry expired callbacks.
 | Device core | `D3D12DDI_DEVICE_FUNCS_CORE_0088` | Engine functions plus typed shell entries |
 | Command lists | `D3D12DDI_COMMAND_LIST_FUNCS_3D_0092` | Separate compute and graphics indices, with retained runtime table handles |
 | Command queue | `D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001` | Execution, signal selection and explicit unsupported-operation handlers |
-| Extended features | `D3D12DDI_EXTENDED_FEATURES_FUNCS_0021` | Empty supported-feature list; feature enabling is unsupported |
+| Extended features | `D3D12DDI_EXTENDED_FEATURES_FUNCS_0021` | Empty supported-feature list. Feature enabling is unsupported |
 
-Composition validates the requested size and index before publishing the table.
+Composition checks the requested size and index before publishing the table.
 `ddi-0092-layout.h` checks the WDK layouts. `ddi-entry.h` provides exact typed
-trampolines for the 122 core slots and 70 slots in each command-list table;
-original functions are immutable after publication, and refills must match.
+trampolines for the 122 core slots and 70 slots in each command-list table.
+The original functions are immutable after publication, and refills must match.
 Queue and extended-feature calls use the same entry policy. Reserved queue
 fields are not treated as callable slots. A trampoline refuses on its own when a
 handle resolves to nothing, when it cannot enter the owner's scope, or when the
-call throws; for a slot of the AllowOutOfMemory category (`allow_out_of_memory`,
+call throws. For a slot of the AllowOutOfMemory category (`allow_out_of_memory`,
 today `pfnCreateHeapAndResource`, `pfnOpenHeapAndResource`, `pfnCreateStateObject`
 and `pfnAddToStateObject`) such a refusal is
 clamped to a code the runtime admits, because the runtime cannot tell a
@@ -97,7 +97,7 @@ the same owner are allowed. A different device cannot inherit that authority,
 and engine workers do not acquire it merely by holding a pointer. Command-list
 entries resolve their owning shell through the engine context.
 
-Deferred command-list replay is on by default and read once per device; the
+Deferred command-list replay is on by default and read once per device. The
 experiment `deferred-replay-off` (the application profile, the machine-wide value
 or, in a lab build only, `AMDGPU_WDDM_D3D12_EXPERIMENT`, with every default and its
 off switch in [ddi-trace.h](ddi-trace.h)) takes it back.
@@ -159,7 +159,7 @@ driver's compute queue setting keeps the node closed. A lab-flavour ICD also
 hides it when `RADV_BC250_ACE_QUEUES=0` is set. The engine then takes the
 graphics family for the compute and copy queues.
 `QueueContext` preserves the full runtime queue handle and callback-owned context.
-`QueueEngineRegistry` associates this context with an engine queue; `HostedQueue`
+`QueueEngineRegistry` associates this context with an engine queue. `HostedQueue`
 aliases it for RADV submission instead of creating another context for the same
 application queue. Internal engine queues use device-owned KT contexts through
 `HostedDispatch`.
@@ -169,7 +169,7 @@ runtime's GPU fence placements into private state without interpreting them as
 CPU pointers or inventing KMT handles. The signal DDI selects physical adapter
 mask 1 for the runtime to queue its fence operation on that context. It creates
 no separate engine fence and writes no completion value on the CPU. Runtime
-fence ordering still requires execution validation.
+fence ordering still requires a check by execution.
 
 The wait DDI also selects mask 1, and the runtime queues the wait on the queue's
 context. A monitored fence belongs to the adapter, so a queue on node 2 waits for
@@ -190,12 +190,12 @@ Every refusal taken before anything is allocated names its admission check in
 `ImportReport::refusal` and writes one line through `ddi_refusal` (`ddi-trace.h`),
 with the request flags, the heap flags, the bits of them this shell has no use
 for, and the resource description. A caller reads the same facts from
-`last_report()`; the line exists so that a lab log, and `tools/win/capture-share`,
+`last_report()`. The line exists so that a lab log, and `tools/win/capture-share`,
 which copies the debugger channel into its cell log, carry them.
 
 ## Shared resources
 
-One shape works: a 2D texture of one mip level, one array slice and one sample on
+One texture shape works: a 2D texture of one mip level, one array slice and one sample on
 a GPU-only heap, in a format with a COMPOSED row of the surface format table. It
 is created as a linear row-major image and published as the same two private-data
 records the D3D11 shell reads and writes, so either shell opens what either shell
@@ -215,16 +215,27 @@ D3D12 resource over the same memory. A texture can have mip levels and array lay
 It opens as the engine's LINEAR image of the same description (engine ABI 1.11,
 V15), and only when that image has the creator's layout. The contract's match rule
 decides, with the device UUID that the shell gives engine-ddi
-(`set_device_identity`). A D3D12 create of a shared buffer or of a texture outside
-the LINEAR SURFACE form still fails.
+(`set_device_identity`).
 
-Every other shape of a D3D12 create still fails: buffers, mip chains, arrays, 3D textures, MSAA,
+A D3D12 create of a shared buffer works. Every committed buffer on a GPU-only heap
+carries the ENGINE LAYOUT record and a BC2A blob (`shared-buffer-record.h`), because
+the DDI does not say which buffers are shared. A D3D12 open of that buffer, in the
+same process or in another one, then adopts the same memory. The lab probe
+(`tools/win/shared-interop`) measured the open, the bytes in both directions and
+the cost of a create, which is the same with and without the record. The switch
+`engine-layout-buffers-off` (`ddi-trace.h`) removes the record for a diagnosis.
+The D3D11 runtime refuses `OpenSharedResource1` of a D3D12 buffer with `E_INVALIDARG`
+before the driver sees the call. It does this on this driver and on another vendor's
+driver, so a buffer that D3D12 created opens only in D3D12.
+
+A D3D12 create of a texture outside the LINEAR SURFACE form still fails, and so does
+every other shape: mip chains, arrays, 3D textures, MSAA,
 block-compressed and typeless formats, depth-stencil, cross-adapter surfaces,
 CPU-visible shared heaps, a shared heap with no resource and a placed resource on
 one. They fail with `E_OUTOFMEMORY`, one of the two failures a creation DDI may
 report (the other is `D3DDDIERR_DEVICEREMOVED`), so the application loses the
 resource and keeps its device - at every layer that can refuse the call, the thunk
-included (BD-075; `engine_ddi::admitted_create_failure`,
+included (BD-075, `engine_ddi::admitted_create_failure`,
 `native12::ddi_admitted_create_failure`).
 
 Shared fences work in every direction, because the D3D12 DDI has no fence sharing
@@ -247,7 +258,7 @@ The residency of an imported heap belongs to the runtime. `native-residency-ddi.
 resolves engine objects to runtime allocation handles, removes aliases within the
 request and sends one complete list through the native runtime residency callbacks.
 `E_PENDING` preserves the runtime paging fence and sets `WaitMask`. That fence
-is distinct from the importer's KT mapping fence. Empty validated allocation
+is distinct from the importer's KT mapping fence. Empty checked allocation
 lists require no kernel operation. Unknown ownership or malformed callback
 results fail rather than manufacturing residency.
 
@@ -325,12 +336,12 @@ progress is per monitored fence (`device-progress.h`): the ICD signals the
 submitting context's fence after every native submit and publishes the value, on
 application and internal contexts alike, and `HostedDispatch` sees every such
 publication. The delay is a bounded FIFO, oldest first, with a count, a byte and
-an age bound; the bounds only shorten the delay and never the progress condition.
+an age bound. The bounds only shorten the delay and never the progress condition.
 A linear primary is never held, because only its own runtime resource may release
 it. The device's teardown drains the FIFO in full and counts what was still
 unretired there. Both halves of the gate are switchable
 (`import-progress-gate-off`, `import-quarantine-off`, and
-`release-two-phase-off` for engine-ddi's half; `ddi-trace.h`), all on by default.
+`release-two-phase-off` for engine-ddi's half, in `ddi-trace.h`), all on by default.
 These three switches have the class Lab, so only a lab build honours them.
 
 **Switch classes.** Each switch name that the shell reads has a row in
@@ -397,9 +408,9 @@ DLLs and a hosted Vulkan instance. Experiments come from the application profile
 the machine-wide value and, in a lab build only, `AMDGPU_WDDM_D3D12_EXPERIMENT`
 (BD-167). Such processes have no profile, so they run the defaults unless the
 machine-wide value names a switch.
-The sparse policy stays at its default (value absent, on); the DWORD set to 0
+The sparse policy stays at its default (value absent, on). The DWORD set to 0
 removes FL 12_x from processes started afterwards without removing D3D12.
-A file that a running process maps cannot be deleted or overwritten in place,
+A file that a running process maps cannot be removed or overwritten in place,
 only renamed: replacements use `ReplaceFile` with a named backup, and the kill
 switch is the diagnostic shell put back at the registered path that way.
 Running processes keep what they loaded.
@@ -412,7 +423,7 @@ sequence, QPC, thread and outcome. Optional typed observations record format,
 sample count, flags and capability outputs. Private pointers, resource data and
 opaque handles are excluded. Entry is recorded before owner resolution so a rejected scope can
 still be identified. A normal return from a void DDI is not proof that its work
-succeeded; error callbacks and GPU completion must be examined separately.
+succeeded. Error callbacks and GPU completion must be examined separately.
 Adapter negotiation, engine startup, hosted callbacks and teardown have their
 own diagnostics.
 
@@ -449,20 +460,20 @@ Mesa fork.
 
 DXGI table publication is not implemented. Present private data size is zero.
 The Present handler returns the allocation of one presented surface and the
-context of its queue, and refuses every other shape; composition of what it
-returns is not validated.
+context of its queue, and refuses every other shape. The composition of what it
+returns is not checked.
 
 A presentable surface (a linear primary) is allocated with the LB7A v1
 description under the E26R v1 resource record. Its storage format is one
 that `driver/contract/amdgpu_wddm_surface_format.h` enables for composition
-(B8G8R8A8, R8G8B8A8, R10G10B10A2 and R16G16B16A16_FLOAT today); the
+(B8G8R8A8, R8G8B8A8, R10G10B10A2 and R16G16B16A16_FLOAT today). The
 compositor converts it to the desktop's format, so the monitor's depth does
 not decide it. The same table gives the kernel driver and the compositor's UMD
 the format's size a pixel (8 for FP16). The swap chain's colour space and HDR
 metadata never reach this DDI: DXGI hands them to the compositor. An FP16
 primary is presentable on a machine only when the kernel driver and the
 desktop UMD carry the table's FP16 row as well (0.7.184.1, 4176D1DF and
-E6B944CF do not); until then the kernel refuses its allocation.
+E6B944CF do not). Until then the kernel refuses its allocation.
 It is released by its runtime
 resource, with ASSUME_NOT_IN_USE and SYNCHRONOUS_DESTROY, and only inside the
 `pfnCreateHeapAndResource` or `pfnDestroyHeapAndResource` call of that
@@ -479,18 +490,18 @@ inside them and queues address updates through `HostedDispatch`
 (`hosted-sparse-test.cpp`). An extent has one owner, an allocation's ordinary
 mapping or a reservation, and a runtime answer that would give it two removes
 the device. What is mapped inside a reservation is not recorded. One update
-names one reservation; its backing, range, fence and context are held until
+names one reservation. Its backing, range, fence and context are held until
 the runtime callback returns, the imported heaps among them. The queue's
 `pfnUpdateTileMappings` and `pfnCopyTileMappings` are one operation of the
 queue, admitted as an execute is, and hand their arguments unchanged to the
-engine queue. Both are host and harness tested; no run against the system
+engine queue. Both are host and harness tested. No run against the system
 runtime has used them.
 Queue Wait, scheduling groups, offer/reclaim and background
 processing are also outside the current shell. A non-null function pointer may
 be an explicit refusal handler, so table publication is not a capability claim.
 See [engine-ddi/SLOTS.md](engine-ddi/SLOTS.md) for the engine boundary's slot map.
 
-## Host validation
+## Host checks
 
 The build runs tests for adapter admission and export negotiation, typed table
 composition, entry scopes and diagnostics, queue/context ownership, hosted
