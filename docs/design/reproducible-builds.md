@@ -33,11 +33,11 @@ baked into a shipped binary.
 | # | cause | bytes | fix |
 |---|---|---|---|
 | 1 | COFF `TimeDateStamp`: the linker writes the clock | 2-4 | `/Brepro` on `cl.exe`, `link.exe` and `lib.exe`. The linker then writes a hash of the output instead of a time, and adds an `IMAGE_DEBUG_TYPE_REPRO` entry saying so |
-| 2 | the same timestamp echoed in the debug directory | 7 | the same flag; the debug directory follows the header |
-| 3 | the PDB GUID and the PDB path in the CodeView record | 30 | `/Brepro` derives the GUID from the content; `/PDBALTPATH:%_PDB%` embeds the file name only, not the directory |
+| 2 | the same timestamp echoed in the debug directory | 7 | the same flag. The debug directory follows the header |
+| 3 | the PDB GUID and the PDB path in the CodeView record | 30 | `/Brepro` derives the GUID from the content. `/PDBALTPATH:%_PDB%` embeds the file name only, not the directory |
 | 4 | the optional header `CheckSum` | 2 | follows from 1-3: identical content gives an identical checksum |
 | 5 | the Authenticode signature in the certificate table | 320 | follows from 1-4 as well, for this signing setup. See below |
-| 6 | the object list given to the linker is an unordered directory enumeration | 0 here | `/OPT:ICF` folds identical functions in input order, so a different order is a different image. Sort the list; it costs nothing and removes the risk |
+| 6 | the object list given to the linker is an unordered directory enumeration | 0 here | `/OPT:ICF` folds identical functions in input order, so a different order is a different image. Sort the list. It costs nothing and removes the risk |
 
 Cause 6 did not show up in these two builds because the enumeration order happened to be stable. It is in the
 list because nothing in `Get-ChildItem` promises that.
@@ -69,19 +69,19 @@ but that is hygiene, not determinism.
 
 `driver/kmd/build.ps1`:
 
-- add `/Brepro` to `$clFlags`;
-- add `/Brepro` and `/PDBALTPATH:%_PDB%` to the `link.exe` arguments;
-- sort the object list: `(Get-ChildItem "$obj\*.obj" | Sort-Object -Property Name).FullName`;
+- add `/Brepro` to `$clFlags`.
+- add `/Brepro` and `/PDBALTPATH:%_PDB%` to the `link.exe` arguments.
+- sort the object list: `(Get-ChildItem "$obj\*.obj" | Sort-Object -Property Name).FullName`.
 - copy the linked image to `bc250kmd.unsigned.sys` **before** `Inf2Cat` and `signtool`, so that the
-  signing-independent artifact exists as a file and can be hashed;
+  signing-independent artifact exists as a file and can be hashed.
 - drop `/uselocaltime` from both `Inf2Cat` calls.
 
 `tools/build/build-umd-d3d12.ps1`: add `/Brepro` to `$flags` and `/Brepro` after `/link`.
 
-`tools/build/build-engine-ddi.ps1`: add `/Brepro` to `$flags` and to both `lib.exe` calls; `engine-ddi.lib` is
+`tools/build/build-engine-ddi.ps1`: add `/Brepro` to `$flags` and to both `lib.exe` calls. `engine-ddi.lib` is
 linked into the shell, so an archive with member timestamps would defeat the shell's determinism.
 
-`cl.exe`, `link.exe` and `lib.exe` of WDK/SDK 10.0.26100 all accept `/Brepro`; the header gates and the host
+`cl.exe`, `link.exe` and `lib.exe` of WDK/SDK 10.0.26100 all accept `/Brepro`. The header gates and the host
 tests pass with it.
 
 ## What the signing step needs
@@ -93,15 +93,15 @@ tests pass with it.
 2. **Compare a deployed, signed driver by its Authenticode PE hash, not by its file hash.** What is deployed is
    a signed file, and the Authenticode hash deliberately skips the certificate table, the `CheckSum` field and
    the security data-directory entry, so it is identical for two signings of one image. A small tool parses the
-   PE and hashes the file with those three regions excluded; `tools/win/stackbudget.py` already walks these
-   headers, so the parsing is not new ground. This was validated against `signtool`'s own output on three
+   PE and hashes the file with those three regions excluded. `tools/win/stackbudget.py` already walks these
+   headers, so the parsing is not new ground. This was checked against `signtool`'s own output on three
    signed drivers, the deployed `0.7.196.1` among them: the digest computed this way is the digest `signtool`
    embedded. It only helps together with `/Brepro`, because the timestamp sits inside the hashed region.
-3. **Record the catalog; do not gate on it.** Keep its hash in the build record for identification, with a line
+3. **Record the catalog. Do not gate on it.** Keep its hash in the build record for identification, with a line
    saying it is expected to differ per build and why.
 4. **Do not add `/t` or `/tr` to `signtool` without updating this note.** A countersignature would move the
    signed driver from "reproduces" to "reproduces under the Authenticode hash only". That is an acceptable
-   trade if a trusted signing time is ever wanted; it is not an accident to stumble into.
+   trade if a trusted signing time is ever wanted. It is not an accident to stumble into.
 5. A byte-identical signature under a *different* key or with a pinned time would need a tool that takes the
    signing time and the private key as inputs (`osslsigncode -time`). That is a change of trust model for a
    test certificate and it buys nothing over steps 1 and 2. Not proposed.
@@ -147,7 +147,7 @@ A generator error remains a package failure.
 Turning these flags on changes the bytes of the driver. A `/Brepro` build of the kernel driver is a new
 artifact: it must go through the ordinary promotion path on the lab, with its own candidate, postflight and
 rollback, and not be swapped in quietly because "only metadata changed". The flags touch the debug directory
-and the PE header of a file whose signature the boot loader checks; the cost of being wrong about that is a
+and the PE header of a file whose signature the boot loader checks. The cost of being wrong about that is a
 machine that does not start. The shell is cheaper to try and should go first.
 
 ## What this does not solve
