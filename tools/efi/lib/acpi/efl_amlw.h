@@ -44,6 +44,16 @@ void efl_amlw_end(struct efl_amlw *w, size_t mark);
 /* NameOp and one name segment. The object follows. */
 void efl_amlw_name(struct efl_amlw *w, const char *segment);
 
+/* A Device definition: the extended opcode of ACPI 6.5 section 20.2.5.3, then the 4-character name, then the body.
+ * The mark goes to efl_amlw_end like the scope mark. */
+size_t efl_amlw_device_begin(struct efl_amlw *w, const char *segment);
+
+/* A string object: the StringPrefix and the characters, with the null terminator. */
+void efl_amlw_string(struct efl_amlw *w, const char *text);
+
+/* A named string: Name(_HID, "BC250001"). */
+void efl_amlw_name_string(struct efl_amlw *w, const char *segment, const char *text);
+
 /* A method with an empty body: Method (segment, arguments, NotSerialized) {}. */
 void efl_amlw_empty_method(struct efl_amlw *w, const char *segment, unsigned arguments);
 

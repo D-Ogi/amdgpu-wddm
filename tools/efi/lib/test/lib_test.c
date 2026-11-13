@@ -109,6 +109,21 @@ static void test_amlw(void)
 	/* Method (ABCD, 1, NotSerialized) {}: MethodOp, PkgLength 6, the name, the flags. */
 	CHECK(!memcmp(table + bytes - 7u, "\x14\x06" "ABCD" "\x01", 7));
 
+	/* A device with a _HID of our own, as the TPM experiment needs: Device(DEV0) { Name(_HID, "BC250001") }. */
+	efl_amlw_init(&w, table, sizeof(table));
+	efl_amlw_table_begin(&w, "SSDT", 2, "TEST", "DEVICE", 1, "BCST", 1);
+	mark = efl_amlw_device_begin(&w, "DEV0");
+	efl_amlw_name_string(&w, "_HID", "BC250001");
+	efl_amlw_end(&w, mark);
+	bytes = efl_amlw_table_end(&w);
+	CHECK(bytes > 36u && sum_of(table, bytes) == 0);
+	/* ExtOp 0x5B, DeviceOp 0x82, PkgLength, then "DEV0". */
+	CHECK(table[36] == 0x5B && table[37] == 0x82);
+	CHECK(efl_aml_pkg_length(table + 38, table + bytes, &length) == 1u && 38u + length == bytes);
+	CHECK(!memcmp(table + 39, "DEV0", 4));
+	/* NameOp, "_HID", StringPrefix, the text and its terminator. */
+	CHECK(!memcmp(table + 43, "\x08_HID\x0d" "BC250001", 15));
+
 	/* A body of more than 63 bytes takes a package length of two bytes. */
 	efl_amlw_init(&w, table, sizeof(table));
 	efl_amlw_table_begin(&w, "SSDT", 2, "TEST", "LONG", 1, "BCST", 1);

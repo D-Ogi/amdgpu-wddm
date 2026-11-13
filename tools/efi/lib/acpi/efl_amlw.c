@@ -18,6 +18,9 @@
 #define AML_DUAL_NAME_PREFIX	0x2Eu
 #define AML_MULTI_NAME_PREFIX	0x2Fu
 #define AML_ROOT_CHAR		0x5Cu
+#define AML_EXT_OP		0x5Bu	/* the extended opcode prefix of ACPI 6.5 section 20.2.5 */
+#define AML_DEVICE_OP		0x82u
+#define AML_STRING_PREFIX	0x0Du
 
 #define SDT_HEADER_BYTES	36u
 #define SDT_LENGTH		4u
@@ -194,6 +197,39 @@ void efl_amlw_name(struct efl_amlw *w, const char *segment)
 	}
 	put8(w, AML_NAME_OP);
 	efl_amlw_bytes(w, segment, NAME_SEG);
+}
+
+size_t efl_amlw_device_begin(struct efl_amlw *w, const char *segment)
+{
+	size_t mark;
+	if (strlen(segment) != NAME_SEG || !segment_ok(segment)) {
+		w->overflow = 1;
+		return 0;
+	}
+	put8(w, AML_EXT_OP);
+	put8(w, AML_DEVICE_OP);
+	mark = w->used;
+	efl_amlw_bytes(w, segment, NAME_SEG);
+	return mark;
+}
+
+void efl_amlw_string(struct efl_amlw *w, const char *text)
+{
+	size_t n = strlen(text);
+	if (n > 0x7FFFu) { w->overflow = 1; return; }
+	put8(w, AML_STRING_PREFIX);
+	efl_amlw_bytes(w, text, n + 1);
+}
+
+void efl_amlw_name_string(struct efl_amlw *w, const char *segment, const char *text)
+{
+	if (strlen(segment) != NAME_SEG || !segment_ok(segment)) {
+		w->overflow = 1;
+		return;
+	}
+	put8(w, AML_NAME_OP);
+	efl_amlw_bytes(w, segment, NAME_SEG);
+	efl_amlw_string(w, text);
 }
 
 void efl_amlw_empty_method(struct efl_amlw *w, const char *segment, unsigned arguments)
