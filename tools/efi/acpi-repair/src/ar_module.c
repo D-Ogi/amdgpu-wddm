@@ -168,6 +168,7 @@ static void ar_module_run(struct stage *stage)
 	ar_plan_make(&input, &plan);
 	stage_sayf(stage, AR_NAME, "idle states: %s", ar_idle_text(plan.idle));
 	stage_sayf(stage, AR_NAME, "method stubs: %s", ar_stubs_text(plan.stubs));
+	if (plan.device) stage_say(stage, AR_NAME, "experiment device TPM0 with _HID BC250001 is in the stub table");
 	if (plan.idle != AR_IDLE_REPAIR && plan.stubs != AR_STUBS_REPAIR) return;
 	if (!apply) stage_say(stage, AR_NAME, "acpi.apply=0: the tables are built and checked, and none is installed or removed");
 
