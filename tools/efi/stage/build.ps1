@@ -3,11 +3,13 @@
 #   pwsh tools\efi\stage\build.ps1
 #   pwsh tools\efi\stage\build.ps1 -Out P:\BC-250\scratch\build\efi-stage
 #   pwsh tools\efi\stage\build.ps1 -SkipTests
-#   pwsh tools\efi\stage\build.ps1 -SignedImage <a signed UEFI image, for example a Windows Boot Manager>
+#   pwsh tools\efi\stage\build.ps1 -SignedImage <a signed UEFI image> -SecondSignedImage <another one>
 #
 # The UEFI image: clang for x86_64-unknown-windows, freestanding, linked by lld-link. The stage is an EFI
 # application.
-# The host tests: the llvm-mingw clang of the workspace, so the test build needs no Visual Studio and nothing on C:.
+# The host tests: the llvm-mingw clang of the workspace with its address sanitizer, so the test build needs no
+# Visual Studio. The Secure Boot tests read two signed images of the Windows installation of this PC, as controls
+# that this project did not make. They are read only. A control that is not there fails the build.
 # Everything is written under -Out, never into the repository. Nothing here touches a lab machine or a boot entry.
 
 param(
@@ -18,7 +20,9 @@ param(
     [string]$AcpiDump = 'P:\BC-250\firmware\unit-A-2026-09-21\acpi',
     # The ACPICA compiler, as a second parser of the built tables. Not there: that check says SKIP.
     [string]$Iasl = 'P:\BC-250\toolchain\acpica-iasl-20260930\iasl.exe',
-    [string]$SignedImage = '',
+    # Two real signed images, the positive controls of the Secure Boot tests. They are necessary.
+    [string]$SignedImage = 'C:\Windows\Boot\EFI\bootmgfw.efi',
+    [string]$SecondSignedImage = 'C:\Windows\System32\winload.efi',
     [switch]$SkipTests
 )
 
@@ -50,7 +54,7 @@ $corePure = Sources 'stage\src' @('stage_options.c')
 $unlockPure = Sources 'core-unlock\src' @('cu_decide.c', 'cu_run.c', 'cu_smu.c', 'cu_msr.c', 'cu_report.c', 'cu_options.c')
 $repairPure = Sources 'acpi-repair\src' @('ar_plan.c')
 $securePure = Sources 'secure-boot\src' @('sb_der.c', 'sb_rsa.c', 'sb_x509.c', 'sb_pe.c', 'sb_pkcs7.c', 'sb_siglist.c',
-    'sb_verify.c')
+    'sb_verify.c', 'sb_policy.c')
 $pure = @($libPure) + @($corePure) + @($unlockPure) + @($repairPure) + @($securePure)
 # The UEFI bindings: the core and one file for each module.
 $bindings = @(Sources 'stage\src' @('main.c')) + @(Sources 'core-unlock\src' @('cu_module.c', 'report_uefi.c')) +
@@ -102,22 +106,43 @@ if ($SkipTests) { exit 0 }
 
 Write-Host 'compile (host tests)'
 $hostCc = Join-Path $Mingw 'x86_64-w64-mingw32-clang.exe'
-$hostFlags = @('-std=c11', '-O1', '-g', "-I$efiRoot\lib\include", "-I$efiRoot\lib\test") + $includes
+foreach ($control in @($SignedImage, $SecondSignedImage)) {
+    if (-not $control -or -not (Test-Path -LiteralPath $control -PathType Leaf)) {
+        throw "the signed image '$control' is not there: the Secure Boot tests have no control (-SignedImage, -SecondSignedImage)"
+    }
+}
+# The address sanitizer stops the test at a read or a write outside a buffer. Its run-time library is a DLL beside
+# the compiler.
+$env:PATH = "$Mingw;$env:PATH"
+$hostFlags = @('-std=c11', '-O1', '-g', '-fsanitize=address', '-fno-omit-frame-pointer', "-I$efiRoot\lib\include", "-I$efiRoot\lib\test") + $includes
 Build-Objects $hostCc $hostFlags $objHost ($pure + $tests) $strict
 Build-Objects $hostCc $hostFlags $objHost $shared $relaxed
 $test = Join-Path $Out 'host_test.exe'
-Invoke-Tool $hostCc (@('-o', $test) + (Get-ChildItem "$objHost\*.o").FullName)
+Invoke-Tool $hostCc (@('-fsanitize=address', '-o', $test) + (Get-ChildItem "$objHost\*.o").FullName)
 
 Write-Host 'fixtures (Secure Boot tests)'
 # New throwaway keys at each run. Only public data is written, under -Out.
 Remove-Item $fixtures -Recurse -Force -ErrorAction SilentlyContinue
 & python (Join-Path $efiRoot 'secure-boot\test\make_fixtures.py') $fixtures
-if ($LASTEXITCODE -eq 3) { Write-Host 'SKIP the Secure Boot fixtures: the Python package cryptography is not installed' }
-elseif ($LASTEXITCODE -ne 0) { throw "make_fixtures.py failed ($LASTEXITCODE)" }
+if ($LASTEXITCODE -ne 0) { throw "make_fixtures.py failed ($LASTEXITCODE): the Python package cryptography is necessary" }
+
+Write-Host 'control (the fixtures under the signature check of Windows)'
+# The fixtures come from this project's own encoder. Windows reads them with code that this project did not write.
+# The test root is not a trusted root of this PC, so the status of a sound signature is UnknownError or NotTrusted
+# with the signer certificate read. A changed image must be HashMismatch.
+$sound = Get-AuthenticodeSignature -LiteralPath (Join-Path $fixtures 'signed.efi')
+$changed = Get-AuthenticodeSignature -LiteralPath (Join-Path $fixtures 'signed_tampered.efi')
+Write-Host "signed.efi: $($sound.Status), signer $($sound.SignerCertificate.Subject)"
+Write-Host "signed_tampered.efi: $($changed.Status)"
+if ($null -eq $sound.SignerCertificate -or $sound.SignerCertificate.Subject -notmatch 'BC-250 test signer' -or
+    $sound.Status -in @('HashMismatch', 'NotSigned', 'Incompatible', 'NotSupportedFileFormat')) {
+    throw 'Windows does not read the signature of the fixture signed.efi'
+}
+if ($changed.Status -ne 'HashMismatch') { throw 'Windows does not refuse the changed fixture signed_tampered.efi' }
 
 Write-Host 'run (host tests)'
 # The first directory is the stock ACPI tables that the repository stores as evidence.
-& $test (Join-Path $repo 'evidence\linux\2026-09-21-E01-recon-binaries\acpi') $AcpiDump $fixtures $tables $SignedImage
+& $test (Join-Path $repo 'evidence\linux\2026-09-21-E01-recon-binaries\acpi') $AcpiDump $fixtures $tables $SignedImage $SecondSignedImage
 $code = $LASTEXITCODE
 Write-Host "bc250-stage host tests exit code $code"
 

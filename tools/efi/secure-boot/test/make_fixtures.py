@@ -199,6 +199,14 @@ def main() -> int:
     write("dbx_root.esl", mkesl.database([root.der], []))
     write("dbx_digest.esl", mkesl.database([], [digest]))
     write("bad.esl", mkesl.database([root.der], [])[:-3])
+    # The forbidden database of a PC: the digest of the signed part of a certificate, with a revocation time.
+    write("dbx_leaf_hash.esl", mkesl.database([], [], revoked=[leaf.der]))
+    write("dbx_inter_hash.esl", mkesl.database([], [], revoked=[inter.der]))
+    write("dbx_other_hash.esl", mkesl.database([], [], revoked=[other.der]))
+    write("dbx_unknown.esl", mkesl.signature_list(mkesl.uuid.UUID(int=7), mkesl.BC250_OWNER_GUID, [b"unknown type"]))
+    write("empty.esl", mkesl.database([], []))
+    # The same digest from the package "cryptography", which did not see the reader of mkesl.py.
+    write("leaf_tbs.digest", hashlib.sha256(leaf.certificate.tbs_certificate_bytes).digest())
     print(f"fixtures written to {out}")
     return 0
 

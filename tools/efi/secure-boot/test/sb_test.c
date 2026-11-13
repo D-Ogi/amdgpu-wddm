@@ -5,8 +5,10 @@
  *
  * The images, certificates and databases come from test/make_fixtures.py, which makes new keys at each run and
  * writes no private key. When the fixture directory is not there, the tests that need it are skipped and the test
- * says so. One more optional input is a real signed UEFI image (for example a Windows Boot Manager): it is the
- * positive control of the whole chain on bytes that this project did not make.
+ * says so. Two more inputs are real signed images (the build script gives a Windows Boot Manager and a Windows
+ * loader): they are the positive control of the whole chain on bytes and signatures that this project did not
+ * make. The build script also gives the fixtures to the signature check of Windows, which is the control of the
+ * fixtures themselves.
  */
 #include "efl_test.h"
 #include "efi.h"
@@ -14,6 +16,7 @@
 #include "sb_der.h"
 #include "sb_pe.h"
 #include "sb_pkcs7.h"
+#include "sb_policy.h"
 #include "sb_siglist.h"
 #include "sb_verify.h"
 #include "sb_x509.h"
@@ -93,7 +96,7 @@ static void test_verdicts(const char *dir)
 		{ "signed_two.efi", "db_root.esl", NULL, SB_ALLOWED_SIGNATURE },
 		/* No db entry leads to the signature. */
 		{ "signed.efi", NULL, NULL, SB_NOT_TRUSTED },
-		{ "signed.efi", "bad.esl", NULL, SB_NOT_TRUSTED },
+		{ "signed.efi", "empty.esl", "empty.esl", SB_NOT_TRUSTED },
 		{ "signed_other.efi", "db_root.esl", NULL, SB_NOT_TRUSTED },
 		{ "signed_noca.efi", "db_root.esl", NULL, SB_NOT_TRUSTED },
 		/* The digest of the image. */
@@ -113,6 +116,21 @@ static void test_verdicts(const char *dir)
 		{ "signed.efi", "db_leaf.esl", "dbx_root.esl", SB_FORBIDDEN_CERTIFICATE },
 		{ "signed_two.efi", "db_root.esl", "dbx_leaf.esl", SB_FORBIDDEN_CERTIFICATE },
 		{ "signed_other.efi", "db_root.esl", "dbx_leaf.esl", SB_NOT_TRUSTED },
+		/* The digest of the signed part of a certificate in dbx, as the dbx of a PC has it. */
+		{ "signed.efi", "db_root.esl", "dbx_leaf_hash.esl", SB_FORBIDDEN_CERTIFICATE },
+		{ "signed.efi", "db_leaf.esl", "dbx_inter_hash.esl", SB_FORBIDDEN_CERTIFICATE },
+		{ "signed.efi", "db_root.esl", "dbx_other_hash.esl", SB_ALLOWED_SIGNATURE },
+		{ "signed_two.efi", "db_root.esl", "dbx_other_hash.esl", SB_FORBIDDEN_CERTIFICATE },
+		{ "unsigned.efi", "db_digest.esl", "dbx_leaf_hash.esl", SB_ALLOWED_DIGEST },
+		/* That entry type forbids only in dbx. In db it allows nothing. */
+		{ "signed.efi", "dbx_leaf_hash.esl", NULL, SB_NOT_TRUSTED },
+		/* A database that is not well formed: no verdict but "not allowed", also for an image that db allows. */
+		{ "signed.efi", "bad.esl", NULL, SB_BAD_DATABASE },
+		{ "signed.efi", "db_root.esl", "bad.esl", SB_BAD_DATABASE },
+		{ "unsigned.efi", "db_digest.esl", "bad.esl", SB_BAD_DATABASE },
+		/* An entry type that the stage does not read changes no verdict. The enforce mode refuses such a dbx
+		 * before the verdict (test_policy). */
+		{ "signed.efi", "db_root.esl", "dbx_unknown.esl", SB_ALLOWED_SIGNATURE },
 		/* Changed bytes. */
 		{ "signed_tampered.efi", "db_root.esl", NULL, SB_BAD_SIGNATURE },
 		{ "signed_tampered.efi", "db_digest.esl", NULL, SB_BAD_SIGNATURE },
@@ -157,6 +175,53 @@ static void test_digests(const char *dir)
 	}
 }
 
+/* The rule for the inputs of the enforce mode: each defect refuses, and only the whole set passes. */
+static void test_policy(const char *dir)
+{
+	struct file unknown = load(dir, "dbx_unknown.esl"), hash = load(dir, "dbx_leaf_hash.esl");
+	struct file empty = load(dir, "empty.esl"), want = load(dir, "leaf_tbs.digest");
+	struct sb_inputs good = { SB_SOURCE_GOOD, SB_SOURCE_GOOD, SB_SOURCE_ABSENT, SB_SOURCE_ABSENT, 0 }, in;
+	struct sb_siglist_count count;
+
+	CHECK(sb_enforce_defect(&good) == NULL);
+	in = good; in.db_firmware = in.dbx_firmware = SB_SOURCE_GOOD;
+	CHECK(sb_enforce_defect(&in) == NULL);
+	in = good; in.db_file = SB_SOURCE_ABSENT;
+	CHECK(sb_enforce_defect(&in) != NULL);
+	in = good; in.db_file = SB_SOURCE_BROKEN;
+	CHECK(sb_enforce_defect(&in) != NULL);
+	in = good; in.dbx_file = SB_SOURCE_ABSENT;
+	CHECK(sb_enforce_defect(&in) != NULL);
+	in = good; in.dbx_file = SB_SOURCE_BROKEN;
+	CHECK(sb_enforce_defect(&in) != NULL);
+	in = good; in.db_firmware = SB_SOURCE_BROKEN;
+	CHECK(sb_enforce_defect(&in) != NULL);
+	in = good; in.dbx_firmware = SB_SOURCE_BROKEN;
+	CHECK(sb_enforce_defect(&in) != NULL);
+	/* The firmware variables do not replace the files. */
+	in = good; in.db_file = SB_SOURCE_ABSENT; in.db_firmware = SB_SOURCE_GOOD;
+	CHECK(sb_enforce_defect(&in) != NULL);
+	in = good; in.dbx_unread = 1;
+	CHECK(sb_enforce_defect(&in) != NULL);
+
+	/* The counts that feed the rule. */
+	CHECK(sb_siglist_count(unknown.data, unknown.bytes, &count) == 1 && count.other == 1);
+	CHECK(sb_siglist_count(hash.data, hash.bytes, &count) == 1 && count.x509_sha256 == 1 && count.other == 0);
+	CHECK(sb_siglist_count(empty.data, empty.bytes, &count) == 1 && empty.bytes == 28);
+	CHECK(count.x509 + count.sha256 + count.x509_sha256 + count.other == 0);
+	/* The digest in the list is the one that the package "cryptography" computes for the signed part. */
+	CHECK(want.bytes == 32 && hash.bytes == 28u + 16u + 48u && !memcmp(hash.data + 28u + 16u, want.data, 32));
+	/* A list of that type with another entry size is malformed. */
+	if (hash.bytes == 92u) {
+		hash.data[24] = 63;
+		CHECK(sb_siglist_count(hash.data, hash.bytes, &count) == 0);
+	}
+	free(unknown.data);
+	free(hash.data);
+	free(empty.data);
+	free(want.data);
+}
+
 static void test_lists(const char *dir)
 {
 	struct file mixed = load(dir, "db_mixed.esl"), bad = load(dir, "bad.esl"), leaf = load(dir, "db_leaf.esl");
@@ -168,7 +233,7 @@ static void test_lists(const char *dir)
 	struct sb_cert c_leaf, c_inter, c_root;
 
 	CHECK(sb_siglist_count(mixed.data, mixed.bytes, &count) == 1);
-	CHECK(count.x509 == 2 && count.sha256 == 2 && count.other == 1);
+	CHECK(count.x509 == 2 && count.sha256 == 2 && count.other == 1 && count.x509_sha256 == 0);
 	CHECK(sb_siglist_count(bad.data, bad.bytes, &count) == 0);
 	CHECK(sb_siglist_count(NULL, 0, &count) == 1 && count.x509 + count.sha256 + count.other == 0);
 	CHECK(sb_siglist_count(mixed.data, 27, &count) == 0);
@@ -260,7 +325,7 @@ static void test_robust(const char *dir)
 
 /* A real signed image: its signature must verify under its own signer, and the image must be allowed when the
  * issuer of that signer is the one db entry, and not trusted with an empty db. */
-static void test_real_image(const char *path)
+static void test_real_image(const char *path, const char *option)
 {
 	struct file image = { NULL, 0 }, none = { NULL, 0 }, db = { NULL, 0 };
 	const unsigned char *signature;
@@ -272,12 +337,14 @@ static void test_real_image(const char *path)
 	int have_issuer = 0;
 
 	if (path == NULL || path[0] == 0) {
-		printf("SKIP secure-boot, real signed image: no path given (build.ps1 -SignedImage <file>)\n");
+		printf("SKIP secure-boot, real signed image: no path given (build.ps1 %s <file>)\n", option);
 		return;
 	}
 	image.data = efl_test_load("", path, &image.bytes);
 	if (image.data == NULL) {
-		printf("SKIP secure-boot, real signed image: %s did not read\n", path);
+		/* A path that was given and does not read is a failure: the control did not run. */
+		failures++;
+		printf("FAIL secure-boot, real signed image: %s did not read\n", path);
 		return;
 	}
 	CHECK(sb_pe_read(image.data, image.bytes, &pe) == 1 && pe.cert_bytes != 0);
@@ -316,7 +383,7 @@ static void test_real_image(const char *path)
 	free(image.data);
 }
 
-unsigned sb_tests(const char *fixture_dir, const char *real_image, unsigned *check_count)
+unsigned sb_tests(const char *fixture_dir, const char *real_image, const char *second_image, unsigned *check_count)
 {
 	size_t probe_bytes = 0;
 	unsigned char *probe = efl_test_load(fixture_dir, "signed.efi", &probe_bytes);
@@ -328,10 +395,12 @@ unsigned sb_tests(const char *fixture_dir, const char *real_image, unsigned *che
 		free(probe);
 		test_digests(fixture_dir);
 		test_lists(fixture_dir);
+		test_policy(fixture_dir);
 		test_verdicts(fixture_dir);
 		test_robust(fixture_dir);
 	}
-	test_real_image(real_image);
+	test_real_image(real_image, "-SignedImage");
+	test_real_image(second_image, "-SecondSignedImage");
 	*check_count = checks;
 	return failures;
 }
