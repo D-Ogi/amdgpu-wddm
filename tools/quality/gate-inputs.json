@@ -39,6 +39,7 @@
     "hostwatch",
     "lab-emerg",
     "lab-runner",
+    "lab-thermal",
     "target-boot",
     "train-validate",
     "gpu-timeline",

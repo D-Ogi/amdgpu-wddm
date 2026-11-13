@@ -177,6 +177,8 @@ Check 'lab-emerg-watch' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -For
  # than the message claimed rather than less.)
  Check 'kmd-deploy' { $env:BC250_ROOT=$Workspace; $env:BC250_KMD_DEPLOY_WORK=(New-Item -ItemType Directory -Force "$Out\kmd-deploy").FullName; & python "$repo\tools\win\kmd-deploy\check-offline.py" --quick }
  Check 'lab-runner' { & python -m unittest discover -s "$repo\tools\win\lab-runner" }
+ # BD-376: the one definition of the lab temperature levels, and the gate against a level held by a tool itself.
+ Check 'lab-thermal' { & python -B -m unittest discover -s "$repo\tools\win\lab-thermal" }
  Check 'target-boot' { & python -m unittest discover -s "$repo\tools\win" -p "test_target*.py" }
  Check 'train-validate' { & python -m unittest discover -s "$repo\tools\win\train-validate" }
  Check 'gpu-timeline' { & python -m unittest discover -s "$repo\tools\win\gpu-timeline" -p 'test_*.py' }
