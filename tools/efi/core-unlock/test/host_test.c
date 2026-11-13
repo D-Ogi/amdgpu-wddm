@@ -568,7 +568,7 @@ static size_t add_structure(unsigned char *t, size_t at, const unsigned char *fo
 	return at;
 }
 
-/* The identity strings are the ones driver/kmd/board_identity.c accepts. */
+/* The identity strings are the ones driver/common/board/board_identity.c accepts. */
 static size_t build_smbios(unsigned char *t, const char *product)
 {
 	static const char *const bios[] = { "American Megatrends Inc.", "P5.00", "05/03/2022" };

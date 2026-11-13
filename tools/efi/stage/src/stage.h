@@ -46,7 +46,7 @@ void stage_say_console(struct stage *stage, const char *module, const char *line
 void stage_log_flush(struct stage *stage);
 
 /* 1 when the board is a BC-250: exactly one PCI function and the SMBIOS table match the driver's own identity
- * check (driver/kmd/board_identity.c). The answer is found once. */
+ * check (driver/common/board/board_identity.c). The answer is found once. */
 int stage_board_bc250(struct stage *stage);
 
 /* The ACPI tables as they are now. The address of the RSDP is read again at each call, because an installed or

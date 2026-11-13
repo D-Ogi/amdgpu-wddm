@@ -26,16 +26,13 @@ static int string_is(const unsigned char* start, const unsigned char* end,
     }
     return 0;
 }
-unsigned BoardIdentitySelect(const unsigned char* pci, size_t pciBytes,
-                             const unsigned char* rsmb, size_t rsmbBytes, unsigned* reason)
+/* The SMBIOS half of the rule, for callers that have no PCI configuration access (a TPM filter does not). The
+ * strings are the same ones BoardIdentitySelect checks: exactly one BIOS entry from AMI with a known version and
+ * date, exactly one baseboard entry "ASRock" / "AMD BC-250", and the end-of-table marker as the last structure. */
+static unsigned smbios_select(const unsigned char* rsmb, size_t rsmbBytes, unsigned* reason)
 {
     size_t at, size;
     unsigned boards = 0, bios = 0, boardMatch = 0, biosMatch = 0, ended = 0;
-    *reason = 2;
-    if (!pci || pciBytes != 64 || read16(pci) != 0x1002 || read16(pci + 2) != 0x13fe ||
-        (pci[14] & 0x7f) != 0 || read16(pci + 44) != 0x1022 || read16(pci + 46) != 0)
-        return 0;
-    *reason = 3;
     if (!rsmb || rsmbBytes < 8 || read32(rsmb + 4) != rsmbBytes - 8) return 0;
     size = rsmbBytes;
     for (at = 8; at < size;) {
@@ -69,6 +66,23 @@ unsigned BoardIdentitySelect(const unsigned char* pci, size_t pciBytes,
     }
     if (!ended || boards != 1 || !boardMatch) { *reason = 2; return 0; }
     return bios == 1 && biosMatch;
+}
+
+unsigned BoardIdentitySelect(const unsigned char* pci, size_t pciBytes,
+                             const unsigned char* rsmb, size_t rsmbBytes, unsigned* reason)
+{
+    *reason = 2;
+    if (!pci || pciBytes != 64 || read16(pci) != 0x1002 || read16(pci + 2) != 0x13fe ||
+        (pci[14] & 0x7f) != 0 || read16(pci + 44) != 0x1022 || read16(pci + 46) != 0)
+        return 0;
+    *reason = 3;
+    return smbios_select(rsmb, rsmbBytes, reason);
+}
+
+unsigned BoardIdentitySelectSmbios(const unsigned char* rsmb, size_t rsmbBytes, unsigned* reason)
+{
+    *reason = 3;
+    return smbios_select(rsmb, rsmbBytes, reason);
 }
 
 int BoardIdentityQualification(const unsigned char* rsmb, size_t bytes,

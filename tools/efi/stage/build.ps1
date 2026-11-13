@@ -64,7 +64,7 @@ $libc = @(Sources 'lib' @('efl_libc.c'))
 # The repository sources that the stage shares with the driver. They keep their own warning level: they are the
 # driver's code, built the same way here and there.
 $shared = @((Join-Path $shim 'bc250_smu.c'), (Join-Path $shim 'bc250_cpu.c'), (Join-Path $shim 'bc250_oc.c'),
-    (Join-Path $repo 'driver\kmd\board_identity.c'))
+    (Join-Path $repo 'driver\common\board\board_identity.c'))
 $tests = @((Join-Path $efiRoot 'stage\test\host_main.c'), (Join-Path $efiRoot 'stage\test\stage_test.c'),
     (Join-Path $efiRoot 'lib\test\lib_test.c'), (Join-Path $efiRoot 'core-unlock\test\host_test.c'),
     (Join-Path $efiRoot 'core-unlock\test\report_test.c'), (Join-Path $efiRoot 'acpi-repair\test\ar_test.c'),
@@ -72,7 +72,7 @@ $tests = @((Join-Path $efiRoot 'stage\test\host_main.c'), (Join-Path $efiRoot 's
 
 $includes = @("-I$efiRoot\lib", "-I$efiRoot\lib\acpi", "-I$efiRoot\stage\src", "-I$efiRoot\core-unlock\src",
     "-I$efiRoot\acpi-repair\src", "-I$efiRoot\secure-boot\src",
-    "-I$shim\include", "-I$shim", "-I$repo\driver\amdgpu-import", "-I$repo\third_party\linux-amdgpu", "-I$repo\driver\kmd")
+    "-I$shim\include", "-I$shim", "-I$repo\driver\amdgpu-import", "-I$repo\third_party\linux-amdgpu", "-I$repo\driver\kmd", "-I$repo\driver\common\board")
 $strict = @('-Wall', '-Wextra', '-Werror')
 $relaxed = @('-Wall', '-Wno-unknown-pragmas', '-Wno-unused-parameter')
 

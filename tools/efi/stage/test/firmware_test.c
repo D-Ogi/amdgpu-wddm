@@ -784,7 +784,7 @@ static size_t add_structure(unsigned char *t, size_t at, const unsigned char *fo
 	return at;
 }
 
-/* The SMBIOS table of a BC-250, with the strings that driver/kmd/board_identity.c accepts, behind a 3.0 entry
+/* The SMBIOS table of a BC-250, with the strings that driver/common/board/board_identity.c accepts, behind a 3.0 entry
  * point. */
 static void build_smbios(void)
 {

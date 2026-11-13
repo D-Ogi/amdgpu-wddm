@@ -2,7 +2,7 @@
 /*
  * The SMBIOS table of the firmware, in the form Windows hands the driver ('RSMB' of GetSystemFirmwareTable: an
  * eight-byte header with the version and the length, then the structures). The driver's own identity check,
- * BoardIdentitySelect in driver/kmd/board_identity.c, then reads it unchanged. Layouts: SMBIOS Reference
+ * BoardIdentitySelect in driver/common/board/board_identity.c, then reads it unchanged. Layouts: SMBIOS Reference
  * Specification 3.7, section 5.2 (the two entry points) and section 6.1 (the structure form).
  */
 #ifndef EFL_SMBIOS_H
