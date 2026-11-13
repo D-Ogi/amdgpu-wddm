@@ -107,7 +107,6 @@
 1	tools/win/dxgimodes/README.md
 3	tools/win/gpu-timeline/README.md
 12	tools/win/gpuload/README.md
-27	tools/win/gui-trials/T2.md
 7	tools/win/kd/README.md
 15	tools/win/kmtprobe/README.md
 5	tools/win/lab-runner/README.md
