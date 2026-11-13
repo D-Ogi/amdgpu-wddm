@@ -1,7 +1,7 @@
 # ADR 0010: the decisions that decide performance, written down before they set
 
 Date: 2026-09-22. Status: **accepted** (the question, after stage C, was whether the architecture should change while
-it still can; this is the answer, accepted the same day).
+it still can. This is the answer, accepted the same day).
 
 ## Context
 
@@ -15,7 +15,7 @@ which - including whether C is the right language, or whether Rust or hand-writt
    tables, a pointer onto a ring, an interrupt), and the GPU does the work on command buffers a user-mode driver
    built. C costs nothing against Rust there, assembly buys nothing in control code, and the copies that are hot go
    through `RtlCopyMemory`, which already is assembly. The WDDM headers and the imported amdgpu code are C (hard rule
-   7: import, do not retype). Rust's real offer is memory safety, not speed; it is declined for now on cost, not on
+   7: import, do not retype). Rust's real offer is memory safety, not speed. It is declined for now on cost, not on
    merit, and nothing in this ADR stops a self-contained module from being written in it later.
 2. **Kept, because it is the one choice that could not be undone:** GpuMmu, `NoPatchingRequired`, page tables in
    the hardware's own format, and the user-mode command buffer executed in place as an indirect buffer (facts M73,
@@ -31,13 +31,13 @@ which - including whether C is the right language, or whether Rust or hand-writt
    that paging never queues behind rendering. User mode sees the nodes, which makes this the sticky one. SDMA's seven
    known defects (`driver/shim/test/sdma_faults.c`) are closed first.
 6. **Clocks are on the map early.** The GPU runs at a fixed, low operating point set by a startup task. Power
-   management through the SMU will move the frame rate more than any line of driver code; it blocks nothing in the
+   management through the SMU will move the frame rate more than any line of driver code. It blocks nothing in the
    architecture and is scheduled rather than designed here.
 
 ## Consequences
 
 - Points 3 to 6 are each a decision of their own and are carried by ADR 0011 (present is a flip), ADR 0012
-  (submission), ADR 0013 (node layout) and ADR 0014 (clocks); this ADR keeps points 1 and 2 and the ordering.
+  (submission), ADR 0013 (node layout) and ADR 0014 (clocks). This ADR keeps points 1 and 2 and the ordering.
 - Nothing already built is thrown away. Points 3 to 5 are work ahead, in that order of stickiness: 5, 3, 4.
 - Until point 4 is done, no performance number from this driver means anything, and none is to be recorded as a fact.
 - If the project prefers Rust for new modules regardless, point 1 is the only one that changes, and the cost is the
