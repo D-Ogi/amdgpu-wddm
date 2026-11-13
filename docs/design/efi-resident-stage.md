@@ -54,18 +54,19 @@ The stage has a core, three modules and a shared library. Each directory is one 
 
 ### The interface between the core and a module
 
-`stage/src/stage.h` is the whole interface. A module is one `struct stage_module`: a name, an off switch and four
+`stage/src/stage.h` is the whole interface. A module is one `struct stage_module`: a name, an off switch and five
 functions.
 
 | Function | When the core calls it |
 |---|---|
 | `run` | once, before Windows starts. This is the work of the module |
+| `probe` | in place of `run`, when the module is off and `probe=1` is set. It says which protocols the firmware has for the module, and it changes nothing |
 | `gate` | once, with the bytes of the next image. The answer is pass, bind or deny |
 | `loaded` | after the firmware loaded that image, with the status |
 | `unwind` | when the image did not start or returned |
 
 A module calls the core for a console line, the board identity, the ACPI root tables, a file beside the stage and
-pool memory. A module never calls another module, and it never includes a header of another module. The shared
+pool memory. A module that restarts the board first calls the core to write the log. A module never calls another module, and it never includes a header of another module. The shared
 library holds only code that has no job of its own. The core holds no job of a module.
 
 Each module keeps its decisions in pure C files that need no firmware. One file per module is the UEFI binding.
@@ -113,6 +114,24 @@ An option is `name=value`. An option that no module understands is counted on th
 | `acpi.idle=0` | 1 | no idle state table |
 | `acpi.stubs=0` | 1 | no method stub table |
 | `sb.mode=audit`, `sb.mode=enforce` | `audit` | report each verdict, or refuse an image that is not allowed |
+| `acpi.apply=0` | 1 | the ACPI module builds and checks its tables, and installs and removes none |
+| `probe=1` | 0 | a module that is off says which protocols the firmware has for it |
+| `log=0`, `log=1`, `log=line` | `1` | the log file: none, written before the next image starts, or written after each line |
+
+### The log file
+
+The console of the stage is on the screen of the board only. So the core keeps the console lines of one start in
+memory and writes them to `bc250-stage.log` beside the stage image. It uses the file protocol of the volume, as
+the core unlock does for its marker. The new lines go behind the lines of earlier starts. A file above 256 KiB
+starts again.
+
+- `log=1` writes the lines before the next image starts, before a module restarts the board, and before the
+  stage returns.
+- `log=line` writes after each line. Use it for a first start on a firmware: if the firmware stops in a call, the
+  file ends at the line before that call.
+- `log=0` writes no file.
+
+If the volume does not take the file, the console says so one time, and the start continues.
 
 ## The failure policy
 
@@ -368,6 +387,7 @@ firmware.
 |---|---|
 | shared library | SHA-256 against the vectors of the standard. The AML writer against the AML name scan |
 | core | the load options: claimed, not understood, dropped |
+| core, log | the log file against the console of the model: before the next image starts, after each line, behind an earlier start, and before a restart. A volume that takes no write, and a file above its bound |
 | core unlock | the tests of [the core unlock page](efi-core-unlock.md), unchanged |
 | ACPI module, unit A | the plan and both tables from the ACPI dump of unit A outside the repository. The test says SKIP when the dump is not there |
 | ACPI module, changed tables | 16 processors in pairs and not in pairs. A shorter stock table and one changed byte. A table that defines the target, and a second run |
@@ -391,15 +411,20 @@ edk2 behaviour and not the AMI firmware. Each step starts the stage from the GRU
 stick. No step makes a firmware boot entry. [The README of the stage](../../tools/efi/stage/README.md) gives the GRUB
 entry.
 
+Each step uses `log=line` and reads `bc250-stage.log` in Windows after the start. No person reads the screen.
+
 1. Copy `bc250-stage.efi` to `\EFI\BC250\` on the EFI System Partition of the Windows disk. Start it with
-   `unlock=0 acpi=0 sb=0`. Read the console: the core runs, no module runs, and Windows starts.
-2. Start it with `unlock=0 sb=0 report=1`. Read the lines of the ACPI module. In Windows, examine the processor
-   devices and the idle states.
+   `unlock=0 acpi=0 sb=0 probe=1`. Read the log: the core runs, no module runs, the probe lines give the presence
+   of the four protocols, and Windows starts.
+2. Start it with `unlock=0 sb=0 acpi.apply=0`. Read the plan of the ACPI module. Then start it with
+   `unlock=0 sb=0`. Read the lines of the ACPI module. In Windows, examine the processor devices, the idle
+   states and the ACPI errors of the System log.
 3. Put `db.esl` beside the stage. Start it with `unlock=0 acpi=0`. Read the verdict lines and the count of hook
    calls.
-4. Start it with `unlock=0 acpi=0 sb.mode=enforce`. Windows must start. Then put the digest of the boot manager
-   into `dbx.esl`: the stage must refuse the boot manager, and the firmware goes on with its boot order.
-5. Start it with all modules and `reset=warm`.
+4. Put `dbx.esl` beside the stage. Start it with `unlock=0 acpi=0 sb.mode=enforce`. Windows must start. Then put
+   the digest of the boot manager into `dbx.esl`: the stage must refuse the boot manager, and the firmware goes on
+   with its boot order.
+5. Start it with all modules, `reset=warm` and `report=1`.
 
 ## What is measured and what is not
 
@@ -420,11 +445,11 @@ entry.
 Each question has the measurement that answers it.
 
 1. Does the AMI firmware core call Security2 at `LoadImage`, and does the firmware have the two ACPI protocols?
-   Lab steps 2 and 3 answer it: the stage prints the protocol result and the count of hook calls.
+   Lab steps 1 and 3 answer it: the stage prints the presence of the protocols and the count of hook calls.
 2. Does `LoadImage` from a verified buffer with a device path start the Windows Boot Manager on this firmware?
    Lab step 4 answers it.
 3. Are the MADT and the CPU table the same after a start with 8 cores, and on BIOS P5.00? Row L54 answers it.
-4. Is the I/O address of the C2 state in the stock `_CST` the address that the CPU uses? The report of lab step 2
+4. Is the I/O address of the C2 state in the stock `_CST` the address that the CPU uses? The report of lab step 5
    reads the C-state base address register, and the two values must agree.
 5. What are the real P-state frequencies and voltages? Row L55 answers the frequencies. The `_PCT` contract needs
    an AMD source.

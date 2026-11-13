@@ -31,6 +31,10 @@ image alone. The Secure Boot tests read two signed images of the Windows install
 | `report=1` | 0 | write the read-only report to `core-unlock-report.txt` beside the image |
 | `acpi.idle=0` | 1 | do not install the idle state table |
 | `acpi.stubs=0` | 1 | do not install the method stub table |
+| `acpi.apply=0` | 1 | build and check the tables of the ACPI module, and install and remove none |
+| `probe=1` | 0 | a module that is off says which protocols the firmware has for it. It changes nothing |
+| `log=0` | 1 | write no log file |
+| `log=line` | no | write the log file after each console line, not only before the next image starts |
 | `sb.mode=audit` | yes | report the verdict on each image, and refuse none |
 | `sb.mode=enforce` | no | do not start an image that the databases do not allow. A defect in `db.esl` or `dbx.esl` refuses each image |
 
@@ -45,6 +49,7 @@ Put these files in the directory of `bc250-stage.efi`. Only the stage itself is 
 | `db.esl` | Secure Boot module | the allowed certificates and image digests |
 | `dbx.esl` | Secure Boot module | the forbidden certificates and image digests |
 | `core-unlock.mark` | core unlock | the loop guard. The stage writes it |
+| `bc250-stage.log` | core | the console lines of each start. The stage writes it. `log=0` stops that |
 
 ## Make the databases
 
@@ -69,7 +74,7 @@ This procedure writes no NVRAM variable.
 2. Add a menu entry to `grub.cfg` on the stick. Set `root` to that partition in the entry.
 3. In the entry, write `chainloader /EFI/BC250/bc250-stage.efi unlock=0 sb=0`.
 4. Start the board from the stick and select the entry.
-5. Read the console lines of the stage.
+5. Read the console lines of the stage on the screen, or read `\EFI\BC250\bc250-stage.log` after the start.
 6. Remove one off switch for each later start, and read the lines again.
 
 To read the result under Linux, put the stage and the boot loader of the stick on one partition. Then add
