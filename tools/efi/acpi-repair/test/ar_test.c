@@ -195,8 +195,8 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 	/* With a reserved page the device carries _CRS: Memory32Fixed of that page, then the end tag. */
 	plan.crb_base = 0x12345000ull;
 	stub_bytes = ar_build_stubs(&plan, stubs, sizeof(stubs));
-	CHECK(stub_bytes == 36u + 3u * 7u + 7u + 7u + 15u + 5u + 16u);
-	CHECK(!memcmp(stubs + stub_bytes - 12u, "\x86\x09\x00\x00\x00\x50\x34\x12\x00\x10\x00\x00", 12));
+	CHECK(stub_bytes == 36u + 3u * 7u + 7u + 7u + 15u + 5u + 18u);
+	CHECK(!memcmp(stubs + stub_bytes - 14u, "\x86\x09\x00\x01\x00\x50\x34\x12\x00\x10\x00\x00\x79\x00", 14));
 	plan.crb_base = 0;
 
 	/* The ACPI TPM2 table of the experiment: 52 bytes, revision 4, platform class 0, start method 7. */
@@ -231,11 +231,44 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 	{
 		unsigned char t[512];
 		size_t nb = ar_build_stubs(&plan, t, sizeof(t));
-		/* Header, the three stub methods, the scope, the device, _HID and _CRS. */
-		CHECK(nb == 36u + 3u * 7u + 7u + 7u + 15u + 5u + 16u);
+		const unsigned char *crs;
+		size_t at, seen = 0, base = 0, len = 0, rw = 0, ended = 0;
+		/* Header, the three stub methods, the scope, the device, _HID, Name(_CRS) and the buffer object. */
+		CHECK(nb == 36u + 3u * 7u + 7u + 7u + 15u + 5u + 18u);
 		CHECK(ar_table_sound(t, nb));
 		CHECK(memcmp(t + 36u + 3u * 7u + 7u + 7u, "\x08_HID\x0dMSFT0101", 15) == 0);
-		CHECK(memcmp(t + nb - 12u, "\x86\x09\x00\x00\x00\x50\x34\x12\x00\x10\x00\x00", 12) == 0);
+		/* The resource template is the buffer's payload: BufferOp, package length, the size byte pair, then
+		 * the template up to the End Tag. Walk it the way a consumer does: small descriptors only, and the
+		 * End Tag ends it. A walk, not a byte compare at a fixed offset. */
+		crs = t + nb - 14u;
+		for (at = 0; at + 2u <= 14u;) {
+			/* A large descriptor sets bit 7: type in the low bits, a 16-bit length, then the payload.
+			 * A small one keeps bit 7 clear: type in bits 6:3, one length byte. */
+			unsigned tag = crs[at] & 0x7Fu, large = (crs[at] & 0x80u) != 0;
+			if (!large) {
+				CHECK((crs[at] >> 3) == 0x0Fu);	/* only the End Tag is small here */
+				ended = at + 2u;
+				break;
+			}
+			{
+			unsigned dlen = (unsigned)crs[at + 1] | ((unsigned)crs[at + 2] << 8);
+			if (tag == 0x0Fu) {		/* End Tag never sets bit 7; this is a malformed template */
+				ended = 0;
+				break;
+			}
+			if (tag == 0x06u && dlen == 9) {	/* Memory32Fixed */
+				seen++;
+				rw = crs[at + 3] & 1u;
+				base = (size_t)crs[at + 4] | ((size_t)crs[at + 5] << 8) | ((size_t)crs[at + 6] << 16) |
+				       ((size_t)crs[at + 7] << 24);
+				len = (size_t)crs[at + 8] | ((size_t)crs[at + 9] << 8) | ((size_t)crs[at + 10] << 16) |
+				      ((size_t)crs[at + 11] << 24);
+			}
+			at += 3u + dlen;
+			}
+		}
+		CHECK(seen == 1 && rw == 1 && base == 0x12345000u && len == 0x1000u);
+		CHECK(ended == 14u);			/* the End Tag is the last descriptor and nothing follows it */
 	}
 	plan.crb_base = 0;
 	plan.hid_msft = 0;
