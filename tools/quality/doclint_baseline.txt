@@ -40,7 +40,6 @@
 15	docs/d3d12-shared-resources.md
 8	docs/design/adaptive-cpu-gpu.md
 21	docs/design/bc250-open-test-pack.md
-25	docs/design/d3d12-ddi-engine.md
 1	docs/design/dp-audio.md
 1	docs/design/dpm.md
 12	docs/design/fan.md

@@ -1,9 +1,9 @@
 # Design note: the vkd3d-proton engine behind a native D3D12 UMD (M15)
 
 Date: 2026-09-28. Status: engine ABI 1.0 implemented, tested offline on the development PC and run standalone on
-unit A (T1, fact M757). The native D3D12 shell is being built; no DDI device runs on the engine yet. Scope: the engine `amdgpu_wddm_vkd3d.dll`, its ABI and its known gaps.
+unit A (T1, fact M757). The native D3D12 shell is being built. No DDI device runs on the engine yet. Scope: the engine `amdgpu_wddm_vkd3d.dll`, its ABI and its known gaps.
 Build recipe: [build.md](../build.md#vkd3d-proton). Direction: ADR 0017 item 5 (vkd3d-proton is the default
-engine; FL 12_0 Must, 12_1 Should; a bounded spike first), item 6 (vkd3d-proton stays a separate LGPL DLL) and
+engine. FL 12_0 Must, 12_1 Should, with a bounded spike first), item 6 (vkd3d-proton stays a separate LGPL DLL) and
 item 7 (no numeric bound for M15 before its first measurement).
 
 ## Position in the stack
@@ -18,12 +18,12 @@ application -> d3d12.dll / d3d12core.dll / dxgi.dll (Microsoft runtime)
 
 The engine is built from the vkd3d-proton branch `amdgpu-wddm/ddi-engine`. It is upstream vkd3d-proton plus the
 `libs/ddi/` directory (MIT) and two small changes in `libs/vkd3d/`:
-- the embedder's configuration defaults (see Files, configuration and logging);
+- the embedder's configuration defaults (see Files, configuration and logging).
 - the optional device extensions that extend `VK_KHR_swapchain` are enabled only together with it. `d3d12core`
   always requires the swapchain extension. The engine enables no WSI, so its device create info was invalid,
   as the validation layer reported (`VUID-vkCreateDevice-ppEnabledExtensionNames-01387`).
 
-The branch is published at <https://github.com/D-Ogi/vkd3d-proton/tree/amdgpu-wddm/ddi-engine>; `recipe.json` of
+The branch is published at <https://github.com/D-Ogi/vkd3d-proton/tree/amdgpu-wddm/ddi-engine>. `recipe.json` of
 each build names the commit.
 
 ## Where the boundary sits
@@ -44,26 +44,26 @@ is part of the first M15 measurement.
 
 ## The ABI
 
-The single copy of the contract is `libs/ddi/bc250_vkd3d_engine.h` in the vkd3d-proton branch; the shell
+The single copy of the contract is `libs/ddi/bc250_vkd3d_engine.h` in the vkd3d-proton branch. The shell
 includes it from the checkout it builds against. It needs only `windows.h` and `vulkan_core.h`, so both the
 engine's translation units (vkd3d-proton's own D3D12 headers) and the shell's (SDK `d3d12.h` plus
 `d3d12umddi.h`) can include it.
 
 The DLL exports one function, `Bc250Vkd3dEngineGetFuncs(abiVersion, funcs)`, which fills `CreateDevice`. Before
-branch commit a582668d the DLL was `bc250vkd3d.dll`; the header file name and the code identifiers keep their
+branch commit a582668d the DLL was `bc250vkd3d.dll`. The header file name and the code identifiers keep their
 BC250 names.
 
 - **Versioning.** The version the shell passes is the version it *requires*: the lowest minor whose additions
   it calls. It is not the version of the header it compiled against. A newer header therefore does not force a
-  newer engine; the DXVK shell learned that the hard way. A major mismatch, or a minor above the engine's,
+  newer engine. The DXVK shell learned that the hard way. A major mismatch, or a minor above the engine's,
   returns `E_NOINTERFACE`.
 - **Rules.** The rules V1-V6 are written in the header:
-  - V1: the engine creates its own Vulkan objects through the shell's entry point and loads no Vulkan DLL;
+  - V1: the engine creates its own Vulkan objects through the shell's entry point and loads no ICD.
   - V2: the adapter is the physical device whose `deviceLUID` equals the adapter's LUID, and devices are
-    independent;
-  - V3: threads and submission (below);
-  - V4: vkd3d-proton COM objects, and the final `Release` returns 0;
-  - V5: HRESULTs only;
+    independent.
+  - V3: threads and submission (below).
+  - V4: vkd3d-proton COM objects, and the final `Release` returns 0.
+  - V5: HRESULTs only.
   - V6: no files.
 
 ### Threads and submission (V3)
@@ -103,7 +103,7 @@ The shell must pass them through untouched: no alignment, no masking, no transla
   cache off, as if `VKD3D_CONFIG` contained `pipeline_library_app_cache`. An application's own
   `ID3D12PipelineLibrary` keeps working.
 - **How the default is set.** The branch adds `vkd3d_config_set_embedder_defaults()` to libvkd3d. The module
-  that embeds libvkd3d calls it once, before its first instance; `d3d12core.dll` never calls it.
+  that embeds libvkd3d calls it once, before its first instance. `d3d12core.dll` never calls it.
 - **Configuration.** The process's `VKD3D_CONFIG` and the other vkd3d-proton variables still apply on top, for
   debugging. vkd3d-proton's built-in application workarounds apply by executable name, as per application.
   The M15 comparison must run both paths with the same configuration.
@@ -117,7 +117,7 @@ The shell must pass them through untouched: no alignment, no masking, no transla
 On the development PC (RTX 4090, not unit A), `CreateDevice` took 281-312 ms over six runs. That covers the
 instance, the device and vkd3d-proton's device initialization. The DXVK engine's `CreateDevice` takes about
 19 ms, but it excludes the shell's own `vkCreateDevice`, so the two numbers do not compare. These are not facts
-rows; unit A numbers come from a lab run of the same test.
+rows. Unit A numbers come from a lab run of the same test.
 
 ## Gaps
 
@@ -125,7 +125,7 @@ rows; unit A numbers come from a lab run of the same test.
 |---|---|---|
 | Queue mode for a DDI device | ABI 1.0 has vkd3d-proton's own threads (V3). | ABI 1.1 after the fence probe: one runtime context and one VkQueue per D3D12 queue, synchronous `ExecuteCommandLists`, engine bookkeeping on its own completion signal. |
 | Runtime allocations | Descriptor heaps and resources are engine allocations. | Import from runtime allocations in the same minor, the way the DXVK engine's E5 imports images. |
-| Residency, offer and reclaim | Not implemented. | Same shape as the DXVK engine's gap; needs the hosted query from memory to kernel allocation. |
+| Residency, offer and reclaim | Not implemented. | Same shape as the DXVK engine's gap. Needs the hosted query from memory to kernel allocation. |
 | FL 12_0 and 12_1 | vkd3d-proton reports 12_0 only with tiled resources tier 2 (`libs/vkd3d/device.c`, feature level selection), so it needs sparse binding from hosted RADV. 12_1 adds ROVs and conservative rasterization. | Sparse on by default in the hosted driver after its conformance run, then a caps run on unit A. |
 | Disk shader cache | On, per user and per application. The engine keeps two files in `%LOCALAPPDATA%\amdgpu-wddm\vkd3d`. `vkd3d-proton.<exe>.cache` is the engine's stream archive of SPIR-V and pipeline blobs, merged from `.cache.write`. `vkd3d-proton.<exe>.cache.driver` is one `VkPipelineCache` of the hosted driver, saved by a thread-pool job. The engine DLL names the directory before its first device (fork `libs/ddi/ddi_engine.c`), and the hosted driver keeps its own `mesa_shader_cache`. A pipeline whose blobs are in the archive makes no compile at the next start. | A compile that the cache does not cover still runs under the engine's compile limiter: two at a time, one above 80 C. Since BD-226, a draw-time variant does not wait for a slot: it compiles at once, past the bound. |
 
@@ -134,17 +134,17 @@ rows; unit A numbers come from a lab run of the same test.
 `amdgpu_wddm_vkd3d_engine_test.exe <amdgpu_wddm_vkd3d.dll> [adapter substring] [--icd <driver DLL>] [--fl <hex>]`
 is the offline positive control. It plays the shell: it loads a Vulkan driver (the loader, or with `--icd` a
 driver DLL directly through `vk_icdGetInstanceProcAddr`, as the shell loads hosted RADV) and passes its entry
-point to the engine. It runs on any Vulkan 1.3 GPU, opens no window, writes no files and exits by itself; exit
+point to the engine. It runs on any Vulkan 1.3 GPU, opens no window, writes no files and exits by itself. Exit
 code 0 means every check passed:
-- the export's version rules;
-- an unknown LUID refused with no device created;
-- `CreateDevice` on the adapter's LUID, and `GetAdapterLuid` returning it;
-- a second independent device;
+- the export's version rules.
+- an unknown LUID refused with no device created.
+- `CreateDevice` on the adapter's LUID, and `GetAdapterLuid` returning it.
+- a second independent device.
 - the capabilities the shell's `GetCaps` will mirror: feature level, the 12_0/12_1 tiers, shader model, ray
-  tracing tier;
-- a copy round trip UPLOAD -> DEFAULT -> READBACK on a direct queue, word for word;
+  tracing tier.
+- a copy round trip UPLOAD -> DEFAULT -> READBACK on a direct queue, word for word.
 - a compute dispatch: a DXIL `cs_6_0` program with an embedded root signature writes a raw UAV reached through
-  a shader-visible descriptor table at `start + 3 * increment`, word for word;
+  a shader-visible descriptor table at `start + 3 * increment`, word for word.
 - final `Release` returning 0.
 
 On the development PC every check passes. The GPU is an RTX 4090 at FL 12_2, SM 6.8, ray tracing tier 1.1.
