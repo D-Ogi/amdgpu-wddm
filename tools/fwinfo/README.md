@@ -13,7 +13,7 @@ loaded on unit A. Current KMD packages load firmware from their Driver Store dir
 The blobs themselves are not in this repository (`.gitignore`: `*.bin`). They live under
 `<BC250_ROOT>\ref\linux-firmware\amdgpu\` (`BC250_ROOT` is the workspace root, by default the
 parent directory of this repository). Versions are facts about public files and are
-printed here; payload bytes never are.
+printed here. Payload bytes never are.
 
 ## Usage
 
@@ -31,7 +31,7 @@ per `.bin` file in a directory. `compare` matches those versions against a Linux
 `amdgpu_firmware_info` debugfs dump (the ones in `evidence/linux/`) and exits non-zero on
 a disagreement.
 
-The container does not say which IP it belongs to; the file name does, the same way
+The container does not say which IP it belongs to. The file name does, the same way
 amdgpu asks for a file by name and then calls the matching `amdgpu_ucode_print_*_hdr()`.
 `--kind` overrides that for a file with an unusual name. A file whose name says nothing
 gets its common header read and a note saying so.
@@ -66,9 +66,9 @@ so both fields are in dwords relative to the start of the payload.
 
 - **Nothing about the payload itself.** The bytes are microcode for a processor we do not
   emulate. A file with a perfect header and random payload passes.
-- **No signature check.** These files are signed; the PSP verifies them and we cannot.
+- **No signature validation.** These files are signed. The PSP verifies them and we cannot.
   `check` passing says nothing about whether the PSP will accept the image.
-- **`ip_version_major/minor`** is printed, never checked. Nothing tells us from the file
+- **`ip_version_major/minor`** is printed, never validated. Nothing tells us from the file
   alone which IP version the running part wants.
 - **Which file is which.** `check` believes the file name about the kind. A
   `cyan_skillfish2_rlc.bin` that actually holds an sdma header fails on the struct size,
@@ -165,7 +165,7 @@ What that says:
    microcode, which is why the driver loads the same image under two firmware types.
    `cyan_skillfish2_sdma.bin` and `cyan_skillfish2_sdma1.bin` are not: same versions and
    same sizes, different payloads and different `crc32`. The two SDMA engines get
-   different microcode, and swapping the two files would pass every check in here.
+   different microcode, and swapping the two files would pass every validation in here.
 4. The payload starts at byte 256 in all eight files, while the headers end at 44, 48 or
    104 - so each file carries 212, 208 or 152 bytes of padding in between. Padding, not
    data: `ucode_array_offset_bytes` is what the driver must use, not `header_size_bytes`.
