@@ -14,11 +14,11 @@ context created through the runtime. A SPARSE queue, when enabled, adds a ninth
 context. The default queue count is unchanged. The private binding extension
 keeps bootstrap version 5 and uses its own version 1 structure. Host operations
 6 and 7 create and destroy a context with its queue cookie. The shell binds and
-unbinds within the owning runtime call; unbound queues cannot submit.
+unbinds within the owning runtime call. Unbound queues cannot submit.
 
 Bound devices require immediate submission and disable register shadowing and
 the independent shader-upload context. The shell must provide a valid lifetime
-for internal contexts as well as application contexts; the series does not
+for internal contexts as well as application contexts. The series does not
 invent a runtime command-queue handle for internal work.
 
 Unbind succeeds only after retirement and successful release. Failed retirement
@@ -29,7 +29,7 @@ Discarding CPU metadata at device teardown does not prove OS reclamation.
 
 Known limit: a sparse mapping chain that fails partway does not advance the
 mapping fence's wait value. These patches are accepted for non-sparse native
-integration only; sparse retirement and FL12_1 acceptance remain open.
+integration only. Sparse retirement and FL12_1 acceptance remain open.
 
 ## Build and host validation
 
@@ -41,27 +41,27 @@ powershell -NoProfile -File tools/build/build-radv-queue-tests.ps1 `
 ```
 
 The runner compiles the patch's test source with the build's recorded flags and
-links the actual winsys objects used by the DLL; when the tree has
+links the actual winsys objects used by the DLL. When the tree has
 radv_wddm2_hosted_sync_test.c it builds that one too, against the runtime
 libraries. It runs every case of each file's tests[] table, each in its own
 process with a 60-second timeout, with the BC250_* winsys knobs removed and the
 deferred destroy log and configuration pointed into the output directory. It
-records source, object, library and DLL hashes. Always rebuild first; the runner
+records source, object, library and DLL hashes. Always rebuild first. The runner
 does not establish object freshness.
 
 Up to 2026-10-03 the runner ran a fixed list of twelve cases and named its
-executable queue-test.exe; deferred_witness, which checks its own module name in
+executable queue-test.exe. The case deferred_witness, which checks its own module name in
 the logged destroy stack, failed under that name only.
 
 On 2026-09-28, both the reviewed series build and the integrated owned-tree build
 passed 224 checks with zero failures. The latter DLL SHA-256 is
 5AF91A4200D040371924BF2FCF3345AAC00E0C448E2BA9A3BB8EBFDDCB0E73BF.
 All thirteen modified files matched the reviewed result after line-ending
-normalization; integration preserved the previous working-tree changes and Git
+normalization. Integration preserved the previous working-tree changes and Git
 index. The previous RT candidate 949669FF was retained separately.
 
-The scripted host validates queue identity, dispatch, retirement and ownership.
-It does not validate the public instance parser, public queue locking, device
+The scripted host checks queue identity, dispatch, retirement and ownership.
+It does not check the public instance parser, public queue locking, device
 admission, native D3D12CreateDevice, hardware execution or game RT. No lab
 installation was performed for this integration.
 
@@ -70,8 +70,8 @@ installation was performed for this integration.
 0005-adapter-query.patch follows the four-patch queue series. It adds private
 instance structure 0x42434834, version 1, for adapter GetCaps before the runtime
 has supplied device callbacks. Enumeration retains the real adapter and queue
-policy but skips the paging queue. vkCreateDevice explicitly refuses this mode;
-its winsys identity cannot be reused by a device instance. No zero handle is
+policy but skips the paging queue. vkCreateDevice explicitly refuses this mode.
+Its winsys identity cannot be reused by a device instance. No zero handle is
 submitted as a substitute for an owned kernel object.
 
 Candidate 439889E0DCFAFB8C8CC4219B087124BBB9F842171C94C85F0A8FED03BF6E9279
@@ -80,7 +80,7 @@ instance parser and rejects a query structure without a host. That host check
 does not enumerate hardware. The matching shell scope preserves the engine's
 instance extensions and pNext chain and checks closure without device callbacks.
 The adapter-caps-probe asks ABI 1.2 QueryAdapterCaps on the BC-250 through that
-scope; it must run under a bounded process Job. Native runtime wiring and a lab
+scope. It must run under a bounded process Job. Native runtime wiring and a lab
 measurement remain separate acceptance steps.
 
 ## Instance policy of the host
@@ -102,7 +102,7 @@ without a host fail instance creation.
 
 Candidate 51BC39532BED9AB228D3CBFF22D9D3161191700FD281C585EEC4738BFD72BE8D
 builds. adapter-query-scope-test runs those acceptances and refusals through the
-actual DLL's instance parser; the candidate before the patch, which ignores the
+actual DLL's instance parser. The candidate before the patch, which ignores the
 structure, fails the same test at the first refusal. That host check does not
 enumerate hardware: what the policy does to the reported features is not shown
 by it. An ICD without the patch keeps its environment behaviour under a shell
@@ -110,11 +110,11 @@ that chains the policy, so the host's off is a guarantee only with this patch.
 
 ## CPU maps of host allocations
 
-0007-host-import-cpu-map.patch follows 0006; it touches other files, and in the
+0007-host-import-cpu-map.patch follows 0006. It touches other files, and in the
 lab tree it was applied before 0006 (either order applies). It gives
 `bc250_host_import` a flags field under sType 0x42434835, in the padding after
 the allocation handle, so the x64 size of 48 bytes and every other offset stay
-unchanged; an import under the old sType has no flags. With
+unchanged. An import under the old sType has no flags. With
 `BC250_HOST_IMPORT_CPU_MAP` the host answers Lock2 and Unlock2 for that
 allocation and vkMapMemory may map it: the first map locks it once, a second map
 returns the same pointer without a host call, and destruction unlocks without
@@ -122,7 +122,7 @@ destroying the borrowed allocation. Without the bit a borrowed allocation is
 never mapped by the ICD. The patch adds one host test case (thirteen in all).
 
 Candidate F43FD08CC5A3320007215F40760ACF432FA887FEB1CC855ECEEA5E36CB55D549
-builds from the series without 0006; with 0006 on top the candidate is 51BC3953
+builds from the series without 0006. With 0006 on top, the candidate is 51BC3953
 above.
 
 ## Waiting for the queue before a preamble is replaced
@@ -130,13 +130,13 @@ above.
 0008-preamble-wait.patch follows 0007. `radv_update_preamble_cs` replaces the
 queue's scratch, ring and descriptor buffers and preamble streams when a
 submission needs larger ones, and destroyed the old objects at once. On Linux
-the kernel defers the release until the GPU is done; the WDDM2 winsys evicts,
+the kernel defers the release until the GPU is done. The WDDM2 winsys evicts,
 frees the virtual address and destroys the allocation immediately, while the
 previous submission may still write its scratch. The patch waits for the
 queue's submitted work (`ctx_wait_idle`) before it destroys the replaced objects
 and keeps them, with a line on stderr, if that wait fails: a leak instead of a
 fault. `radv_wddm2_ctx_wait_idle` now also waits for the queue's progress fence
-after the last submission. Callers pass the queue's context and ring; a follower
+after the last submission. Callers pass the queue's context and ring. A follower
 queue passes its leader's.
 
 The change answers two lab bugchecks 0x116 during a DX12 session with ray
@@ -147,9 +147,9 @@ from the timing and the code path, not read from the dump. With the patch the
 same session ran to its bound without a fault or a TDR.
 
 Candidate D672813F87B39CAB0DAFA41AD699C15F785D97DFBDF416B0516966D951E84F27
-(an incremental rebuild over 51BC3953) builds; the host tests pass thirteen
+(an incremental rebuild over 51BC3953) builds. The host tests pass thirteen
 cases with 241 checks and no failure. The wait can block a submission for up to
-the winsys wait bound when older work waits on a later CPU signal; that case has
+the winsys wait bound when older work waits on a later CPU signal. That case has
 no test yet. Other winsys paths that destroy objects the GPU may still use are
 not audited by this patch. Kto się śpieszy, ten się diabłu cieszy (the devil
 rejoices at the one in a hurry): freeing early is how the 0x116 got in.
@@ -169,8 +169,8 @@ Candidate 6E43EF21CCD773FD600B7F845FFF2B3B0F3E9C51A2FA1BB893B2F5D64583EEBD
 builds from the series. The host tests pass thirteen cases with 241 checks and
 no failure. A host test links each build's util library and identifies two
 copies of the candidate with different last-write times. The build before the
-patch gives two identifiers; the patched build gives one. The first call costs
-13.8 ms for the 24 MB DLL on the development PC; a repeated call costs 2 us.
+patch gives two identifiers. The patched build gives one. The first call costs
+13.8 ms for the 24 MB DLL on the development PC. A repeated call costs 2 us.
 That host test does not enumerate hardware. The UUID on the BC-250 itself and a
 warm pipeline cache across two lab trials remain to be shown there.
 Po owocach ich poznacie (by their fruits you shall know them): judge a build by
@@ -185,7 +185,7 @@ of pipeline compile time in a warm game run. MSVC builds make C4189, a local
 variable initialized but never read, an error. Without assertions a variable
 that only an assert reads is such a variable, and the build stopped in
 vtn_cmat.c and in the generated amd_cp_print_packet_gfx11.c. The GCC branch of
-meson.build already relaxes its unused-variable warnings when NDEBUG is set; the
+meson.build already relaxes its unused-variable warnings when NDEBUG is set. The
 patch does the same for C4189 in the MSVC branch.
 
 No assert in the WDDM2 winsys, the monitored fence, the Win32 WSI or this series
@@ -203,7 +203,7 @@ the full hashes of the libraries it imports, so a library's key named the whole
 chain below it. Witcher 3 adds shaders as it streams them, in a different order
 and with different additions on each run. In two warm runs the persisted cache
 held ten libraries whose cached data (stages, stage hashes, shader hashes) were
-byte-identical but whose keys differed; each missed and cost 50 to 590 ms on a
+byte-identical but whose keys differed. Each missed and cost 50 to 590 ms on a
 game thread.
 
 A library's compile uses nothing of the imported libraries except whether one
@@ -215,7 +215,7 @@ importing pipelines use. A pipeline linked from the chain (vkd3d's self-link)
 still depends on the whole chain and still compiles its traversal shader when
 the chain differs. Candidate
 66FE8F3178EA2D70D8804858E23434C7662E46AE119529C4DA6FAF7E53F57200 passes the
-host tests (thirteen cases, 241 checks); none of them creates a ray tracing
+host tests (thirteen cases, 241 checks). None of them creates a ray tracing
 pipeline, so the effect remains to be shown by a warm pair on the lab. Co
 nagle, to po diable (what is hasty is the devil's): the cache was right to be
 careful, only too careful about its ancestry.
