@@ -16,7 +16,6 @@
 # document has to be rewritten; a document that is touched anyway should come out lower.
 #
 # To look at one document: python tools/quality/doclint.py --files <path>
-2	docs/dxvk-engine-commit-map.md
 10	docs/testing/THIRD-PARTY.md
 20	driver/contract/README-winsys.md
 28	driver/contract/README.md
