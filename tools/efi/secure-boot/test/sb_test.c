@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /*
  * Host tests of the Secure Boot module: the DER reader, the signature lists, the Authenticode digest, the
- * certificate and signature readers, RSA, the verdict, and the RAM variable store.
+ * certificate and signature readers, RSA, and the verdict.
  *
  * The images, certificates and databases come from test/make_fixtures.py, which makes new keys at each run and
  * writes no private key. When the fixture directory is not there, the tests that need it are skipped and the test
@@ -15,7 +15,6 @@
 #include "sb_pe.h"
 #include "sb_pkcs7.h"
 #include "sb_siglist.h"
-#include "sb_vars.h"
 #include "sb_verify.h"
 #include "sb_x509.h"
 
@@ -53,163 +52,6 @@ static void test_der(void)
 	CHECK(!sb_der_next(&in, &t));
 	in.p = NULL; in.n = 0;
 	CHECK(!sb_der_next(&in, &t));
-}
-
-/* ---- the variable store -------------------------------------------------------------------------- */
-
-static const EFI_GUID guid_a = { 0x8BE4DF61, 0x93CA, 0x11D2, { 0xAA, 0x0D, 0x00, 0xE0, 0x98, 0x03, 0x2B, 0x8C } };
-static const EFI_GUID guid_b = { 0xD719B2CB, 0x3D3A, 0x4596, { 0xA3, 0xBC, 0xDA, 0xD0, 0x0E, 0x67, 0x65, 0x6F } };
-
-/* A model of the firmware's GetNextVariableName over a fixed list. */
-static const struct { const CHAR16 *name; const EFI_GUID *guid; } firmware_vars[] = {
-	{ u"BootOrder", &guid_a }, { u"AVeryLongFirmwareVariableName", &guid_b }, { u"db", &guid_a }
-};
-#define FIRMWARE_VARS (sizeof(firmware_vars) / sizeof(firmware_vars[0]))
-static unsigned firmware_calls;
-
-static size_t wide_chars(const CHAR16 *s)
-{
-	size_t n = 0;
-	while (s[n]) n++;
-	return n;
-}
-
-static int wide_same(const CHAR16 *a, const CHAR16 *b)
-{
-	size_t n = wide_chars(a);
-	return n == wide_chars(b) && !memcmp(a, b, n * sizeof(CHAR16));
-}
-
-static EFI_STATUS EFIAPI firmware_next(UINTN *size, CHAR16 *name, EFI_GUID *guid)
-{
-	size_t next = 0, need;
-	firmware_calls++;
-	if (name[0]) {
-		for (next = 0; next < FIRMWARE_VARS; next++)
-			if (wide_same(firmware_vars[next].name, name) && !memcmp(firmware_vars[next].guid, guid, sizeof(*guid))) break;
-		if (next == FIRMWARE_VARS) return EFI_INVALID_PARAMETER;
-		next++;
-	}
-	if (next == FIRMWARE_VARS) return EFI_NOT_FOUND;
-	need = (wide_chars(firmware_vars[next].name) + 1u) * sizeof(CHAR16);
-	if (*size < need) {
-		*size = need;
-		return EFI_BUFFER_TOO_SMALL;
-	}
-	memcpy(name, firmware_vars[next].name, need);
-	*guid = *firmware_vars[next].guid;
-	*size = need;		/* as edk2 does: the size of the name that it gave */
-	return EFI_SUCCESS;
-}
-
-static void test_vars(void)
-{
-	static struct sb_var_store store, copy;
-	static const char *const want[] = { "SecureBoot", "SetupMode", "db", "BootOrder", "AVeryLongFirmwareVariableName", "db" };
-	const UINT32 attributes = SB_VAR_BOOTSERVICE_ACCESS | SB_VAR_RUNTIME_ACCESS;
-	const UINT8 one = 1, zero = 0;
-	UINT8 data[64];
-	CHAR16 name[64];
-	EFI_GUID guid;
-	UINT32 got_attributes;
-	UINTN size;
-	EFI_STATUS status;
-	unsigned i, k;
-	int index;
-
-	sb_vars_init(&store);
-	CHECK(sb_vars_sound(&store) && store.count == 0);
-	CHECK(sb_vars_add(&store, &guid_a, u"SecureBoot", attributes, &one, 1));
-	CHECK(sb_vars_add(&store, &guid_a, u"SetupMode", attributes, &zero, 1));
-	CHECK(sb_vars_add(&store, &guid_b, u"db", attributes, "0123456789", 10));
-	CHECK(!sb_vars_add(&store, &guid_a, u"SecureBoot", attributes, &one, 1));		/* twice */
-	CHECK(!sb_vars_add(&store, &guid_a, u"", attributes, &one, 1));
-	CHECK(!sb_vars_add(&store, &guid_a, u"ANameOfTwentyFourChars..", attributes, &one, 1));	/* no room for the end */
-	CHECK(sb_vars_add(&store, &guid_a, u"ANameOf23Characters....", attributes, NULL, 0));
-	store.count--;
-	CHECK(store.count == 3 && store.used == 12 && sb_vars_sound(&store));
-
-	/* Find: the name and the GUID, both whole. */
-	CHECK(sb_vars_find(&store, u"SecureBoot", &guid_a) == 0 && sb_vars_find(&store, u"db", &guid_b) == 2);
-	CHECK(sb_vars_find(&store, u"SecureBoot", &guid_b) < 0 && sb_vars_find(&store, u"SecureBoo", &guid_a) < 0);
-	CHECK(sb_vars_find(&store, u"SecureBoot2", &guid_a) < 0 && sb_vars_find(&store, u"secureboot", &guid_a) < 0);
-
-	/* Get: the size rules of GetVariable. */
-	size = 0;
-	got_attributes = 0;
-	CHECK(sb_vars_get(&store, 2, &got_attributes, &size, NULL) == EFI_BUFFER_TOO_SMALL && size == 10);
-	CHECK(got_attributes == attributes);
-	size = sizeof(data);
-	memset(data, 0xEE, sizeof(data));
-	CHECK(sb_vars_get(&store, 2, NULL, &size, data) == EFI_SUCCESS && size == 10 && !memcmp(data, "0123456789", 10));
-	CHECK(data[10] == 0xEE);
-	size = 1;
-	CHECK(sb_vars_get(&store, 0, &got_attributes, &size, data) == EFI_SUCCESS && size == 1 && data[0] == 1);
-	CHECK(sb_vars_get(&store, 1, NULL, &size, data) == EFI_SUCCESS && data[0] == 0);
-	CHECK(sb_vars_get(&store, 0, NULL, NULL, data) == EFI_INVALID_PARAMETER);
-	size = 4;
-	CHECK(sb_vars_get(&store, 0, NULL, &size, NULL) == EFI_INVALID_PARAMETER);
-	/* No attribute bit says "non-volatile" or "authenticated". */
-	for (i = 0; i < store.count; i++) CHECK((store.vars[i].attributes & ~6u) == 0);
-
-	/* Next: the store's names, then the firmware's names. The firmware's "db" has another GUID than the store's
-	 * "db": they are two variables. */
-	name[0] = 0;
-	memset(&guid, 0, sizeof(guid));
-	for (i = 0; i < sizeof(want) / sizeof(want[0]); i++) {
-		size = sizeof(name);
-		status = sb_vars_next(&store, firmware_next, &size, name, &guid);
-		CHECK(status == EFI_SUCCESS);
-		for (k = 0; want[i][k]; k++) CHECK(name[k] == (unsigned char)want[i][k]);
-		CHECK(name[k] == 0);
-	}
-	CHECK(!memcmp(&guid, &guid_a, sizeof(guid)));
-	size = sizeof(name);
-	CHECK(sb_vars_next(&store, firmware_next, &size, name, &guid) == EFI_NOT_FOUND);
-
-	/* A buffer that is too small for a name of the store: the size that is necessary, and the buffer as it was. */
-	name[0] = 0;
-	size = 4;
-	CHECK(sb_vars_next(&store, firmware_next, &size, name, &guid) == EFI_BUFFER_TOO_SMALL && size == 22 && name[0] == 0);
-	/* After the last name of the store, a buffer that is too small for the first firmware name: the caller's
-	 * name and GUID are put back, so the second call with more room goes on at the same place. */
-	memcpy(name, u"db", 6);
-	guid = guid_b;
-	size = 8;
-	CHECK(sb_vars_next(&store, firmware_next, &size, name, &guid) == EFI_BUFFER_TOO_SMALL && size == 20);
-	CHECK(wide_same(name, u"db") && !memcmp(&guid, &guid_b, sizeof(guid)));
-	size = sizeof(name);
-	CHECK(sb_vars_next(&store, firmware_next, &size, name, &guid) == EFI_SUCCESS && wide_same(name, u"BootOrder"));
-	/* Inside the firmware's list the firmware's own answer goes back to the caller. */
-	size = 24;
-	CHECK(sb_vars_next(&store, firmware_next, &size, name, &guid) == EFI_BUFFER_TOO_SMALL && size == 60);
-	CHECK(wide_same(name, u"BootOrder"));
-	size = sizeof(name);
-	CHECK(sb_vars_next(&store, firmware_next, &size, name, &guid) == EFI_SUCCESS);
-	CHECK(wide_same(name, u"AVeryLongFirmwareVariableName"));
-	/* A name that nobody has goes to the firmware, which refuses it. */
-	memcpy(name, u"Nobody", 14);
-	size = sizeof(name);
-	CHECK(sb_vars_next(&store, firmware_next, &size, name, &guid) == EFI_INVALID_PARAMETER);
-	CHECK(sb_vars_next(&store, firmware_next, NULL, name, &guid) == EFI_INVALID_PARAMETER);
-	CHECK(sb_vars_next(&store, firmware_next, &size, NULL, &guid) == EFI_INVALID_PARAMETER);
-	CHECK(firmware_calls > 0);
-
-	/* The store is one block without pointers: a copy at another address reads the same. */
-	memcpy(&copy, &store, sizeof(copy));
-	memset(&store, 0, sizeof(store));
-	index = sb_vars_find(&copy, u"db", &guid_b);
-	size = sizeof(data);
-	CHECK(index == 2 && sb_vars_get(&copy, index, NULL, &size, data) == EFI_SUCCESS && !memcmp(data, "0123456789", 10));
-	CHECK(!sb_vars_sound(&store));
-	copy.vars[1].offset = SB_VARS_DATA_BYTES;
-	CHECK(!sb_vars_sound(&copy));
-
-	/* The data area has an end. */
-	sb_vars_init(&store);
-	CHECK(sb_vars_add(&store, &guid_a, u"big", attributes, copy.data, SB_VARS_DATA_BYTES - 4u));
-	CHECK(!sb_vars_add(&store, &guid_a, u"more", attributes, copy.data, 5));
-	CHECK(sb_vars_add(&store, &guid_a, u"more", attributes, copy.data, 4));
 }
 
 /* ---- images and databases ------------------------------------------------------------------------ */
@@ -479,7 +321,6 @@ unsigned sb_tests(const char *fixture_dir, const char *real_image, unsigned *che
 	size_t probe_bytes = 0;
 	unsigned char *probe = efl_test_load(fixture_dir, "signed.efi", &probe_bytes);
 	test_der();
-	test_vars();
 	if (probe == NULL) {
 		printf("SKIP secure-boot, images and databases: no fixtures in %s (make_fixtures.py needs the Python package "
 		       "'cryptography')\n", fixture_dir ? fixture_dir : "(no directory given)");

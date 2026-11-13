@@ -17,7 +17,7 @@ static void test_options(void)
 	unsigned i;
 
 	/* The image name has no "=" and is skipped. Each module claims its own names. */
-	wide(text, "bc250-stage.efi unlock=0 sb.mode=enforce  acpi.idle=1 sb.reported=0");
+	wide(text, "bc250-stage.efi unlock=0 sb.mode=enforce  acpi.idle=1 acpi.stubs=0");
 	stage_options_parse(text, 512, &o);
 	CHECK(o.count == 4 && o.dropped == 0);
 	CHECK(stage_options_unclaimed(&o) == 4);
@@ -25,7 +25,7 @@ static void test_options(void)
 	CHECK(stage_option_flag(&o, "acpi", 1) == 1);			/* not given: the fallback */
 	CHECK(stage_option_flag(&o, "acpi.idle", 0) == 1);
 	CHECK(stage_option_choice(&o, "sb.mode", modes, 2, 0) == 1);
-	CHECK(stage_option_flag(&o, "sb.reported", 1) == 0);
+	CHECK(stage_option_flag(&o, "acpi.stubs", 1) == 0);
 	CHECK(stage_options_unclaimed(&o) == 0);
 
 	/* A value that is not a choice keeps the fallback and stays unclaimed. The last good token wins. */

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Makes a signature database file (db.esl, dbx.esl, PK.esl, KEK.esl) for the Secure Boot module of the BC-250 stage.
+"""Makes a signature database file (db.esl, dbx.esl) for the Secure Boot module of the BC-250 stage.
 
 The file is one or more EFI_SIGNATURE_LIST structures, the format of the UEFI db and dbx variables. An X.509
 certificate goes in as EFI_CERT_X509_GUID. A PE image goes in as its Authenticode SHA-256 digest
 (EFI_CERT_SHA256_GUID), which allows or forbids exactly these bytes.
 
-    python mkesl.py --out db.esl --cert windows-pca.cer --image bc250-sbvar.efi
+    python mkesl.py --out db.esl --cert windows-pca.cer --image another.efi
     python mkesl.py --out dbx.esl --sha256 <64 hex digits>
     python mkesl.py --digest bootmgfw.efi          # prints the Authenticode SHA-256 digest and writes nothing
 

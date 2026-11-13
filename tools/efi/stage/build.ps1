@@ -1,13 +1,12 @@
-# Builds the BC-250 stage (bc250-stage.efi), its runtime driver (bc250-sbvar.efi) and the host tests, then runs
-# the host tests.
+# Builds the BC-250 stage (bc250-stage.efi) and the host tests, then runs the host tests.
 #
 #   pwsh tools\efi\stage\build.ps1
 #   pwsh tools\efi\stage\build.ps1 -Out P:\BC-250\scratch\build\efi-stage
 #   pwsh tools\efi\stage\build.ps1 -SkipTests
 #   pwsh tools\efi\stage\build.ps1 -SignedImage <a signed UEFI image, for example a Windows Boot Manager>
 #
-# The UEFI images: clang for x86_64-unknown-windows, freestanding, linked by lld-link. The stage is an EFI
-# application. The runtime driver is an EFI runtime driver, so the firmware keeps it after ExitBootServices.
+# The UEFI image: clang for x86_64-unknown-windows, freestanding, linked by lld-link. The stage is an EFI
+# application.
 # The host tests: the llvm-mingw clang of the workspace, so the test build needs no Visual Studio and nothing on C:.
 # Everything is written under -Out, never into the repository. Nothing here touches a lab machine or a boot entry.
 
@@ -30,12 +29,11 @@ $repo = (Resolve-Path (Join-Path $here '..\..\..')).Path
 $shim = Join-Path $repo 'driver\shim'
 
 $objStage = Join-Path $Out 'obj-stage'
-$objDriver = Join-Path $Out 'obj-sbvar'
 $objHost = Join-Path $Out 'obj-host'
 $fixtures = Join-Path $Out 'fixtures'
 $tables = Join-Path $Out 'tables'
-New-Item -ItemType Directory -Force $Out, $objStage, $objDriver, $objHost, $tables | Out-Null
-Remove-Item "$objStage\*.o", "$objDriver\*.o", "$objHost\*.o", "$tables\*" -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $Out, $objStage, $objHost, $tables | Out-Null
+Remove-Item "$objStage\*.o", "$objHost\*.o", "$tables\*" -Force -ErrorAction SilentlyContinue
 $env:TEMP = Join-Path $Out 'tmp'; $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 
@@ -52,14 +50,12 @@ $corePure = Sources 'stage\src' @('stage_options.c')
 $unlockPure = Sources 'core-unlock\src' @('cu_decide.c', 'cu_run.c', 'cu_smu.c', 'cu_msr.c', 'cu_report.c', 'cu_options.c')
 $repairPure = Sources 'acpi-repair\src' @('ar_plan.c')
 $securePure = Sources 'secure-boot\src' @('sb_der.c', 'sb_rsa.c', 'sb_x509.c', 'sb_pe.c', 'sb_pkcs7.c', 'sb_siglist.c',
-    'sb_verify.c', 'sb_vars.c')
+    'sb_verify.c')
 $pure = @($libPure) + @($corePure) + @($unlockPure) + @($repairPure) + @($securePure)
 # The UEFI bindings: the core and one file for each module.
 $bindings = @(Sources 'stage\src' @('main.c')) + @(Sources 'core-unlock\src' @('cu_module.c', 'report_uefi.c')) +
     @(Sources 'acpi-repair\src' @('ar_module.c')) + @(Sources 'secure-boot\src' @('sb_module.c')) +
     @(Sources 'lib' @('efl_libc.c'))
-# The runtime driver: its own file, the variable store and the small C library. Nothing else stays in memory.
-$driver = @(Sources 'secure-boot\rt' @('sbvar_rt.c')) + @(Sources 'secure-boot\src' @('sb_vars.c')) + @(Sources 'lib' @('efl_libc.c'))
 # The repository sources that the stage shares with the driver. They keep their own warning level: they are the
 # driver's code, built the same way here and there.
 $shared = @((Join-Path $shim 'bc250_smu.c'), (Join-Path $shim 'bc250_cpu.c'), (Join-Path $shim 'bc250_oc.c'),
@@ -82,23 +78,20 @@ function Build-Objects([string]$cc, [string[]]$flags, [string]$objDir, [string[]
     }
 }
 
-Write-Host 'compile (UEFI images)'
+Write-Host 'compile (UEFI image)'
 $clang = Join-Path $Llvm 'clang.exe'
 $efiFlags = @('--target=x86_64-unknown-windows', '-std=c11', '-O2', '-ffreestanding', '-fno-builtin', '-nostdlibinc',
     '-fno-stack-protector', '-mno-stack-arg-probe', '-mno-red-zone', '-fno-ident',
     "-I$efiRoot\lib\include", "-I$efiRoot\lib\include\libc") + $includes
 Build-Objects $clang $efiFlags $objStage ($pure + $bindings) $strict
 Build-Objects $clang $efiFlags $objStage $shared $relaxed
-Build-Objects $clang $efiFlags $objDriver $driver $strict
 
-Write-Host 'link (UEFI images)'
+Write-Host 'link (UEFI image)'
 $link = Join-Path $Llvm 'lld-link.exe'
 $linkFlags = @('/nologo', '/entry:efi_main', '/nodefaultlib', '/machine:x64', '/opt:ref', '/Brepro', '/debug:none')
 $stage = Join-Path $Out 'bc250-stage.efi'
-$sbvar = Join-Path $Out 'bc250-sbvar.efi'
 Invoke-Tool $link ($linkFlags + @('/subsystem:efi_application', "/out:$stage") + (Get-ChildItem "$objStage\*.o").FullName)
-Invoke-Tool $link ($linkFlags + @('/subsystem:efi_runtime_driver', "/out:$sbvar") + (Get-ChildItem "$objDriver\*.o").FullName)
-$sums = foreach ($image in @($stage, $sbvar)) {
+$sums = foreach ($image in @($stage)) {
     $hash = (Get-FileHash -Algorithm SHA256 $image).Hash
     Write-Host "$(Split-Path -Leaf $image) $((Get-Item $image).Length) bytes, SHA256 $hash"
     "$hash  $(Split-Path -Leaf $image)"

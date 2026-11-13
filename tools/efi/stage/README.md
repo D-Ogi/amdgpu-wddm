@@ -12,9 +12,9 @@ module.
 3. Read the last lines. The line `bc250-stage host tests exit code 0` must be there.
 4. Look for lines that start with `SKIP`. Each one names an input that the tests did not have.
 
-The script writes `bc250-stage.efi`, `bc250-sbvar.efi`, `SHA256SUMS` and the host test to
+The script writes `bc250-stage.efi`, `SHA256SUMS` and the host test to
 `P:\BC-250\scratch\build\efi-stage`. Give `-Out <directory>` for another place. Give `-SkipTests` to build the
-images alone. Give `-SignedImage <file>` to add a real signed UEFI image to the Secure Boot tests.
+image alone. Give `-SignedImage <file>` to add a real signed UEFI image to the Secure Boot tests.
 
 ## Load options
 
@@ -32,7 +32,6 @@ images alone. Give `-SignedImage <file>` to add a real signed UEFI image to the 
 | `acpi.stubs=0` | 1 | do not install the method stub table |
 | `sb.mode=audit` | yes | report the verdict on each image, and refuse none |
 | `sb.mode=enforce` | no | do not start an image that the databases do not allow |
-| `sb.reported=1` | 0 | make Windows read "Secure Boot on". This needs `sb.mode=enforce` |
 
 The stage counts each option that no module understands and prints the count.
 
@@ -44,8 +43,6 @@ Put these files in the directory of `bc250-stage.efi`. Only the stage itself is 
 |---|---|---|
 | `db.esl` | Secure Boot module | the allowed certificates and image digests |
 | `dbx.esl` | Secure Boot module | the forbidden certificates and image digests |
-| `PK.esl`, `KEK.esl` | reported mode | the content of the `PK` and `KEK` variables that Windows reads |
-| `bc250-sbvar.efi` | reported mode | the runtime driver |
 | `core-unlock.mark` | core unlock | the loop guard. The stage writes it |
 
 ## Make the databases
@@ -53,7 +50,7 @@ Put these files in the directory of `bc250-stage.efi`. Only the stage itself is 
 `tools\efi\secure-boot\tools\mkesl.py` makes a database file. It needs only Python.
 
 1. Get the certificate that signs your boot manager, as a DER or PEM file.
-2. Run `python tools\efi\secure-boot\tools\mkesl.py --out db.esl --cert <certificate> --image bc250-sbvar.efi`.
+2. Run `python tools\efi\secure-boot\tools\mkesl.py --out db.esl --cert <certificate>`.
 3. To allow one image by its digest, add `--image <file>` to that command.
 4. To forbid one image, run `python tools\efi\secure-boot\tools\mkesl.py --out dbx.esl --image <file>`.
 
@@ -107,13 +104,10 @@ To change an option, remove the entry and create it again with the new options.
 2. Run `efibootmgr --bootnum <number> --delete-bootnum`.
 3. Remove the directory `EFI/BC250/` on the EFI System Partition.
 
-## The reported mode
+## What the Secure Boot module is not
 
-WARNING: With `sb.reported=1`, Windows refuses its test-signing mode. The driver of this project is test-signed
-and does not load in that start. Use this mode only on an installation that does not need the driver.
-
-The mode does not make the board secure. The stage and its databases are files that nobody signed. Read
-"What each mode gives, and what it does not give" in the design page before you use it.
+The module does not make the board secure, and it does not make Windows report Secure Boot. The stage and its
+databases are files that nobody signed. Read "What each mode gives, and what it does not give" in the design page.
 
 ## The marker
 
