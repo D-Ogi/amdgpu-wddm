@@ -970,6 +970,24 @@ facts:
     evidence: "[Core unlock arms](../evidence/windows/2026-11-12-core-unlock/README.md)"
     edges:
       - {"type": "uses", "to": "M961"}
+  - id: M965
+    status: MEASURED
+    date: "2026-11-13"
+    claim: "The stock CPU idle table of unit A (BIOS P3.00, 6 cores) is one SSDT with the OEM ID `AMD` and the OEM table ID `AMD CPU`: 1560 bytes, 12 scopes `\\_PR.C000` to `\\_PR.C00B` of 127 bytes each and nothing else. Each scope holds the same 79-byte `_CST` object (C1 through a `FFixedHW` register, C2 through the `SystemIO` port 0x414 with the latency 0x190) and a `_CSD` object `{ 6, 0, k / 2, 0xFE, 2, 0 }` for scope k. No table of the capture defines `C000` to `C00B`, so the 12 scopes have no target, which is the cause of the 12 failed lookups of M47"
+    status_text: "MEASURED (a reading of the tables stored on 2026-09-21, ACPICA iasl 20260930 and SHA-256)"
+    detail: "SHA-256 of the table `2f0c27555723a8ecda6a968059f66bdf082e63194d31898792ac71cb1f86a4d1`, of the `_CST` object `0a4b37466742ce2c7788010c913e9c46268a920dd93624e92c8d8a2582742e3c`. The FADT of the same capture gives the C2 latency 0x65 and the C3 latency 0x3E9. The capture has 6 cores: the table of a start with 8 cores is not measured. What Windows does with the table is not measured"
+    evidence: "[The reading](../evidence/linux/2026-11-13-acpi-cpu-tables-reading/README.md), [the tables](../evidence/linux/2026-09-21-E01-recon-binaries/README.txt)"
+    edges:
+      - {"type": "uses", "to": "M47"}
+  - id: M966
+    status: MEASURED
+    date: "2026-11-13"
+    claim: "The stock DSDT of unit A (BIOS P3.00, OEM ID `ALASKA`, OEM table ID `A M I `) declares 16 `Processor` objects `\\_PR.P000` to `\\_PR.P00F` with the processor IDs 1 to 16, which are the processor IDs of the 16 Local APIC entries of the MADT (12 enabled with the APIC IDs 0 to 5 and 8 to 13, 4 not enabled). Each object holds only `TYPE` and `_PDC`: no table gives a processor `_PSS`, `_PCT`, `_PPC` or `_PSD`, and the firmware's P-state package `\\_PR.APSS` holds only the value 0xFFFF. The DSDT calls three methods that no table defines, each with one argument: `APTS` from `\\_SB.PCI0.NPTS`, `AWAK` from `\\_SB.PCI0.NWAK`, and `AFN7` from three `_BCM` methods"
+    status_text: "MEASURED (a reading of the tables stored on 2026-09-21, ACPICA iasl 20260930)"
+    detail: "`_PDC` would load a table from the operation region `\\_PR.SSDT` (address 0xFFFF0000) when `TBLD` is 0. The stored value of `TBLD` is 4, so the load does not run in this capture. The firmware writes parts of the DSDT at each start, so its digest identifies this capture only. The capture has 6 cores: the MADT of a start with 8 cores is not measured"
+    evidence: "[The reading](../evidence/linux/2026-11-13-acpi-cpu-tables-reading/README.md), [the tables](../evidence/linux/2026-09-21-E01-recon-binaries/README.txt)"
+    edges:
+      - {"type": "uses", "to": "M965"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"
