@@ -1,0 +1,55 @@
+; SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+; The skeleton TPM servicer: a lower filter of the ACPI TPM 2.0 device.
+; tpm.sys stays the function driver. This INF only adds the filter below it.
+;
+; The filter refuses to attach unless the TPM2 ACPI table carries the OEM table ID BC250TPM and the board
+; identifies itself as a BC-250, so installing it on another machine is harmless.
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = Security
+ClassGuid   = {d94ee5d8-d189-4994-83d2-f68d7d41b0e6}
+Provider    = %ProviderString%
+DriverVer   = 11/13/2026,1.0.0.0
+CatalogFile = tpmserv.cat
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 12
+
+[Manufacturer]
+%ManufacturerString% = Bc250,NT$ARCH$
+
+[Bc250.NT$ARCH$]
+%DeviceString% = Tpmserv_Install, ACPI\MSFT0101
+
+[Tpmserv_Install.NT]
+Include = wdfldr.inf
+Needs   = WDFLDR.NT
+
+[Tpmserv_Install.NT.Services]
+Include = wdfldr.inf
+Needs   = WDFLDR.NT
+AddService = tpmserv, %SPSVCINST_ASSOCSERVICE%, Tpmserv_Service
+
+[Tpmserv_Service]
+DisplayName    = %ServiceString%
+ServiceType    = %SERVICE_KERNEL_DRIVER%
+StartType      = %SERVICE_BOOT_START%
+ErrorControl   = %SERVICE_ERROR_NORMAL%
+ServiceBinary  = %12%\tpmserv.sys
+; The filter sits below the function driver, which keeps being tpm.sys.
+AddReg         = Tpmserv_Service_AddReg
+
+[Tpmserv_Service_AddReg]
+HKR,, "LowerFilters", 0x00010000, "tpmserv"
+
+[Strings]
+ProviderString     = "BC-250 project"
+ManufacturerString = "BC-250 project"
+DeviceString       = "BC-250 TPM servicer filter"
+ServiceString      = "BC-250 TPM servicer filter"
+SPSVCINST_ASSOCSERVICE = 0x00000002
+SERVICE_KERNEL_DRIVER  = 0x00000001
+SERVICE_BOOT_START     = 0x00000000
+SERVICE_ERROR_NORMAL   = 0x00000001
