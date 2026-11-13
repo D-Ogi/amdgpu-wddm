@@ -50,6 +50,8 @@ struct ar_input {
 	struct ar_cpu cpu[AR_MAX_CPUS];
 	int want_idle;				/* 0: the load option turned this repair off */
 	int want_stubs;
+	/* 1: the SSDT also carries the experiment device of the TPM work: Device(TPM0) with _HID "BC250001". */
+	int want_device;
 };
 
 enum ar_idle {
@@ -97,6 +99,7 @@ struct ar_plan {
 
 	enum ar_stubs stubs;
 	unsigned stub_mask;		/* bit i: ar_stub_name(i) gets an empty method */
+	int device;			/* 1: ar_build_stubs writes the experiment device */
 };
 
 void ar_plan_make(const struct ar_input *in, struct ar_plan *plan);

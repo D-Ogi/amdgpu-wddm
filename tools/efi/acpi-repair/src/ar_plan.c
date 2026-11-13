@@ -361,6 +361,7 @@ static void plan_stubs(const struct ar_input *in, struct ar_plan *plan)
 void ar_plan_make(const struct ar_input *in, struct ar_plan *plan)
 {
 	memset(plan, 0, sizeof(*plan));
+	plan->device = in->want_device;
 	plan_idle(in, plan);
 	if (plan->idle != AR_IDLE_REPAIR) plan->targets = plan->copied = plan->derived = plan->left_out = 0;
 	plan_stubs(in, plan);
@@ -405,11 +406,17 @@ size_t ar_build_stubs(const struct ar_plan *plan, unsigned char *out, size_t cap
 {
 	struct efl_amlw w;
 	unsigned s;
-	if (plan->stubs != AR_STUBS_REPAIR || plan->stub_mask == 0) return 0;
+	if (plan->stubs != AR_STUBS_REPAIR) return 0;
+	if (plan->stub_mask == 0 && !plan->device) return 0;
 	efl_amlw_init(&w, out, capacity);
 	efl_amlw_table_begin(&w, "SSDT", 2, AR_OEM_ID, AR_STUB_TABLE_ID, 1, "BCST", 1);
 	for (s = 0; s < AR_STUBS; s++)
 		if (plan->stub_mask & (1u << s)) efl_amlw_empty_method(&w, stub_names[s], STUB_ARGUMENTS);
+	if (plan->device) {
+		size_t mark = efl_amlw_device_begin(&w, "TPM0");
+		efl_amlw_name_string(&w, "_HID", "BC250001");
+		efl_amlw_end(&w, mark);
+	}
 	return efl_amlw_table_end(&w);
 }
 

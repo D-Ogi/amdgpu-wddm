@@ -184,6 +184,18 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 	stub_bytes = ar_build_stubs(&plan, stubs, sizeof(stubs));
 	save(out_dir, "ar-stubs.aml", stubs, stub_bytes);
 
+	/* The TPM experiment: the same table with Device(TPM0) { Name(_HID, "BC250001") } after the stubs. */
+	plan.device = 1;
+	stub_bytes = ar_build_stubs(&plan, stubs, sizeof(stubs));
+	CHECK(stub_bytes == 36u + 3u * 7u + 7u + 15u);
+	CHECK(ar_table_sound(stubs, stub_bytes));
+	CHECK(stubs[36u + 21u] == 0x5B && stubs[36u + 22u] == 0x82 && !memcmp(stubs + 36u + 24u, "TPM0", 4));
+	CHECK(!memcmp(stubs + 36u + 28u, "\x08_HID\x0d" "BC250001", 15));
+	CHECK(ar_build_stubs(&plan, stubs, 50) == 0);		/* no room for the device */
+	plan.device = 0;
+	/* The table goes back to the stub-only form that the second-plan checks below expect. */
+	stub_bytes = ar_build_stubs(&plan, stubs, sizeof(stubs));
+
 	/* The built table's own check refuses a changed table. */
 	table[bytes - 10u] ^= 1u;
 	CHECK(ar_check_idle(&plan, table, bytes) == 0);			/* the checksum */

@@ -146,6 +146,8 @@ static void ar_module_run(struct stage *stage)
 	size_t bytes;
 	int want_idle = stage_option_flag(&stage->options, "acpi.idle", 1);
 	int want_stubs = stage_option_flag(&stage->options, "acpi.stubs", 1);
+	/* The TPM experiment: a device of our own in the stub table. Off unless the load option asks for it. */
+	int want_device = stage_option_flag(&stage->options, "acpi.ssdt.dev", 0);
 	int apply = stage_option_flag(&stage->options, "acpi.apply", 1);
 
 	if (!stage_board_bc250(stage)) {
@@ -162,6 +164,7 @@ static void ar_module_run(struct stage *stage)
 	}
 	input.want_idle = want_idle;
 	input.want_stubs = want_stubs;
+	input.want_device = want_device;
 	ar_plan_make(&input, &plan);
 	stage_sayf(stage, AR_NAME, "idle states: %s", ar_idle_text(plan.idle));
 	stage_sayf(stage, AR_NAME, "method stubs: %s", ar_stubs_text(plan.stubs));
