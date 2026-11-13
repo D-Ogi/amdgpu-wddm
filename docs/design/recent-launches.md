@@ -112,7 +112,7 @@ letter case resolve to one spelling. The `\\?\` prefix is stripped (`\\?\UNC\srv
 When the file cannot be opened, the path from `GetFullPathNameW` is used. Paths can be longer than 260 characters.
 
 Two entries are the same path when they compare equal ordinally ignoring case (`CompareStringOrdinal` with
-`bIgnoreCase`. In .NET `StringComparison.OrdinalIgnoreCase`). `A\game.exe` and `B\game.exe` are two entries. The
+`bIgnoreCase`, in .NET `StringComparison.OrdinalIgnoreCase`). `A\game.exe` and `B\game.exe` are two entries. The
 reader derives the file name itself. Per-game settings are still keyed by file name
 (`HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<file name>`), so two tiles with the same file name share one
 profile. The application must say so and must not suggest separate settings.
