@@ -250,8 +250,15 @@ static void hook(struct stage *stage)
  * must not return: it restarts the board. */
 static void unhook(struct stage *stage)
 {
+	VOID *installed = NULL;
 	EFI_STATUS status;
 	if (security2_handle == NULL) return;
+	/* An image that the stage started can put a protocol of its own in front of the stage's and return without
+	 * an unwind. Its function then calls into the stage. The stage does not return in silence over that: the
+	 * reinstall below fails, because the installed structure is not the one of the stage. */
+	if (EFI_ERROR(stage->bs->HandleProtocol(security2_handle, &security2_guid, &installed)) ||
+	    installed != &stage_security2 || stage_security2.FileAuthentication != check_file)
+		stage_say(stage, SB_NAME, "another image changed the Security2 protocol after the stage and did not put it back");
 	status = stage->bs->ReinstallProtocolInterface(security2_handle, &security2_guid, &stage_security2, firmware_security2);
 	security2_handle = NULL;
 	if (!EFI_ERROR(status)) return;
