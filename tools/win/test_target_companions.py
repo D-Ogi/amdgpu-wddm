@@ -56,6 +56,24 @@ class Companions(unittest.TestCase):
         self.assertEqual(remote, "C:\\BC250\\tmp\\poll.ps1")
         self.assertEqual(pushed, [([str(s), str(target.KMD_READER)], "C:\\BC250\\tmp")])
 
+    # BD-376: the temperature levels go beside every script that reads them, by the same rule as the reader.
+    def test_the_repository_levels_exist(self):
+        self.assertTrue(target.THERMAL_LEVELS.is_file(), target.THERMAL_LEVELS)
+
+    def test_a_script_that_names_the_levels_gets_the_repository_copy(self):
+        s = self.script("trial.ps1", "$levels = Join-Path $PSScriptRoot 'thermal-levels.json'\n")
+        self.assertEqual(target.script_companions(s), [str(target.THERMAL_LEVELS)])
+
+    def test_a_copy_of_the_levels_beside_the_script_comes_first(self):
+        s = self.script("trial.ps1", "$levels = Join-Path $PSScriptRoot 'thermal-levels.json'\n")
+        own = self.script("thermal-levels.json", "{}\n")
+        self.assertEqual(target.script_companions(s), [str(own)])
+
+    def test_a_script_that_names_both_gets_both(self):
+        s = self.script("poll.ps1", ". (Join-Path $PSScriptRoot 'kmd-reader.ps1')\n"
+                                    "$levels = Join-Path $PSScriptRoot 'thermal-levels.json'\n")
+        self.assertEqual(target.script_companions(s), [str(target.KMD_READER), str(target.THERMAL_LEVELS)])
+
 
 if __name__ == "__main__":
     unittest.main()
