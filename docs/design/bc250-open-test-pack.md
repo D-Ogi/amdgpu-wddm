@@ -7,7 +7,7 @@ Upstream support, versions, licenses and exact commands must be checked when
 pinning each dependency. The linked descriptions below are proposed uses.
 
 The pack serves M8/M9 compute, M10 presentation, M11 stability, M12 API coverage
-and M13 desktop work. It supplements the M9 DMA/startup acceptance gates; it does
+and M13 desktop work. It supplements the M9 DMA/startup acceptance gates. It does
 not replace them with a demo or a benchmark. Correctness unlocks each next layer.
 
 ## Proposed components
@@ -17,12 +17,12 @@ not replace them with a demo or a benchmark. Correctness unlocks each next layer
 | Identification | Vulkan-Tools: vulkaninfo, vkcube | Actual ICD/device/capabilities, then basic presentation after its WSI gate |
 | Correctness | VK-GL-CTS / dEQP | Compute, memory, descriptors, synchronization, rendering and WSI regression oracle |
 | Reproduction | GFXReconstruct | Small captures, replay, resource dumps and matched Windows/Linux reproduction |
-| Investigation | RenderDoc | Inspect failed frames, pipelines, descriptors and buffers; not automated pass/fail |
+| Investigation | RenderDoc | Inspect failed frames, pipelines, descriptors and buffers. Not automated pass/fail |
 | Compute | Canonical E14, VkFFT, vkpeak | Content hashes, numerical workloads, larger buffers, barriers and bounded long dispatches |
 | Software reference | SwiftShader | Secondary CPU Vulkan oracle alongside same-unit Linux/RADV |
 | Native graphics | Vulkan-Samples, Sascha Willems examples, Filament | Increasing rendering complexity and reference images |
 | Multiple engines | DiligentSamples, bgfx examples | Comparable scenes through different abstractions/backends |
-| API translation | DXVK + dxvk-tests, ANGLE, Zink; later vkd3d-proton | D3D/OpenGL/GLES workloads after native Vulkan acceptance |
+| API translation | DXVK + dxvk-tests, ANGLE, Zink. Later vkd3d-proton | D3D/OpenGL/GLES workloads after native Vulkan acceptance |
 | Applications | Godot demos, GZDoom + Freedoom | Engine/shader/streaming/present integration and final demonstrations |
 | Telemetry | PresentMon CLI and KMD logs | Frame pacing and correlation with submits, fences, stalls and boot/device state |
 
@@ -33,13 +33,13 @@ not replace them with a demo or a benchmark. Correctness unlocks each next layer
 Start every run with the selected adapter, device identity, actual loaded ICD
 and other graphics modules, their hashes and versions, capabilities, boot/device
 generation and invocation. Reject accidental WARP, another GPU, a wrong ICD or a
-silent backend fallback. Keep sensitive identifiers in private lab artifacts;
-publish stable redacted unit labels rather than hardware UUIDs or serials.
+silent backend fallback. Keep sensitive identifiers in private lab artifacts.
+Publish stable redacted unit labels rather than hardware UUIDs or serials.
 
 Retain E14 as the canonical small compute control, with the existing Linux/CPU
 hashes and deliberately wrong-shader check. A fence completion or absence of a
-crash is never a content oracle. Integer outputs require exact comparison;
-floating-point tests need a written tolerance and reference method.
+crash is never a content oracle. Integer outputs require exact comparison.
+Floating-point tests need a written tolerance and reference method.
 
 Use selected CTS cases before benchmarks. Initial proposed selectors:
 
@@ -60,19 +60,19 @@ subset Khronos certification or a conformant implementation.
 
 Build a small deterministic GFXReconstruct corpus:
 
-- offscreen traces, kept separate from WSI traces;
-- a single-dispatch trace;
-- transfer, compute and rendering in one dependency graph;
+- offscreen traces, kept separate from WSI traces.
+- a single-dispatch trace.
+- transfer, compute and rendering in one dependency graph.
 - golden buffers and images captured on the same BC-250 under Linux/RADV.
 
-Verify portability, required features, versions and replay options for each
-trace; replay is not automatically equivalent across operating systems. Retain
+Check portability, required features, versions and replay options for each
+trace. Replay is not automatically equivalent across operating systems. Retain
 resource content checks and original invocation. Use RenderDoc for investigation
 when a case fails, without making successful capture an acceptance condition.
 
 Use VkFFT FFT/inverse-FFT numerical tests as well as timing. Use vkpeak for
 synthetic ALU/type/dispatch pressure only: throughput output does not itself
-validate arithmetic or predict application performance. SwiftShader is an
+check arithmetic or predict application performance. SwiftShader is an
 independent auxiliary oracle within its actual capabilities, not a substitute
 for the same-hardware Linux reference.
 
@@ -94,9 +94,9 @@ Only open each branch after its native Vulkan prerequisites pass:
 - DXVK + dxvk-tests: focused D3D9/D3D11 cases before arbitrary games. Check native
   Windows deployment/support constraints for the pinned build.
 - ANGLE: its dEQP coverage with an explicitly selected Vulkan backend.
-- Zink: verify the pinned driver's requirements before OpenGL regression cases.
-- vkd3d-proton: later, after its actual Vulkan features and descriptor limits;
-  record the exact development/native-Windows build configuration.
+- Zink: check the pinned driver's requirements before OpenGL regression cases.
+- vkd3d-proton: later, after its actual Vulkan features and descriptor limits.
+  Record the exact development/native-Windows build configuration.
 
 Every run must prove the loaded translation/backend DLLs and selected device.
 Passing with a different backend is not passing our Vulkan stack.
@@ -107,16 +107,16 @@ seeds, assets and frame ranges where an image oracle is expected.
 
 The Forge is not selected in the proposal because the cited documentation
 reportedly removed Windows Vulkan switching. Recheck that claim only if adding
-it later; it is not a newly verified fact in this plan.
+it later. It is not a newly verified fact in this plan.
 
 ## Execution profiles
 
 | Profile | Target duration | Proposed contents |
 |---|---|---|
-| smoke | 3-5 minutes | ICD identity, E14, selected CTS compute/memory, offscreen triangle; 1000 vkcube frames only if WSI is admitted |
+| smoke | 3-5 minutes | ICD identity, E14, selected CTS compute/memory, offscreen triangle. 1000 vkcube frames only if WSI is admitted |
 | regression | 30-90 minutes | CTS shards, replay corpus, Vulkan-Samples, VkFFT and admitted basic DXVK/ANGLE cases |
 | showcase | 10-20 minutes | Asteroids, Filament PBR, Godot particles, GZDoom/Freedoom |
-| soak | 6-12 hours | Resize/alt-tab/fullscreen, swapchain recreation, memory churn, repeated process launch |
+| soak | 6-12 hours | Resize/alt-tab/fullscreen, swapchain recreation, memory churn, repeated process start |
 | forensic | Until first failure | One isolated case, detailed KMD log, trace/resources, immediate profile stop |
 
 Durations are targets, not a reason to skip required cases silently. The proposed
@@ -126,12 +126,12 @@ overhead and a declared unavailable/not-run outcome if instrumentation fails.
 
 ## Runner rules
 
-1. Confirm identities, versions, hashes, capabilities, workload prerequisites,
+1. Check identities, versions, hashes, capabilities, workload prerequisites,
    operating point, temperature and the operator STOP flag before admission.
 2. A fence timeout, TDR, frozen present, unexpected black image or oracle mismatch
-   ends the entire profile immediately. Do not launch another workload afterward.
+   ends the entire profile immediately. Do not start another workload afterward.
    Preserve partial logs and record the last accepted/completed work. Killing a
-   process is not evidence that GPU DMA stopped; recovery is a separate action.
+   process is not evidence that GPU DMA stopped. Recovery is a separate action.
 3. Performance is eligible for publication only after the matching correctness
    controls pass. Keep instrumented captures separate from ordinary timing runs.
 4. Record source commit, dependency/asset lock, SHA-256 of binaries, exact command,
@@ -139,17 +139,17 @@ overhead and a declared unavailable/not-run outcome if instrumentation fails.
    KMD log, exit/timeout/oracle outcome, and applicable images/resources for every run.
 5. Use same-unit Linux/RADV as the primary reference and SwiftShader as an
    auxiliary reference. Match models, scenes, data types, clocks and relevant
-   settings; disclose remaining differences.
+   settings. Disclose remaining differences.
 6. Pin dependencies and assets to immutable commits/releases and content hashes.
    Prefer current upstream when selecting a pin, but never fetch a moving latest
    during a recorded test. This is compatible with the project's bleeding-edge policy.
 7. The original proposal required WSI tests to return to display-only until the
    full table was safe. Before implementing that action, reconcile it with the
    actual accepted lab profile and working full-WDDM desktop in STATE.md. Do not
-   turn it into an unconditional PnP/reset after every test; recovery/rollback
+   turn it into an unconditional PnP/reset after every test. Recovery/rollback
    must preserve known-good state and verified GPU ownership.
-8. Launch graphics applications on the lab, respecting the development-PC GUI
-   rule. This saved plan does not launch tools, download dependencies or change
+8. Start graphics applications on the lab, respecting the development-PC GUI
+   rule. This saved plan does not start tools, download dependencies or change
    the installed driver.
 
 ## First implementation and dashboard
@@ -162,11 +162,11 @@ a later layer, even when their binaries are available.
 Implement the runner/manifest and canonical positive controls first, then add
 one gated corpus at a time. The dashboard must show four independent axes:
 correctness, stability, presentation and performance. A good-looking demo does
-not mask a compute mismatch; passing offscreen CTS does not prove desktop/WSI.
+not mask a compute mismatch. Passing offscreen CTS does not prove desktop/WSI.
 
 ## Upstream links supplied with the proposal
 
-These are research inputs; exact revisions and support claims are not validated
+These are research inputs. Exact revisions and support claims are not checked
 by saving this document. Tracking parameters have been removed.
 
 - [Vulkan-Tools](https://github.com/KhronosGroup/Vulkan-Tools/blob/main/vulkaninfo/vulkaninfo.md)
