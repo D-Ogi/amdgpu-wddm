@@ -63,7 +63,7 @@ Use `board-caps` for the current fan, CPU and GPU limits.
 Board setters require an admitted provider. An older driver without this query does not authorize setters.
 
 The last line of `log` counts its escapes: `escapes: N without adapter synchronization, M with HardwareAccess`.
-A `log summary` against 0.7.184.1 or later takes exactly one HardwareAccess escape, the summary itself; every
+A `log summary` against 0.7.184.1 or later takes exactly one HardwareAccess escape, the summary itself. Every
 page after it goes without adapter synchronization. Each HardwareAccess escape is a Level Two call, so dxgkrnl
 idles the GPU for it and a running game waits: BD-054 was the overlay polling a CLI from before 0.7.184.1, whose
 `log summary` took 16 of them every 5 s (280-420 ms per poll). The overlay reads that line and warns when
@@ -90,9 +90,9 @@ or the driver is not installed, `3` the start budget is used up (`stages`) or th
 
 `health read` returns a synchronized software snapshot without hardware access
 or GPU scheduler idling. Flags are full WDDM (1), engines ready (2), visible
-active output (4), and this generation/epoch durably confirmed (8). Completion
-counts refer to distinct successfully programmed and completed primary flips;
-repeated vblanks and old-buffer fallback reports do not count as progress.
+active output (4), and this generation/epoch `durably confirmed` (8). Completion
+counts refer to distinct successfully programmed and completed primary flips.
+Repeated vblanks and old-buffer fallback reports do not count as progress.
 
 The monitor observes at least 60 seconds of fresh progress before issuing
 `health confirm`. A direct command is a diagnostic endpoint, not a replacement
@@ -122,9 +122,9 @@ device, display-only ones included. Measured on the development PC on 2026-09-21
 because the failure is a measurement too. On success it prints version, last stage, the mode (display-only vs
 full WDDM table), presents (the display-only path's own counter) plus blits/flips (the full table's, both 0
 outside it - `wddm.c`'s `WddmCounters`, `BC250_ESCAPE.Reserved[0]`/`[1]`), and which gates are open (`Flags`).
-`tools/win/bc250mon`'s overlay runs this every few seconds for its "bc250kmd live" panel; see its README.
+`tools/win/bc250mon`'s overlay runs this every few seconds for its "bc250kmd live" panel. See its README.
 
-- against a driver that has no such escape, the call fails and the hex status is the answer;
+- against a driver that has no such escape, the call fails and the hex status is the answer.
 - against bc250kmd, a failure means dxgkrnl does not route escapes to a display-only miniport, and M4 needs
   another control channel (ADR 0006, open questions).
 
@@ -144,7 +144,7 @@ a baseline, not an answer: the question is settled by the same command against b
 
 ## fbdump: what the display controller is actually scanning out
 
-Under the full WDDM table, `mon.py screenshot`'s GDI capture reads the CDD's surfaces and shows black (facts
+Under the full WDDM table, `mon.py screenshot`'s GDI capture reads the CDD's surfaces and comes back black (facts
 M84) - it is not looking at what HUBP0 is scanning out. `fbdump` is `BC250_ESCAPE_RUN_FBDUMP`
 (`driver/kmd/dcn.c`): read-only, no gate beyond `EnableMmio` (BAR5 mapped), the same condition `dcn` already
 answers to. Each call reads `HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS[_HIGH]` and `..._SURFACE_PITCH` fresh (a
@@ -152,21 +152,21 @@ present between two calls of the same dump is a torn frame in the resulting BMP,
 OTG0 for the whole dump would make this the write escape it deliberately is not), maps `RowCount * Pitch` bytes
 read-only (`MmMapIoSpaceEx(..., PAGE_READONLY | PAGE_NOCACHE)`) and copies them out. `BC250_FBDUMP_MAX_ROWS`
 (64) rows per call keeps one escape's buffer at 512 KiB regardless of the true row count, well short of the
-9 MB the whole 1920x1200 A8R8G8B8 surface would take in one call; `bc250kmd_cli fbdump` asks for that many rows
+9 MB the whole 1920x1200 A8R8G8B8 surface would take in one call. `bc250kmd_cli fbdump` asks for that many rows
 at a time (about 19 calls for the firmware's own mode) and assembles a bottom-up 32-bit `BI_RGB` BMP - no
 channel swap needed, since A8R8G8B8's in-memory byte order (B, G, R, A) already matches BMP's.
 
 The band's physical range must land inside the VRAM carve-out (`EnableVram`,
-`Device->VramPhysical`/`VramLength` - the same range `dcn.c`'s `AddressAllowed` and `wddm.c`'s Blt validate
+`Device->VramPhysical`/`VramLength` - the same range `dcn.c`'s `AddressAllowed` and `wddm.c`'s Blt check
 against) or inside the firmware's own framebuffer, which `display.c` maps at every device start regardless of
 any gate - so a fresh boot that has never taken `EnableVram` can still be dumped.
 
-`tools/win/bc250mon`'s `mon.py scanout` runs this on the target and pulls the BMP back; see its README.
+`tools/win/bc250mon`'s `mon.py scanout` runs this on the target and pulls the BMP back. See its README.
 
 ## Stage names
 
 `g_Stages` repeats `enum BC250_STAGE` from `driver/kmd/bc250kmd.h`. `test_stages.py` parses both and fails the
-build if they drift apart (`build.ps1` runs it; the monitor keeps a third copy with its own test).
+build if they drift apart (`build.ps1` runs it, and the monitor keeps a third copy with its own test).
 
 ## Build
 
@@ -207,12 +207,12 @@ another. `quick.ps1` builds the lab flavour as the `driver-state-cli-lab-x64` ch
 
 ## Typed clock client
 
-`clock read` returns one paired KMD MHz/VID/temperature sample; `clock set MHz mV`
+`clock read` returns one paired KMD MHz/VID/temperature sample. `clock set MHz mV`
 runs the complete serialized clock policy and verifies readback. The native
 `bc250control.dll` built beside this CLI exports the same path to the monitor
 and reader compatibility CLI. No raw SMU message passthrough or bc250rd fallback.
-The KMD must have completed native-owner handover before these calls can succeed;
-an offline owner returns DEVICE_NOT_READY. See `docs/design/startup-clock-ownership.md`.
+The KMD must have completed native-owner handover before these calls can succeed.
+An offline owner returns DEVICE_NOT_READY. See `docs/design/startup-clock-ownership.md`.
 
 ## Telemetry exports
 
@@ -222,7 +222,7 @@ Two more `bc250control.dll` exports feed the monitor's GPU telemetry line (`tool
 - `Bc250Dpm(BC250_ESCAPE_DPM*, 160)`: the DPM governor's published snapshot, `BC250_ESCAPE_RUN_DPM` op READ
   (KMD 0.7.175 and later), with `NoAdapterSynchronization` as the KMD requires and open to non-admin callers.
   A KMD without the command answers `STATUS_DEVICE_NOT_READY` or leaves the status unknown
-  (`STATUS_NOT_SUPPORTED` here). The structure comes from `driver/kmd/bc250kmd_escape.h`; a guarded copy of KMD
+  (`STATUS_NOT_SUPPORTED` here). The structure comes from `driver/kmd/bc250kmd_escape.h`. A guarded copy of KMD
   0.7.177's stays in the source for a header that predates the escape, and `tools/win/bc250mon/test_telemetry.py`
   checks it against the header.
 - `Bc250VideoMemory(hardware-id or NULL, BC250_VIDEO_MEMORY*, 264)`: `D3DKMTQueryStatistics` per segment of
@@ -239,7 +239,7 @@ the same `NoAdapterSynchronization`-only flags:
   the adapter lock from 0.7.184.1. No `HardwareAccess` fallback and no `LOG_SUMMARY`: an older driver's refusal is
   returned as it is.
 
-All of them open the adapter per call and close it again. The interface path is looked up once and cached; an absent
+All of them open the adapter per call and close it again. The interface path is looked up once and cached. An absent
 adapter is looked for again at most every 2 s, since the SetupAPI walk costs ~0.8 ms of CPU against ~6-9 us
 for a cached call (development PC, `vram`). `test-telemetry.ps1`, run by `build.ps1`, tests both exports with
 the D3DKMT calls replaced.
