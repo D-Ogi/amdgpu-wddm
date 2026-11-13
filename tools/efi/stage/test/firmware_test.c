@@ -14,11 +14,14 @@
  * PCI Root Bridge I/O protocols.
  */
 #include <setjmp.h>
+#include <stdio.h>
 #include "efl_test.h"
 #include "efi.h"
 #include "efl_text.h"
 #include "stage.h"
 #include "cu_bar.h"
+#include "sb_crc32.h"
+#include "sb_windows.h"
 
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st);
 
@@ -70,6 +73,13 @@ static struct {
 	unsigned char pci[64];
 	unsigned char *variable_dbx;	/* the dbx variable of the firmware, or NULL */
 	size_t variable_dbx_bytes;
+	unsigned char *variable_secureboot;	/* a SecureBoot variable of the firmware, or NULL */
+	size_t variable_secureboot_bytes;
+	/* The runtime side of sb.windows: the event, the conversion and two refusals that a test can ask for. */
+	int allocate_fails, create_event_fails;
+	unsigned converts, events_open;
+	EFI_EVENT_NOTIFY event_notify;
+	VOID *event_context;
 	/* The register BAR: the descriptor list of each BarIndex, the index that Mem.Read takes, the windows of the
 	 * root bridge, and the value of the control register. */
 	unsigned char bar_list[FW_BARS][64];
@@ -141,10 +151,42 @@ static EFI_STATUS EFIAPI fw_output(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *this, const 
 	return EFI_SUCCESS;
 }
 
+/* Memory of the type EfiRuntimeServicesCode holds code that the test calls, so the model gives it pages that can be
+ * executed. A firmware's pool of that type is executable too (UEFI 2.10, AllocatePool). The two Win32 functions come
+ * from kernel32 through their own declarations: the header would collide with the type names of efi.h. */
+#ifdef _WIN32
+__declspec(dllimport) void *__stdcall VirtualAlloc(void *address, size_t size, unsigned int type, unsigned int protect);
+__declspec(dllimport) int __stdcall VirtualFree(void *address, size_t size, unsigned int type);
+#endif
+#define FW_MEM_COMMIT		0x00001000u
+#define FW_MEM_RESERVE		0x00002000u
+#define FW_MEM_RELEASE		0x00008000u
+#define FW_PAGE_EXECUTE_READWRITE 0x00000040u
+#define FW_EXEC_BLOCKS 4u
+static struct { void *pointer; unsigned index; } fw_exec[FW_EXEC_BLOCKS];
+
+static int fw_exec_find(const void *pointer)
+{
+	unsigned i;
+	for (i = 0; i < FW_EXEC_BLOCKS; i++)
+		if (fw_exec[i].pointer == pointer) return (int)i;
+	return -1;
+}
+
 static EFI_STATUS EFIAPI fw_allocate(EFI_MEMORY_TYPE type, UINTN size, VOID **buffer)
 {
-	(void)type;
-	*buffer = malloc(size ? size : 1u);
+	if (fw.allocate_fails) return EFI_OUT_OF_RESOURCES;
+	if (size == 0u) size = 1u;
+	if (type == EfiRuntimeServicesCode) {
+		unsigned slot = (unsigned)fw_exec_find(NULL);
+		if (slot >= FW_EXEC_BLOCKS) return EFI_OUT_OF_RESOURCES;
+		*buffer = VirtualAlloc(NULL, (size_t)size, FW_MEM_COMMIT | FW_MEM_RESERVE, FW_PAGE_EXECUTE_READWRITE);
+		if (*buffer == NULL) return EFI_OUT_OF_RESOURCES;
+		fw_exec[slot].pointer = *buffer;
+		fw.pool_live++;
+		return EFI_SUCCESS;
+	}
+	*buffer = malloc((size_t)size);
 	if (*buffer == NULL) return EFI_OUT_OF_RESOURCES;
 	fw.pool_live++;
 	return EFI_SUCCESS;
@@ -152,8 +194,54 @@ static EFI_STATUS EFIAPI fw_allocate(EFI_MEMORY_TYPE type, UINTN size, VOID **bu
 
 static EFI_STATUS EFIAPI fw_free(VOID *buffer)
 {
-	free(buffer);
+	int at = fw_exec_find(buffer);
+	if (at >= 0) {
+		fw_exec[at].pointer = NULL;
+		(void)VirtualFree(buffer, 0, FW_MEM_RELEASE);
+	} else {
+		free(buffer);
+	}
 	fw.pool_live--;
+	return EFI_SUCCESS;
+}
+
+/* The runtime side: one event of the address change, a pointer conversion that keeps the model's one address
+ * space, and the table checksum. */
+static EFI_STATUS EFIAPI fw_create_event(UINT32 type, UINTN notify_tpl, EFI_EVENT_NOTIFY notify, VOID *context,
+					 EFI_EVENT *event)
+{
+	(void)notify_tpl;
+	if (fw.create_event_fails) return EFI_OUT_OF_RESOURCES;
+	if (type != EVT_SIGNAL_VIRTUAL_ADDRESS_CHANGE || notify == NULL || event == NULL) return EFI_INVALID_PARAMETER;
+	fw.event_notify = notify;
+	fw.event_context = context;
+	fw.events_open++;
+	*event = &fw_rt;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fw_close_event(EFI_EVENT event)
+{
+	if (event == NULL) return EFI_INVALID_PARAMETER;
+	if (fw.events_open > 0u) fw.events_open--;
+	fw.event_notify = NULL;
+	fw.event_context = NULL;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fw_convert_pointer(UINTN disposition, VOID **address)
+{
+	(void)disposition;
+	if (address == NULL || *address == NULL) return EFI_INVALID_PARAMETER;
+	/* The model keeps one address space: the conversion counts, and the pointer stays usable. */
+	fw.converts++;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fw_crc32(VOID *data, UINTN bytes, UINT32 *crc)
+{
+	if (crc == NULL) return EFI_INVALID_PARAMETER;
+	*crc = (UINT32)sb_crc32(data, (size_t)bytes);
 	return EFI_SUCCESS;
 }
 
@@ -451,8 +539,17 @@ static EFI_STATUS EFIAPI fw_get_variable(CHAR16 *name, EFI_GUID *vendor, UINT32 
 	char text[16];
 	(void)vendor; (void)attributes;
 	narrow(name, text, sizeof(text));
+	if (strcmp(text, "SecureBoot") == 0 && fw.variable_secureboot != NULL) {
+		if (data == NULL || *size < fw.variable_secureboot_bytes) {
+			*size = fw.variable_secureboot_bytes;
+			return EFI_BUFFER_TOO_SMALL;
+		}
+		memcpy(data, fw.variable_secureboot, fw.variable_secureboot_bytes);
+		*size = fw.variable_secureboot_bytes;
+		return EFI_SUCCESS;
+	}
 	if (strcmp(text, "dbx") != 0 || fw.variable_dbx == NULL) return EFI_NOT_FOUND;
-	if (*size < fw.variable_dbx_bytes) {
+	if (data == NULL || *size < fw.variable_dbx_bytes) {
 		*size = fw.variable_dbx_bytes;
 		return EFI_BUFFER_TOO_SMALL;
 	}
@@ -762,8 +859,16 @@ static int new_firmware(const char *acpi_dir)
 	fw_bs.LoadImage = fw_load_image;
 	fw_bs.StartImage = fw_start_image;
 	fw_bs.UnloadImage = fw_unload_image;
+	fw_bs.CreateEvent = fw_create_event;
+	fw_bs.CloseEvent = fw_close_event;
+	fw_bs.CalculateCrc32 = fw_crc32;
+	fw_rt.ConvertPointer = fw_convert_pointer;
 	fw_rt.GetVariable = fw_get_variable;
 	fw_rt.ResetSystem = fw_reset_system;
+	memset(&fw_rt.Hdr, 0, sizeof(fw_rt.Hdr));
+	fw_rt.Hdr.Signature = 0x5652455453424D53ull;	/* the table's own value is not read; the field has a size */
+	fw_rt.Hdr.HeaderSize = (UINT32)sizeof(EFI_RUNTIME_SERVICES);
+	(void)fw_crc32(&fw_rt, sizeof(fw_rt), &fw_rt.Hdr.CRC32);
 	fw_st.ConOut = &fw_console;
 	fw_st.BootServices = &fw_bs;
 	fw_st.RuntimeServices = &fw_rt;
@@ -1088,6 +1193,130 @@ static void test_secure_boot(const char *acpi_dir, const char *fixtures)
 	CHECK(fw.firmware_checks == 1 && said("secure-boot: off by the load option"));
 }
 
+/* ---- the state that Windows reads (sb.windows) ---------------------------------------------------- */
+
+static const EFI_GUID guid_global = { 0x8BE4DF61, 0x93CA, 0x11D2, { 0xAA, 0x0D, 0x00, 0xE0, 0x98, 0x03, 0x2B, 0x8C } };
+static const EFI_GUID guid_database = { 0xD719B2CB, 0x3D3A, 0x4596, { 0xA3, 0xBC, 0xDA, 0xD0, 0x0E, 0x67, 0x65, 0x6F } };
+
+static void test_sb_windows(const char *acpi_dir, const char *fixtures)
+{
+	static unsigned char pk[4] = { 0x11, 0x22, 0x33, 0x44 };
+	static unsigned char kek[6] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
+	static unsigned char db_bytes[8] = { 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7 };
+	static unsigned char dbx_bytes[10] = { 0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9 };
+	struct sb_windows_inputs in;
+	struct stage st;
+	unsigned char data[16];
+	UINT32 attr = 0;
+	UINTN size = 0;
+	int reset;
+
+	memset(&in, 0, sizeof(in));
+	in.pk = pk;
+	in.pk_bytes = sizeof(pk);
+	in.kek = kek;
+	in.kek_bytes = sizeof(kek);
+	in.db = db_bytes;
+	in.db_bytes = sizeof(db_bytes);
+	in.dbx = dbx_bytes;
+	in.dbx_bytes = sizeof(dbx_bytes);
+
+	/* A full start with sb.windows=1: the log names the state, and the filter is gone when the stage returns. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_file(BESIDE "db.esl", fixtures, "db_root.esl");
+	add_file(BESIDE "dbx.esl", fixtures, "empty.esl");
+	add_file(BESIDE "pk.esl", fixtures, "db_root.esl");
+	add_file(BESIDE "kek.esl", fixtures, "db_root.esl");
+	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce sb.windows=1 log=line", &reset) == EFI_SUCCESS && !reset);
+	CHECK(said("Windows sees SecureBoot=1 from this stage (sb.windows=1), the firmware has no Secure Boot"));
+	CHECK(said("the operating system is offered PK 0, KEK 0") || said("the operating system is offered PK"));
+	CHECK(fw_rt.GetVariable == fw_get_variable && fw.events_open == 0 && fw.pool_live == 0);
+	/* Without enforce the option is ignored, and the firmware is not touched. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 acpi=0 sb.windows=1", &reset) == EFI_SUCCESS);
+	CHECK(said("sb.windows=1 without sb.mode=enforce: ignored") && fw_rt.GetVariable == fw_get_variable);
+
+	/* The filter itself, between its install and its unwind. */
+	if (!new_firmware(acpi_dir)) return;
+	memset(&st, 0, sizeof(st));
+	st.st = &fw_st;
+	st.bs = &fw_bs;
+	CHECK(sb_windows_install(&st, &in) == 0);
+	CHECK(sb_windows_result_text(0)[0] != 0);
+	CHECK(fw_rt.GetVariable != fw_get_variable && fw.events_open == 1 && fw.event_notify != NULL);
+	/* SecureBoot = 1, SetupMode = 0, with the boots service and runtime attributes. */
+	size = 1;
+	CHECK(fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_SUCCESS);
+	CHECK(size == 1 && data[0] == 1 && attr == 0x6);
+	size = 1;
+	CHECK(fw_rt.GetVariable(u"SetupMode", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_SUCCESS);
+	CHECK(size == 1 && data[0] == 0 && attr == 0x6);
+	/* The size first, as an operating system asks, and a buffer that is too small. */
+	size = 0;
+	CHECK(fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, &attr, &size, NULL) == EFI_BUFFER_TOO_SMALL);
+	CHECK(size == 1);
+	size = 2;
+	data[0] = 0xFF;
+	data[1] = 0xFF;
+	CHECK(fw_rt.GetVariable(u"PK", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_BUFFER_TOO_SMALL);
+	CHECK(size == sizeof(pk) && data[0] == 0xFF && attr == 0x27);
+	/* The four databases, with the time-based authenticated attributes. */
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"PK", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_SUCCESS);
+	CHECK(size == sizeof(pk) && !memcmp(data, pk, sizeof(pk)) && attr == 0x27);
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"KEK", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_SUCCESS);
+	CHECK(size == sizeof(kek) && !memcmp(data, kek, sizeof(kek)));
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"db", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_SUCCESS);
+	CHECK(size == sizeof(db_bytes) && !memcmp(data, db_bytes, sizeof(db_bytes)));
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"dbx", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_SUCCESS);
+	CHECK(size == sizeof(dbx_bytes) && !memcmp(data, dbx_bytes, sizeof(dbx_bytes)));
+	/* Every other name goes to the firmware. */
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"BootOrder", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_NOT_FOUND);
+	/* A firmware that has SecureBoot answers with its own value: the stage does not override it. */
+	fw.variable_secureboot = efl_test_load(fixtures, "empty.esl", &fw.variable_secureboot_bytes);
+	if (fw.variable_secureboot != NULL) {
+		fw.variable_secureboot_bytes = 1;
+		fw.variable_secureboot[0] = 0;
+		size = 1;
+		CHECK(fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_SUCCESS);
+		CHECK(size == 1 && data[0] == 0);
+		free(fw.variable_secureboot);
+		fw.variable_secureboot = NULL;
+		fw.variable_secureboot_bytes = 0;
+	}
+	/* The address change: the notify converts every pointer and writes the slot again. */
+	{
+		unsigned before = fw.converts;
+		CHECK(fw.event_notify != NULL);
+		fw.event_notify((EFI_EVENT)&fw_rt, fw.event_context);
+		/* The state, the runtime table and the five pointers of it: seven conversions. */
+		CHECK(fw.converts - before >= 7);
+	}
+	size = 1;
+	CHECK(fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_SUCCESS && data[0] == 1);
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"db", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_SUCCESS &&
+	      !memcmp(data, db_bytes, sizeof(db_bytes)));
+	/* The unwind puts the firmware back and frees the runtime memory. */
+	sb_windows_unwind(&st);
+	CHECK(fw_rt.GetVariable == fw_get_variable && fw.events_open == 0 && fw.pool_live == 0);
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_NOT_FOUND);
+	/* No memory for the runtime filter, and no event: both refuse and free what they took. */
+	fw.allocate_fails = 1;
+	CHECK(sb_windows_install(&st, &in) == 1 && fw_rt.GetVariable == fw_get_variable);
+	fw.allocate_fails = 0;
+	fw.create_event_fails = 1;
+	CHECK(sb_windows_install(&st, &in) == 3 && fw_rt.GetVariable == fw_get_variable && fw.pool_live == 0);
+	fw.create_event_fails = 0;
+}
+
 static void test_core(const char *acpi_dir, const char *fixtures)
 {
 	int reset;
@@ -1372,6 +1601,7 @@ unsigned firmware_tests(const char *acpi_dir, const char *fixture_dir, unsigned 
 		test_probe_bar(acpi_dir, fixture_dir);
 		test_acpi(acpi_dir, fixture_dir);
 		test_secure_boot(acpi_dir, fixture_dir);
+		test_sb_windows(acpi_dir, fixture_dir);
 	}
 	free(probe);
 	free_firmware();

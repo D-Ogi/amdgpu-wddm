@@ -12,9 +12,13 @@
  *   module does not write into the structure of the firmware, which can be in read-only memory.
  *
  * sb.mode=audit (the default) reports each verdict and refuses nothing. sb.mode=enforce refuses an image that is
- * not allowed, and it refuses every image when its inputs have a defect. The module gives no Secure Boot variable
- * to the operating system. It reads the db and dbx variables of the firmware when they are there, and it calls
- * SetVariable nowhere.
+ * not allowed, and it refuses every image when its inputs have a defect. The module reads the db and dbx variables
+ * of the firmware when they are there, and it calls SetVariable nowhere.
+ *
+ * sb.windows=1, only with sb.mode=enforce, gives the operating system the state that the firmware lacks: a filter in
+ * front of GetVariable answers SecureBoot=1, SetupMode=0 and the kit's PK, KEK, db and dbx (sb_windows.c). Every
+ * other name, and every variable that the firmware has, goes to the firmware's own function. The state lives for
+ * this start only and in memory only: no NVRAM write, and no SetVariable call exists in the stage.
  */
 #include <stddef.h>
 #include <string.h>
@@ -24,6 +28,7 @@
 #include "sb_policy.h"
 #include "sb_siglist.h"
 #include "sb_verify.h"
+#include "sb_windows.h"
 
 #define SB_NAME			"secure-boot"
 #define SB_DATABASE_MAX_BYTES	(1024u * 1024u)
@@ -275,12 +280,70 @@ static void unhook(struct stage *stage)
 	for (;;) {}
 }
 
+/* ---- the state that Windows reads (sb.windows) --------------------------------------------------- */
+
+/* One file of the kit, read for the filter that serves it to the operating system. The bytes are copied into
+ * runtime memory by sb_windows_install, so the module frees them after the install. */
+static enum sb_source read_served(struct stage *stage, const char *name, unsigned char **data, size_t *bytes)
+{
+	unsigned short path[STAGE_PATH_CHARS];
+	enum stage_read read;
+	*data = NULL;
+	*bytes = 0;
+	if (!stage_sibling(stage, name, path, STAGE_PATH_CHARS)) return SB_SOURCE_ABSENT;
+	read = stage_read_file(stage, path, SB_DATABASE_MAX_BYTES, data, bytes);
+	if (read == STAGE_READ_ABSENT) return SB_SOURCE_ABSENT;
+	if (read != STAGE_READ_OK) {
+		stage_sayf(stage, SB_NAME, "%s did not read: the operating system is not given it", name);
+		*data = NULL;
+		*bytes = 0;
+		return SB_SOURCE_BROKEN;
+	}
+	return SB_SOURCE_GOOD;
+}
+
+static void windows_install(struct stage *stage)
+{
+	struct sb_windows_inputs inputs;
+	unsigned char *pk, *kek, *db, *dbx;
+	size_t pk_bytes, kek_bytes, db_bytes, dbx_bytes;
+	int result;
+
+	memset(&inputs, 0, sizeof(inputs));
+	(void)read_served(stage, "pk.esl", &pk, &pk_bytes);
+	(void)read_served(stage, "kek.esl", &kek, &kek_bytes);
+	(void)read_served(stage, "db.esl", &db, &db_bytes);
+	(void)read_served(stage, "dbx.esl", &dbx, &dbx_bytes);
+	stage_sayf(stage, SB_NAME, "the operating system is offered PK %u, KEK %u, db %u and dbx %u bytes",
+		   (unsigned)pk_bytes, (unsigned)kek_bytes, (unsigned)db_bytes, (unsigned)dbx_bytes);
+	inputs.pk = pk;
+	inputs.pk_bytes = pk_bytes;
+	inputs.kek = kek;
+	inputs.kek_bytes = kek_bytes;
+	inputs.db = db;
+	inputs.db_bytes = db_bytes;
+	inputs.dbx = dbx;
+	inputs.dbx_bytes = dbx_bytes;
+	result = sb_windows_install(stage, &inputs);
+	stage_free(stage, pk);
+	stage_free(stage, kek);
+	stage_free(stage, db);
+	stage_free(stage, dbx);
+	if (result != 0) {
+		stage_sayf(stage, SB_NAME, "sb.windows=1: the state is not installed: %s", sb_windows_result_text(result));
+		return;
+	}
+	stage_say(stage, SB_NAME, "Windows sees SecureBoot=1 from this stage (sb.windows=1), the firmware has no Secure Boot");
+}
+
 /* ---- the module ---------------------------------------------------------------------------------- */
 
 static void sb_module_run(struct stage *stage)
 {
+	int windows;
 	sb_stage = stage;
 	mode = (int)stage_option_choice(&stage->options, "sb.mode", mode_names, 2u, MODE_AUDIT);
+	windows = stage_option_flag(&stage->options, "sb.windows", 0);
 	read_databases(stage);
 	if (mode == MODE_ENFORCE && defect != NULL) {
 		/* Fail closed: the operator asked for a refusal, and the inputs cannot give a sound verdict. */
@@ -292,6 +355,12 @@ static void sb_module_run(struct stage *stage)
 		   mode == MODE_ENFORCE ? "an image that is not allowed does not start"
 					: "each image is checked and reported, and none is refused");
 	hook(stage);
+	if (!windows) return;
+	if (mode != MODE_ENFORCE) {
+		stage_say(stage, SB_NAME, "sb.windows=1 without sb.mode=enforce: ignored, the state is not installed");
+		return;
+	}
+	windows_install(stage);
 }
 
 static enum stage_gate sb_module_gate(struct stage *stage, const unsigned char *image, size_t bytes)
@@ -323,6 +392,7 @@ static void sb_module_loaded(struct stage *stage, EFI_STATUS status)
 
 static void sb_module_unwind(struct stage *stage)
 {
+	sb_windows_unwind(stage);
 	unhook(stage);
 	firmware_security2 = NULL;
 	stage_free(stage, db);

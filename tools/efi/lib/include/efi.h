@@ -91,6 +91,16 @@ typedef struct { UINT8 Type; UINT8 SubType; UINT8 Length[2]; } EFI_DEVICE_PATH_P
 
 typedef enum { EfiResetCold = 0, EfiResetWarm = 1, EfiResetShutdown = 2, EfiResetPlatformSpecific = 3 } EFI_RESET_TYPE;
 
+/* EFI_EVENT is defined with the other base types. The virtual address change event (UEFI 2.10, section 7.5.1 and
+ * the SetVirtualAddressMap contract): a runtime driver converts its own pointers in the notify function. */
+#define EVT_TIMER				0x80000000u
+#define EVT_RUNTIME				0x40000000u
+#define EVT_NOTIFY_WAIT				0x00000100u
+#define EVT_NOTIFY_SIGNAL			0x00000200u
+#define EVT_SIGNAL_EXIT_BOOT_SERVICES		0x00000201u
+#define EVT_SIGNAL_VIRTUAL_ADDRESS_CHANGE	0x60000202u
+typedef VOID (EFIAPI *EFI_EVENT_NOTIFY)(EFI_EVENT Event, VOID *Context);
+
 typedef struct {
 	EFI_TABLE_HEADER Hdr;
 	VOID *GetTime;
@@ -98,7 +108,7 @@ typedef struct {
 	VOID *GetWakeupTime;
 	VOID *SetWakeupTime;
 	VOID *SetVirtualAddressMap;
-	VOID *ConvertPointer;
+	EFI_STATUS (EFIAPI *ConvertPointer)(UINTN DebugDisposition, VOID **Address);
 	EFI_STATUS (EFIAPI *GetVariable)(CHAR16 *VariableName, EFI_GUID *VendorGuid, UINT32 *Attributes, UINTN *DataSize,
 					 VOID *Data);
 	VOID *GetNextVariableName;
@@ -128,11 +138,12 @@ typedef struct {
 	VOID *GetMemoryMap;
 	EFI_STATUS (EFIAPI *AllocatePool)(EFI_MEMORY_TYPE PoolType, UINTN Size, VOID **Buffer);
 	EFI_STATUS (EFIAPI *FreePool)(VOID *Buffer);
-	VOID *CreateEvent;
+	EFI_STATUS (EFIAPI *CreateEvent)(UINT32 Type, UINTN NotifyTpl, EFI_EVENT_NOTIFY NotifyFunction, VOID *NotifyContext,
+					 EFI_EVENT *Event);
 	VOID *SetTimer;
 	VOID *WaitForEvent;
 	VOID *SignalEvent;
-	VOID *CloseEvent;
+	EFI_STATUS (EFIAPI *CloseEvent)(EFI_EVENT Event);
 	VOID *CheckEvent;
 	VOID *InstallProtocolInterface;
 	EFI_STATUS (EFIAPI *ReinstallProtocolInterface)(EFI_HANDLE Handle, const EFI_GUID *Protocol, VOID *OldInterface,
@@ -165,7 +176,7 @@ typedef struct {
 	EFI_STATUS (EFIAPI *LocateProtocol)(const EFI_GUID *Protocol, VOID *Registration, VOID **Interface);
 	VOID *InstallMultipleProtocolInterfaces;
 	VOID *UninstallMultipleProtocolInterfaces;
-	VOID *CalculateCrc32;
+	EFI_STATUS (EFIAPI *CalculateCrc32)(VOID *Data, UINTN DataSize, UINT32 *Crc32);
 	VOID *CopyMem;
 	VOID *SetMem;
 	VOID *CreateEventEx;

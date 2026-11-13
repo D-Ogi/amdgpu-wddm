@@ -54,11 +54,11 @@ $corePure = Sources 'stage\src' @('stage_options.c')
 $unlockPure = Sources 'core-unlock\src' @('cu_bar.c', 'cu_decide.c', 'cu_run.c', 'cu_smu.c', 'cu_msr.c', 'cu_report.c', 'cu_options.c')
 $repairPure = Sources 'acpi-repair\src' @('ar_plan.c')
 $securePure = Sources 'secure-boot\src' @('sb_der.c', 'sb_rsa.c', 'sb_x509.c', 'sb_pe.c', 'sb_pkcs7.c', 'sb_siglist.c',
-    'sb_verify.c', 'sb_policy.c')
+    'sb_verify.c', 'sb_policy.c', 'sb_crc32.c')
 $pure = @($libPure) + @($corePure) + @($unlockPure) + @($repairPure) + @($securePure)
 # The UEFI bindings: the core and one file for each module.
 $bindings = @(Sources 'stage\src' @('main.c')) + @(Sources 'core-unlock\src' @('cu_module.c', 'report_uefi.c')) +
-    @(Sources 'acpi-repair\src' @('ar_module.c')) + @(Sources 'secure-boot\src' @('sb_module.c'))
+    @(Sources 'acpi-repair\src' @('ar_module.c')) + @(Sources 'secure-boot\src' @('sb_module.c', 'sb_windows.c'))
 # The small C library of the UEFI image. The host tests use the C library of the host.
 $libc = @(Sources 'lib' @('efl_libc.c'))
 # The repository sources that the stage shares with the driver. They keep their own warning level: they are the
@@ -115,7 +115,7 @@ foreach ($control in @($SignedImage, $SecondSignedImage)) {
 # The address sanitizer stops the test at a read or a write outside a buffer. Its run-time library is a DLL beside
 # the compiler.
 $env:PATH = "$Mingw;$env:PATH"
-$hostFlags = @('-std=c11', '-O1', '-g', '-fsanitize=address,undefined', '-fno-sanitize-recover=undefined', '-fno-omit-frame-pointer', "-I$efiRoot\lib\include", "-I$efiRoot\lib\test") + $includes
+$hostFlags = @('-std=c11', '-O1', '-g', '-fsanitize=address,undefined', '-fno-sanitize-recover=undefined', '-fno-omit-frame-pointer', '-DSB_RT_IN_PLACE', "-I$efiRoot\lib\include", "-I$efiRoot\lib\test") + $includes
 # The bindings are in the host build too: firmware_test.c runs them against a model of the firmware.
 Build-Objects $hostCc $hostFlags $objHost ($pure + $bindings + $tests) $strict
 Build-Objects $hostCc $hostFlags $objHost $shared $relaxed
