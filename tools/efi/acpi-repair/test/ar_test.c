@@ -199,6 +199,20 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 	CHECK(!memcmp(stubs + stub_bytes - 12u, "\x86\x09\x00\x00\x00\x50\x34\x12\x00\x10\x00\x00", 12));
 	plan.crb_base = 0;
 
+	/* The ACPI TPM2 table of the experiment: 52 bytes, revision 4, platform class 0, start method 7. */
+	plan.crb_base = 0x12345000ull;
+	{
+		unsigned char tpm2[64];
+		size_t n2 = ar_build_tpm2(&plan, tpm2, sizeof(tpm2));
+		CHECK(n2 == 52u);
+		CHECK(!memcmp(tpm2, "TPM2", 4) && tpm2[8] == 4 && *(unsigned *)(tpm2 + 4) == 52u);
+		CHECK(tpm2[36] == 0 && tpm2[37] == 0);
+		CHECK(!memcmp(tpm2 + 40, "\x00\x50\x34\x12\x00\x00\x00\x00", 8));
+		CHECK(tpm2[48] == 7 && tpm2[49] == 0 && tpm2[50] == 0 && tpm2[51] == 0);
+		CHECK(ar_build_tpm2(&plan, tpm2, 40) == 0);
+	}
+	plan.crb_base = 0;
+
 	/* Device on and no stub needed: the table is still built, and it holds the device alone. */
 	{
 		enum ar_stubs keep = plan.stubs;

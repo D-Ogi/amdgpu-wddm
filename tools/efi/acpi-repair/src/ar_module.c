@@ -230,6 +230,15 @@ static void ar_module_run(struct stage *stage)
 		else
 			(void)install(stage, installer, buffer, bytes, "method stubs", AR_STUB_TABLE_ID);
 	}
+	if (plan.device && plan.crb_base != 0) {
+		bytes = ar_build_tpm2(&plan, buffer, AR_TABLE_MAX_BYTES);
+		if (bytes == 0)
+			stage_say(stage, AR_NAME, "the TPM2 table of the experiment was not built");
+		else if (!apply)
+			stage_sayf(stage, AR_NAME, "the TPM2 table of %u bytes passed its check", (unsigned)bytes);
+		else
+			(void)install(stage, installer, buffer, bytes, "the TPM2 table", "TPM2");
+	}
 	stage_free(stage, buffer);
 }
 

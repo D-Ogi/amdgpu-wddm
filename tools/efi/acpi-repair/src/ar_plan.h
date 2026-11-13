@@ -117,6 +117,10 @@ const char *ar_stub_name(unsigned index);
 size_t ar_build_idle(const struct ar_plan *plan, unsigned char *out, size_t capacity);
 size_t ar_build_stubs(const struct ar_plan *plan, unsigned char *out, size_t capacity);
 
+/* The ACPI TPM2 table of the experiment: 52 bytes, platform class 0 (PC client), the control address of the
+ * reserved page, start method 7 (CRB). Revision 4, as the ACPI table of a CRB TPM carries. */
+size_t ar_build_tpm2(const struct ar_plan *plan, unsigned char *out, size_t capacity);
+
 /* The check of a built table before it is installed: the length field, the checksum, and a name scan that must
  * find exactly what the plan asked for. 1 when the table is right. */
 int ar_check_idle(const struct ar_plan *plan, const unsigned char *table, size_t bytes);

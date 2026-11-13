@@ -434,6 +434,23 @@ size_t ar_build_stubs(const struct ar_plan *plan, unsigned char *out, size_t cap
 	return efl_amlw_table_end(&w);
 }
 
+size_t ar_build_tpm2(const struct ar_plan *plan, unsigned char *out, size_t capacity)
+{
+	struct efl_amlw w;
+	unsigned char body[16];
+	unsigned long long base = plan->crb_base;
+	unsigned k;
+	if (!plan->device || base == 0) return 0;
+	efl_amlw_init(&w, out, capacity);
+	efl_amlw_table_begin(&w, "TPM2", 4, AR_OEM_ID, "BC250TPM", 1, "BCST", 1);
+	/* PlatformClass 0 in the low half of the flags, then the control address, then start method 7 (CRB). */
+	body[0] = body[1] = body[2] = body[3] = 0;
+	for (k = 0; k < 8; k++) body[4 + k] = (unsigned char)(base >> (8 * k));
+	body[12] = 7; body[13] = 0; body[14] = 0; body[15] = 0;
+	efl_amlw_bytes(&w, body, sizeof(body));
+	return efl_amlw_table_end(&w);
+}
+
 int ar_check_idle(const struct ar_plan *plan, const unsigned char *table, size_t bytes)
 {
 	static struct efl_aml_scan scan;
