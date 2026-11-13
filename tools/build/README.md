@@ -1,17 +1,17 @@
 # tools/build
 
 Recipe scripts for the parts of the driver stack that are not built by `driver/kmd/build.ps1`: LLVM, the
-Mesa components, DXVK and vkd3d-proton. [docs/build.md](../../docs/build.md) is the narrative (prerequisites, sources, deployment);
-these scripts are its executable half.
+Mesa components, DXVK and vkd3d-proton. [docs/build.md](../../docs/build.md) is the narrative (prerequisites, sources, deployment).
+These scripts are its executable half.
 
 | File | What it does |
 |---|---|
-| `build-llvm.ps1` | cmake + ninja for LLVM 23.1.2 with the recorded options; checks the new `CMakeCache.txt` against them |
+| `build-llvm.ps1` | cmake + ninja for LLVM 23.1.2 with the recorded options. It checks the new `CMakeCache.txt` against them |
 | `build-mesa.ps1` | meson + ninja for one Mesa component (`-Config radv`, `radv-mt`, `radv-system`, `llvmpipe-umd`, `zink-umd`, `zink-gl`, `zink-gl-icd`). `-Compiler msvc` or `clang-cl` has no default. `-Variant release,lto,isa` adds named options. It checks the new meson log's `Build Options:` line |
 | `mesa-configs.json` | the meson option sets and their ninja targets, the only copy the script reads |
 | `build-dxvk.ps1` | meson + ninja for DXVK (`-Config per-app`, `ddi-engine`). `-Compiler msvc` or `clang-cl` (x64 and x86) has no default. Same gate, also records submodule commits. For clang-cl x86 it also checks the calling-convention policy in every compile command |
 | `dxvk-configs.json` | the two DXVK option sets, their ninja targets and the arguments of each compiler |
-| `build-vkd3d.ps1` | meson + ninja for vkd3d-proton (`-Config per-app`, `ddi-engine`, `ddi-engine-lto`, `-Arch x64` or `x86`). `-Compiler msvc` or `clang-cl` (x64 and x86) has no default. Same gate, records submodule commits and `widl`. It gives meson the `widl` of `toolchain\mingw-w64-tools-14.0.0.r532` (or `-Widl`) in a native file. It stops on a `widl` older than 2.14 or without explicit aggregate returns; for clang-cl x86 it also checks the calling-convention policy in every compile command |
+| `build-vkd3d.ps1` | meson + ninja for vkd3d-proton (`-Config per-app`, `ddi-engine`, `ddi-engine-lto`, `-Arch x64` or `x86`). `-Compiler msvc` or `clang-cl` (x64 and x86) has no default. Same gate, records submodule commits and `widl`. It gives meson the `widl` of `toolchain\mingw-w64-tools-14.0.0.r532` (or `-Widl`) in a native file. It stops on a `widl` older than 2.14 or without explicit aggregate returns. For clang-cl x86 it also checks the calling-convention policy in every compile command |
 | `vkd3d-configs.json` | the three vkd3d-proton option sets, their ninja targets, the arguments of each compiler and the `compiler_options` of `ddi-engine-lto` |
 | `engine_abi.py`, `test_engine_abi.py` | selects the release or the lab engine DLL pin of `driver/umd/d3d12/engine-ddi/engine-abi.json` (`build-engine-ddi.ps1 -Flavour`), with the semantics of `tools/release/release_flavour.py`: neither flavour's DLL can pass the other's run |
 | `build-umd-router.ps1` | The UMD router `bc250d3d_router.dll` (`driver/umd/router`), its UMD doubles and its host-test harness. `-Compiler clang-cl` (default, LLVM 23.1.4) or `msvc` with `-MsvcReason`, x64 and x86 |
@@ -21,7 +21,7 @@ these scripts are its executable half.
 | `pe_compare.py` | compares two PE images apart from the per-build timestamps and PDB GUID of a non-`/Brepro` link, and the CheckSum that covers them |
 | `build-radv-queue-tests.ps1`, `radv-queue-tests.py` | host tests of the hosted queue winsys in a built RADV tree ([driver/icd/mesa-wddm2-runtime-queues](../../driver/icd/mesa-wddm2-runtime-queues/README.md)) |
 | `build-radv-bo-lifetime-test.ps1`, `radv-bo-lifetime-test.py` | the BO lifetime test (BD-201, BD-212) of a built RADV tree, x64 or x86. A mock D3DKMT host checks each release of a BO against the queue values |
-| `build-radv-unorm10-export-test.ps1`, `radv-unorm10-export-test.py` | host test of the 10-bit UNORM colour export rounding (BD-049) in a built RADV tree: the epilog key, the NIR export and the ACO epilog over about 1.3 million inputs, and a negative control without the rounding that must fail |
+| `build-radv-unorm10-export-test.ps1`, `radv-unorm10-export-test.py` | host test of the 10-bit UNORM colour export rounding (BD-049) in a built RADV tree. It covers the epilog key, the NIR export and the ACO epilog over about 1.3 million inputs. It adds a negative control without the rounding that must fail |
 | `common.ps1` | shared helpers: workspace root, Visual Studio environment, tool versions, source identity |
 
 The build scripts load the Visual Studio developer environment themselves, keep TEMP under `<BC250_ROOT>\scratch\tmp`,
