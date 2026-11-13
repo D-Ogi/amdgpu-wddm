@@ -40,7 +40,7 @@ setting of the workload: a capped run and an uncapped one are not the same work,
 A result from before the option carries no such key, and it reads as interval 0.
 
 Across implementations (a CPU rasterizer against a GPU, one vendor against another) the scenes are built to be
-comparable too; this is scene revision 2, `scene_revision` in the result:
+comparable too. This is scene revision 2, `scene_revision` in the result:
 
 - `draws` is exact on every conforming implementation. Vertices snap to chosen positions, no triangle edge passes
   through a pixel centre, the texel comes from `Load` at the pixel's integer position, and the tint is a 0/1
@@ -74,10 +74,10 @@ python tools\win\d3d11bench\imgdiff.py DIR_A DIR_B [--tolerance N]
 ```
 
 prints, per scene, how many pixels differ, the largest difference per channel, the first pixel beyond the
-tolerance and both images' checksums (equal to the `checksum` in the run's JSON, which ties a dump to its run);
+tolerance and both images' checksums (equal to the `checksum` in the run's JSON, which ties a dump to its run).
 `--diff OUT.pam` on two files writes the difference image. A wrong draw shows as large differences over whole
 regions: a displaced or missing triangle, or a black `shaders` tile. A tolerance is a judgement recorded with the
-result; it never replaces the same-GPU checksum match of the bound, and never applies to `draws`.
+result. It never replaces the same-GPU checksum match of the bound, and never applies to `draws`.
 
 Modes:
 
@@ -92,18 +92,18 @@ Modes:
 A summary on standard output (`SCENE ...` lines, then `PASS` or `FAIL`) and one JSON object, format 1, on
 standard output or in `--out FILE` (written atomically):
 
-- `result` (`measured` or `failed`) and `exit`;
-- `scene_revision`: the scenes' shaders and constants (2; absent in revision 1 results);
+- `result` (`measured` or `failed`) and `exit`.
+- `scene_revision`: the scenes' shaders and constants (2, absent in revision 1 results).
 - the settings: `mode`, `width`, `height`, `feature_level`, `frame_latency`, `sync_interval` and every scene's
-  parameters;
-- `adapter`: vendor, device and description as DXGI reports them;
-- `d3d11`: `app-local` or `system`, from the path of the `d3d11.dll` the process actually loaded;
+  parameters.
+- `adapter`: vendor, device and description as DXGI reports them.
+- `d3d11`: `app-local` or `system`, from the path of the `d3d11.dll` the process actually loaded.
 - `modules`: path and size of every loaded graphics module (D3D runtime, DXGI, Vulkan loader, the project's
-  `bc250*` and `amdgpu_wddm_*` modules, anything from the driver store, every Vulkan driver);
-- `icds`: path and SHA-256 of every loaded Vulkan driver, i.e. every module that exports
-  `vk_icdGetInstanceProcAddr`;
-- `environment`: every `DXVK_*`, `VK_*`, `MESA_*`, `RADV_*`, `ACO_*` and `BC250_*` variable;
-- `dxvk_conf`: whether a `dxvk.conf` exists next to the executable or in the working directory;
+  `bc250*` and `amdgpu_wddm_*` modules, anything from the driver store, every Vulkan driver).
+- `icds`: path and SHA-256 of every loaded Vulkan driver, that is, every module that exports
+  `vk_icdGetInstanceProcAddr`.
+- `environment`: every `DXVK_*`, `VK_*`, `MESA_*`, `RADV_*`, `ACO_*` and `BC250_*` variable.
+- `dxvk_conf`: whether a `dxvk.conf` exists next to the executable or in the working directory.
 - per scene: statistics (count, median, p5, p95, mean, min, max) of `frame_ms` (start of one frame to the start
   of the next), `record_ms` (the application's D3D11 calls), `present_ms` (`Present`, or `End` and `Flush` of
   the throttle query offscreen) and `gpu_ms` (timestamp queries, read without flushing), plus the checksum.
@@ -118,9 +118,9 @@ at most 170 s) keeps every run inside the lab's three-minute limit.
 1. Same unit, same clocks (the lab operating point), same build of the engine and of per-application DXVK from
    the same DXVK revision, and the same ICD. Record the artifact hashes next to the results. The two paths find
    the ICD differently: per-application DXVK through the Vulkan loader, which uses the registered driver and, in
-   an elevated process, ignores `VK_DRIVER_FILES` and `VK_ICD_FILENAMES`; the system path through the UMD, which
+   an elevated process, ignores `VK_DRIVER_FILES` and `VK_ICD_FILENAMES`. The system path through the UMD, which
    loads its own sibling `amdgpu_wddm_radv.dll` (`bc250radv.dll` in shells built before the rename). Either register the same file for the loader or run the per-application side
-   unelevated with `VK_DRIVER_FILES`; `compare.py` compares the `icds` hashes and refuses runs that differ.
+   unelevated with `VK_DRIVER_FILES`. `compare.py` compares the `icds` hashes and refuses runs that differ.
 2. Same configuration on both paths: identical `DXVK_*`, Vulkan loader and Mesa variables, no `dxvk.conf` unless
    both sides have the same one. `compare.py` refuses runs whose recorded environment differs.
 3. Caches: the engine runs without DXVK's shader cache (it writes no cache file), while per-application DXVK
@@ -133,7 +133,7 @@ at most 170 s) keeps every run inside the lab's three-minute limit.
    where it has one: either disable it on both sides (`MESA_SHADER_CACHE_DISABLE=true`) or start with one
    discarded run per side. Say which.
 4. At least three runs per side, alternating (per-app, system, per-app, ...), window mode, with the same
-   arguments. Each run takes a few seconds with the defaults; the whole series stays well under three minutes.
+   arguments. Each run takes a few seconds with the defaults. The whole series stays well under three minutes.
 5. Compare:
 
    ```
@@ -154,7 +154,7 @@ at most 170 s) keeps every run inside the lab's three-minute limit.
    tool checks and never for a bound verdict. Recording, present and GPU times are printed for diagnosis only.
 
 On a development PC with an NVIDIA GPU, DXVK reports the adapter as AMD unless `DXVK_CONFIG` sets
-`dxgi.hideNvidiaGpu = False`; set it on both sides, or `compare.py` rightly refuses the runs as different adapters.
+`dxgi.hideNvidiaGpu = False`. Set it on both sides, or `compare.py` rightly refuses the runs as different adapters.
 A native driver on the system side is a tool check only: its costs sit in different places (NVIDIA's `Flush` does
 the command building that DXVK does while recording), and it says nothing about the bound.
 
@@ -167,11 +167,11 @@ control, excluded from the three performance scenes. It renders three distinct
 exact clear colors and Presents at each of four sizes: requested,65x33,127x79,
 requested again. The twelve pre-Present readbacks must match the expected BGRA
 bytes, including alpha. Optional PAM dumps preserve every frame. An event query
-retires each iteration; before each ResizeBuffers the context state is cleared,
+retires each iteration. Before each ResizeBuffers the context state is cleared,
 views/back-buffer/staging references released and commands flushed. Reacquired
 back-buffer dimensions and format must match. CPU/GPU comparison can therefore
 check resizing, identity rotation and old-resource retirement with the same
-workload. It does not verify composed screen pixels or copy-free transport.
+workload. It does not check composed screen pixels or copy-free transport.
 
 The resize scene must be selected alone and requires window mode. Successful
 JSON has three resizes, twelve Presents, twelve pixel checks and four per-size
