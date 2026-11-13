@@ -38,7 +38,7 @@ bytes. It is initialised at compile time, so its signature is present from image
 
 - Header:
   - `Signature` is the qword `0x4752503035324342`, the bytes "BC250PRG".
-  - `Version` is 2. Version 1 had no `Input` and no `RecentSeq`; it was never deployed.
+  - `Version` is 2. Version 1 had no `Input` and no `RecentSeq`. It was never deployed.
   - The header also holds `Size`, `KmdVersion` and `SiteCount`.
 - Writers use interlocked operations only: no lock, no allocation, no register access, no log. The recorders are
   therefore safe at any IRQL, including the ISR.
@@ -158,7 +158,7 @@ The bugcheck is `0xBC250BAD`, with these parameters:
   so the heartbeat age does not include the time spent asleep. A failed transition down stays paused.
 - **Pause is a flag, not a barrier.** A check DPC that already read `Active = 1` can still reach `KeBugCheckEx`
   after `HangDetectorPause` returns. Only `HangDetectorStop` closes the detector, through its DPC flush. A pause
-  that excluded such a trip would need a synchronized disarm; this diagnostic accepts the narrow window.
+  that excluded such a trip would need a synchronized disarm. This diagnostic accepts the narrow window.
 - dxgkrnl serializes PnP and power calls, so start, stop, pause and resume do not race each other.
 
 ### Limits
@@ -187,7 +187,7 @@ extracts the actual code from `wddm.c`:
 - the stop drain
 - admission
 
-`driver/kmd/test/run_paging_queue.ps1` builds that code with the real `paging_private.c` parser; gate
+`driver/kmd/test/run_paging_queue.ps1` builds that code with the real `paging_private.c` parser. The gate
 `paging-queue` in `tools/quality/quick.ps1` runs it. The earlier ownership and order checks pass unchanged. The
 second caller is the actual drain, run again from the report hook between two passes of the first
 caller. The new cases are:
@@ -200,7 +200,7 @@ caller. The new cases are:
   two requeues, in FIFO order.
 - **Boundary.** A stop that lands during the quota's last report still gives a quota exit, but no requeue.
 
-Three mutations of the generated code are negative controls; each fails as expected:
+Three mutations of the generated code are negative controls. Each fails as expected:
 
 - `--drop-quota`, the 171 drain. Gate `paging-queue-no-quota` runs this one.
 - `--drop-requeue`
@@ -213,5 +213,5 @@ Three mutations of the generated code are negative controls; each fails as expec
 - the heartbeat moving, stale and gap cases
 - the signature bytes
 
-The host harness is deterministic. It does not show that the detector fires on hardware, what a real dump
+The host harness is deterministic. It does not prove that the detector fires on hardware, what a real dump
 contains, or what caused the hangs described above.

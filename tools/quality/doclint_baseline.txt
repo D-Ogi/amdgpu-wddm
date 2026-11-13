@@ -17,7 +17,6 @@
 #
 # To look at one document: python tools/quality/doclint.py --files <path>
 1	docs/design/dp-audio.md
-5	docs/design/hang-detector.md
 4	docs/design/iommu-dma-remapping.md
 1	docs/design/scanout-admission.md
 3	docs/design/vsync-arm-status.md
