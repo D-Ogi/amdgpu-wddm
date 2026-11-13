@@ -1,10 +1,10 @@
 # Full-WDDM successful-start confirmation
 
-Status: implemented in145; one warmPnP automatic-confirmation control passes
+Status: implemented in145. One warmPnP automatic-confirmation control passes
 (M457,2026-09-25). See [runtime evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/automatic-confirmation145/RESULT.md).
-The144 kernel already required a checked durable admission increment;145 adds
+The 144 kernel already required a confirmed durable admission increment. The 145 kernel adds
 the full-table confirmation handshake below. Broader lifecycle coverage remains
-open; this is not full M9 acceptance.
+open. This is not full M9 acceptance.
 This work belongs to the existing M9 startup requirement.
 
 ## Positive path
@@ -18,14 +18,14 @@ This work belongs to the existing M9 startup requirement.
    For at least 60 seconds it observes the same ready identity, visible active
    output, and fresh successful presentation progress. A missing or unhealthy
    sample, counter regression or identity change restarts the interval.
-4. The monitor requests confirmation of that exact identity. The kernel checks
+4. The monitor requests confirmation of that exact identity. The kernel confirms
    it against the live identity and current readiness, then writes zero and
-   checks the registry flush result. Only that success means confirmed.
+   confirms the registry flush result. Only that success means confirmed.
 
 A monitor process, successful StartDevice, stage50, programmed flip count or
 hardware vsync tick by itself does not prove a completed presentation. A fresh
-query of a stale counter is also insufficient. This confirms startup progress;
-it does not prove pixel correctness, GPU rendering, model correctness or M9.
+query of a stale counter is also insufficient. This confirms startup progress.
+It does not prove pixel correctness, GPU rendering, model correctness or M9.
 
 ## Presentation witness and lifecycle
 
@@ -86,7 +86,7 @@ wait, and the other run exits 0 ("confirmed by another client"). The installer
 does not start the startup task at install time, because the logon
 confirmation that it starts then confirms the start of that boot. Rules:
 common.ps1 Get-LogonTaskPlan and Test-LogonTaskPlan. Host tests:
-tools/release/test-session-checks.ps1 (eight negative controls) and
+`tools/release/test-session-checks.ps1` (eight negative controls) and
 tools/release/test-start-confirm.ps1.
 
 A start without output (BD-343). A start without a firmware display (BD-341,
@@ -212,7 +212,7 @@ READY and VISIBLE (7) at LastStage 50, which is the first VidPN commit. The
 rule for no output is FULL, READY and NO_OUTPUT (35) at LastStage 39, which is
 `StageStartDone`, with 60 seconds of readiness or flag CONFIRMED. Its result
 line says which rule passed. Before BD-343, an install on a computer with no
-monitor failed both checks and collected a diagnostics file. The confirm button
+monitor failed both tests and collected a diagnostics file. The confirm button
 of the control application keeps the display rule only, because a window that
 a person can see needs a display. Its text names the state without output.
 
@@ -235,7 +235,7 @@ At sign-in the control application opens its notice
 (`StartNotice.cs`, case Guard), and one click clears the count and starts the
 device again. The installer also writes the count.
 
-Close health admission before stop, adapter power-down and TDR handling; D0
+Close health admission before stop, adapter power-down and TDR handling. D0
 alone must not reopen it while full resume is unsupported. Visibility/mode
 changes invalidate the monitor's observation interval. Readiness must include
 both execution and paging admission, not merely Started. A query must never
@@ -243,7 +243,7 @@ follow a Wddm/Gfx pointer whose owner can be freed concurrently.
 
 Keep the query reply in adapter-owned storage with explicit synchronization.
 The implementation must prove writer ordering and reader lifetime, including
-StopDevice racing an escape; do not reuse GET_INFO as a lifetime guarantee.
+StopDevice racing an escape. Do not reuse GET_INFO as a lifetime guarantee.
 No polling query may read BAR registers, submit work or idle GPU scheduling.
 
 ## Typed interface
@@ -252,7 +252,7 @@ Use one versioned structure with exact byte-size validation, operation status,
 current device-start identity, readiness/visibility flags, completed-primary
 count, last completion age, and confirmed identity/status. Confirm includes the
 expected identity. Unknown versions and absent support leave the counter alone.
-Keep explicit human confirmation separately labelled; it does not manufacture
+Keep explicit human confirmation separately labelled. It does not manufacture
 an automatic-health result. Preserve the existing display-only policy.
 
 The read path should avoid HardwareAccess. NoAdapterSynchronization does not
@@ -273,7 +273,7 @@ mailbox, no state a stop frees - and the CU mode and DPM confirmations it calls
 have always run from escapes that take NoAdapterSynchronization alone. For one
 release the confirm path also admits the old HardwareAccess word, so a CLI, DLL
 or overlay of 0.7.212 or older still confirms a start. Every other flag word is
-refused before anything is read or written; the table of admitted and refused
+refused before anything is read or written. The table of admitted and refused
 words, per operation, is in driver/kmd/test/start_health_test.c and
 tools/win/bc250kmd_cli/test_escape_flags.py.
 
@@ -296,7 +296,7 @@ Local Microsoft sources reviewed:
 - windows-driver-docs-ddi/wdk-ddi-src/content/d3dkmddi/nc-d3dkmddi-dxgkddi_escape.md:
   DxgkDdiEscape runs at PASSIVE_LEVEL.
 - windows-driver-docs-ddi/wdk-ddi-src/content/d3dukmdt/ns-d3dukmdt-_d3dddi_escapeflags.md:
-  HardwareAccess semantics; NoAdapterSynchronization has no explanatory text.
+  HardwareAccess semantics. NoAdapterSynchronization has no explanatory text.
 
 These sources support the synchronization constraints, not the proposed private
 health ABI. Its lifetime proof and tests remain implementation obligations.
@@ -305,10 +305,10 @@ health ABI. Its lifetime proof and tests remain implementation obligations.
 
 The adapter owns a lifecycle mutex, a short snapshot spin lock and read rundown.
 Queries copy only this storage. PASSIVE_LEVEL lifecycle transitions serialize
-with confirmation; DPC engine faults immediately close the snapshot and advance
+with confirmation. DPC engine faults immediately close the snapshot and advance
 its epoch under the spin lock. Registry I/O never holds that spin lock.
 
-The confirmation decision linearizes at the live healthy identity check before
+The confirmation decision linearizes at the live healthy identity test before
 registry I/O. It certifies the preceding startup interval, not future operation.
 If an asynchronous fault advances the epoch during the flush, the old interval
 may already be durably acknowledged, but the reply must not certify the new
@@ -343,9 +343,9 @@ keeps its count. Host test: `driver/kmd/test/guard_start_test.c`.
 ## Acceptance
 
 Host tests must exercise the actual confirmation policy: healthy progress for
-60 seconds; no progress; repeated old-buffer reports; stale/missing samples;
-new identity with the same registry counter; stop or power-down immediately
-before confirm; write failure; and flush failure. A success before a checked
+60 seconds. No progress. Repeated old-buffer reports. Stale/missing samples.
+New identity with the same registry counter. Stop or power-down immediately
+before confirm. Write failure and flush failure. A success before a confirmed
 flush must fail a negative-control test.
 
 On the lab, leave a genuine newly admitted start at counter1 and observe the
@@ -353,4 +353,4 @@ monitor change it to zero only after the required interval. Record generation,
 completion progress and checked persistence status, plus retained OS/DWM
 identity and the operator's input/display result. Do not manufacture a fresh start
 by changing only the registry counter. No repeated OS restart is needed to
-validate the first warm PnP path; AC-cold and power-resume tests remain separate.
+confirm the first warm PnP path. AC-cold and power-resume tests remain separate.

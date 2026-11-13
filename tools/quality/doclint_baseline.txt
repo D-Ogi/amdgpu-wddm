@@ -58,7 +58,7 @@
 13	docs/design/vidpn-flip.md
 3	docs/design/vsync-arm-status.md
 10	docs/design/vsync-diagnostic-samples.md
-20	docs/design/wddm-start-confirmation.md
+1	docs/design/wddm-start-confirmation.md
 2	docs/dxvk-engine-commit-map.md
 19	docs/hardware.md
 8	docs/init-sequence.md
