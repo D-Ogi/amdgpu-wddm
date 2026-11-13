@@ -32,7 +32,7 @@ because `bc250rd.sys` is admin-only.
 - **Actions** are a table of named operations. Buttons are generated from it, hotkeys and the HTTP API call
   into it, so a new control is reachable from everywhere at once and every invocation is logged with its
   origin.
-- **API**: JSON over HTTP on the loopback interface only; it is reached through SSH (`mon.py`), never from
+- **API**: JSON over HTTP on the loopback interface only. It is reached through SSH (`mon.py`), never from
   the network. Remote panels let an experiment put its own table on the screen without changing this tool.
 - **Screenshot** (`Screenshot.cs`) is the remote side's only pair of eyes: the SSH session lives in session 0
   and has no desktop, so only this process, running in the console session, can capture anything.
@@ -55,21 +55,21 @@ before it stopped talking (ADR 0006 points 3 and 4, `driver/kmd/README.md`):
 Only SCM error 1060 produces `not installed`. A missing or damaged store produces an error.
 An initialized store does not prove that a driver start occurred. Startup records remain readable with Code 43.
 
-**Confirming a start** (ADR 0006 point 3). Full WDDM uses a typed KMD
+**Checking a start** (ADR 0006 point 3). Full WDDM uses a typed KMD
 snapshot through `bc250control.dll`. The monitor requires 60 seconds of fresh,
 advancing completed-primary witnesses for one device-start generation and
 visibility epoch. Missing samples, gaps over 15 seconds, stale progress or an
 identity change restart observation. The kernel then checks the named live
 identity and readiness before performing a checked durable registry reset.
 
-Display-only retains its stage61/60-second policy only when a valid typed reply
+The `display-only` mode retains its stage61/60-second policy only when a valid typed reply
 positively identifies that mode. An old DLL, unsupported ABI or failed query
 never selects a fallback confirmation path. Explicit human confirmation also
 checks the native registry flush result. These checks certify startup progress,
 not correct pixels, GPU rendering or complete M9 acceptance.
 
 Two actions drive the same thing by hand during an install: `kmd.confirm` forces the reset, `kmd.budget`
-prints the current values into the log. Neither has a button; they are for `mon.py action`.
+prints the current values into the log. Neither has a button. They are for `mon.py action`.
 
 The stage names are a copy of `enum BC250_STAGE` in `driver/kmd/bc250kmd.h`. `test_stages.py` parses both and
 fails the build if they drift apart:
@@ -95,10 +95,10 @@ condensing its output:
 | `Version` | the driver build |
 | `Stage` | `last stage`, same numbers as the KMD panel's `Stage`, red at 90/91 |
 | `Mode` | `display-only` or `FULL WDDM TABLE` (amber) |
-| `Presents` | the display-only path's own present counter |
+| `Presents` | the `display-only` path's own present counter |
 | `Counters` | the full table's own present counters, blits and flips (0 outside it) |
 | `Gates` | `mmio`, `mmio writes`, `vram`, `vram writes`, `gart`, `psp`, `gfx`, `ih` |
-| `Temperature` | Tctl, via `Driver.cs` - the same `bc250rd.sys` method `tools/win/bc250rd/temp.py` drives from the development PC, not a second copy of it: `GpuProvider`'s panel already shows it too, this one repeats it next to the driver's own state for one glance instead of two |
+| `Temperature` | Tctl, via `Driver.cs` - the same `bc250rd.sys` method `tools/win/bc250rd/temp.py` drives from the development PC, not a second copy of it. `GpuProvider`'s panel already shows it too. This row repeats it next to the driver's own state for one glance instead of two |
 
 When `bc250kmd_cli.exe` is missing, times out, or the escape itself refuses (not an administrator, or
 `bc250kmd` is not the adapter's active driver), the panel shows that one line under `info` instead of going
@@ -110,9 +110,9 @@ empty or throwing.
 loaded by DWM, hashes the module file, and looks up the exact build in
 `graphics-modules.json` in the monitor data directory. Copy the supplied manifest
 alongside the executable when deploying. Add a new hash only after identifying
-the renderer and shader execution path of that binary; a build with selectable
+the renderer and shader execution path of that binary. A build with selectable
 backends also needs runtime backend evidence before assigning a renderer label.
-Unknown hashes are displayed as unknown, without a CPU/GPU claim.
+The panel shows unknown hashes as unknown, without a CPU/GPU claim.
 
 The panel shows DWM PID, UMD module and build, renderer, CPU/GPU draw execution,
 shader interpreter/JIT, and the live KMD version/table. The driver's own log ring
@@ -124,7 +124,7 @@ scanout do not imply GPU execution of DWM draws.
 
 Those counters are written into the ring by a `LOG_SUMMARY` escape, which is a
 Level Two call: dxgkrnl idles the GPU for it, and a running game waits (trial 317:
-280-420 ms for 16 such escapes, about 20 ms each; trial 41: a 300 ms stall every
+280-420 ms for 16 such escapes, about 20 ms each. Trial 41: a 300 ms stall every
 5.4 s and about 2 % of the frame rate for this panel's own poll). Nothing asks for
 it on a schedule any more (C55). The 5 s poll sends `log 0` instead: `GET_LOG`
 pages, which the driver answers with `NoAdapterSynchronization` alone. One such poll
@@ -135,8 +135,7 @@ A summary now goes out once per `graphics.summary` action -
 `python mon.py action graphics.summary`, or the same name through the HTTP API - and
 the `KMD counters` row says where the block in the panel came from: `summary written by this poll, on request`, or
 `from the ring's last summary, N s before the newest log line` (amber past ten
-minutes of driver time), or `kept from the summary of HH:mm:ss`, or `no summary
-yet` when no counter row is shown at all. The kept block is what KMD 0.7.216.24
+minutes of driver time), or `kept from the summary of HH:mm:ss`, or `no summary yet` when no counter row is shown at all. The kept block is what KMD 0.7.216.24
 and later need: a requested summary writes beside the log ring there, so a page
 read cannot find it again (BD-097, `docs/design/kmd-log-ring.md`). The `KMD poll` row checks the CLI's escape count line and warns when a
 page read took any Level Two escape, when a requested summary took more than one,
@@ -152,7 +151,7 @@ action refuses a request made while that marker exists and answers
 promising a summary nothing will write.
 
 The sampled time makes the observation's age visible. The existing `kmdinfo`
-panel remains available through the API; the overlay omits that duplicate panel
+panel remains available through the API. The overlay omits that duplicate panel
 when the pipeline panel exists. An overlay update needs only an overlay task
 restart, not a Windows or DWM restart.
 
@@ -171,7 +170,7 @@ that shell loads and the ICD the engine draws with. The module names are the one
 user-mode drivers run from the DriverStore: each shell loads its own ICD copy (`amdgpu_wddm_radv_d3d11.dll`,
 `amdgpu_wddm_radv_d3d12.dll`), and the x86 files carry a `32` suffix (`amdgpu_wddm_d3d1132.dll`,
 `amdgpu_wddm_dxvk32.dll`, `amdgpu_wddm_radv_d3d1132.dll` and so on). The panel knows both name sets and the names
-up to tester.30; `test_module_names.py` fails when the header names a file the panel does not know.
+up to tester.30. `test_module_names.py` fails when the header names a file the panel does not know.
 
 | Loaded | Row |
 |---|---|
@@ -193,8 +192,7 @@ the Vulkan loader chose RADV. A WinUI or WebView2 host (M365Copilot.exe, for exa
 our complete D3D11 stack. The row is green, because the stack is complete.
 
 A shell without its engine or ICD is a device still being created, and the row is grey for the first 10
-seconds. After that it is a failed `LoadLibrary` and the row turns amber with `engine never loaded (load
-failed)`: D3D11 usually falls back to WARP in that case, which the WARP row reports, but D3D12 has no
+seconds. After that it is a failed `LoadLibrary` and the row turns amber with `engine never loaded (load failed)`. D3D11 usually falls back to WARP in that case, which the WARP row reports. D3D12 has no
 implicit fallback, so the shell stays mapped alone for the life of the process and nothing else would say
 so. `d3d10warp.dll` is shared by D3D11 and D3D12. When both runtimes are loaded the WARP row cannot say
 which one uses it.
@@ -239,8 +237,8 @@ for DWM.
 
 `VulkanInventoryProvider.cs` reads `vulkan-inventory.json` from the monitor data
 folder every five seconds. A relative `BC250MON_VULKAN_INVENTORY` override is
-resolved against that folder; an absolute override is also accepted. The provider
-never launches Vulkan tools, creates a Vulkan instance, or opens a GPU device.
+resolved against that folder. An absolute override is also accepted. The provider
+never starts Vulkan tools, creates a Vulkan instance, or opens a GPU device.
 The collector runs separately on an explicit request. Publish the finished JSON
 by replacing the previous file, and retain the full text report beside it.
 
@@ -249,15 +247,15 @@ library (or only the requested manifest when unverified), extension/layer counts
 format counts, and selected timeline semaphore, buffer device address, FP16 and
 sparse binding features. `?` means not captured, not unsupported. These are
 queried Vulkan capabilities, separate from the active DWM renderer shown in the
-pipeline panel. Enumeration does not validate rendering or inference results.
+pipeline panel. Enumeration does not check rendering or inference results.
 
 Schema 1 examples are in `test/fixtures/vulkan-*.json` and are synthetic. Status
-is `ok`, `partial`, `error` or `unsupported`. Partial captures display a warning
-alongside known fields; truncated format statistics remain null. Error captures
-do not reuse older capability rows. `CapturedUtc` is required and UTC; caches
+is `ok`, `partial`, `error` or `unsupported`. Partial captures show a warning
+alongside known fields. Truncated format statistics remain null. Error captures
+do not reuse older capability rows. `CapturedUtc` is required and UTC. Caches
 older than 24 hours or captured with a different known KMD version are marked.
 `IcdPath` is the requested manifest and `IcdSha256` hashes that manifest.
-`IcdLibraryPath`/`IcdLibrarySha256` identify the actual library when observed;
+`IcdLibraryPath`/`IcdLibrarySha256` identify the actual library when observed.
 `IcdVerified` refers to that loader observation, described by `LoaderEvidence`,
 not merely a requested environment override. The JSON also retains collector,
 tool hash, captured KMD version, layer names and full report path.
@@ -265,7 +263,7 @@ tool hash, captured KMD version, layer names and full report path.
 The overlay moves whole panels into additional columns when they exceed the
 monitor working area's height. Font size, click-through and hotkeys are unchanged.
 `test-vulkan-inventory.ps1 -Out <build directory>` checks actual provider parsing,
-cache replacement and panel geometry without opening a window or querying a GPU;
+cache replacement and panel geometry without opening a window or querying a GPU.
 `build.ps1` runs this check. The source fixtures are never deployed as live data.
 
 ## Operating point
@@ -284,13 +282,13 @@ as it differs from the lab's expectation.
 
 | Row | Source | Amber | Red |
 |---|---|---|---|
-| `CU` | `BC250_ESCAPE_RUN_CU_MODE` op READ through `Bc250CuMode`: the mode this start applied, the units the registers count, and the pending or confirmed mark. Without a snapshot, `Parameters\CuModeLastApplied`, marked as a driver record | the counted units differ from the expectation. 40 applied and nobody confirmed it. The registers name different WGPs on the shader arrays (`VALID` without `CONSISTENT`). This start did not run the CU stage | a request for 40 units that applied 24, or 0 units applied (the stock restore failed) |
+| `CU` | `BC250_ESCAPE_RUN_CU_MODE` op READ through `Bc250CuMode`: the mode this start applied, the units the registers count, and the `pending` or `confirmed` mark. Without a snapshot, `Parameters\CuModeLastApplied`, marked as a driver record | the counted units differ from the expectation. 40 applied and nobody checked it. The registers name different WGPs on the shader arrays (`VALID` without `CONSISTENT`). This start did not run the CU stage | a request for 40 units that applied 24, or 0 units applied (the stock restore failed) |
 | `CU setting` | `Parameters\CuMode` and `CuDisableWgp`, against the encoded request in `CuModePending` and `CuModeConfirmed`: what the next start applies | the units the setting gives (the mode less two per masked WGP) differ from the expectation. The mark on disk names another request, so the next start is pending. An absent `CuMode` reads `the next start harvests to 24` | - |
 | `CU reason` | `Parameters\CuModeLastReason` or the snapshot, by the name of `enum bc250_cu_reason`. The row appears only when the reason is not `none` | any other reason | the five reasons that make the driver write `CuMode = 24` durably: `PENDING_UNCONFIRMED`, `POWER_GATING`, `STOCK_UNEXPECTED`, `READBACK`, `RESTORE_FAILED` |
 | `CU snapshot` | why the escape gave no answer. The row appears only then | always | - |
-| `DPM` | the governor's snapshot: mode, `GOVERNING`, the confirmation, `PAUSED` and `STABLE` | `PAUSED`. `STABLE`: a D3D12 client called `SetStablePowerState` and pinned the clock to the floor. A snapshot older than 30 seconds, or a read that failed after it | `PENDING` without `CONFIRMED` (a restart falls back to fixed-lab), or mode DPM without `GOVERNING` |
-| `DPM cap` | `CapMHz` against `MaxMHz`, the throttle by the name of `enum bc250_dpm_throttle`, and the idle point in force (`idle 500 MHz`, with `(now)` while the clock sits there; `IdleMHz` 0 or an ABI 1 snapshot leaves it out) | the thermal cap sits under the ceiling, the throttle is one of the four thermal ones, or the start counts failed SMU transitions | throttle `SMU`: the governor gave up after `BC250_DPM_ERROR_LIMIT` failures in a row |
-| `Start health` | `BC250_ESCAPE_RUN_START_HEALTH` op READ: the flags by name, the generation and the epoch. A newer epoch of the same start adds `epoch +N since logon` and keeps the level. The driver raises the epoch at every mode change, visibility change and fault. Every game that switches the display mode raises it | `CONFIRMED` is absent, or no completed presentation for longer than `BC250_START_HEALTH_FRESH_MS` | the generation changed inside this overlay session, or `FULL` without `READY` |
+| `DPM` | the governor's snapshot: mode, `GOVERNING`, the confirmation, `PAUSED` and `STABLE` | `PAUSED`. `STABLE`: a D3D12 client called `SetStablePowerState` and pinned the clock to the floor. A snapshot older than 30 seconds, or a read that failed after it | `PENDING` without `CONFIRMED` (a restart falls back to `fixed-lab`), or mode DPM without `GOVERNING` |
+| `DPM cap` | `CapMHz` against `MaxMHz`, the throttle by the name of `enum bc250_dpm_throttle`, and the idle point in force (`idle 500 MHz`, with `(now)` while the clock sits there. `IdleMHz` 0 or an ABI 1 snapshot leaves it out) | the thermal cap sits under the ceiling, the throttle is one of the four thermal ones, or the start counts failed SMU transitions | throttle `SMU`: the governor gave up after `BC250_DPM_ERROR_LIMIT` failures in a row |
+| `Start health` | `BC250_ESCAPE_RUN_START_HEALTH` op READ: the flags by name, the generation and the epoch. A newer epoch of the same start adds `epoch +N since logon` and keeps the level. The driver raises the epoch at every mode change, visibility change and fault. Every game that switches the screen mode raises it | `CONFIRMED` is absent, or no completed presentation for longer than `BC250_START_HEALTH_FRESH_MS` | the generation changed inside this overlay session, or `FULL` without `READY` |
 | `Interop` | `BC250_ESCAPE_RUN_INTEROP` op READ through `Bc250Interop`: the requested and the effective switches. Also the session marker this start found, and what it did about it. Without the export, `Parameters\InteropLastState`, marked as the registry mirror | `STALE`: a marker of this boot, from a start that ended without an unmark. A system power transition in progress. No full WDDM start decided the switches | the effective switches differ from the requested ones, so the driver closed the GPU desktop path. One switch alone. `UNCLEAN`: a marker of an earlier boot, so the machine died with the path in use. `CLOSED_BY_DRIVER`, or a failed durable close |
 
 A live session is not a fault, and this is the one place the panel had to be told so. `InteropSession` is on disk
@@ -325,7 +323,7 @@ reports them. `expectations.json` is where the lab admits the ones it meant.
 
 `kmd_abi` is one word per driver revision, and the release scripts admit every build of a revision for it. A
 matching ABI thus does not say that the release's own `bc250kmd.sys` is the loaded one. The witness does. The
-installer's `verify` step and the start-confirm task write it only when the SHA-256 of the loaded image is the
+installer's `verify` step and the `start-confirm` task write it only when the SHA-256 of the loaded image is the
 release's, and when nothing replaced that file after the boot started. The panel accepts a witness of schema 1,
 written by one of those two, of this boot (`BootId`), for the installed release, and naming the ABI the driver
 replies. That is a subset of the control application's rule (`DriverCard.WitnessProblem`), which also binds the
@@ -409,7 +407,7 @@ use of the path is normal traffic. The level of the line is the worst level amon
 ## Scanout screenshots (the full WDDM table's own picture)
 
 Under the full WDDM table, `screenshot`'s GDI capture (`Screenshot.CaptureScreen`, `CopyFromScreen`) reads the
-CDD's surfaces and comes back solid black (facts M84) - it is not looking at what the display controller is
+CDD's surfaces and comes back solid black (facts M84) - it is not looking at what the scan-out controller is
 actually scanning out. `mon.py scanout` is the counterpart that is: it runs `bc250kmd_cli fbdump`
 (`BC250_ESCAPE_RUN_FBDUMP`, `driver/kmd/dcn.c` - read-only, HUBP0's own registers) on the target through the
 same SSH transport `mon.py` already uses for a command, pulls the BMP back with `target.py pull`, and downsizes
@@ -441,9 +439,9 @@ memory the KMD or dxgkrnl already holds. The clock fallback is the same typed re
 
 | Value | Source |
 |---|---|
-| Tctl, GFX clock | the DPM governor's published snapshot (`BC250_ESCAPE_RUN_DPM`, op READ, KMD 0.7.175 and later) through `Bc250Dpm` in `bc250control.dll`. When the snapshot does not carry them (governor stopped, no flag), the clock escape the SoC panel already uses stands in; the JSON says which in `temperatureSource` / `clockSource` |
-| load | the mean of the governor's `BusyAvgPermille` over the 2 s window, only when the snapshot carries `BC250_DPM_FLAG_HW_BUSY` (GRBM_STATUS busy share, KMD 0.7.177). Older KMDs publish a submit-to-fence share that read 7 % while ETW saw 91 %, so it is not shown: the line says `n/a` and the note names the KMD version |
-| VRAM | `D3DKMTQueryStatistics` per segment through `Bc250VideoMemory`: used = resident bytes of the non-aperture segments (what Task Manager calls dedicated usage), total = their commit limits, or the adapter's dedicated video memory when dxgkrnl reports no limit. The aperture (system memory the GPU maps) is kept apart in the JSON |
+| Tctl, GFX clock | the DPM governor's published snapshot (`BC250_ESCAPE_RUN_DPM`, op READ, KMD 0.7.175 and later) through `Bc250Dpm` in `bc250control.dll`. When the snapshot does not carry them (governor stopped, no flag), the clock escape the SoC panel already uses stands in. The JSON says which in `temperatureSource` / `clockSource` |
+| load | the mean of the governor's `BusyAvgPermille` over the 2 s window, only when the snapshot carries `BC250_DPM_FLAG_HW_BUSY` (GRBM_STATUS busy share, KMD 0.7.177). Older KMDs publish a submit-to-fence share that read 7 % while ETW saw 91 %. The panel does not show that share. The line says `n/a` and the note names the KMD version |
+| VRAM | `D3DKMTQueryStatistics` per segment through `Bc250VideoMemory`. Used = resident bytes of the non-aperture segments (what Task Manager calls dedicated usage). Total = their commit limits, or the adapter's dedicated VRAM when dxgkrnl reports no limit. The aperture (system memory the GPU maps) is kept apart in the JSON |
 
 Samples are taken every 250 ms and published every 2 s. A missing value is `n/a`, never a guess, and the
 reason goes to `note` (logged once when it changes).
@@ -452,9 +450,9 @@ reason goes to `note` (logged once when it changes).
 of the machine during a game (trials 139/140). So the telemetry never causes a frame of its own: the header
 clock repaints only its own rectangle once a second, and the telemetry line is invalidated in that same tick,
 only when its text changed. A full repaint happens only when a panel, the log or the status changes. The
-monitor's own work per second is about 15 us managed (8 samples, one publish, one line paint; the telemetry
+monitor's own work per second is about 15 us managed (8 samples, one publish, one line paint - the telemetry
 host test measures it) plus four DPM escapes and, every 2 s, one statistics digest, each an adapter open, the
-call and a close of a few microseconds (the adapter path is cached; looking it up walks SetupAPI for ~0.8 ms and is
+call and a close of a few microseconds (the adapter path is cached, and looking it up walks SetupAPI for ~0.8 ms and is
 retried at most every 2 s while the adapter is absent).
 
 ## The brake
@@ -484,7 +482,7 @@ few seconds has to poll one of the two and end. `mon.py stop?` does it from the 
 
 Both capture endpoints take `scale` (0.1 to 1.0, default 0.5, bicubic downscale), `format` (`png` default or
 `jpg`), `quality` (1 to 100, default 80, `jpg` only) and `overlay` (`1` default, `0` leaves this tool's own
-window out of the picture). They answer with the image bytes and an `X-Capture-Size: <w>x<h>` header;
+window out of the picture). They answer with the image bytes and an `X-Capture-Size: <w>x<h>` header.
 `/windows` and every error answer with JSON. A window is found by handle, or by the first title that contains
 the given text, case-insensitive, nearest the front first.
 
@@ -505,7 +503,7 @@ an acute accent. A hotkey another process already holds is refused silently by W
 warning when a registration fails rather than leaving a dead key.
 
 Buttons today: STOP, clear stop, 1000 MHz / 820 mV, stock 1500 MHz, hide, back to click-through.
-Temperature colours: green below 87 C, amber from 87 C (the stop limit; 85 C before 2026-10-01), red from 92 C
+Temperature colours: green below 87 C, amber from 87 C (the stop limit, 85 C before 2026-10-01), red from 92 C
 (Tctl).
 
 ## Build and deploy
@@ -557,7 +555,7 @@ units or from the defaults the installer applied. See "The expectations file" ab
 
 Every call goes over SSH, so the JSON body travels base64-encoded and images come back base64 on one line.
 Which machine and which of its addresses is `tools/win/target.py`'s decision, from the configuration outside
-the repository; `mon.py` holds no address and no ssh options of its own.
+the repository. `mon.py` holds no address and no ssh options of its own.
 
 ```
 mon.py state
@@ -579,37 +577,37 @@ mon.py scanout [--scale 0.5] [--format png|bmp] [--out FILE]     what HUBP0 actu
 `screenshot` writes to `<BC250_ROOT>\scratch\screens\<timestamp>.<ext>` (`BC250_ROOT` is the workspace
 root, by default the parent directory of this repository) unless `--out` says otherwise, creates
 the folder, and prints the path, the pixel size and the file size. Half scale is the default because the
-reader pays per image token; a 1920x1200 screen at 0.5 is 960x600, about 750 kB as PNG and 30 kB as JPEG 70.
+reader pays per image token. A 1920x1200 screen at 0.5 is 960x600, about 750 kB as PNG and 30 kB as JPEG 70.
 
 `scanout` runs entirely outside the overlay's HTTP API (it shells `bc250kmd_cli fbdump` on the target through
-`target.py`, then pulls and re-encodes locally), so it needs no `mon.py` command of the overlay's at all; it
+`target.py`, then pulls and re-encodes locally), so it needs no `mon.py` command of the overlay's at all. It
 still logs nothing of its own on the overlay side, unlike `screenshot`, since the escape it drives already logs
 each band (`GuardLog`, `dcn.c`). It writes to the same `scratch\screens` folder, `-scanout.<ext>` suffixed, and
-deletes the full-resolution intermediate BMP it pulls once the downscaled picture is written.
+removes the full-resolution intermediate BMP it pulls once the downscaled picture is written.
 
 ## Not there yet
 
 - `scanout` supports `png` (its own minimal encoder) and `bmp` (no re-encoding) only - no `jpg`, which would
-  need a real JPEG encoder; and HUBP0 only, the pipe the firmware already scans out on.
+  need a real JPEG encoder. It reads HUBP0 only, the pipe the firmware already scans out on.
 
-- No authentication on the API; acceptable only because it is loopback-bound behind SSH.
+- No authentication on the API. This is acceptable only because the API is loopback-bound behind SSH.
 - `/screenshot/window` asks the window to draw itself (`PrintWindow` with `PW_RENDERFULLCONTENT`). A window
   that refuses, or answers with one flat colour, is copied from the screen region it occupies instead, and
   then whatever lies on top of it is in the picture. The log line says which of the two was used.
 - A minimized window has nothing to copy from the screen, so the fallback gives a blank image.
 - `overlay=0` uses `WDA_EXCLUDEFROMCAPTURE`, which needs Windows 10 2004 or later. It leaves the window on
-  the monitor and only hides it from the capture, so the lab screen shows no flicker; if Windows refuses, the
+  the monitor and only hides it from the capture, so the lab screen shows no flicker. If Windows refuses, the
   capture still happens with the overlay in it and the log line says `overlay could not be hidden`.
-- Only the primary screen; a second monitor would need the endpoint to take a display index.
+- Only the primary screen is captured. A second monitor would need the endpoint to take a monitor index.
 - A capture runs on the API's single thread, so it blocks other requests for a few hundred milliseconds.
 
 ## Native clock client migration (M440)
 
 The current source uses the typed KMD client in bc250control.dll, built by
-`tools/win/bc250kmd_cli/build.ps1`; pass that DLL to this build with `-ControlDll`
+`tools/win/bc250kmd_cli/build.ps1`. Pass that DLL to this build with `-ControlDll`
 and keep it beside bc250mon.exe. The earlier bc250rd descriptions above document
 the deployed legacy version, not this new source. The SoC panel takes paired
 clock/VID/temperature samples in-process and labels the KMD backend. Clock changes
-are one KMD transaction; the unforced-voltage stock button has been removed.
+are one KMD transaction. The unforced-voltage stock button has been removed.
 No raw mailbox IOCTL or automatic fallback exists. Do not deploy before completing
 native KMD owner activation and the legacy-writer handover.

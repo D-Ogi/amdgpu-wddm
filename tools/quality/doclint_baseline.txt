@@ -108,7 +108,6 @@
 6	tools/win/amdgpu_wddm_control/README.md
 6	tools/win/amdgpu_wddm_setup/README.md
 14	tools/win/bc250kmd_cli/README.md
-38	tools/win/bc250mon/README.md
 9	tools/win/bc250rd/README.md
 3	tools/win/cumode/README.md
 20	tools/win/d3d11bench/README.md
