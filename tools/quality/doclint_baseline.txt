@@ -25,7 +25,6 @@
 28	driver/umd/d3d12/engine-ddi/shader-container/README.md
 1	tools/release/README.md
 6	tools/win/amdgpu_wddm_control/README.md
-5	tools/win/lab-runner/README.md
 6	tools/win/triage/README.md
 1	tools/win/vkfillcheck/README.md
 2	tools/wininstall/README.md
