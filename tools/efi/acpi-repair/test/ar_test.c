@@ -244,11 +244,18 @@ static int dsm_run(const unsigned char *p, const unsigned char *end, const struc
 	return 0;
 }
 
+static int dsm_eval_revision(const unsigned char *body, const unsigned char *end, const unsigned char *uuid,
+			     unsigned long long revision, unsigned long long function, struct dsm_value *out)
+{
+	struct dsm_call call = { uuid, revision, function };
+	return dsm_run(body, end, &call, out) == 1;
+}
+
+/* Revision ID 1, as the specification gives it for most functions. */
 static int dsm_eval(const unsigned char *body, const unsigned char *end, const unsigned char *uuid,
 		    unsigned long long function, struct dsm_value *out)
 {
-	struct dsm_call call = { uuid, 1, function };
-	return dsm_run(body, end, &call, out) == 1;
+	return dsm_eval_revision(body, end, uuid, 1, function, out);
 }
 
 static int dsm_is_integer(const unsigned char *body, const unsigned char *end, const unsigned char *uuid,
@@ -280,9 +287,12 @@ static void check_tpm_dsm(const unsigned char *body, const unsigned char *end, c
 	CHECK(dsm_is_bytes(body, end, ppi, 0, DSM_BUFFER, ppi_functions, 2));
 	CHECK(dsm_is_bytes(body, end, ppi, 1, DSM_STRING, "1.3", 3));		/* the interface version */
 	CHECK(dsm_is_integer(body, end, ppi, 2, 1));				/* 1: not implemented */
-	/* Function 3: success, no pending operation, no parameter of a pending operation. */
-	CHECK(dsm_eval(body, end, ppi, 3, &v) && v.kind == DSM_PACKAGE && v.count == 3 && v.element[0] == 0 &&
-	      v.element[1] == 0 && v.element[2] == 0);
+	/* Function 3: success, no pending operation; with Revision ID 1 two integers only, with Revision ID 2 also
+	 * the parameter of a pending operation. Windows asks with Revision ID 1 and fails on three integers. */
+	CHECK(dsm_eval_revision(body, end, ppi, 1, 3, &v) && v.kind == DSM_PACKAGE && v.count == 2 &&
+	      v.element[0] == 0 && v.element[1] == 0);
+	CHECK(dsm_eval_revision(body, end, ppi, 2, 3, &v) && v.kind == DSM_PACKAGE && v.count == 3 &&
+	      v.element[0] == 0 && v.element[1] == 0 && v.element[2] == 0);
 	CHECK(dsm_is_integer(body, end, ppi, 4, 0));				/* 0: no action of the OS is necessary */
 	/* Function 5: success, no most recent operation, so no response. */
 	CHECK(dsm_eval(body, end, ppi, 5, &v) && v.kind == DSM_PACKAGE && v.count == 3 && v.element[0] == 0 &&

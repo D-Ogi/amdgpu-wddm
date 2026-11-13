@@ -415,20 +415,45 @@ static void dsm_return_integer(struct efl_amlw *w, unsigned function, unsigned l
 	efl_amlw_end(w, mark);
 }
 
+/* Writes Return (Package () {0, ...}) with the given number of zero integers. */
+static void dsm_return_zeros(struct efl_amlw *w, unsigned elements)
+{
+	size_t package;
+	unsigned i;
+	efl_amlw_return(w);
+	package = efl_amlw_package_begin(w, elements);
+	for (i = 0; i < elements; i++) efl_amlw_integer(w, 0);
+	efl_amlw_end(w, package);
+}
+
 /* Writes If (LEqual (Arg2, function)) { Return (Package () {0, 0, 0}) }. */
 static void dsm_return_zero_package(struct efl_amlw *w, unsigned function)
 {
 	size_t mark = efl_amlw_if_begin(w);
-	size_t package;
 	efl_amlw_lequal(w);
 	efl_amlw_arg(w, 2);
 	efl_amlw_integer(w, function);
-	efl_amlw_return(w);
-	package = efl_amlw_package_begin(w, 3);
-	efl_amlw_integer(w, 0);
-	efl_amlw_integer(w, 0);
-	efl_amlw_integer(w, 0);
-	efl_amlw_end(w, package);
+	dsm_return_zeros(w, 3);
+	efl_amlw_end(w, mark);
+}
+
+/* Function 3: If (LEqual (Arg2, 3)) { If (LEqual (Arg1, 1)) { Return ({0, 0}) } Return ({0, 0, 0}) }. With
+ * Revision ID 1 "no integer parameter beyond parameter two are expected in the response"; Windows asks with
+ * revision 1 and fails with TBS_E_INSUFFICIENT_BUFFER (0x80284005) on three. */
+static void dsm_return_pending(struct efl_amlw *w)
+{
+	size_t mark = efl_amlw_if_begin(w);
+	size_t revision;
+	efl_amlw_lequal(w);
+	efl_amlw_arg(w, 2);
+	efl_amlw_integer(w, 3);
+	revision = efl_amlw_if_begin(w);
+	efl_amlw_lequal(w);
+	efl_amlw_arg(w, 1);
+	efl_amlw_integer(w, 1);
+	dsm_return_zeros(w, 2);
+	efl_amlw_end(w, revision);
+	dsm_return_zeros(w, 3);
 	efl_amlw_end(w, mark);
 }
 
@@ -440,7 +465,7 @@ static void dsm_return_zero_package(struct efl_amlw *w, unsigned function)
  *   function 0: Buffer {0xFF, 0x01}, functions 0 to 8 are there (the standard _DSM query, ACPI 6.5 section 9.1.1).
  *   function 1: "1.3", the interface version ("the return value MUST be "1.3"").
  *   function 2: 1, "Operation Value of the Request Not Supported".
- *   function 3: {0, 0, 0}, "no operation is pending".
+ *   function 3: {0, 0, 0}, "no operation is pending"; {0, 0} for Revision ID 1, which expects two integers.
  *   function 4: 0, "None": no operation can be pending, so the OS has no action to do.
  *   function 5: {0, 0, 0}, "no previously requested operation exists and hence no response exists".
  *   function 6: 3, "The function MUST return 3" (deprecated, not implemented).
@@ -481,7 +506,7 @@ static void write_ppi_dsm(struct efl_amlw *w)
 	efl_amlw_end(w, query);
 
 	dsm_return_integer(w, 2, 1);
-	dsm_return_zero_package(w, 3);
+	dsm_return_pending(w);
 	dsm_return_integer(w, 4, 0);
 	dsm_return_zero_package(w, 5);
 	dsm_return_integer(w, 6, 3);
