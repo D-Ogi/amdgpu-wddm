@@ -3555,7 +3555,7 @@
       {
        "name": "pfnCheckFormatSupport",
        "function": "check_format_support",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1555",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1782",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -3567,7 +3567,7 @@
       {
        "name": "pfnCheckMultisampleQualityLevels",
        "function": "check_multisample_quality_levels",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1514",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1741",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4241,7 +4241,7 @@
       {
        "name": "pfnMapHeap",
        "function": "map_heap",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1157",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1384",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4253,7 +4253,7 @@
       {
        "name": "pfnUnmapHeap",
        "function": "unmap_heap",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1171",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1398",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4265,7 +4265,7 @@
       {
        "name": "pfnCalcPrivateHeapAndResourceSizes",
        "function": "calc_heap_and_resource",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:548",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:549",
        "done": true,
        "reason": "returns the answer",
        "applicability": {
@@ -4325,7 +4325,7 @@
       {
        "name": "pfnCalcPrivateOpenedHeapAndResourceSizes",
        "function": "calc_opened_heap_and_resource",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:910",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:919",
        "done": true,
        "reason": "returns the answer",
        "applicability": {
@@ -4446,7 +4446,7 @@
       {
        "name": "pfnCheckResourceVirtualAddress",
        "function": "check_resource_virtual_address",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1179",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1406",
        "done": true,
        "reason": "returns the answer",
        "applicability": {
@@ -4458,7 +4458,7 @@
       {
        "name": "pfnCheckResourceAllocationInfo",
        "function": "check_resource_allocation_info",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1257",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1484",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4470,7 +4470,7 @@
       {
        "name": "pfnCheckSubresourceInfo",
        "function": "check_subresource_info",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1317",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1544",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4482,7 +4482,7 @@
       {
        "name": "pfnCheckExistingResourceAllocationInfo",
        "function": "check_existing_resource_allocation_info",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1349",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1576",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4566,7 +4566,7 @@
       {
        "name": "pfnCheckResourceAllocationHandle",
        "function": "check_resource_allocation_handle",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1535",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1762",
        "done": true,
        "reason": "returns the answer",
        "applicability": {
@@ -4748,7 +4748,7 @@
       {
        "name": "pfnEnumerateMetaCommands",
        "function": "enumerate_no_meta_commands",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:728",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:744",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros",
        "applicability": {
@@ -4762,7 +4762,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:768",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:784",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -4774,7 +4774,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:768",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:784",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -4786,7 +4786,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:768",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:784",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -4798,7 +4798,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:768",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:784",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -4810,7 +4810,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:768",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:784",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -4966,7 +4966,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:768",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:784",
        "applicability": {
         "class": "optional",
         "reason": "Sampler feedback: an optional tier. The BC-250 (gfx1013) reports none.",
@@ -5012,7 +5012,7 @@
       {
        "name": "pfnImplicitShaderCacheControl",
        "function": "implicit_shader_cache_control",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:750",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:766",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -5490,7 +5490,7 @@
       {
        "name": "pfnDiscardResource",
        "function": "discard_resource",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1873",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:2100",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -5502,7 +5502,7 @@
       {
        "name": "pfnCopyTextureRegion",
        "function": "copy_texture_region",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1817",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:2044",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -5514,7 +5514,7 @@
       {
        "name": "pfnResourceCopy",
        "function": "resource_copy",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1860",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:2087",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -5538,7 +5538,7 @@
       {
        "name": "pfnCopyBufferRegion",
        "function": "copy_buffer_region",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1591",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1818",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -5586,7 +5586,7 @@
       {
        "name": "pfnResourceBarrier",
        "function": "resource_barrier",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1895",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:2122",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -5600,7 +5600,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:827",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:843",
        "applicability": {
         "class": "applicable",
         "reason": "The DXGI Blt was ported to D3D12 command lists.",
@@ -5996,7 +5996,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:827",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:843",
        "applicability": {
         "class": "applicable",
         "reason": "AtomicCopyBufferUINT and AtomicCopyBufferUINT64 of the command list.",
@@ -6081,7 +6081,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:827",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:843",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -6093,7 +6093,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:827",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:843",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -6200,7 +6200,7 @@
       {
        "name": "pfnBarrier",
        "function": "barrier",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:2408",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:2635",
        "done": true,
        "reason": "forwards to barrier_of: does work",
        "applicability": {
