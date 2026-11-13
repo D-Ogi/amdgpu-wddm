@@ -15,7 +15,7 @@ Consume/IhTakeVsync to verify client/source filtering and one-shot latch deliver
 
 The new diagnostic line reports DPC polls, successful DPC ACKs and synchronization
 failures separately. Existing DCN poll counters and entry timestamp now include
-both ISR and synchronized DPC polls; InterruptCount/InterruptLastTime still denote
+both ISR and synchronized DPC polls. InterruptCount/InterruptLastTime still denote
 actual ISR entry. Do not equate total no-event polls with ISR calls after this change.
 A synchronization failure is recorded, never manufactured into a successful ACK.
 

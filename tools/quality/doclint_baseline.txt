@@ -24,7 +24,6 @@
 2	docs/testing/release-notes/0.7.205.100-tester.11.md
 20	driver/contract/README-winsys.md
 28	driver/contract/README.md
-1	driver/kmd/test/vsync_vector_test.md
 1	driver/shim/README.md
 5	driver/shim/test/README.md
 23	driver/umd/d3d12/README.md
