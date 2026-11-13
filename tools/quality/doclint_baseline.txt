@@ -112,7 +112,6 @@
 15	tools/win/kmtprobe/README.md
 5	tools/win/lab-runner/README.md
 8	tools/win/lab-runner/etw/README.md
-20	tools/win/redirblt-probe/README.md
 1	tools/win/smartplug/README.md
 6	tools/win/triage/README.md
 1	tools/win/vkfillcheck/README.md
