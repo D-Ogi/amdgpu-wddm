@@ -6,7 +6,7 @@ non-interactive session cannot sit at a `kd>` prompt.
 
 The debugger is the portable WinDbg package unpacked under `<BC250_ROOT>\toolchain\windbg\x64\amd64\` - nothing
 is installed. Symbols, symbol cache and logs live under `<BC250_ROOT>\scratch\` (`BC250_ROOT` is the
-workspace root, by default the parent directory of this repository); `_NT_SYMBOL_PATH`,
+workspace root, by default the parent directory of this repository). `_NT_SYMBOL_PATH`,
 `DBGHELP_HOMEDIR` and `_NT_SYMCACHE_PATH` are set explicitly by these scripts, so nothing lands on `C:`.
 
 | File | What it is |
@@ -92,9 +92,9 @@ plain module name.
 ## A live target over KDNET
 
 > **Disabled since 2026-09-21.** Starting the live server made the development PC leak nonpaged kernel memory
-> at about 0.87 GB/s (hang after ~110 s; reproduced once under supervision: 57 GB in 70 s, released about 70 s
+> at about 0.87 GB/s (hang after ~110 s, reproduced once under supervision: 57 GB in 70 s, released about 70 s
 > after the killed process had gone). The cause
-> inside the launch is not known yet; `kd_server.py start` refuses live mode unless
+> inside the server start is not known yet. `kd_server.py start` refuses live mode unless
 > `BC250_KD_LIVE_AT_MY_OWN_RISK=1`. Dump files are not affected. The text below describes the intended use.
 
 The target must have been set up for network debugging and rebooted, and the key it was given must be in
@@ -118,11 +118,11 @@ the connection lines out of the log and says `connected` or `waiting to reconnec
 
 ## Details worth knowing
 
-- **The key is a secret.** It is read from `secrets/kd/key.txt` and put on `kd`'s command line, nowhere else;
-  the state file and `status` show it as `<key>`. Note that a command line is not a hiding place: anyone who
+- **The key is a secret.** It is read from `secrets/kd/key.txt` and put on `kd`'s command line, nowhere else.
+  The state file and `status` show it as `<key>`. Note that a command line is not a hiding place: anyone who
   can list processes on this PC (`Get-CimInstance Win32_Process`) can read the key off the running `kd.exe`.
 - **Firewall.** KDNET is inbound UDP on port 50000 to this PC. `kd_server.py firewall` reports the profiles
-  read-only; opening the port needs an elevated shell and these scripts never change a rule.
+  read-only. Opening the port needs an elevated shell and these scripts never change a rule.
 - **One port, one server.** Only one debugger can hold UDP 50000. `start` refuses if its own server is already
   running, but it cannot see a `kd.exe` somebody else started by hand - if the target never connects, look for
   another `kd.exe` first.
@@ -131,7 +131,7 @@ the connection lines out of the log and says `connected` or `waiting to reconnec
   commands are fenced by two `.echo` markers so the answer can be cut out of the banner and the NatVis noise.
   The client asks for one line of output history (`-clines 1`), and the fence takes the *last* opening marker,
   because a connecting client is replayed part of the server's earlier output.
-- **`-server` has to be the first argument** on kd's command line; it rejects it anywhere else.
+- **`-server` has to be the first argument** on kd's command line. It rejects it anywhere else.
 - **The server runs in its own hidden console and its own process group.** That is what makes `--break` work:
   it is a `CTRL_BREAK_EVENT` sent to that group, exactly what Ctrl+Break at a `kd` console does. `kd_cmd.py`
   does it in a short-lived child of its own, because sending the event means detaching from one's own console.
