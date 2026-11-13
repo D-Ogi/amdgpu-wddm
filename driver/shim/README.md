@@ -258,7 +258,7 @@ upstream keeps them in `nbio_v2_3.c`: `bc250_nbio_ih_control()` and
 
 The fence is the smallest submission that both writes a value the driver can read and raises an
 interrupt, which together are the proof that the rings and the interrupt ring are connected. A gfx
-or compute ring gets a `RELEASE_MEM`. The KIQ gets two `WRITE_DATA` packets, because it has no
+or compute ring receives a `RELEASE_MEM`. The KIQ receives two `WRITE_DATA` packets, because it has no
 end-of-pipe and signals by writing `CPC_INT_STATUS`. `bc250_gfx_fence_page_alloc()` hands out one
 GTT page of 8-byte slots for the value to land in - a separate call and not part of
 `bc250_gfx_setup()`, because allocating it there would move every MC address the traced bring-up
@@ -454,7 +454,7 @@ Four more things it checks, none of which the two windows can reach:
   queue) and the rings are ordered queue-major, so pairing them by index compares the wrong pairs.
 - **Teardown and re-run.** `bc250_gfx_hw_fini`, then the rings freed and allocated again as the
   miniport's FINI and RUN do, then the whole bring-up on the same adev. On Windows a second PSP load
-  in one boot leaves the RLC disabled and busy (facts M35), so the kmd gets one load per boot and
+  in one boot leaves the RLC disabled and busy (facts M35), so the kmd receives one load per boot and
   everything after it has to be undoable with registers and the KIQ alone. The engines are checked
   halted afterwards against AMD's own field masks, and every register the two fini paths touch is
   surveyed against the trace windows the miniport's allow-list is generated from - the teardown has
@@ -615,7 +615,7 @@ Then, on the ring that bring-up produced:
   overflow path, `IH_RB_WPTR` read there, and `IH_RB_RPTR` written only in a separate run with
   `use_doorbell` forced false, so the third entry of the list is measured rather than asserted.
 - the trio run again through a second `struct amdgpu_device` that is zeroed except for `irq.ih`
-  copied by value, which is what the miniport's DPC gets, with the same results.
+  copied by value, which is what the miniport's DPC receives, with the same results.
 - a fence emitted on the gfx ring, on compute ring 3 and on the KIQ: each lands its value in a GTT
   slot and produces exactly one vector, which decodes back to that ring.
 - a compute dispatch on compute ring 0, which is the whole of the M6 shader test (below).
@@ -826,7 +826,7 @@ poll `CP_HQD_ACTIVE` to 0, then the pointer registers zeroed. The handshake is u
 There is no documented MEC reset to use instead - `kgd_gfx_v10_hqd_reset()` returns 0 without
 touching anything, and `SOFT_RESET_CPC` exists only from gfx11 on.
 
-#### And why the other eight queues get their pointers cleared
+#### And why the other eight queues have their pointers cleared
 
 A second, quieter half of the same problem, and it is about a register rather than an engine.
 `bc250_compute_mqd_init()` samples `CP_HQD_PQ_RPTR` under each queue's own selection, as upstream
