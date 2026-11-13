@@ -23,5 +23,4 @@
 29	driver/umd/d3d12/engine-ddi/README.md
 30	driver/umd/d3d12/engine-ddi/SLOTS.md
 28	driver/umd/d3d12/engine-ddi/shader-container/README.md
-1	tools/release/README.md
-5	tools/win/amdgpu_wddm_control/README.md
+4	tools/win/amdgpu_wddm_control/README.md

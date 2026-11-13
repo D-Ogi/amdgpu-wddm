@@ -91,3 +91,6 @@ terms:
   - term: confirm
     means: "To record that a start, a setting or a review item passed its check. The check is the act, and the confirmation is the record."
     names: ["confirm", "confirms", "confirmed", "confirming", "confirmation", "unconfirmed", "Confirm", "Confirms", "Confirmed", "Confirming", "Confirmation", "Unconfirmed"]
+  - term: repair
+    means: "The installer feature that the `-Repair` switch of `install.cmd` starts. It reopens the driver's own closures. A repair set is the kept closure of a release, which this feature installs from."
+    names: ["repair", "Repair", "repair set", "repair sets", "repair install"]
