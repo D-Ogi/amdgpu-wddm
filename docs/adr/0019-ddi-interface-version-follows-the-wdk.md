@@ -2,7 +2,7 @@
 
 Date: 2026-09-27. Status: accepted direction (decision of 2026-09-27: a higher
 version, the newest the WDK offers). Supersedes ADR 0008 point 2. The move itself is engineering work with its own
-experiments; nothing here is measured unless it cites a `facts.md` row.
+experiments. Nothing here is measured unless it cites a `facts.md` row.
 
 ## Context
 
@@ -20,19 +20,19 @@ its own reason". The reason has arrived from two sides:
 The WDK in `toolchain/nuget` (10.0.26100) defines versions up to `DXGKDDI_INTERFACE_VERSION_WDDM3_2` (0x11007,
 `shared/d3dukmdt.h`), and the header's default is 3.2. `driver/kmd/bc250kmd.h` already records how the version
 changes structure shapes and how the display-only probe (`scratch/m7-stagea/probe.c`) measured which members
-move; that method carries over.
+move. That method carries over.
 
 ## Decision
 
 1. **Target: the newest `DXGKDDI_INTERFACE_VERSION_WDDM*` the WDK in `toolchain/nuget` defines**, 3.2 today, and
    the version the driver reports to dxgkrnl follows the version it is compiled at. When the WDK is updated, the
-   target moves with it; a lower value is a temporary pin that needs the failing evidence and the work to remove
+   target moves with it. A lower value is a temporary pin that needs the failing evidence and the work to remove
    it written down, as the toolchain rule says.
 2. **One version for one binary**, as before: the macro shapes `DXGKRNL_INTERFACE` and the `DXGKARG_*` structures
    and our device structure carries one of them.
 3. **The move is staged and measured, not flipped:** the size-and-offset probe is run at 2.0 and at the target for
-   every structure the driver touches; every DDI the target version makes mandatory is implemented or given an
-   honest failure return; every optional DDI stays absent until an experiment needs it; caps that the target
+   every structure the driver touches. Every DDI the target version makes mandatory is implemented or given an
+   honest failure return. Every optional DDI stays absent until an experiment needs it. Caps that the target
    version lets the driver claim (and that the runtime would start relying on) are claimed only with evidence.
    Each stage has an experiment with a fresh-boot control on unit A and the boot-loop guard behind it.
 4. **Owner of the work:** the kernel driver's owner (whoever holds KMD changes and their validation at the
@@ -44,9 +44,9 @@ move; that method carries over.
 - `driver/kmd/bc250kmd.h`'s `C_ASSERT` on 2.0 becomes an assert on the target, and its comment moves from "why
   2.0 is safe for the display-only path" to "which members moved between 2.0 and the target and what the driver
   does about each".
-- The contract matrix (`docs/wddm_contract_matrix.md`) gains the DDIs the target version adds; the ABI gates of
+- The contract matrix (`docs/wddm_contract_matrix.md`) gains the DDIs the target version adds. The ABI gates of
   E35 (facts M537/M538) are re-run at the target before any promotion.
-- Windows on unit A (the lab's Windows 11 build) must actually offer the target version to a driver; if it caps
+- Windows on unit A (the lab's Windows 11 build) must actually offer the target version to a driver. If it caps
   lower, that cap is the measured, temporary pin of point 1.
 
 ## References

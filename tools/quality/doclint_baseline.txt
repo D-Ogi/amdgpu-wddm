@@ -29,7 +29,6 @@
 3	docs/adr/0012-submission-many-in-flight-vmid-per-process.md
 3	docs/adr/0013-node-layout-3d-plus-sdma.md
 2	docs/adr/0015-m10-cpu-wsi.md
-8	docs/adr/0019-ddi-interface-version-follows-the-wdk.md
 5	docs/adr/0020-operator-tuning-in-the-smu-owner.md
 1	docs/design/dp-audio.md
 5	docs/design/hang-detector.md
