@@ -8,7 +8,7 @@ E16 runs 001 and 002 were spent measuring a package whose INF had no `UserModeDr
 (non compute-only) WDDM adapter cannot start without one on unit A's build of dxgkrnl (`docs/facts.md`
 M64), so that package could never have passed, and two boots of the lab machine measured nothing.
 `--model full` turns that into a one-second error here. *Mądry Polak po szkodzie* - the Pole is wise
-after the damage; the point of this tool is to be wise before the next one.
+after the damage. The point of this tool is to be wise before the next one.
 
 ## Usage
 
@@ -68,7 +68,7 @@ Every finding carries a code (`UMD001`, `VRS011`, ...) so that a report can be c
 
 - **error** - do not install this package.
 - **warn** - probably wrong, decide before installing.
-- **note** - a fact worth having in the evidence, including the ones that are correct on purpose
+- **note** - a fact worth having in the evidence, including the ones that are right on purpose
   (the missing `UserModeDriverNameWow`, the untrusted test certificate, the catalog-signed-only DLL).
 
 ## What is checked
@@ -83,19 +83,19 @@ matches is a warning - this driver is meant to match exactly one device.
 its dirid, and the fact that the binary it names is also copied by a `CopyFiles` section. A service
 pointing at a file the install never copies is an error.
 
-**Files.** Everything in `CopyFiles` must be in `[SourceDisksFiles]` and in the directory; everything in
+**Files.** Everything in `CopyFiles` must be in `[SourceDisksFiles]` and in the directory. Everything in
 `[SourceDisksFiles]` must be in the directory. Every file in the directory must be referenced by the INF
 or be a known extra (`.cat`, `.cer`, `.json`) - an unreferenced binary is a leftover from an older build
 or a file somebody forgot to add to `CopyFiles`. SHA-256 of every file goes in the report.
 
 **User-mode driver** (`--model full`). `UserModeDriverName` must exist in the *software* key (an AddReg
-of the DDInstall section; one written from a `.HW` section lands in the device key, where dxgkrnl does
+of the DDInstall section. One written from a `.HW` section lands in the device key, where dxgkrnl does
 not look), be `REG_MULTI_SZ` (`0x00010000`), and name at least one DLL. Every DLL it names must be in
 `CopyFiles`, in `[SourceDisksFiles]` and in the directory. `REG_SZ` (flags `0`) is a warning, not an
 error: `bc250kmd.inf` keeps it as a documented fallback to try if the DLL is never loaded. A missing
 `UserModeDriverNameWow` is a note - our INF omits it on purpose, because a Wow value pointing at the
 64-bit stub would make "the runtime never asked for a 32-bit driver" and "it asked and the load failed"
-the same observation. For `--model display-only` a missing UMD name is a note; a present one is also a
+the same observation. For `--model display-only` a missing UMD name is a note. A present one is also a
 note, since the display-only table does start with one.
 
 **Binaries.** PE headers read by hand: machine (anything but AMD64 is an error), subsystem (a `.sys`
@@ -104,10 +104,10 @@ embedded signature), and the CodeView debug id with its PDB path.
 
 **UMD exports.** The export name table of the *built* DLL - not of `bc250umd.def` - must carry
 `OpenAdapter`, `OpenAdapter10` and `OpenAdapter10_2`, exactly, undecorated. `driver/umd-stub/bc250umd.c`
-has no `__declspec(dllexport)`; the names come from `driver/umd-stub/bc250umd.def`, which
+has no `__declspec(dllexport)`. The names come from `driver/umd-stub/bc250umd.def`, which
 `driver/umd-stub/build.ps1` hands the linker as `/DEF:`. If that switch is ever lost, the DLL builds,
 loads, and exports nothing the runtime can find - which in the lab looks exactly like "the runtime never
-called us". A missing name is an error; a name present only in a decorated form (`_OpenAdapter@4` from
+called us". A missing name is an error. A name present only in a decorated form (`_OpenAdapter@4` from
 an x86 `__stdcall` build, `?OpenAdapter@@...` from a C++ one) is an error that says so, because the
 runtime does `GetProcAddress` by the plain string. Extra exports are a note.
 
@@ -115,17 +115,17 @@ runtime does `GetProcAddress` by the plain string. Extra exports are a note.
 calls the three entry points with a zeroed 4 KiB block - both `D3DDDIARG_OPENADAPTER` (`d3dumddi.h`) and
 `D3D10DDIARG_OPENADAPTER` (`d3d10umddi.h`) are well under 128 bytes on x64, and the stub ignores its
 argument entirely, so nothing can be read past the end. All three must return `E_NOTIMPL`
-(`0x80004001`); any other value, or an exception, is an error. The step is deliberately narrow: only a
+(`0x80004001`). Any other value, or an exception, is an error. The step is deliberately narrow: only a
 DLL that `UserModeDriverName` names, only one resolving inside the package directory given on the
 command line, only when it is AMD64 and this Python is 64-bit Windows, and `FreeLibrary` afterwards. A
-skip is a note, never a pass. This runs our own code on the development PC, which is why it is opt-in;
-the stub starts no thread, takes no lock and touches no file (`driver/umd-stub/bc250umd.c`).
+skip is a note, never a pass. This runs our own code on the development PC, which is why it is opt-in.
+The stub starts no thread, takes no lock and touches no file (`driver/umd-stub/bc250umd.c`).
 
 It answers a question the export table cannot: that the DLL in *this* package is the stub, and not, say,
 a half-finished real UMD that would return `S_OK` with an empty function table and put the runtime a
 long way into a stack that is not there.
 
-**Version agreement.** `DriverVer` against `--expect-version`; a three-field expectation accepts the
+**Version agreement.** `DriverVer` against `--expect-version`. A three-field expectation accepts the
 fourth (build) field, which is `0` for the plain package and `1` for the `-UmdStub` one, the convention
 that stops the second package tying with the first on the same hardware id and date.
 
@@ -142,9 +142,9 @@ all (the older E05 kmdod driver) gets a note instead of an error.
 INF installs, which catches a catalog that was not rebuilt after the INF changed. Membership by hash is
 `signtool verify /pa /c <cat> <file>`, per file, and its two failures are told apart:
 
-- *"File not found in the specified catalog"* - an error; the file is not in the catalog or its hash
+- *"File not found in the specified catalog"* - an error. The file is not in the catalog or its hash
   moved.
-- *"...terminated in a root certificate which is not trusted"* - a **note**; the file **is** in the
+- `"...terminated in a root certificate which is not trusted"` - a **note**. The file **is** in the
   catalog and its hash matched, and the chain then failed because the lab certificate is a test
   certificate that this development PC does not trust. Expected.
 
@@ -171,7 +171,7 @@ work by writing a `.cat`, so it is never given the package: the files are copied
 ## What is not checked
 
 - **Nothing about the device.** No lab access, no BC-250 needed, no registry, no installed driver store.
-- **Whether the driver works.** This tool reads a package; it does not run one.
+- **Whether the driver works.** This tool reads a package. It does not run one.
 - **Trust.** The test certificate is deliberately not trusted here, so "would this install with Secure
   Boot on and test signing off" is not answered. That is a property of the lab machine, not the package.
 - **The PDB.** Not part of a package and not looked for.
@@ -252,7 +252,7 @@ mattering for evidence rather than for convenience.
 2. **`packagecheck` on the package that is about to be installed** - the gate. `--model` set to the
    run's model, `--expect-version` to the version the run is supposed to measure, `--load` when the
    package carries the stub. Exit 1: stop, do not touch the lab machine. Exit 2: the tool failed, not
-   the package; fix the invocation and run it again, do not skip it.
+   the package. Fix the invocation and run it again, do not skip it.
 3. `--markdown` and `--manifest` into the run's evidence directory, next to the install log. Between
    them they say what was installed and what its bytes were.
 4. Push and install (`tools\wininstall`), then the run.
