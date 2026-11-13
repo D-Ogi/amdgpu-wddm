@@ -35,7 +35,6 @@
 13	docs/adr/0018-engine-present-for-vulkan-wsi.md
 8	docs/adr/0019-ddi-interface-version-follows-the-wdk.md
 5	docs/adr/0020-operator-tuning-in-the-smu-owner.md
-15	docs/d3d12-shared-resources.md
 8	docs/design/adaptive-cpu-gpu.md
 1	docs/design/dp-audio.md
 1	docs/design/dpm.md

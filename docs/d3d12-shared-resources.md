@@ -43,8 +43,7 @@ listed under "What refuses" below.
 
 ## A refusal must not remove the device
 
-A creation function of a user-mode display driver is in the AllowOutOfMemory category (`windows-driver-docs`
-display `handling-errors.md`). The runtime admits `E_OUTOFMEMORY` and `D3DDDIERR_DEVICEREMOVED` from it. It
+A creation function of a user-mode driver is in the AllowOutOfMemory category (`windows-driver-docs display handling-errors.md`). The runtime admits `E_OUTOFMEMORY` and `D3DDDIERR_DEVICEREMOVED` from it. It
 treats any other failure as a critical driver failure, removes the device, and sets the removed reason to
 `DXGI_ERROR_DRIVER_INTERNAL_ERROR`. The driver answered `E_NOTIMPL`, so all 13 shared-resource cells of
 `tools/win/capture-share` reported `0x887A0005` with reason `0x887A0020`.
@@ -251,11 +250,11 @@ submission:
   at `open-shared`, `f12to12` ran untraced), so "never called" does not cover the cross-process case. Each slot
   therefore records its first call per process on the always-on debugger channel (`fence_slot_seen`), and the lab
   kit counts both slots per row, so the next pass answers this with a number instead of an absence. `pfnWaitForFence`
-  used to call `queue_failure` unconditionally, so the first wait the runtime sent removed the device; it now
+  used to call `queue_failure` unconditionally, so the first wait the runtime sent removed the device. It now
   answers as the signal does, on by default, and `AMDGPU_WDDM_D3D12_EXPERIMENT=fence-wait-accept-off` restores that
   older refusal for a bisect, in a lab build only (the switch has the class Lab). The accept is the default because the alternative default is the device loss, and
   because the cross-process case is untested in **both** directions: the switch does not make it tested, it only
-  says which of the two untested answers a row got;
+  says which of the two untested answers a row got.
 - `pfnSignalFence`'s own comment states the precondition it depends on - "Execute must already have submitted all
   work on that same context" - and `submit_locked` (`engine-ddi/queue.cpp`) forwards to vkd3d-proton's
   `ExecuteCommandLists`, which may hand the work to its submission thread and return. The precondition is
@@ -266,7 +265,7 @@ proves it did not acquire early) and still reads poison, while the plain `s12to1
 difference in the client is that `s12to11`'s creator calls `Finish()`, a CPU wait on its own work, before it tells
 the reader. The discriminator is `capshare --creator-finish`, which gives the keyed-mutex creator that same wait
 before every `ReleaseSync`. If the row then passes, the memory path is sound and the handover ordering above is
-the defect; if it still reads poison, the write itself is not reaching the reader, and the record and the
+the defect. If it still reads poison, the write itself is not reaching the reader, and the record and the
 placement are the next suspects. Do not read a `km12to11` pass under `--creator-finish` as a fix: it is the
 measurement that says which half to fix.
 
@@ -315,7 +314,7 @@ BD-075 shipped a D3D12 open that refused every cross-API surface the CPU D3D11 r
 writes E26R v2, 16 bytes, while this decoder admits v3, 64 bytes, and reads the DXGI format out of it. The
 refusal line already said so - `resource private data 16 bytes (magic 0x52363245, version 2)`, in an 18.8 KB cell
 log - and the reason it cost a lab pass is that the kit never surfaced that line, not that the name was missing.
-The names below are a convenience that puts the reason first; the information was there. The decoder names its
+The names below are a convenience that puts the reason first. The information was there. The decoder names its
 check (`Bc250SharedSurfaceDecodeWhy`, `BC250_SHARED_SURFACE_WHY_*` in `driver/contract/bc250_shared_surface.h`),
 the open's `*why` is that name, and `driver/contract/test/shared-surface-test.cpp` pins every one of them. They
 are a contract: the lab kit matches them, so they are not renamed silently.
@@ -324,7 +323,7 @@ are a contract: the lab kit matches them, so they are not renamed silently.
 |---|---|
 | `record arguments` | a null blob or a null result |
 | `record length` | the E26R record is not exactly 64 bytes. **E26R v1 (12 bytes) and v2 (16 bytes) land here**, and that is the whole cross-API failure of round 1 |
-| `allocation length` | the LB7A record is not exactly 32 bytes. Kept apart from `record length` because the two blobs come from two producers' code paths, and one name for both would let a regression in either print the other's reason |
+| `allocation length` | the LB7A record is not exactly 32 bytes. Kept apart from `record length`. The two blobs come from two producers' code paths, and one name for both would let a regression in either print the other's reason |
 | `allocation record` | the LB7A magic or version |
 | `record magic`, `record version` | the E26R magic, or a version that is not 3 in a 64-byte record |
 | `record policy` | the kernel driver's own parser (`Bc250SurfaceResourcePolicy`) refuses the access bits, so nobody placed this memory the way the record claims |
@@ -349,7 +348,7 @@ on the GPU route (the application router's allowlist), which is also the route g
 The same asymmetry runs the other way, and it is not this driver's. A CPU-route **opener** takes the opened
 format from the LB7A storage column alone (Mesa `d3d10umd` `OpenResource`) and never reads the E26R record, so a
 `B8G8R8A8_UNORM_SRGB` surface opens as `B8G8R8A8_UNORM`: the bytes are right and the view is not. Every content
-oracle of `capture-share` compares raw bytes, so that would have passed silently; both openers of the client now
+oracle of `capture-share` compares raw bytes, so that would have passed silently. Both openers of the client now
 refuse an opened description that is not the creator's, and the lab kit's CPU-route sRGB row expects that refusal
 instead of a round trip. The GPU route's shell does carry the record's DXGI format
 (`driver/umd/dxvk/ddi-resource.cpp` `decode_open_resource`), so the `.gpu11` row is the one that proves the sRGB
@@ -404,7 +403,7 @@ hold is told that the driver cannot do it, in a code the runtime survives.
    its own expected number of shared creates and shared opens, and a row whose counts are wrong scores 0 even when
    its pixels are right. The controls `w12` and `f12to12` must show zero of each, which is what says the retry did
    not fire on an ordinary committed texture.
-   The cross-API rows need the D3D11 process on the **GPU** route. Its shell writes the full E26R v3 record; the
+   The cross-API rows need the D3D11 process on the **GPU** route. Its shell writes the full E26R v3 record. The
    CPU route's Mesa `d3d10umd` writes v2, 16 bytes, which this opener declines at `record length` and would
    decline again at `record access`. The trial therefore puts `capshare.exe` and `capshare-peer.exe` on the
    application router's allowlist for the run and restores the list afterwards, and it reads the route each side
@@ -418,14 +417,14 @@ hold is told that the driver cannot do it, in a code the runtime survives.
 
 | Test | What it pins |
 |---|---|
-| `driver/contract/test/shared-surface-test.cpp` | the two records as byte literals: named checks over the encoder, both decoders, the kernel driver's parser and every single-field refusal. The last of these covers all 5 COMPOSED rows and their 7 format round trips. Since round 2 it also pins the name every refusal reports, one check per `BC250_SHARED_SURFACE_WHY_*` constant, so a log line is a contract and not a courtesy. The runner prints its own total ("67 checks, 0 failures"). Three documents had counted that total by hand, and disagreed |
+| `driver/contract/test/shared-surface-test.cpp` | the two records as byte literals. It holds named checks over the encoder, both decoders, the kernel driver's parser and every single-field refusal. The last of these covers all 5 COMPOSED rows and their 7 format round trips. Since round 2 it also pins the name every refusal reports, one check per `BC250_SHARED_SURFACE_WHY_*` constant. That makes a log line a contract and not a courtesy. The runner prints its own total ("67 checks, 0 failures"). Three documents had counted that total by hand, and disagreed |
 | `driver/umd/d3d12/allocation-request-test.cpp` | what the create publishes, field by field, and that `prepare_surface` still writes the primary's v1 record |
 | `driver/umd/d3d12/heap-import-test.cpp` | the shell half: the shareable envelope, `kShareRequired` only from the runtime's refusal, the shared surface's records and refusals, and the borrowed lifetime of an adopted allocation |
 | `engine-ddi/tests/test-shared-create.cpp` | round trip 8 on the GPU: the retry, and the geometry the engine measured. A texel-exact render and read-back of the created surface, in five formats. Both sRGB views are two of the five. Each retry raises the counter once and writes its line once |
-| `engine-ddi/tests/test-shared-open.cpp` | round trip 9 on the GPU: one adopt, and a texel-exact clear and read-back of the opened surface. Also both sRGB views, the same handle opened twice, and 12 malformed records. Also an open of two allocations, an open that names a protected resource session, the two Present questions, and the two shells that serve no adopt |
+| `engine-ddi/tests/test-shared-open.cpp` | round trip 9 on the GPU: one adopt, and a texel-exact clear and read-back of the opened surface. Also both sRGB views, the same handle opened twice, and 12 malformed records. Also an open of two allocations and an open that names a protected resource session. Also the two Present questions, and the two shells that serve no adopt |
 | `engine-ddi/engine-ddi-header-test.cpp` | boundary revision 5, the `AdoptRequest` layout, and `kShareRequired` clamped to `E_OUTOFMEMORY` |
-| `tools/win/capture-share/host-validate.ps1` | the real client on a working driver: 35 cells. Among them the two sRGB cells `s12to11-srgb` and `s11to12-srgb`, the keyed handover discriminator `km12to11-finish`, and the four injected negative controls. It proves the oracles before the lab sees them. The route blocker and the opened-format refusal cannot fire on this host - it has one correct driver and no CPU D3D11 UMD - so the blocker is a case of `capshare --self-test` instead |
-| `scratch/train/b19-bd075/lab-bd075-classify-test.ps1` (local) | the trial's own scoring: 24 classification cases, 8 restore cases, 11 route-arm cases, 6 allowlist-restore cases, 15 trace cases on written trace files and 6 refusal-text cases. Among the trace cases are the control that shows a retry, the double counting the first rule did, and the 64-byte ICD winsys allocations the first rule counted as shared creates |
+| `tools/win/capture-share/host-validate.ps1` | the real client on a working driver: 35 cells. Among them the two sRGB cells `s12to11-srgb` and `s11to12-srgb`, the keyed handover discriminator `km12to11-finish`, and the four injected negative controls. It proves the oracles before the lab sees them. The route blocker and the opened-format refusal cannot fire on this host, because it has one working driver and no CPU D3D11 UMD. The blocker is a case of `capshare --self-test` instead |
+| `scratch/train/b19-bd075/lab-bd075-classify-test.ps1` (local) | the trial's own scoring. It has 24 classification cases, 8 restore cases, 11 route-arm cases, 6 allowlist-restore cases, 15 trace cases on written trace files and 6 refusal-text cases. Among the trace cases are the control that shows a retry and the double counting the first rule did. They also include the 64-byte ICD winsys allocations the first rule counted as shared creates |
 
 ## Open questions for later work
 
@@ -446,7 +445,7 @@ hold is told that the driver cannot do it, in a code the runtime survives.
 - A clamped refusal is quiet. It used to be unmissable - the device went away and the reason said
   `DRIVER_INTERNAL_ERROR` - and now it is one line on a channel that a game trial does not read
   (`AMDGPU_WDDM_LOG` unset, no debugger, no DBWIN listener), while the application reads `E_OUTOFMEMORY` as "out
-  of video memory" and may quietly drop settings. The driver has no always-on counter surface of its own for a
+  of VRAM" and may quietly drop settings. The driver has no always-on counter surface of its own for a
   trial to read, so a count of clamped refusals per device belongs with the overlay's graphics row or
   `bc250kmd_cli`, in the change that gives the UMD that surface. Until then the trial that must see them passes
   `-Trace` (`AMDGPU_WDDM_LOG` plus `AMDGPU_WDDM_DDI_TRACE`), and `tools/win/capture-share` records the debugger
