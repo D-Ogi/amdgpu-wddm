@@ -102,7 +102,6 @@
 3	tools/win/cumode/README.md
 3	tools/win/d3d11errors/README.md
 2	tools/win/d3d11mt/README.md
-20	tools/win/d3d12caps/README.md
 1	tools/win/dxgimodes/README.md
 3	tools/win/gpu-timeline/README.md
 12	tools/win/gpuload/README.md
