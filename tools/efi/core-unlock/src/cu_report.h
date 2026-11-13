@@ -3,13 +3,13 @@
  * The read-only report (docs/design/efi-core-unlock.md, "The report"): the text of what the firmware shows before
  * Windows starts. This module only formats. The UEFI binding (report_uefi.c) collects the input: the MP Services
  * counts, one register sample per processor, the GOP modes. The ACPI part is read here through the parsers of
- * cu_acpi.c and cu_aml.c, over the caller's map function, so the host tests give it stored tables.
+ * efl_acpi.c and efl_aml.c, over the caller's map function, so the host tests give it stored tables.
  */
 #ifndef CU_REPORT_H
 #define CU_REPORT_H
 #include <stddef.h>
-#include "cu_acpi.h"
-#include "cu_aml.h"
+#include "efl_acpi.h"
+#include "efl_aml.h"
 #include "cu_msr.h"
 
 #define CU_REPORT_NAME		"core-unlock-report.txt"
@@ -52,7 +52,7 @@ struct cu_report_input {
 	unsigned cpus, cpus_dropped;
 	struct cu_report_cpu cpu[CU_REPORT_MAX_CPUS];
 	int bsp_only_sampled;		/* no MP Services: the BSP's sample is cpu[0] */
-	const struct cu_acpi *acpi;
+	const struct efl_acpi *acpi;
 	unsigned gops, gops_dropped;
 	struct cu_report_gop gop[CU_REPORT_MAX_GOPS];
 };
@@ -66,8 +66,8 @@ struct cu_report_power_summary {
 	unsigned tables;		/* DSDT and SSDT tables that were scanned */
 	unsigned objects;		/* listed objects in them */
 	unsigned processor_objects;
-	unsigned with_name[CU_AML_POWER_NAMES];
+	unsigned with_name[EFL_AML_POWER_NAMES];
 };
-void cu_report_power_summary(const struct cu_acpi *acpi, struct cu_report_power_summary *out);
+void cu_report_power_summary(const struct efl_acpi *acpi, struct cu_report_power_summary *out);
 
 #endif

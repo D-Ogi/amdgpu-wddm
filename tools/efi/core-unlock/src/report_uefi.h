@@ -7,7 +7,7 @@
 #ifndef REPORT_UEFI_H
 #define REPORT_UEFI_H
 #include "efi.h"
-#include "cu_acpi.h"
+#include "efl_acpi.h"
 
 typedef void (*report_say_fn)(void *context, const char *line);
 
@@ -15,7 +15,7 @@ struct report_uefi {
 	EFI_SYSTEM_TABLE *st;
 	EFI_FILE_PROTOCOL *root;		/* the volume of the image, or NULL */
 	const unsigned short *path;		/* the report file on that volume, or NULL */
-	const struct cu_acpi *acpi;
+	const struct efl_acpi *acpi;
 	const char *version;
 	report_say_fn say;
 	void *say_context;

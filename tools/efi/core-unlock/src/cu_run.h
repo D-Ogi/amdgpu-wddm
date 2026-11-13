@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /*
  * One start of core-unlock: the observations, the decision (cu_decide.h) and the steps of the action, over a table
- * of operations. src/main.c gives the UEFI operations, test/host_test.c gives recorded ones, so the order of the
+ * of operations. src/cu_module.c gives the UEFI operations, test/host_test.c gives recorded ones, so the order of the
  * steps is tested on the host: the marker before the message, the message before the reset, and no reset after any
  * failure. Every path returns, and the caller then starts Windows.
  */

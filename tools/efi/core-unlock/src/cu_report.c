@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <string.h>
 #include "cu_report.h"
-#include "cu_text.h"
+#include "efl_text.h"
 
 /* The StatusFlag bits of EFI_PROCESSOR_INFORMATION (PI Specification 1.8 volume 2, MP Services). */
 #define MP_STATUS_BSP		0x1u
@@ -30,7 +30,7 @@ static void add(struct sink *s, const char *format, ...)
 	if (s->used + 1u >= s->capacity) { s->truncated = 1; return; }
 	room = s->capacity - s->used;
 	va_start(args, format);
-	n = cu_vformat(s->out + s->used, room, format, args);
+	n = efl_vformat(s->out + s->used, room, format, args);
 	va_end(args);
 	if (n + 1u >= room) s->truncated = 1;
 	s->used += n;
@@ -40,7 +40,7 @@ static void add(struct sink *s, const char *format, ...)
 
 static void processors(struct sink *s, const struct cu_report_input *in)
 {
-	static struct cu_acpi_madt_cpu madt[CU_ACPI_MAX_MADT_CPUS];
+	static struct efl_acpi_madt_cpu madt[EFL_ACPI_MAX_MADT_CPUS];
 	unsigned count = 0, dropped = 0, enabled = 0, i;
 	add(s, "\n[processors]\n");
 	if (in->mp_present)
@@ -60,7 +60,7 @@ static void processors(struct sink *s, const struct cu_report_input *in)
 		    (c->status_flag & MP_STATUS_HEALTHY) ? " healthy" : " not healthy");
 	}
 	if (in->cpus_dropped) add(s, "  %u more processors are not listed\n", in->cpus_dropped);
-	if (in->acpi == NULL || cu_acpi_madt_list(in->acpi, madt, CU_ACPI_MAX_MADT_CPUS, &count, &dropped) != CU_ACPI_OK) {
+	if (in->acpi == NULL || efl_acpi_madt_list(in->acpi, madt, EFL_ACPI_MAX_MADT_CPUS, &count, &dropped) != EFL_ACPI_OK) {
 		add(s, "MADT: not found\n");
 		return;
 	}
@@ -76,36 +76,36 @@ static void processors(struct sink *s, const struct cu_report_input *in)
 
 /* ---- ACPI ------------------------------------------------------------------------------------------- */
 
-static int is_aml(const struct cu_acpi_table *t)
+static int is_aml(const struct efl_acpi_table *t)
 {
 	return !memcmp(t->signature, "DSDT", 4) || !memcmp(t->signature, "SSDT", 4);
 }
 
-void cu_report_power_summary(const struct cu_acpi *acpi, struct cu_report_power_summary *out)
+void cu_report_power_summary(const struct efl_acpi *acpi, struct cu_report_power_summary *out)
 {
-	static struct cu_acpi_table tables[CU_ACPI_MAX_TABLES];
-	static struct cu_aml_scan scan;
+	static struct efl_acpi_table tables[EFL_ACPI_MAX_TABLES];
+	static struct efl_aml_scan scan;
 	unsigned count = 0, dropped = 0, i, j, k;
 	memset(out, 0, sizeof(*out));
-	if (acpi == NULL || cu_acpi_tables(acpi, tables, CU_ACPI_MAX_TABLES, &count, &dropped) != CU_ACPI_OK) return;
+	if (acpi == NULL || efl_acpi_tables(acpi, tables, EFL_ACPI_MAX_TABLES, &count, &dropped) != EFL_ACPI_OK) return;
 	for (i = 0; i < count; i++) {
-		if (!is_aml(&tables[i]) || tables[i].bytes == NULL || !cu_aml_scan(tables[i].bytes, tables[i].length, &scan))
+		if (!is_aml(&tables[i]) || tables[i].bytes == NULL || !efl_aml_scan(tables[i].bytes, tables[i].length, &scan))
 			continue;
 		out->tables++;
 		out->objects += scan.objects;
 		out->processor_objects += scan.processor_objects;
 		for (j = 0; j < scan.objects; j++)
-			for (k = 0; k < CU_AML_POWER_NAMES; k++)
+			for (k = 0; k < EFL_AML_POWER_NAMES; k++)
 				if (scan.object[j].names & (1u << k)) out->with_name[k]++;
 	}
 }
 
-static void aml_table(struct sink *s, const struct cu_acpi_table *t)
+static void aml_table(struct sink *s, const struct efl_acpi_table *t)
 {
-	static struct cu_aml_scan scan;
+	static struct efl_aml_scan scan;
 	unsigned i, k;
 	add(s, "%s \"%s\" at 0x%llx:", t->signature, t->oem_table_id, t->address);
-	if (t->bytes == NULL || !cu_aml_scan(t->bytes, t->length, &scan)) {
+	if (t->bytes == NULL || !efl_aml_scan(t->bytes, t->length, &scan)) {
 		add(s, " not scanned (checksum wrong)\n");
 		return;
 	}
@@ -115,29 +115,29 @@ static void aml_table(struct sink *s, const struct cu_acpi_table *t)
 	if (scan.malformed) add(s, ", %u scope openings did not parse", scan.malformed);
 	add(s, "\n");
 	for (i = 0; i < scan.objects; i++) {
-		const struct cu_aml_object *o = &scan.object[i];
-		add(s, "  %s (%s):", o->path, cu_aml_kind_text(o->kind));
+		const struct efl_aml_object *o = &scan.object[i];
+		add(s, "  %s (%s):", o->path, efl_aml_kind_text(o->kind));
 		if (o->names == 0) add(s, " none of the names");
-		for (k = 0; k < CU_AML_POWER_NAMES; k++)
-			if (o->names & (1u << k)) add(s, " %s", cu_aml_power_name_text((enum cu_aml_power_name)k));
+		for (k = 0; k < EFL_AML_POWER_NAMES; k++)
+			if (o->names & (1u << k)) add(s, " %s", efl_aml_power_name_text((enum efl_aml_power_name)k));
 		add(s, "\n");
 	}
 	add(s, "  occurrences of the bytes:");
-	for (k = 0; k < CU_AML_COUNTS; k++) add(s, " %s %u", cu_aml_count_text((enum cu_aml_count)k), scan.counts[k]);
+	for (k = 0; k < EFL_AML_COUNTS; k++) add(s, " %s %u", efl_aml_count_text((enum efl_aml_count)k), scan.counts[k]);
 	add(s, "\n");
 }
 
-static void acpi_part(struct sink *s, const struct cu_acpi *acpi)
+static void acpi_part(struct sink *s, const struct efl_acpi *acpi)
 {
-	static struct cu_acpi_table tables[CU_ACPI_MAX_TABLES];
+	static struct efl_acpi_table tables[EFL_ACPI_MAX_TABLES];
 	struct cu_report_power_summary summary;
-	struct cu_acpi_fadt fadt;
+	struct efl_acpi_fadt fadt;
 	unsigned count = 0, dropped = 0, i, k;
-	enum cu_acpi_result result;
+	enum efl_acpi_result result;
 
 	add(s, "\n[acpi tables]\n");
-	result = acpi == NULL ? CU_ACPI_NO_RSDP : cu_acpi_tables(acpi, tables, CU_ACPI_MAX_TABLES, &count, &dropped);
-	if (result != CU_ACPI_OK) {
+	result = acpi == NULL ? EFL_ACPI_NO_RSDP : efl_acpi_tables(acpi, tables, EFL_ACPI_MAX_TABLES, &count, &dropped);
+	if (result != EFL_ACPI_OK) {
 		add(s, "no RSDT or XSDT (reason %u)\n", (unsigned)result);
 		return;
 	}
@@ -156,12 +156,12 @@ static void acpi_part(struct sink *s, const struct cu_acpi *acpi)
 	cu_report_power_summary(acpi, &summary);
 	add(s, "summary over %u tables: %u Processor objects, %u listed objects; objects that define",
 	    summary.tables, summary.processor_objects, summary.objects);
-	for (k = 0; k < CU_AML_POWER_NAMES; k++)
-		add(s, " %s %u", cu_aml_power_name_text((enum cu_aml_power_name)k), summary.with_name[k]);
+	for (k = 0; k < EFL_AML_POWER_NAMES; k++)
+		add(s, " %s %u", efl_aml_power_name_text((enum efl_aml_power_name)k), summary.with_name[k]);
 	add(s, "\n");
 
 	add(s, "\n[fadt]\n");
-	if (cu_acpi_fadt_fields(acpi, &fadt) != CU_ACPI_OK) {
+	if (efl_acpi_fadt_fields(acpi, &fadt) != EFL_ACPI_OK) {
 		add(s, "no FADT with a right checksum\n");
 		return;
 	}

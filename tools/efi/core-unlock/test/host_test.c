@@ -10,12 +10,13 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include "cu_acpi.h"
+#include "efl_acpi.h"
 #include "cu_decide.h"
 #include "cu_run.h"
-#include "cu_smbios.h"
+#include "efl_smbios.h"
 #include "cu_smu.h"
-#include "cu_text.h"
+#include "efl_text.h"
+#include "cu_options.h"
 #include "bc250_cpu.h"
 #include "board_identity.h"
 #include "generated/smu_registers.h"
@@ -493,58 +494,58 @@ static void build_acpi(int revision, unsigned madt_local_enabled, unsigned madt_
 
 static void test_acpi(void)
 {
-	struct cu_acpi a;
-	struct cu_reset_register reg;
+	struct efl_acpi a;
+	struct efl_reset_register reg;
 	unsigned n = 0;
 	a.map = mem_map;
 	a.context = NULL;
 	a.rsdp = RSDP_AT;
 
 	build_acpi(2, 12, 4, 0);
-	CHECK(cu_acpi_reset_register(&a, &reg) == CU_ACPI_OK);
-	CHECK(reg.space == CU_ACPI_SPACE_IO && reg.address == 0x0ABCu && reg.value == 0x5Au);
-	CHECK(cu_acpi_madt_processors(&a, &n) == CU_ACPI_OK && n == 12u);
+	CHECK(efl_acpi_reset_register(&a, &reg) == EFL_ACPI_OK);
+	CHECK(reg.space == EFL_ACPI_SPACE_IO && reg.address == 0x0ABCu && reg.value == 0x5Au);
+	CHECK(efl_acpi_madt_processors(&a, &n) == EFL_ACPI_OK && n == 12u);
 
 	/* Revision 0: the RSDT. */
 	build_acpi(0, 16, 0, 0);
-	CHECK(cu_acpi_reset_register(&a, &reg) == CU_ACPI_OK && reg.value == 0x5Au);
-	CHECK(cu_acpi_madt_processors(&a, &n) == CU_ACPI_OK && n == 16u);
+	CHECK(efl_acpi_reset_register(&a, &reg) == EFL_ACPI_OK && reg.value == 0x5Au);
+	CHECK(efl_acpi_madt_processors(&a, &n) == EFL_ACPI_OK && n == 16u);
 
 	/* x2APIC entries count only when there is no Local APIC entry. */
 	build_acpi(2, 0, 0, 16);
-	CHECK(cu_acpi_madt_processors(&a, &n) == CU_ACPI_OK && n == 16u);
+	CHECK(efl_acpi_madt_processors(&a, &n) == EFL_ACPI_OK && n == 16u);
 	build_acpi(2, 12, 0, 16);
-	CHECK(cu_acpi_madt_processors(&a, &n) == CU_ACPI_OK && n == 12u);
+	CHECK(efl_acpi_madt_processors(&a, &n) == EFL_ACPI_OK && n == 12u);
 
 	/* The flag RESET_REG_SUP clear. */
 	build_acpi(2, 12, 0, 0);
 	put32(mem + (FADT_AT - MEM_BASE) + 112, 0);
 	fix_checksum(mem + (FADT_AT - MEM_BASE), FADT_BYTES, 9);
-	CHECK(cu_acpi_reset_register(&a, &reg) == CU_ACPI_NOT_SUPPORTED);
+	CHECK(efl_acpi_reset_register(&a, &reg) == EFL_ACPI_NOT_SUPPORTED);
 
 	/* A register that is not 8 bits wide. */
 	build_acpi(2, 12, 0, 0);
 	mem[FADT_AT - MEM_BASE + 117] = 16;
 	fix_checksum(mem + (FADT_AT - MEM_BASE), FADT_BYTES, 9);
-	CHECK(cu_acpi_reset_register(&a, &reg) == CU_ACPI_BAD_REGISTER);
+	CHECK(efl_acpi_reset_register(&a, &reg) == EFL_ACPI_BAD_REGISTER);
 
 	/* A wrong checksum hides the table. */
 	build_acpi(2, 12, 0, 0);
 	mem[FADT_AT - MEM_BASE + 128] ^= 1u;
-	CHECK(cu_acpi_reset_register(&a, &reg) == CU_ACPI_NO_TABLE);
+	CHECK(efl_acpi_reset_register(&a, &reg) == EFL_ACPI_NO_TABLE);
 
 	/* A FADT that ends before the reset value. */
 	build_acpi(2, 12, 0, 0);
 	put32(mem + (FADT_AT - MEM_BASE) + 4, 116);
 	fix_checksum(mem + (FADT_AT - MEM_BASE), 116, 9);
-	CHECK(cu_acpi_reset_register(&a, &reg) == CU_ACPI_SHORT);
+	CHECK(efl_acpi_reset_register(&a, &reg) == EFL_ACPI_SHORT);
 
 	/* No RSDP. */
 	build_acpi(2, 12, 0, 0);
 	mem[0] = 'X';
-	CHECK(cu_acpi_reset_register(&a, &reg) == CU_ACPI_NO_RSDP);
+	CHECK(efl_acpi_reset_register(&a, &reg) == EFL_ACPI_NO_RSDP);
 	a.rsdp = 0;
-	CHECK(cu_acpi_madt_processors(&a, &n) == CU_ACPI_NO_RSDP && n == 0u);
+	CHECK(efl_acpi_madt_processors(&a, &n) == EFL_ACPI_NO_RSDP && n == 0u);
 }
 
 /* ---- SMBIOS and the driver's board identity ------------------------------------------------------ */
@@ -598,17 +599,17 @@ static void test_smbios(void)
 	size_t n, extent, bytes;
 	unsigned reason = 0, bios = 0;
 	unsigned char machine[16];
-	struct cu_smbios_table found;
+	struct efl_smbios_table found;
 	unsigned char *e;
 
 	n = build_smbios(table, "AMD BC-250");
 	/* Bytes after the end-of-table structure (a 3.0 maximum is a bound, not a length) are not part of it. */
 	memcpy(tail, table, n);
 	memset(tail + n, 0xAA, 32);
-	extent = cu_smbios_extent(tail, n + 32u);
+	extent = efl_smbios_extent(tail, n + 32u);
 	CHECK(extent == n);
-	bytes = cu_smbios_rsmb(tail, extent, 3, 4, rsmb, sizeof(rsmb));
-	CHECK(bytes == n + CU_RSMB_HEADER_BYTES);
+	bytes = efl_smbios_rsmb(tail, extent, 3, 4, rsmb, sizeof(rsmb));
+	CHECK(bytes == n + EFL_RSMB_HEADER_BYTES);
 	build_pci(pci);
 	CHECK(BoardIdentitySelect(pci, 64, rsmb, bytes, &reason) == 1u);
 	CHECK(BoardIdentityQualification(rsmb, bytes, &bios, machine) == 1 && bios == 5u);
@@ -616,16 +617,16 @@ static void test_smbios(void)
 	CHECK(BoardIdentitySelect(pci, 64, NULL, 0, &reason) == 0u && reason == 3u);
 	/* Another product, or another PCI function, is not a BC-250. */
 	n = build_smbios(table, "AMD BC-251");
-	bytes = cu_smbios_rsmb(table, cu_smbios_extent(table, n), 3, 4, rsmb, sizeof(rsmb));
+	bytes = efl_smbios_rsmb(table, efl_smbios_extent(table, n), 3, 4, rsmb, sizeof(rsmb));
 	CHECK(BoardIdentitySelect(pci, 64, rsmb, bytes, &reason) == 0u);
 	n = build_smbios(table, "AMD BC-250");
-	bytes = cu_smbios_rsmb(table, cu_smbios_extent(table, n), 3, 4, rsmb, sizeof(rsmb));
+	bytes = efl_smbios_rsmb(table, efl_smbios_extent(table, n), 3, 4, rsmb, sizeof(rsmb));
 	pci[2] = 0xFF;
 	CHECK(BoardIdentitySelect(pci, 64, rsmb, bytes, &reason) == 0u && reason == 2u);
 	/* A table cut before its end-of-table structure has no extent, and a small buffer gets nothing. */
-	CHECK(cu_smbios_extent(table, n - 1u) == 0u);
-	CHECK(cu_smbios_extent(table, 3) == 0u);
-	CHECK(cu_smbios_rsmb(table, n, 3, 4, rsmb, n) == 0u);
+	CHECK(efl_smbios_extent(table, n - 1u) == 0u);
+	CHECK(efl_smbios_extent(table, 3) == 0u);
+	CHECK(efl_smbios_rsmb(table, n, 3, 4, rsmb, n) == 0u);
 
 	/* The two entry points, in the test memory. */
 	memset(mem, 0, sizeof(mem));
@@ -635,10 +636,10 @@ static void test_smbios(void)
 	put32(e + 0x0C, 0x400u);
 	put64(e + 0x10, MEM_BASE + 0x1000u);
 	fix_checksum(e, 0x18, 5);
-	CHECK(cu_smbios_entry(mem_map, NULL, MEM_BASE, 1, &found) == 1);
+	CHECK(efl_smbios_entry(mem_map, NULL, MEM_BASE, 1, &found) == 1);
 	CHECK(found.address == MEM_BASE + 0x1000u && found.max_bytes == 0x400u && found.major == 3u && found.minor == 4u);
 	e[0x10] ^= 1u;
-	CHECK(cu_smbios_entry(mem_map, NULL, MEM_BASE, 1, &found) == 0);
+	CHECK(efl_smbios_entry(mem_map, NULL, MEM_BASE, 1, &found) == 0);
 	e = mem + 0x100;
 	memcpy(e, "_SM_", 4);
 	e[5] = 0x1F; e[6] = 2; e[7] = 8;
@@ -646,9 +647,9 @@ static void test_smbios(void)
 	e[0x16] = 0x34; e[0x17] = 0x01;
 	put32(e + 0x18, (unsigned)(MEM_BASE + 0x2000u));
 	fix_checksum(e, 0x1F, 4);
-	CHECK(cu_smbios_entry(mem_map, NULL, MEM_BASE + 0x100u, 0, &found) == 1);
+	CHECK(efl_smbios_entry(mem_map, NULL, MEM_BASE + 0x100u, 0, &found) == 1);
 	CHECK(found.address == MEM_BASE + 0x2000u && found.max_bytes == 0x134u && found.major == 2u);
-	CHECK(cu_smbios_entry(mem_map, NULL, MEM_BASE + 0x100u, 1, &found) == 0);
+	CHECK(efl_smbios_entry(mem_map, NULL, MEM_BASE + 0x100u, 1, &found) == 0);
 }
 
 /* ---- text and device paths ----------------------------------------------------------------------- */
@@ -683,26 +684,33 @@ static void test_text(void)
 {
 	unsigned short opt[64], file[128], marker[128];
 	unsigned char dp[256], out[512];
+	struct stage_options so;
 	struct cu_options o;
 	char line[64];
 	size_t at, bytes;
 
-	wide(opt, "core-unlock.efi reset=fadt");
-	cu_options_parse(opt, 64, &o);
-	CHECK(o.reset == CU_RESET_FADT && o.unknown == 0);
+	wide(opt, "bc250-stage.efi reset=fadt");
+	stage_options_parse(opt, 64, &so);
+	cu_options_read(&so, &o);
+	CHECK(o.reset == CU_RESET_FADT && stage_options_unclaimed(&so) == 0);
 	wide(opt, "reset=none");
-	cu_options_parse(opt, 64, &o);
+	stage_options_parse(opt, 64, &so);
+	cu_options_read(&so, &o);
 	CHECK(o.reset == CU_RESET_NONE);
 	wide(opt, "  reset=warm  ");
-	cu_options_parse(opt, 64, &o);
-	CHECK(o.reset == CU_RESET_WARM && o.unknown == 0);
+	stage_options_parse(opt, 64, &so);
+	cu_options_read(&so, &o);
+	CHECK(o.reset == CU_RESET_WARM && stage_options_unclaimed(&so) == 0);
 	wide(opt, "reset=cold wait=5");
-	cu_options_parse(opt, 64, &o);
-	CHECK(o.reset == CU_RESET_WARM && o.unknown == 2);
+	stage_options_parse(opt, 64, &so);
+	cu_options_read(&so, &o);
+	CHECK(o.reset == CU_RESET_WARM && stage_options_unclaimed(&so) == 2);
 	wide(opt, "reset=fadt");
-	cu_options_parse(opt, 5, &o);		/* the size ends the text before the value */
-	CHECK(o.reset == CU_RESET_WARM && o.unknown == 0);
-	cu_options_parse(NULL, 0, &o);
+	stage_options_parse(opt, 5, &so);	/* the size ends the text before the value */
+	cu_options_read(&so, &o);
+	CHECK(o.reset == CU_RESET_WARM && stage_options_unclaimed(&so) == 0);
+	stage_options_parse(NULL, 0, &so);
+	cu_options_read(&so, &o);
 	CHECK(o.reset == CU_RESET_WARM);
 	CHECK(cu_reset_method_name(CU_RESET_COUNT) != NULL);
 
@@ -711,37 +719,37 @@ static void test_text(void)
 	at = add_file_node(dp, 6, "\\EFI\\BC250");
 	at = add_file_node(dp, at, "core-unlock.efi");
 	at = add_end(dp, at);
-	CHECK(cu_devpath_bytes(dp, sizeof(dp)) == at);
-	CHECK(cu_devpath_file(dp, sizeof(dp), file, 128) == 1);
+	CHECK(efl_devpath_bytes(dp, sizeof(dp)) == at);
+	CHECK(efl_devpath_file(dp, sizeof(dp), file, 128) == 1);
 	CHECK(wide_is(file, "\\EFI\\BC250\\core-unlock.efi"));
-	CHECK(cu_marker_path(file, marker, 128) == 1);
+	CHECK(efl_sibling_path(file, CU_MARKER_NAME, marker, 128) == 1);
 	CHECK(wide_is(marker, "\\EFI\\BC250\\core-unlock.mark"));
-	CHECK(cu_marker_path(file, marker, 10) == 0);
+	CHECK(efl_sibling_path(file, CU_MARKER_NAME, marker, 10) == 0);
 	wide(opt, "no-directory.efi");
-	CHECK(cu_marker_path(opt, marker, 128) == 0);
-	CHECK(cu_devpath_bytes(dp, at - 1u) == 0);
-	CHECK(cu_devpath_file(dp, sizeof(dp), file, 8) == 0);
+	CHECK(efl_sibling_path(opt, CU_MARKER_NAME, marker, 128) == 0);
+	CHECK(efl_devpath_bytes(dp, at - 1u) == 0);
+	CHECK(efl_devpath_file(dp, sizeof(dp), file, 8) == 0);
 
 	/* The Windows Boot Manager on the device of the image: the device path of the device handle, which is the
 	 * hardware node and the end node. */
 	add_end(dp, 6);
 	wide(file, "\\EFI\\Microsoft\\Boot\\bootmgfw.efi");
-	bytes = cu_devpath_with_file(dp, sizeof(dp), file, out, sizeof(out));
+	bytes = efl_devpath_with_file(dp, sizeof(dp), file, out, sizeof(out));
 	CHECK(bytes == 6u + 4u + 2u * 33u + 4u);
-	CHECK(cu_devpath_bytes(out, bytes) == bytes);
+	CHECK(efl_devpath_bytes(out, bytes) == bytes);
 	CHECK(out[0] == 1 && out[6] == 4 && out[7] == 4 && out[bytes - 4] == 0x7F && out[bytes - 3] == 0xFF);
-	CHECK(cu_devpath_file(out, bytes, marker, 128) == 1 && wide_is(marker, "\\EFI\\Microsoft\\Boot\\bootmgfw.efi"));
-	CHECK(cu_devpath_with_file(dp, sizeof(dp), file, out, 20) == 0);
+	CHECK(efl_devpath_file(out, bytes, marker, 128) == 1 && wide_is(marker, "\\EFI\\Microsoft\\Boot\\bootmgfw.efi"));
+	CHECK(efl_devpath_with_file(dp, sizeof(dp), file, out, 20) == 0);
 
-	cu_format(line, sizeof(line), "%u %x %d %s %llx %%", 12u, 0xABu, -3, "ok", 0x1234ABCD5678ull);
+	efl_format(line, sizeof(line), "%u %x %d %s %llx %%", 12u, 0xABu, -3, "ok", 0x1234ABCD5678ull);
 	CHECK(!strcmp(line, "12 AB -3 ok 1234ABCD5678 %"));
-	cu_format(line, 6, "%s", "truncated");
+	efl_format(line, 6, "%s", "truncated");
 	CHECK(!strcmp(line, "trunc"));
 }
 
 unsigned report_tests(const char *evidence_dir, unsigned *check_count);
 
-int main(int argc, char **argv)
+unsigned cu_tests(const char *evidence_dir, unsigned *check_count)
 {
 	unsigned report_checks = 0, report_failures;
 	test_decide();
@@ -752,10 +760,8 @@ int main(int argc, char **argv)
 	test_acpi();
 	test_smbios();
 	test_text();
-	/* The report tests: argv[1] is the directory of the stored ACPI tables (build.ps1 passes it). */
-	report_failures = report_tests(argc > 1 ? argv[1] : NULL, &report_checks);
-	checks += report_checks;
-	failures += report_failures;
-	printf("core-unlock host tests: %u checks, %u failures\n", checks, failures);
-	return failures ? 1 : 0;
+	/* The report tests read the stored ACPI tables of unit A from the evidence directory. */
+	report_failures = report_tests(evidence_dir, &report_checks);
+	*check_count = checks + report_checks;
+	return failures + report_failures;
 }

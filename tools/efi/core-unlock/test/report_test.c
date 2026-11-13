@@ -8,11 +8,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "cu_acpi.h"
-#include "cu_aml.h"
+#include "efl_acpi.h"
+#include "efl_aml.h"
 #include "cu_msr.h"
 #include "cu_report.h"
-#include "cu_text.h"
+#include "efl_text.h"
+#include "cu_options.h"
 
 static unsigned checks, failures;
 #define CHECK(c) do { checks++; if (!(c)) { failures++; printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #c); } } while (0)
@@ -102,7 +103,7 @@ static void finish(struct aml *a)
 
 static void test_aml_synthetic(void)
 {
-	static struct cu_aml_scan s;
+	static struct efl_aml_scan s;
 	struct aml a;
 	size_t scope, device, method, processor, buffer, cpu1;
 	header(&a, "SSDT");
@@ -141,39 +142,39 @@ static void test_aml_synthetic(void)
 	close_pkg(&a, scope);
 	finish(&a);
 
-	CHECK(cu_aml_scan(a.b, a.n, &s) == 1);
+	CHECK(efl_aml_scan(a.b, a.n, &s) == 1);
 	CHECK(s.processor_objects == 1u && s.thermal_zones == 1u && s.malformed == 0u && s.dropped == 0u);
 	CHECK(s.objects == 4u);
-	CHECK(!strcmp(s.object[0].path, "\\_SB_.CPU0") && s.object[0].kind == CU_AML_DEVICE_CPU);
-	CHECK(s.object[0].names == ((1u << CU_AML_CST) | (1u << CU_AML_PSS)));
-	CHECK(!strcmp(s.object[1].path, "\\_SB_.CPU1") && s.object[1].kind == CU_AML_DEVICE_CPU && s.object[1].names == 0);
-	CHECK(!strcmp(s.object[2].path, "\\_PR_.P000") && s.object[2].kind == CU_AML_PROCESSOR && s.object[2].names == 0);
-	CHECK(!strcmp(s.object[3].path, "\\_PR_.C000") && s.object[3].kind == CU_AML_SCOPE);
-	CHECK(s.object[3].names == (1u << CU_AML_CSD));
-	CHECK(s.counts[CU_AML_TMP] == 1u && s.counts[CU_AML_FAN_EISAID] == 0u && s.counts[CU_AML_FAN_STRING] == 0u);
+	CHECK(!strcmp(s.object[0].path, "\\_SB_.CPU0") && s.object[0].kind == EFL_AML_DEVICE_CPU);
+	CHECK(s.object[0].names == ((1u << EFL_AML_CST) | (1u << EFL_AML_PSS)));
+	CHECK(!strcmp(s.object[1].path, "\\_SB_.CPU1") && s.object[1].kind == EFL_AML_DEVICE_CPU && s.object[1].names == 0);
+	CHECK(!strcmp(s.object[2].path, "\\_PR_.P000") && s.object[2].kind == EFL_AML_PROCESSOR && s.object[2].names == 0);
+	CHECK(!strcmp(s.object[3].path, "\\_PR_.C000") && s.object[3].kind == EFL_AML_SCOPE);
+	CHECK(s.object[3].names == (1u << EFL_AML_CSD));
+	CHECK(s.counts[EFL_AML_TMP] == 1u && s.counts[EFL_AML_FAN_EISAID] == 0u && s.counts[EFL_AML_FAN_STRING] == 0u);
 
 	/* A scope whose length runs past the table is not opened, and the scan goes on. */
 	header(&a, "DSDT");
 	emit1(&a, 0x10); emit(&a, "\x7F", 1); emit(&a, "_SB_", 4);
 	emit1(&a, 0x08); emit(&a, "_CST", 4); emit1(&a, 0x00);
 	finish(&a);
-	CHECK(cu_aml_scan(a.b, a.n, &s) == 1);
+	CHECK(efl_aml_scan(a.b, a.n, &s) == 1);
 	CHECK(s.malformed == 1u && s.objects == 1u && !strcmp(s.object[0].path, "\\"));
 
 	/* Not an AML table, or a length beyond the bytes. */
 	header(&a, "APIC");
 	finish(&a);
-	CHECK(cu_aml_scan(a.b, a.n, &s) == 0);
+	CHECK(efl_aml_scan(a.b, a.n, &s) == 0);
 	header(&a, "SSDT");
 	finish(&a);
-	CHECK(cu_aml_scan(a.b, a.n - 1u, &s) == 0);
-	CHECK(cu_aml_scan(NULL, 0, &s) == 0);
+	CHECK(efl_aml_scan(a.b, a.n - 1u, &s) == 0);
+	CHECK(efl_aml_scan(NULL, 0, &s) == 0);
 
 	/* The EISA ID encoding: PNP0A03 is the well-known 0x030AD041 of a PCI host bridge. */
-	CHECK(cu_aml_eisaid("PNP0A03") == 0x030AD041u);
-	CHECK(cu_aml_eisaid("PNP0C0B") == 0x0B0CD041u);
-	CHECK(cu_aml_eisaid("pnp0C0B") == 0u && cu_aml_eisaid("PNP0C0") == 0u && cu_aml_eisaid("PNP0C0BX") == 0u);
-	CHECK(cu_aml_eisaid(NULL) == 0u);
+	CHECK(efl_aml_eisaid("PNP0A03") == 0x030AD041u);
+	CHECK(efl_aml_eisaid("PNP0C0B") == 0x0B0CD041u);
+	CHECK(efl_aml_eisaid("pnp0C0B") == 0u && efl_aml_eisaid("PNP0C0") == 0u && efl_aml_eisaid("PNP0C0BX") == 0u);
+	CHECK(efl_aml_eisaid(NULL) == 0u);
 }
 
 /* ---- the stock tables of unit A --------------------------------------------------------------------------- */
@@ -230,11 +231,11 @@ static int build_stock(const char *dir)
 	return 1;
 }
 
-static int stock_scan(const char *dir, const char *name, struct cu_aml_scan *s)
+static int stock_scan(const char *dir, const char *name, struct efl_aml_scan *s)
 {
 	size_t bytes = 0;
 	unsigned char *data = load(dir, name, &bytes);
-	int ok = data != NULL && cu_aml_scan(data, bytes, s);
+	int ok = data != NULL && efl_aml_scan(data, bytes, s);
 	free(data);
 	return ok;
 }
@@ -245,14 +246,14 @@ static void model(const char *vendor, unsigned family, unsigned model_number, un
 
 static void test_stock(const char *dir)
 {
-	static struct cu_aml_scan s;
-	static struct cu_acpi_table tables[CU_ACPI_MAX_TABLES];
-	static struct cu_acpi_madt_cpu madt[CU_ACPI_MAX_MADT_CPUS];
+	static struct efl_aml_scan s;
+	static struct efl_acpi_table tables[EFL_ACPI_MAX_TABLES];
+	static struct efl_acpi_madt_cpu madt[EFL_ACPI_MAX_MADT_CPUS];
 	static struct cu_report_input in;
 	static char text[CU_REPORT_BYTES];
 	struct cu_report_power_summary sum;
-	struct cu_acpi_fadt fadt;
-	struct cu_acpi acpi;
+	struct efl_acpi_fadt fadt;
+	struct efl_acpi acpi;
 	unsigned i, count = 0, dropped = 0, enabled = 0, cst = 0, pss = 0, n = 0;
 	int truncated = 1;
 	size_t chars;
@@ -267,35 +268,35 @@ static void test_stock(const char *dir)
 		char want[16];
 		snprintf(want, sizeof(want), "\\_PR_.C00%X", i);
 		CHECK(!strcmp(s.object[i].path, want));
-		CHECK(s.object[i].kind == CU_AML_SCOPE);
-		CHECK(s.object[i].names == ((1u << CU_AML_CST) | (1u << CU_AML_CSD)));
+		CHECK(s.object[i].kind == EFL_AML_SCOPE);
+		CHECK(s.object[i].names == ((1u << EFL_AML_CST) | (1u << EFL_AML_CSD)));
 	}
 	/* The DSDT: 16 Processor objects \_PR_.P000 to \_PR_.P00F, none with a power name. */
 	CHECK(stock_scan(dir, "DSDT.aml", &s));
 	CHECK(s.processor_objects == 16u && s.thermal_zones == 0u && s.dropped == 0u && s.malformed == 0u);
 	for (i = 0; i < s.objects; i++) {
-		if (s.object[i].kind == CU_AML_PROCESSOR) {
+		if (s.object[i].kind == EFL_AML_PROCESSOR) {
 			char want[16];
 			snprintf(want, sizeof(want), "\\_PR_.P00%X", n++);
 			CHECK(!strcmp(s.object[i].path, want));
 		}
-		if (s.object[i].names & (1u << CU_AML_CST)) cst++;
-		if (s.object[i].names & (1u << CU_AML_PSS)) pss++;
+		if (s.object[i].names & (1u << EFL_AML_CST)) cst++;
+		if (s.object[i].names & (1u << EFL_AML_PSS)) pss++;
 	}
 	CHECK(n == 16u && cst == 0u && pss == 0u);
-	CHECK(s.counts[CU_AML_TZ] == 0u && s.counts[CU_AML_TMP] == 0u && s.counts[CU_AML_FAN_STRING] == 0u &&
-	      s.counts[CU_AML_FAN_EISAID] == 0u);
+	CHECK(s.counts[EFL_AML_TZ] == 0u && s.counts[EFL_AML_TMP] == 0u && s.counts[EFL_AML_FAN_STRING] == 0u &&
+	      s.counts[EFL_AML_FAN_EISAID] == 0u);
 	/* SSDT2 "AmdTable": no processor scope. */
 	CHECK(stock_scan(dir, "SSDT2.aml", &s));
 	CHECK(s.processor_objects == 0u);
-	for (i = 0; i < s.objects; i++) CHECK((s.object[i].names & (1u << CU_AML_CST)) == 0u);
+	for (i = 0; i < s.objects; i++) CHECK((s.object[i].names & (1u << EFL_AML_CST)) == 0u);
 
 	/* The same tables behind an RSDP and an XSDT. */
 	CHECK(build_stock(dir));
 	acpi.map = arena_map;
 	acpi.context = NULL;
 	acpi.rsdp = RSDP_AT;
-	CHECK(cu_acpi_tables(&acpi, tables, CU_ACPI_MAX_TABLES, &count, &dropped) == CU_ACPI_OK);
+	CHECK(efl_acpi_tables(&acpi, tables, EFL_ACPI_MAX_TABLES, &count, &dropped) == EFL_ACPI_OK);
 	CHECK(count == 5u && dropped == 0u);
 	CHECK(count == 5u && !strcmp(tables[0].signature, "FACP") && !strcmp(tables[2].signature, "SSDT") &&
 	      !strcmp(tables[2].oem_table_id, "AMD CPU") && !strcmp(tables[4].signature, "DSDT"));
@@ -303,17 +304,17 @@ static void test_stock(const char *dir)
 
 	cu_report_power_summary(&acpi, &sum);
 	CHECK(sum.tables == 3u && sum.processor_objects == 16u);
-	CHECK(sum.with_name[CU_AML_CST] == 12u && sum.with_name[CU_AML_CSD] == 12u);
-	CHECK(sum.with_name[CU_AML_PSS] == 0u && sum.with_name[CU_AML_PCT] == 0u && sum.with_name[CU_AML_PPC] == 0u &&
-	      sum.with_name[CU_AML_CPC] == 0u && sum.with_name[CU_AML_PSD] == 0u && sum.with_name[CU_AML_LPI] == 0u);
+	CHECK(sum.with_name[EFL_AML_CST] == 12u && sum.with_name[EFL_AML_CSD] == 12u);
+	CHECK(sum.with_name[EFL_AML_PSS] == 0u && sum.with_name[EFL_AML_PCT] == 0u && sum.with_name[EFL_AML_PPC] == 0u &&
+	      sum.with_name[EFL_AML_CPC] == 0u && sum.with_name[EFL_AML_PSD] == 0u && sum.with_name[EFL_AML_LPI] == 0u);
 
-	CHECK(cu_acpi_madt_list(&acpi, madt, CU_ACPI_MAX_MADT_CPUS, &count, &dropped) == CU_ACPI_OK);
+	CHECK(efl_acpi_madt_list(&acpi, madt, EFL_ACPI_MAX_MADT_CPUS, &count, &dropped) == EFL_ACPI_OK);
 	for (i = 0; i < count; i++) if (madt[i].flags & 1u) enabled++;
 	CHECK(count == 16u && dropped == 0u && enabled == 12u);
-	CHECK(cu_acpi_madt_processors(&acpi, &n) == CU_ACPI_OK && n == 12u);
-	CHECK(cu_acpi_madt_list(&acpi, madt, 4, &count, &dropped) == CU_ACPI_OK && count == 4u && dropped == 12u);
+	CHECK(efl_acpi_madt_processors(&acpi, &n) == EFL_ACPI_OK && n == 12u);
+	CHECK(efl_acpi_madt_list(&acpi, madt, 4, &count, &dropped) == EFL_ACPI_OK && count == 4u && dropped == 12u);
 
-	CHECK(cu_acpi_fadt_fields(&acpi, &fadt) == CU_ACPI_OK);
+	CHECK(efl_acpi_fadt_fields(&acpi, &fadt) == EFL_ACPI_OK);
 	CHECK(fadt.revision == 6u && fadt.length == 276u && fadt.has_reset);
 	CHECK(fadt.p_lvl2_lat == 101u && fadt.p_lvl3_lat == 1001u);
 	CHECK(fadt.reset_space == 1u && fadt.reset_width == 8u && fadt.reset_address == 0xCF9u && fadt.reset_value == 6u);
@@ -475,28 +476,33 @@ static void wide(unsigned short *out, const char *s)
 static void test_report_option(void)
 {
 	unsigned short opt[64], path[64], file[64];
+	struct stage_options so;
 	struct cu_options o;
 	unsigned i;
-	wide(opt, "core-unlock.efi report=1 reset=fadt");
-	cu_options_parse(opt, 64, &o);
-	CHECK(o.report == 1 && o.reset == CU_RESET_FADT && o.unknown == 0);
+	wide(opt, "bc250-stage.efi report=1 reset=fadt");
+	stage_options_parse(opt, 64, &so);
+	cu_options_read(&so, &o);
+	CHECK(o.report == 1 && o.reset == CU_RESET_FADT && stage_options_unclaimed(&so) == 0);
 	wide(opt, "report=0");
-	cu_options_parse(opt, 64, &o);
-	CHECK(o.report == 0 && o.unknown == 0);
+	stage_options_parse(opt, 64, &so);
+	cu_options_read(&so, &o);
+	CHECK(o.report == 0 && stage_options_unclaimed(&so) == 0);
 	wide(opt, "report=yes");
-	cu_options_parse(opt, 64, &o);
-	CHECK(o.report == 0 && o.unknown == 1);
+	stage_options_parse(opt, 64, &so);
+	cu_options_read(&so, &o);
+	CHECK(o.report == 0 && stage_options_unclaimed(&so) == 1);
 	wide(opt, "reset=none");
-	cu_options_parse(opt, 64, &o);
+	stage_options_parse(opt, 64, &so);
+	cu_options_read(&so, &o);
 	CHECK(o.report == 0);
 
-	wide(file, "\\EFI\\BC250\\core-unlock.efi");
-	CHECK(cu_sibling_path(file, CU_REPORT_NAME, path, 64) == 1);
+	wide(file, "\\EFI\\BC250\\bc250-stage.efi");
+	CHECK(efl_sibling_path(file, CU_REPORT_NAME, path, 64) == 1);
 	wide(opt, "\\EFI\\BC250\\core-unlock-report.txt");
 	for (i = 0; opt[i]; i++) CHECK(path[i] == opt[i]);
 	CHECK(path[i] == 0);
-	CHECK(cu_sibling_path(file, CU_REPORT_NAME, path, 20) == 0);
-	CHECK(cu_sibling_path(file, NULL, path, 64) == 0);
+	CHECK(efl_sibling_path(file, CU_REPORT_NAME, path, 20) == 0);
+	CHECK(efl_sibling_path(file, NULL, path, 64) == 0);
 }
 
 unsigned report_tests(const char *evidence_dir, unsigned *check_count)

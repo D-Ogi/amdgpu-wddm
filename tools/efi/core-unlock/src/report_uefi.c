@@ -12,7 +12,7 @@
 #include "efi.h"
 #include "cu_msr.h"
 #include "cu_report.h"
-#include "cu_text.h"
+#include "efl_text.h"
 #include "report_uefi.h"
 
 #define REPORT_AP_TIMEOUT_US	1000000u	/* one processor's sample is a few CPUID and RDMSR instructions */
@@ -197,7 +197,7 @@ void report_uefi_run(const struct report_uefi *r)
 	if (write_file(r, text, chars, &status) == 0)
 		r->say(r->say_context, "report: written to " CU_REPORT_NAME " beside this application");
 	else {
-		cu_format(line, sizeof(line), "report: the file was not written, status 0x%llx", (unsigned long long)status);
+		efl_format(line, sizeof(line), "report: the file was not written, status 0x%llx", (unsigned long long)status);
 		r->say(r->say_context, line);
 	}
 	bs->FreePool(text);
