@@ -22,7 +22,6 @@
 1	docs/adr/0003-license.md
 4	docs/adr/0004-polyform-noncommercial.md
 3	docs/adr/0005-vulkan-first-user-mode.md
-8	docs/adr/0007-bring-up-through-gated-escapes.md
 6	docs/adr/0009-native-d3d-umd-is-a-goal.md
 4	docs/adr/0010-performance-decisions-before-they-set.md
 5	docs/adr/0011-present-is-a-flip.md
