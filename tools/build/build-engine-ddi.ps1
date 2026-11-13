@@ -48,7 +48,7 @@ param(
     [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
     # Which of the two engine DLLs of one source line the runs load (BD-167): the release flavour reads no
     # diagnostic variable and has no statistics, the lab flavour keeps both. engine-abi.json pins one DLL per
-    # flavour and engine_abi.py selects it, so a lab DLL can never pass a release run.
+    # flavour and architecture (-Arch) and engine_abi.py selects it, so a lab DLL can never pass a release run.
     [ValidateSet('release', 'lab')][string]$Flavour = 'release',
     # The lab flavour (BD-167; build-umd-d3d12.ps1 -Lab passes it): the library also reads AMDGPU_WDDM_DDI_TRACE and
     # the entry path knobs (BC250_ENTRY_*). Without it, the release flavour, which has no lookup of those names.
@@ -68,7 +68,7 @@ $src = Join-Path $repo 'driver\umd\d3d12\engine-ddi'
 $pinPath = if ($EngineAbiPin) { [IO.Path]::GetFullPath($EngineAbiPin) } else { Join-Path $src 'engine-abi.json' }
 $pinSha = (Get-FileHash -Algorithm SHA256 -LiteralPath $pinPath).Hash
 $selector = Join-Path $PSScriptRoot 'engine_abi.py'
-$selected = & python -I $selector --pin $pinPath --flavour $Flavour 2>&1
+$selected = & python -I $selector --pin $pinPath --flavour $Flavour --arch $Arch 2>&1
 if ($LASTEXITCODE -ne 0) { throw "${pinPath}: no $Flavour pin ($selector): $($selected -join ' ')" }
 $pin = $selected -join "`n" | ConvertFrom-Json
 if (-not $OutputDir) { $OutputDir = Join-Path $root 'scratch\build\d3d12-engine-ddi' }
@@ -249,7 +249,7 @@ try {
     }
     # The same selection decides the verdict (engine_abi.py check_engine_dll): the DLL is the one this
     # flavour pins, or the run stops here. A flavour with no DLL built yet (pending) also stops here.
-    $verdict = & python -I $selector --pin $pinPath --flavour $Flavour --engine-dll $EngineDll 2>&1
+    $verdict = & python -I $selector --pin $pinPath --flavour $Flavour --arch $Arch --engine-dll $EngineDll 2>&1
     if ($LASTEXITCODE -ne 0) { throw "engine DLL $EngineDll is not the $Flavour engine: $($verdict -join ' ')" }
 
     function Invoke-Run([string]$Tag, [string]$Exe, [bool]$WithVvl, [string[]]$Extra = @()) {

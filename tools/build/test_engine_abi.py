@@ -85,11 +85,41 @@ class EngineFlavourTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             select_engine_abi(legacy, 'lab')
 
+    def test_an_x86_dll_is_its_own_pin(self):
+        x86 = {name: {'x86': {'engine_dll_dir': 'build/' + name + '-x86', 'engine_dll_sha256': c * 64,
+                              'engine_dll_recipe': name + ' x86 recipe'}}
+               for name, c in (('release', 'e'), ('lab', 'f'))}
+        source = pin(**x86)
+        for flavour, c in (('release', 'e'), ('lab', 'f')):
+            wide = select_engine_abi(source, flavour)
+            self.assertEqual((wide['arch'], wide['engine_dll_sha256']), ('x64', DIGEST[flavour]))
+            self.assertNotIn('x86', wide)
+            narrow = select_engine_abi(source, flavour, 'x86')
+            self.assertEqual((narrow['arch'], narrow['engine_dll_dir']), ('x86', 'build/' + flavour + '-x86'))
+            self.assertEqual(check_engine_dll(narrow, c * 64), c * 64)
+            with self.assertRaises(ValueError):
+                check_engine_dll(narrow, DIGEST[flavour])
+            with self.assertRaises(ValueError):
+                select_engine_abi(narrow, flavour, 'x64')
+        # No x86 object: x64 selects, x86 is refused. An x86 digest equal to another DLL's is refused.
+        with self.assertRaises(ValueError):
+            select_engine_abi(pin(), 'release', 'x86')
+        same = copy.deepcopy(x86)
+        same['lab']['x86']['engine_dll_sha256'] = DIGEST['release']
+        with self.assertRaises(ValueError):
+            select_engine_abi(pin(**same), 'lab')
+        short = copy.deepcopy(x86)
+        del short['lab']['x86']['engine_dll_recipe']
+        with self.assertRaises(ValueError):
+            select_engine_abi(pin(**short), 'lab', 'x86')
+        with self.assertRaises(ValueError):
+            select_engine_abi(source, 'lab', 'arm64')
+
     def test_the_pinned_engine_abi_selects_both_flavours(self):
         source = json.loads(PIN.read_text(encoding='utf-8-sig'))
         dirs = set()
-        for flavour in ('release', 'lab'):
-            selected = select_engine_abi(source, flavour)
+        for flavour, arch in (('release', 'x64'), ('lab', 'x64'), ('release', 'x86'), ('lab', 'x86')):
+            selected = select_engine_abi(source, flavour, arch)
             self.assertEqual(selected['flavour'], flavour)
             self.assertTrue(selected['engine_dll_recipe'])
             self.assertEqual(selected['engine_dll'], 'amdgpu_wddm_vkd3d.dll')
@@ -98,7 +128,7 @@ class EngineFlavourTests(unittest.TestCase):
             # A digest the build pins, or PENDING until that flavour's DLL is built. Equal digests are
             # refused by the selection itself, so the file cannot let one flavour's DLL pass the other's run.
             self.assertTrue(digest == PENDING or (len(digest) == 64 and not digest.strip('0123456789abcdef')))
-        self.assertEqual(len(dirs), 2)
+        self.assertEqual(len(dirs), 4)
 
 
 if __name__ == '__main__':
