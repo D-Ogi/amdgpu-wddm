@@ -39,7 +39,6 @@
 4	docs/design/iommu-dma-remapping.md
 1	docs/design/scanout-admission.md
 3	docs/design/vsync-arm-status.md
-10	docs/design/vsync-diagnostic-samples.md
 2	docs/dxvk-engine-commit-map.md
 8	docs/init-sequence.md
 1	docs/testing/release-notes/0.7.202.100-tester.11.md
