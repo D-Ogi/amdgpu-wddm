@@ -331,7 +331,7 @@ refusal stays behind the first on purpose, and neither is allowed to assume the 
 
 ## The DirectFlip handshake, kernel half (increment 2, 0.7.213.1)
 
-The half below was written as revision 209 on `kmd209-iflip2`; train b20 merged it into the lineage that
+The half below was written as revision 209 on `kmd209-iflip2`. Train b20 merged it into the lineage that
 ships, so 0.7.213.1 is the first driver that has it and no 0.7.209 was ever released.
 
 The compositor's user-mode driver may only answer `CheckDirectFlipSupport` TRUE about a surface the
