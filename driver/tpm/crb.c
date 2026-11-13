@@ -34,16 +34,22 @@ static void finish(struct crb *c)
 	c->busy = 0;
 }
 
-/* The answer to a command that does not fit: tag TPM_ST_NO_SESSIONS, size 10, TPM_RC_COMMAND_SIZE. */
-static void answer_bad_size(struct crb *c)
+/* A response with no parameters: tag TPM_ST_NO_SESSIONS, size 10, then the response code. */
+static void answer_rc(struct crb *c, crb_u32 rc)
 {
-	static const unsigned char rsp[CRB_TPM_HEADER_BYTES] = {
-		0x80, 0x01, 0x00, 0x00, 0x00, 0x0A,
-		(CRB_TPM_RC_COMMAND_SIZE >> 24) & 0xFFu, (CRB_TPM_RC_COMMAND_SIZE >> 16) & 0xFFu,
-		(CRB_TPM_RC_COMMAND_SIZE >> 8) & 0xFFu, CRB_TPM_RC_COMMAND_SIZE & 0xFFu,
-	};
+	unsigned char rsp[CRB_TPM_HEADER_BYTES] = {0x80, 0x01, 0x00, 0x00, 0x00, 0x0A, 0, 0, 0, 0};
+	rsp[6] = (unsigned char)((rc >> 24) & 0xFFu);
+	rsp[7] = (unsigned char)((rc >> 16) & 0xFFu);
+	rsp[8] = (unsigned char)((rc >> 8) & 0xFFu);
+	rsp[9] = (unsigned char)(rc & 0xFFu);
 	put_bytes(c, rsp, sizeof(rsp));
 	finish(c);
+}
+
+/* The answer to a command that does not fit. */
+static void answer_bad_size(struct crb *c)
+{
+	answer_rc(c, CRB_TPM_RC_COMMAND_SIZE);
 }
 
 void crb_reset(struct crb *c, volatile void *window, crb_u64 page_phys)
@@ -148,4 +154,11 @@ void crb_complete(struct crb *c, const unsigned char *response, size_t response_
 	}
 	put_bytes(c, response, response_bytes);
 	finish(c);
+}
+
+void crb_fail(struct crb *c, crb_u32 rc)
+{
+	if (!c->busy) return;
+	c->count.failed++;
+	answer_rc(c, rc);
 }

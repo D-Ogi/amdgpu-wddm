@@ -12,7 +12,7 @@ ExtensionId        = {EFA23211-8F26-484A-B7BA-EC53027EBC4B}
 Provider           = %ProviderString%
 CatalogFile        = tpmserv.cat
 PnpLockdown        = 1
-DriverVer          = 11/13/2026,1.0.0.1
+DriverVer          = 11/13/2026,1.0.0.2
 
 [SourceDisksNames]
 1 = %DiskName%

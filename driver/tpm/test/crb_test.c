@@ -144,6 +144,23 @@ static void test_bad_sizes(struct crb *c)
 	CHECK(!crb_busy(c));
 }
 
+/* A command that nobody can serve gets TPM_RC_FAILURE from crb_fail, and START goes to 0. */
+static void test_fail(struct crb *c)
+{
+	size_t n;
+	put_command((const unsigned char *)"\x80\x01\x00\x00\x00\x0c\x00\x00\x01\x45\x00\x01", 12);	/* Shutdown(STATE) */
+	wr(CRB_CTRL_START, CRB_START);
+	CHECK(crb_poll(c, cmd, sizeof(cmd), &n) == CRB_POLL_COMMAND && n == 12);
+	crb_fail(c, CRB_TPM_RC_FAILURE);
+	CHECK(rd(CRB_CTRL_START) == 0);
+	CHECK(!crb_busy(c));
+	CHECK(memcmp(page + CRB_DATA_BUFFER, "\x80\x01\x00\x00\x00\x0a\x00\x00\x01\x01", 10) == 0);
+	CHECK(c->count.failed == 1);
+	/* Without a command it does nothing. */
+	crb_fail(c, CRB_TPM_RC_FAILURE);
+	CHECK(c->count.failed == 1);
+}
+
 static void test_relinquish(struct crb *c)
 {
 	size_t n;
@@ -164,6 +181,7 @@ int main(void)
 	test_locality_and_ready(&c);
 	test_command(&c);
 	test_bad_sizes(&c);
+	test_fail(&c);
 	test_relinquish(&c);
 	printf("crb_test: %d checks, %d failures\n", checks, failures);
 	return failures != 0;

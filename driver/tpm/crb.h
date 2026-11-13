@@ -86,6 +86,8 @@ typedef char crb_u64_is_64_bits[sizeof(crb_u64) == 8 ? 1 : -1];
 #define CRB_TPM_HEADER_BYTES	10u
 /* TPM_RC_COMMAND_SIZE, the answer to a command whose header size does not fit the buffer it came in. */
 #define CRB_TPM_RC_COMMAND_SIZE	0x142u
+/* TPM_RC_FAILURE, the answer to a command that nobody can serve (no TPM core is connected). */
+#define CRB_TPM_RC_FAILURE	0x101u
 
 /* Counters for the diagnostics of the caller. They only grow. */
 struct crb_counters {
@@ -95,6 +97,7 @@ struct crb_counters {
 	crb_u32 cancels;		/* CANCEL seen while a command was out */
 	crb_u32 ready, idle;		/* cmdReady and goIdle requests */
 	crb_u32 locality_requests, locality_relinquish;
+	crb_u32 failed;			/* commands answered by crb_fail */
 };
 
 struct crb {
@@ -125,6 +128,10 @@ enum crb_poll_result crb_poll(struct crb *c, unsigned char *command, size_t capa
  * buffer, or one shorter than a TPM header, is replaced with a TPM_RC_COMMAND_SIZE answer (the core broke its
  * buffer contract; see TPMLIB_SetBufferSize in the core). Does nothing when no command is out. */
 void crb_complete(struct crb *c, const unsigned char *response, size_t response_bytes);
+
+/* Answers the command that crb_poll handed out with a 10-byte response of response code rc (tag
+ * TPM_ST_NO_SESSIONS) and clears START. For a command that nobody will serve. Does nothing when no command is out. */
+void crb_fail(struct crb *c, crb_u32 rc);
 
 /* 1 when a command is out. */
 static inline int crb_busy(const struct crb *c) { return c->busy; }

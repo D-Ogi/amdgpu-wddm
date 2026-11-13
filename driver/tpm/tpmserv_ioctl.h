@@ -6,7 +6,8 @@
  *
  * The control device lives from DriverEntry to driver unload, not with the TPM device node: a restart of the TPM
  * device node keeps the handle of the service valid, and a command that was out when the service closed its handle
- * goes out again to the next GET_COMMAND.
+ * goes out again to the next GET_COMMAND. When no service is connected for 2 s, the filter answers the command with
+ * TPM_RC_FAILURE itself (a shutdown ends the service before tpm.sys sends its last commands).
  *
  * Only the LocalSystem account and the Administrators group can open the device (SDDL in tpmserv.c).
  */
@@ -31,7 +32,7 @@
 
 #define TPMSERV_MAX_COMMAND	0xF80u	/* the CRB data buffer; see crb.h */
 
-#define TPMSERV_STATUS_VERSION	1u
+#define TPMSERV_STATUS_VERSION	2u
 struct tpmserv_status {
 	unsigned int version;		/* TPMSERV_STATUS_VERSION */
 	unsigned int attached;		/* 1 while the filter has a started TPM device with a mapped page */
@@ -39,6 +40,7 @@ struct tpmserv_status {
 	unsigned int commands, bad_size, start_while_idle, cancels;
 	unsigned int ready, idle, locality_requests, locality_relinquish;
 	unsigned int redelivered;	/* commands given out again after the service closed its handle */
+	unsigned int failed;		/* commands answered with TPM_RC_FAILURE because no service was connected */
 };
 
 #endif

@@ -221,7 +221,8 @@ static void WINAPI service_main(DWORD argc, LPWSTR *argv)
 	if (g_status_handle == NULL) return;
 	g_status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
 	g_status.dwCurrentState = SERVICE_RUNNING;
-	/* PRESHUTDOWN, not SHUTDOWN: the core stays up as long as the system lets it, for the last commands. */
+	/* PRESHUTDOWN, not SHUTDOWN: the core stops and writes its state while the system still waits for services.
+	 * tpm.sys sends its last commands later, in the kernel phase; the filter answers them (tpmserv_ioctl.h). */
 	g_status.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_PRESHUTDOWN;
 	SetServiceStatus(g_status_handle, &g_status);
 	run();

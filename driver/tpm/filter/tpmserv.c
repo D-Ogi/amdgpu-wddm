@@ -38,6 +38,11 @@ TRACELOGGING_DEFINE_PROVIDER(g_TpmServ, "Bc250TpmServicer",
 #define POLL_FAST_MS		1
 #define POLL_SLOW_MS		10
 #define POLL_FAST_TICKS		1000u	/* quiet fast ticks before the slow rate */
+/* How long a command waits for a core service when none is connected, before the filter answers it with
+ * TPM_RC_FAILURE. Long enough for a restart of the service; short, because tpm.sys sends its last commands
+ * (TPM2_Shutdown) in the kernel phase of a shutdown, after every service has ended, and without an answer it waits
+ * for its own timeouts: the shutdown of unit A took more than 180 s that way (2026-11-13). */
+#define ORPHAN_WAIT_100NS	(2000ll * 10000ll)
 
 /* One servicer per machine: the platform has one TPM. The lock orders the timer, the I/O callbacks and the PnP
  * callbacks; every access to the window and to the command state holds it. */
@@ -54,6 +59,8 @@ typedef struct _SERVICER {
 	BOOLEAN CommandOut;		/* crb_poll gave a command and crb_complete has not run */
 	BOOLEAN Delivered;		/* the command went to the service */
 	WDFFILEOBJECT DeliveredTo;
+	BOOLEAN ServiceOpen;		/* the core service holds the control device open */
+	ULONGLONG OrphanDeadline;	/* interrupt time at which a command without a service is failed, 0 if none */
 	ULONG Redelivered;
 	ULONG QuietTicks;
 	struct crb Crb;
@@ -105,7 +112,7 @@ static BOOLEAN BoardIsBc250(VOID)
 static ULONG ActivitySum(const struct crb_counters *k)
 {
 	return k->commands + k->bad_size + k->start_while_idle + k->cancels + k->ready + k->idle +
-	       k->locality_requests + k->locality_relinquish;
+	       k->locality_requests + k->locality_relinquish + k->failed;
 }
 
 /* Under the lock: hand the command out if a request waits. Returns the request to complete, or NULL. */
@@ -134,6 +141,32 @@ static VOID CompleteGet(WDFREQUEST request)
 	}
 }
 
+/* Under the lock: a command that is out while no service is connected gets TPM_RC_FAILURE after ORPHAN_WAIT_100NS.
+ * A service that connects in that time gets the command. */
+static VOID FailOrphanLocked(VOID)
+{
+	ULONGLONG now;
+
+	if (!g.CommandOut || g.ServiceOpen) {
+		g.OrphanDeadline = 0;
+		return;
+	}
+	now = KeQueryInterruptTime();
+	if (g.OrphanDeadline == 0) {
+		g.OrphanDeadline = now + ORPHAN_WAIT_100NS;
+		return;
+	}
+	if (now < g.OrphanDeadline) return;
+	crb_fail(&g.Crb, CRB_TPM_RC_FAILURE);
+	g.CommandOut = FALSE;
+	g.Delivered = FALSE;
+	g.DeliveredTo = NULL;
+	g.OrphanDeadline = 0;
+	TraceLoggingWrite(g_TpmServ, "orphan",
+		TraceLoggingHexUInt32(((ULONG)g.Command[6] << 24) | ((ULONG)g.Command[7] << 16) |
+				      ((ULONG)g.Command[8] << 8) | g.Command[9], "code"));
+}
+
 static VOID EvtTimer(_In_ WDFTIMER Timer)
 {
 	WDFREQUEST deliver = NULL;
@@ -153,6 +186,7 @@ static VOID EvtTimer(_In_ WDFTIMER Timer)
 				TraceLoggingHexUInt32(((ULONG)g.Command[6] << 24) | ((ULONG)g.Command[7] << 16) |
 						      ((ULONG)g.Command[8] << 8) | g.Command[9], "code"));
 		}
+		FailOrphanLocked();
 		after = ActivitySum(&g.Crb.count);
 		deliver = TakeWaitingRequestLocked();
 		if (after != before || g.CommandOut) g.QuietTicks = 0;
@@ -230,6 +264,7 @@ static VOID GetStatus(WDFREQUEST request)
 	s->locality_requests = g.Crb.count.locality_requests;
 	s->locality_relinquish = g.Crb.count.locality_relinquish;
 	s->redelivered = g.Redelivered;
+	s->failed = g.Crb.count.failed;
 	WdfSpinLockRelease(g.Lock);
 	WdfRequestCompleteWithInformation(request, STATUS_SUCCESS, sizeof(*s));
 }
@@ -248,10 +283,23 @@ static VOID EvtControlIoctl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request, _In_ s
 	}
 }
 
-/* The service closed its handle: a command it held goes out again to the next GET_COMMAND. */
+/* The service opened the control device (it is exclusive: one service). */
+static VOID EvtFileCreate(_In_ WDFDEVICE Device, _In_ WDFREQUEST Request, _In_ WDFFILEOBJECT FileObject)
+{
+	UNREFERENCED_PARAMETER(Device);
+	UNREFERENCED_PARAMETER(FileObject);
+	WdfSpinLockAcquire(g.Lock);
+	g.ServiceOpen = TRUE;
+	WdfSpinLockRelease(g.Lock);
+	WdfRequestComplete(Request, STATUS_SUCCESS);
+}
+
+/* The service closed its handle: a command it held goes out again to the next GET_COMMAND, or gets
+ * TPM_RC_FAILURE when no service connects in time (FailOrphanLocked). */
 static VOID EvtFileCleanup(_In_ WDFFILEOBJECT FileObject)
 {
 	WdfSpinLockAcquire(g.Lock);
+	g.ServiceOpen = FALSE;
 	if (g.Delivered && g.DeliveredTo == FileObject) {
 		g.Delivered = FALSE;
 		g.DeliveredTo = NULL;
@@ -278,7 +326,7 @@ static NTSTATUS CreateControlDevice(_In_ WDFDRIVER Driver)
 	WdfDeviceInitSetDeviceType(init, TPMSERV_DEVICE_TYPE);
 	status = WdfDeviceInitAssignName(init, &name);
 	if (!NT_SUCCESS(status)) { WdfDeviceInitFree(init); return status; }
-	WDF_FILEOBJECT_CONFIG_INIT(&fileConfig, WDF_NO_EVENT_CALLBACK, WDF_NO_EVENT_CALLBACK, EvtFileCleanup);
+	WDF_FILEOBJECT_CONFIG_INIT(&fileConfig, EvtFileCreate, WDF_NO_EVENT_CALLBACK, EvtFileCleanup);
 	WdfDeviceInitSetFileObjectConfig(init, &fileConfig, WDF_NO_OBJECT_ATTRIBUTES);
 	status = WdfDeviceCreate(&init, WDF_NO_OBJECT_ATTRIBUTES, &control);
 	if (!NT_SUCCESS(status)) { if (init != NULL) WdfDeviceInitFree(init); return status; }
