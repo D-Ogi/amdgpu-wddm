@@ -41,7 +41,6 @@
 1	docs/design/dpm.md
 12	docs/design/fan.md
 11	docs/design/gfx-submit-root-serialization.md
-16	docs/design/gpu-dwm-interop-switches.md
 5	docs/design/hang-detector.md
 4	docs/design/iommu-dma-remapping.md
 14	docs/design/paging-journal.md

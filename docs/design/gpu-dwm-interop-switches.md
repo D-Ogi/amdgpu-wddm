@@ -18,7 +18,7 @@ None of this has run on the lab yet.
 | Switch | Consumer | Effect when 1 |
 |---|---|---|
 | `EnableGpuPresentBlit` | `Bc250WddmPresent` (wddm.c) | a Blt present calls `WddmBuildGpuPresent` instead of the CPU `BlitGate` path |
-| `EnableGpuPresentBlit` | `SubmitCommandVirtual` BGP1 admission (wddm.c) | a BGP1 record is executed; with the switch at 0 it is refused with `STATUS_INVALID_PARAMETER` |
+| `EnableGpuPresentBlit` | `SubmitCommandVirtual` BGP1 admission (wddm.c) | a BGP1 record is executed. With the switch at 0 it is refused with `STATUS_INVALID_PARAMETER` |
 | `EnableGpuPresentBlit` | `wddm_allocation_identity.inc` | `OpenAllocation` binds the opened handle to its `CreateAllocation` object |
 | `EnableCddDwmInterop` | `WddmDriverCaps` (wddm.c, DXGKQAITYPE_DRIVERCAPS) | reports the interop cap and `MaxTextureWidthShift`/`MaxTextureHeightShift` 2 |
 | `EnableCddDwmInterop` (or `EnableHandleIdentityProbe`) | `WddmObservePresent` (wddm.c) | records the first 16 Blt presents' handles (diagnostic, no GPU work) |
@@ -41,7 +41,7 @@ A change takes effect at the next adapter start: a driver restart, a device disa
 
 ## The decision at start
 
-`interop_policy.c` decides; `interop.c` reads the registry and carries the decision out. The policy is plain C
+`interop_policy.c` decides. `interop.c` reads the registry and carries the decision out. The policy is plain C
 and `driver/kmd/test/interop_policy_test.c` runs it against an independent oracle over every input combination,
 plus the life of the switches across simulated boots (quality gate `interop-policy`).
 
@@ -57,10 +57,10 @@ plus the life of the switches across simulated boots (quality gate `interop-poli
 
 After an unclean boot, if either switch is not explicitly 0, the start:
 
-1. writes `EnableGpuPresentBlit` = 0 and `EnableCddDwmInterop` = 0, flushed;
-2. writes `InteropClosedReason` = 4 (unclean);
+1. writes `EnableGpuPresentBlit` = 0 and `EnableCddDwmInterop` = 0, flushed.
+2. writes `InteropClosedReason` = 4 (unclean).
 3. deletes `InteropSession`, but only if steps 1 and 2 reached the disk. Otherwise the marker stays, and the
-   next start closes again;
+   next start closes again.
 4. runs with both switches closed and logs one line that names the reason:
 
 ```
@@ -91,9 +91,9 @@ The marker has to say "the machine went down while the path was in use", not "th
 - When the last counted device is destroyed (`Bc250WddmDestroyDevice`, then `InteropUserEnd`), the marker is
   deleted, and `InteropLastEnd` is set to 2.
 - An orderly adapter stop (`Bc250StopDevice`, then `InteropStop`) also deletes it, and sets `InteropLastEnd` to 1.
-- A system sleep or shutdown deletes it when it begins, while the registry is still up (KMD 0.7.198, BD-059):
+- A system sleep or shutdown deletes it when it starts, while the registry is still up (KMD 0.7.198, BD-059):
   - the `\Callback\PowerState` notification `PO_CB_SYSTEM_STATE_LOCK` with Argument2 0, sent before the system
-    set-power IRP, sets `InteropLastEnd` to 3 (system-power);
+    set-power IRP, sets `InteropLastEnd` to 3 (system-power).
   - the adapter's `DxgkDdiSetPowerState` to D1-D3 for a system action (`PowerActionSleep` to
     `PowerActionShutdownOff`) is the second hook and sets 4 (adapter-d3) if the marker is still there, for example
     after a failed delete in the callback.
@@ -115,13 +115,13 @@ clean restart, so the session now ends at the power transition instead.
 
 What stays detected: a hang, a 0x116 bugcheck or a power cut with the path in use comes before any power
 transition, so the marker is still there at the next start, and the switches close. What is given up: a power
-loss while the machine is asleep (S3) or hibernated, with DWM alive, now reads as clean; the path is not in use
+loss while the machine is asleep (S3) or hibernated, with DWM alive, now reads as clean. The path is not in use
 in S3/S4, and the marker comes back at the resume.
 
-The transitions are `bc250_interop_session_step` in `interop_policy.c`, plain C; the host test checks every
+The transitions are `bc250_interop_session_step` in `interop_policy.c`, plain C. The host test checks every
 sequence of up to five events, each with the registry write succeeding or failing, against independent rules,
 plus nine lifecycles on the simulated registry (a clean restart through either hook, a failed delete retried, a
-device that begins during the shutdown, a death with the path in use, sleep and resume).
+device that starts during the shutdown, a death with the path in use, sleep and resume).
 
 One planned restart on the lab has to show `previous end system-power` (or `adapter-d3`) and no `unclean`, and one
 AC cut with DWM on the path has to show `unclean` and `CLOSED_BY_DRIVER`.
@@ -132,10 +132,10 @@ All are REG_DWORD under `Services\bc250kmd\Parameters`.
 
 | Value | Written by | Meaning |
 |---|---|---|
-| `EnableGpuPresentBlit` | operator; the driver writes 0 after an unclean boot | absent = 1 since 0.7.181 |
-| `EnableCddDwmInterop` | operator; the driver writes 0 after an unclean boot | absent = 1 since 0.7.181 |
+| `EnableGpuPresentBlit` | operator. The driver writes 0 after an unclean boot | absent = 1 since 0.7.181 |
+| `EnableCddDwmInterop` | operator. The driver writes 0 after an unclean boot | absent = 1 since 0.7.181 |
 | `InteropSession` | driver | this boot's BootId while a counted device is alive |
-| `InteropClosedReason` | driver | why the driver wrote both switches 0; deleted when they open again |
+| `InteropClosedReason` | driver | why the driver wrote both switches 0. Deleted when they open again |
 | `InteropLastState` | driver, every full start | effective bits, plus requested bits shifted left by 8 (bit 1 blit, bit 2 cdd) |
 | `InteropLastReason` | driver, every full start | the start's reason |
 | `InteropLastEnd` | driver | how the last session ended: 1 device stop, 2 last user gone, 3 system power transition (0.7.198), 4 adapter down for a system action (0.7.198) |
@@ -148,9 +148,9 @@ with both switches on.
 `BC250_ESCAPE_RUN_INTEROP` (25, `BC250_ESCAPE_INTEROP`, ABI 1, 104 bytes) returns the snapshot. It has one
 operation, READ, and follows the DPM and CU-mode pattern:
 
-- `NoAdapterSynchronization` = 1 and every other escape flag 0;
-- open to every caller;
-- no BAR access, under the start-health reader rundown;
+- `NoAdapterSynchronization` = 1 and every other escape flag 0.
+- open to every caller.
+- no BAR access, under the start-health reader rundown.
 - `Reserved` zero in and out.
 
 There is no write operation. The switches are registry state and stay so.
@@ -164,11 +164,10 @@ power callback registered
 ```
 
 The last line comes from 0.7.198 on. `NOT registered` means `\Callback\PowerState` was not available at load and
-only the adapter's D3 ends a session at a clean restart; `, system power transition under way (no mark)` means a
+only the adapter's D3 ends a session at a clean restart. `, system power transition under way (no mark)` means a
 sleep or shutdown has begun and the system is not back in S0. Snapshot flags: `POWER_CALLBACK` 2048, `DOWN` 4096.
 
-`log summary` adds one `interop summary:` line. The existing `wddm: CDD interop%u GPU Present gate%u identity
-probe%u` line is unchanged, because `interop.ps1` parses it.
+`log summary` adds one `interop summary:` line. The existing `wddm: CDD interop%u GPU Present gate%u identity probe%u` line is unchanged, because `interop.ps1` parses it.
 
 ## Deployment note
 
