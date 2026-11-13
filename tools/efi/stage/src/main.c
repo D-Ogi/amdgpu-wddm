@@ -381,10 +381,11 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st)
 		}
 		modules[i]->run(&stage);
 	}
+	/* The core reads its own option before the count, so next= is not in the count. */
+	choose_next(&stage);
 	unclaimed = stage_options_unclaimed(&stage.options);
 	if (unclaimed) stage_sayf(&stage, NULL, "%u load option(s) not understood and ignored", unclaimed);
 
-	choose_next(&stage);
 	status = start_next(&stage);
 	unwind_modules(&stage);
 	if (stage.root != NULL) stage.root->Close(stage.root);
