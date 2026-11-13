@@ -16,7 +16,6 @@
 # document has to be rewritten; a document that is touched anyway should come out lower.
 #
 # To look at one document: python tools/quality/doclint.py --files <path>
-1	docs/adr/0003-license.md
 4	docs/adr/0004-polyform-noncommercial.md
 3	docs/adr/0005-vulkan-first-user-mode.md
 6	docs/adr/0009-native-d3d-umd-is-a-goal.md
