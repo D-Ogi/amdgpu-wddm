@@ -222,9 +222,22 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 	{
 		unsigned char t[512];
 		size_t nb = ar_build_stubs(&plan, t, sizeof(t));
-		CHECK(nb > 0 && memcmp(t, t + 0, 0) == 0);
+		/* The header's length field carries the size the builder returns. */
+		CHECK(nb > 36u && t[4] == (unsigned char)nb && ar_table_sound(t, nb));
 		CHECK(memcmp(t + nb - 15u, "\x08_HID\x0dMSFT0101", 15) == 0);
 	}
+	/* The real case of trial s8: MSFT0101 with the reserved page, so _HID followed by _CRS. */
+	plan.crb_base = 0x12345000ull;
+	{
+		unsigned char t[512];
+		size_t nb = ar_build_stubs(&plan, t, sizeof(t));
+		/* Header, the three stub methods, the scope, the device, _HID and _CRS. */
+		CHECK(nb == 36u + 3u * 7u + 7u + 7u + 15u + 5u + 16u);
+		CHECK(ar_table_sound(t, nb));
+		CHECK(memcmp(t + 36u + 3u * 7u + 7u + 7u, "\x08_HID\x0dMSFT0101", 15) == 0);
+		CHECK(memcmp(t + nb - 12u, "\x86\x09\x00\x00\x00\x50\x34\x12\x00\x10\x00\x00", 12) == 0);
+	}
+	plan.crb_base = 0;
 	plan.hid_msft = 0;
 
 	/* Device on and no stub needed: the table is still built, and it holds the device alone. */

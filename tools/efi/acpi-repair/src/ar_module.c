@@ -224,8 +224,10 @@ static void ar_module_run(struct stage *stage)
 			if (plan.stub_mask & (1u << s))
 				stage_sayf(stage, AR_NAME, "method %s is called and not defined: an empty method", ar_stub_name(s));
 		bytes = ar_build_stubs(&plan, buffer, AR_TABLE_MAX_BYTES);
-		if (bytes != 0 && plan.device && ar_table_holds(buffer, bytes, "BC250001"))
-			stage_say(stage, AR_NAME, "experiment device TPM0 with _HID BC250001 is in the built table");
+		/* The log names the identifier that the plan wrote, and proves it from the built bytes. */
+		if (bytes != 0 && plan.device && ar_table_holds(buffer, bytes, plan.hid_msft ? "MSFT0101" : "BC250001"))
+			stage_sayf(stage, AR_NAME, "experiment device TPM0 with _HID %s is in the built table",
+				   plan.hid_msft ? "MSFT0101" : "BC250001");
 		if (bytes == 0 || !ar_check_stubs(&plan, buffer, bytes))
 			stage_say(stage, AR_NAME, "method stubs: the built table failed its own check: not installed");
 		else if (!apply)
