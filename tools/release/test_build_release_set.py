@@ -708,6 +708,19 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
         words = {h["word"] for h in gates["attribution"]["hits"]}
         self.assertTrue({"Co-Authored-By", "Claude", "Anthropic"} <= words, words)
 
+    def test_the_tracked_claude_md_file_name_is_no_attribution(self):
+        commit = self.ws.commit("docs: CLAUDE.md in STE\n\nCLAUDE.md has no doclint findings now.\n")
+        git(self.ws.repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+        git(self.ws.repo, "fetch", "-q", "origin")
+        _, gates = self.gates(self.ws.manifest([self.ws.row("a", commit=commit)], recipe_commit=commit))
+        self.assertEqual(gates["attribution"]["status"], "PASS", gates["attribution"])
+        commit = self.ws.commit("docs: CLAUDE.md in STE\n\nClaude rewrote it.\n")
+        git(self.ws.repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+        git(self.ws.repo, "fetch", "-q", "origin")
+        _, gates = self.gates(self.ws.manifest([self.ws.row("a", commit=commit)], recipe_commit=commit))
+        self.assertEqual(gates["attribution"]["status"], "FAIL")
+        self.assertIn("Claude", {h["word"] for h in gates["attribution"]["hits"]})
+
     def test_an_unpublished_owner_attribution_is_refused(self):
         commit = self.ws.commit(OWNER_QUOTE)
         _, gates = self.gates(self.ws.manifest([self.ws.row("a", commit=commit)], recipe_commit=commit),

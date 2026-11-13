@@ -63,10 +63,12 @@ TEST_PLACEHOLDERS = ARG_PLACEHOLDERS | {"testout", "recipe"}
 KIND_COMPILERS = {"user": ("clang-cl", "msvc"), "kernel": ("msvc",), "managed": ("csc",), "data": ("none",)}
 # Words that say an AI agent or model wrote or co-wrote a commit. No AI agent appears as author or co-author in the
 # public repositories. Qwen and Llama are left out on purpose: they are the models this project
-# runs on the GPU, so their names are the subject of a measurement, not an author.
+# runs on the GPU, so their names are the subject of a measurement, not an author. The file name CLAUDE.md is the
+# repository's own tracked working rules: a commit that names that file names a document, not an author (the push
+# gate of the workspace reads it the same way).
 ATTRIBUTION = [
     ("Co-Authored-By", r"co-authored-by"),
-    ("Claude", r"\bclaude\b"), ("Anthropic", r"\banthropic\b"), ("Opus", r"\bopus\b"), ("Sonnet", r"\bsonnet\b"),
+    ("Claude", r"\bclaude\b(?!\.md\b)"), ("Anthropic", r"\banthropic\b"), ("Opus", r"\bopus\b"), ("Sonnet", r"\bsonnet\b"),
     ("Haiku", r"\bhaiku\b"), ("Fable", r"\bfable\b"), ("Codex", r"\bcodex\b"), ("OpenAI", r"\bopen\s?ai\b"),
     ("GPT", r"\b(?:chat)?gpt(?:-?[0-9][\w.]*)?\b"), ("Gemini", r"\bgemini\b"), ("Grok", r"\bgrok\b"),
     ("Copilot", r"\bcopilot\b"), ("DeepSeek", r"\bdeepseek\b"),
@@ -79,7 +81,7 @@ ATTRIBUTION_RX = [(word, re.compile(rx, re.I)) for word, rx in ATTRIBUTION]
 # attribution context by themselves, so these words are always a hit there. The gate checks these documented
 # patterns; it is no general detector of authorship in prose.
 CONTEXT_WORDS = {"Opus", "Sonnet", "Haiku", "Fable"}
-CONTEXT_RX = re.compile(r"^\s*[a-z][a-z-]*-by\s*:|\bclaude\b|\banthropic\b"
+CONTEXT_RX = re.compile(r"^\s*[a-z][a-z-]*-by\s*:|\bclaude\b(?!\.md\b)|\banthropic\b"
                         r"|\b(?:written|generated|authored|recorded|assisted|created)\s+(?:by|with)\b", re.I)
 # A commit message states a requirement as the project's own, never as a quote of the repository owner or an
 # attribution with a date. The push gate of the workspace refuses such a message with this same pattern, so a
