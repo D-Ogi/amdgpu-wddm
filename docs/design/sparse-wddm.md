@@ -25,7 +25,7 @@ That guide also constrains queued mapping implementation. A paging companion
 context waits on the UpdateGpuVirtualAddress monitored fence, updates mappings,
 then signals completion. Tile-pool physical locations can change while that
 work waits. CopyPageTableEntries therefore resolves the current mappings at
-execution through the privileged process address space; capturing physical
+execution through the privileged process address space. Capturing physical
 page numbers at construction is not an equivalent general implementation.
 For CPU_VIRTUAL page-table updates, Microsoft describes a separate deferred
 UpdatePageTable path without CopyPageTableEntries and without rendering overlap.
@@ -36,29 +36,29 @@ The original migration failure was M414's compiler assertion in
 ac_nir_fixup_smem_loads_null_prt.c. Current AMD compiler information marks this
 ASIC as affected by scalar-memory reads from NULL PRT pages. Mesa's workaround
 uses two related virtual address ranges. Sparse buffers have a normal HIGH
-view and a LOW view; missing LOW regions map a real zero-filled buffer. Scalar
+view and a LOW view. Missing LOW regions map a real zero-filled buffer. Scalar
 loads clear a reserved address bit and use the LOW view. Normal allocations
-must respect that address-bit policy; mappings of resident pages must keep
+must respect that address-bit policy. Mappings of resident pages must keep
 both views consistent. At M414, the WDDM2 port did not supply that policy or
 address_prt_wa_control_bit. M485 implements the two-view policy with bit46. Assigning an arbitrary nonzero bit would only hide
-the assertion, not establish correct mappings.
+the assertion, not establish valid mappings.
 
 Accordingly radv_sparse_enabled returns false when the workaround is required
-and the bit is absent. This deliberately gates the current sparse feature set;
-it is not proof that basic sparseBinding, buffer residency and image residency
+and the bit is absent. This deliberately gates the current sparse feature set.
+It is not proof that basic sparseBinding, buffer residency and image residency
 all have identical requirements. Evaluate them separately during implementation.
 
 KMD149 now encodes native Zero/PRT and advertises ZeroInPteSupported.
 M484 verifies initial/unmapped zero reads and discarded writes through CP DMA,
-with exact bound-data controls. Four-level terminal encoding is host-tested;
-higher-level hardware walks remain unverified. M485/M487 add scalar/shader
+with exact bound-data controls. Four-level terminal encoding is host-tested.
+Higher-level hardware walks remain unverified. M485/M487 add scalar/shader
 and RGBA8 image controls. The separate
 COPY_DATA access path still triggers TDR in the observed hole test. Native
 Zero support alone does not complete scalar alias or queued mapping requirements.
 
 Local primary references: ref/ddi-display/d3dukmdt.md, DXGK_PTE,
 D3DDDIGPUVIRTUALADDRESS_PROTECTION_TYPE and
-D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION; ref/ddi-display/d3dkmddi.md,
+D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION. Further references: ref/ddi-display/d3dkmddi.md,
 DXGK_GPUMMUCAPS. The consolidated sources include exact WDK26100 declarations.
 Code review and source hashes are in
 [the source review](../../evidence/windows/2026-09-24-E27-m9-recovery/sparse-uma-review/RESULT.md).
@@ -69,20 +69,20 @@ Code review and source hashes are in
    replay/capture addresses and the KMD VA width. Port the existing AMD/Linux
    algorithm, adapting the OS mapping API rather than inventing register values.
 2. Implement matching HIGH/LOW reservation, initial zero mapping, bind/unbind
-   and destruction. Keep both views ordered with the queue's real VM fences;
-   retain backing until their users retire. Establish the Zero/PRT or OS-emulated
+   and destruction. Keep both views ordered with the queue's real VM fences.
+   Retain backing until their users retire. Establish the Zero/PRT or OS-emulated
    page semantics on this unit before enabling capabilities.
 3. Test resident/unbound/rebound pages with distinct known values, scalar and
    vector reads, aliases and writes into holes followed by reads. Follow the
    exact advertised Vulkan guarantees: strict nonresident behavior means zero
-   reads and discarded writes; without it safe undefined reads are still
+   reads and discarded writes. Without it, safe undefined reads are still
    distinct from a fault or hang. Basic sparseBinding requires complete binding
-   before access; sparseResidency is a separate feature.
+   before access. `sparseResidency` is a separate feature.
    [Vulkan sparse resources](https://docs.vulkan.org/spec/latest/chapters/sparsemem.html).
 4. Cover buffers first, then image block layouts, mip tails and advertised image
-   formats/sample counts; include aliasing and queued remaps. Compare the chosen
+   formats/sample counts. Include aliasing and queued remaps. Compare the chosen
    CTS sparse cases with Linux on this unit at the same Mesa revision. Re-run
-   ordinary M8/M9 content controls; turn on only the features actually accepted.
+   ordinary M8/M9 content controls. Turn on only the features actually accepted.
 
 This work is not performed merely by upgrading Mesa, adding SDMA INDIRECT,
 or enabling a capability flag. It does not require implementing O2 adaptive
@@ -92,7 +92,7 @@ CPU/GPU execution. Sparse hardware acceptance remains open.
 The Mesa05e6c962 candidate at that stage fixes virtual reservation ownership (M481)
 and batches mapping requests behind application waits and previous rendering
 (M482). A GPU wait on the OS mapping-completion fence precedes later work and
-signals. Host models exercise the actual request-building functions; ordinary
+signals. Host models exercise the actual request-building functions. Ordinary
 compute/present controls check regressions. Neither is sparse GPU acceptance.
 M484-M487 subsequently add native page semantics and scalar alias controls.
 Privileged runtime PTE resolution remains required before general enablement.
