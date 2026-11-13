@@ -87,7 +87,6 @@
 1	driver/kmd/test/vsync_vector_test.md
 1	driver/shim/README.md
 6	driver/shim/test/README.md
-25	driver/shim/test/sdma_faults_report.md
 23	driver/umd/d3d12/README.md
 29	driver/umd/d3d12/engine-ddi/README.md
 30	driver/umd/d3d12/engine-ddi/SLOTS.md

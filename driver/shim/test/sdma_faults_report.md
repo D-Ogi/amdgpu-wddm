@@ -1,11 +1,11 @@
-Report of the first full run, 2026-09-21; fixes of 2026-09-22 are listed at the end.
+Report of the first full run, 2026-09-21. Fixes of 2026-09-22 are listed at the end.
 
 # SDMA bring-up under fault injection
 
 Host-side matrix against `driver/shim/bc250_sdma.c`, run with an instrumented allocator (live-object
 table, poison on free, fault at the Nth call) and a register file that can make an engine answer with
 a write pointer the driver did not choose. No register sequence was changed and none was compared
-with a trace here; `run_gfx.ps1` still says EXACT MATCH over 354 + 35 writes.
+with a trace here. `run_gfx.ps1` still says EXACT MATCH over 354 + 35 writes.
 
 Deliverables:
 
@@ -13,27 +13,27 @@ Deliverables:
   and register backend, so nothing it does can reach the replay's `backend_mem.c`.
 - `driver\shim\test\run_sdma_faults.ps1` - build and run, output under
   `<BC250_ROOT>\scratch\build\sdma-faults`, exit code non-zero on a failed expectation.
-- `driver\shim\test\README.md` - new file (there was none); what the suite is and
+- `driver\shim\test\README.md` - new file (there was none). What the suite is and
   how an expected failure is written.
 
-State today: **161 checks, 0 failures, 15 expected failures over 7 confirmed defects, exit 0.**
+State today: **161 checks, 0 failures, 15 expected failures over 7 established defects, exit 0.**
 
 ## The matrix
 
 | # | Case | Verdict |
 |---|------|---------|
-| 1a | ring/write-back/fence allocation fails, each in turn (calls 0, 1, 2, 3) | **PASS** - error returned, every earlier allocation released exactly once, no double free, no stray free, no write into freed memory, and the failed setup writes no register at all |
+| 1a | ring/write-back/fence allocation fails, each in turn (calls 0, 1, 2, 3) | **PASS** - error returned. Every earlier allocation is released exactly once, with no double free, no stray free and no write into freed memory. The failed setup writes no register at all |
 | 1b | the same for engine 0 and engine 1 separately | **PASS** |
 | 1c | retry after a failure, and teardown twice after it | **PASS** |
 | 2a | write-back page returns `cpu == NULL` | **DEFECT D-01** (accepted), **DEFECT D-02** (leaked) |
 | 2b | ring buffer returns `cpu == NULL`, engine 0 and engine 1 | refusal **PASS**, **DEFECT D-02** (the refused object is unfreeable) |
 | 2c | fence page returns `cpu == NULL` | refusal **PASS**, **DEFECT D-03** (leaked, and a retry leaks a second page) |
 | 3 | `slot = ring->me & 1`, a caller with `me = 2` | **DEFECT D-07** |
-| 4a | preserved wptr all-ones (both halves, low half, high half) | **PASS** - `BC250_EINVAL`, ring not enabled, no write outside the confirmed set |
+| 4a | preserved wptr all-ones (both halves, low half, high half) | **PASS** - `BC250_EINVAL`, ring not enabled, no write outside the established set |
 | 4b | preserved wptr not dword aligned / not a whole 16-dword submission / one dword | **PASS** - `BC250_EINVAL` |
-| 4c | preserved wptr past the end of the ring | **PASS** - adopted on purpose; `buf_mask` wraps it (0x2040 -> dword 0x10 of 0x800) |
+| 4c | preserved wptr past the end of the ring | **PASS** - adopted on purpose. `buf_mask` wraps it (0x2040 -> dword 0x10 of 0x800) |
 | 4d | preserved wptr wildly large (0x7FFF_FFFF_FFC0) | **PASS** - adopted, programmed back, published into the shadow before `RB_ENABLE`, indexing stays in the ring |
-| 5 | engine 1 refuses after engine 0 has started | state is **unambiguous but not safe**: engine 0 left running (upstream same, see below); `hw_fini` correctly reports `BC250_EBUSY`; a second setup is **DEFECT D-04** |
+| 5 | engine 1 refuses after engine 0 has started | state is **unambiguous but not safe**: engine 0 left running (upstream same, see below). `hw_fini` correctly reports `BC250_EBUSY`. A second setup is **DEFECT D-04** |
 | 6a | `start` and `hw_fini` after a failed setup | **DEFECT D-05** |
 | 6b | unwind exactly once, fini twice, fini after a failed setup | **PASS** |
 | 6c | the rings after a teardown | **DEFECT D-06** (use-after-write into a freed ring buffer and a freed write-back page) |
@@ -43,10 +43,10 @@ State today: **161 checks, 0 failures, 15 expected failures over 7 confirmed def
 ### D-01 `bc250_sdma_setup()` accepts a write-back page it cannot address
 
 `driver/shim/bc250_sdma.c:633-637` and `:669-671`. The ring buffer's `cpu == NULL` is refused eight
-lines below (`:653-656`); the write-back page's is not, and `ring->wptr_cpu_addr` is simply left NULL.
+lines below (`:653-656`). The write-back page's is not, and `ring->wptr_cpu_addr` is simply left NULL.
 
 Scenario: an allocator honours the contract in `driver/shim/include/bc250_shim.h:31-38` ("`cpu` may be
-NULL if the owner cannot map the memory; the shim then refuses to build anything that needs CPU
+NULL if the owner cannot map the memory. The shim then refuses to build anything that needs CPU
 access rather than guessing") and hands back the write-back page unmapped. `bc250_sdma_setup()`
 returns 0. `bc250_sdma_start()` then programs `SDMA0_GFX_RB_WPTR_POLL_ADDR_LO/HI` with the page's MC
 address and sets `F32_POLL_ENABLE` (`:396-407`): the engine is told to poll a shadow the driver can
@@ -74,7 +74,7 @@ backend away from being real.
 +	}
 ```
 
-The `if (adev->sdma.wb_mem.cpu != NULL)` at `:669` then becomes always true; leaving it costs nothing.
+The `if (adev->sdma.wb_mem.cpu != NULL)` at `:669` then becomes always true. Leaving it costs nothing.
 
 Upstream: no counterpart. `amdgpu_bo_create_reserved()` fails the whole allocation when the kernel
 map fails (`ref/linux-src/.../amdgpu_object.c:302-308`), so amdgpu has no "allocated but unmapped"
@@ -90,7 +90,7 @@ pointer. So every "allocated, but I cannot address it" refusal in the shim leaks
 got: the shim holds `mc` and `size` and has no way to say so. The suite shows one live allocation
 after each of cases 2a and 2b.
 
-Two ways out; the lead picks.
+Two ways out. The lead picks.
 
 (a) Make free able to release it - smallest change that keeps the contract as written:
 
@@ -113,7 +113,7 @@ plus the same two lines in `backend_mem.c:315-332`, and one sentence in `bc250_s
 
 (b) Tighten the contract instead: `bc250_shim_mem_alloc()` must never return 0 with `cpu == NULL`
 (both backends already behave that way), `bc250_shim.h:31-38` says so, and the four `cpu == NULL`
-rejections in the shim stay as cheap assertions. That deletes D-01 and D-03 along with D-02, at the
+rejections in the shim stay as cheap assertions. That removes D-01 and D-03 along with D-02, at the
 price of a documented capability nobody uses.
 
 Upstream: no counterpart, same reason as D-01. `amdgpu_bo_free_kernel()` takes the BO, not a CPU
@@ -157,14 +157,14 @@ one leaked page per submission attempt.
  	return 0;
 ```
 
-Without D-02 the two explicit stores still stop the second leak; only the first page is lost.
+Without D-02 the two explicit stores still stop the second leak. Only the first page is lost.
 
 Upstream: no counterpart. `sdma_v5_0_ring_test_ring()` takes its scratch dword from
 `amdgpu_device_wb_get()` (`reference/sdma_v5_0.c:1023-1027`) and frees it on every error path.
 
 ### D-04 a second `bc250_sdma_setup()` leaks the first one's three allocations
 
-`driver/shim/bc250_sdma.c:627-674`. Nothing checks whether `adev->sdma` already holds allocations;
+`driver/shim/bc250_sdma.c:627-674`. Nothing checks whether `adev->sdma` already holds allocations.
 `bc250_shim_mem_alloc()` overwrites `wb_mem` and both `ring_mem` descriptors, and the previous three
 pages are lost - the suite counts 6 live objects after the second setup, 3 after the teardown that
 follows. The asymmetry is worth naming: `bc250_sdma_fence_page_alloc()` is idempotent and says so in
@@ -202,7 +202,7 @@ allocations, and `bc250_sdma_teardown()` does not put it back. So after a failed
 
 What the suite measured: `bc250_sdma_start()` returns **0** and enables both engines -
 `SDMA0_GFX_RB_BASE = 0`, `RB_CNTL = 0x00001001` (`RB_SIZE` 0, `RB_ENABLE` 1), `IB_ENABLE` 1. Two
-engines fetching from MC address 0 with a 4-byte ring.
+engines reading from MC address 0 with a 4-byte ring.
 
 The worse arm is not exercised by the suite on purpose: on a re-init the engine keeps its write
 pointer (facts M59/M60), `hw_wptr != 0` at `:352` is taken, and `:377` dereferences
@@ -228,7 +228,7 @@ caller in the tree reaches this today. It is one caller away, and the guard is f
 ```
 
 `i` is already declared in the function. Alternatively (or as well) have `bc250_sdma_teardown()` set
-`adev->sdma.num_instances = 0`; that one line would also make this state harmless, but it changes what
+`adev->sdma.num_instances = 0`. That one line would also make this state harmless, but it changes what
 `bc250_sdma_hw_fini()` walks after a teardown, so the guard above is the smaller change.
 
 Upstream: same absence of an internal guard, same protection by the caller
@@ -248,7 +248,7 @@ check counts **2** freed allocations written into, and the call returns `BC250_E
 refusal.
 
 Reachability: the documented order is fence page first, teardown after (`bc250_sdma.h:100-103`), and
-`driver/kmd/gfx.c:150-154` does it that way; the fence IOCTL also refuses unless `gfx->SetUp`
+`driver/kmd/gfx.c:150-154` does it that way. The fence IOCTL also refuses unless `gfx->SetUp`
 (`gfx.c:374`). So this needs a caller's mistake - which is exactly what `bc250_gfx.c:1702-1704` says
 the CP rings must be proof against: "leaves `ring->ring` NULL, so that a ring whose allocation did not
 finish cannot be written to". The SDMA teardown does not keep that rule.
@@ -296,7 +296,7 @@ A ring with `me = 2` does not get a refusal: it gets engine 0's scratch slot. Th
 test on such a ring and watched slot 0 go from its sentinel to `0xCAFEDEAD`, with the emitted
 `WRITE_LINEAR` carrying `bc250_sdma_fence_addr(adev, 0)` - so a third "engine" would seed, submit
 against and poll the slot engine 0 is using, and the two would overwrite each other's answers. The
-call returned `BC250_ETIME` in the suite (no stub executes SDMA packets there); on hardware it would
+call returned `BC250_ETIME` in the suite (no stub executes SDMA packets there). On hardware it would
 return 0 for the wrong reason as soon as engine 0's own test happened to run.
 
 ```diff
@@ -321,7 +321,7 @@ slot per call from `amdgpu_device_wb_get()` and never indexes anything by `ring-
 Related, and **not** a defect of ours: `bc250_sdma_reg_offset()` folds `instance >= 2` onto instance
 0's register window (`:89-94`), because it tests `if (instance == 1)`. Upstream's
 `sdma_v5_0_get_reg_offset()` (`reference/sdma_v5_0.c:218`) is written exactly the same way. Left
-alone; the transcription rule wins.
+alone. The transcription rule wins.
 
 ## Findings that are not defects
 
@@ -336,7 +336,7 @@ alone; the transcription rule wins.
   engine 1 (`rptr` 0 behind the corrupt `wptr`), halted both engines and disabled both rings.
   `driver/kmd/gfx.c`'s `Fini()` turns that into pages that stay - by design (`bc250_sdma.h:56-60`),
   and it means a corrupt preserved write pointer costs the driver its three SDMA pages permanently.
-- **No error path writes a register outside the confirmed set.** The set is not typed anywhere: the
+- **No error path writes a register outside the established set.** The set is not typed anywhere: the
   suite learns it from a successful `bc250_sdma_hw_init()` in the same process (74 distinct
   registers over 90 writes), which is the sequence the replay compares with unit A's trace. Every
   error path - the adoption refusals, the failed setups, the undo after them - stayed inside it.
@@ -362,11 +362,11 @@ alone; the transcription rule wins.
 
 All seven defects are fixed. Host suite results:
 
-- `run_sdma_faults.ps1` before: **161 checks, 0 failures, 15 expected failures over 7 confirmed
+- `run_sdma_faults.ps1` before: **161 checks, 0 failures, 15 expected failures over 7 established
   defects, exit 0** (the baseline above, reconfirmed by re-running the report's own commit before
   touching anything). After: **158 checks, 0 failures, 0 expected failures, 0 XPASS, exit 0.** The
   drop from 161 to 158 is 2a's three checks that only ran on the path D-01 closes (what an accepted,
-  unmapped write-back page would have cost); with D-01 fixed that path is unreachable, so the dead
+  unmapped write-back page would have cost). With D-01 fixed that path is unreachable, so the dead
   branch was removed rather than left to bit-rot untested. Every `check_defect()` that named one of
   the seven ids has been turned into a plain `check()`, as the suite's own README says to do once a
   defect no longer reproduces.
@@ -391,7 +391,7 @@ Per defect:
   `sdma_faults.c` all now look an allocation up by `mc` when `cpu` is NULL, matching `bc250_shim.h`'s
   updated contract comment. Note for the lead: this is wider than "fix it in `bc250_sdma.c` or its
   header" - see "Disagreements" below for why D-02 could not be closed from `bc250_sdma.c` alone.
-  Neither shipped backend can produce a `cpu == NULL` success today (confirmed by reading both
+  Neither shipped backend can produce a `cpu == NULL` success today (established by reading both
   `bc250_shim_mem_alloc()`s), so this is currently a no-behavior-change hardening of the free path,
   not a change reachable on unit A.
 - **D-03** (`bc250_sdma_fence_page_alloc`): the refusal now frees the page (which D-02 makes possible)
@@ -399,13 +399,13 @@ Per defect:
   descriptor. Both halves of the check now pass: the refused page is not live, and a later call does
   not double-allocate.
 - **D-04** (`bc250_sdma_setup`): a guard at the top refuses a second setup while `wb_mem.size != 0`.
-  Case 5's "a second setup succeeds" check was itself asserting the defect's own effect; it is now
+  Case 5's "a second setup succeeds" check was itself asserting the defect's own effect. It is now
   "a second setup is refused" and a companion check that the first setup's three allocations survive
   untouched.
 - **D-05** (`bc250_sdma_start`): a guard loop refuses to enable any engine whose ring has no `funcs`
   or no `ring_size`, before anything is written. Case 6a's "both engines were enabled on a ring that
-  does not exist" check documented the defect's own effect; it is now "neither engine was enabled",
-  and the refusal writes zero registers (stronger than merely staying inside the confirmed set).
+  does not exist" check documented the defect's own effect. It is now "neither engine was enabled",
+  and the refusal writes zero registers (stronger than merely staying inside the established set).
 - **D-06** (`bc250_sdma_teardown`): nulls `ring->ring` and `ring->wptr_cpu_addr` and zeroes
   `ring->gpu_addr` for both instances after freeing their ring buffers, matching the rule
   `bc250_gfx.c` already states for the CP rings. `bc250_sdma_ring_test()` on a torn-down ring now
@@ -417,8 +417,7 @@ Per defect:
 
 ### Disagreements / deviations from the task as given
 
-- **D-02's fix is not contained in `bc250_sdma.c`.** `bc250_shim_mem_free()`'s `if (m->cpu == NULL)
-  return` early-out is not in `bc250_sdma.c` at all - it is in the two shipped backends
+- **D-02's fix is not contained in `bc250_sdma.c`.** `bc250_shim_mem_free()`'s `if (m->cpu == NULL) return` early-out is not in `bc250_sdma.c` at all - it is in the two shipped backends
   (`driver/kmd/gpumem.c`, `driver/shim/test/backend_mem.c`), and the fault suite mirrors it in its own
   self-contained model on purpose ("EXACTLY as the two shipped backends do it", the file's own header
   comment). `bc250_sdma.c` has no other way to release an allocation than calling that function, and
@@ -432,7 +431,7 @@ Per defect:
   implementations (plus one sentence in `bc250_shim.h`) rather than leave D-02 as a defect the given
   scope could not close. Flagging this explicitly since the task said "fix each defect at the root in
   `driver/shim/bc250_sdma.c` (or its header)" and this one is not there.
-- **Three plain `check()` calls needed their expected value corrected, not just a `check_defect()`
+- **Three plain `check()` calls needed their expected value updated, not just a `check_defect()`
   flip.** `case_null_cpu_fence_page()`'s "the refusal leaves the allocation's MC address in
   adev->sdma.fence_mem" (now clears it, by design, D-03), `case_second_engine_fails()`'s "a second
   bc250_sdma_setup on the same adev succeeds" (now refused, by design, D-04), and
@@ -440,12 +439,12 @@ Per defect:
   neither is, by design, D-05) were all asserting the *symptom* of a defect as the expected outcome,
   not wrapped in `check_defect()`. Fixing the defect without touching these three would have left them
   failing forever with no defect id attached, which is worse than either leaving them alone or fixing
-  them, so I updated the expected value to match the new, correct behaviour. None of the three checks
-  were weakened - each now asserts a stronger and more specific condition than before (e.g. D-05's
-  register check moved from "no write outside the confirmed set" to "no write at all").
+  them, so I updated the expected value to match the new, intended behaviour. None of the three checks
+  were weakened - each now asserts a stronger and more specific condition than before (for example D-05's
+  register check moved from "no write outside the established set" to "no write at all").
 - **`check_defect()` is now unused.** With all seven flipped to plain `check()`, nothing calls it, so
   `/W4` sees an unreferenced static function (C4505). I kept the function (the suite's README
-  documents it as the mechanism for the *next* confirmed defect) and wrapped it in
+  documents it as the mechanism for the *next* established set) and wrapped it in
   `#pragma warning(push/pop)` with `4505` disabled, rather than deleting suite infrastructure that is
-  still current per the README. Worth a second opinion if the lead would rather delete it until it is
+  still current per the README. Worth a second opinion if the lead would rather remove it until it is
   needed again.
