@@ -238,8 +238,11 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 		CHECK(ar_table_sound(t, nb));
 		CHECK(memcmp(t + 36u + 3u * 7u + 7u + 7u, "\x08_HID\x0dMSFT0101", 15) == 0);
 		/* The resource template is the buffer's payload: BufferOp, package length, the size byte pair, then
-		 * the template up to the End Tag. Walk it the way a consumer does: small descriptors only, and the
-		 * End Tag ends it. A walk, not a byte compare at a fixed offset. */
+		 * the template up to the End Tag. Walk it the way a consumer does - a large descriptor carries a
+		 * 16-bit length, the End Tag is the only small one and ends the walk - not a byte compare at a fixed
+		 * offset. The buffer header must declare the same 14 bytes the walk consumes. */
+		CHECK(t[nb - 18u] == 0x11);			/* BufferOp */
+		CHECK(t[nb - 16u] == 0x0A && t[nb - 15u] == 14u);	/* BytePrefix, the size the encoder chose */
 		crs = t + nb - 14u;
 		for (at = 0; at + 2u <= 14u;) {
 			/* A large descriptor sets bit 7: type in the low bits, a 16-bit length, then the payload.
