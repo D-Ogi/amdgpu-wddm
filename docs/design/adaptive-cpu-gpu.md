@@ -7,13 +7,13 @@ No implementation or speedup claim. This is optional O2 in the
 ## Decision and realistic scope
 
 Investigate adaptation for operations whose semantics and implementations the
-UMD controls. Begin with avoiding redundant copies and selecting an execution
+UMD controls. Start with avoiding redundant copies and selecting an execution
 engine for known buffer operations. An application/runtime integration can
 later expose coarse compute tasks with validated CPU and GPU implementations.
 Transparent migration of arbitrary game shaders or game logic is out of scope
 for the first prototype. The driver does not own the game's CPU task graph.
 
-BC-250 has a shared GDDR6 memory pool; UMA does not mean one physical chip,
+BC-250 has a shared GDDR6 memory pool. UMA does not mean one physical chip,
 one address space, identical CPU/GPU bandwidth, or automatically coherent
 cached mappings. The current Windows model still has a VRAM carveout, GTT,
 page tables and separate allocation/cache policies. Existing M9 acceptance
@@ -33,10 +33,10 @@ board, not conclusions from UMA or utilization percentages alone.
 
 | Operation | Initial assessment | Boundary |
 |---|---|---|
-| Upload/readback storage choice and eliminating redundant copies | Highest priority | Preserve residency, cache attributes, API visibility and resource lifetime; shared physical storage does not automatically make two API resources aliases. |
+| Upload/readback storage choice and eliminating redundant copies | Highest priority | Preserve residency, cache attributes, API visibility and resource lifetime. Shared physical storage does not automatically make two API resources aliases. |
 | Linear buffer copies and fills | Good bounded CPU/SDMA/GPU comparison | Only CPU-accessible, appropriately cached mappings with known ownership. Include waiting, mapping and cache costs. Do not execute a recorded command early. |
 | Known format conversion, packing or driver meta operations | Later selective prototype | Require matching layout and validated implementations. GPU tiling/compression metadata can make a CPU path expensive. |
-| Coarse compute tasks in a cooperating runtime | Promising separate integration | Runtime knows the dependency graph and can offer CPU/GPU versions; include result placement and the following consumer. |
+| Coarse compute tasks in a cooperating runtime | Promising separate integration | Runtime knows the dependency graph and can offer CPU/GPU versions. Include result placement and the following consumer. |
 | Arbitrary game draws or SPIR-V shaders on CPU | Defer | Requires a compatible CPU backend plus textures, derivatives/subgroups, atomics, precision, queries and synchronization semantics. Having llvmpipe and RADV available does not provide transparent interchangeability. |
 | Game simulation, AI or physics absent from submitted GPU work | Application responsibility | A graphics driver cannot infer and relocate arbitrary CPU application code. |
 
@@ -61,14 +61,14 @@ Calibrate on private scratch data. Never replay a live application command
 for profiling: atomics, writes, queries and external side effects are observable.
 Use bounded sampling of normal work, confidence margins and hysteresis so
 small timing changes do not switch paths every frame. Cache profiles by
-operation shape, resource properties and exact driver/compiler version;
-expire them after relevant changes. Log sizes/timings/path decisions, not
+operation shape, resource properties and exact driver/compiler version.
+Expire them after relevant changes. Log sizes/timings/path decisions, not
 application data. Provide forced CPU/SDMA/GPU modes for controlled comparisons.
 
 CPU execution must occupy the same legal position in the submission dependency
-graph, and signal completion only after its data is visible. Check semaphore,
+graph, and signal completion only after its data is visible. Validate semaphore,
 fence, resource-layout and timestamp/query semantics. Vulkan explicitly separates
-memory visibility from merely sharing storage; see
+memory visibility from merely sharing storage. See
 [Synchronization and cache control](https://docs.vulkan.org/spec/latest/chapters/synchronization.html).
 
 ## Research gates
@@ -81,7 +81,7 @@ memory visibility from merely sharing storage; see
 
 Report end-to-end latency, P50/P95/P99 frame times where applicable, CPU time,
 queue waits and content correctness. Keep matched clocks and memory pressure.
-Whole-lab plug power is supporting telemetry; its current scales/update age
+Whole-lab plug power is supporting telemetry. Its current scales/update age
 are not a calibrated per-kernel energy meter. A kernel microbenchmark win alone
 cannot justify promoting a policy that delays the application's critical path.
 
