@@ -4,7 +4,7 @@ The registered D3D10/D3D11 user-mode driver of unit A (`UserModeDriverName` entr
 driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks one of three UMDs and forwards the call:
 
 - `dwm.exe` (and any `HostedClients` entry) goes to the hosted GPU UMD `bc250d3d_zink.dll`, or to the CPU UMD by
-  the kill switch `DwmForceCpu` or when the KMD's GPU DWM interop switches are off;
+  the kill switch `DwmForceCpu` or when the KMD's GPU DWM interop switches are off.
 - every other process goes to the application GPU UMD (the DXVK-based shell `amdgpu_wddm_d3d11.dll`,
   `driver/umd/dxvk`) or to the CPU UMD, by the `AppRouter` policy (`cpu`, `allowlist`, `gpu-default`, with `Allow`
   and `Deny` lists). The sign-in, lock, consent and credential processes (`LogonUI.exe`, `LockApp.exe`,
@@ -21,7 +21,7 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   are compared as final resolved paths (`router-identity.h`), so `\\?\` prefixes, 8.3 names and junctions read as
   one form. The route line gives the result as `component=yes`, `no` or `unknown`. The route does not use it: an
   image or directory that cannot be resolved also takes the GPU UMD. Until 2026-11-02 such an image stayed on the
-  CPU UMD (reason `app-component-unknown`); BD-088 removed that route;
+  CPU UMD (reason `app-component-unknown`). BD-088 removed that route.
 - under `gpu-default` the router also carries a built-in default `Deny` list of its own (`IsCpuOnlyDialogHost` in
   `router-policy.h`, reason `app-dialog-host`): the images whose window the application GPU UMD was measured not
   to show. It holds `PickerHost.exe`, the File Picker UI Host, which serves the Windows firewall notification
@@ -41,8 +41,8 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   of Windows 11 all open the router through `OpenAdapter10_2` and create a device at a D3D11-family interface
   (BD-081, measured on x64 and x86 on 2026-10-07: `evidence/windows/2026-10-07-BD081-d3d10-entry-devpc`). The
   router's `OpenAdapter10` export stays, and still sends every application to the CPU UMD (reason
-  `app-d3d10-entry`), because the application GPU UMD has no `OpenAdapter10`; no measured runtime calls it.
-  `tools/win/d3d10probe --trace-entry` shows the entry and the interface for one process;
+  `app-d3d10-entry`), because the application GPU UMD has no `OpenAdapter10`. No measured runtime calls it.
+  `tools/win/d3d10probe --trace-entry` shows the entry and the interface for one process.
 - a failed GPU load or GPU `OpenAdapter` falls back to the CPU UMD with the caller's arguments restored.
 
 What the built-in default `Deny` list still owes, and how to repay it (BD-126). The entry changes the route, and
@@ -84,11 +84,11 @@ The `compositor` suite drives every answer of `ReportCompositor` with injected D
 
 The registry interface (`HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`, `...\AppRouter` and the KMD's
 `InteropLastState`) is documented value by value at the top of `router.cpp`. The decisions themselves are free of
-I/O in `router-policy.h`, so the host tests drive them directly; the path resolution in `router-identity.h` is
+I/O in `router-policy.h`, so the host tests drive them directly. The path resolution in `router-identity.h` is
 tested on real files (the `identity` scenario: extended prefix, 8.3 alias, junction, `Windows2`/`Windows.old`).
 
 The compiled default CPU UMD path, `C:\BC250\m15\desktop-umd173-007\bc250d3d.dll`, is the lab's deployment path
-on unit A; the `DesktopRouter` value `CpuUmdPath` overrides it. It stays in the source because it is part of the
+on unit A. The `DesktopRouter` value `CpuUmdPath` overrides it. It stays in the source because it is part of the
 registered binary.
 
 ## Registered build
@@ -97,7 +97,7 @@ registered binary.
 |---|---|---|---|
 | `bc250d3d_router.dll` | `674AD261640B1A3A79150E41F39C2B8962F3AB7747E3E725C8C2F3E42FFCAED0` | 2026-10-01, from this source | since 2026-10-01T04:26Z |
 
-It replaced the desktop-only router `5BBEB783`; the desktop decision and its route log line are unchanged from it.
+It replaced the desktop-only router `5BBEB783`. The desktop decision and its route log line are unchanged from it.
 
 ## Build and host gate
 
@@ -112,7 +112,7 @@ flags are the msvc flags in clang-cl form, with x86-64-v3, the system-header SDK
 `-Werror=cast-calling-convention`. `-Compiler msvc` needs `-MsvcReason`. The msvc recipe is the recipe of
 `674AD261`: Visual Studio 2022 `vcvars64` (MSVC 14.44.35207, cl
 19.44.35221) with the WDK 10.0.26100.0 `um` and `shared` headers from `<BC250_ROOT>\toolchain\nuget` in front of
-`INCLUDE`; `/O2 /MD /W4 /WX /Zi /LD`, linked `/DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:%_PDB%`. The same run builds
+`INCLUDE`. `/O2 /MD /W4 /WX /Zi /LD`, linked `/DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:%_PDB%`. The same run builds
 five UMD doubles from `tests/fake-umd.cpp` and the harness `tests/test-router.cpp`. Output goes to
 `<BC250_ROOT>\scratch\build\umd-router` unless `-OutputDir` says otherwise.
 
@@ -125,7 +125,7 @@ the router and every other PE file of the package (`tools/build/versionstamp.py`
 `test-umd-router.ps1` lays out the router, the doubles and three real binaries (hosted UMD, CPU UMD, the DXVK shell
 with its config) and runs `test-router.exe`: each scenario in its own process on a private application hive, so no
 machine state is touched and no device is opened. The gate of `674AD261` ran 68 scenarios with 0 failures (hosted
-UMD `E6B944CF`, CPU UMD `4176D1DF`, shell `E748418C` with config `A9B498ED`); the old router `5BBEB783` fails 26 of
+UMD `E6B944CF`, CPU UMD `4176D1DF`, shell `E748418C` with config `A9B498ED`). The old router `5BBEB783` fails 26 of
 them, the application-policy ones. The desktop-route scenarios run the harness as `<layout>\dwm\dwm.exe`. They
 read the record with the harness's own account as the owner, and the shells' rule over it: `route-dwm-name` (GPU,
 admitted), `route-dwm-name-kill` and `route-dwm-name-fallback` (the rule stands down on the record alone, with
