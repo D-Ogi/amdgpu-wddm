@@ -9,30 +9,31 @@ The probe does the steps of one buffer case of that test:
 1. It creates two DYNAMIC buffers A and B (512 KiB by default) and one DEFAULT buffer on the BC-250 adapter (vendor
    1002, device 13FE).
 2. It starts a real-time ETW session, enables the provider and requests a capture state (the rundown).
-3. It does N rounds (4 by default). In each round it copies A to the DEFAULT buffer, then maps A with
-   `D3D11_MAP_WRITE_DISCARD` and unmaps it. Then it does the same for B. The copy keeps the GPU on the current
-   storage, so each discard renames the buffer.
-4. It submits the work, waits 1 s, stops the session and prints each event of its own process.
+3. It does one naming step for A and one for B. A discard copies the buffer to the DEFAULT buffer, then maps the
+   buffer with `D3D11_MAP_WRITE_DISCARD` and unmaps it. The copy keeps the GPU on the current storage, so each
+   discard renames the buffer. A naming step is one discard, a flush and a wait of 250 ms.
+4. It does N rounds (4 by default). In each round it does one discard of A, then one discard of B, with no wait.
+5. It submits the work, waits 1 s, stops the session and prints each event of its own process.
 
 Each output line has the time in ms, the event (`MAP`, `UNMAP` or `RUNDOWN`), the buffer (`A`, `B` or `?`), the two
 handles, the offset, the size, the usage bits (`Packed` = 1, `Renamed` = 2) and the semantic. Lines that start with
-`--` are the steps of the probe. The probe finds the buffer of an event from the step in which the event comes,
-because the engine writes the events inside the Map call.
+`--` are the steps of the probe. The probe finds the buffer of an event from the naming step in which an event
+of the same `hD3D` handle comes. A driver can write the events of a round later than the Map call (the engine writes
+them when it does the commands), so the rounds cannot name a buffer.
 
 For each buffer, these checks must pass:
 
 | Check | Model of the test |
 |---|---|
-| MAP before UNMAP | The MAP of the new instance comes before the UNMAP of the old one. |
 | Renamed | Each event of the buffer has Renamed usage. |
 | Own allocation | Each instance is a kernel allocation of its own: not Packed, offset 0. |
-| Link | Each MAP comes while an earlier instance of the buffer is mapped. |
-| Instances | At the end, 2 to N+2 instances are mapped. |
+| Link | Each MAP comes while an earlier instance of the buffer is mapped. An UNMAP of the old instance before the MAP of the new one fails this check. |
+| Instances | At the end, 2 to N+3 instances are mapped. |
 
 Three more checks apply to the run:
 
 - Clock: each event comes between the first and the last step of the probe, and at least one MAP or UNMAP event
-  comes in a discard step. If this check fails, the events and the steps do not have one time base, and the probe
+  comes in a naming step. If this check fails, the events and the steps do not have one time base, and the probe
   cannot name the buffers. The probe reads the time stamps raw, in the clock of the session (QPC). The first output line names
   that clock.
 - No allocation is an instance of both buffers.
@@ -50,7 +51,7 @@ Controls:
 
 - `--size 65536` gives a buffer below `d3d11.renameDedicatedSize`. The engine suballocates it, so the "Own allocation"
   check must fail. This shows that the probe can see the packed form.
-- D3D11 files from before BD-379 write UNMAP before MAP, so the "MAP before UNMAP" check must fail with them.
+- D3D11 files from before BD-379 write UNMAP before MAP, so the "Link" check must fail with them.
 
 The probe only shows what the driver writes. The HLK test also reads the events of the kernel (DxgKrnl), and the
 probe does not record those.

@@ -212,15 +212,27 @@ int main(int argc, char **argv) {
     session.capture_state();
     Sleep(500u);
 
+    auto discard = [&](int b, unsigned fill) {
+        ctx->CopyResource(target.Get(), buffers[b].Get());
+        D3D11_MAPPED_SUBRESOURCE m{};
+        if (SUCCEEDED(ctx->Map(buffers[b].Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &m))) {
+            std::memset(m.pData, int(fill), 16u);
+            ctx->Unmap(buffers[b].Get(), 0u);
+        }
+    };
+    // The naming steps: one discard of each buffer alone, then a flush and a wait. A driver can write its events
+    // later than the Map call (at a flush, or when a worker does the commands), so only a step that waits can
+    // say which hD3DAllocation is A and which is B.
+    for (int b = 0; b < 2; b++) {
+        markers.push_back({ now(), std::string("name ") + (b ? "B" : "A"), b });
+        discard(b, 0xF0u + unsigned(b));
+        ctx->Flush();
+        Sleep(250u);
+    }
     for (unsigned r = 0; r < rounds; r++) {
         for (int b = 0; b < 2; b++) {
-            ctx->CopyResource(target.Get(), buffers[b].Get());
-            markers.push_back({ now(), std::string("discard ") + std::to_string(r + 1u) + (b ? " B" : " A"), b });
-            D3D11_MAPPED_SUBRESOURCE m{};
-            if (SUCCEEDED(ctx->Map(buffers[b].Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &m))) {
-                std::memset(m.pData, int(r * 2u + unsigned(b) + 1u), 16u);
-                ctx->Unmap(buffers[b].Get(), 0u);
-            }
+            markers.push_back({ now(), std::string("discard ") + std::to_string(r + 1u) + (b ? " B" : " A"), -1 });
+            discard(b, r * 2u + unsigned(b) + 1u);
         }
     }
     markers.push_back({ now(), "flush", -1 });
@@ -234,8 +246,7 @@ int main(int argc, char **argv) {
     ReleaseSRWLockExclusive(&g_lock);
     std::stable_sort(events.begin(), events.end(), [](const Event &a, const Event &b) { return a.time < b.time; });
 
-    // The buffer of each event: the MAP and UNMAP events inside a discard window are of the buffer that it maps.
-    // The engine writes them inside the Map call (E2), so the window holds them.
+    // The buffer of each event: the MAP and UNMAP events inside a naming step are of the buffer that it maps.
     std::map<UINT64, int> owner;
     for (const Event &e : events) {
         // hD3DAllocation 0 is an allocation of the driver itself, not of a resource
@@ -271,8 +282,8 @@ int main(int argc, char **argv) {
         std::printf("%s %s: %s\n", ok ? "PASS" : "FAIL", buffer, what.c_str()); pass = pass && ok;
     };
     // Self-check of the time base: each event comes between the first and the last marker, and at least one MAP or
-    // UNMAP in a discard window. Else the markers and the events do not have one clock, and the checks below cannot
-    // name the buffers. A driver can write some events later (at a flush), so not every event must be in a window.
+    // UNMAP in a naming step. Else the markers and the events do not have one clock, and the checks below cannot
+    // name the buffers.
     size_t outside = 0, inWindow = 0, mapsAndUnmaps = 0;
     for (const Event &e : events) {
         if (e.time < markers.front().time || e.time > markers.back().time) outside++;
@@ -284,29 +295,19 @@ int main(int argc, char **argv) {
     }
     check(!events.empty() && outside == 0u && inWindow > 0u, "clock",
           std::to_string(events.size()) + " events, " + std::to_string(outside) + " outside the run, "
-          + std::to_string(inWindow) + " of " + std::to_string(mapsAndUnmaps) + " MAP and UNMAP events in a discard window");
+          + std::to_string(inWindow) + " of " + std::to_string(mapsAndUnmaps) + " MAP and UNMAP events in a naming step");
     std::map<UINT64, int> dxgOwner; bool shared = false;
     for (int b = 0; b < 2; b++) {
         const char *label = b ? "B" : "A";
         UINT64 d3d = 0;
         for (const auto &[key, value] : owner) if (value == b) d3d = key;
-        if (!d3d) { check(false, label, "no MAP or UNMAP event of a discard"); continue; }
-        std::vector<UINT64> mapped; bool order = true, renamed = true, own = true, linked = true;
+        if (!d3d) { check(false, label, "no MAP or UNMAP event in the naming step"); continue; }
+        std::vector<UINT64> mapped; bool renamed = true, own = true, linked = true;
         for (size_t i = 0; i < events.size(); i++) {
             const Event &e = events[i];
             if (e.d3d != d3d) continue;
             renamed = renamed && (e.usage & UsageRenamed);
             if (e.opcode == OpUnmap) {
-                // An UNMAP followed in the same discard window by a MAP of this buffer breaks the link
-                for (size_t j = i + 1; j < events.size(); j++) {
-                    if (events[j].d3d != d3d) continue;
-                    if (events[j].opcode == OpMap) {
-                        bool sameWindow = true;
-                        for (const Marker &m : markers) if (m.time > e.time && m.time <= events[j].time) sameWindow = false;
-                        if (sameWindow) order = false;
-                    }
-                    break;
-                }
                 mapped.erase(std::remove(mapped.begin(), mapped.end(), e.dxg), mapped.end());
             } else {
                 if (e.opcode == OpMap && mapped.empty()) linked = false;
@@ -317,12 +318,12 @@ int main(int argc, char **argv) {
                 else own = false; // two mappings of one allocation by one buffer
             }
         }
-        check(order, label, "MAP of a new instance comes before UNMAP of the old one");
         check(renamed, label, "every event has Renamed usage");
         check(own, label, "each instance is an allocation of its own (not Packed, offset 0)");
-        check(linked, label, "each MAP comes while an earlier instance is mapped");
-        check(mapped.size() >= 2u && mapped.size() <= rounds + 2u, label,
-              "mapped instances at the end: " + std::to_string(mapped.size()) + " (2 to " + std::to_string(rounds + 2u) + ")");
+        // An UNMAP of the old instance before the MAP of the new one leaves no instance mapped, and fails here
+        check(linked, label, "each MAP comes while an earlier instance is mapped (MAP before UNMAP)");
+        check(mapped.size() >= 2u && mapped.size() <= rounds + 3u, label,
+              "mapped instances at the end: " + std::to_string(mapped.size()) + " (2 to " + std::to_string(rounds + 3u) + ")");
     }
     check(!shared, "A+B", "no allocation is an instance of both buffers");
     check(session.lost() == 0u && g_short == 0u, "session",
