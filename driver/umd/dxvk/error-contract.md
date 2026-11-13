@@ -8,7 +8,7 @@ The engine COM API and the runtime DDI have different permitted error channels.
 
 The shell maps failed engine Map results to device removal except for that legal
 polling case. It marks the hosted bridge device-lost before notifying the runtime.
-Output mapping fields remain zero on failure; no pointer from a failed Map is published.
+Output mapping fields remain zero on failure. No pointer from a failed Map is published.
 Busy without DONOTWAIT is terminal. Resource creation retains its separate OOM policy.
 
 Source contract: local `ref/ddi-display/d3d10umddi.md`, ResourceMap remarks (WDK/SDK
