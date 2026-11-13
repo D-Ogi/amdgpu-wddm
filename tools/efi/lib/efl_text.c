@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
-/* Load options, device paths and the console formatter (cu_text.h). */
+/* Device paths and the console formatter (efl_text.h). */
 #include <stdarg.h>
 #include <stddef.h>
 #include <string.h>
-#include "cu_text.h"
+#include "efl_text.h"
 
 #define DP_HEADER_BYTES		4u
 #define DP_TYPE_MEDIA		0x04u
@@ -11,64 +11,11 @@
 #define DP_TYPE_END		0x7Fu
 #define DP_END_ENTIRE		0xFFu
 
-/* ---- load options ------------------------------------------------------------------------------ */
-
-static int token_is(const unsigned short *t, size_t n, const char *ascii)
-{
-	size_t i;
-	for (i = 0; i < n; i++)
-		if (ascii[i] == 0 || t[i] != (unsigned char)ascii[i]) return 0;
-	return ascii[n] == 0;
-}
-
-void cu_options_parse(const unsigned short *text, size_t chars, struct cu_options *out)
-{
-	static const char *const methods[CU_RESET_COUNT] = { "warm", "fadt", "none" };
-	size_t at = 0, end, i;
-	out->reset = CU_RESET_WARM;
-	out->report = 0;
-	out->unknown = 0;
-	if (text == NULL) return;
-	for (end = 0; end < chars && text[end]; end++) {}
-	while (at < end) {
-		size_t start, eq = 0;
-		int known = 0;
-		while (at < end && text[at] == ' ') at++;
-		start = at;
-		while (at < end && text[at] != ' ') {
-			if (text[at] == '=' && eq == 0) eq = at;
-			at++;
-		}
-		if (at == start || eq == 0) continue;
-		if (token_is(text + start, eq - start, "reset"))
-			for (i = 0; i < CU_RESET_COUNT; i++)
-				if (token_is(text + eq + 1, at - eq - 1, methods[i])) {
-					out->reset = (enum cu_reset_method)i;
-					known = 1;
-				}
-		if (token_is(text + start, eq - start, "report")) {
-			if (token_is(text + eq + 1, at - eq - 1, "0")) { out->report = 0; known = 1; }
-			if (token_is(text + eq + 1, at - eq - 1, "1")) { out->report = 1; known = 1; }
-		}
-		if (!known) out->unknown++;
-	}
-}
-
-const char *cu_reset_method_name(enum cu_reset_method method)
-{
-	switch (method) {
-	case CU_RESET_WARM: return "warm (ResetSystem EfiResetWarm)";
-	case CU_RESET_FADT: return "fadt (FADT reset register)";
-	case CU_RESET_NONE: return "none";
-	default: return "unknown";
-	}
-}
-
 /* ---- device paths ------------------------------------------------------------------------------ */
 
 static size_t node_bytes(const unsigned char *node) { return (size_t)node[2] | ((size_t)node[3] << 8); }
 
-size_t cu_devpath_bytes(const unsigned char *path, size_t max_bytes)
+size_t efl_devpath_bytes(const unsigned char *path, size_t max_bytes)
 {
 	size_t at = 0;
 	if (path == NULL) return 0;
@@ -81,9 +28,9 @@ size_t cu_devpath_bytes(const unsigned char *path, size_t max_bytes)
 	return 0;
 }
 
-int cu_devpath_file(const unsigned char *path, size_t max_bytes, unsigned short *out, size_t capacity)
+int efl_devpath_file(const unsigned char *path, size_t max_bytes, unsigned short *out, size_t capacity)
 {
-	size_t at = 0, used = 0, total = cu_devpath_bytes(path, max_bytes);
+	size_t at = 0, used = 0, total = efl_devpath_bytes(path, max_bytes);
 	if (total == 0 || out == NULL || capacity == 0) return 0;
 	out[0] = 0;
 	while (at < total && path[at] != DP_TYPE_END) {
@@ -110,7 +57,7 @@ int cu_devpath_file(const unsigned char *path, size_t max_bytes, unsigned short 
 	return used > 0;
 }
 
-int cu_sibling_path(const unsigned short *image_file, const char *name, unsigned short *out, size_t capacity)
+int efl_sibling_path(const unsigned short *image_file, const char *name, unsigned short *out, size_t capacity)
 {
 	size_t i, slash = 0, used, chars;
 	int found = 0;
@@ -127,17 +74,12 @@ int cu_sibling_path(const unsigned short *image_file, const char *name, unsigned
 	return 1;
 }
 
-int cu_marker_path(const unsigned short *image_file, unsigned short *out, size_t capacity)
-{
-	return cu_sibling_path(image_file, CU_MARKER_NAME, out, capacity);
-}
-
-size_t cu_devpath_with_file(const unsigned char *device, size_t max_bytes, const unsigned short *file,
+size_t efl_devpath_with_file(const unsigned char *device, size_t max_bytes, const unsigned short *file,
 			    unsigned char *out, size_t capacity)
 {
-	size_t total = cu_devpath_bytes(device, max_bytes), prefix, chars = 0, node, i;
+	size_t total = efl_devpath_bytes(device, max_bytes), prefix, chars = 0, node, i;
 	if (total == 0 || file == NULL || out == NULL) return 0;
-	/* The prefix is every node before the first end node, which is the last node cu_devpath_bytes counted. */
+	/* The prefix is every node before the first end node, which is the last node efl_devpath_bytes counted. */
 	prefix = 0;
 	while (device[prefix] != DP_TYPE_END) prefix += node_bytes(device + prefix);
 	while (file[chars]) chars++;
@@ -181,7 +123,7 @@ static void put_number(struct sink *s, unsigned long long value, unsigned base)
 	while (n) put(s, digits[--n]);
 }
 
-size_t cu_vformat(char *out, size_t capacity, const char *format, va_list args)
+size_t efl_vformat(char *out, size_t capacity, const char *format, va_list args)
 {
 	struct sink s;
 	s.out = out;
@@ -227,12 +169,12 @@ size_t cu_vformat(char *out, size_t capacity, const char *format, va_list args)
 	return s.used;
 }
 
-size_t cu_format(char *out, size_t capacity, const char *format, ...)
+size_t efl_format(char *out, size_t capacity, const char *format, ...)
 {
 	va_list args;
 	size_t n;
 	va_start(args, format);
-	n = cu_vformat(out, capacity, format, args);
+	n = efl_vformat(out, capacity, format, args);
 	va_end(args);
 	return n;
 }

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
-/* The C library functions of include/libc/string.h, for the UEFI build only. The compiler may also call memset
- * and memcpy by itself, so these must exist even where no source names them. Byte loops: every buffer here is
- * small (a 64-byte configuration space, an SMBIOS copy of a few kilobytes). */
+/* The C library functions of include/libc/string.h, for the UEFI builds only. The compiler may also call memset
+ * and memcpy by itself, so these must exist even where no source names them. Byte loops: the largest buffer here
+ * is one boot image of a few megabytes, copied or compared a few times in one start. */
 #include <string.h>
 
 void *memset(void *dst, int value, size_t count)
@@ -47,4 +47,11 @@ size_t strlen(const char *s)
 	size_t n = 0;
 	while (s[n]) n++;
 	return n;
+}
+
+int strcmp(const char *a, const char *b)
+{
+	const unsigned char *x = (const unsigned char *)a, *y = (const unsigned char *)b;
+	for (; *x && *x == *y; x++, y++) {}
+	return *x == *y ? 0 : (*x < *y ? -1 : 1);
 }

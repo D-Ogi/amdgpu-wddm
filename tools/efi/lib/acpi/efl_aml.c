@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
-/* The name scan of a DSDT or SSDT (cu_aml.h). The encodings are those of the ACPI Specification 6.5 chapter 20, each
+/* The name scan of a DSDT or SSDT (efl_aml.h). The encodings are those of the ACPI Specification 6.5 chapter 20, each
  * named once below. */
 #include <stddef.h>
 #include <string.h>
-#include "cu_aml.h"
+#include "efl_aml.h"
 
 /* ACPI 6.5 section 20.2: the opcodes and prefixes that the scan follows or skips. */
 #define AML_ZERO_OP		0x00u
@@ -44,40 +44,40 @@
 #define SDT_LENGTH		4u
 #define NAME_SEG		4u
 
-static const char power_names[CU_AML_POWER_NAMES][NAME_SEG + 1u] = {
+static const char power_names[EFL_AML_POWER_NAMES][NAME_SEG + 1u] = {
 	"_CST", "_CSD", "_PSS", "_PCT", "_PPC", "_PSD", "_CPC", "_LPI"
 };
 
-const char *cu_aml_power_name_text(enum cu_aml_power_name name)
+const char *efl_aml_power_name_text(enum efl_aml_power_name name)
 {
-	return (unsigned)name < CU_AML_POWER_NAMES ? power_names[name] : "?";
+	return (unsigned)name < EFL_AML_POWER_NAMES ? power_names[name] : "?";
 }
 
-const char *cu_aml_kind_text(enum cu_aml_kind kind)
+const char *efl_aml_kind_text(enum efl_aml_kind kind)
 {
 	switch (kind) {
-	case CU_AML_PROCESSOR: return "Processor";
-	case CU_AML_DEVICE_CPU: return "Device ACPI0007";
-	case CU_AML_DEVICE: return "Device";
-	case CU_AML_SCOPE: return "Scope";
+	case EFL_AML_PROCESSOR: return "Processor";
+	case EFL_AML_DEVICE_CPU: return "Device ACPI0007";
+	case EFL_AML_DEVICE: return "Device";
+	case EFL_AML_SCOPE: return "Scope";
 	default: return "?";
 	}
 }
 
-static const char count_names[CU_AML_COUNTS][8] = {
+static const char count_names[EFL_AML_COUNTS][8] = {
 	"_TZ_", "_TMP", "_CRT", "_PSV", "_AC0", "_FST", "PNP0C0B", "PNP0C0B"
 };
 
-const char *cu_aml_count_text(enum cu_aml_count count)
+const char *efl_aml_count_text(enum efl_aml_count count)
 {
 	switch (count) {
-	case CU_AML_FAN_STRING: return "PNP0C0B (string)";
-	case CU_AML_FAN_EISAID: return "PNP0C0B (EISA ID)";
-	default: return (unsigned)count < CU_AML_COUNTS ? count_names[count] : "?";
+	case EFL_AML_FAN_STRING: return "PNP0C0B (string)";
+	case EFL_AML_FAN_EISAID: return "PNP0C0B (EISA ID)";
+	default: return (unsigned)count < EFL_AML_COUNTS ? count_names[count] : "?";
 	}
 }
 
-unsigned cu_aml_eisaid(const char *id)
+unsigned efl_aml_eisaid(const char *id)
 {
 	unsigned compressed = 0, product = 0, i;
 	if (id == NULL) return 0;
@@ -103,7 +103,7 @@ struct name {
 	int absolute;
 	unsigned parents;	/* the number of ParentPrefixChar */
 	unsigned segments;
-	unsigned char segment[CU_AML_MAX_SEGMENTS][NAME_SEG];
+	unsigned char segment[EFL_AML_MAX_SEGMENTS][NAME_SEG];
 };
 
 static int lead_char(unsigned char c) { return (c >= 'A' && c <= 'Z') || c == '_'; }
@@ -130,7 +130,7 @@ static size_t parse_name(const unsigned char *p, const unsigned char *end, struc
 		count = at[1];
 		at += 2;
 	} else count = 1u;
-	if (count == 0 || count > CU_AML_MAX_SEGMENTS || (size_t)(end - at) < (size_t)count * NAME_SEG) return 0;
+	if (count == 0 || count > EFL_AML_MAX_SEGMENTS || (size_t)(end - at) < (size_t)count * NAME_SEG) return 0;
 	for (i = 0; i < count; i++, at += NAME_SEG) {
 		if (!name_seg_ok(at)) return 0;
 		memcpy(out->segment[i], at, NAME_SEG);
@@ -157,16 +157,26 @@ static size_t parse_pkg_length(const unsigned char *p, const unsigned char *end,
 struct scope {
 	const unsigned char *end;
 	unsigned segments;
-	unsigned char segment[CU_AML_MAX_SEGMENTS][NAME_SEG];
+	unsigned char segment[EFL_AML_MAX_SEGMENTS][NAME_SEG];
 	int object;		/* the index of its list entry, or -1 */
 	int opener;		/* the opcode that opened it, AML_SCOPE_OP or an extended opcode */
 };
 
 struct scanner {
-	struct scope stack[CU_AML_MAX_DEPTH];
+	struct scope stack[EFL_AML_MAX_DEPTH];
 	unsigned depth;		/* stack[0] is the root of the namespace */
-	struct cu_aml_scan *out;
+	struct efl_aml_scan *out;
+	const char *const *watch;
+	unsigned watch_count;
 };
+
+/* Counts a definition whose last name segment is on the watch list. */
+static void watch_segment(struct scanner *sc, const unsigned char *segment)
+{
+	unsigned i;
+	for (i = 0; i < sc->watch_count; i++)
+		if (!memcmp(segment, sc->watch[i], NAME_SEG)) sc->out->watched[i]++;
+}
 
 /* The absolute path of a name seen in the current scope. 0 when it leaves the root or is too deep. */
 static int resolve(const struct scope *current, const struct name *n, struct scope *into)
@@ -178,7 +188,7 @@ static int resolve(const struct scope *current, const struct name *n, struct sco
 		into->segments = current->segments - n->parents;
 		memcpy(into->segment, current->segment, (size_t)into->segments * NAME_SEG);
 	}
-	if (into->segments + n->segments > CU_AML_MAX_SEGMENTS) return 0;
+	if (into->segments + n->segments > EFL_AML_MAX_SEGMENTS) return 0;
 	for (i = 0; i < n->segments; i++) memcpy(into->segment[into->segments + i], n->segment[i], NAME_SEG);
 	into->segments += n->segments;
 	return 1;
@@ -189,7 +199,7 @@ static void format_path(const struct scope *s, char *out)
 	size_t used = 0;
 	unsigned i;
 	out[used++] = '\\';
-	for (i = 0; i < s->segments && used + NAME_SEG + 2u <= CU_AML_PATH_CHARS; i++) {
+	for (i = 0; i < s->segments && used + NAME_SEG + 2u <= EFL_AML_PATH_CHARS; i++) {
 		if (i) out[used++] = '.';
 		memcpy(out + used, s->segment[i], NAME_SEG);
 		used += NAME_SEG;
@@ -198,12 +208,12 @@ static void format_path(const struct scope *s, char *out)
 }
 
 /* The list entry of the current scope, made on first use. -1 when the list is full. */
-static int object_of(struct scanner *sc, enum cu_aml_kind kind)
+static int object_of(struct scanner *sc, enum efl_aml_kind kind)
 {
 	struct scope *top = &sc->stack[sc->depth];
-	struct cu_aml_object *o;
+	struct efl_aml_object *o;
 	if (top->object >= 0) return top->object;
-	if (sc->out->objects >= CU_AML_MAX_OBJECTS) {
+	if (sc->out->objects >= EFL_AML_MAX_OBJECTS) {
 		sc->out->dropped++;
 		return -1;
 	}
@@ -211,13 +221,14 @@ static int object_of(struct scanner *sc, enum cu_aml_kind kind)
 	format_path(top, o->path);
 	o->kind = kind;
 	o->names = 0;
+	o->proc_id = 0;
 	top->object = (int)sc->out->objects++;
 	return top->object;
 }
 
-static enum cu_aml_kind kind_of_opener(int opener)
+static enum efl_aml_kind kind_of_opener(int opener)
 {
-	return opener == AML_EXT_DEVICE_OP ? CU_AML_DEVICE : CU_AML_SCOPE;
+	return opener == AML_EXT_DEVICE_OP ? EFL_AML_DEVICE : EFL_AML_SCOPE;
 }
 
 /* Opens a scope at p, whose PkgLength starts at pkg. Returns the bytes up to the end of the name and its fixed
@@ -237,13 +248,17 @@ static size_t open_scope(struct scanner *sc, const unsigned char *p, const unsig
 	body = pkg + lb + nb + operands;
 	next.end = pkg + length;
 	if (next.end > top->end || body > next.end) return 0;
-	if (sc->depth + 1u >= CU_AML_MAX_DEPTH || !resolve(top, &n, &next)) return 0;
+	if (sc->depth + 1u >= EFL_AML_MAX_DEPTH || !resolve(top, &n, &next)) return 0;
 	next.object = -1;
 	next.opener = opener;
 	sc->stack[++sc->depth] = next;
+	/* A Scope statement names an object that exists. Every other opener defines the object. */
+	if (opener != AML_SCOPE_OP && n.segments) watch_segment(sc, n.segment[n.segments - 1u]);
 	if (opener == AML_EXT_PROCESSOR_OP) {
+		int o;
 		sc->out->processor_objects++;
-		(void)object_of(sc, CU_AML_PROCESSOR);
+		o = object_of(sc, EFL_AML_PROCESSOR);
+		if (o >= 0) sc->out->object[o].proc_id = pkg[lb + nb];	/* ProcID, the first fixed operand */
 	} else if (opener == AML_EXT_THERMAL_ZONE_OP) {
 		sc->out->thermal_zones++;
 	}
@@ -256,8 +271,9 @@ static void defined(struct scanner *sc, const struct name *n, const unsigned cha
 	static const unsigned char cpu_hid[] = "ACPI0007";	/* ACPI 6.5 section 8.4: the processor device */
 	unsigned i;
 	int o;
+	if (n->segments) watch_segment(sc, n->segment[n->segments - 1u]);
 	if (n->absolute || n->parents || n->segments != 1u) return;
-	for (i = 0; i < CU_AML_POWER_NAMES; i++)
+	for (i = 0; i < EFL_AML_POWER_NAMES; i++)
 		if (!memcmp(n->segment[0], power_names[i], NAME_SEG)) {
 			o = object_of(sc, kind_of_opener(sc->stack[sc->depth].opener));
 			if (o >= 0) sc->out->object[o].names |= 1u << i;
@@ -266,8 +282,8 @@ static void defined(struct scanner *sc, const struct name *n, const unsigned cha
 	if (!memcmp(n->segment[0], "_HID", NAME_SEG) && sc->stack[sc->depth].opener == AML_EXT_DEVICE_OP &&
 	    (size_t)(end - after) >= sizeof(cpu_hid) + 1u && after[0] == AML_STRING_PREFIX &&
 	    !memcmp(after + 1, cpu_hid, sizeof(cpu_hid))) {
-		o = object_of(sc, CU_AML_DEVICE_CPU);
-		if (o >= 0) sc->out->object[o].kind = CU_AML_DEVICE_CPU;
+		o = object_of(sc, EFL_AML_DEVICE_CPU);
+		if (o >= 0) sc->out->object[o].kind = EFL_AML_DEVICE_CPU;
 	}
 }
 
@@ -287,7 +303,31 @@ static size_t count_bytes(const unsigned char *t, size_t bytes, const unsigned c
 	return hits;
 }
 
-int cu_aml_scan(const unsigned char *table, size_t bytes, struct cu_aml_scan *out)
+size_t efl_aml_pkg_length(const unsigned char *p, const unsigned char *end, size_t *length)
+{
+	return parse_pkg_length(p, end, length);
+}
+
+size_t efl_aml_absolute_path(const unsigned char *p, const unsigned char *end, char *path)
+{
+	struct name n;
+	struct scope s;
+	size_t bytes = parse_name(p, end, &n);
+	if (bytes == 0 || !n.absolute || n.segments == 0) return 0;
+	if (1u + (size_t)n.segments * (NAME_SEG + 1u) > EFL_AML_PATH_CHARS) return 0;
+	s.segments = n.segments;
+	memcpy(s.segment, n.segment, (size_t)n.segments * NAME_SEG);
+	format_path(&s, path);
+	return bytes;
+}
+
+int efl_aml_scan(const unsigned char *table, size_t bytes, struct efl_aml_scan *out)
+{
+	return efl_aml_scan_watch(table, bytes, NULL, 0, out);
+}
+
+int efl_aml_scan_watch(const unsigned char *table, size_t bytes, const char *const *watch, unsigned watch_count,
+		       struct efl_aml_scan *out)
 {
 	static struct scanner sc;	/* the stack is large for a firmware stack */
 	const unsigned char *p, *end;
@@ -300,11 +340,11 @@ int cu_aml_scan(const unsigned char *table, size_t bytes, struct cu_aml_scan *ou
 		 ((size_t)table[SDT_LENGTH + 3] << 24);
 	if (length < SDT_HEADER_BYTES || length > bytes) return 0;
 
-	for (i = 0; i < CU_AML_COUNTS; i++) {
+	for (i = 0; i < EFL_AML_COUNTS; i++) {
 		unsigned char eisa[4];
 		unsigned v;
-		if (i == CU_AML_FAN_EISAID) {
-			v = cu_aml_eisaid("PNP0C0B");	/* ACPI 6.5 section 11.3: the fan device */
+		if (i == EFL_AML_FAN_EISAID) {
+			v = efl_aml_eisaid("PNP0C0B");	/* ACPI 6.5 section 11.3: the fan device */
 			eisa[0] = (unsigned char)v; eisa[1] = (unsigned char)(v >> 8);
 			eisa[2] = (unsigned char)(v >> 16); eisa[3] = (unsigned char)(v >> 24);
 			out->counts[i] = (unsigned)count_bytes(table, length, eisa, 4);
@@ -316,6 +356,8 @@ int cu_aml_scan(const unsigned char *table, size_t bytes, struct cu_aml_scan *ou
 
 	memset(&sc, 0, sizeof(sc));
 	sc.out = out;
+	sc.watch = watch;
+	sc.watch_count = watch_count > EFL_AML_MAX_WATCH ? EFL_AML_MAX_WATCH : watch_count;
 	end = table + length;
 	sc.stack[0].end = end;
 	sc.stack[0].object = -1;

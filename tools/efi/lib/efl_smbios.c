@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
-/* The SMBIOS entry points and the RSMB form (cu_smbios.h). */
+/* The SMBIOS entry points and the RSMB form (efl_smbios.h). */
 #include <stddef.h>
 #include <string.h>
-#include "cu_smbios.h"
+#include "efl_smbios.h"
 
 /* 32-bit entry point (section 5.2.1) */
 #define EP2_BYTES_MIN		0x1Fu
@@ -32,7 +32,7 @@ static int checksum_ok(const unsigned char *p, unsigned bytes)
 	return sum == 0;
 }
 
-int cu_smbios_entry(cu_map_fn map, void *context, unsigned long long entry, int v3, struct cu_smbios_table *out)
+int efl_smbios_entry(efl_map_fn map, void *context, unsigned long long entry, int v3, struct efl_smbios_table *out)
 {
 	const unsigned char *e;
 	unsigned bytes;
@@ -61,7 +61,7 @@ int cu_smbios_entry(cu_map_fn map, void *context, unsigned long long entry, int 
 	return out->address != 0 && out->max_bytes != 0;
 }
 
-size_t cu_smbios_extent(const unsigned char *table, size_t max_bytes)
+size_t efl_smbios_extent(const unsigned char *table, size_t max_bytes)
 {
 	size_t at = 0;
 	if (table == NULL) return 0;
@@ -78,11 +78,11 @@ size_t cu_smbios_extent(const unsigned char *table, size_t max_bytes)
 	return 0;
 }
 
-size_t cu_smbios_rsmb(const unsigned char *table, size_t extent, unsigned major, unsigned minor,
+size_t efl_smbios_rsmb(const unsigned char *table, size_t extent, unsigned major, unsigned minor,
 		      unsigned char *out, size_t capacity)
 {
 	if (table == NULL || out == NULL || extent == 0 || extent > 0xFFFFFFFFu ||
-	    capacity < CU_RSMB_HEADER_BYTES + extent)
+	    capacity < EFL_RSMB_HEADER_BYTES + extent)
 		return 0;
 	out[0] = 0;			/* Used20CallingMethod */
 	out[1] = (unsigned char)major;
@@ -92,6 +92,6 @@ size_t cu_smbios_rsmb(const unsigned char *table, size_t extent, unsigned major,
 	out[5] = (unsigned char)(extent >> 8);
 	out[6] = (unsigned char)(extent >> 16);
 	out[7] = (unsigned char)(extent >> 24);
-	memcpy(out + CU_RSMB_HEADER_BYTES, table, extent);
-	return CU_RSMB_HEADER_BYTES + extent;
+	memcpy(out + EFL_RSMB_HEADER_BYTES, table, extent);
+	return EFL_RSMB_HEADER_BYTES + extent;
 }
