@@ -728,9 +728,10 @@ void created_case(Gpu& g, const CreatedCase& c, bool open_expected, uint32_t see
 }
 
 // The cost of a committed GPU-only buffer create, which the ENGINE LAYOUT record of the D3D12 shell changes (the
-// lab switch engine-layout-buffers writes it for every such buffer). The case creates kCostBuffers buffers of 4096
-// bytes with unordered access, times each create with QueryPerformanceCounter, and prints the mean, the median and
-// the longest. It passes when every create succeeds; the lab compares two runs, the switch off and on.
+// shell writes it for every such buffer unless engine-layout-buffers-off is set). The case creates kCostBuffers
+// buffers of 4096 bytes with unordered access, times each create with QueryPerformanceCounter, and prints the mean,
+// the median and the longest. It passes when every create succeeds. The lab compares two runs, with and without the
+// off switch.
 constexpr int kCostBuffers = 256;
 
 void create_cost_case(Gpu& g) {

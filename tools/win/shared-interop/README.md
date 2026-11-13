@@ -39,8 +39,9 @@ checks `--help` and a bad argument, and writes `SHA256SUMS.txt`. The default out
    linear mips), `--texture-open-expected` makes the case pass when the open succeeds with 7 mips.
 6. D3D12 creates three shared buffers: `d12-buffer-100`, `d12-buffer-4096-uav` and `d12-buffer-65536-uav`. Each
    is a committed buffer on a DEFAULT heap with `D3D12_HEAP_FLAG_SHARED` and an NT handle. The `-uav` buffers allow
-   unordered access. The D3D12 shell of this driver refuses a shared buffer today. Thus by default, a create that
-   fails with `E_OUTOFMEMORY` passes as `<buffer>-12to12`, and the other cases of that buffer do not run. With
+   unordered access. A driver can refuse a shared buffer: earlier D3D12 shells of this driver did. Thus by
+   default, a create that fails with `E_OUTOFMEMORY` passes as `<buffer>-12to12`, and the other cases of that buffer
+   do not run. With
    `--buffer-open-expected` the create must succeed. D3D12 writes a pattern into each buffer. Then there are three
    cases for each buffer:
    - `<buffer>-12to12`: D3D12 opens the handle, checks `GetDesc` and compares every byte. A process has one D3D12
@@ -56,7 +57,7 @@ checks `--help` and a bad argument, and writes `SHA256SUMS.txt`. The default out
 7. `buffer-create-cost` creates 256 committed buffers of 4096 bytes on a DEFAULT heap and measures the time of each
    create. It prints the mean, the median, the longest time and the time of the first create. The case passes when
    each create succeeds. To find the cost of the record of the D3D12 driver, the lab compares two runs: one with the
-   lab switch `engine-layout-buffers` and one without it.
+   default and one with the switch `engine-layout-buffers-off`. On unit A (2026-11-13) the means were equal.
 
 Each byte of a pattern is a function of its index and of the case, so a shifted, short or stale copy shows. A
 failed case names the step, the HRESULT, the count of bytes that differ and the first one.

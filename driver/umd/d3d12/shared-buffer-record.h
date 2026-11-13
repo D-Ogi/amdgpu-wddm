@@ -4,10 +4,11 @@
 //
 // The D3D12 DDI does not say that a create is shared (engine-ddi/INTEGRATION.md, "The shared surface"), so the
 // shell cannot write the record only for a shared buffer. It writes it for every committed buffer on a GPU-only heap,
-// when the lab switch engine-layout-buffers is on (ddi-trace.h). A buffer has no layout: the record and the BC2A
-// blob with BC250_UMD_A_SHARED change nothing on the GPU, and the kernel driver reads neither field. The switch stays
-// a lab switch until a lab probe has measured two things: that the runtime keeps the 240 bytes for every committed
-// buffer, and what the record costs per create (shared-open design, step 5).
+// unless engine-layout-buffers-off is on (ddi-trace.h). A buffer has no layout: the record and the BC2A blob with
+// BC250_UMD_A_SHARED change nothing on the GPU, and the kernel driver reads neither field. The lab probe
+// (tools/win/shared-interop, unit A, 2026-11-13) measured that the runtime keeps the 240 bytes for every committed
+// buffer and that a create costs the same with and without the record (353.2 us without it, 342.5 and 353.6 us with
+// it, mean of 256 creates), so the record is the default.
 //
 // The reader of this record is the ENGINE LAYOUT open of a D3D12 opener (engine-ddi/resources.cpp). The D3D11
 // runtime refused OpenSharedResource1 of a D3D12 buffer with E_INVALIDARG on the development PC (another vendor's

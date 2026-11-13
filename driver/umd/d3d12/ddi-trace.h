@@ -120,22 +120,22 @@ inline void ddi_chain_failure(const char* site,HRESULT code,unsigned operation=0
 //     acceleration structure and state object slots refuse opacity micromaps, SERIALIZE and DESERIALIZE
 //     (adapter-caps.cpp, device-engine.cpp, engine-ddi set_raytracing_tier12_reporting and
 //     set_raytracing_tier12_commands). Lab: a release shell always reports the tier that the engine has.
+//   engine-layout-buffers-off: a committed buffer on a GPU-only heap gets no ENGINE LAYOUT record and no BC2A blob
+//     (heap-import.cpp, shared-buffer-record.h; BD-373 step 5), the answer of earlier builds: a D3D12 open of a
+//     shared D3D12 buffer is then refused at the record length. The record is the default because the lab probe
+//     (tools/win/shared-interop, unit A, 2026-11-13) measured that the runtime keeps the 240 bytes and that a
+//     create costs the same with and without it.
 //
 // Two names are still opt-in, because no measurement admits them as defaults under the GPU compositor:
 //   present-cached: the swap-chain surface is placed in the Cached aperture (heap-import.cpp). dxgkrnl
 //     refuses Cached on a PRIMARY allocation (trial 105), so it needs present-noprimary with it.
 //   present-noprimary: the swap-chain buffers are not PRIMARY (heap-import.cpp), which also forfeits the
 //     scanout route. Measured gain of the pair under the CPU compositor, none under the GPU one (K115).
-// One lab name is opt-in because its measurement is still to come:
-//   engine-layout-buffers: every committed buffer on a GPU-only heap carries the ENGINE LAYOUT record and a BC2A blob
-//     with BC250_UMD_A_SHARED, so that a D3D12 opener can open it when the application shares it
-//     (heap-import.cpp, shared-buffer-record.h; BD-373 step 5). The DDI does not say which buffers are shared. Lab:
-//     the probe of the shared-open design must first measure that the runtime keeps the 240 bytes for every such
-//     buffer and what they cost per create; then the record becomes a default with an off switch.
 // One more name asks for a diagnostic rather than a deviation:
 //   replay-log: with deferred replay on, the replay lines also go to a file of their own (replay-log.h), for a
 //     game whose stderr nobody reads. It changes no behaviour; it costs the writes.
-// The positive names of the defaults (raytracing-tier, recording-bind, retire-handoff, deferred-replay) are
+// The positive names of the defaults (raytracing-tier, recording-bind, retire-handoff, deferred-replay,
+// engine-layout-buffers, the lab name of the trials before the record became the default) are
 // still accepted and do nothing, so that an older trial string or profile naming them still resolves.
 //
 // Where the list comes from:
@@ -189,12 +189,13 @@ inline constexpr SwitchRow kD3D12Switches[]={
     {"import-residency-release-on",SwitchClass::Lab},
     {"fence-wait-accept-off",SwitchClass::Lab},
     {"shared-create-retry-off",SwitchClass::Lab},
-    {"engine-layout-buffers",SwitchClass::Lab},
+    {"engine-layout-buffers-off",SwitchClass::Feature},
     {"raytracing-tier",SwitchClass::Accepted},
     {"recording-bind",SwitchClass::Accepted},
     {"retire-handoff",SwitchClass::Accepted},
     {"deferred-replay",SwitchClass::Accepted},
     {"import-residency-hold-on",SwitchClass::Accepted},
+    {"engine-layout-buffers",SwitchClass::Accepted},
     {"scanout-flip",SwitchClass::Accepted},
     {"scanout-flip-",SwitchClass::Accepted,true},
 };

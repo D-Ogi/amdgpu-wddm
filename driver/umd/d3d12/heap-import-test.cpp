@@ -357,7 +357,7 @@ int main(){
  assert(!owner.owns_allocation(memory.allocation) && owner.free(&memory)==E_INVALIDARG);
  }
  {
-  // BD-373 step 5, the lab switch engine-layout-buffers: a committed buffer on a GPU-only heap carries the ENGINE
+  // BD-373 step 5, the ENGINE LAYOUT record (the default, set by device-engine.cpp): a committed buffer on a GPU-only heap carries the ENGINE
   // LAYOUT record with this device's identity; a CPU-visible heap, a heap without a resource, a Width the record
   // cannot carry and the switch off keep the ordinary allocation. The memory and the events are the same either way.
   assert(!owner.engine_layout_buffers());

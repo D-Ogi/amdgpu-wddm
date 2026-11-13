@@ -857,7 +857,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     bits=needs.memoryTypeBits;if(request->memory_type_bits)bits&=request->memory_type_bits;
     alignment=std::max<uint64_t>(65536,std::max<uint64_t>(request->alignment,needs.alignment));
     const uint64_t bytes=std::max<uint64_t>(request->byte_size,needs.size);
-    // BD-373 step 5 (lab switch engine-layout-buffers): a committed buffer on a GPU-only heap carries the ENGINE
+    // BD-373 step 5 (the default, engine-layout-buffers-off turns it off): a committed buffer on a GPU-only heap carries the ENGINE
     // LAYOUT record, so that a D3D12 opener can open it if the application shares it. The DDI does not say which
     // buffers are shared, so every such buffer gets it; a heap for placed resources has no resource and gets none.
     BC250_SHARED_RESOURCE engine_record{};

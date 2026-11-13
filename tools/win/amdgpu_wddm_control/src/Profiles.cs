@@ -89,6 +89,7 @@ namespace AmdgpuWddmControl
         public static readonly string[] NotOffered =
         {
             "scanout-flip-off",   // a display route for a lab comparison, with no use for one game
+            "engine-layout-buffers-off", // a diagnosis of a shared-buffer open, with no use for one game
         };
 
         static readonly Regex Syntax = new Regex("^[a-z0-9,-]*$", RegexOptions.CultureInvariant);

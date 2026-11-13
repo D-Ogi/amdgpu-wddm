@@ -242,8 +242,8 @@ public:
     uint64_t leaked_reservation_bytes() const noexcept {return leaked_reservation_bytes_.load();}
     // A retirement point of the quarantine outside allocate() and free(): releases what the policy admits.
     void retire_held() noexcept {drain(false);}
-    // BD-373 step 5, the lab switch engine-layout-buffers (ddi-trace.h): from now on every committed buffer on a GPU-only
-    // heap gets the ENGINE LAYOUT record of shared-buffer-record.h, with this device identity in it. A null or all-zero
+    // BD-373 step 5, the default unless engine-layout-buffers-off (ddi-trace.h): from now on every committed buffer on
+    // a GPU-only heap gets the ENGINE LAYOUT record of shared-buffer-record.h, with this device identity in it. A null or all-zero
     // device UUID turns the record off again, because an opener refuses a record without an identity. Set before the
     // first allocate(), by the owner that reads the switch (device-engine.cpp).
     void write_engine_layout_buffers(const uint8_t* device_uuid,const uint8_t* driver_uuid) noexcept;

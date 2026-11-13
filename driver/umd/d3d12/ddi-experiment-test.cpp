@@ -208,10 +208,15 @@ int main() {
         assert(row && row->cls == native12::SwitchClass::Lab);
         assert(admit(name, false).kept.empty());
     }
-    // BD-373 step 5: a lab name because its measurement is still to come, so a release shell writes no record.
+    // BD-373 step 5: the ENGINE LAYOUT record of buffers is a default, so its off switch is a Feature name that a
+    // release shell honours, and the old lab name is accepted and changes nothing.
     {
-        const native12::SwitchRow* row = native12::switch_row(native12::kD3D12Switches, "engine-layout-buffers");
-        assert(row && row->cls == native12::SwitchClass::Lab && admit("engine-layout-buffers", false).kept.empty());
+        const native12::SwitchRow* off = native12::switch_row(native12::kD3D12Switches, "engine-layout-buffers-off");
+        assert(off && off->cls == native12::SwitchClass::Feature);
+        assert(admit("engine-layout-buffers-off", false).kept == "engine-layout-buffers-off");
+        const native12::SwitchRow* old = native12::switch_row(native12::kD3D12Switches, "engine-layout-buffers");
+        assert(old && old->cls == native12::SwitchClass::Accepted);
+        assert(admit("engine-layout-buffers", false).kept == "engine-layout-buffers");
     }
     // A mixed list keeps its order. A name with no row is dropped in each flavour, and so is a name that only
     // starts as a row does.
