@@ -58,7 +58,7 @@ enum ar_idle {
 	AR_IDLE_NO_STOCK_TABLE,		/* no SSDT with the header of the stock CPU table */
 	AR_IDLE_NOT_STOCK,		/* a table with that header whose content is not the stock content */
 	AR_IDLE_TARGETS_EXIST,		/* an object C000 is defined: the stock table is not defective here */
-	AR_IDLE_ALREADY_PRESENT,	/* a processor of the DSDT already has _CST */
+	AR_IDLE_ALREADY_PRESENT,	/* a processor already has _CST or _CSD in the DSDT or in another table */
 	AR_IDLE_NO_PROCESSORS,		/* the MADT lists no enabled processor, or more than AR_MAX_CPUS */
 	AR_IDLE_NO_PROCESSOR_OBJECT,	/* an enabled processor has no Processor object in the DSDT */
 	AR_IDLE_TABLES_INCOMPLETE,	/* the set of definition blocks is not whole, or one of them does not scan */
@@ -69,7 +69,7 @@ enum ar_stubs {
 	AR_STUBS_REPAIR = 0,
 	AR_STUBS_OFF,
 	AR_STUBS_NOT_STOCK_DSDT,	/* the DSDT does not have the header of the stock DSDT */
-	AR_STUBS_NOTHING_MISSING,	/* each method is defined, or the DSDT does not name it */
+	AR_STUBS_NOTHING_MISSING,	/* each method is defined, the DSDT does not name it, or a call has another form */
 	AR_STUBS_TABLES_INCOMPLETE,	/* the set of definition blocks is not whole, or one of them does not scan */
 	AR_STUBS_COUNT
 };

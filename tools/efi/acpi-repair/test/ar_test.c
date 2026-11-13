@@ -342,6 +342,19 @@ static void test_variants(const char *dir, const char *out_dir)
 	ar_plan_make(&in, &plan);
 	CHECK(plan.idle == AR_IDLE_TARGETS_EXIST);
 
+	/* Another table gives a processor a _CSD and no _CST: a built table would define _CSD a second time. */
+	efl_amlw_init(&w, extra, sizeof(extra));
+	efl_amlw_table_begin(&w, "SSDT", 2, "TEST", "CSD", 1, "BCST", 1);
+	mark = efl_amlw_scope_begin(&w, "\\_PR_.P003");
+	efl_amlw_name(&w, "_CSD");
+	efl_amlw_integer(&w, 0);
+	efl_amlw_end(&w, mark);
+	extra_bytes = efl_amlw_table_end(&w);
+	CHECK(extra_bytes != 0);
+	in.ssdt[2].length = extra_bytes;
+	ar_plan_make(&in, &plan);
+	CHECK(plan.idle == AR_IDLE_ALREADY_PRESENT && plan.targets == 0);
+
 	/* One of the three methods is defined by another table: only the two others get a stub. */
 	efl_amlw_init(&w, extra, sizeof(extra));
 	efl_amlw_table_begin(&w, "SSDT", 2, "TEST", "AWAK", 1, "BCST", 1);
@@ -352,6 +365,17 @@ static void test_variants(const char *dir, const char *out_dir)
 	CHECK(plan.idle == AR_IDLE_REPAIR && plan.stubs == AR_STUBS_REPAIR && plan.stub_mask == 5u);
 	bytes = ar_build_stubs(&plan, table, sizeof(table));
 	CHECK(bytes == 36u + 2u * 7u && ar_check_stubs(&plan, table, bytes) == 1);
+
+	/* A call of another form: the name with a constant after it, not an ArgN or a LocalN. That method gets no
+	 * stub, because the argument count of the call is then not known. */
+	stock_input(&s, &in);
+	memcpy(changed, s.dsdt, s.dsdt_bytes);
+	for (k = 36u; k + 5u <= s.dsdt_bytes; k++)
+		if (!memcmp(changed + k, "AWAK", 4)) { changed[k + 4u] = 0x0Au; break; }
+	fix_checksum(changed, s.dsdt_bytes);
+	in.dsdt.bytes = changed;
+	ar_plan_make(&in, &plan);
+	CHECK(plan.stubs == AR_STUBS_REPAIR && plan.stub_mask == 5u);
 
 	/* The load options. */
 	stock_input(&s, &in);

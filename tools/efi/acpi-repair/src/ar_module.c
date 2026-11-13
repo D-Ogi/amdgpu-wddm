@@ -83,7 +83,7 @@ static int collect(struct stage *stage)
 }
 
 /* Removes the stock CPU table from the root tables. The key of a table comes from the SDT protocol. */
-static void remove_stock(struct stage *stage, EFI_ACPI_TABLE_PROTOCOL *installer, const struct ar_table *stock)
+static void remove_stock(struct stage *stage, EFI_ACPI_TABLE_PROTOCOL *installer, const unsigned char *stock_header)
 {
 	EFI_ACPI_SDT_PROTOCOL *sdt = NULL;
 	UINTN index;
@@ -97,7 +97,7 @@ static void remove_stock(struct stage *stage, EFI_ACPI_TABLE_PROTOCOL *installer
 		UINTN key = 0;
 		EFI_STATUS status = sdt->GetAcpiTable(index, &table, &version, &key);
 		if (EFI_ERROR(status)) break;
-		if (table == NULL || memcmp(table, stock->bytes, SDT_HEADER_BYTES) != 0) continue;
+		if (table == NULL || memcmp(table, stock_header, SDT_HEADER_BYTES) != 0) continue;
 		status = installer->UninstallAcpiTable(installer, key);
 		if (EFI_ERROR(status))
 			stage_sayf(stage, AR_NAME, "the stock CPU table was not removed, status 0x%llx: it stays",
@@ -142,7 +142,7 @@ static void ar_module_run(struct stage *stage)
 {
 	EFI_ACPI_TABLE_PROTOCOL *installer = NULL;
 	unsigned char *buffer;
-	struct ar_table stock;
+	unsigned char stock_header[SDT_HEADER_BYTES];
 	size_t bytes;
 	int want_idle = stage_option_flag(&stage->options, "acpi.idle", 1);
 	int want_stubs = stage_option_flag(&stage->options, "acpi.stubs", 1);
@@ -176,13 +176,14 @@ static void ar_module_run(struct stage *stage)
 			   plan.stock_exact ? "the digest of the table of unit A" : "stock content, another digest");
 		stage_sayf(stage, AR_NAME, "processors: %u copied, %u derived, %u left out", plan.copied, plan.derived,
 			   plan.left_out);
-		/* The stock table is in firmware memory that an uninstall can free, so its header is kept here. */
-		stock = input.ssdt[plan.stock_ssdt];
+		/* The stock table is in firmware memory that an install can move and an uninstall can free, so a copy
+		 * of its header is kept here. The header holds the length and the checksum, so it names one table. */
+		memcpy(stock_header, input.ssdt[plan.stock_ssdt].bytes, SDT_HEADER_BYTES);
 		bytes = ar_build_idle(&plan, buffer, AR_TABLE_MAX_BYTES);
 		if (bytes == 0 || !ar_check_idle(&plan, buffer, bytes))
 			stage_say(stage, AR_NAME, "idle states: the built table failed its own check: not installed");
 		else if (install(stage, installer, buffer, bytes, "idle states", AR_IDLE_TABLE_ID))
-			remove_stock(stage, installer, &stock);
+			remove_stock(stage, installer, stock_header);
 	}
 	if (plan.stubs == AR_STUBS_REPAIR) {
 		unsigned s;

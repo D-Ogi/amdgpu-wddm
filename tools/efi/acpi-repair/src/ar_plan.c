@@ -21,6 +21,8 @@
 #define AML_DWORD_PREFIX	0x0Cu
 #define AML_QWORD_PREFIX	0x0Eu
 #define AML_SCOPE_OP		0x10u
+#define AML_LOCAL0_OP		0x60u	/* Local0 to Local7 are 0x60 to 0x67, Arg0 to Arg6 are 0x68 to 0x6E */
+#define AML_ARG6_OP		0x6Eu
 #define AML_PACKAGE_OP		0x12u
 
 /* _CSD (ACPI 6.5 chapter 8): one package of NumEntries, Revision, Domain, CoordType, NumProcessors, Index. */
@@ -45,8 +47,8 @@ static const unsigned char stock_table_sha256[EFL_SHA256_BYTES] = {
 	0x08, 0x2e, 0x63, 0x19, 0x4d, 0x31, 0x89, 0x87, 0x92, 0xac, 0x71, 0xcb, 0x1f, 0x86, 0xa4, 0xd1
 };
 
-/* The header of the stock DSDT, and the three methods that it calls and no stock table defines, each with one
- * argument at every call (fact M966). */
+/* The header of the stock DSDT, and the three methods that it calls and no stock table defines. Each call has
+ * one operand after the name (fact M966), so each stub has one argument. */
 static const unsigned char dsdt_oem_id[6] = { 'A', 'L', 'A', 'S', 'K', 'A' };
 static const unsigned char dsdt_oem_table_id[8] = { 'A', ' ', 'M', ' ', 'I', ' ', 0, 0 };
 static const char *const stub_names[AR_STUBS] = { "APTS", "AWAK", "AFN7" };
@@ -58,7 +60,7 @@ static const char *const idle_text[AR_IDLE_COUNT] = {
 	"no SSDT with the header of the stock CPU table: nothing to repair",
 	"the CPU SSDT does not have the stock content: left alone",
 	"the names that the stock CPU table targets are defined: left alone",
-	"a processor already has _CST: left alone",
+	"a processor already has _CST or _CSD: left alone",
 	"the MADT gives no usable list of enabled processors: left alone",
 	"an enabled processor has no Processor object in the DSDT: left alone",
 	"the ACPI tables cannot be read whole, so a name collision cannot be excluded: left alone",
@@ -244,6 +246,7 @@ static void plan_idle(const struct ar_input *in, struct ar_plan *plan)
 {
 	static struct efl_aml_scan scan;	/* large for a firmware stack */
 	static const char *const watch[1] = { "C000" };
+	const unsigned idle_names = (1u << EFL_AML_CST) | (1u << EFL_AML_CSD);
 	unsigned char digest[EFL_SHA256_BYTES];
 	unsigned i, k, rule_holds = 1;
 
@@ -270,10 +273,11 @@ static void plan_idle(const struct ar_input *in, struct ar_plan *plan)
 			return;
 		}
 		if (scan.watched[0]) { plan->idle = AR_IDLE_TARGETS_EXIST; return; }
-		/* A processor that has _CST in another table needs no repair, and a second _CST would collide. */
+		/* The built table defines _CST and _CSD. A scope that has one of them in another table needs no repair,
+		 * and a second definition of the name would collide. */
 		if (i > 0)
 			for (k = 0; k < scan.objects; k++)
-				if (scan.object[k].names & (1u << EFL_AML_CST)) { plan->idle = AR_IDLE_ALREADY_PRESENT; return; }
+				if (scan.object[k].names & idle_names) { plan->idle = AR_IDLE_ALREADY_PRESENT; return; }
 	}
 
 	if (in->cpus == 0 || in->cpus > AR_MAX_CPUS) { plan->idle = AR_IDLE_NO_PROCESSORS; return; }
@@ -282,7 +286,7 @@ static void plan_idle(const struct ar_input *in, struct ar_plan *plan)
 		return;
 	}
 	for (k = 0; k < scan.objects; k++)
-		if (scan.object[k].names & (1u << EFL_AML_CST)) { plan->idle = AR_IDLE_ALREADY_PRESENT; return; }
+		if (scan.object[k].names & idle_names) { plan->idle = AR_IDLE_ALREADY_PRESENT; return; }
 
 	/* The rule that the stock scopes obey: position k is in domain k / 2, with the other thread of its core. A
 	 * processor past the stock scopes gets a _CSD only when every stock scope obeys the rule. */
@@ -318,12 +322,19 @@ static void plan_idle(const struct ar_input *in, struct ar_plan *plan)
 	plan->idle = AR_IDLE_REPAIR;
 }
 
-static size_t count_bytes(const unsigned char *t, size_t bytes, const char *pattern)
+/* 1 when the table names the method, and each place that names it has exactly one operand of one byte after
+ * the name: an ArgN or a LocalN object. AML does not encode the argument count of a call, so a stub must have the
+ * count that the call sites show. A call with one such operand is the only form that the stock DSDT has (fact
+ * M966). A stub with one argument takes that operand. On any other form the method gets no stub. */
+static int calls_with_one_operand(const unsigned char *t, size_t bytes, const char *name)
 {
 	size_t i, hits = 0;
-	for (i = 0; i + NAME_SEG <= bytes; i++)
-		if (!memcmp(t + i, pattern, NAME_SEG)) hits++;
-	return hits;
+	for (i = SDT_HEADER_BYTES; i + NAME_SEG <= bytes; i++) {
+		if (memcmp(t + i, name, NAME_SEG) != 0) continue;
+		if (i + NAME_SEG >= bytes || t[i + NAME_SEG] < AML_LOCAL0_OP || t[i + NAME_SEG] > AML_ARG6_OP) return 0;
+		hits++;
+	}
+	return hits > 0;
 }
 
 static void plan_stubs(const struct ar_input *in, struct ar_plan *plan)
@@ -342,7 +353,7 @@ static void plan_stubs(const struct ar_input *in, struct ar_plan *plan)
 		for (s = 0; s < AR_STUBS; s++) defined[s] += scan.watched[s];
 	}
 	for (s = 0; s < AR_STUBS; s++)
-		if (defined[s] == 0 && count_bytes(in->dsdt.bytes, in->dsdt.length, stub_names[s]) > 0)
+		if (defined[s] == 0 && calls_with_one_operand(in->dsdt.bytes, in->dsdt.length, stub_names[s]))
 			plan->stub_mask |= 1u << s;
 	plan->stubs = plan->stub_mask ? AR_STUBS_REPAIR : AR_STUBS_NOTHING_MISSING;
 }
