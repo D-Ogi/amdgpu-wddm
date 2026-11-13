@@ -12,7 +12,7 @@ train b20 merged it into the lineage that ships, so the released 0.7.208.1 does 
 **Part B, the write path, is the last section.** It is allowed since 2026-10-06: the driver takes the
 fan from the BIOS curve while it runs, and gives it back to the chip's automatic mode on every exit path.
 Part B adds one writer, `driver/shim/bc250_fan.c`, and keeps the reader of this page as it is. Its lab write
-path is not yet validated on Windows: see the lab trial at the end.
+path is not yet checked on Windows: see the lab trial at the end.
 
 ## What the chip is
 
@@ -150,7 +150,7 @@ would otherwise spend hundreds of them on one repeated sentence.
 | --- | --- |
 | Tachometer | refuse `0xFFFF` (the chip's own "no reading"), refuse above 6000 RPM, refuse a change by more than a factor of 4 while both samples turn. A fan that starts or stops has a zero on one side and passes |
 | Duty read-back | 0 to 255, published as permille, rounded to nearest. 245 gives 961 |
-| Temperature | `(signed word / 128) * 500` millidegrees, a 0.5 C step. Refuse the raw words `0xFFFF` and `0x0000`, refuse a converted 0 mC (the step means the raw words 1 to 127 convert to 0 as well), and refuse a result outside -40 C to 150 C |
+| Temperature | `(signed word / 128) * 500` millidegrees, a 0.5 C step. Refuse the raw words `0xFFFF` and `0x0000`. Refuse a converted 0 mC (the step means the raw words 1 to 127 convert to 0 as well). Refuse a result outside -40 C to 150 C |
 
 A refused value is published as 0 with its valid bit clear, and `RpmValidMask` and `DutyValidMask` carry those
 bits to every reader. "Refused" and "reads zero" are therefore different states on the wire, which matters most
@@ -168,7 +168,7 @@ This is what makes the give-up rule fire on a window that stops answering.
 ## The settings
 
 All four are `REG_DWORD` under `Services\bc250kmd\Parameters`. From 0.7.213 the INF writes `EnableHwmon` 1
-and `HwmonBasePort` 0; the other two stay absent, because they are values an operator pins.
+and `HwmonBasePort` 0. The other two stay absent, because they are values an operator pins.
 
 | Setting | Meaning |
 | --- | --- |
@@ -216,7 +216,7 @@ not a stopped fan, and a red row over it would send somebody to the case for not
 `RpmValidMask`: a channel that reads 0 answered, a channel that was refused did not.
 
 Beside the flag, `Refusals` counts every value the driver refused since the start. A refused value does not
-refuse the sample, so it never moves `Errors`; it is still the footprint of a second reader on this window, and a
+refuse the sample, so it never moves `Errors`. It is still the footprint of a second reader on this window, and a
 measured session has to see it. `bc250kmd_cli` prints it as `refusals=`, with `answered=N/M` beside `turning=N/M`.
 
 ## What the tools show
@@ -239,13 +239,13 @@ ports. `scratch/fan-control/lab-fan-read.ps1` is the operator's check. It reads 
 60 s at idle and 60 s under a GPU load, through `bc250kmd_cli telemetry 1`, so the fan reading and the
 driver's own Tctl come out of one process at one instant. It prints every sample and then judges ten things:
 
-- enough samples arrived, and every one of them was fresh and valid;
-- RPM inside 300 to 6000, and no duty read-back above 0 while the fan reads stopped;
-- duty read-back inside 0 to 100 %;
-- no sample was refused, and the driver's refusal counter did not grow during the run;
-- every tachometer the chip reports as present answered (`answered=N/M`);
-- a temperature guarded every sample, and the guard names which reading it used;
-- the fan mode bit is clear, so the EC still owns the curve;
+- enough samples arrived, and every one of them was fresh and valid.
+- RPM inside 300 to 6000, and no duty read-back above 0 while the fan reads stopped.
+- duty read-back inside 0 to 100 %.
+- no sample was refused, and the driver's refusal counter did not grow during the run.
+- every tachometer the chip reports as present answered (`answered=N/M`).
+- a temperature guarded every sample, and the guard names which reading it used.
+- the fan mode bit is clear, so the EC still owns the curve.
 - RPM rises or holds as the guarding temperature rises.
 
 A 150 s stopwatch ends the run whatever happens, and the load block does not start when less than its own
@@ -443,7 +443,7 @@ the debt. The blind give-back sets it.
 | --- | --- | --- |
 | device stop and remove | `FanStop` from `Bc250StopDevice` and `Bc250RemoveDevice`, after `DpmStop` | `stop` |
 | out of D0 | `FanPause` from `Bc250SetPowerState` after `DpmPause`. `FanResume` takes the fan again in D0 | `power` |
-| out of D0, display-only branch | `FanStop` on the branch that stops the governor | `power` |
+| out of D0, `display-only` branch | `FanStop` on the branch that stops the governor | `power` |
 | driver unload | `FanDriverUnload` from `Bc250Unload`, for a device that the stop paths missed | `unload` |
 | the step stops | the watchdog DPC: no step for 3 s, given back in a work item at PASSIVE_LEVEL. A step that holds the controller for 6 s gets a blind give-back | `watchdog` |
 | the user asks | `RUN_FAN` BOARD, applied at the next step | `user` |
@@ -590,14 +590,13 @@ The read check of Part A, `lab-fan-read.ps1`, judges the board's own curve. With
 
 ### The lab trial
 
-The Windows write path is host-tested only. One lab trial of at most three minutes validates it:
+The Windows write path is host-tested only. One lab trial of at most three minutes checks it:
 
-1. Install the release that carries Part B. Read `bc250kmd_cli fan`. Pass: `fanctl state=curve
-   controlling=1 gate=ok fault=0`, and `readback` within 8 counts of `raw`.
+1. Install the release that carries Part B. Read `bc250kmd_cli fan`. Pass: `fanctl state=curve controlling=1 gate=ok fault=0`, and `readback` within 8 counts of `raw`.
 2. Run `bc250kmd_cli fan set 40 30`. Pass: about 770 RPM within 5 s.
 3. Wait for the lease to run out, or run `bc250kmd_cli fan auto`. Pass: `state=board controlling=0`
    and about 1360 RPM, the EC curve, within 5 s.
-4. Run `bc250kmd_cli fan curve`, then restart the display device as the kmd-deploy kit does (disable,
+4. Run `bc250kmd_cli fan curve`, then restart the GPU device as the kmd-deploy kit does (disable,
    enable). Pass: while it is disabled the fan turns at the EC curve's speed. After the enable
    `controlling=1` again.
 

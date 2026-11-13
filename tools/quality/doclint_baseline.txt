@@ -36,7 +36,6 @@
 5	docs/adr/0020-operator-tuning-in-the-smu-owner.md
 8	docs/design/adaptive-cpu-gpu.md
 1	docs/design/dp-audio.md
-12	docs/design/fan.md
 11	docs/design/gfx-submit-root-serialization.md
 5	docs/design/hang-detector.md
 4	docs/design/iommu-dma-remapping.md
