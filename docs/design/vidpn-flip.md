@@ -1,7 +1,7 @@
 # SetVidPnSourceAddress's own flip design note (E22 step 3, ADR 0011 point 3 step 3)
 
 Design decisions taken while implementing `EnableVidPnFlip`, 2026-09-22, against bc250kmd 0.7.23 (no version
-bump). Every claim carries a `file:line`; lines marked **DECISION** are this note's own choice, not something
+bump). Every claim carries a `file:line`. Lines marked **DECISION** are this note's own choice, not something
 measured. Style follows `docs/design/paging-node.md`.
 
 ## 1. What this adds and what it reuses
@@ -11,10 +11,8 @@ escape (`DcnFlipEscape`/`DcnFlipCore`) driven from display-only mode. Step 3 wir
 full WDDM table's own flip path, so that a real `DxgkDdiSetVidPnSourceAddress` call - the one dxgkrnl issues
 after every present, not an escape a test tool calls by hand - moves the scanout, and the VUPDATE_NO_LOCK
 interrupt reports completion instead of a fixed-period software timer. Everything new sits behind a second
-gate, `EnableVidPnFlip`, chained onto the existing `EnableDcnWrite` (`mmio.c:131-134`: `VidPnFlipEnabled =
-DcnWriteEnabled && GuardReadSetting(L"EnableVidPnFlip", 0) == 1`) - which itself already means `EnableMmio &&
-EnableDcnWrite`. Nothing here is meaningful unless `EnableFullWddm` is also open: `wddm.c`'s `Wddm` pointer is
-NULL in display-only mode, and every new call site checks it first (`WddmVSyncArm`, `wddm.c:849`; `WddmDcnVsync`,
+gate, `EnableVidPnFlip`, chained onto the existing `EnableDcnWrite` (`mmio.c:131-134`: `VidPnFlipEnabled = DcnWriteEnabled && GuardReadSetting(L"EnableVidPnFlip", 0) == 1`) - which itself already means `EnableMmio && EnableDcnWrite`. Nothing here is meaningful unless `EnableFullWddm` is also open: `wddm.c`'s `Wddm` pointer is
+NULL in display-only mode, and every new call site checks it first (`WddmVSyncArm`, `wddm.c:849`, and `WddmDcnVsync`,
 `wddm.c:908`).
 
 ## 2. Address conversion and validation
@@ -57,7 +55,7 @@ afford. `DXGKDDI_SETVIDPNSOURCEADDRESS` is annotated `_IRQL_requires_min_(PASSIV
 itself - so a busy-wait there would stall the very DPC that is supposed to report the flip's completion
 (section 5). `Bc250WddmSetVidPnSourceAddress` (`wddm.c:2476-2528`) calls `DcnFlipSourceAddress` only when the
 address actually changed (`InterlockedExchange64` on `wddm->PrimaryAddress`, unconditionally on IRQL, since
-`MmioDcnRead`/`MmioDcnWrite` take no lock of their own - `mmio.c` - and are legal at any level reachable here);
+`MmioDcnRead`/`MmioDcnWrite` take no lock of their own - `mmio.c` - and are legal at any level reachable here).
 `WddmVSyncArm(device, TRUE)` - which does take a spin lock and, with the gate closed, calls `KeSetTimerEx` -
 is skipped above `DISPATCH_LEVEL` exactly as it already was before this change (`wddm.c:2526`, `high` computed
 at `wddm.c:2489`), counted separately (`FlipsAboveDispatch`) so the assumption that `SetVidPnSourceVisibility`
@@ -73,7 +71,7 @@ second flag is what `WddmVSyncArm`'s hardware branch (`wddm.c:851-864`) sets, un
 way the software path already sets `wddm->VSyncArmed`. What makes the RMW itself legal at DIRQL is that
 `MmioDcnRead`/`MmioDcnWrite` (`mmio.c`) take no lock at all - a binary search over a static allow-list plus a
 volatile access to mapped BAR5 - so this needed none of the generic IH ring's single-consumer, DPC-only
-machinery (`ih.c`) to stay correct. The ack ORs `VUPDATE_NO_LOCK_EVENT_CLEAR` into the value just read
+machinery (`ih.c`) to stay valid. The ack ORs `VUPDATE_NO_LOCK_EVENT_CLEAR` into the value just read
 (`dcn.c:572-573`), so `VUPDATE_NO_LOCK_INT_EN` and every other field of `OTG0_OTG_GLOBAL_SYNC_STATUS` go back
 exactly as read - the identical RMW `DcnVsyncEnable` (`dcn.c:537-549`) uses to arm or disarm the source, so the
 sequence is written once, not twice. A read or write that is refused (BAR5 gone, offset not on the allow-list)
@@ -98,15 +96,15 @@ CRTC_VSYNC on", is honoured identically by both paths).
 Before reporting, `WddmDcnVsync` polls `DcnFlipPending` (`dcn.c:522-529`) - a single, non-blocking read of
 `HUBPREQ0_DCSURF_FLIP_CONTROL`'s `SURFACE_FLIP_PENDING` bit, `FALSE` (treated as "not pending", never blocking)
 on any register-read failure. This mirrors amdgpu's own `dm_vupdate_high_irq`, which completes a flip only once
-`dc_get_flip_pending_on_otg` says none is pending - the double-buffered HUBP hardware can still show the
+`dc_get_flip_pending_on_otg` says none is pending - the double-buffered HUBP hardware can still present the
 previous surface for the instant right after VUPDATE if the CRTC caught the update mid-scan. Facts M94 measured
 the bit clearing within one frame, so a still-pending read defers the report to the next tick
-(`Device->DcnVsyncDeferred`, counted) rather than reporting early; in the ordinary case this should not defer
+(`Device->DcnVsyncDeferred`, counted) rather than reporting early. In the ordinary case this should not defer
 more than once. Once clear, the DPC reports `DXGK_INTERRUPT_CRTC_VSYNC` with `wddm->PrimaryAddress` - the same
 address `SetVidPnSourceAddress` last stored, which is also the address `DcnFlipSourceAddress` already wrote to
 the hardware - through the existing `WddmReport` (`wddm.c:159-161`'s own comment: nothing else retires a queued
 flip). **DECISION**: report `CRTC_VSYNC`, not a second, separate `DISPLAYONLY_VSYNC` - this table is the full
-WDDM one; `DISPLAYONLY_VSYNC` belongs to the display-only DDI table this build does not use once
+WDDM one. `DISPLAYONLY_VSYNC` belongs to the display-only DDI table this build does not use once
 `EnableFullWddm` is open, and `MaxQueuedFlipOnVSync = 1` (`wddm.c:1391`, unchanged) means one report is exactly
 what retires the one flip that can be outstanding.
 
@@ -205,15 +203,14 @@ when the flip with the mark completes. A queued flip without the mark waits behi
 stays busy. The OS admits it without a wait, and only the 64-entry ring of the flip queue limits the queue.
 
 **The programming.** DCN 2.01 uses `hubp1_program_surface_flip_and_addr` (Linux v6.18
-`dc/hubp/dcn201/dcn201_hubp.c:115`, `dc/hubp/dcn10/dcn10_hubp.c:349`). It writes `SURFACE_FLIP_TYPE =
-flip_immediate`, then the address, high half first. DC does this inside the TG master update lock
+`dc/hubp/dcn201/dcn201_hubp.c:115`, `dc/hubp/dcn10/dcn10_hubp.c:349`). It writes `SURFACE_FLIP_TYPE = flip_immediate`, then the address, high half first. DC does this inside the TG master update lock
 (`dc/core/dc.c:4194` lock, `:4398` `update_plane_addr`, `:4406` unlock). `dcn201_update_plane_addr` records an
 immediate address as current at once (`dc/hwss/dcn201/dcn201_hwseq.c:156-157`). `DcnFlipWriteSequence`
 (`driver/kmd/dcn.c`) keeps that order in the acknowledged `OTG_MASTER_UPDATE_LOCK`. It writes
 `SURFACE_FLIP_TYPE` 1 for a request with `Flags.FlipImmediate` and 0 for every other flip. A vsync flip writes
 the same register values as 0.7.216.64. DCN 2.01 has no `set_flip_control_gsl` in its hardware sequencer, so
 the driver does not touch `SURFACE_GSL_ENABLE`. The two stereo-sync fields keep the firmware's values, as since
-M87. The record of each immediate flip shows the full `DCSURF_FLIP_CONTROL` value.
+M87. The record of each immediate flip records the full `DCSURF_FLIP_CONTROL` value.
 
 **When a flip has taken effect.** `hubp1_is_flip_pending` (`dcn10_hubp.c:751-777`) calls a flip done when
 `SURFACE_FLIP_PENDING` is clear and `SURFACE_EARLIEST_INUSE` is the requested address. That is a vblank test:
@@ -381,7 +378,7 @@ The previous OS primary remains retained. No unprogrammed request is reported as
 With the hardware gate closed, the existing software-report route retains its separate deposit behavior.
 
 BUSY is a safety response, not a proved recovery mechanism for this legacy scheduler.
-M904 shows that an exclusive queue head can remain and lead to the later 0x119 assertion.
+M904 records that an exclusive queue head can remain and lead to the later 0x119 assertion.
 M902 also records a BUSY head that stopped progress until a restart.
 The exact r7b artifact still needs a lab overlap trial. These risks remain open until that trial or a different completion contract resolves them.
 
@@ -517,8 +514,7 @@ It checks both build flavours and preserves HIP dispatch. Restoring command 35 f
 `Bc250StopDevice` (`pnp.c:98-124`) already calls `WddmStop(device)` first - "nothing below it is allowed to
 have run" - then, in order, `IhStop`, `GfxStop`, `PspStop`, `GartStop`, `VramStop`, `DcnStop`, `MmioStop`.
 `WddmStop`'s own critical section (`wddm.c:1146-1159`) now disarms the hardware vsync source next to the
-existing software-timer cancel: `if (Device->DcnVsyncArmed != 0) { InterlockedExchange(&Device->DcnVsyncArmed,
-0); DcnVsyncEnable(Device, FALSE); }`, under the same spin lock and for the same reason the timer cancel is
+existing software-timer cancel: `if (Device->DcnVsyncArmed != 0) { InterlockedExchange(&Device->DcnVsyncArmed, 0); DcnVsyncEnable(Device, FALSE); }`, under the same spin lock and for the same reason the timer cancel is
 there - so that nothing can re-arm behind `wddm->Stopping` being set. Because this runs inside `WddmStop`,
 which runs before `DcnStop`, the VUPDATE_NO_LOCK interrupt is disabled and acked (`DcnVsyncEnable(..., FALSE)`
 always ORs in `EVENT_CLEAR`, `dcn.c:547`) before `DcnStop` restores the firmware's own surface address
@@ -554,11 +550,11 @@ and by `tools/wddm_contract_check/check.py` staying 34 OK / 4 n/a.
    from the escape path's own poll, not from back-to-back hardware-driven vsyncs. E22 step 3's H7 (README) is
    this question.
 2. **VUPDATE_NO_LOCK's exact trigger phase relative to the CRTC's active/blank boundary** is amdgpu's own
-   documented behaviour (`dm_vupdate_high_irq`), not something this driver has measured on this ASIC yet; if it
+   documented behaviour (`dm_vupdate_high_irq`), not something this driver has measured on this ASIC yet. If it
    fires later in the frame than expected, `DcnFlipPending`'s defer-and-recheck already covers that case rather
    than assuming it away.
 3. **Whether a second `SetVidPnSourceAddress` can arrive before the first flip's VUPDATE_NO_LOCK has been
-   serviced** is unmeasured; `DcnFlipWriteSequence` always writes the newest address (last write wins, matching
+   serviced** is unmeasured. `DcnFlipWriteSequence` always writes the newest address (last write wins, matching
    `MaxQueuedFlipOnVSync = 1`'s promise of at most one outstanding flip), so this is believed safe by
    construction rather than proven by a lab run.
 
@@ -567,8 +563,7 @@ and by `tools/wddm_contract_check/check.py` staying 34 OK / 4 n/a.
 M100 found the consequence this note's step 3 did not address: once `DxgkDdiSetVidPnSourceAddress` has flipped
 HUBP0 away from the firmware's framebuffer, nothing scans that framebuffer out any more, and E20's CPU blit
 (`WddmPresentBlit`, `wddm.c`) kept painting it anyway. The fix, bc250kmd 0.7.31, is in
-`WddmPresentBlit` and `dcn.c`'s new `DcnScanoutMapping`/`DcnUnmapScanout`: once `Device->VidPnFlipEnabled &&
-Device->DcnDiverged`, the blit's destination becomes a CPU mapping of `Device->DcnCurrentAddress` instead of
+`WddmPresentBlit` and `dcn.c`'s new `DcnScanoutMapping`/`DcnUnmapScanout`: once `Device->VidPnFlipEnabled && Device->DcnDiverged`, the blit's destination becomes a CPU mapping of `Device->DcnCurrentAddress` instead of
 `Device->Framebuffer`, remapped only when that address changes (once a flip, matching M97's "one flip served 60
 presents", never once a present) and bounded by the mapped length, never by anything user mode supplied. The
 mapping is made and torn down at `PASSIVE_LEVEL` only, from `WddmPresentBlit` and from `WddmStop`/`DcnStop` -
@@ -600,7 +595,7 @@ shape this build compiles at (`bc250kmd.h:42-48`):
   lookup does today (facts M82).
 - `DXGK_ALLOCATIONINFOFLAGS`/`_WDDM2_0` (`d3dkmddi.h:3750-3847`) mark no allocation "primary" at
   `CreateAllocation` time - the nearest thing, `D3DKMDT_SHAREDPRIMARYSURFACEDATA` (`d3dkmddi.h:4167`), is the
-  legacy shared-desktop-primary path, and the E22 evidence shows the CDD's surfaces arriving as ordinary
+  legacy shared-desktop-primary path, and the E22 evidence records the CDD's surfaces arriving as ordinary
   per-present allocations through `Present`'s own list instead. Either way, this driver only ever finds out
   which allocation is primary by being told, never by asking.
 - **The pitch is the real gap, and it is this driver's own, not a documented WDDM one.** `DcnFlipWriteSequence`
@@ -617,7 +612,7 @@ shape this build compiles at (`bc250kmd.h:42-48`):
   no compositor copy in between - option B, not option A. The CPU blit this section fixes is the improvised
   piece standing in for a capability the driver already advertises but does not yet fully implement.
 
-**DECISION: ship the mapped-copy fix above now; treat flipping straight to the CDD's own allocation as the next
+**DECISION: ship the mapped-copy fix above now. Treat flipping straight to the CDD's own allocation as the next
 step, not this one.**
 
 1. It answers the measured defect (M100) inside gates already exercised (`EnablePresentBlit`, `EnableVidPnFlip`)
@@ -630,7 +625,7 @@ step, not this one.**
    a handle directly.
 3. Option B needs the pitch question above actually answered from the allocation's own data, not assumed from
    the mode set, before any write sequence - this one or a new one that also programs `DCSURF_SURFACE_PITCH` -
-   can flip to an allocation whose stride was never independently confirmed to be 7680.
+   can flip to an allocation whose stride was never independently checked to be 7680.
 
 The two are not in tension: the mapped-copy path is a strict improvement on 0.7.25 either way, and needs no
 revisiting if a later step adds a real flip-to-CDD-allocation path - that step would just mean
