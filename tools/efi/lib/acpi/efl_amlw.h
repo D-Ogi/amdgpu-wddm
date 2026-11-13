@@ -51,6 +51,9 @@ size_t efl_amlw_device_begin(struct efl_amlw *w, const char *segment);
 /* A string object: the StringPrefix and the characters, with the null terminator. */
 void efl_amlw_string(struct efl_amlw *w, const char *text);
 
+/* A buffer object of the given bytes: the encoding that a resource template uses. */
+void efl_amlw_buffer(struct efl_amlw *w, const void *bytes, size_t count);
+
 /* A named string: Name(_HID, "BC250001"). */
 void efl_amlw_name_string(struct efl_amlw *w, const char *segment, const char *text);
 

@@ -416,6 +416,18 @@ size_t ar_build_stubs(const struct ar_plan *plan, unsigned char *out, size_t cap
 		size_t scope = efl_amlw_scope_begin(&w, "\\_SB_");
 		size_t mark = efl_amlw_device_begin(&w, "TPM0");
 		efl_amlw_name_string(&w, "_HID", "BC250001");
+		if (plan->crb_base != 0) {
+			/* Memory32Fixed (0x86) of the reserved page, then the end tag: the CRB window of the TPM work. */
+			unsigned char crs[12];
+			unsigned long long base = plan->crb_base;
+			unsigned k;
+			crs[0] = 0x86; crs[1] = 0x09; crs[2] = 0x00; crs[3] = 0x00;
+			for (k = 0; k < 4; k++) crs[4 + k] = (unsigned char)(base >> (8 * k));
+			for (k = 0; k < 4; k++) crs[8 + k] = (unsigned char)(0x1000u >> (8 * k));
+			crs[8] = 0x00; crs[9] = 0x10; crs[10] = 0x00; crs[11] = 0x00;
+			efl_amlw_name(&w, "_CRS");
+			efl_amlw_buffer(&w, crs, sizeof(crs));
+		}
 		efl_amlw_end(&w, mark);
 		efl_amlw_end(&w, scope);
 	}

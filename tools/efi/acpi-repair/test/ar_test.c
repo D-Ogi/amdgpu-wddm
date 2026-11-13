@@ -192,6 +192,13 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 	CHECK(stubs[36u + 21u] == 0x10 && stubs[36u + 28u] == 0x5B && stubs[36u + 29u] == 0x82 && !memcmp(stubs + 36u + 31u, "TPM0", 4));
 	CHECK(!memcmp(stubs + 36u + 35u, "\x08_HID\x0d" "BC250001", 15));
 	CHECK(ar_build_stubs(&plan, stubs, 50) == 0);		/* no room for the device */
+	/* With a reserved page the device carries _CRS: Memory32Fixed of that page, then the end tag. */
+	plan.crb_base = 0x12345000ull;
+	stub_bytes = ar_build_stubs(&plan, stubs, sizeof(stubs));
+	CHECK(stub_bytes == 36u + 3u * 7u + 7u + 7u + 15u + 5u + 16u);
+	CHECK(!memcmp(stubs + stub_bytes - 12u, "\x86\x09\x00\x00\x00\x50\x34\x12\x00\x10\x00\x00", 12));
+	plan.crb_base = 0;
+
 	/* Device on and no stub needed: the table is still built, and it holds the device alone. */
 	{
 		enum ar_stubs keep = plan.stubs;

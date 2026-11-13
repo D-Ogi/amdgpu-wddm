@@ -21,6 +21,7 @@
 #define AML_EXT_OP		0x5Bu	/* the extended opcode prefix of ACPI 6.5 section 20.2.5 */
 #define AML_DEVICE_OP		0x82u
 #define AML_STRING_PREFIX	0x0Du
+#define AML_BUFFER_OP		0x11u
 
 #define SDT_HEADER_BYTES	36u
 #define SDT_LENGTH		4u
@@ -219,6 +220,18 @@ void efl_amlw_string(struct efl_amlw *w, const char *text)
 	if (n > 0x7FFFu) { w->overflow = 1; return; }
 	put8(w, AML_STRING_PREFIX);
 	efl_amlw_bytes(w, text, n + 1);
+}
+
+void efl_amlw_buffer(struct efl_amlw *w, const void *bytes, size_t count)
+{
+	if (count > 0x7FFFu) { w->overflow = 1; return; }
+	put8(w, AML_BUFFER_OP);
+	{
+		size_t mark = w->used;
+		efl_amlw_integer(w, (unsigned long long)count);
+		efl_amlw_bytes(w, bytes, count);
+		efl_amlw_end(w, mark);
+	}
 }
 
 void efl_amlw_name_string(struct efl_amlw *w, const char *segment, const char *text)

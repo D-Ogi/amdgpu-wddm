@@ -100,6 +100,7 @@ struct ar_plan {
 	enum ar_stubs stubs;
 	unsigned stub_mask;		/* bit i: ar_stub_name(i) gets an empty method */
 	int device;			/* 1: ar_build_stubs writes the experiment device */
+	unsigned long long crb_base;	/* the reserved page that _CRS describes, 0 when no page is reserved */
 };
 
 void ar_plan_make(const struct ar_input *in, struct ar_plan *plan);
