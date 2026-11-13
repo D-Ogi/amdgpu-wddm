@@ -39,7 +39,7 @@ points at the Vulkan headers (default: the headers in
    range, the untouched sentinel outside it.
 
 The `dstOffset` bytes before the range and the 256 bytes after it are guard bytes. A store that leaves the
-range fails the case, even when every byte inside the range is correct. RADV's current buffer meta shader has
+range fails the case, even when every byte inside the range is as expected. RADV's current buffer meta shader has
 no destination clamp: its bounds come only from the thread count of the dispatch, so an off-by-one in that
 count writes past the end with no other symptom.
 
