@@ -22,7 +22,7 @@
 #include "stage.h"
 #include "board_identity.h"
 
-#define STAGE_VERSION		"3"
+#define STAGE_VERSION		"4"
 #define STAGE_LINE_CHARS	256u
 #define STAGE_DEVPATH_MAX_BYTES	4096u
 #define STAGE_SMBIOS_MAX_BYTES	(1024u * 1024u)	/* the bound driver/kmd/board_memory_identity.c sets on 'RSMB' */
@@ -497,6 +497,9 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st)
 	status = start_next(&stage);
 	unwind_modules(&stage);
 	if (log_lost) stage_sayf(&stage, NULL, "%u console line(s) did not fit in the log", log_lost);
+	/* The last line of the stage. A log that ends with it says that the stage returned to its loader, and that a
+	 * stop after it is in the loader or in the image that the loader starts next. */
+	stage_sayf(&stage, NULL, "returning to the loader, status 0x%llx", (unsigned long long)(EFI_ERROR(status) ? status : EFI_SUCCESS));
 	stage_log_flush(&stage);
 	if (stage.root != NULL) stage.root->Close(stage.root);
 	stage.root = NULL;

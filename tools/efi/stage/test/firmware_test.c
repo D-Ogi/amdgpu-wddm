@@ -296,6 +296,26 @@ static int file_has(const char *path, const char *text)
 	return 0;
 }
 
+/* The offset of the first copy of the text in the file, or -1. */
+static long file_at(const char *path, const char *text)
+{
+	struct fw_file *file = find_file(path);
+	size_t n = strlen(text), i;
+	if (file == NULL) return -1;
+	for (i = 0; i + n <= file->bytes; i++)
+		if (!memcmp(file->data + i, text, n)) return (long)i;
+	return -1;
+}
+
+/* 1 when the file ends with this line and its line end. */
+static int file_ends_with(const char *path, const char *line)
+{
+	struct fw_file *file = find_file(path);
+	size_t n = strlen(line);
+	if (file == NULL || file->bytes < n + 1u) return 0;
+	return !memcmp(file->data + file->bytes - n - 1u, line, n) && file->data[file->bytes - 1u] == '\n';
+}
+
 /* -- the handle database -- */
 
 static struct fw_protocol *find_protocol(EFI_HANDLE handle, const EFI_GUID *guid)
@@ -952,6 +972,30 @@ static void test_secure_boot(const char *acpi_dir, const char *fixtures)
 	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce", &reset) == EFI_ACCESS_DENIED);
 	CHECK(fw.loads == 0 && fw.starts == 0 && said("a module refused the next image"));
 	CHECK(security2_now() == &fw_security2 && fw.pool_live == 0);
+
+	/* Lab step s4b: enforce, the digest of the next image is in dbx. The stage refuses it and returns to its
+	 * loader. With log=line and with log=1, the log file holds the refusal, the unwind and the return line, in
+	 * that order, and the return line is the last line of the file when efi_main returns. */
+	{
+		static const char *const modes[] = { "unlock=0 acpi=0 sb.mode=enforce log=line",
+						     "unlock=0 acpi=0 sb.mode=enforce log=1" };
+		unsigned m;
+		for (m = 0; m < 2u; m++) {
+			long refused, back, returning;
+			if (!new_firmware(acpi_dir)) return;
+			add_file(NEXT, fixtures, "signed.efi");
+			add_file(BESIDE "db.esl", fixtures, "db_root.esl");
+			add_file(BESIDE "dbx.esl", fixtures, "dbx_digest.esl");
+			CHECK(run_stage(modes[m], &reset) == EFI_ACCESS_DENIED && !reset);
+			CHECK(fw.loads == 0 && fw.starts == 0 && security2_now() == &fw_security2 && fw.pool_live == 0);
+			refused = file_at(LOG_FILE, "bc250-stage: a module refused the next image: not started\n");
+			back = file_at(LOG_FILE, "secure-boot: the Security2 protocol of the firmware is back in its place\n");
+			returning = file_at(LOG_FILE, "bc250-stage: returning to the loader, status 0x800000000000000F\n");
+			CHECK(file_has(LOG_FILE, "forbidden: the digest of the image is in dbx"));
+			CHECK(refused >= 0 && back > refused && returning > back);
+			CHECK(file_ends_with(LOG_FILE, "bc250-stage: returning to the loader, status 0x800000000000000F"));
+		}
+	}
 	/* Enforce, an image that dbx forbids by a certificate digest. */
 	if (!new_firmware(acpi_dir)) return;
 	add_file(NEXT, fixtures, "signed.efi");

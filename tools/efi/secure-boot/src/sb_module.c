@@ -261,7 +261,11 @@ static void unhook(struct stage *stage)
 		stage_say(stage, SB_NAME, "another image changed the Security2 protocol after the stage and did not put it back");
 	status = stage->bs->ReinstallProtocolInterface(security2_handle, &security2_guid, &stage_security2, firmware_security2);
 	security2_handle = NULL;
-	if (!EFI_ERROR(status)) return;
+	if (!EFI_ERROR(status)) {
+		/* The line says that the unwind ended. A stop after it is not in the stage's check. */
+		stage_say(stage, SB_NAME, "the Security2 protocol of the firmware is back in its place");
+		return;
+	}
 	stage_sayf(stage, SB_NAME, "the firmware did not take its Security2 protocol back, status 0x%llx",
 		   (unsigned long long)status);
 	stage_say(stage, SB_NAME, "the stage cannot return with its check in the firmware: restart in 10 seconds");
