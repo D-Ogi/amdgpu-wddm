@@ -6,9 +6,10 @@
  * the page (crb.c) and moves each command to the user-mode TPM core service through a control device
  * (tpmserv_ioctl.h), and the answer back.
  *
- * Identification, before anything attaches: the SMBIOS system or baseboard product names a BC-250, and the
- * firmware TPM2 table carries the OEM table ID BC250TPM of the stage. On any other machine DriverEntry creates no
- * control device and AddDevice attaches nothing, so a real TPM below tpm.sys is never touched.
+ * Identification, before anything attaches: the SMBIOS tables pass the shared board rule
+ * (BoardIdentitySelectSmbios), and the firmware TPM2 table carries the OEM table ID BC250TPM of the stage. On any
+ * other machine DriverEntry creates no control device and AddDevice attaches nothing, so a real TPM below tpm.sys
+ * is never touched.
  *
  * Order at start: the start request goes down to the ACPI bus driver first; on the way back up this filter maps
  * the page and resets it to the TPM reset state (EvtDevicePrepareHardware) before tpm.sys sees the start complete.
@@ -25,6 +26,7 @@
 #include <TraceLoggingProvider.h>
 #include "../crb.h"
 #include "../tpmserv_ioctl.h"
+#include "../../common/board/board_identity.h"
 
 TRACELOGGING_DEFINE_PROVIDER(g_TpmServ, "Bc250TpmServicer",
 	(0x9f3c7a11, 0x2b64, 0x4d0e, 0x8a, 0x51, 0x7c, 0x3e, 0x19, 0xb2, 0x6d, 0x04));
@@ -81,38 +83,21 @@ static ULONGLONG Tpm2ControlArea(VOID)
 	return control;
 }
 
-/* TRUE when the SMBIOS system (type 1) or baseboard (type 2) strings name a BC-250. */
+/* TRUE when the SMBIOS tables are a documented BC-250 (driver/common/board: the rule the display driver uses,
+ * without its PCI half, which a TPM filter cannot read). */
 static BOOLEAN BoardIsBc250(VOID)
 {
-	static const CHAR needle[] = "BC-250";
-	ULONG size = 0, offset;
+	ULONG size = 0;
 	PUCHAR p;
+	unsigned reason = 0;
 	BOOLEAN found = FALSE;
 
 	if (AuxKlibGetSystemFirmwareTable('RSMB', 0, NULL, 0, &size) != STATUS_BUFFER_TOO_SMALL || size < 8)
 		return FALSE;
 	p = (PUCHAR)ExAllocatePool2(POOL_FLAG_PAGED, size, 'pmsB');
 	if (p == NULL) return FALSE;
-	if (!NT_SUCCESS(AuxKlibGetSystemFirmwareTable('RSMB', 0, p, size, &size))) {
-		ExFreePoolWithTag(p, 'pmsB');
-		return FALSE;
-	}
-	/* RawSMBIOSData: 8 header bytes, then the structures. Each one is a formatted area of p[1] bytes and a
-	 * string set that ends with two zero bytes. */
-	for (offset = 8; offset + 4 <= size && !found;) {
-		UCHAR type = p[offset], length = p[offset + 1];
-		ULONG next;
-		if (length < 4 || offset + length > size) break;
-		next = offset + length;
-		while (next + 1 < size && (p[next] != 0 || p[next + 1] != 0)) {
-			if ((type == 1 || type == 2) && next + sizeof(needle) - 1 <= size &&
-			    RtlEqualMemory(p + next, needle, sizeof(needle) - 1))
-				found = TRUE;
-			next++;
-		}
-		if (type == 127) break;
-		offset = next + 2;
-	}
+	if (NT_SUCCESS(AuxKlibGetSystemFirmwareTable('RSMB', 0, p, size, &size)))
+		found = BoardIdentitySelectSmbios(p, size, &reason) == 1;
 	ExFreePoolWithTag(p, 'pmsB');
 	return found;
 }
