@@ -639,6 +639,10 @@ int main(int argc, char** argv) {
         {"buffer-65536", 65536, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, 0, 0},
         {"structured-4096-s16", 4096, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS,
          D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, 16},
+        // The two variables of buffer-100, one at a time: its size with the binds of buffer-4096, and its binds
+        // with the size of buffer-4096. The order above stays, so each earlier case keeps its seed.
+        {"buffer-100-uav", 100, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, 0, 0},
+        {"buffer-4096-vb", 4096, D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_SHADER_RESOURCE, 0, 0},
     };
     uint32_t seed = 1;
     for (const BufferCase& c : cases) buffer_case(g, c, Form::Kmt, seed++);

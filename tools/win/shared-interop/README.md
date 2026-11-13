@@ -27,7 +27,9 @@ checks `--help` and a bad argument, and writes `SHA256SUMS.txt`. The default out
      waits for the fence, copies the buffer to a staging buffer and compares every byte.
 
    The buffers are `buffer-100` (vertex and shader resource binds), `buffer-4096` and `buffer-65536` (shader
-   resource and unordered access binds), and `structured-4096-s16` (structured, stride 16).
+   resource and unordered access binds), and `structured-4096-s16` (structured, stride 16). Two more cases change one
+   property of `buffer-100` at a time: `buffer-100-uav` has its size with the binds of `buffer-4096`, and
+   `buffer-4096-vb` has its binds with the size of `buffer-4096`.
 4. `buffer-4096-nt-create` holds the rule of the D3D11 runtime for the NT handle form: `CreateBuffer` with
    `D3D11_RESOURCE_MISC_SHARED_NTHANDLE` returns `E_INVALIDARG` before a driver gets the call. The case passes on
    this result with both devices alive. Thus a D3D11 buffer has no NT handle, and the legacy handle is the buffer
