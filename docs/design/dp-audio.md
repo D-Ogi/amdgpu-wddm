@@ -29,11 +29,11 @@ container ID from 0.7.216.25. Step 3 ran on the lab on 2026-10-09. Step 5 is not
 
 ## Why the endpoint waits for the stream
 
-Under 0.7.215.1, step 1 ran alone. Windows then showed an active "Digital Audio (HDMI)" endpoint. Its audio clock
+Under 0.7.215.1, step 1 ran alone. Windows then reported an active "Digital Audio (HDMI)" endpoint. Its audio clock
 was not programmed, so it played no sound. Edge slaved its video to that clock and played video at about 0.7 times
 real time. An endpoint without a stream is worse than no endpoint.
 
-From 0.7.216.1 the driver never shows the endpoint without its stream:
+From 0.7.216.1 the driver never reports the endpoint without its stream:
 
 - `AUDIO_ENABLED` is the last write of a start.
 - If the stream half is off, refused or failed, `AUDIO_ENABLED` stays 0.
@@ -155,7 +155,7 @@ The first Windows trial of the stream half ran on the installed 0.7.216.100-test
   1.08844, which is 0.06 %. That is a witness on the hardware side, with no part of the Windows audio stack in it.
 
 So the DTO1 module decision below is measured, not argued: Linux's 5 988 740 would be 0.19 % fast, which the
-exclusive arms would have shown as about 1.0019, five times the spread they do show. The whole stream state was
+exclusive arms would have given about 1.0019, five times the spread they do give. The whole stream state was
 read before, twice during and after the tone and did not change, `AFMT_AUDIO_FIFO_OVERFLOW` included. Step 4 ran
 on the lab in the same trial: the endpoint is built from the monitor's EDID, and the class driver publishes
 32 000, 44 100 and 48 000 Hz, which is the rate mask `dce_aud_hw_init` writes.

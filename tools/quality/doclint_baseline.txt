@@ -16,7 +16,6 @@
 # document has to be rewritten; a document that is touched anyway should come out lower.
 #
 # To look at one document: python tools/quality/doclint.py --files <path>
-1	docs/design/dp-audio.md
 2	docs/dxvk-engine-commit-map.md
 1	docs/testing/release-notes/0.7.202.100-tester.11.md
 2	docs/testing/release-notes/0.7.203.100-tester.11.md
