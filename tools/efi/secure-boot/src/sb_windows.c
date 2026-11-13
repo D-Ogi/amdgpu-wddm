@@ -80,8 +80,9 @@ static __attribute__((always_inline)) inline int rt_name_is(const CHAR16 *name, 
 }
 
 /* EFI_GLOBAL_VARIABLE {8BE4DF61-93CA-11D2-AA0D-00E098032B8C}, edk2 8628578dacd3, MdePkg\Include\Guid\GlobalVariable.h.
- * The names SecureBoot and SetupMode are EFI_SECURE_BOOT_MODE_NAME and EFI_SETUP_MODE_NAME of that file; the
- * values 1 and 0 are SECURE_BOOT_MODE_ENABLE and USER_MODE of MdePkg\Include\Guid\ImageAuthentication.h. */
+ * The names of that namespace are SecureBoot, SetupMode, PK (EFI_PLATFORM_KEY_NAME) and KEK
+ * (EFI_KEY_EXCHANGE_KEY_NAME); the values 1 and 0 are SECURE_BOOT_MODE_ENABLE and USER_MODE of
+ * MdePkg\Include\Guid\ImageAuthentication.h. */
 static __attribute__((always_inline)) inline int rt_is_global(const EFI_GUID *g)
 {
 	return g != NULL && g->Data1 == 0x8BE4DF61u && g->Data2 == 0x93CAu && g->Data3 == 0x11D2u &&
@@ -225,19 +226,24 @@ SB_RT_TEXT(c) static EFI_STATUS EFIAPI sb_rt_filter(CHAR16 *name, EFI_GUID *vend
 	unsigned char secure_boot_on = 1;
 	unsigned char setup_mode_off = 0;
 	if (st == NULL || st->magic != SB_RT_MAGIC || st->original == NULL) return EFI_DEVICE_ERROR;
-	if (rt_is_global(vendor) && (rt_name_is(name, "SecureBoot") || rt_name_is(name, "SetupMode"))) {
-		/* A firmware that has the variable answers with its own value. */
-		if (st->original(name, vendor, NULL, &probe, NULL) != EFI_NOT_FOUND)
-			return st->original(name, vendor, attributes, size, data);
-		if (rt_name_is(name, "SecureBoot"))
-			return rt_serve(&secure_boot_on, 1u, SB_RT_GLOBAL_ATTR, attributes, size, data);
-		return rt_serve(&setup_mode_off, 1u, SB_RT_GLOBAL_ATTR, attributes, size, data);
-	}
-	if (rt_is_database(vendor)) {
+	if (rt_is_global(vendor)) {
+		/* PK and KEK live in this namespace, not in the database one: edk2 8628578dacd3 puts
+		 * EFI_PLATFORM_KEY_NAME and EFI_KEY_EXCHANGE_KEY_NAME in Guid\GlobalVariable.h, and the database names
+		 * in Guid\ImageAuthentication.h. Windows asks for them with the global GUID. */
 		if (rt_name_is(name, "PK"))
 			return rt_serve(st->pk, st->pk_bytes, SB_RT_ACCEPTED_ATTR, attributes, size, data);
 		if (rt_name_is(name, "KEK"))
 			return rt_serve(st->kek, st->kek_bytes, SB_RT_ACCEPTED_ATTR, attributes, size, data);
+		if (rt_name_is(name, "SecureBoot") || rt_name_is(name, "SetupMode")) {
+			/* A firmware that has the variable answers with its own value. */
+			if (st->original(name, vendor, NULL, &probe, NULL) != EFI_NOT_FOUND)
+				return st->original(name, vendor, attributes, size, data);
+			if (rt_name_is(name, "SecureBoot"))
+				return rt_serve(&secure_boot_on, 1u, SB_RT_GLOBAL_ATTR, attributes, size, data);
+			return rt_serve(&setup_mode_off, 1u, SB_RT_GLOBAL_ATTR, attributes, size, data);
+		}
+	}
+	if (rt_is_database(vendor)) {
 		if (rt_name_is(name, "db"))
 			return rt_serve(st->db, st->db_bytes, SB_RT_ACCEPTED_ATTR, attributes, size, data);
 		if (rt_name_is(name, "dbx"))

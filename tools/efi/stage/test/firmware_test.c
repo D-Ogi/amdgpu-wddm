@@ -1260,15 +1260,20 @@ static void test_sb_windows(const char *acpi_dir, const char *fixtures)
 	size = 2;
 	data[0] = 0xFF;
 	data[1] = 0xFF;
-	CHECK(fw_rt.GetVariable(u"PK", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_BUFFER_TOO_SMALL);
+	CHECK(fw_rt.GetVariable(u"PK", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_BUFFER_TOO_SMALL);
 	CHECK(size == sizeof(pk) && data[0] == 0xFF && attr == 0x27);
-	/* The four databases, with the time-based authenticated attributes. */
+	/* PK and KEK live in the global namespace, db and dbx in the database one (edk2 8628578dacd3). */
 	size = sizeof(data);
-	CHECK(fw_rt.GetVariable(u"PK", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_SUCCESS);
+	CHECK(fw_rt.GetVariable(u"PK", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_SUCCESS);
 	CHECK(size == sizeof(pk) && !memcmp(data, pk, sizeof(pk)) && attr == 0x27);
 	size = sizeof(data);
-	CHECK(fw_rt.GetVariable(u"KEK", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_SUCCESS);
-	CHECK(size == sizeof(kek) && !memcmp(data, kek, sizeof(kek)));
+	CHECK(fw_rt.GetVariable(u"KEK", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_SUCCESS);
+	CHECK(size == sizeof(kek) && !memcmp(data, kek, sizeof(kek)) && attr == 0x27);
+	/* A firmware answers EFI_NOT_FOUND when the name is asked in the wrong namespace, and so does the filter. */
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"PK", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_NOT_FOUND);
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"KEK", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_NOT_FOUND);
 	size = sizeof(data);
 	CHECK(fw_rt.GetVariable(u"db", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_SUCCESS);
 	CHECK(size == sizeof(db_bytes) && !memcmp(data, db_bytes, sizeof(db_bytes)));
