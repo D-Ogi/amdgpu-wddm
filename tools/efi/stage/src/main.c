@@ -27,6 +27,9 @@
 #define STAGE_DEVPATH_MAX_BYTES	4096u
 #define STAGE_SMBIOS_MAX_BYTES	(1024u * 1024u)	/* the bound driver/kmd/board_memory_identity.c sets on 'RSMB' */
 #define STAGE_IMAGE_MAX_BYTES	(64u * 1024u * 1024u)	/* a boot manager or a boot loader is a few megabytes */
+#define STAGE_LOG_NAME		"bc250-stage.log"
+#define STAGE_LOG_BYTES		(16u * 1024u)		/* the console lines of one start */
+#define STAGE_LOG_FILE_MAX	(256u * 1024u)		/* a larger log file starts again */
 
 static const EFI_GUID loaded_image_guid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
 static const EFI_GUID device_path_guid = EFI_DEVICE_PATH_PROTOCOL_GUID;
@@ -48,7 +51,79 @@ static const struct stage_module *const modules[] = { &cu_module, &ar_module, &s
 #define MODULES (sizeof(modules) / sizeof(modules[0]))
 static int module_on[MODULES];
 
-/* ---- console ------------------------------------------------------------------------------------- */
+/* ---- console and log ----------------------------------------------------------------------------- */
+
+/* The log is the console text of this start, kept in memory and written behind the text of earlier starts in a
+ * file beside the stage. A board without a person at its screen gives its console back that way. The load option
+ * log= chooses the moment of the write. */
+enum { LOG_OFF = 0, LOG_AT_END = 1, LOG_EACH_LINE = 2 };
+static const char *const log_modes[] = { "0", "1", "line" };
+static char log_text[STAGE_LOG_BYTES];
+static size_t log_used, log_written;
+static unsigned log_lost;		/* lines that did not fit in log_text */
+static int log_mode = LOG_OFF;		/* off until the load options are read */
+
+static void log_keep(const CHAR16 *wide, size_t chars)
+{
+	size_t i;
+	if (log_used + chars > STAGE_LOG_BYTES) {
+		log_lost++;
+		return;
+	}
+	for (i = 0; i < chars; i++)
+		if (wide[i] != '\r') log_text[log_used++] = (char)wide[i];
+}
+
+void stage_log_flush(struct stage *stage)
+{
+	unsigned short path[STAGE_PATH_CHARS];
+	EFI_FILE_PROTOCOL *file = NULL;
+	EFI_STATUS status;
+	UINT64 size = 0;
+	UINTN bytes = log_used - log_written;
+	const UINT64 mode = EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE;
+
+	if (log_mode == LOG_OFF || bytes == 0 || stage->root == NULL) return;
+	if (!stage_sibling(stage, STAGE_LOG_NAME, path, STAGE_PATH_CHARS)) return;
+	status = stage->root->Open(stage->root, &file, path, mode, 0);
+	if (!EFI_ERROR(status) && file == NULL) status = EFI_NOT_FOUND;
+	if (!EFI_ERROR(status)) {
+		/* The new text goes behind the old text: the position after a seek to the end is the size. */
+		status = file->SetPosition(file, ~0ull);
+		if (!EFI_ERROR(status)) status = file->GetPosition(file, &size);
+		if (!EFI_ERROR(status) && size > STAGE_LOG_FILE_MAX) {
+			/* Delete closes the handle. The file starts again with this start. */
+			(void)file->Delete(file);
+			file = NULL;
+			status = stage->root->Open(stage->root, &file, path, mode, 0);
+			if (!EFI_ERROR(status) && file == NULL) status = EFI_NOT_FOUND;
+		}
+		if (!EFI_ERROR(status)) status = file->Write(file, &bytes, log_text + log_written);
+		if (!EFI_ERROR(status)) status = file->Flush(file);
+		if (file != NULL) file->Close(file);
+	}
+	if (EFI_ERROR(status)) {
+		/* One line on the console, and no second try: a volume that does not take the file stays as it is. */
+		log_mode = LOG_OFF;
+		stage_sayf(stage, NULL, "the log file did not write, status 0x%llx: no log for this start",
+			   (unsigned long long)status);
+		return;
+	}
+	log_written = log_used;
+}
+
+/* Reads the load option log= and writes what the console said before the option was known. */
+static void log_start(struct stage *stage)
+{
+	log_mode = (int)stage_option_choice(&stage->options, "log", log_modes, 3u, LOG_AT_END);
+	if (log_mode == LOG_OFF) return;
+	if (stage->root == NULL || !stage->image_file_known) {
+		log_mode = LOG_OFF;
+		stage_say(stage, NULL, "no volume or no path of this application: no log file");
+		return;
+	}
+	if (log_mode == LOG_EACH_LINE) stage_log_flush(stage);
+}
 
 void stage_say(struct stage *stage, const char *module, const char *line)
 {
@@ -66,6 +141,8 @@ void stage_say(struct stage *stage, const char *module, const char *line)
 	wide[n++] = '\n';
 	wide[n] = 0;
 	if (stage->st->ConOut != NULL) stage->st->ConOut->OutputString(stage->st->ConOut, wide);
+	log_keep(wide, n);
+	if (log_mode == LOG_EACH_LINE) stage_log_flush(stage);
 }
 
 void stage_sayf(struct stage *stage, const char *module, const char *format, ...)
@@ -346,6 +423,8 @@ static EFI_STATUS start_next(struct stage *stage)
 		if (windows != NULL) stage->bs->UnloadImage(windows);
 		return status;
 	}
+	/* The last moment of the stage before the next image: the log must be on the volume now. */
+	stage_log_flush(stage);
 	status = stage->bs->StartImage(windows, NULL, NULL);
 	stage_sayf(stage, NULL, "the next image returned, status 0x%llx", (unsigned long long)status);
 	return status;
@@ -358,9 +437,13 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st)
 	static struct stage stage;
 	EFI_STATUS status;
 	unsigned unclaimed;
+	int probe;
 	size_t i;
 
 	memset(&stage, 0, sizeof(stage));
+	log_used = log_written = 0;
+	log_lost = 0;
+	log_mode = LOG_OFF;
 	stage.image = image;
 	stage.st = st;
 	stage.bs = st->BootServices;
@@ -372,11 +455,15 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st)
 	}
 	stage_options_parse(stage.loaded->LoadOptions, stage.loaded->LoadOptionsSize / 2u, &stage.options);
 	open_volume(&stage);
+	log_start(&stage);
+	probe = stage_option_flag(&stage.options, "probe", 0);
 
 	for (i = 0; i < MODULES; i++) {
 		module_on[i] = stage_option_flag(&stage.options, modules[i]->off_switch, 1);
 		if (!module_on[i]) {
 			stage_sayf(&stage, modules[i]->name, "off by the load option %s=0", modules[i]->off_switch);
+			/* probe=1: a module that is off says what the firmware has for it, and changes nothing. */
+			if (probe && modules[i]->probe != NULL) modules[i]->probe(&stage);
 			continue;
 		}
 		modules[i]->run(&stage);
@@ -388,6 +475,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st)
 
 	status = start_next(&stage);
 	unwind_modules(&stage);
+	if (log_lost) stage_sayf(&stage, NULL, "%u console line(s) did not fit in the log", log_lost);
+	stage_log_flush(&stage);
 	if (stage.root != NULL) stage.root->Close(stage.root);
 	stage.root = NULL;
 	return EFI_ERROR(status) ? status : EFI_SUCCESS;

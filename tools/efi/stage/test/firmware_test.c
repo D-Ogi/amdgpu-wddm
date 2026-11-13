@@ -4,7 +4,7 @@
  * the Secure Boot module binding. They run the real efi_main against a model of the firmware in this file: a
  * console, pool memory, a volume with files, the handle database with ReinstallProtocolInterface, LoadImage with
  * its call of the Security2 protocol, the ACPI table and SDT protocols over real root tables, a PCI function and
- * an SMBIOS table.
+ * an SMBIOS table. The volume takes one written file, the log of the stage.
  *
  * The model follows the edk2 behaviour that the bindings rely on (commit 8628578dacd3): LoadImage asks the
  * Security2 protocol that is installed at that moment, EFI_ACCESS_DENIED gives no image handle, and
@@ -27,7 +27,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st);
 #define SDT_HEADER	36u
 
 struct fw_file { char path[96]; unsigned char *data; size_t bytes; };
-struct fw_open { EFI_FILE_PROTOCOL protocol; const struct fw_file *file; UINT64 position; };
+struct fw_open { EFI_FILE_PROTOCOL protocol; struct fw_file *file; UINT64 position; };
 struct fw_protocol { EFI_HANDLE handle; EFI_GUID guid; VOID *interface; };
 struct fw_table { unsigned char *bytes; size_t length; UINTN key; };
 
@@ -37,6 +37,9 @@ static struct {
 	long pool_live;
 	struct fw_file file[FW_FILES];
 	unsigned files;
+	int read_only;			/* the volume takes no write */
+	unsigned file_writes, file_deletes;
+	int log_at_start;		/* at StartImage the log file had the line "starting the next image" */
 	struct fw_protocol protocol[FW_PROTOCOLS];
 	unsigned protocols;
 	/* LoadImage and StartImage. */
@@ -83,6 +86,8 @@ static const EFI_GUID guid_fs = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID, guid_secur
 static const EFI_GUID guid_acpi_table = EFI_ACPI_TABLE_PROTOCOL_GUID, guid_acpi_sdt = EFI_ACPI_SDT_PROTOCOL_GUID;
 static const EFI_GUID guid_pci = EFI_PCI_IO_PROTOCOL_GUID, guid_acpi20 = EFI_ACPI_20_TABLE_GUID;
 static const EFI_GUID guid_smbios3 = EFI_SMBIOS3_TABLE_GUID;
+
+#define LOG_FILE "\\EFI\\BC250\\bc250-stage.log"
 
 static void narrow(const CHAR16 *wide, char *out, size_t capacity)
 {
@@ -149,7 +154,7 @@ static VOID EFIAPI fw_reset_system(EFI_RESET_TYPE type, EFI_STATUS status, UINTN
 
 /* -- the volume -- */
 
-static const struct fw_file *find_file(const char *path)
+static struct fw_file *find_file(const char *path)
 {
 	unsigned i;
 	for (i = 0; i < fw.files; i++)
@@ -186,23 +191,66 @@ static EFI_STATUS EFIAPI file_set_position(EFI_FILE_PROTOCOL *this, UINT64 posit
 	return EFI_SUCCESS;
 }
 
+static EFI_STATUS EFIAPI file_write(EFI_FILE_PROTOCOL *this, UINTN *size, VOID *buffer)
+{
+	struct fw_open *open = (struct fw_open *)this;
+	size_t end = (size_t)open->position + *size;
+	if (end > open->file->bytes) {
+		open->file->data = realloc(open->file->data, end);
+		open->file->bytes = end;
+	}
+	memcpy(open->file->data + open->position, buffer, *size);
+	open->position = end;
+	fw.file_writes++;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI file_flush(EFI_FILE_PROTOCOL *this)
+{
+	(void)this;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI file_delete(EFI_FILE_PROTOCOL *this)
+{
+	struct fw_file *file = ((struct fw_open *)this)->file;
+	free(file->data);
+	*file = fw.file[--fw.files];	/* the last file takes the place of the deleted one */
+	fw.file_deletes++;
+	free(this);
+	return EFI_SUCCESS;
+}
+
 static EFI_STATUS EFIAPI file_open(EFI_FILE_PROTOCOL *this, EFI_FILE_PROTOCOL **out, const CHAR16 *name, UINT64 mode,
 				   UINT64 attributes)
 {
-	static const struct fw_file root = { "", NULL, 0 };
+	static struct fw_file root = { "", NULL, 0 };
 	struct fw_open *open;
-	const struct fw_file *file = &root;
+	struct fw_file *file = &root;
 	char path[96];
 	(void)attributes;
 	if (this != NULL) {
 		narrow(name, path, sizeof(path));
 		file = find_file(path);
+		if (mode != EFI_FILE_MODE_READ) {
+			/* The one file that the stage writes in these tests is its log. */
+			if (strcmp(path, LOG_FILE) != 0) failures++;
+			if (fw.read_only) return EFI_WRITE_PROTECTED;
+			if (file == NULL && (mode & EFI_FILE_MODE_CREATE) && fw.files < FW_FILES) {
+				file = &fw.file[fw.files++];
+				snprintf(file->path, sizeof(file->path), "%s", path);
+				file->data = malloc(1);
+				file->bytes = 0;
+			}
+		}
 		if (file == NULL) return EFI_NOT_FOUND;
-		if (mode != EFI_FILE_MODE_READ) return EFI_WRITE_PROTECTED;	/* the stage writes no file in these tests */
 	}
 	open = calloc(1, sizeof(*open));
 	open->protocol.Open = file_open;
 	open->protocol.Close = file_close;
+	open->protocol.Delete = file_delete;
+	open->protocol.Write = file_write;
+	open->protocol.Flush = file_flush;
 	open->protocol.Read = file_read;
 	open->protocol.GetPosition = file_get_position;
 	open->protocol.SetPosition = file_set_position;
@@ -215,6 +263,17 @@ static EFI_STATUS EFIAPI fs_open_volume(EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *this, E
 {
 	(void)this;
 	return file_open(NULL, root, NULL, EFI_FILE_MODE_READ, 0);
+}
+
+/* 1 when the file is there and holds this text. */
+static int file_has(const char *path, const char *text)
+{
+	struct fw_file *file = find_file(path);
+	size_t n = strlen(text), i;
+	if (file == NULL) return 0;
+	for (i = 0; i + n <= file->bytes; i++)
+		if (!memcmp(file->data + i, text, n)) return 1;
+	return 0;
 }
 
 /* -- the handle database -- */
@@ -296,7 +355,7 @@ static EFI_STATUS EFIAPI fw_load_image(BOOLEAN boot_policy, EFI_HANDLE parent, E
 				       VOID *buffer, UINTN size, EFI_HANDLE *image)
 {
 	struct fw_protocol *security = find_protocol(NULL, &guid_security2);
-	const struct fw_file *file;
+	struct fw_file *file;
 	unsigned short wide[96];
 	char name[96];
 	EFI_STATUS status = EFI_SUCCESS;
@@ -329,6 +388,7 @@ static EFI_STATUS EFIAPI fw_start_image(EFI_HANDLE image, UINTN *exit_size, CHAR
 	(void)exit_size; (void)exit_data;
 	if (image != &fw_handle_child) failures++;
 	fw.starts++;
+	fw.log_at_start = file_has(LOG_FILE, "starting the next image");
 	fw.stage_check_at_start = security != NULL && security->interface != &fw_security2;
 	if (fw.child_hooks && security != NULL) security->interface = &fw_child_security2;
 	return fw.start_status;
@@ -859,6 +919,132 @@ static void test_core(const char *acpi_dir, const char *fixtures)
 	CHECK(run_stage("unlock=0 acpi=0 sb=0", &reset) == EFI_ABORTED && fw.pool_live == 0);
 }
 
+/* The count of this text in the file. */
+static unsigned file_count(const char *path, const char *text)
+{
+	struct fw_file *file = find_file(path);
+	size_t n = strlen(text), i;
+	unsigned count = 0;
+	if (file == NULL) return 0;
+	for (i = 0; i + n <= file->bytes; i++)
+		if (!memcmp(file->data + i, text, n)) count++;
+	return count;
+}
+
+/* 1 when the log file is the console text of the last start, without its carriage returns. */
+static int log_is_console(void)
+{
+	struct fw_file *file = find_file(LOG_FILE);
+	size_t i, at = 0;
+	if (file == NULL) return 0;
+	for (i = 0; i < fw.log_bytes; i++) {
+		if (fw.log[i] == '\r') continue;
+		if (at >= file->bytes || file->data[at] != (unsigned char)fw.log[i]) return 0;
+		at++;
+	}
+	return at == file->bytes;
+}
+
+static void test_log(const char *acpi_dir, const char *fixtures)
+{
+	struct fw_file *old;
+	unsigned lines, i;
+	int reset;
+
+	/* The default: the log is on the volume before the next image starts, and it is the whole console at the
+	 * end. The two core options are not in the count of options that nobody read. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 acpi=0 sb=0", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(fw.log_at_start == 1 && log_is_console() && fw.file_writes == 2 && fw.pool_live == 0);
+	CHECK(file_has(LOG_FILE, "bc250-stage: BC-250 stage, version") && file_has(LOG_FILE, "the next image returned"));
+	CHECK(!said("not understood"));
+	/* A second start writes behind the first. */
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 log=1", &reset) == EFI_SUCCESS && !said("not understood"));
+	CHECK(file_count(LOG_FILE, "BC-250 stage, version") == 2 && fw.file_deletes == 0);
+
+	/* log=0: no file and no write. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 log=0", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(find_file(LOG_FILE) == NULL && fw.file_writes == 0 && !said("not understood"));
+
+	/* log=line: one write for each console line, so the file ends at the last line before a stop. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 log=line", &reset) == EFI_SUCCESS && log_is_console());
+	for (lines = 0, i = 0; i < fw.log_bytes; i++) lines += fw.log[i] == '\n';
+	/* The lines before the option is read go in one write. */
+	CHECK(lines > 4 && fw.file_writes >= lines - 2u && fw.file_writes <= lines && fw.log_at_start == 1);
+
+	/* A volume that takes no write: one line says so, and the next image starts. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.read_only = 1;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 log=line", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(file_count(LOG_FILE, "x") == 0 && fw.file_writes == 0 && said("the log file did not write"));
+	for (lines = 0, i = 0; i + 1u < fw.log_bytes; i++) lines += !strncmp(fw.log + i, "did not write", 13);
+	CHECK(lines == 1);
+
+	/* A log file above its bound starts again. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	old = &fw.file[fw.files++];
+	snprintf(old->path, sizeof(old->path), "%s", LOG_FILE);
+	old->bytes = 256u * 1024u + 1u;
+	old->data = malloc(old->bytes);
+	memset(old->data, 'x', old->bytes);
+	CHECK(run_stage("unlock=0 acpi=0 sb=0", &reset) == EFI_SUCCESS && fw.file_deletes == 1);
+	CHECK(log_is_console() && file_count(LOG_FILE, "xx") == 0 && find_file(NEXT) != NULL);
+
+	/* A restart by a module: the reason is in the file before the board restarts. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.refuse_put_back = 1;
+	fw.start_status = EFI_ABORTED;
+	(void)run_stage("unlock=0 acpi=0", &reset);
+	CHECK(reset == 1 && file_has(LOG_FILE, "restart in 10 seconds") && log_is_console());
+
+	/* A load that fails leaves the reason in the file. */
+	if (!new_firmware(acpi_dir)) return;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0", &reset) == EFI_NOT_FOUND && file_has(LOG_FILE, "did not load"));
+}
+
+static void test_probe(const char *acpi_dir, const char *fixtures)
+{
+	int reset;
+	/* probe=1 with the modules off: the presence of the four protocols, and no change of the firmware. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(said("acpi: probe: ACPI table protocol present") && said("acpi: probe: ACPI SDT protocol present"));
+	CHECK(said("secure-boot: probe: Security2 protocol present, on exactly one handle"));
+	CHECK(said("secure-boot: probe: Security protocol absent") && !said("not understood"));
+	CHECK(fw.installs == 0 && fw.uninstalls == 0 && fw.reinstalls == 0 && fw.pool_live == 0);
+	/* A firmware without them. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	find_protocol(NULL, &guid_acpi_table)->guid.Data1 ^= 1u;
+	find_protocol(NULL, &guid_acpi_sdt)->guid.Data1 ^= 1u;
+	find_protocol(NULL, &guid_security2)->guid.Data1 ^= 1u;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(said("ACPI table protocol absent") && said("ACPI SDT protocol absent") && said("no Security2 protocol"));
+	/* Without probe=1 a module that is off says one line only, and a module that is on does not probe. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 acpi=0 sb=0", &reset) == EFI_SUCCESS && !said("probe:"));
+	CHECK(run_stage("unlock=0 sb=0 probe=1 acpi.apply=0", &reset) == EFI_SUCCESS && !said("acpi: probe:"));
+
+	/* acpi.apply=0: the plan and the built tables are reported, and the root tables stay as they are. */
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	CHECK(run_stage("unlock=0 sb=0 acpi.apply=0", &reset) == EFI_SUCCESS && fw.starts == 1);
+	CHECK(said("acpi.apply=0: the tables are built and checked") && said("idle states: a table of"));
+	CHECK(said("method stubs: a table of") && said("passed its check") && !said("not understood"));
+	CHECK(fw.installs == 0 && fw.uninstalls == 0 && has_table("AMD CPU") && !has_table("CPUIDLE"));
+	CHECK(fw.pool_live == 0);
+}
+
 unsigned firmware_tests(const char *acpi_dir, const char *fixture_dir, unsigned *check_count)
 {
 	size_t bytes = 0;
@@ -868,6 +1054,8 @@ unsigned firmware_tests(const char *acpi_dir, const char *fixture_dir, unsigned 
 		       acpi_dir ? acpi_dir : "(no directory given)", fixture_dir ? fixture_dir : "(no directory given)");
 	} else {
 		test_core(acpi_dir, fixture_dir);
+		test_log(acpi_dir, fixture_dir);
+		test_probe(acpi_dir, fixture_dir);
 		test_acpi(acpi_dir, fixture_dir);
 		test_secure_boot(acpi_dir, fixture_dir);
 	}

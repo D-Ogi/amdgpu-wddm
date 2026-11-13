@@ -146,6 +146,7 @@ static void ar_module_run(struct stage *stage)
 	size_t bytes;
 	int want_idle = stage_option_flag(&stage->options, "acpi.idle", 1);
 	int want_stubs = stage_option_flag(&stage->options, "acpi.stubs", 1);
+	int apply = stage_option_flag(&stage->options, "acpi.apply", 1);
 
 	if (!stage_board_bc250(stage)) {
 		stage_say(stage, AR_NAME, "not a BC-250: nothing done");
@@ -165,6 +166,7 @@ static void ar_module_run(struct stage *stage)
 	stage_sayf(stage, AR_NAME, "idle states: %s", ar_idle_text(plan.idle));
 	stage_sayf(stage, AR_NAME, "method stubs: %s", ar_stubs_text(plan.stubs));
 	if (plan.idle != AR_IDLE_REPAIR && plan.stubs != AR_STUBS_REPAIR) return;
+	if (!apply) stage_say(stage, AR_NAME, "acpi.apply=0: the tables are built and checked, and none is installed or removed");
 
 	buffer = stage_alloc(stage, AR_TABLE_MAX_BYTES);
 	if (buffer == NULL) {
@@ -182,6 +184,8 @@ static void ar_module_run(struct stage *stage)
 		bytes = ar_build_idle(&plan, buffer, AR_TABLE_MAX_BYTES);
 		if (bytes == 0 || !ar_check_idle(&plan, buffer, bytes))
 			stage_say(stage, AR_NAME, "idle states: the built table failed its own check: not installed");
+		else if (!apply)
+			stage_sayf(stage, AR_NAME, "idle states: a table of %u bytes passed its check", (unsigned)bytes);
 		else if (install(stage, installer, buffer, bytes, "idle states", AR_IDLE_TABLE_ID))
 			remove_stock(stage, installer, stock_header);
 	}
@@ -193,10 +197,23 @@ static void ar_module_run(struct stage *stage)
 		bytes = ar_build_stubs(&plan, buffer, AR_TABLE_MAX_BYTES);
 		if (bytes == 0 || !ar_check_stubs(&plan, buffer, bytes))
 			stage_say(stage, AR_NAME, "method stubs: the built table failed its own check: not installed");
+		else if (!apply)
+			stage_sayf(stage, AR_NAME, "method stubs: a table of %u bytes passed its check", (unsigned)bytes);
 		else
 			(void)install(stage, installer, buffer, bytes, "method stubs", AR_STUB_TABLE_ID);
 	}
 	stage_free(stage, buffer);
 }
 
-const struct stage_module ar_module = { AR_NAME, "acpi", ar_module_run, NULL, NULL, NULL };
+/* probe=1 with acpi=0: the two protocols that the repair needs, read and not changed. */
+static void ar_module_probe(struct stage *stage)
+{
+	VOID *found = NULL;
+	stage_sayf(stage, AR_NAME, "probe: ACPI table protocol %s",
+		   EFI_ERROR(stage->bs->LocateProtocol(&acpi_table_guid, NULL, &found)) || found == NULL ? "absent" : "present");
+	found = NULL;
+	stage_sayf(stage, AR_NAME, "probe: ACPI SDT protocol %s",
+		   EFI_ERROR(stage->bs->LocateProtocol(&acpi_sdt_guid, NULL, &found)) || found == NULL ? "absent" : "present");
+}
+
+const struct stage_module ar_module = { AR_NAME, "acpi", ar_module_run, ar_module_probe, NULL, NULL, NULL };

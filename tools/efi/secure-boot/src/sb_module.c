@@ -265,6 +265,7 @@ static void unhook(struct stage *stage)
 	stage_sayf(stage, SB_NAME, "the firmware did not take its Security2 protocol back, status 0x%llx",
 		   (unsigned long long)status);
 	stage_say(stage, SB_NAME, "the stage cannot return with its check in the firmware: restart in 10 seconds");
+	stage_log_flush(stage);
 	stage->bs->Stall(SB_UNWIND_WAIT_US);
 	stage->st->RuntimeServices->ResetSystem(EfiResetCold, EFI_SUCCESS, 0, NULL);
 	for (;;) {}
@@ -327,5 +328,22 @@ static void sb_module_unwind(struct stage *stage)
 	memset(&databases, 0, sizeof(databases));
 }
 
-const struct stage_module sb_module = { SB_NAME, "sb", sb_module_run, sb_module_gate, sb_module_loaded,
-					sb_module_unwind };
+/* probe=1 with sb=0: the two protocols that the hook needs, read and not changed. */
+static void sb_module_probe(struct stage *stage)
+{
+	static const EFI_GUID security_guid = EFI_SECURITY_ARCH_PROTOCOL_GUID;
+	EFI_SECURITY2_ARCH_PROTOCOL *found = NULL;
+	VOID *older = NULL;
+	if (EFI_ERROR(stage->bs->LocateProtocol(&security2_guid, NULL, (VOID **)&found)) || found == NULL)
+		stage_say(stage, SB_NAME, "probe: the firmware has no Security2 protocol");
+	else
+		stage_sayf(stage, SB_NAME, "probe: Security2 protocol present, %s",
+			   found->FileAuthentication == NULL ? "without a function"
+			   : security2_owner(stage, found) != NULL ? "on exactly one handle"
+								   : "not on exactly one handle");
+	stage_sayf(stage, SB_NAME, "probe: Security protocol %s",
+		   EFI_ERROR(stage->bs->LocateProtocol(&security_guid, NULL, &older)) || older == NULL ? "absent" : "present");
+}
+
+const struct stage_module sb_module = { SB_NAME, "sb", sb_module_run, sb_module_probe, sb_module_gate,
+					sb_module_loaded, sb_module_unwind };

@@ -37,6 +37,11 @@ struct stage {
 void stage_say(struct stage *stage, const char *module, const char *line);
 void stage_sayf(struct stage *stage, const char *module, const char *format, ...);
 
+/* Writes the console lines that are not yet in the log file (bc250-stage.log beside the stage image). The core
+ * does this before it starts the next image and before it returns. A module calls it before it restarts the
+ * board. Nothing happens when the load option log=0 is set or the volume is not known. */
+void stage_log_flush(struct stage *stage);
+
 /* 1 when the board is a BC-250: exactly one PCI function and the SMBIOS table match the driver's own identity
  * check (driver/kmd/board_identity.c). The answer is found once. */
 int stage_board_bc250(struct stage *stage);
@@ -73,6 +78,9 @@ struct stage_module {
 	const char *off_switch;		/* the load option whose value 0 turns the whole module off */
 	/* The work before Windows starts. A module that resets the board does not return. */
 	void (*run)(struct stage *stage);
+	/* Called in place of run when the module is off and the load option probe=1 is set: says whether the
+	 * firmware has what the module needs. It reads only and changes nothing. NULL when there is nothing to say. */
+	void (*probe)(struct stage *stage);
 	/* Asked once for the image that the core is about to start. image is NULL when the file did not read.
 	 * NULL when the module has no say. */
 	enum stage_gate (*gate)(struct stage *stage, const unsigned char *image, size_t bytes);

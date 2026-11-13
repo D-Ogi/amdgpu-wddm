@@ -254,6 +254,7 @@ static int reset_fadt(struct stage *stage)
 	}
 	stage_sayf(stage, CU_NAME, "FADT reset register: space %u, address 0x%llx, value 0x%x", reg.space, reg.address,
 		   (unsigned)reg.value);
+	stage_log_flush(stage);
 	if (reg.space == EFL_ACPI_SPACE_IO && reg.address <= 0xFFFFu) {
 		stage->bs->Stall(CU_RESET_PAUSE_MS * 1000u);
 		outb((unsigned short)reg.address, reg.value);
@@ -274,6 +275,7 @@ static int op_reset(void *context)
 	struct stage *stage = u->stage;
 	switch (u->options.reset) {
 	case CU_RESET_WARM:
+		stage_log_flush(stage);
 		stage->bs->Stall(CU_RESET_PAUSE_MS * 1000u);
 		stage->st->RuntimeServices->ResetSystem(EfiResetWarm, EFI_SUCCESS, 0, NULL);
 		return -1;
@@ -339,4 +341,4 @@ static void cu_module_run(struct stage *stage)
 	(void)cu_run(&ops, u.options.reset != CU_RESET_NONE);
 }
 
-const struct stage_module cu_module = { CU_NAME, "unlock", cu_module_run, NULL, NULL, NULL };
+const struct stage_module cu_module = { CU_NAME, "unlock", cu_module_run, NULL, NULL, NULL, NULL };
