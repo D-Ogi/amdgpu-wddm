@@ -483,7 +483,9 @@ HRESULT RuntimeHeapImports::release_owned(Record& record,bool proved) noexcept {
         // The mark comes first: if this release fails, the record goes back to records_, and a later release
         // of it must not ask for the retired form (Record::unproved).
         {Exclusive held(lock_);record.unproved=true;}
-        if(record.surface && !record.driver_surface){free_report_.owner_expired=true;return kOwnerExpired;}
+        // A borrowed record (BD-373: an opened buffer is adopted without being a surface) takes the branch of the
+        // opened surface, so every borrowed allocation has one rule here.
+        if((record.surface || record.adopted) && !record.driver_surface){free_report_.owner_expired=true;return kOwnerExpired;}
         free_report_.adopted=record.adopted;free_report_.driver_surface=record.driver_surface;
         UINT64 reservation=0,reservation_bytes=0;
         paging_.release_mapping_to_os(record.mapping,&reservation,&reservation_bytes);
@@ -589,6 +591,17 @@ HRESULT RuntimeHeapImports::refuse_address(const char* why,HRESULT hr,uint64_t b
                 static_cast<unsigned long long>(alignment),static_cast<unsigned long long>(address),
                 static_cast<unsigned long long>(alignment?address&(alignment-1):0ull));
     return hr;
+}
+
+HRESULT RuntimeHeapImports::probe_buffer(uint64_t bytes,VkMemoryRequirements* needs) const noexcept {
+    *needs={};
+    VkBufferCreateInfo probe_info{};probe_info.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    probe_info.size=bytes;probe_info.usage=VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT|
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;probe_info.sharingMode=VK_SHARING_MODE_EXCLUSIVE;
+    VkBuffer probe{};const HRESULT hr=from_vk(create_buffer_(device_,&probe_info,nullptr,&probe));if(FAILED(hr))return hr;
+    if(!probe)return E_UNEXPECTED;
+    requirements_(device_,probe,needs);destroy_buffer_(device_,probe,nullptr);
+    return S_OK;
 }
 
 HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,engine_ddi::ImportedMemory* out) noexcept {
@@ -825,12 +838,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         if(FAILED(hr))return hr;
     } else {
     report_.stage=ImportStage::Probe;
-    VkBufferCreateInfo probe_info{};probe_info.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    probe_info.size=request->byte_size;probe_info.usage=VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT|
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;probe_info.sharingMode=VK_SHARING_MODE_EXCLUSIVE;
-    VkBuffer probe{};hr=from_vk(create_buffer_(device_,&probe_info,nullptr,&probe));if(FAILED(hr))return hr;
-    if(!probe)return E_UNEXPECTED;
-    VkMemoryRequirements needs{};requirements_(device_,probe,&needs);destroy_buffer_(device_,probe,nullptr);
+    VkMemoryRequirements needs{};hr=probe_buffer(request->byte_size,&needs);if(FAILED(hr))return hr;
     bits=needs.memoryTypeBits;if(request->memory_type_bits)bits&=request->memory_type_bits;
     alignment=std::max<uint64_t>(65536,std::max<uint64_t>(request->alignment,needs.alignment));
     hr=allocation.prepare(std::max<uint64_t>(request->byte_size,needs.size),alignment,access,request->rt_owner.handle);
@@ -938,18 +946,34 @@ HRESULT RuntimeHeapImports::adopt(const engine_ddi::AdoptRequest* request,engine
     report_={};report_.stage=ImportStage::Request;
     if(!active_.load() || !domain_.entered() || !initialized_)return E_UNEXPECTED;
     drain(false);
-    constexpr uint32_t adopt_flags=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryShareable|
+    // Two forms (engine-ddi.h, AdoptRequest): the linear surface of the LINEAR SURFACE form, with the image's memory
+    // types, and (BD-373) the buffer of the ENGINE LAYOUT form, with no memory types: the engine places a buffer in
+    // memory of any type a buffer can use, so the types come from a buffer of this device, as allocate() takes them.
+    constexpr uint32_t surface_flags=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryShareable|
         engine_ddi::kMemoryLinearSurface;
-    if(!request || !out || request->size!=sizeof(*request) || request->flags!=adopt_flags ||
-       !request->allocation || !request->memory_type_bits || !request->byte_size || !request->alignment ||
+    constexpr uint32_t buffer_flags=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryShareable;
+    const bool surface=request && request->flags==surface_flags;
+    const bool buffer=request && request->flags==buffer_flags;
+    if(!request || !out || request->size!=sizeof(*request) || (!surface && !buffer) ||
+       !request->allocation || (surface && !request->memory_type_bits) || (buffer && request->memory_type_bits) ||
+       !request->byte_size || !request->alignment ||
        (request->alignment&(request->alignment-1)) || (request->byte_size&4095)){
         report_.refusal="malformed adopt request";return E_INVALIDARG;
     }
-    const uint64_t alignment=std::max<uint64_t>(4096,request->alignment);
+    uint64_t alignment=std::max<uint64_t>(4096,request->alignment);
+    uint32_t bits=request->memory_type_bits;
+    if(buffer){
+        report_.stage=ImportStage::Probe;
+        VkMemoryRequirements needs{};
+        const HRESULT probed=probe_buffer(request->byte_size,&needs);
+        if(FAILED(probed))return probed;
+        bits=needs.memoryTypeBits;alignment=std::max<uint64_t>(alignment,needs.alignment);
+        if(needs.size>request->byte_size){report_.refusal="buffer needs more than the allocation";return E_INVALIDARG;}
+    }
     report_.stage=ImportStage::MemoryType;report_.bytes=request->byte_size;report_.alignment=alignment;
-    // The surface is GPU-only memory, as the create's is: the opener maps nothing on the CPU.
+    // The memory is GPU-only, as the create's is: the opener maps nothing on the CPU.
     uint32_t type=UINT32_MAX;
-    for(uint32_t i=0;i<properties_.memoryTypeCount;++i)if((request->memory_type_bits&(1u<<i)) &&
+    for(uint32_t i=0;i<properties_.memoryTypeCount;++i)if((bits&(1u<<i)) &&
         (properties_.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
         {type=i;break;}
     if(type==UINT32_MAX){report_.refusal="no device-local memory type";return E_INVALIDARG;}
@@ -962,7 +986,7 @@ HRESULT RuntimeHeapImports::adopt(const engine_ddi::AdoptRequest* request,engine
         if(opened!=S_OK)return opened;
     }
     auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
-    record->busy=true;record->surface=true;record->adopted=true;
+    record->busy=true;record->surface=surface;record->adopted=true;
     // A borrowed allocation names no release owner: its authority is the runtime's, not a resource of ours.
     record->authority=0;
     // Several records may hold one borrowed handle. An application may call OpenSharedHandle twice on one device
@@ -1060,9 +1084,8 @@ HRESULT RuntimeHeapImports::free(const engine_ddi::ImportedMemory* memory) noexc
         // destroy that ends it (release_owned), which a later drain is no longer inside. Nor is an opened
         // shared surface (BD-075): the runtime destroys its allocation as soon as the destroy returns, so a
         // mapping of it held past that destroy would name memory that is no longer the opener's.
-        // The adopted term is redundant today (adopt sets surface as well) and is kept on purpose: the two reasons
-        // above are different reasons, and a later record that is adopted without being a surface must still never
-        // be quarantined. heap-import-test pins both.
+        // The two reasons above are different reasons, so both terms stay: an opened buffer (BD-373) is adopted
+        // without being a surface, and it must never be quarantined either. heap-import-test pins both.
         quarantine=policy_.holds() && !record->surface && !record->adopted;
         if(quarantine){imported=record->imported.memory;record->imported.memory=VK_NULL_HANDLE;}
     }

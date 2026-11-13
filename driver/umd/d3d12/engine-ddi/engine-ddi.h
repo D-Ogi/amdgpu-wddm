@@ -14,7 +14,9 @@
 // may answer the shell-internal kShareRequired for a request that carried it, and ShellHooks grows by the optional
 // adopt_memory, which takes an allocation the runtime opened instead of allocating one. The engine ABI does not
 // change: a shared surface is the same linear image the linear primary already is (1.3 V13). Added within r5,
-// additively: set_pso_policy, asynchronous pipeline-state compilation on a worker pool (off unless set).
+// additively: set_pso_policy, asynchronous pipeline-state compilation on a worker pool (off unless set), and
+// set_device_identity, the device UUID that the open of an ENGINE LAYOUT shared resource compares (BD-373).
+// The ENGINE LAYOUT open of a buffer adopts with kMemoryDedicated|kMemoryShareable alone (AdoptRequest).
 // The shell (namespace native12) owns everything else:
 //   - the adapter, device state and FillDDITable composition;
 //   - queues and their WDDM contexts, fences and queue Signal/Wait;
@@ -217,8 +219,13 @@ struct MemoryRequest {
 // BD-075, the open half: an allocation the runtime opened for us (D3D12DDIARG_OPENHEAP_0003), which the shell
 // must map, make resident and import into the engine's VkDevice without allocating anything. The record it
 // builds is borrowed: the shell never deallocates it, because it never allocated it, and the runtime destroys
-// it as soon as pfnDestroyHeapAndResource returns. flags is kMemoryDedicated|kMemoryShareable|
-// kMemoryLinearSurface, as the shareable create's second attempt is, so the shell applies the same rules.
+// it as soon as pfnDestroyHeapAndResource returns. Two forms (BD-373):
+//   - a linear surface (the LINEAR SURFACE form): flags kMemoryDedicated|kMemoryShareable|kMemoryLinearSurface, as
+//     the shareable create's second attempt is, so the shell applies the same rules; memory_type_bits is the
+//     image's.
+//   - a buffer (the ENGINE LAYOUT form): flags kMemoryDedicated|kMemoryShareable; memory_type_bits is 0, not
+//     narrowed, and the shell picks a device-local type a buffer can use; byte_size is the whole kernel allocation;
+//     alignment is the address alignment of the engine heap that allows buffers (64 KiB).
 struct AdoptRequest {
     uint32_t size;                              // sizeof(AdoptRequest)
     uint32_t flags;                             // MemoryRequestFlags
@@ -230,9 +237,9 @@ struct AdoptRequest {
     // replaces said "the shell records it", which it never did (BD-075 review, 2026-10-06).
     D3D12DDI_HRTRESOURCE rt_owner;
     D3DKMT_HANDLE allocation;                   // pOpenAllocationInfo[0].hAllocation; never ours to destroy
-    uint32_t memory_type_bits;                  // the engine's memoryTypeBits for the image, as above
-    uint64_t byte_size;                         // the backing the image needs, page rounded
-    uint64_t alignment;                         // the image's memory alignment
+    uint32_t memory_type_bits;                  // the image's memoryTypeBits, or 0 for a buffer (above)
+    uint64_t byte_size;                         // the backing the image needs, page rounded; a buffer: the allocation
+    uint64_t alignment;                         // the image's memory alignment; a buffer: the heap's address alignment
 };
 
 // One runtime allocation that the shell has made and imported. The shell owns it (see the release sequence).
@@ -357,6 +364,20 @@ struct ReleasePolicy {
     uint32_t two_phase;                         // 0: one snapshot per release; 1: the second phase above
 };
 HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) noexcept;
+
+// BD-373: the identity of the engine's Vulkan device, as VkPhysicalDeviceIDProperties of the engine's physical device
+// gives it (GetVulkanHandles). The open of a shared resource in the ENGINE LAYOUT form (shared-resource.h) compares
+// device_uuid with the creator's record and refuses a record of another adapter; driver_uuid goes into the opener's
+// record for diagnostics only. Without this call every such open is refused ("engine layout device identity"); the
+// LINEAR SURFACE open does not use it. Call it like set_retire_policy: after create_device_context, before the context
+// is used on another thread. E_INVALIDARG, with the identity held before kept, for a null argument, a size other than
+// sizeof(DeviceIdentity), or a device_uuid of 16 zero bytes (no identity).
+struct DeviceIdentity {
+    uint32_t size;                              // sizeof(DeviceIdentity)
+    uint8_t device_uuid[16];                    // VkPhysicalDeviceIDProperties::deviceUUID
+    uint8_t driver_uuid[16];                    // VkPhysicalDeviceIDProperties::driverUUID
+};
+HRESULT set_device_identity(DeviceContext* context, const DeviceIdentity* identity) noexcept;
 
 // Raytracing tier 1.2 in the command and state object slots, OFF in the library (the device half of
 // set_raytracing_tier12_reporting; the shell turns it on, and only a lab-flavour shell has an off switch, the

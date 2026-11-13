@@ -94,7 +94,8 @@ Write-Host "engine ABI $($pin.abi_version) $($pin.header_revision): $engineHeade
 # Object files are named after the source's leaf, so no two sources here may share one.
 $libSources = @('context.cpp', 'caps.cpp', 'queue.cpp', 'commands.cpp', 'resources.cpp', 'descriptors.cpp',
                 'root-signature.cpp', 'pipelines.cpp', 'graphics.cpp', 'queries.cpp', 'tiles.cpp', 'state-objects.cpp', 'state-object-shell.cpp', 'generic-programs.cpp',
-                'work-graphs.cpp', 'replay.cpp', 'pso-async.cpp', 'entry.cpp', 'shader-container\shader-container.cpp', 'shader-container\dxil-metadata.cpp') | ForEach-Object { Join-Path $src $_ }
+                'work-graphs.cpp', 'replay.cpp', 'pso-async.cpp', 'entry.cpp', 'shader-container\shader-container.cpp', 'shader-container\dxil-metadata.cpp',
+                'shared-resource.cpp') | ForEach-Object { Join-Path $src $_ }
 $harnessSources = @(Get-ChildItem -LiteralPath (Join-Path $src 'tests') -Filter '*.cpp' |
     Where-Object { $_.Name -like 'harness*.cpp' -or $_.Name -like 'test-*.cpp' } | ForEach-Object FullName)
 
@@ -130,7 +131,7 @@ try {
     $flags = @('/nologo', '/std:c++20', '/EHsc', '/W4', '/WX', '/O2', ("/external:W" + $(if ($Arch -eq 'x86') { 1 } else { 0 })), '/MT', '/DNOMINMAX', '/Zi',
         '/Brepro', '/FC', "/d1trimfile:$repo", "/d1trimfile:$EngineSource", "/d1trimfile:$VulkanInclude",
                "/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$VulkanInclude", "/external:I$EngineInclude",
-               "/I$src")
+               "/external:I$repo\driver\contract\third_party", "/external:I$repo\driver\contract\uapi-shim", "/I$src")
     if ($Lab) { $flags += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
     # raytracing-tier12.h names values and layouts that the 26100 headers of this build lack, and checks them against
     # the headers that have them only where those headers are on the include path. This step puts them there: d3d12.h
@@ -218,6 +219,9 @@ try {
         Write-Host 'native engine-ddi.lib: no harness_ symbols'
         Invoke-Step 'native policy test build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:native-policy-test.exe (Join-Path $src 'tests\native-policy-test.cpp') engine-ddi.lib }
         Invoke-Step 'native policy test' { & .\native-policy-test.exe }
+        # The ENGINE LAYOUT adapter (shared-resource.h) has no engine call, so its host test needs no engine.
+        Invoke-Step 'shared resource adapter test build' { Invoke-Bc250UmdCompiler $compilerExe @nativeFlags /Fo:native\ /Fd:native\ /Fe:shared-resource-test.exe (Join-Path $src 'tests\shared-resource-test.cpp') engine-ddi.lib }
+        Invoke-Step 'shared resource adapter test' { & .\shared-resource-test.exe }
         Invoke-Step 'caps test build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:caps-test.exe (Join-Path $src 'tests\caps-test.cpp') engine-ddi.lib dxgi.lib }
         Invoke-Step 'caps test (stub engine)' { & .\caps-test.exe }
         Invoke-Step 'pipeline stream test build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:pipeline-stream-test.exe (Join-Path $src 'tests\pipeline-stream-test.cpp') engine-ddi.lib }

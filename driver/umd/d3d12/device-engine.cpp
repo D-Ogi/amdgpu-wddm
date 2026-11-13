@@ -390,6 +390,24 @@ public:
                        adopt};
         result=engine_ddi::create_device_context(&context,&context_);stage("DeviceContext",result);
         if(result!=S_OK)return result;
+        // BD-373: the device identity of the ENGINE LAYOUT open, from the engine's own physical device. Without it
+        // the open of such a shared resource is refused by name and the device is otherwise unchanged, so a query
+        // that gives no UUID is a stage line, not a failed device.
+        {
+            engine_ddi::DeviceIdentity identity{};identity.size=sizeof(identity);
+            const auto properties2=reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(
+                hosted.entry()(instance,"vkGetPhysicalDeviceProperties2"));
+            HRESULT known=E_NOINTERFACE;
+            if(properties2){
+                VkPhysicalDeviceIDProperties id{};id.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+                VkPhysicalDeviceProperties2 props{};props.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;props.pNext=&id;
+                properties2(physical,&props);
+                std::memcpy(identity.device_uuid,id.deviceUUID,sizeof(identity.device_uuid));
+                std::memcpy(identity.driver_uuid,id.driverUUID,sizeof(identity.driver_uuid));
+                known=engine_ddi::set_device_identity(context_,&identity);
+            }
+            stage("DeviceIdentity",known);
+        }
         result=configure_overlay_formats(context_);stage("OverlayFormats",result);
         if(result!=S_OK)return result;
         // Raytracing tier 1.2 in the slots, where the engine device has it; the caps half is in adapter-caps.cpp, and

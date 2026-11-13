@@ -172,6 +172,9 @@ class RuntimeHeapImports final {
     // record; this writes the reason and the line.
     static HRESULT refuse_address(const char* why,HRESULT hr,uint64_t bytes,uint64_t alignment,
                                   uint64_t address) noexcept;
+    // The requirements of a buffer of bytes bytes on this device, with the usage the engine's buffers need here:
+    // the memory types and the alignment of a buffer import (allocate, and adopt of a buffer). No memory exists.
+    HRESULT probe_buffer(uint64_t bytes,VkMemoryRequirements* needs) const noexcept;
     HRESULT release(Record&) noexcept;
     HRESULT release_import(Record&,VkDeviceMemory) noexcept;    // the Vulkan import alone
     HRESULT unlock_for_release(Record&) noexcept;               // a CPU lock the ICD left on it

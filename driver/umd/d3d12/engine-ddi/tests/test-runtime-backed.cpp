@@ -125,8 +125,9 @@ HRESULT APIENTRY stub_adopt(void* shell, const engine_ddi::AdoptRequest* request
     if (m.create_buffer(m.device, &probe_info, nullptr, &probe) != VK_SUCCESS) return E_OUTOFMEMORY;
     VkMemoryRequirements needs{};
     m.requirements(m.device, probe, &needs);
-    const uint32_t type = pick_type(m, needs.memoryTypeBits & request->memory_type_bits,
-                                   D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE);
+    // A buffer of the ENGINE LAYOUT form names no memory types (BD-373): any type a buffer can use.
+    const uint32_t allowed = request->memory_type_bits ? request->memory_type_bits : UINT32_MAX;
+    const uint32_t type = pick_type(m, needs.memoryTypeBits & allowed, D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE);
     VkMemoryAllocateFlagsInfo flags{};
     flags.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
     flags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;

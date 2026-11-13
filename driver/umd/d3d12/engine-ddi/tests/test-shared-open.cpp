@@ -6,8 +6,10 @@
 // that the open borrowed its memory - one adopt, no allocate callback, the handle the runtime gave - that the opened
 // resource reads and writes like any other texture, and that its destroy frees the import without deallocating an
 // allocation this driver never created. Every malformed record is refused with nothing constructed.
+// BD-373: the same for a buffer of the ENGINE LAYOUT form (S26R + BC2A, engine_layout_open below).
 #include "harness.h"
 
+#include "../../../../contract/bc250_shared_resource_alloc.h"
 #include "../../../../contract/bc250_shared_surface.h"
 
 #include <algorithm>
@@ -61,18 +63,18 @@ struct Opened {
     }
 };
 
-HRESULT open_surface(Env& env, Device& device, D3DKMT_HANDLE handle, const BC250_WDDM_ALLOCATION_PRIVATE& allocation,
-                     const BC250_SURFACE_RESOURCE_PRIVATE& resource, UINT resource_bytes, UINT allocation_bytes,
-                     Opened& out) {
+// The open of one allocation with the two private-data blobs the runtime hands over, whatever their wire form.
+HRESULT open_blobs(Env& env, Device& device, D3DKMT_HANDLE handle, const void* allocation, UINT allocation_bytes,
+                   const void* resource, UINT resource_bytes, Opened& out) {
     out = Opened{};
     D3DDDI_OPENALLOCATIONINFO info{};
     info.hAllocation = handle;
-    info.pPrivateDriverData = &allocation;
+    info.pPrivateDriverData = allocation;
     info.PrivateDriverDataSize = allocation_bytes;
     D3D12DDIARG_OPENHEAP_0003 args{};
     args.NumAllocations = 1;
     args.pOpenAllocationInfo = &info;
-    args.pPrivateDriverData = const_cast<BC250_SURFACE_RESOURCE_PRIVATE*>(&resource);
+    args.pPrivateDriverData = const_cast<void*>(resource);
     args.PrivateDriverDataSize = resource_bytes;
     args.InitialResourceState = D3D12DDI_RESOURCE_STATE_COMMON;
     const D3D12DDI_HEAP_AND_RESOURCE_SIZES sizes = env.core.pfnCalcPrivateOpenedHeapAndResourceSizes(
@@ -85,6 +87,12 @@ HRESULT open_surface(Env& env, Device& device, D3DKMT_HANDLE handle, const BC250
                                                        D3D12DDI_HPROTECTEDRESOURCESESSION_0030{}, out.hres());
     if (FAILED(hr)) out = Opened{};             // nothing was constructed
     return hr;
+}
+
+HRESULT open_surface(Env& env, Device& device, D3DKMT_HANDLE handle, const BC250_WDDM_ALLOCATION_PRIVATE& allocation,
+                     const BC250_SURFACE_RESOURCE_PRIVATE& resource, UINT resource_bytes, UINT allocation_bytes,
+                     Opened& out) {
+    return open_blobs(env, device, handle, &allocation, allocation_bytes, &resource, resource_bytes, out);
 }
 
 void destroy_opened(Env& env, Device& device, Opened& opened) {
@@ -135,6 +143,7 @@ bool engine_layout(Device& device, const Surface& s, UINT& pitch, UINT64& backin
 }
 
 void unserved_open(Env& env);
+void engine_layout_open(Env& env);
 
 } // namespace
 
@@ -523,6 +532,7 @@ void test_shared_open(Env& env) {
     }
 
     unserved_open(env);
+    engine_layout_open(env);
 
     checkf(m.frees == m.allocations + m.adoptions,
            "shared open: every allocation and every adopted import came back through free_memory (%u frees, %u "
@@ -569,6 +579,243 @@ void unserved_open(Env& env) {
     if (SUCCEEDED(refused_hr)) destroy_opened(env, device, opened);
     uint32_t live = UINT32_MAX;
     (void)engine_ddi::destroy_device_context(device.context, &live);
+}
+
+// BD-373: a buffer of the ENGINE LAYOUT form (S26R + BC2A), as the D3D11 shell creates it. The open adopts the whole
+// allocation with no memory types named and a 64 KiB address alignment, places a D3D12 buffer at offset 0, and that
+// buffer reads and writes. The stub adopts fresh memory, so the bytes of another creator are the lab's cell; the
+// refusals and the adopt request are this one's. The allocations are 64 KiB: the stub's address comes from Vulkan, and
+// only an allocation of 64 KiB or more is certain to get an address of 64 KiB alignment there.
+constexpr uint8_t kDeviceUuid[16] = {0xb2, 0x50, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+
+BC250_SHARED_RESOURCE buffer_record(uint32_t width) {
+    BC250_SHARED_RESOURCE r{};
+    r.Magic = BC250_SHARED_RESOURCE_MAGIC;
+    r.Version = BC250_SHARED_RESOURCE_VERSION;
+    r.Bytes = BC250_SHARED_RESOURCE_BYTES;
+    r.Dimension = BC250_SHARED_RESOURCE_BUFFER;
+    r.Width = width;
+    r.Height = r.MipLevels = r.ArraySize = 1;
+    r.SampleCount = 1;
+    r.BindFlags = BC250_SR_BIND_SHADER_RESOURCE | BC250_SR_BIND_UNORDERED_ACCESS;
+    r.CreateUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    r.SharingMode = BC250_SR_VK_SHARING_EXCLUSIVE;
+    r.BufferSize = width;
+    r.MemorySize = width;
+    r.MemoryAlignment = 256;
+    r.MemoryTypeBits = 0x7;
+    r.CreatorApi = BC250_SR_CREATOR_D3D11;
+    std::memcpy(r.DeviceUuid, kDeviceUuid, sizeof(kDeviceUuid));
+    return r;
+}
+
+void engine_layout_open(Env& env) {
+    StubMemory m;
+    if (!load_stub(env, m) || !m.address) return;
+    Device device;
+    device.shell.memory = &m;
+    HRESULT hr = open_device(env, device, stub_allocate, stub_free, nullptr, stub_adopt);
+    checkf(hr == S_OK && device.context, "engine layout open: device context in RuntimeBacked mode (hr %08lx)",
+           static_cast<unsigned long>(hr));
+    if (hr != S_OK) return;
+    BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_DIRECT, 0, 0, 0};
+    engine_ddi::EngineQueue* queue = nullptr;
+    hr = engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue);
+    if (hr != S_OK) {
+        checkf(false, "engine layout open: create_engine_queue DIRECT (hr %08lx)", static_cast<unsigned long>(hr));
+        return;
+    }
+
+    constexpr UINT kBytes = 65536;
+    const BC250_SHARED_RESOURCE record = buffer_record(kBytes);
+    bc250_umd_alloc_private blob{};
+    check(Bc250SharedResourceAllocInit(&blob, &record) == 1 && blob.alloc_size == kBytes,
+          "engine layout open: the creator's BC2A blob is written by the contract header");
+    const D3DKMT_HANDLE handle = 0x50000011u;
+
+    // Before the shell has given the device identity, the open is refused by name with nothing adopted.
+    Opened opened;
+    hr = open_blobs(env, device, handle, &blob, sizeof(blob), &record, sizeof(record), opened);
+    checkf(hr == E_OUTOFMEMORY && !m.adoptions, "engine layout open: refused while the identity is unknown (hr %08lx)",
+           static_cast<unsigned long>(hr));
+    if (SUCCEEDED(hr)) destroy_opened(env, device, opened);
+
+    engine_ddi::DeviceIdentity identity{};
+    identity.size = sizeof(identity);
+    check(engine_ddi::set_device_identity(device.context, &identity) == E_INVALIDARG,
+          "engine layout open: an all-zero device UUID is refused");
+    std::memcpy(identity.device_uuid, kDeviceUuid, sizeof(kDeviceUuid));
+    identity.size = sizeof(identity) - 1;
+    check(engine_ddi::set_device_identity(device.context, &identity) == E_INVALIDARG,
+          "engine layout open: a wrong DeviceIdentity size is refused");
+    identity.size = sizeof(identity);
+    check(engine_ddi::set_device_identity(device.context, &identity) == S_OK,
+          "engine layout open: set_device_identity");
+
+    // The open itself, and the bytes through it.
+    {
+        const uint32_t allocations = m.allocations;
+        hr = open_blobs(env, device, handle, &blob, sizeof(blob), &record, sizeof(record), opened);
+        checkf(hr == S_OK && m.adoptions == 1 && m.allocations == allocations && m.last_adopt_handle == handle &&
+                   m.last_adopt_flags == (engine_ddi::kMemoryDedicated | engine_ddi::kMemoryShareable) &&
+                   m.last_adopt_byte_size == kBytes && m.last_adopt_alignment == 65536 && m.last_adopt_type_bits == 0,
+               "engine layout open: one adopt of the whole allocation, no types named, 64 KiB alignment (hr %08lx, %u "
+               "adopts, flags %x, %llu bytes, alignment %llu, types %x)",
+               static_cast<unsigned long>(hr), m.adoptions, m.last_adopt_flags,
+               static_cast<unsigned long long>(m.last_adopt_byte_size),
+               static_cast<unsigned long long>(m.last_adopt_alignment), m.last_adopt_type_bits);
+    }
+    if (hr == S_OK) {
+        const Buffer base = opened.as_buffer();
+        Buffer beside;
+        const HRESULT placed = create_placed_buffer(env, device, base, 0, 4096, beside);
+        checkf(placed == E_OUTOFMEMORY, "engine layout open: a buffer placed on the opened buffer is refused (hr %08lx)",
+               static_cast<unsigned long>(placed));
+        if (SUCCEEDED(placed)) destroy_buffer(env, device, beside);
+
+        Buffer upload, readback;
+        const HRESULT hr_up = create_buffer(env, device, HeapKind::Upload, kBytes, false, upload);
+        const HRESULT hr_rb = create_buffer(env, device, HeapKind::Readback, kBytes, false, readback);
+        void* cpu = nullptr;
+        HRESULT hr_map = hr_up == S_OK ? env.core.pfnMapHeap(device.h(), upload.hheap(), &cpu) : E_ABORT;
+        if (hr_map == S_OK && cpu) {
+            UINT32* words = static_cast<UINT32*>(cpu);
+            for (UINT i = 0; i < kBytes / 4; ++i) words[i] = 0x5a000000u ^ (i * 2654435761u);
+            env.core.pfnUnmapHeap(device.h(), upload.hheap());
+        }
+        Recording rec;
+        const HRESULT hr_rec = hr_up == S_OK && hr_rb == S_OK && hr_map == S_OK
+                                   ? open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, rec)
+                                   : E_ABORT;
+        UINT bad = kBytes / 4;
+        HRESULT hr_run = E_ABORT;
+        if (hr_rec == S_OK) {
+            const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[rec.table];
+            auto at = [](const Buffer& b) {
+                D3D12DDIARG_BUFFER_PLACEMENT p{};
+                p.BaseAddress.UMD = {b.hres(), 0};
+                return p;
+            };
+            const D3D12DDIARG_RESOURCE_BARRIER_0022 to_dest =
+                transition(base, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_COPY_DEST);
+            t.pfnResourceBarrier(rec.hlist(), 1, &to_dest);
+            t.pfnCopyBufferRegion(rec.hlist(), at(base), at(upload), kBytes);
+            const D3D12DDIARG_RESOURCE_BARRIER_0022 to_source =
+                transition(base, D3D12DDI_RESOURCE_STATE_COPY_DEST, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
+            t.pfnResourceBarrier(rec.hlist(), 1, &to_source);
+            t.pfnCopyBufferRegion(rec.hlist(), at(readback), at(base), kBytes);
+            t.pfnCloseCommandList(rec.hlist());
+            const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
+            hr_run = engine_ddi::execute_command_lists(queue, 1, lists);
+            wait_queue_idle(env, queue, "engine layout open");
+            cpu = nullptr;
+            hr_map = env.core.pfnMapHeap(device.h(), readback.hheap(), &cpu);
+            if (hr_map == S_OK && cpu) {
+                bad = 0;
+                const UINT32* words = static_cast<const UINT32*>(cpu);
+                for (UINT i = 0; i < kBytes / 4; ++i) bad += words[i] != (0x5a000000u ^ (i * 2654435761u)) ? 1u : 0u;
+                env.core.pfnUnmapHeap(device.h(), readback.hheap());
+            }
+        }
+        checkf(hr_run == S_OK && hr_map == S_OK && !bad && !device.shell.list_errors,
+               "engine layout open: the opened buffer takes 64 KiB and gives them back (hr %08lx %08lx %08lx, %u of %u "
+               "words differ)",
+               static_cast<unsigned long>(hr_rec), static_cast<unsigned long>(hr_run),
+               static_cast<unsigned long>(hr_map), bad, kBytes / 4);
+        destroy_recording(env, device, rec);
+        if (readback.resource) destroy_buffer(env, device, readback);
+        if (upload.resource) destroy_buffer(env, device, upload);
+
+        const uint32_t frees = m.frees;
+        destroy_opened(env, device, opened);
+        checkf(m.frees == frees + 1 && !engine_ddi::harness_pending_releases(device.context),
+               "engine layout open: the destroy returns the borrowed memory once (%u frees, %u pending)",
+               m.frees - frees, engine_ddi::harness_pending_releases(device.context));
+    }
+
+    // Two opens of one handle adopt twice, as on the LINEAR SURFACE form.
+    {
+        Opened a, b;
+        const uint32_t adoptions = m.adoptions;
+        const HRESULT hr_a = open_blobs(env, device, handle, &blob, sizeof(blob), &record, sizeof(record), a);
+        const HRESULT hr_b = open_blobs(env, device, handle, &blob, sizeof(blob), &record, sizeof(record), b);
+        checkf(hr_a == S_OK && hr_b == S_OK && m.adoptions == adoptions + 2,
+               "engine layout open: the same handle opened twice adopts twice (hr %08lx %08lx, %u adopts)",
+               static_cast<unsigned long>(hr_a), static_cast<unsigned long>(hr_b), m.adoptions - adoptions);
+        if (hr_b == S_OK) destroy_opened(env, device, b);
+        if (hr_a == S_OK) destroy_opened(env, device, a);
+    }
+
+    // The refusals, each with nothing adopted and the device kept.
+    auto refused_record = [&](const BC250_SHARED_RESOURCE& r, const bc250_umd_alloc_private& a, UINT bytes,
+                              const char* what) {
+        const uint32_t adoptions = m.adoptions, errors = device.shell.device_errors;
+        Opened o;
+        const HRESULT refusal = open_blobs(env, device, handle, &a, sizeof(a), &r, bytes, o);
+        checkf(refusal == E_OUTOFMEMORY && m.adoptions == adoptions && device.shell.device_errors == errors,
+               "engine layout open: %s is refused with nothing adopted (hr %08lx, %u adopts)", what,
+               static_cast<unsigned long>(refusal), m.adoptions - adoptions);
+        if (SUCCEEDED(refusal)) destroy_opened(env, device, o);
+    };
+    {
+        refused_record(record, blob, sizeof(record) - 1, "a record of 239 bytes");
+        BC250_SHARED_RESOURCE other = record;
+        other.DeviceUuid[0] ^= 1;
+        refused_record(other, blob, sizeof(other), "a record of another device");
+        bc250_umd_alloc_private one_page = blob;
+        one_page.alloc_size = one_page.va_size = 4096;
+        refused_record(record, one_page, sizeof(record), "an allocation below the record's memory");
+        // A LINEAR texture record of a valid shape: refused by name until engine ABI V15.
+        BC250_SHARED_RESOURCE texture{};
+        texture.Magic = BC250_SHARED_RESOURCE_MAGIC;
+        texture.Version = BC250_SHARED_RESOURCE_VERSION;
+        texture.Bytes = BC250_SHARED_RESOURCE_BYTES;
+        texture.Dimension = BC250_SHARED_RESOURCE_TEXTURE2D;
+        texture.Width = texture.Height = 128;
+        texture.MipLevels = 2;
+        texture.ArraySize = 1;
+        texture.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        texture.SampleCount = 1;
+        texture.BindFlags = BC250_SR_BIND_SHADER_RESOURCE;
+        texture.CreateUsage = VK_IMAGE_USAGE_SAMPLED_BIT;
+        texture.ImageType = BC250_SR_VK_IMAGE_TYPE_2D;
+        texture.VkFormat = VK_FORMAT_R8G8B8A8_UNORM;
+        texture.ExtentWidth = texture.ExtentHeight = 128;
+        texture.ExtentDepth = 1;
+        texture.VkMipLevels = 2;
+        texture.VkArrayLayers = 1;
+        texture.VkSamples = BC250_SR_VK_SAMPLE_COUNT_1;
+        texture.Tiling = BC250_SR_VK_TILING_LINEAR;
+        texture.MemorySize = kBytes;
+        texture.MemoryAlignment = 4096;
+        texture.MemoryTypeBits = 0x7;
+        texture.LayoutHash = 1;
+        texture.CreatorApi = BC250_SR_CREATOR_D3D11;
+        std::memcpy(texture.DeviceUuid, kDeviceUuid, sizeof(kDeviceUuid));
+        refused_record(texture, blob, sizeof(texture), "a texture record");
+        // The adopt refused by the shell: the open fails and the device lives.
+        m.refuse_adopt = true;
+        const uint32_t refusals = m.adopt_refusals;
+        Opened o;
+        hr = open_blobs(env, device, handle, &blob, sizeof(blob), &record, sizeof(record), o);
+        checkf(hr == E_OUTOFMEMORY && m.adopt_refusals == refusals + 1,
+               "engine layout open: a shell that refuses the adopt fails the open (hr %08lx)",
+               static_cast<unsigned long>(hr));
+        m.refuse_adopt = false;
+    }
+
+    checkf(m.frees == m.allocations + m.adoptions,
+           "engine layout open: every allocation and every adopted import came back (%u frees, %u allocations, %u "
+           "adopts)",
+           m.frees, m.allocations, m.adoptions);
+    check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
+          "engine layout open: destroy_engine_queue reports Retired");
+    uint32_t live = UINT32_MAX;
+    hr = engine_ddi::destroy_device_context(device.context, &live);
+    checkf(hr == S_OK && live == 0 && !device.shell.device_errors && !device.shell.list_errors,
+           "engine layout open: destroy_device_context S_OK with no live object and no error (hr %08lx, %u live)",
+           static_cast<unsigned long>(hr), live);
 }
 
 } // namespace

@@ -9,6 +9,7 @@
 #include "../../../contract/amdgpu_wddm_surface_format.h"
 #include "../../../contract/bc250_shared_surface.h"
 #include "../present-copy.h"
+#include "shared-resource.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -599,6 +600,12 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             log_line("placed: the base is a linear surface, its memory holds that image alone");
             return E_INVALIDARG;
         }
+        // An opened resource's memory is borrowed and holds the creator's resource alone (BD-373: an opened buffer
+        // is not linear, so the line above does not see it).
+        if (base->backing->adopted) {
+            log_line("placed: the base is an opened shared resource, its memory holds that resource alone");
+            return E_INVALIDARG;
+        }
         const uint64_t offset = base->offset + res_desc->ReuseBufferGPUVA.BaseAddress.UMD.Offset;
         if (offset < base->offset) return E_INVALIDARG;
         ID3D12Resource* engine = nullptr;
@@ -905,6 +912,8 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
 // (nothing to place and no description to decode), a placed resource on such a heap, anything but exactly one
 // allocation, a record the shared decoder declines, and a record whose pitch or size this engine's linear image of
 // the same description disagrees with.
+// BD-373: a resource record with the S26R magic is the other wire form, ENGINE LAYOUT (open_engine_layout below):
+// a buffer is opened over the adopted allocation, a texture record is refused by name until engine ABI V15.
 // Calc answers the private sizes the open constructs, the same records a create builds, so a runtime that calls
 // Calc and then Open sees one shape.
 D3D12DDI_HEAP_AND_RESOURCE_SIZES APIENTRY calc_opened_heap_and_resource(D3D12DDI_HDEVICE,
@@ -942,13 +951,22 @@ D3D12_RESOURCE_DESC1 opened_desc(const BC250_SHARED_SURFACE& surface) noexcept {
     desc.Format = static_cast<DXGI_FORMAT>(surface.DxgiFormat);
     desc.SampleDesc = {1, 0};
     desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-    if (surface.BindFlags & BC250_SHARED_BIND_RENDER_TARGET) desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-    if (surface.BindFlags & BC250_SHARED_BIND_UNORDERED_ACCESS)
-        desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    if (!(surface.BindFlags & BC250_SHARED_BIND_SHADER_RESOURCE))
-        desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+    desc.Flags = opened_resource_flags(static_cast<uint32_t>(surface.BindFlags), false);
     return desc;
+}
+
+// What both forms of an open need before their own decoder runs: a runtime-backed device, exactly one allocation
+// with a handle, and a device that is not lost. *first is that allocation.
+HRESULT open_arguments(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* args, D3D12DDI_HHEAP hheap,
+                       D3D12DDI_HRESOURCE hres, const D3DDDI_OPENALLOCATIONINFO** first) noexcept {
+    *first = nullptr;
+    if (!c || !args || !hheap.pDrvPrivate || !hres.pDrvPrivate) return E_INVALIDARG;
+    if (c->mode != MemoryMode::RuntimeBacked) return E_NOTIMPL;
+    if (args->NumAllocations != 1 || !args->pOpenAllocationInfo) return E_INVALIDARG;
+    if (!args->pOpenAllocationInfo[0].hAllocation) return E_INVALIDARG;
+    if (c->lost()) return DXGI_ERROR_DEVICE_REMOVED;
+    *first = &args->pOpenAllocationInfo[0];
+    return S_OK;
 }
 
 // The open itself. On a refusal nothing is constructed, nothing of the runtime's is kept, and *why names the step
@@ -956,12 +974,10 @@ D3D12_RESOURCE_DESC1 opened_desc(const BC250_SHARED_SURFACE& surface) noexcept {
 HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* args, D3D12DDI_HHEAP hheap,
                             D3D12DDI_HRTRESOURCE rt, D3D12DDI_HRESOURCE hres, const char** why) noexcept {
     *why = "arguments";
-    if (!c || !args || !hheap.pDrvPrivate || !hres.pDrvPrivate) return E_INVALIDARG;
-    if (c->mode != MemoryMode::RuntimeBacked) return E_NOTIMPL;
-    if (args->NumAllocations != 1 || !args->pOpenAllocationInfo) return E_INVALIDARG;
-    const D3DDDI_OPENALLOCATIONINFO& first = args->pOpenAllocationInfo[0];
-    if (!first.hAllocation) return E_INVALIDARG;
-    if (c->lost()) return DXGI_ERROR_DEVICE_REMOVED;
+    const D3DDDI_OPENALLOCATIONINFO* allocation = nullptr;
+    HRESULT hr = open_arguments(c, args, hheap, hres, &allocation);
+    if (FAILED(hr)) return hr;
+    const D3DDDI_OPENALLOCATIONINFO& first = *allocation;
 
     // The decoder names the check it decided at, and *why is that name: "record" alone covered seventeen checks, and
     // the three cross-API failures of round 1 all declined here. The refusal line below already printed the record's
@@ -988,7 +1004,7 @@ HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* a
     *why = "engine image";
     const D3D12_RESOURCE_DESC1 desc = opened_desc(shared);
     LinearSurface surface{};
-    HRESULT hr = query_linear_surface(c, desc, &surface);
+    hr = query_linear_surface(c, desc, &surface);
     if (FAILED(hr)) return hr;
     // The layout agreement, checked and not assumed: two drivers that compute different addresses from the same
     // bytes produce silent corruption, which is worse than a refusal. The producer is usually the same RADV build
@@ -1076,6 +1092,99 @@ HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* a
     return S_OK;
 }
 
+// BD-373: the open of the ENGINE LAYOUT form (S26R + BC2A). The adapter (shared-resource.h) decides with the
+// contract's rule whether this engine can bind the record's resource on the allocation, and says what to bind; the
+// steps here are the engine's, in the order and with the release rules of open_shared_surface. Buffers only: the
+// adapter refuses a texture record by name. The buffer is an ordinary placed buffer at offset 0 of an engine heap
+// over the whole adopted allocation, so its bytes are the creator's bytes.
+HRESULT open_engine_layout(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* args, D3D12DDI_HHEAP hheap,
+                           D3D12DDI_HRTRESOURCE rt, D3D12DDI_HRESOURCE hres, const char** why) noexcept {
+    *why = "arguments";
+    const D3DDDI_OPENALLOCATIONINFO* first = nullptr;
+    HRESULT hr = open_arguments(c, args, hheap, hres, &first);
+    if (FAILED(hr)) return hr;
+
+    // The strings are the contract's and the adapter's literals, so the pointer outlives this call.
+    EngineLayoutOpen plan{};
+    hr = plan_engine_layout_open(args->pPrivateDriverData, args->PrivateDriverDataSize, first->pPrivateDriverData,
+                                 first->PrivateDriverDataSize, c->identity, &plan, why);
+    if (FAILED(hr)) return hr;
+
+    // The memory types are not narrowed (0, as a MemoryRequest's): the shell picks a device-local type for a buffer,
+    // and CreateHeapFromMemory checks it.
+    *why = "adopt";
+    AdoptRequest adopt{};
+    adopt.size = sizeof(adopt);
+    adopt.flags = kMemoryDedicated | kMemoryShareable;
+    adopt.rt_owner = rt;
+    adopt.allocation = first->hAllocation;
+    adopt.memory_type_bits = 0;
+    adopt.byte_size = plan.allocation_bytes;
+    adopt.alignment = plan.address_alignment;
+    ImportedMemory memory{};
+    hr = adopt_memory(c, adopt, &memory);
+    if (FAILED(hr)) return hr;
+
+    // From here on the import is engine-ddi's and goes back through the release sequence on every path.
+    *why = "engine heap";
+    D3D12DDIARG_CREATEHEAP_0001 heap_desc{};
+    heap_desc.ByteSize = plan.allocation_bytes;
+    heap_desc.Alignment = 0;
+    heap_desc.CPUPageProperty = D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
+    heap_desc.MemoryPool = D3D12DDI_MEMORY_POOL_L1;
+    heap_desc.Flags = static_cast<D3D12DDI_HEAP_FLAGS>(category_of(plan.desc));
+    heap_desc.CreationNodeMask = 1;
+    heap_desc.VisibleNodeMask = 1;
+    D3D12_HEAP_DESC hd{};
+    hr = heap_desc_of(heap_desc, hd);
+    ID3D12Heap* heap = nullptr;
+    if (SUCCEEDED(hr)) hr = engine_heap_from_memory(c, hd, memory, &heap);
+    if (FAILED(hr)) {
+        log_line("engine layout open: the engine refused the heap over the adopted memory: %08lx (%llu bytes, type "
+                 "%u)",
+                 static_cast<unsigned long>(hr), static_cast<unsigned long long>(memory.byte_size),
+                 memory.memory_type_index);
+        ReleasePayload payload{{nullptr, nullptr}, true, memory, 0};
+        run_release(c->hooks, payload);
+        return hr;
+    }
+
+    Backing* b = new_backing(c, heap_desc, heap);
+    if (!b) {
+        ReleasePayload payload{{heap, nullptr}, true, memory, 0};
+        run_release(c->hooks, payload);
+        return E_OUTOFMEMORY;
+    }
+    b->imported = true;
+    b->memory = memory;
+    b->dedicated = true;
+    b->adopted = true;
+
+    // Not place(): its fit check uses the engine's allocation info, which rounds a buffer up to 64 KiB, and the
+    // allocation of a shared buffer can be a few pages. The engine's own check is the one that applies: offset 0 +
+    // Width <= the heap size (shared-resource.h, kOpenerBufferAlignment), which the match rule already proved.
+    *why = "engine buffer placement";
+    ID3D12Resource* engine = nullptr;
+    hr = c->device8->CreatePlacedResource1(heap, 0, &plan.desc,
+                                           static_cast<D3D12_RESOURCE_STATES>(args->InitialResourceState), nullptr,
+                                           __uuidof(ID3D12Resource), reinterpret_cast<void**>(&engine));
+    if (SUCCEEDED(hr) && !engine) hr = E_UNEXPECTED;
+    if (FAILED(hr)) {
+        log_line("engine layout open: the engine refused the buffer of %llu bytes on a heap of %llu bytes: %08lx",
+                 static_cast<unsigned long long>(plan.desc.Width),
+                 static_cast<unsigned long long>(plan.allocation_bytes), static_cast<unsigned long>(hr));
+        backing_release(b);
+        return hr;
+    }
+    heap->AddRef();
+    new (hheap.pDrvPrivate) HeapRecord{{Tag::Heap, 0, heap, c}, b};
+    c->live.fetch_add(1);
+    construct_resource(static_cast<ResourceRecord*>(hres.pDrvPrivate), c, engine, b, 0, plan.desc, rt,
+                       ResourceKind::Opened, DXGI_FORMAT_UNKNOWN);
+    *why = "";
+    return S_OK;
+}
+
 HRESULT APIENTRY open_heap_and_resource(D3D12DDI_HDEVICE device, const D3D12DDIARG_OPENHEAP_0003* args,
                                         D3D12DDI_HHEAP hheap, D3D12DDI_HRTRESOURCE rt,
                                         D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session, D3D12DDI_HRESOURCE hres) {
@@ -1088,7 +1197,11 @@ HRESULT APIENTRY open_heap_and_resource(D3D12DDI_HDEVICE device, const D3D12DDIA
     }
     if (SUCCEEDED(hr)) {
         c->retire_at_resource();
-        hr = open_shared_surface(c, args, hheap, rt, hres, &why);
+        // By the magic of the resource record, before any decoder: the two forms have different readers, and an
+        // S26R record never reaches the LINEAR SURFACE decoder (the D3D11 shell routes the same way).
+        hr = args && is_engine_layout_record(args->pPrivateDriverData, args->PrivateDriverDataSize)
+                 ? open_engine_layout(c, args, hheap, rt, hres, &why)
+                 : open_shared_surface(c, args, hheap, rt, hres, &why);
     }
     if (SUCCEEDED(hr)) return hr;
     // Same rule as the create slot: the open of a shared handle fails, the device lives (BD-075).

@@ -199,15 +199,24 @@ One shape works: a 2D texture of one mip level, one array slice and one sample o
 a GPU-only heap, in a format with a COMPOSED row of the surface format table. It
 is created as a linear row-major image and published as the same two private-data
 records the D3D11 shell reads and writes, so either shell opens what either shell
-created. Nothing in the DDI says that a create is shared, so the create learns it
-from the runtime's own refusal of the ordinary allocation shape and retries once;
-an ordinary create pays no engine query and no retry. The open adopts the
+created. Nothing in the DDI says that a create is shared, so the shell selects the
+representation from the description before it allocates: every description inside
+the shareable envelope gets the surface record, and every other description keeps
+the ordinary allocation with no engine query (BD-217, engine-ddi `INTEGRATION.md`,
+"The shared surface"). The open adopts the
 allocation the runtime opened and never deallocates it. `CreateCommittedResource`
 with `D3D12_HEAP_FLAG_SHARED`, `ID3D12CompatibilityDevice::CreateSharedResource`
 (keyed mutex, whose mutex is the runtime's own object) and
 `ID3D12Device::OpenSharedHandle` of a resource all take that path.
 
-Every other shape still fails: buffers, mip chains, arrays, 3D textures, MSAA,
+The open also reads the ENGINE LAYOUT form (`driver/contract/bc250_shared_resource.h`,
+BD-373) for buffers: a buffer that the D3D11 shell created and shared opens as a
+D3D12 buffer over the same memory. The contract's match rule decides, with the
+device UUID that the shell gives engine-ddi (`set_device_identity`). A texture
+record of that form is refused by name until engine ABI V15. A D3D12 create of a
+shared buffer still fails.
+
+Every other shape still fails: buffers created by D3D12, mip chains, arrays, 3D textures, MSAA,
 block-compressed and typeless formats, depth-stencil, cross-adapter surfaces,
 CPU-visible shared heaps, a shared heap with no resource and a placed resource on
 one. They fail with `E_OUTOFMEMORY`, one of the two failures a creation DDI may

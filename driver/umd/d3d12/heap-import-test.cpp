@@ -271,8 +271,10 @@ static void VKAPI_CALL memory_properties(VkPhysicalDevice d,VkPhysicalDeviceMemo
  out->memoryTypes[2].propertyFlags=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT|VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
  out->memoryTypes[3].propertyFlags=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
 }
+// The size every probe must have: the request's 4096 bytes, or (BD-373) the adopted allocation of an opened buffer.
+static UINT64 probe_size=4096;
 static VkResult VKAPI_CALL buffer_create(VkDevice d,const VkBufferCreateInfo* info,const VkAllocationCallbacks*,VkBuffer* out){
- assert(d==handle<VkDevice>(4) && info->size==4096 && (info->usage&VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));++probes;*out=handle<VkBuffer>(7);return VK_SUCCESS;
+ assert(d==handle<VkDevice>(4) && info->size==probe_size && (info->usage&VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));++probes;*out=handle<VkBuffer>(7);return VK_SUCCESS;
 }
 static void VKAPI_CALL buffer_destroy(VkDevice,VkBuffer,const VkAllocationCallbacks*){}
 static void VKAPI_CALL buffer_requirements(VkDevice,VkBuffer,VkMemoryRequirements* out){*out={65536,65536,15};}
@@ -814,6 +816,34 @@ int main(){
           owner.last_free_report().stage==FreeStage::Done && !owner.last_free_report().owner_expired);
    assert(!owner.owns_allocation(borrowed.allocation) && owner.free(&borrowed)==E_INVALIDARG);
   }
+  // BD-373, the open of a buffer in the ENGINE LAYOUT form: kMemoryDedicated|kMemoryShareable alone and no memory
+  // types. The types and the alignment come from a probe buffer of the whole allocation, as allocate() takes them;
+  // the rest is the surface's open: no allocate callback, a borrowed record that is not a surface, and no
+  // deallocate and no Evict at the release.
+  {
+   engine_ddi::AdoptRequest open=adopt;open.flags=shareable_flags;open.memory_type_bits=0;open.alignment=65536;
+   open.allocation=++next_allocation;
+   engine_ddi::ImportedMemory borrowed{};
+   probe_size=65536;
+   const auto old_probes=probes;const unsigned makes=makes_resident,evicts=evictions;
+   events.clear();
+   assert(owner.adopt(&open,&borrowed)==S_OK && events=="MZIE" && probes==old_probes+1 &&
+          borrowed.allocation==open.allocation && borrowed.byte_size==65536 && borrowed.memory_type_index==0 &&
+          borrowed.gpu_va==gpu_address);
+   assert(makes_resident==makes+1 && evictions==evicts+1);
+   assert(owner.owns_allocation(borrowed.allocation) && !owner.borrow_backing(borrowed.allocation));
+   const unsigned evicted_before=evictions;
+   events.clear();assert(owner.free(&borrowed)==S_OK && events=="VU" && evictions==evicted_before);
+   assert(owner.last_free_report().adopted && !owner.last_free_report().surface &&
+          owner.last_free_report().stage==FreeStage::Done && !owner.last_free_report().owner_expired);
+   // An allocation smaller than a buffer of this device over it needs (the stub's buffers need 64 KiB) is refused
+   // after the probe and before any map.
+   probe_size=4096;open.allocation=next_allocation+1;open.byte_size=4096;
+   engine_ddi::ImportedMemory short_memory{};events.clear();
+   assert(owner.adopt(&open,&short_memory)==E_INVALIDARG && !short_memory.memory && events.empty());
+   assert(owner.last_report().refusal &&
+          !std::strcmp(owner.last_report().refusal,"buffer needs more than the allocation"));
+  }
   // A handle this driver created itself is never adopted over: that is the store corruption the refusal exists
   // for, and the only shape adopt still declines on a known handle.
   {
@@ -839,7 +869,10 @@ int main(){
    assert(owner.adopt(nullptr,&out)==E_INVALIDARG && owner.adopt(&adopt,nullptr)==E_INVALIDARG);
    auto bad_request=[&](auto change){engine_ddi::AdoptRequest r=adopt;r.allocation=next_allocation+1;change(r);bad(r);};
    bad_request([](engine_ddi::AdoptRequest& r){r.size=sizeof(r)-4;});
+   // The buffer form names no memory types (BD-373): with the surface's type mask it is malformed.
    bad_request([](engine_ddi::AdoptRequest& r){r.flags=shareable_flags;});
+   bad_request([](engine_ddi::AdoptRequest& r){r.flags=engine_ddi::kMemoryShareable;r.memory_type_bits=0;});
+   bad_request([](engine_ddi::AdoptRequest& r){r.flags=engine_ddi::kMemoryDedicated;r.memory_type_bits=0;});
    bad_request([](engine_ddi::AdoptRequest& r){r.flags=shared_flags|engine_ddi::kMemoryPrimary;});
    bad_request([](engine_ddi::AdoptRequest& r){r.allocation=0;});
    bad_request([](engine_ddi::AdoptRequest& r){r.memory_type_bits=0;});
@@ -864,6 +897,13 @@ int main(){
    events.clear();assert(held.adopt(&open,&borrowed)==S_OK && events=="MZIE");
    events.clear();assert(held.free(&borrowed)==S_OK && events=="VU" && !held.held_count() && !held.held_bytes());
    assert(held.last_free_report().adopted && held.last_free_report().stage==FreeStage::Done);
+   // BD-373: an opened buffer is adopted without being a surface, and is not held either.
+   engine_ddi::AdoptRequest buffer=open;buffer.flags=shareable_flags;buffer.memory_type_bits=0;buffer.alignment=65536;
+   buffer.allocation=++next_allocation;probe_size=65536;
+   events.clear();assert(held.adopt(&buffer,&borrowed)==S_OK && events=="MZIE");
+   events.clear();assert(held.free(&borrowed)==S_OK && events=="VU" && !held.held_count() && !held.held_bytes());
+   assert(held.last_free_report().adopted && !held.last_free_report().surface);
+   probe_size=4096;
    assert(held.close_after_engine_retirement()==S_OK && held.discard_metadata()==0);
   }
   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
@@ -1693,7 +1733,8 @@ int main(){
   "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress whose unproved teardown release goes through the OS: no evict, no VA free, deallocate flags 0, an ordinary mapping's range left to the destroy and a reservation kept and counted; after its deallocate fails, the teardown walk releases it with flags 0 again), "
   "BD-075/BD-217 shared resources (the shareable envelope unchanged, positive LB7A selection before an ordinary allocation, the shared surface's "
   "LB7A and E26R v3 records with the three view flags and every refusal by name, and an adopted allocation that is borrowed: no allocate or deallocate "
-  "callback, no quarantine, no backing to lend, one record per allocation handle), "
+  "callback, no quarantine, no backing to lend, one record per allocation handle; BD-373 the adopted buffer of the "
+  "ENGINE LAYOUT form with the memory types of a probe buffer, and an allocation too small for it refused by name), "
   "BD-101 (the 4 MiB MSAA placement alignment: one reservation of held+alignment, the map at its aligned offset, "
   "the whole reservation freed with the import, a refused reservation and a wrong answer both giving it back, and "
   "an address that does not satisfy the request refused by name at ImportStage::AddressAlignment), "

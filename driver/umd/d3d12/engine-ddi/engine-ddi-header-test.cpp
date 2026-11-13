@@ -116,6 +116,15 @@ static_assert(std::is_same_v<decltype(&engine_ddi::set_release_policy),
 static_assert(std::is_standard_layout_v<engine_ddi::ReleasePolicy> && sizeof(engine_ddi::ReleasePolicy) == 8 &&
                   offsetof(engine_ddi::ReleasePolicy, two_phase) == 4,
               "ReleasePolicy size and offsets");
+// Added within r5, additively (BD-373): the device identity of the ENGINE LAYOUT open. A uint32_t and two 16-byte
+// UUIDs, no padding.
+static_assert(std::is_same_v<decltype(&engine_ddi::set_device_identity),
+                             HRESULT (*)(engine_ddi::DeviceContext*, const engine_ddi::DeviceIdentity*) noexcept>,
+              "set_device_identity");
+static_assert(std::is_standard_layout_v<engine_ddi::DeviceIdentity> && sizeof(engine_ddi::DeviceIdentity) == 36 &&
+                  offsetof(engine_ddi::DeviceIdentity, device_uuid) == 4 &&
+                  offsetof(engine_ddi::DeviceIdentity, driver_uuid) == 20,
+              "DeviceIdentity size and offsets");
 // Added within r4, additively: deferred command-list replay. Four uint32_t, then four pointers (log: replay-hitch).
 static_assert(std::is_same_v<decltype(&engine_ddi::set_replay_policy),
                              HRESULT (*)(engine_ddi::DeviceContext*, const engine_ddi::ReplayPolicy*) noexcept>,

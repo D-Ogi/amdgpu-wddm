@@ -5,6 +5,7 @@
 #include "replay.h"
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include <tuple>
 #include <type_traits>
 #include "../stdio-log.h"
@@ -435,6 +436,21 @@ HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) 
     }
     context->release_two_phase = policy->two_phase != 0;
     log_line("release policy: two-phase retirement %u", policy->two_phase);
+    return S_OK;
+}
+
+HRESULT set_device_identity(DeviceContext* context, const DeviceIdentity* identity) noexcept {
+    bool any = false;
+    if (identity && identity->size == sizeof(DeviceIdentity))
+        for (const uint8_t byte : identity->device_uuid) any = any || byte != 0;
+    if (!context || !identity || identity->size != sizeof(DeviceIdentity) || !any) {
+        log_refusal("set_device_identity: refused (%s)", !context ? "no context" : !identity ? "no identity" :
+                    identity->size != sizeof(DeviceIdentity) ? "size" : "no device UUID");
+        return E_INVALIDARG;
+    }
+    context->identity.known = true;
+    std::memcpy(context->identity.device_uuid, identity->device_uuid, sizeof(context->identity.device_uuid));
+    std::memcpy(context->identity.driver_uuid, identity->driver_uuid, sizeof(context->identity.driver_uuid));
     return S_OK;
 }
 

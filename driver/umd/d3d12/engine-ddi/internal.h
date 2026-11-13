@@ -2,6 +2,7 @@
 // engine-ddi internals shared by its translation units. Not part of the boundary (engine-ddi.h is).
 #pragma once
 #include "engine-ddi.h"
+#include "shared-resource.h"
 #include "../present-copy-sync.h"
 #include <atomic>
 #include <cstddef>
@@ -316,6 +317,9 @@ public:
     ReleaseObserver observer = nullptr;         // harness only
     void* observer_user = nullptr;
 
+    // The device identity (set_device_identity, BD-373): written before the context is used on another thread,
+    // read only after, by the ENGINE LAYOUT open (shared-resource.h). Not known until the shell sets it.
+    OpenerIdentity identity{};
     // The release policy (set_release_policy): written before the context is used on another thread, read
     // only after. The counters are diagnostic (the log line at powers of two).
     bool release_two_phase = false;

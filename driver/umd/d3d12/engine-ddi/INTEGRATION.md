@@ -673,6 +673,24 @@ make resident and import without any allocation callback. The memory comes back 
 other, where the shell's own record knows that it must not deallocate what it never allocated. `adopt_memory` is
 optional even in RuntimeBacked: null means no shared open is served, and the slot refuses as it did before r5.
 
+The ENGINE LAYOUT open (BD-373, added within r5). A resource record with the S26R magic goes to the adapter in
+`shared-resource.h`, never to the LINEAR SURFACE decoder. The adapter reads the record and its BC2A allocation blob
+with `driver/contract/bc250_shared_resource.h` and `bc250_shared_resource_alloc.h`, makes the record of the buffer
+this engine places for the same description, and lets `Bc250SharedResourceMatchWhy` decide. Only buffers open in
+this revision. A texture record is refused with `engine layout texture`. The adopt request of a buffer has
+`kMemoryDedicated | kMemoryShareable` without `kMemoryLinearSurface`, `memory_type_bits` 0, `byte_size` the whole
+allocation (BC2A `alloc_size`) and `alignment` 64 KiB: vkd3d-proton places a buffer as a range of the heap's own
+VkBuffer, and a heap over borrowed memory that allows buffers needs a GPU virtual address of the heap alignment.
+The shell selects the memory type from its own buffer of that size and refuses an allocation that is smaller than
+that buffer needs. engine-ddi then creates the heap over the memory and places the buffer at offset 0 with
+`CreatePlacedResource1`, without the 64 KiB rounding of `GetResourceAllocationInfo`, because a shared buffer's
+allocation can be a few pages. A placed resource on the opened heap and a tile mapping into it are refused.
+
+The match rule compares the creator's DeviceUuid with the opener's. engine-ddi has no Vulkan query of its own, so
+the shell calls `set_device_identity` once after `create_device_context` with `VkPhysicalDeviceIDProperties` of the
+engine's physical device. Until it does, every ENGINE LAYOUT open is refused with `engine layout device identity`.
+A failure of the setter does not fail the device. Only these opens are lost.
+
 Heap size left to the resource. H and DDI-ref give `D3D12DDIARG_CREATEHEAP_0001::ByteSize` as "Size of the heap,
 in bytes" (H:319-328) and define no special value. engine-ddi treats a ByteSize of UINT64_MAX as "no size given":
 
