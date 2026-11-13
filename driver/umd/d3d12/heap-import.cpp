@@ -1050,7 +1050,11 @@ HRESULT RuntimeHeapImports::adopt(const engine_ddi::AdoptRequest* request,engine
     }
     HRESULT hr=record->allocation.adopt(request->allocation);
     {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->handle=record->allocation.handle();}
-    if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),request->byte_size,record->mapping,alignment);}
+    // The creator chose the placement of the allocation (BD-373, lab 2026-11-13: a 100-byte D3D11 shared buffer, one
+    // page, mapped at a 4 KiB address that the 64 KiB check refused). The opener needs the heap alignment, so it
+    // asks for it through a reservation whenever that is above one page, whatever the creator's blob said.
+    if(hr==S_OK){report_.stage=ImportStage::Map;
+        hr=paging_.map(record->allocation.handle(),request->byte_size,record->mapping,alignment,PagingDomain::kPage);}
     if(hr==S_OK){report_.stage=ImportStage::Resident;hr=paging_.make_resident(record->mapping);}
     UINT64 address=0;
     if(hr==S_OK){report_.stage=ImportStage::MapReady;hr=paging_.wait_ready(record->mapping,&address);}

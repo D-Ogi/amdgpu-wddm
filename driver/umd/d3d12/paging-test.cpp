@@ -124,6 +124,26 @@ static void alignment_cases(){
         assert(freed_base==reserve_base && freed_size==bytes+k4M);
         reserve_base=saved;
     }
+    // BD-373: an opened allocation whose placement the creator chose (placed = one page). A 64 KiB alignment is
+    // then above what VidMm's own pick is known to have, so one reservation of one page plus 64 KiB is taken and
+    // the map names the 64 KiB boundary inside it. The default placement still takes none (the first case).
+    {
+        native12::GpuMapping m;completed=0;reserves=0;aligned_maps=0;aligned_frees=0;
+        assert(d.map(9,4096,m,k64,native12::PagingDomain::kPage)==S_OK && reserves==1 && reserved_size==2*k64);
+        const UINT64 aligned=(reserve_base+k64-1)&~(k64-1);
+        assert(aligned_maps==1 && mapped_base==aligned && d.ready(m,&address)==S_OK && address==aligned);
+        assert(d.unmap_after_gpu_retirement(m)==S_OK && aligned_frees==1);
+        assert(freed_base==reserve_base && freed_size==2*k64);
+        // One page asked of a one-page placement: nothing to reserve.
+        native12::GpuMapping p;completed=0;reserves=0;aligned_maps=0;mapped_base=1;
+        assert(d.map(9,4096,p,4096,native12::PagingDomain::kPage)==S_OK && !reserves && !mapped_base);
+        assert(d.unmap_after_gpu_retirement(p)==S_OK);
+        // A placement that is not a power of two from one page to 64 KiB is refused before any callback.
+        native12::GpuMapping q;reserves=0;aligned_maps=0;
+        assert(d.map(9,4096,q,k64,0)==E_INVALIDARG && d.map(9,4096,q,k64,2048)==E_INVALIDARG &&
+               d.map(9,4096,q,k64,12288)==E_INVALIDARG && d.map(9,4096,q,k64,2*k64)==E_INVALIDARG &&
+               !reserves && !aligned_maps);
+    }
     // Negative controls.
     {
         native12::GpuMapping m;completed=0;

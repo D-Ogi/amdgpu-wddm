@@ -114,6 +114,7 @@ public:
     // same 64 KiB is what the reservation structure itself is specified in: BaseAddress, MinimumAddress and
     // MaximumAddress must be 64 KiB aligned and Size a multiple of 64 KiB (D3DDDI_RESERVEGPUVIRTUALADDRESS).
     static constexpr UINT64 kMapGranularity=65536;
+    static constexpr UINT64 kPage=4096;
     unsigned evict_failures() const noexcept {return evict_failures_.load();}
     // Borrowed allocations whose residency reference was dropped without an Evict callback: see
     // unmap_after_gpu_retirement.
@@ -148,7 +149,8 @@ public:
     // A D3D12 heap that holds a 4x MSAA render target arrives with
     // D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT (4 MiB), and the address the runtime picks by itself is
     // 64 KiB aligned, so that heap was refused and the application read "out of memory" with 8 GB free.
-    //   Above kMapGranularity the address comes from the documented route, in two callbacks:
+    //   Above the placement of the allocation (placed, below) the address comes from the documented route, in two
+    // callbacks:
     // pfnReserveGpuVirtualAddressCb takes a range of bytes + alignment with no memory behind it, and
     // pfnMapGpuVirtualAddressCb maps the allocation at the aligned offset inside that range. The DDI admits
     // exactly this: with a non-NULL BaseAddress "the entire range from BaseAddress to BaseAddress+Size must be
@@ -165,13 +167,20 @@ public:
     // on an acceptance the checks below do not admit, the mapping is left empty, so the caller's release path
     // has nothing to do. An address the runtime picked is not freed here, because a mapping the checks refuse
     // has no address this driver may name.
-    HRESULT map(D3DKMT_HANDLE allocation,UINT64 bytes,GpuMapping& out,UINT64 alignment=0) noexcept {
+    //   placed (BD-373): the alignment that the address VidMm picks by itself is known to have for this
+    // allocation. It is kMapGranularity for an allocation of this driver, whose BC2A blob asks for that
+    // placement. An allocation that another device created and this one opened has the creator's placement,
+    // which can be one page: the lab saw a one-page D3D11 shared buffer mapped at a 4 KiB address. The
+    // opener passes kPage for it, so an alignment above one page takes the reservation route.
+    HRESULT map(D3DKMT_HANDLE allocation,UINT64 bytes,GpuMapping& out,UINT64 alignment=0,
+                UINT64 placed=kMapGranularity) noexcept {
         if(out.owner_) return E_UNEXPECTED;
         if(!queue_ || !sync_ || !completed_ || !map_ || !allocation || !bytes || (bytes&4095)) return E_INVALIDARG;
         if(alignment&(alignment-1)) return E_INVALIDARG;            // a power of two, or nothing asked
+        if(placed<kPage || placed>kMapGranularity || (placed&(placed-1))) return E_INVALIDARG;
         if(*completed_==UINT64_MAX) return D3DDDIERR_DEVICEREMOVED;
         UINT64 base=0,reservation=0,reserved_bytes=0;
-        if(alignment>kMapGranularity){
+        if(alignment>placed){
             if(!reserve_ || !free_) return E_UNEXPECTED;
             if(bytes>UINT64_MAX-alignment-kMapGranularity) return E_INVALIDARG;
             const UINT64 span=(bytes+alignment+kMapGranularity-1)&~(kMapGranularity-1);

@@ -103,7 +103,9 @@ static unsigned reserves=0;
 static HRESULT reserve_result=S_OK;
 static UINT64 map_answer=0;                          // the address the map mock answers, 0: the ordinary one
 // What the allocation holds: the request's 4096 bytes rounded up to the alignment asked for.
-static UINT64 held_bytes(){return msaa_alignment?msaa_alignment:UINT64_C(65536);}
+// BD-373: the size of an adopted allocation that is not the 64 KiB of the other cases (0: none).
+static UINT64 held_override=0;
+static UINT64 held_bytes(){return held_override?held_override:msaa_alignment?msaa_alignment:UINT64_C(65536);}
 // BD-133: the Present copy's surface is allocated on the driver's own request, with no runtime resource.
 static bool driver_surface_request=false;
 // BD-133, the D3D9 back buffer: the shared form of the driver's own copy surface of a B8G8R8X8 source (tagged
@@ -295,7 +297,9 @@ static VkResult VKAPI_CALL buffer_create(VkDevice d,const VkBufferCreateInfo* in
  assert(d==handle<VkDevice>(4) && info->size==probe_size && (info->usage&VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));++probes;*out=handle<VkBuffer>(7);return VK_SUCCESS;
 }
 static void VKAPI_CALL buffer_destroy(VkDevice,VkBuffer,const VkAllocationCallbacks*){}
-static void VKAPI_CALL buffer_requirements(VkDevice,VkBuffer,VkMemoryRequirements* out){*out={65536,65536,15};}
+// The size a probe buffer needs: 64 KiB, or (BD-373) one page for the one-page buffer the D3D11 shell shares.
+static UINT64 probe_need=65536;
+static void VKAPI_CALL buffer_requirements(VkDevice,VkBuffer,VkMemoryRequirements* out){*out={probe_need,65536,15};}
 static VkResult VKAPI_CALL memory_allocate(VkDevice d,const VkMemoryAllocateInfo* info,const VkAllocationCallbacks*,VkDeviceMemory* out){
  assert(d==handle<VkDevice>(4) && info->allocationSize==held_bytes() && info->memoryTypeIndex==expected_type);
  auto flags=static_cast<const VkMemoryAllocateFlagsInfo*>(info->pNext);
@@ -880,12 +884,14 @@ int main(){
    engine_ddi::AdoptRequest open=adopt;open.flags=shareable_flags;open.memory_type_bits=0;open.alignment=65536;
    open.allocation=++next_allocation;
    engine_ddi::ImportedMemory borrowed{};
-   probe_size=65536;
+   // The heap alignment (64 KiB) is above one page, and the creator chose the allocation's placement, so the
+   // address comes from a reservation ('S'), not from what VidMm picks.
+   probe_size=65536;msaa_alignment=65536;
    const auto old_probes=probes;const unsigned makes=makes_resident,evicts=evictions;
-   events.clear();
-   assert(owner.adopt(&open,&borrowed)==S_OK && events=="MZIE" && probes==old_probes+1 &&
-          borrowed.allocation==open.allocation && borrowed.byte_size==65536 && borrowed.memory_type_index==0 &&
-          borrowed.gpu_va==gpu_address);
+   events.clear();reserves=0;
+   assert(owner.adopt(&open,&borrowed)==S_OK && events=="SMZIE" && probes==old_probes+1 && reserves==1 &&
+          reserved_span==131072 && borrowed.allocation==open.allocation && borrowed.byte_size==65536 &&
+          borrowed.memory_type_index==0 && borrowed.gpu_va==aligned_va && !(aligned_va&65535));
    assert(makes_resident==makes+1 && evictions==evicts+1);
    assert(owner.owns_allocation(borrowed.allocation) && !owner.borrow_backing(borrowed.allocation));
    const unsigned evicted_before=evictions;
@@ -899,6 +905,24 @@ int main(){
    assert(owner.adopt(&open,&short_memory)==E_INVALIDARG && !short_memory.memory && events.empty());
    assert(owner.last_report().refusal &&
           !std::strcmp(owner.last_report().refusal,"buffer needs more than the allocation"));
+   // The lab shape (2026-11-13, buffer-100 of tools/win/shared-interop): a 100-byte D3D11 shared buffer is one
+   // page, and VidMm placed it at a 4 KiB address (100a01000, off by 4096), which the 64 KiB check refused. The
+   // map now names a 64 KiB base inside a reservation of one page plus the alignment, rounded to 64 KiB. The map
+   // mock asserts that the base it is given is that aligned base, never 0 (the runtime's own pick).
+   {
+    const UINT64 saved_base=reserve_base;reserve_base=UINT64_C(0x100a10000);
+    probe_size=4096;probe_need=4096;held_override=4096;
+    engine_ddi::AdoptRequest page=open;page.allocation=++next_allocation;page.byte_size=4096;
+    engine_ddi::ImportedMemory one_page{};events.clear();reserves=0;
+    assert(owner.adopt(&page,&one_page)==S_OK && events=="SMZIE" && reserves==1 && reserved_span==131072);
+    assert(one_page.byte_size==4096 && one_page.gpu_va==aligned_va && !(one_page.gpu_va&65535) &&
+           one_page.gpu_va>=reserve_base && one_page.gpu_va+4096<=reserve_base+reserved_span);
+    assert(owner.last_report().stage==ImportStage::Done && owner.last_report().address==one_page.gpu_va);
+    // One free of the whole reservation, and no Evict and no deallocate of the borrowed allocation.
+    events.clear();assert(owner.free(&one_page)==S_OK && events=="VU");
+    probe_need=65536;held_override=0;reserve_base=saved_base;
+   }
+   msaa_alignment=0;probe_size=4096;
   }
   // A handle this driver created itself is never adopted over: that is the store corruption the refusal exists
   // for, and the only shape adopt still declines on a known handle.
@@ -955,11 +979,11 @@ int main(){
    assert(held.last_free_report().adopted && held.last_free_report().stage==FreeStage::Done);
    // BD-373: an opened buffer is adopted without being a surface, and is not held either.
    engine_ddi::AdoptRequest buffer=open;buffer.flags=shareable_flags;buffer.memory_type_bits=0;buffer.alignment=65536;
-   buffer.allocation=++next_allocation;probe_size=65536;
-   events.clear();assert(held.adopt(&buffer,&borrowed)==S_OK && events=="MZIE");
+   buffer.allocation=++next_allocation;probe_size=65536;msaa_alignment=65536;
+   events.clear();assert(held.adopt(&buffer,&borrowed)==S_OK && events=="SMZIE");
    events.clear();assert(held.free(&borrowed)==S_OK && events=="VU" && !held.held_count() && !held.held_bytes());
    assert(held.last_free_report().adopted && !held.last_free_report().surface);
-   probe_size=4096;
+   probe_size=4096;msaa_alignment=0;
    assert(held.close_after_engine_retirement()==S_OK && held.discard_metadata()==0);
   }
   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
