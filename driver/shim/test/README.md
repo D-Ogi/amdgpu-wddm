@@ -1,7 +1,7 @@
 # The shim's host tests
 
 What each suite is, and where its long-form documentation lives. The shim itself, its contract and
-the replay method are described in `driver/shim/README.md`; this file covers the tests as tests.
+the replay method are described in `driver/shim/README.md`. This file covers the tests as tests.
 
 | Script | What it runs | Asks |
 |--------|--------------|------|
@@ -12,7 +12,7 @@ the replay method are described in `driver/shim/README.md`; this file covers the
 | `run_pte.ps1` | `replay_pte.c` | the page tables. |
 | `run_sdma_faults.ps1` | `sdma_faults.c` | what the SDMA bring-up does when things fail. |
 | `run_sdma_copy.ps1` | `sdma_copy_packets.c` | ADR 0013: does `bc250_sdma_copy.c` write the same copy/fill packets amdgpu's `sdma_v5_0_emit_copy_buffer()`/`emit_fill_buffer()` would, dword for dword, split where they would split? |
-| `run_paging.ps1` | `paging_packets.c` | ADR 0008 stage D: does `bc250_sdma_paging.c` write the same TRANSFER_VIRTUAL/FILL_VIRTUAL packets into a caller-owned buffer, and does the room check answer `BC250_SDMA_PAGING_INSUFFICIENT` - writing nothing - when the buffer is too small? |
+| `run_paging.ps1` | `paging_packets.c` | ADR 0008 stage D: does `bc250_sdma_paging.c` write the same TRANSFER_VIRTUAL/FILL_VIRTUAL packets into a caller-owned buffer? Does the room check answer `BC250_SDMA_PAGING_INSUFFICIENT` - writing nothing - when the buffer is too small? |
 | `run_gfx_vm_flush.ps1` | `gfx_vm_flush.c` | `docs/design/gfx-submit-root-serialization.md` option (b). Is the gfx job frame the same 23 dwords as 0.7.216.24? Are the 29 dwords in front of it what `gmc_v10_0_emit_flush_gpu_tlb()` emits, per VMID and per engine? `-WrongAckMask` is its negative control. |
 
 The five replays all ask one question - does the shim write what unit A's Linux driver wrote, in that
@@ -50,7 +50,7 @@ file and links against `driver/shim` alone, so that an allocator instrumented to
 - **the allocator**, with a live-object table, a fault at the Nth call, and a "succeeded but could
   not map it" mode for the `cpu == NULL` case `bc250_shim.h` allows. Freed memory is not given back
   to the C library: it is filled with a poison byte and kept, so that a write into it after the free
-  is a fact the suite states rather than a crash it might get away with. The free itself is modelled
+  is a fact the suite states rather than a crash it might avoid. The free itself is modelled
   exactly as the two shipped backends do it, keyed on the CPU pointer, because one of the findings is
   about what that line does with an object that has none.
 - **the register file**, one value per dword index, plus a forced-read table for the one thing E15
@@ -59,7 +59,7 @@ file and links against `driver/shim` alone, so that an allocator instrumented to
   preserved write pointer is put in front of the adoption code.
 
 No register sequence may change to satisfy this suite. The sequences are confirmed write-for-write
-against unit A's trace and `run_gfx.ps1` says so; this suite only fails the things around them, and
+against unit A's trace and `run_gfx.ps1` says so. This suite only fails the things around them, and
 it checks that an error path writes no register a working bring-up would not - the set it compares
 against is learned from a successful `bc250_sdma_hw_init()` in the same process, never typed.
 
@@ -87,7 +87,7 @@ count the operation needs reported back - the shape `DxgkDdiBuildPagingBuffer` n
 `STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER`. What resolves a paging operation's virtual addresses to the
 physical ones this file takes as input (`VidMmTranslate()`, driver/kmd) and what pushes the built
 packets onto the live SDMA0 ring (`GfxSubmitPaging()`, DISPATCH_LEVEL, `driver/kmd/gfx.c`) are both
-kernel-mode code with no host harness; this suite is deliberately the part that has one.
+kernel-mode code with no host harness. This suite is deliberately the part that has one.
 Links against `bc250_sdma_paging.c`, `bc250_sdma_copy.c`, `bc250_sdma.c`, `bc250_ring.c` and
 `bc250_nbio.c` - the same files `driver/kmd/build.ps1` compiles into the miniport for this - with its
 own plain shim backend, the same reason `sdma_faults.c` and `sdma_copy_packets.c` bring their own.
