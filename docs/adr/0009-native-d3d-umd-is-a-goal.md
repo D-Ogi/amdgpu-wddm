@@ -1,6 +1,6 @@
 # ADR 0009: a native Direct3D user-mode driver is a goal (M13)
 
-Date: 2026-09-21. Status: accepted (direction only; the route is chosen when M12 closes). Supersedes point 2 of
+Date: 2026-09-21. Status: accepted (direction only). The route is chosen when M12 closes. Supersedes point 2 of
 ADR 0005, second sentence ("A native D3D UMD is not a goal"). The rest of ADR 0005 stands: Vulkan is still first,
 and Direct3D applications still reach the GPU through DXVK and vkd3d-proton first (M12).
 
@@ -37,8 +37,8 @@ that the sizing was never a reason.
 - `driver/umd-stub` stops being a throwaway: it is where M13's driver will be registered, and the INF mechanics
   E16 run 2 proves (`UserModeDriverName`, the second package) are M13's first step already taken.
 - The kernel-mode driver has to serve two user-mode clients with different habits (RADV's winsys and a D3D
-  runtime's UMD) through one private interface. `driver/contract/` is versioned for that reason; M13 may add to
-  it, never fork it.
+  runtime's UMD) through one private interface. `driver/contract/` is versioned for that reason. M13 may add to
+  it. M13 may never fork it.
 - Direct3D 12 natively is not part of M13's criterion. DWM does not need it, vkd3d-proton covers applications
   (M12), and whether it follows is a later decision.
 - Nothing here is measured.
@@ -48,7 +48,7 @@ that the sizing was never a reason.
 Full WDDM repair immediately after M8 and a desktop sub-roadmap were requested. M13 diagnostic
 bring-up and backend feasibility work may therefore proceed before M12 closes. This supersedes the
 ordering restriction in point3 and the timing clause in this ADR's status line. It does not select a
-GPU backend or close M9-M12. The native hardware D3D and accelerated DWM goals remain unchanged;
+GPU backend or close M9-M12. The native hardware D3D and accelerated DWM goals remain unchanged.
 [M13.1-M13.7](../m13-accelerated-desktop-roadmap.md) define measurable intermediate gates. Software
 rendering is an explicitly temporary control. Backend selection still requires an experiment and ADR update.
 
@@ -56,7 +56,7 @@ rendering is an explicitly temporary control. Backend selection still requires a
 
 Point 2's first candidate has been measured in part: `d3d10umd` over Zink over our RADV draws a native D3D shader
 with exact pixels (facts M531), reaches a shared WDDM allocation through a second device (M532, M533), and a
-hardware D3D device receives runtime allocations through the runtime callbacks (M534; `hKMResource` zero, cause
+hardware D3D device receives runtime allocations through the runtime callbacks (M534, with `hKMResource` zero and the cause
 unknown). The route now argued for is one point 2 did not name: a hosted ICD, one Vulkan device per D3D runtime
 device driven through the runtime's callbacks, with DXVK as the engine behind the D3D11 DDI and the
 `d3d10umd`/Zink build as the control. That argument was made in the project's working notes, outside this
@@ -66,6 +66,6 @@ repository. Nothing in this section selects a route.
 
 [ADR 0017](0017-graphics-stack-direction-after-m12.md) records the accepted direction and the decisions
 of the same day. It amends point 2 with the hosted ICD route (one Vulkan device per D3D runtime device, driven
-through the runtime's callbacks; `d3d10umd`/Zink as the bring-up control and native path, llvmpipe as the CPU
-baseline) and satisfies point 3 as far as direction goes: the route is confirmed as M13's route, with evidence,
-when M13.3 passes. Facts M539-M541 are its first measured steps; none of them is GPU composition by DWM.
+through the runtime's callbacks, with `d3d10umd`/Zink as the bring-up control and native path, and llvmpipe as the CPU
+baseline) and satisfies point 3 as far as direction goes. The route is confirmed as M13's route, with evidence,
+when M13.3 passes. Facts M539-M541 are its first measured steps. None of them is GPU composition by DWM.
