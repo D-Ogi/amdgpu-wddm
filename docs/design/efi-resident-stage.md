@@ -138,6 +138,11 @@ The text of the read-only report of the core unlock goes to the console and to i
   file ends at the line before that call.
 - `log=0` writes no file.
 
+The last line of a start that returns is `returning to the loader, status 0x...`. Before it, the Secure Boot
+module says that the Security2 protocol of the firmware is back in its place. If the log ends with the return
+line, a stop after it is in the loader or in the image that the loader starts next. If the log ends before it, the
+stop is in the stage.
+
 If the volume does not take the file, the console says so one time, and the start continues.
 
 ## The failure policy
@@ -405,7 +410,7 @@ firmware.
 | Secure Boot, robustness | each byte of a signed image changed in turn, and each length of the file. No change of a signed byte is allowed |
 | Secure Boot, databases | the digest of a certificate in `dbx`, and a database that is not well formed. An unknown entry type and an empty list. Each defect of the enforce inputs |
 | Secure Boot, real images | necessary: the Windows Boot Manager and the Windows loader of the build PC must pass under the issuer of their signer. This is the positive control on bytes and signatures that this project did not make. The build fails without them |
-| UEFI bindings | the real entry point of the stage against a model of the firmware in the test. The start from the path and from the verified buffer. A refused image and each defect of the enforce inputs. An image that the firmware does not start. The hook and its unwind, with a firmware that does not take its protocol back. The installation of the tables and the removal of the stock table |
+| UEFI bindings | the real entry point of the stage against a model of the firmware in the test. The start from the path and from the verified buffer. A refused image and each defect of the enforce inputs. An image that the firmware does not start. Lab step s4b: an image that `dbx` refuses by its digest, with `log=line` and with `log=1`. The log holds the refusal, the unwind and the return line in that order. The return line is the last line of the file. The hook and its unwind, with a firmware that does not take its protocol back. The installation of the tables and the removal of the stock table |
 | Secure Boot, fixtures | the signature check of Windows reads the signed fixture and refuses the changed fixture. This is the control of the fixtures, by code that this project did not write |
 
 The test keys are made at each run and are never written to a file. The repository holds no private key. The
