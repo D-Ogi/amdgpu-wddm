@@ -1,17 +1,21 @@
 # Read-only preflight of unit A before the arms of a train validation (Windows PowerShell 5.1, SSH session).
 # Generic: it names no train and no package.
 #
-#   preflight.ps1 [-Cu 40] [-TdrDelay 10] [-MaxTctl 80]
+#   preflight.ps1 [-Cu 40] [-TdrDelay 10]
 #
 # What it refuses on: a CU mode other than 40 confirmed (the lab lost 16 CU once and a whole round of numbers
 # with it), a DPM that is switched off (a 0x116 leaves DpmMode 0 behind), a TdrDelay other than 10 (the GUI
-# default since 2026-10-08), a temperature at or above -MaxTctl, and another trial already running on the
-# machine. The last one is why this exists: two agents on one lab produce two sets of numbers and no evidence.
+# default since 2026-10-08), a temperature at or above measured_start_below_c of thermal-levels.json (the one
+# definition of the levels, tools/win/lab-thermal, which target.py pushes beside this script), and another trial
+# already running on the machine. The last one is why this exists: two agents on one lab produce two sets of numbers and no evidence.
 # The resident tasks of the lab are not competing trials and are never counted as one: the overlay, the net
 # watchdog and the emergency channel run at every boot and must keep running. -ResidentTasks names them.
-param([int]$Cu = 40, [int]$TdrDelay = 10, [double]$MaxTctl = 80,
+param([int]$Cu = 40, [int]$TdrDelay = 10,
     [string[]]$ResidentTasks = @('BC250 monitor overlay', 'BC250 net watchdog', 'Lab emergency channel'))
 $ErrorActionPreference = 'Continue'
+$thermal = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'thermal-levels.json')) | ConvertFrom-Json
+if ($thermal.schema -cne 'bc250.lab-thermal-levels.v1') { throw 'thermal-levels.json has an unknown schema' }
+$MaxTctl = [double]$thermal.measured_start_below_c
 $bad = @()
 $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot).InstallRoot
 $cli = Join-Path $inst 'tools\bc250kmd_cli.exe'
