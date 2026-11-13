@@ -13,7 +13,7 @@ DMA buffer is created, and not accessed by VidMm during that buffer's lifetime.
 [BuildPagingBuffer](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/d3dkmddi/ns-d3dkmddi-_dxgkarg_buildpagingbuffer)
 provides the remaining private storage and allows advancing its output pointer.
 [SubmitCommandVirtual](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/d3dkmddi/ns-d3dkmddi-_dxgkarg_submitcommandvirtual)
-provides the driver's private buffer; malformed-command rejection is distinct
+provides the driver's private buffer. Malformed-command rejection is distinct
 from a valid submission needing more kernel pool memory.
 
 WddmSubmitPagingHardware now borrows the prebuilt slot for queued records, but
@@ -26,18 +26,18 @@ paging VA layout and chunking larger allocations. threading-and-synchronization-
 first-level.md lists BuildPagingBuffer among nonreentrant scheduler DDIs. This
 serializes a call, not every unfinished operation across multiple calls. The
 legacy TransferStart/TransferEnd guarantee must not be silently assumed to
-provide a numeric bound for virtual transfer captures; TransferVirtual flags
+provide a numeric bound for virtual transfer captures. TransferVirtual flags
 only describe source/destination page sizes. Keep capture reservation/fallback
 until its own resource proof or replacement is complete.
 
 ## Implemented private format
 
 Legacy direct kind0 and native kind1 remain unchanged. New kind2 contains the
-same direct header/payload plus queue storage; kind3 contains the same native
+same direct header/payload plus queue storage. The kind3 record contains the same native
 metadata plus queue storage. Walkers normalize them to direct/native spans and
 never expose queue bytes as SDMA commands.
 
-Each queued record begins on an8-byte CPU boundary. The queue region begins at
+Each queued record starts on an8-byte CPU boundary. The queue region starts at
 an8-byte boundary after immutable command data/metadata. Each job slot is64bytes:
 
 - Direct: one slot for each possible DWORD start in that record. Disjoint partial
@@ -45,18 +45,18 @@ an8-byte boundary after immutable command data/metadata. Each job slot is64bytes
 - Native: one slot, because the existing parser only admits whole native spans.
 
 A single slot for the entire DMA buffer would be insufficient for simultaneously
-pending partial submissions. Slot selection validates the entire requested
+pending partial submissions. Slot selection checks the entire requested
 range before returning writable storage. A request spanning several records uses
 the slot corresponding to its first selected command. Different OS buffers
 remain independent even when GPU VA values coincide.
 
 Private size is align8(24 + commandBytes) +64*(commandBytes/4) for direct records,
 and128bytes for native records. PagingPrivateQueuedDirectCapacity computes the
-largest payload fitting the supplied remaining private bytes; callers must also
+largest payload fitting the supplied remaining private bytes. Callers must also
 apply existing DMA/live-ring limits. Constructors clear only padding/job storage,
 preserve direct command words, and refuse before writing when storage is short.
-This trades private-buffer capacity for guaranteed per-submission job space;
-it does not impose an arbitrary global queue length or block the submit DDI.
+This trades private-buffer capacity for guaranteed per-submission job space.
+It does not impose an arbitrary global queue length or block the submit DDI.
 
 ## Required runtime integration
 
@@ -71,7 +71,7 @@ it does not impose an arbitrary global queue length or block the submit DDI.
    lets Windows reuse the DMA buffer. Do not touch borrowed memory afterwards.
    A timeout must retain ownership, not report fake completion or reclaim a slot.
 4. Cover stop/cancellation/preemption and device generation. Detach borrowed
-   records while their OS lifetime is still valid; do not free OS-owned memory.
+   records while their OS lifetime is still valid. Do not free OS-owned memory.
    Distinguish legacy heap-backed records during migration. No hidden heap
    fallback may be counted as complete removal of submit-time allocation.
 5. Host-test interleaved partial ranges, independent buffers, immediate and late
@@ -96,8 +96,8 @@ records retain explicit heap allocation during migration.
 
 On a real fence, retirement detaches the node, caches its needed fields and
 clears borrowed ownership before WddmRecordCompletionLocked. No borrowed
-pointer is read or freed after publication. A timeout keeps the pending node;
-a later real fence permits retirement. The existing stop drain distinguishes
+pointer is read or freed after publication. A timeout keeps the pending node.
+A later real fence permits retirement. The existing stop drain distinguishes
 borrowed storage from heap storage. Its hardware quiescence and OS lifetime
 preconditions remain separate acceptance gates.
 
@@ -111,7 +111,7 @@ interleavings with OS/GPU mocks, not a threaded or hardware proof.
 
 Full WDK build and875868 actual-builder regressions pass. No lab deployment.
 Next migrate every builder's private capacity, header publication and pointer
-advance together; ensure queued alignment across mixed records. Then test
+advance together. Ensure queued alignment across mixed records. Then test
 actual builder-to-queue integration and remove or explicitly justify remaining
 legacy/zero-byte allocation before claiming the submission resource gate closed.
 Evidence: [M425](../../evidence/windows/2026-09-24-E27-m9-recovery/paging-borrowed-queue/RESULT.md).
@@ -122,7 +122,7 @@ Every builder now limits emitted words by queued private capacity and advances
 by aligned queued record size. Native records reserve128bytes before encoding.
 Submission requires a nonempty queued record and has no legacy allocation/copy
 fallback. Stop bookkeeping clears OS nodes without freeing them. Actual callers
-require nonempty ranges; parser support for legacy records remains for existing
+require nonempty ranges. Parser support for legacy records remains for existing
 isolated packet controls, not production submission.
 
 Actual-source builders, format witnesses and builder-output-to-queue fixtures
