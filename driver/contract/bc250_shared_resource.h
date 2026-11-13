@@ -31,7 +31,8 @@
  * metadata, so an opener that creates an image of the same layout on the same memory reads the same texels. An
  * OPTIMAL image can have DCC metadata that an opener's engine initializes again
  * when it first uses the image, which would destroy the creator's content; a later version of this record can add
- * OPTIMAL with explicit metadata handling, the Tiling field is there for it.
+ * OPTIMAL with explicit metadata handling, the Tiling field is there for it. docs/design/shared-tiled-textures.md
+ * is the design of that version (a DRM format modifier without DCC).
  *
  * The rules of which descriptions may have this form are D3D11's for shared resources (direct3d-11-1-features.md,
  * "Extended support for shared Texture2D resources"): DEFAULT usage, no CPU access, no multisampling, no depth
