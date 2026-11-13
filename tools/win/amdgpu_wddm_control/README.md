@@ -18,27 +18,27 @@ of Settings. Its list names each language in its own script (English, Polski, Po
 Language"), so a person who cannot read the current language still finds it. A choice redraws the window at once. The
 choice is the `Language` value that Nagi Setup also reads and writes (docs/gui/interfaces.md section 5).
 
-| Page | What it shows or changes |
+| Page | What it displays or changes |
 |---|---|
-| Home | One status card with one recommended action, Getting started, recent games, monitor, driver and graphics summaries |
-| Games | One entry per game file name: recent games, stored profiles, graphics settings, the release's defaults and added games. Per game: the D3D12 application profile as grouped check boxes with origin and cost, and the highest shader model. Also the game's own graphics and Vulkan settings (below), Apply/Discard, Undo/Redo and "Recommended" |
-| Graphics | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid) and the compute unit choice (section 7 of the plan). The number of cores runs from 24 to 40 in twos. Behind "Choose the pairs of cores yourself" sits a map of the four groups of five pairs. There a person turns on the pairs the firmware leaves off, one at a time (a board with one or two broken units). "Processor temperature limit (throttling)", outside the tuning cards: the processor temperature now, the cap in force, and a picker for 85-100 C. The default is 87 C, which the driver applies when no cap is stored (`docs/design/tuner.md`). "Advanced tuning", closed by default: the graphics voltage curve, the processor's clock limit, undervolt and temperature cap, and the processor core count (`docs/design/tuner.md`). Each tuning change is a trial that the driver takes back by itself unless kept. The settings for all games (below). Restore defaults (keep or reset the games) with undo. Sharpening and anti-aliasing as "Coming later" |
-| Display | The monitors Windows reports. Per monitor: the resolution, refresh rate and GPU scaling from the modes Windows lists. A change stays only when the person keeps it within 15 s (below). Identify and a link to the Windows display settings. HDR and VRR as "Coming later" |
-| Performance | Live load, temperature, clock, VRAM, power and fan (every 2 s, only while shown and not minimized), the shader cache sizes. Each row says "No reading" when the driver gives no fresh value. Power needs KMD 0.7.215 (the SMU metrics table, RUN_DPM ABI 3), the fan KMD 0.7.213.1. Voltage goes only into the support report. The ray tracing benchmark (below) |
-| Driver | The installed release, whether Windows runs it, the update check (Settings can turn the check at start off) |
-| Settings | Language (also the globe in the header), update check at start, recent launches, Nagi, tips, animations, support options, what data the app keeps |
-| Help | Four symptom guides, one explanation per setting (through search), Repair, Restart Windows, the support report, About |
-| Support | The driver's start and recovery states in English, the technical actions (below), the installed components |
+| "Home" | One status card with one recommended action, Getting started, recent games, monitor, driver and graphics summaries |
+| "Games" | One entry per game file name: recent games, stored profiles, graphics settings, the release's defaults and added games. Per game: the D3D12 application profile as grouped check boxes with origin and cost, and the highest shader model. Also the game's own graphics and Vulkan settings (below), Apply/Discard, Undo/Redo and "Recommended" |
+| "Graphics" | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid) and the compute unit choice (section 7 of the plan). The number of cores runs from 24 to 40 in twos. Behind "Choose the pairs of cores yourself" sits a map of the four groups of five pairs. There a person turns on the pairs the firmware leaves off, one at a time (a board with one or two broken units). "Processor temperature limit (throttling)", outside the tuning cards: the processor temperature now, the cap in force, and a picker for 85-100 C. The default is 87 C, which the driver applies when no cap is stored (`docs/design/tuner.md`). "Advanced tuning", closed by default: the graphics voltage curve, the processor's clock limit, undervolt and temperature cap, and the processor core count (`docs/design/tuner.md`). Each tuning change is a trial that the driver takes back by itself unless kept. The settings for all games (below). Restore defaults (keep or reset the games) with undo. Sharpening and anti-aliasing as "Coming later" |
+| "Display" | The monitors Windows reports. Per monitor: the resolution, refresh rate and GPU scaling from the modes Windows lists. A change stays only when the person keeps it within 15 s (below). Identify and a link to the Windows settings page "Display". HDR and VRR as "Coming later" |
+| "Performance" | Live load, temperature, clock, VRAM, power and fan (every 2 s, only while shown and not minimized), the shader cache sizes. Each row says "No reading" when the driver gives no fresh value. Power needs KMD 0.7.215 (the SMU metrics table, RUN_DPM ABI 3), the fan KMD 0.7.213.1. Voltage goes only into the support report. The ray tracing benchmark (below) |
+| "Driver" | The installed release, whether Windows runs it, the update check (Settings can turn the check at start off) |
+| "Settings" | Language (also the globe in the header), update check at start, recent games, Nagi, tips, animations, support options, what data the app keeps |
+| "Help" | Four symptom guides, one explanation per setting (through search), Repair, Restart Windows, the support report, About |
+| "Support" | The driver's start and recovery states in English, the technical actions (below), the installed components |
 
 `--recovery` opens a small recovery view that never loads `bc250control.dll`: the installed release, the symptom
 guides, Repair, Restart Windows and the support report.
 
 ## Start
 
-The app shows a small loading window first: Nagi, the name of the app and one line of text. The
+The app displays a small loading window first: Nagi, the name of the app and one line of text. The
 loading window reads nothing from the computer. When it is on the screen, the app reads the state of the computer on
 a worker thread (`src/WindowReading.cs`: the device through WMI, the driver's answers, the scheduled task, the cached
-update check, the recent launches and the benchmark's game folder) and builds the main window at the same time. The
+update check, the recent games list and the benchmark's game folder) and builds the main window at the same time. The
 main window opens with that reading, and the loading window closes after it (`src/LaunchSequence.cs` holds the order,
 `src/Launch.cs` does it). A start that takes more than 8 s says so and offers to close the loading window. Before
 this change, all of that ran on the thread that draws, before the first picture: on a PC without a BC-250 about
@@ -61,7 +61,7 @@ No `HardwareAccess` escape and no `LOG_SUMMARY`: a Level Two escape idles the GP
 5 s stalled a running game for 300 ms each time (BD-054). The one exception is named below. Live values are read
 every 2 s, and only while Overview or Performance is shown and the window is not minimized.
 
-The one escape that changes the driver is the start-health CONFIRM of "Confirm this start" (Recovery), the same
+The one escape that changes the driver is the start-health `CONFIRM` of "Confirm this start" (Recovery), the same
 request the release's logon task sends: administrator only, once per action, and from 0.7.213 with
 `NoAdapterSynchronization` instead of `HardwareAccess` - it writes the registry and touches no register. A driver of
 0.7.212 or older refuses that word, and that driver is what runs while a release defers the device restart. The DLL
@@ -72,7 +72,7 @@ never on a schedule. DPM settings are
 `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`, which the KMD reads at device start
 (`docs/design/dpm.md`, "Settings and boot guard"): the page says to restart Windows. The runtime tuning escapes
 (`dpm tune`, `dpm floor`) are lab tools and not offered. The boot guard can set `DpmMode` back to 0 after an unclean
-or unconfirmed start. The page shows the last start's reason.
+or unconfirmed start. The page displays the last start's reason.
 
 The window runs as the invoking user. A change starts an elevated copy of the program (one UAC prompt) with one verb,
 `--action <name>`. The copy checks its arguments with the same functions as the window and reads the value back. A
@@ -98,7 +98,7 @@ wait because each present copies a finished frame. The help text of each of the 
 | | `Anisotropy` | DWORD | 1, 2, 4, 8, 16 | Texture filtering |
 | | `MaxFrameLatency` | DWORD | 1-3 | Low latency: frames ahead |
 | | `PerformanceOverlay` | DWORD | 1 on, 0 off | Performance overlay (DirectX 11 games for now) |
-| | `RenderOnCpu` | DWORD | 1 on, 0 off | Run DirectX 11 on the processor, a last resort. On the Games page. The card for all games shows it only when it is stored |
+| | `RenderOnCpu` | DWORD | 1 on, 0 off | Run DirectX 11 on the processor, a last resort. On the Games page. The card for all games displays it only when it is stored |
 | | `FsrUpgrade` | DWORD | 1 on (default), 0 off | Allow FSR 4 in games that include it. Only games that ship FSR 4 files get it. Games with anti-cheat protection never get it (docs/design/fsr4-identity.md) |
 | `Vulkan` | `WsiRoute` | REG_SZ | `dxgi` (default, BD-197), `gdi` | Vulkan presentation for all games: Fast (flip) or Compatible. The ICD reads no `WsiRoute` of `Vulkan\Applications\<exe>`, so the Games page has no such row |
 | `Vulkan`, `Vulkan\Applications\<exe>` | `MemoryOverflow` | REG_SZ | `allow` (default), `strict` | When the VRAM is full (DirectX 11 and 12 games only): use system memory, or report out of memory (not shown now, see below) |
@@ -119,8 +119,8 @@ still lists its stored values. The row comes back when its ICD makes it a contro
 An absent value is "Application decides" or the default that the window names. A game's own value wins over the value
 for all games. The settings rule applies. "Application decides" and "Same as all games" write nothing and remove a
 stored value. The helper removes a game's key when it has no value and no subkey left (`delete key`). It removes no
-other key. A stored value outside the contract shows as "Stored value not valid". It stays as it is until the person
-chooses another value. The reader takes `WsiRoute` `dxgi-composition`, but this app does not offer it, so it shows as
+other key. A stored value outside the contract displays as "Stored value not valid". It stays as it is until the person
+chooses another value. The reader takes `WsiRoute` `dxgi-composition`, but this app does not offer it, so it displays as
 "Set outside this app". The Vulkan readers ignore case and take an empty string as absent. They take an invalid
 `WsiRoute` as `gdi` and an invalid `MemoryOverflow` as `allow`, and the window says so. What the Graphics readers do
 with an invalid DWORD is not known here, so the window does not guess. The changes apply the next time a game starts,
@@ -135,13 +135,13 @@ The app offers a switch of the shell only when the shell gives it the class Feat
 the driver still obeys its contracts. A Lab switch turns off a protection of the driver. The app does not offer it, and
 a release build of the shell drops it. The ShellTokens test reads the table and fails if the catalog, a group or
 `Profiles.NotOffered` names a Lab switch. A value that an earlier release stored with such a name stays as it is. The
-support view shows the name.
+support view displays the name.
 
 ## Display modes
 
 The Display page offers only the modes that `EnumDisplaySettingsEx` lists for a monitor at its current colour depth,
 without interlaced modes. It offers three GPU scaling choices: full screen (`DISPLAYCONFIG_SCALING_STRETCHED`), keep
-the aspect ratio (`ASPECTRATIOCENTEREDMAX`) and centred (`CENTERED`). Another scaling that Windows chose shows as "As
+the aspect ratio (`ASPECTRATIOCENTEREDMAX`) and centred (`CENTERED`). Another scaling that Windows chose displays as "As
 Windows set it", and the page never writes it. Apply works as the display settings of Windows. First
 `ChangeDisplaySettingsEx` with `CDS_TEST`. Then the change without saving it, and `SetDisplayConfig` without
 `SDC_SAVE_TO_DATABASE` for the scaling. Then "Keep these display settings?" with a 15 s countdown. Keep saves the
@@ -151,7 +151,7 @@ action. `src/DisplayModes.cs` is the only file that changes a display setting (G
 
 A scaled start of the screen (BD-196) gives a monitor one mode only. The firmware starts the screen in a small mode, for
 example 800 x 600, and the monitor stretches it to the full panel. The driver keeps the mode it got from the firmware,
-and Windows lists only that mode. The Display page shows a warning and the `full-resolution-start` action (Recovery,
+and Windows lists only that mode. The Display page displays a warning and the `full-resolution-start` action (Recovery,
 below) when one of two signals is true. The first signal: Windows lists exactly one resolution for the monitor, that
 resolution is the current one, and it is smaller than the native mode in the monitor's EDID. The native mode is the
 first detailed timing descriptor of the EDID base block. The EDID comes from the `EDID` value of the monitor's device
@@ -202,17 +202,17 @@ What is never measured. A result is read only from a log this pass itself wrote:
 previous run first, refuses to start when that log cannot be removed (another copy of the game holds it open), and
 rejects a log older than the start of the pass. A number that was measured elsewhere is worse than no number.
 
-What it shows. Each pass gives its pictures a second, its highest temperature and its average clock, with "Not
+What it displays. Each pass gives its pictures a second, its highest temperature and its average clock, with "Not
 available" where the driver gave no reading, and the date and driver release of the run. A pass that was stopped
 before its game ran has no reading of its own: the one sample taken before a start belongs to the decision to start,
-and only the pass that was refused because the chip was too hot keeps it (`PassTelemetry.Keep`). The card shows one run in
+and only the pass that was refused because the chip was too hot keeps it (`PassTelemetry.Keep`). The card displays one run in
 full: the run of this session while there is one, otherwise the newest saved run. The state line above it follows
 that run (`BenchState.Id`): the way that measures now, "You stopped the test." for a run the person ended, "The test
 is finished." for a run of this session, and the saved line for a run read back from the history after a new start of
 the application. "Earlier runs" lists the saved runs before the run above it (`BenchHistory.Earlier`), so no run
 appears twice. The newest ten runs are kept
 in `%LOCALAPPDATA%\amdgpu-wddm\benchmarks\q2rtx-history.json` (section 7 of `docs/gui/interfaces.md`). On a board the
-app has positively identified as a BC-250 (the identification of the board memory card) the card also shows what this
+app has positively identified as a BC-250 (the identification of the board memory card) the card also displays what this
 release measured on the project's own board, for comparison: 57.8 to 69.7 pictures a second at 1280x720, with the
 release those numbers were measured with named in the same sentence. The number is a band because twenty passes of
 the two ways over two lab rounds landed inside it, with the two samples of the validation suite, and a pass follows
@@ -222,7 +222,7 @@ The card holds still while a run goes on. A rebuilt page keeps the card the pers
 own scroll offset (`PagePlace.Keep`), because a card above can get a line at any moment: the case fan card does when
 the game loads the chip, and "Start the test" and "Stop the test" moved 23 px down under the pointer of a person who
 was aiming at Stop. "Start the test" brings the buttons of the card into reach by the same arithmetic
-(`PagePlace.Bring`), and a page that shows them already does not move at all. The gate `--smoke-scroll` builds every
+(`PagePlace.Bring`), and a page that displays them already does not move at all. The gate `--smoke-scroll` builds every
 state of a run without a window and measures the two buttons against the view.
 
 `src/Benchmark.cs` holds every rule as pure functions over text, bytes and streams, which the host tests decide
@@ -235,7 +235,7 @@ Every settings page follows one rule. A box is checked only when its value is wr
 written for an unchecked box. Unchecking removes the value (all switches of an application unchecked removes its key),
 so no empty value and no implicit default is left behind. A driver's built-in default is described in text ("driver
 default when unchecked: ..."), never shown as a checked box. Values the installer wrote (the `witcher3.exe` profile)
-show as checked because they are written. Changes stay on the page, marked "Unsaved changes", until Apply. Revert
+display as checked because they are written. Changes stay on the page, marked "Unsaved changes", until Apply. Revert
 reads the stored values again. `Profiles.PlanWrite` and `DpmSettings.PlanWrites` hold the rule and the unit tests
 check it (unchecked: nothing written. Checked, saved, unchecked: removed. The exact set written, in any stored order).
 A `DpmMode` 0 the driver stores after a fallback means the same as no value and is left alone.
@@ -307,7 +307,7 @@ choice into both. The manual recovery with `reg add` is in `docs/testing/INSTALL
 | `reopen-closed` | every value the driver closed by itself, back to the installed release's default, then the desktop record the driver left. The values are `EnableGpuPresentBlit` and `EnableCddDwmInterop`, whose record `InteropClosedReason` is removed after them, and `DpmMode`. Its record `DpmClosedReason` stays: the state catalog lets only the driver write or remove it. The driver removes it at the next start that reads a `DpmMode` other than 0. The rule is `Get-DriverClosure` of the release installer, value for value (`ClosureNotice.cs`). The value must be the one the driver writes when it closes (0). The installed release must name a default for it that is in range and is not that value. A record of the driver's own must sit next to it. That is the durable record with any reason, or `DpmLastReason` with 3, 4 or 8 for a driver before 0.7.208.1. The legacy record belongs to the last start and is not removed. A 0 that a person wrote by hand has no such record. Such a value is never touched. The graphics cores are not here. Their release default is 24. That is also the value the driver closes with, so a repair install reopens nothing there either (`CuMode` in `common.ps1`) | next restart (offered) | the driver closed nothing by itself. The installed release has no list of defaults |
 | `desktop-gpu` | `DwmForceCpu` 0 in both copies (router and driver, BD-296) | next restart (offered) | the driver is not running. The effective switches (escape and `InteropLastState` & 3) are not both on (points to `reopen-gpu-path`). The GPU desktop files are missing. DWM is on the GPU route already. The GPU route is selected already (restart Windows) |
 | `desktop-cpu` | `DwmForceCpu` 1 in both copies (router and driver, BD-296) | next restart (offered) | DWM is on the CPU route already. The CPU route is selected already (restart Windows) |
-| `confirm-start` | start-health CONFIRM (clears `UnconfirmedStarts` and `DpmPending` in the KMD). Not undoable | at once | the driver is not running. Confirmed already. Not eligible by `Test-StartConfirmEligible` of the installer's `start-confirm-core.ps1` (flags 7, completions, ready >= 60 s, last completion <= 5 s. The helper retries the reading for 10 s) |
+| `confirm-start` | start-health `CONFIRM` (clears `UnconfirmedStarts` and `DpmPending` in the KMD). Not undoable | at once | the driver is not running. Confirmed already. Not eligible by `Test-StartConfirmEligible` of the installer's `start-confirm-core.ps1` (flags 7, completions, ready >= 60 s, last completion <= 5 s. The helper retries the reading for 10 s) |
 | `enable-dpm [--ceiling N]` | `DpmMode` 1, and `DpmMaxMHz` N only when a ceiling is chosen | next restart (offered) | N is not 1000-2000 on the 100 MHz grid. Stored already |
 | `set-clocks --mode 1\|unset --ceiling N\|unset` | `DpmMode` 1 or removed, `DpmMaxMHz` N or removed (the Performance page) | next restart (offered) | as above, or a mode other than 1 (the fixed clock is the unchecked default) |
 | `reset-defaults [--games keep\|reset]` | the manifest's defaults of `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `DpmMode`, `DpmMaxMHz` and `DwmForceCpu` (both copies). Remove `InteropClosedReason`. The release's graphics cores. The release's `CpuTune` when the stored value is another one or absent, and `CpuTune` removed when the release names none. Every graphics setting for all games removed. With `--games reset`, every game profile set to the release's recommendation or removed, and every game's graphics settings removed with their empty keys | next restart (offered) | the manifest has no `"defaults"`, or one is missing or out of range. `--games reset` without the release's game list. All at their defaults already |
@@ -369,9 +369,9 @@ amdgpu_wddm_control.exe --action restart-compositor --accept-bd060 --out escape.
 ```
 
 Without `--accept-bd060` the action is refused (exit 3). It changes no setting: for the CPU route after the restart,
-run `desktop-cpu` first. The helper records the running DWM and opens one handle to it (query, terminate and
-synchronize access), checks the process id, session, creation time and that it still runs through that handle, and
-terminates that same handle. Any mismatch refuses and stops nothing. It then waits up to 20 s for a DWM in the same
+run `desktop-cpu` first. The helper records the running DWM and opens one handle to it (the rights `QueryLimited`, `Terminate` and
+`Synchronize`), checks the process id, session, creation time and that it still runs through that handle, and
+ends the process through that same handle. Any mismatch refuses and stops nothing. It then waits up to 20 s for a DWM in the same
 session created after the stopped one, records it for that session and logs both. Warning:
 after a DWM restart some Windows 11 apps, for example the Explorer command bar and Task Manager, can ignore mouse
 clicks until Windows restarts (BD-060). Restart Windows as soon as you can. The window never offers this action.
@@ -438,7 +438,7 @@ gates use it, so a build records nothing in the profile of the PC that builds). 
 An unconfirmed or failed start automatically saves a local report when the control window opens.
 The Recovery window also collects this report without a driver connection.
 Collection stops after 20 seconds and keeps at most 4 MiB of text.
-The window shows the saved path. Nothing is sent.
+The window displays the saved path. Nothing is sent.
 
 `startup-diagnostics.txt` includes StartRecord, StopRecord, device status and current-boot events for the display driver.
 It includes matching SetupAPI sections from the last 1 MiB and at most three kept KMD logs.
@@ -492,15 +492,15 @@ page as `<page>-full.png`. The build fails when two sibling controls overlap, a 
 the page column it was built at (`LayoutRules.PageWidthFinding`: the column width of this moment is not the measure,
 because the window manager clamps a client size larger than the desktop), its last control
 lies outside the scroll range, a visible text names a driver internal, a control lacks an accessible name or tab
-stop, the art shows while "Show Nagi" is off, the guide panel draws no picture while "Show Nagi" is on and the side
-panel is in the window, the side panel shows on a small screen or is missing on a screen with room for it
+stop, the art displays while "Show Nagi" is off, the guide panel draws no picture while "Show Nagi" is on and the side
+panel is in the window, the side panel displays on a small screen or is missing on a screen with room for it
 (G-SMALL), the window is wider or taller than the screen it is drawn for or its page does not follow the column
 left after the window was clamped (G-ORDER), or a language switch leaves old texts behind. The unit tests also check
 every string table: each id in each language, no stale translation (G-STR), no internals in the texts (G-NOINT).
 
 Two more gates hold what the start window flash of tester.31 rc4 taught (fact M898):
 
-- `--smoke-labels <file>` builds every window and page without showing it: the main window with this PC's state and
+- `--smoke-labels <file>` builds every window and page without displaying it: the main window with this PC's state and
   with the three recorded snapshots, the sign-in notice, the loading window, the dialogs and the recovery view. It
   fails on a `Label` with AutoSize off and a `Dock`, because `Label.AdjustSize` gives such a label its requested size
   (100x23) at each change of its text before the parent docks it again. On the labels whose text a timer changes, it
@@ -535,7 +535,7 @@ screens reach. `tools/release/build-release.ps1` refuses a package whose control
 whose setup window, where it ships, lacks one of its own.
 
 "Show Nagi" in Settings is on unless the user turns it off (`ShowNagi` absent or any value but the DWORD 0), so an
-installed application shows her without a setting change. With her off, or with no art embedded
+installed application displays her without a setting change. With her off, or with no art embedded
 (`build.ps1 -NagiArt ''`, whose render runs therefore all use `--no-nagi`), the panel is the text-only panel and
 says the same words.
 
