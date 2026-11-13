@@ -91,7 +91,6 @@
 4	tools/fwinfo/README.md
 15	tools/packagecheck/README.md
 2	tools/release/README.md
-17	tools/runcompare/README.md
 6	tools/win/amdgpu_wddm_control/README.md
 6	tools/win/amdgpu_wddm_setup/README.md
 14	tools/win/bc250kmd_cli/README.md

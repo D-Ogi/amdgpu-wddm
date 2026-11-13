@@ -41,7 +41,7 @@ problem code with its `CM_PROB_*` name.
 
 `diff` prints the sentence, then the two sequences aligned next to each other, then the
 object lifecycle of both, then the facts that differ. A fact that was compared and
-matched is not a row; it is named in the "compared and equal" line, so that a short list
+matched is not a row. It is named in the "compared and equal" line, so that a short list
 means "checked" and not "not looked at".
 
 `normalize` prints the normalized log alone, for committing next to the evidence or for
@@ -51,13 +51,13 @@ feeding to a plain `diff`.
 
 A run directory usually holds two rings: the display-only instance that the device
 disable stopped, and the full-table instance under test. `runcompare` takes the one whose
-log carries `gate: EnableFullWddm 1`; `--ring <file>` overrides it, and `show` lists the
+log carries `gate: EnableFullWddm 1`. `--ring <file>` overrides it, and `show` lists the
 others it saw.
 
 The state files are the same story - the directory holds the state before the gate was
 opened, the state at the failed start, and the state after the gates were closed again
 and the display-only driver came back. The one paired with a full-table ring is the one
-whose `gates` line has `EnableFullWddm 1`; otherwise the last one written. `--state`
+whose `gates` line has `EnableFullWddm 1`. Otherwise it is the last one written. `--state`
 overrides it.
 
 ## The object lifecycle section
@@ -70,16 +70,16 @@ end to end (M71). For the early runs those few milliseconds are the only evidenc
 about what dxgkrnl wanted, so `show` and `diff` unpack them:
 
 - each `Create*` and `Destroy*` in order, with the gap from the previous one in
-  milliseconds, taken from the log's own seconds column;
+  milliseconds, taken from the log's own seconds column.
 - **whether creation and destruction are symmetric** - every object created destroyed
   again, nothing left alive at the stop - and whether the teardown ran in the reverse of
-  the creation order;
-- how long the whole object graph lived, first creation to last destruction;
+  the creation order.
+- how long the whole object graph lived, first creation to last destruction.
 - `CreateProcess`, `CreateDevice` and `CreateContext` flags decoded bit by bit
-  (`flags 0x00000005 (SystemContext | VirtualAddressing)`);
+  (`flags 0x00000005 (SystemContext | VirtualAddressing)`).
 - every field of the `CreateContext` answer: `DmaBufferSize`, `DmaBufferSegmentSet` (as
   segment ids, since it is a bit per segment), `AllocationListSize`,
-  `PatchLocationListSize` and `Caps` bit by bit;
+  `PatchLocationListSize` and `Caps` bit by bit.
 - **the first DDI of the next stage that the run never called.**
 
 The bit names come from `d3dkmddi.h` through `gen_tables.py` -
@@ -87,7 +87,7 @@ The bit names come from `d3dkmddi.h` through `gen_tables.py` -
 `DXGK_CREATEPROCESSFLAGS` - never from memory, and a bit the header does not name is
 printed as `bit N` rather than dropped. The generator takes the newest branch of each
 `#if DXGKDDI_INTERFACE_VERSION`, because the value being decoded is the one dxgkrnl
-passed and dxgkrnl is the newest; the driver itself compiles at
+passed and dxgkrnl is the newest. The driver itself compiles at
 `DXGKDDI_INTERFACE_VERSION_WDDM2_0`, where `SystemProtectedContext` and everything above
 it is still part of `Reserved`.
 
@@ -101,12 +101,12 @@ is there. It is small and meant to be edited.
 M71), but nobody has yet checked the list against them: `EXPECTED_ORDER_OBSERVED` in
 `runcompare.py` is still `None`. Until it is set, the list is a reading of the DDI table
 `driver/kmd/wddm.c` built at stage A and of the WDK, not a measurement, and every line that
-prints a name from it says so. To confirm it, correct the list from what one of those runs
-shows and set `EXPECTED_ORDER_OBSERVED` to that run's id; the wording changes by itself.
+prints a name from it says so. To check it, correct the list from what one of those runs
+shows and set `EXPECTED_ORDER_OBSERVED` to that run's id. The wording changes by itself.
 
-Two things the log cannot give this section: it carries no object handle, so creations
-and destructions are paired by kind and by count and never one named object to another;
-and the driver logs only the first `LOG_CALLS` (8) calls of each DDI, so where the stop
+Two things the log cannot give this section. First, it carries no object handle, so creations
+and destructions are paired by kind and by count and never one named object to another.
+Second, the driver logs only the first `LOG_CALLS` (8) calls of each DDI, so where the stop
 summary counted more than the log shows, `show` says so instead of quietly undercounting.
 
 ## Normalization rules
@@ -138,24 +138,23 @@ where a field that one build does not print says so.
 **The stop summary is not part of the sequence.** It is a report *about* the run written
 inside `DxgkDdiStopDevice`, not a step of it, and its wording moves between builds (the
 "no TDR" line gained `ResetEngine`). Its counters are read - objects, adapter info types,
-TDR - and compared as facts; its lines do not align.
+TDR - and compared as facts. Its lines do not align.
 
 ## Limits
 
 - **The log only holds the first calls.** `wddm.c` logs the first few calls of each DDI
   and, for `QueryAdapterInfo`, every refusal among the first 256 (`WddmFirstCalls`,
   `WddmAnswersLogged`). So a call the summary counts and the log does not is normal, not
-  a hole in the evidence; `show` prints both numbers when they disagree.
+  a hole in the evidence. `show` prints both numbers when they disagree.
 - **First difference means first difference in the log**, not the first difference in
   what the driver did. Two runs that differ only in something nobody logged look equal.
 - **A run with no state file** (a bare ring log) has no package, no gates from the
-  registry and no PnP problem code. Those facts read `not recorded (no state file in this
-  run)`, which is not the same as "equal".
+  registry and no PnP problem code. Those facts read `not recorded (no state file in this run)`, which is not the same as "equal".
 - The tool names nothing from memory. A `QueryAdapterInfo` type outside the Kit's enum
   and an NTSTATUS outside the generated table are printed as their raw numbers.
 - The alignment is `difflib.SequenceMatcher` over the normalized lines. Where a run
   repeats a line many times (four `type 14` calls in a row) the matcher may pair them
-  differently than a human would; the first difference is unaffected, the side by side
+  differently than a human would. The first difference is unaffected, the side by side
   can look odd.
 
 ## The name tables
@@ -171,7 +170,7 @@ python tools/runcompare/gen_tables.py
 python tools/runcompare/gen_tables.py --check     # what the test does
 ```
 
-(The repository spells generated files `*.generated.*`; Python needs an importable module
+(The repository spells generated files `*.generated.*`. Python needs an importable module
 name, so here the dot is an underscore.)
 
 ## Tests
@@ -181,7 +180,7 @@ normalization and lifecycle rules, which are easier to pin down when the log hol
 nothing else - and on the real files of E16 runs 002, 003 and 004, read only. The two
 first differences it pins down are the ones the experiment turns on:
 
-- 002 -> 003: after `DRIVERCAPS`, run 003 is asked type 15 where run 002 was stopped;
+- 002 -> 003: after `DRIVERCAPS`, run 003 is asked type 15 where run 002 was stopped.
 - 003 -> 004: after type 47, run 004 goes on to type 13.
 
 An earlier version of this tool carried a hand-written fixture for run 004, which had not
