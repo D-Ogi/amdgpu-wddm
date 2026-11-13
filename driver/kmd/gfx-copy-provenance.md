@@ -13,7 +13,7 @@ already imported by this project supplies PACKET3 and PACKET3_DMA_DATA.
 Behavior source: Mesa05e6c9622e135ac2aeaf56ec70222642627e2162,
 src/amd/vulkan/radv_cp_dma.c, radv_cs_emit_cp_dma, cp_dma_max_byte_count,
 radv_cp_dma_prepare. The GFX9+ count field is aligned down to32 bytes for each
-maximum-size chunk; the final packet carries CP_SYNC. The first packet uses
+maximum-size chunk. The final packet carries CP_SYNC. The first packet uses
 RAW_WAIT to order earlier CP DMA. L2 source/destination selection matches RADV's
 CP_DMA_USE_L2 path. Cache flushes and shader ordering remain caller obligations.
 
