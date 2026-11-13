@@ -135,7 +135,7 @@ root of a live VMID, so it needs no pipeline sync before a root change.
   (`PACKET3_INDIRECT_BUFFER__VMID`, `bc250_gfx_emit_ib`). The CP fetches the IB, and the job makes every access,
   through that VMID.
 - The `BC250_PJ_GFX_SUBMIT` journal record carries the VMID in `Valid` (0 in the records of earlier drivers).
-  `bc250kmd_cli journal` prints it. The hot line `gfx: job seq %lu vmid %lu fence ...` carries it too; the node
+  `bc250kmd_cli journal` prints it. The hot line `gfx: job seq %lu vmid %lu fence ...` carries it too. The node
   left that line to keep it within 159 characters, and the journal record keeps the node.
 - `ProgressSiteVmFlush` records the VMID as its input, so a dump of a hang inside the flush names it.
 
@@ -162,12 +162,12 @@ with nothing published, and the next buffer starts the whole set again.
 | `wddm.c` `#define BC250_WDDM_VMID 1u` | removed |
 | `wddm.c` `WddmSubmitHardware`: `GfxSubmitIb(Device, BC250_WDDM_VMID, ...)` | `BC250_VMID_AUTO`, the chosen VMID returned |
 | `wddm.c` `WddmSubmitHardware`: the `vmid %u` of `wddm: fence %u on the gfx ring` | the chosen VMID |
-| `wddm.c` FLUSH_TLB: `GfxPagingBuildFlush(..., BC250_WDDM_VMID, ...)` | the resolved root; the fan-out above |
+| `wddm.c` FLUSH_TLB: `GfxPagingBuildFlush(..., BC250_WDDM_VMID, ...)` | the resolved root. The fan-out above |
 | `gfx.c` `BC250_GFX.VmidRoot[16]` | `BC250_GFX.Vmid.Root[16]` with the rest of the table |
-| `gfx.c` `SubmitIbLocked`: the refusal predicate on `VmidRoot` | the same predicate with the gate at 0; `Bc250VmidAdmit` with the pool |
+| `gfx.c` `SubmitIbLocked`: the refusal predicate on `VmidRoot` | the same predicate with the gate at 0. `Bc250VmidAdmit` with the pool |
 | `gfx.c` `SubmitIbLocked`: `VmidRoot[Vmid] = RootPhysical` | `Bc250VmidClaim` under `VmidLock` |
 | `gfx.c` `TearDown` and `GfxPowerRetainedLocked`: zero `VmidRoot` | `Bc250VmidResetAll` |
-| `driver/kmd/test/gfx_pipeline_test.c`, `gfx_retained_test.c` | follow the new types; the pipeline test checks the VMID in the queue and in the timeout report |
+| `driver/kmd/test/gfx_pipeline_test.c`, `gfx_retained_test.c` | follow the new types. The pipeline test checks the VMID in the queue and in the timeout report |
 | `experiments/E27-m9-inference/paging-route-test-suffix.c` (`shim-paging`) | the real `GfxPagingBuildFlush`, gate 0 and the fan-out |
 
 ## 3. Option (b): the flush on the ring, implemented behind `EnableRingVmFlush`, default on from train b31
@@ -231,7 +231,7 @@ implementation in `driver/shim/bc250_gfx.c`:
    `adev->gfx.cp_fw_write_wait` says the CP firmware does that operation, and falls back to
    `amdgpu_ring_emit_reg_write_reg_wait_helper` when it does not. The shim tracks no CP firmware version, so it
    writes the fallback, which every firmware version runs.
-3. **The fallback gets the acknowledge-reset cycle between the two.** Without it the wait can read an acknowledge
+3. **The fallback receives the acknowledge-reset cycle between the two.** Without it the wait can read an acknowledge
    bit that the previous invalidation of this engine left set, and the job would then run on a TLB that was never
    invalidated. Upstream does the same on SDMA (`sdma_v5_0_ring_emit_reg_write_reg_wait`, "wait for a cycle to
    reset vm_inv_eng*_ack", which `bc250_sdma_vm_reg_write_reg_wait` follows) and in the CPU path for a GFXHUB
@@ -274,8 +274,7 @@ the recovery path and stops at the first timeout.
    `HangRecoveryMode` is its released value. Check that the hang detector and the path of
    `docs/design/hang-recovery.md` are armed. Keep the rollback ready: `EnableRingVmFlush` 0 and a restart.
 2. **Arm 1, bounded to three minutes, desktop only.** `EnableRingVmFlush` 1, `EnableVmidPool` 1, restart, and
-   DWM composing the desktop with no game. Read the start log for `gfx: VM flush on the ring
-   (EnableRingVmFlush), engine 1`, then let the desktop run and read the summary.
+   DWM composing the desktop with no game. Read the start log for `gfx: VM flush on the ring (EnableRingVmFlush), engine 1`, then let the desktop run and read the summary.
 3. **Arm 2, one interactive game session.** The Witcher 3 Remaster at a preset that already has a baseline, so
    the frame rate is comparable. The session ends as soon as its goals are met.
 4. **What to read.** `wddm summary: ring VM flush on: <frames> frames, <same> of them on a root the VMID held`
@@ -387,13 +386,13 @@ calls it for the VMID of the timed-out job and, in the register snapshot, for th
 
 | Risk | Consequence | Mitigation | Test |
 |---|---|---|---|
-| A VMID recycled while a job of its old root still runs | wrong translations, VM fault, 0x116 | the retirement test of the chooser; the rule check before every root write, logged once | `vmid-pool`: an exhaustive model check of every interleaving of submit, retire and root choice for pools of 1, 2, 3 and 2 far-apart VMIDs (2.2 million interleavings), and 1.28 million seeded random steps across the sequence wrap; the safety property is "every job in flight still finds its root at its VMID" |
+| A VMID recycled while a job of its old root still runs | wrong translations, VM fault, 0x116 | the retirement test of the chooser. The rule check before every root write, logged once | `vmid-pool`: an exhaustive model check of every interleaving of submit, retire and root choice for pools of 1, 2, 3 and 2 far-apart VMIDs. That makes 2.2 million interleavings. It also runs 1.28 million seeded random steps across the sequence wrap. The safety property is "every job in flight still finds its root at its VMID" |
 | The chooser is changed to ignore retirement | the same | the negative control | `vmid-pool-ignore-retirement` must fail |
-| A pool VMID used by firmware (PSP, RLC) | corruption outside our contexts | the bring-up read; a non-zero VMID in 3..15 stays out | `vmid-pool`: the probe cases |
+| A pool VMID used by firmware (PSP, RLC) | corruption outside our contexts | the bring-up read. A non-zero VMID in 3..15 stays out | `vmid-pool`: the probe cases |
 | `FLUSH_TLB` misses a VMID that holds the root | stale translations after a paging unmap | the superset of section 2 | `shim-paging`: the real `GfxPagingBuildFlush` with gate 0 (VMID 1 alone, byte for byte) and with the pool (the fan-out, the recycle race, all or nothing) |
 | A fault latched on a recycled VMID | a fault nobody can attribute | the history of section 4 | `vmid-pool`: the history cases |
-| `EnableVmidPool` 0 is not 0.7.213.1 | a bisect switch that lies | the gate-0 path keeps the old predicate at the old point | `vmid-pool`: gate-0 identity against the old predicate (120 cases); `gfx-pipeline`, `gfx-retained` |
-| Fourteen VMIDs used up by many processes | `STATUS_DEVICE_BUSY`, the behaviour of 0.7.213.1 | nothing; F1 makes the wait cheap | the summary counts `busy` |
+| `EnableVmidPool` 0 is not 0.7.213.1 | a bisect switch that lies | the gate-0 path keeps the old predicate at the old point | `vmid-pool`: gate-0 identity against the old predicate (120 cases). `gfx-pipeline`, `gfx-retained` |
+| Fourteen VMIDs used up by many processes | `STATUS_DEVICE_BUSY`, the behaviour of 0.7.213.1 | nothing. F1 makes the wait cheap | the summary counts `busy` |
 | An acknowledge mask that is not the VMID's bit (gate 1) | a CP that waits forever: a TDR, and no engine reset (facts M53) | the emitted dwords are read back against the reference, per VMID | `gfx-vm-flush`, with `gfx-vm-flush-wrong-ack` as its negative control |
 | A stale acknowledge bit from this engine's previous invalidation (gate 1) | a job on a TLB that was never invalidated | the acknowledge-reset cycle between the request and the wait | `gfx-vm-flush`: the cycle's register, reference and mask |
 | The gfx ring and the CPU path on one invalidation engine (gate 1) | one path reads the other's acknowledge | one owner per engine (section 3) | `gfx-vm-flush`: the three engine numbers and the registers they address |
@@ -405,8 +404,7 @@ calls it for the VMID of the timed-out job and, in the register snapshot, for th
 other than 0 opens the pool. The INF and the release installer write 1. 0 gives 0.7.213.1: every job at VMID 1,
 the old refusal at the old point, no bring-up read, and `FLUSH_TLB` on VMID 1 alone.
 
-The start log says `gfx: VMID pool on (EnableVmidPool)` or `gfx: VMID pool off (EnableVmidPool 0): every job at
-VMID 1`. The summary has three lines:
+The start log says `gfx: VMID pool on (EnableVmidPool)` or `gfx: VMID pool off (EnableVmidPool 0): every job at VMID 1`. The summary has three lines:
 
 ```
 wddm summary: VMID pool on, members 0x%04lX, excluded 0x%04lX
