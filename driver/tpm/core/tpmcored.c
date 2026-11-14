@@ -26,6 +26,7 @@
 #include <wchar.h>
 #include <openssl/sha.h>
 #include "tpmcore.h"
+#include "espstate.h"
 #include "../handoff.h"
 #include "../tpmserv_ioctl.h"
 
@@ -39,6 +40,7 @@ static HANDLE g_stop;
 static int g_console;
 static FILE *g_log;
 static wchar_t g_dir[MAX_PATH];
+static struct espstate g_esp;	/* the state files of the pre-OS TPM, open after a resume */
 
 static void say(const char *fmt, ...)
 {
@@ -171,6 +173,32 @@ static void serve(HANDLE dev)
 	}
 }
 
+/* Each store of the permanent state of the resumed TPM goes to the state files of the stage volume as well. */
+static void store_esp(const unsigned char *blob, unsigned bytes)
+{
+	unsigned long error = 0;
+	if (espstate_write(&g_esp, blob, bytes, &error))
+		say("state file: sequence %llu written, %u bytes", espstate_written_sequence(&g_esp), bytes);
+	else
+		say("state file: the write failed (%lu): the stage starts from the older copy", error);
+}
+
+/* The state files of the stage volume for the resumed TPM. A TPM that the stage manufactured, or NV that changed in
+ * the stage, is written at once. */
+static void open_esp(const struct tpm_handoff_view *view)
+{
+	static const char *const why[] = { "open", "no volume has the partition GUID of the handoff",
+					   "the SMBIOS table gives no board key", "the directory cannot be made" };
+	enum espstate_result r = espstate_open(&g_esp, view->volume);
+	if (r != ESPSTATE_OK) {
+		say("state file: %s: the TPM state of this boot is not kept for the next one", why[r]);
+		return;
+	}
+	say("state file: the next write is copy %s, sequence %llu", g_esp.next_slot ? "B" : "A", g_esp.next_sequence);
+	tpmcore_on_permanent(store_esp);
+	if (view->flags & TPM_HANDOFF_PERMANENT_CHANGED) store_esp(view->permanent, view->permanent_bytes);
+}
+
 static void sha256(const void *data, size_t bytes, unsigned char digest[32])
 {
 	/* OpenSSL: the core links its libcrypto for libtpms anyway. */
@@ -244,6 +272,7 @@ static int start_core(HANDLE dev)
 		r = tpmcore_resume(g_dir, TPMSERV_MAX_COMMAND, view.permanent, view.permanent_bytes, view.volatile_state,
 				   view.volatile_bytes);
 		say("core resume rc=0x%x", r);
+		if (r == 0) open_esp(&view);
 	}
 	SecureZeroMemory(record, TPM_HANDOFF_MAX_BYTES);	/* the seeds of the TPM */
 	VirtualFree(record, 0, MEM_RELEASE);
@@ -288,6 +317,8 @@ static void run(void)
 	}
 	if (started) {
 		tpmcore_stop();
+		tpmcore_on_permanent(NULL);
+		espstate_close(&g_esp);
 		say("core stopped");
 	}
 }

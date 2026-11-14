@@ -61,6 +61,9 @@ Write-Host 'compile the core'
 & $Clang @ownFlags -c (Join-Path $here 'tpmcore.c') -o (Join-Path $obj 'own_tpmcore.o'); if ($LASTEXITCODE) { throw 'tpmcore.c' }
 & $Clang @ownFlags -c (Join-Path $here 'tpmcored.c') -o (Join-Path $obj 'own_tpmcored.o'); if ($LASTEXITCODE) { throw 'tpmcored.c' }
 & $Clang @ownFlags -c (Join-Path $tpm 'handoff.c') -o (Join-Path $obj 'own_handoff.o'); if ($LASTEXITCODE) { throw 'handoff.c' }
+foreach ($s in @((Join-Path $tpm 'statefile.c'), (Join-Path $tpm 'gcm_openssl.c'), (Join-Path $here 'espstate.c'))) {
+    & $Clang @ownFlags -c $s -o (Join-Path $obj ('own_' + [IO.Path]::GetFileNameWithoutExtension($s) + '.o')); if ($LASTEXITCODE) { throw $s }
+}
 & $Clang @ownFlags -c (Join-Path $tpm 'crb.c') -o (Join-Path $obj 'test_crb.o'); if ($LASTEXITCODE) { throw 'crb.c' }
 & $Clang @ownFlags -c (Join-Path $tpm 'test\crb_bridge_test.c') -o (Join-Path $obj 'test_bridge.o'); if ($LASTEXITCODE) { throw 'crb_bridge_test.c' }
 
@@ -70,8 +73,17 @@ $sys = @((Join-Path $OpenSsl 'lib64\libcrypto.a'), '-lws2_32', '-lcrypt32', '-lb
 # Static C runtime pieces: the lab has no llvm-mingw DLLs.
 $link = @('-O2', '-municode', '-static')
 Write-Host 'link'
-& $Clang @link ($lib + @((Join-Path $obj 'own_vdprintf.o'), (Join-Path $obj 'own_tpmcore.o'), (Join-Path $obj 'own_tpmcored.o'), (Join-Path $obj 'own_handoff.o')) + $sys + @('-o', (Join-Path $Out 'tpmcored.exe')))
+& $Clang @link ($lib + @((Join-Path $obj 'own_vdprintf.o'), (Join-Path $obj 'own_tpmcore.o'), (Join-Path $obj 'own_tpmcored.o'), (Join-Path $obj 'own_handoff.o'), (Join-Path $obj 'own_statefile.o'), (Join-Path $obj 'own_gcm_openssl.o'), (Join-Path $obj 'own_espstate.o')) + $sys + @('-o', (Join-Path $Out 'tpmcored.exe')))
 if ($LASTEXITCODE) { throw 'link tpmcored.exe' }
 & $Clang -O2 -static ($lib + @((Join-Path $obj 'own_vdprintf.o'), (Join-Path $obj 'own_tpmcore.o'), (Join-Path $obj 'test_crb.o'), (Join-Path $obj 'test_bridge.o')) + $sys + @('-o', (Join-Path $Out 'crb_bridge_test.exe')))
 if ($LASTEXITCODE) { throw 'link crb_bridge_test.exe' }
+# The writer of the state files, in a directory under -Out (never an EFI system partition).
+& $Clang @ownFlags -c (Join-Path $tpm 'test\espstate_test.c') -o (Join-Path $obj 'test_espstate.o'); if ($LASTEXITCODE) { throw 'espstate_test.c' }
+& $Clang -O2 -municode -static (@((Join-Path $obj 'test_espstate.o'), (Join-Path $obj 'own_espstate.o'), (Join-Path $obj 'own_statefile.o'), (Join-Path $obj 'own_gcm_openssl.o')) + $sys + @('-o', (Join-Path $Out 'espstate_test.exe')))
+if ($LASTEXITCODE) { throw 'link espstate_test.exe' }
+$espDir = Join-Path $Out 'espstate-test'
+if (Test-Path $espDir) { Remove-Item -Recurse -Force $espDir }
+New-Item -ItemType Directory -Force $espDir | Out-Null
+& (Join-Path $Out 'espstate_test.exe') $espDir
+if ($LASTEXITCODE) { throw 'espstate_test failed' }
 foreach ($f in 'tpmcored.exe', 'crb_bridge_test.exe') { '{0,9}  {1}  {2}' -f (Get-Item (Join-Path $Out $f)).Length, (Get-FileHash (Join-Path $Out $f)).Hash.Substring(0, 8), $f }

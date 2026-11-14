@@ -27,6 +27,10 @@ unsigned tpmcore_resume(const wchar_t *state_dir, unsigned max_buffer, const uns
  * caller then answers TPM_RC_FAILURE itself). */
 size_t tpmcore_process(const unsigned char *command, size_t command_bytes, unsigned char *response, size_t capacity);
 
+/* Called after each store of the permanent state of libtpms (its NV image, "permall") with the stored blob, on the
+ * thread of the command that changed it. NULL: none. The pre-OS TPM keeps its state files current with it. */
+void tpmcore_on_permanent(void (*fn)(const unsigned char *blob, unsigned bytes));
+
 /* Stores the volatile state and stops the core (service stop, system shutdown). */
 void tpmcore_stop(void);
 

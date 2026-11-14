@@ -7,11 +7,15 @@
 #include <wchar.h>
 #include "libtpms/tpm_library.h"
 #include "libtpms/tpm_error.h"
+#include "libtpms/tpm_nvfilename.h"
 #include "tpmcore.h"
 
 #define TPM_RC_INITIALIZE	0x100u	/* TPM2_Startup after a successful one: the TPM already runs */
 
 static wchar_t g_dir[MAX_PATH];
+static void (*g_on_permanent)(const unsigned char *blob, unsigned bytes);
+
+void tpmcore_on_permanent(void (*fn)(const unsigned char *blob, unsigned bytes)) { g_on_permanent = fn; }
 
 /* dir\name for a state blob name of libtpms ("permall", "volatilestate", "savestate"). */
 static int blob_path(const char *name, const wchar_t *suffix, wchar_t *out, size_t cap)
@@ -69,6 +73,7 @@ static TPM_RESULT nv_store(const unsigned char *data, uint32_t length, uint32_t 
 		DeleteFileW(tmp);
 		return TPM_FAIL;
 	}
+	if (g_on_permanent != NULL && strcmp(name, TPM_PERMANENT_ALL_NAME) == 0) g_on_permanent(data, length);
 	return TPM_SUCCESS;
 }
 
