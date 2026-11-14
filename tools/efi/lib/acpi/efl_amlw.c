@@ -22,6 +22,10 @@
 #define AML_DEVICE_OP		0x82u
 #define AML_STRING_PREFIX	0x0Du
 #define AML_BUFFER_OP		0x11u
+#define AML_IF_OP		0xA0u
+#define AML_RETURN_OP		0xA4u
+#define AML_LEQUAL_OP		0x93u
+#define AML_ARG0_OP		0x68u
 
 #define SDT_HEADER_BYTES	36u
 #define SDT_LENGTH		4u
@@ -243,6 +247,44 @@ void efl_amlw_name_string(struct efl_amlw *w, const char *segment, const char *t
 	put8(w, AML_NAME_OP);
 	efl_amlw_bytes(w, segment, NAME_SEG);
 	efl_amlw_string(w, text);
+}
+
+size_t efl_amlw_method_begin(struct efl_amlw *w, const char *segment, unsigned arguments, int serialized)
+{
+	size_t mark;
+	if (strlen(segment) != NAME_SEG || !segment_ok(segment) || arguments > 7u) {
+		w->overflow = 1;
+		return 0;
+	}
+	put8(w, AML_METHOD_OP);
+	mark = w->used;
+	efl_amlw_bytes(w, segment, NAME_SEG);
+	put8(w, (unsigned char)(arguments | (serialized ? 0x08u : 0u)));
+	return mark;
+}
+
+size_t efl_amlw_if_begin(struct efl_amlw *w)
+{
+	size_t mark;
+	put8(w, AML_IF_OP);
+	mark = w->used;
+	return mark;
+}
+
+void efl_amlw_return(struct efl_amlw *w)
+{
+	put8(w, AML_RETURN_OP);
+}
+
+void efl_amlw_arg(struct efl_amlw *w, unsigned index)
+{
+	if (index > 6u) { w->overflow = 1; return; }
+	put8(w, (unsigned char)(AML_ARG0_OP + index));
+}
+
+void efl_amlw_lequal(struct efl_amlw *w)
+{
+	put8(w, AML_LEQUAL_OP);
 }
 
 void efl_amlw_empty_method(struct efl_amlw *w, const char *segment, unsigned arguments)

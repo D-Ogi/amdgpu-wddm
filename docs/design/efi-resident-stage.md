@@ -493,3 +493,15 @@ The core is POSIX-only as shipped. The gates are `TPM_POSIX` and `openssl/bn.h` 
 `RuntimeProfile.c`, and the file layer in `tpm_nvfile.c` and `tpm_library.c`. The state comes from
 `TPMLIB_SetState`/`TPMLIB_GetState` and the `tpm_nvram_loaddata`/`tpm_nvram_storedata` callbacks, so the core
 never writes a file by itself: the stage writes one file on the stick, with a SHA-256 proof and an undo.
+
+## The TPM2 device: where it sits, and the window size
+
+The experiment device is `\_SB.TPM0`. That is the placement that edk2 uses for a firmware TPM:
+`SecurityPkg/Tcg/Tcg2Smm/Tpm.asl` declares `Device (TPM)` inside `Scope (\_SB)`, so `\_SB.TPM`, and gives it
+`Memory32Fixed (ReadWrite, 0xfed40000, 0x5000)` - a window of five localities. Our window is one page, 0x1000 bytes,
+which covers locality 0, and locality 0 is the only one that the Windows TPM driver uses. A later step that needs
+another locality must grow the window and the `_CRS` together, because the reserved page and the descriptor are the
+same object.
+
+The device carries `_HID "MSFT0101"` only when `acpi.ssdt.tpm` is set. The experiment identifier `BC250001` is the
+default so that a run without the TPM option cannot bind `tpm.sys` by accident.

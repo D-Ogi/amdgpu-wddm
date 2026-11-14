@@ -403,6 +403,122 @@ size_t ar_build_idle(const struct ar_plan *plan, unsigned char *out, size_t capa
 	return efl_amlw_table_end(&w);
 }
 
+/* Writes If (LEqual (Arg2, function)) { Return (Integer) }. */
+static void dsm_return_integer(struct efl_amlw *w, unsigned function, unsigned long long value)
+{
+	size_t mark = efl_amlw_if_begin(w);
+	efl_amlw_lequal(w);
+	efl_amlw_arg(w, 2);
+	efl_amlw_integer(w, function);
+	efl_amlw_return(w);
+	efl_amlw_integer(w, value);
+	efl_amlw_end(w, mark);
+}
+
+/* Writes Return (Package () {0, ...}) with the given number of zero integers. */
+static void dsm_return_zeros(struct efl_amlw *w, unsigned elements)
+{
+	size_t package;
+	unsigned i;
+	efl_amlw_return(w);
+	package = efl_amlw_package_begin(w, elements);
+	for (i = 0; i < elements; i++) efl_amlw_integer(w, 0);
+	efl_amlw_end(w, package);
+}
+
+/* Writes If (LEqual (Arg2, function)) { Return (Package () {0, 0, 0}) }. */
+static void dsm_return_zero_package(struct efl_amlw *w, unsigned function)
+{
+	size_t mark = efl_amlw_if_begin(w);
+	efl_amlw_lequal(w);
+	efl_amlw_arg(w, 2);
+	efl_amlw_integer(w, function);
+	dsm_return_zeros(w, 3);
+	efl_amlw_end(w, mark);
+}
+
+/* Function 3: If (LEqual (Arg2, 3)) { If (LEqual (Arg1, 1)) { Return ({0, 0}) } Return ({0, 0, 0}) }. With
+ * Revision ID 1 "no integer parameter beyond parameter two are expected in the response"; Windows asks with
+ * revision 1 and fails with TBS_E_INSUFFICIENT_BUFFER (0x80284005) on three. */
+static void dsm_return_pending(struct efl_amlw *w)
+{
+	size_t mark = efl_amlw_if_begin(w);
+	size_t revision;
+	efl_amlw_lequal(w);
+	efl_amlw_arg(w, 2);
+	efl_amlw_integer(w, 3);
+	revision = efl_amlw_if_begin(w);
+	efl_amlw_lequal(w);
+	efl_amlw_arg(w, 1);
+	efl_amlw_integer(w, 1);
+	dsm_return_zeros(w, 2);
+	efl_amlw_end(w, revision);
+	dsm_return_zeros(w, 3);
+	efl_amlw_end(w, mark);
+}
+
+/*
+ * The _DSM of the TPM device: the TCG Physical Presence Interface (PPI), as tpm.sys reads it. The source of every
+ * value is the TCG PC Client Platform Physical Presence Interface Specification, version 1.30 revision 00.52,
+ * section 8.1 "ACPI Functions". The stage cannot run a physical presence operation at the next boot, so the
+ * method gives an interface with no operation:
+ *   function 0: Buffer {0xFF, 0x01}, functions 0 to 8 are there (the standard _DSM query, ACPI 6.5 section 9.1.1).
+ *   function 1: "1.3", the interface version ("the return value MUST be "1.3"").
+ *   function 2: 1, "Operation Value of the Request Not Supported".
+ *   function 3: {0, 0, 0}, "no operation is pending"; {0, 0} for Revision ID 1, which expects two integers.
+ *   function 4: 0, "None": no operation can be pending, so the OS has no action to do.
+ *   function 5: {0, 0, 0}, "no previously requested operation exists and hence no response exists".
+ *   function 6: 3, "The function MUST return 3" (deprecated, not implemented).
+ *   function 7: 1, "Not Implemented".
+ *   function 8: 0, "Not implemented" for each operation value.
+ * Any other UUID or function: Buffer {0}, no function.
+ * There is no Memory Clear (MOR) _DSM: the TCG PC Client Platform Reset Attack Mitigation Specification, version 1.2
+ * revision 8, deleted the deprecated ACPI method, and Windows uses the UEFI variable. edk2 has no MOR _DSM either.
+ */
+static void write_ppi_dsm(struct efl_amlw *w)
+{
+	static const unsigned char ppi_uuid[16] = {0xA6, 0xFA, 0xDD, 0x3D, 0x1B, 0x36, 0xB4, 0x4E,
+						 0xA4, 0x24, 0x8D, 0x10, 0x08, 0x9D, 0x16, 0x53};	/* ToUUID order */
+	static const unsigned char functions[2] = {0xFF, 0x01};
+	static const unsigned char none[1] = {0x00};
+	size_t method = efl_amlw_method_begin(w, "_DSM", 4, 1);
+	size_t ppi = efl_amlw_if_begin(w);
+	size_t query;
+
+	efl_amlw_lequal(w);
+	efl_amlw_arg(w, 0);
+	efl_amlw_buffer(w, ppi_uuid, sizeof(ppi_uuid));
+
+	query = efl_amlw_if_begin(w);
+	efl_amlw_lequal(w);
+	efl_amlw_arg(w, 2);
+	efl_amlw_integer(w, 0);
+	efl_amlw_return(w);
+	efl_amlw_buffer(w, functions, sizeof(functions));
+	efl_amlw_end(w, query);
+
+	query = efl_amlw_if_begin(w);
+	efl_amlw_lequal(w);
+	efl_amlw_arg(w, 2);
+	efl_amlw_integer(w, 1);
+	efl_amlw_return(w);
+	efl_amlw_string(w, "1.3");
+	efl_amlw_end(w, query);
+
+	dsm_return_integer(w, 2, 1);
+	dsm_return_pending(w);
+	dsm_return_integer(w, 4, 0);
+	dsm_return_zero_package(w, 5);
+	dsm_return_integer(w, 6, 3);
+	dsm_return_integer(w, 7, 1);
+	dsm_return_integer(w, 8, 0);
+	efl_amlw_end(w, ppi);
+
+	efl_amlw_return(w);
+	efl_amlw_buffer(w, none, sizeof(none));
+	efl_amlw_end(w, method);
+}
+
 size_t ar_build_stubs(const struct ar_plan *plan, unsigned char *out, size_t capacity)
 {
 	struct efl_amlw w;
@@ -434,6 +550,7 @@ size_t ar_build_stubs(const struct ar_plan *plan, unsigned char *out, size_t cap
 			efl_amlw_name(&w, "_CRS");
 			efl_amlw_buffer(&w, crs, sizeof(crs));
 		}
+		if (plan->hid_msft) write_ppi_dsm(&w);
 		efl_amlw_end(&w, mark);
 		efl_amlw_end(&w, scope);
 	}

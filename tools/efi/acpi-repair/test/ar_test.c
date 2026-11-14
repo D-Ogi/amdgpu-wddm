@@ -139,6 +139,176 @@ static void check_idle_table(const struct ar_plan *plan, const unsigned char *ta
 }
 
 /* The whole repair on the stock tables of one directory. */
+/*
+ * A small AML interpreter for the _DSM of TPM0. It runs the method body the way an operating system does, for the
+ * subset that the builder writes: If (LEqual (ArgN, data)) { ... }, Return (data), and the data objects Integer,
+ * String, Buffer and a Package of integers (ACPI 6.5 section 20.2). Any other opcode, a length that does not fit,
+ * or a body that ends without Return is a failure. The test thus checks the answers, not the bytes.
+ */
+enum dsm_kind { DSM_NONE, DSM_INTEGER, DSM_STRING, DSM_BUFFER, DSM_PACKAGE };
+
+struct dsm_value {
+	enum dsm_kind kind;
+	unsigned long long integer;
+	const unsigned char *bytes;	/* the payload of a string or a buffer */
+	size_t count;			/* the bytes of a string or a buffer, the elements of a package */
+	unsigned long long element[4];
+};
+
+struct dsm_call {
+	const unsigned char *uuid;	/* Arg0 */
+	unsigned long long revision;	/* Arg1 */
+	unsigned long long function;	/* Arg2 */
+};
+
+/* Reads one data object at p. Returns its bytes, 0 when it is not in the subset or does not fit before end. */
+static size_t dsm_data(const unsigned char *p, const unsigned char *end, struct dsm_value *v)
+{
+	size_t length, lb, i, at;
+	memset(v, 0, sizeof(*v));
+	if (p >= end) return 0;
+	switch (*p) {
+	case 0x00: v->kind = DSM_INTEGER; v->integer = 0; return 1;		/* ZeroOp */
+	case 0x01: v->kind = DSM_INTEGER; v->integer = 1; return 1;		/* OneOp */
+	case 0xFF: v->kind = DSM_INTEGER; v->integer = ~0ull; return 1;	/* OnesOp */
+	case 0x0A: case 0x0B: case 0x0C: case 0x0E: {			/* Byte, Word, DWord, QWord prefix */
+		unsigned width = *p == 0x0A ? 1u : *p == 0x0B ? 2u : *p == 0x0C ? 4u : 8u;
+		if ((size_t)(end - p) < 1u + width) return 0;
+		v->kind = DSM_INTEGER;
+		for (i = 0; i < width; i++) v->integer |= (unsigned long long)p[1 + i] << (8u * i);
+		return 1u + width;
+	}
+	case 0x0D:								/* StringPrefix, NUL terminated */
+		for (i = 1; p + i < end; i++)
+			if (p[i] == 0) { v->kind = DSM_STRING; v->bytes = p + 1; v->count = i - 1u; return i + 1u; }
+		return 0;
+	case 0x11: {								/* BufferOp PkgLength BufferSize bytes */
+		struct dsm_value size;
+		size_t sb;
+		lb = efl_aml_pkg_length(p + 1, end, &length);
+		if (lb == 0 || length > (size_t)(end - p - 1)) return 0;
+		sb = dsm_data(p + 1 + lb, p + 1 + length, &size);
+		if (sb == 0 || size.kind != DSM_INTEGER || size.integer != length - lb - sb) return 0;
+		v->kind = DSM_BUFFER; v->bytes = p + 1 + lb + sb; v->count = (size_t)size.integer;
+		return 1u + length;
+	}
+	case 0x12:								/* PackageOp PkgLength NumElements elements */
+		lb = efl_aml_pkg_length(p + 1, end, &length);
+		if (lb == 0 || length > (size_t)(end - p - 1) || length < lb + 1u) return 0;
+		v->kind = DSM_PACKAGE; v->count = p[1 + lb];
+		if (v->count > 4u) return 0;
+		for (i = 0, at = 1 + lb + 1; i < v->count; i++) {
+			struct dsm_value e;
+			size_t eb = dsm_data(p + at, p + 1 + length, &e);
+			if (eb == 0 || e.kind != DSM_INTEGER) return 0;
+			v->element[i] = e.integer; at += eb;
+		}
+		return at == 1u + length ? 1u + length : 0;
+	default:
+		return 0;
+	}
+}
+
+/* Runs a term list. Returns 1 at Return (with *out set), 0 at the end of the list, -1 at a fault. */
+static int dsm_run(const unsigned char *p, const unsigned char *end, const struct dsm_call *call, struct dsm_value *out)
+{
+	while (p < end) {
+		if (*p == 0xA4)								/* ReturnOp */
+			return dsm_data(p + 1, end, out) > 0 ? 1 : -1;
+		if (*p == 0xA0) {							/* IfOp PkgLength Predicate TermList */
+			size_t length, lb = efl_aml_pkg_length(p + 1, end, &length), db;
+			const unsigned char *q, *if_end;
+			struct dsm_value operand;
+			int equal;
+			if (lb == 0 || length > (size_t)(end - p - 1)) return -1;
+			if_end = p + 1 + length;
+			q = p + 1 + lb;
+			if (q + 2 > if_end || q[0] != 0x93 || q[1] < 0x68 || q[1] > 0x6A) return -1;	/* LEqual (Arg0..Arg2, */
+			db = dsm_data(q + 2, if_end, &operand);
+			if (db == 0) return -1;
+			if (q[1] == 0x68)
+				equal = operand.kind == DSM_BUFFER && operand.count == 16u && !memcmp(operand.bytes, call->uuid, 16);
+			else
+				equal = operand.kind == DSM_INTEGER &&
+					operand.integer == (q[1] == 0x69 ? call->revision : call->function);
+			if (if_end < end && *if_end == 0xA1) return -1;			/* no Else in the subset */
+			if (equal) {
+				int r = dsm_run(q + 2 + db, if_end, call, out);
+				if (r != 0) return r;
+			}
+			p = if_end;
+			continue;
+		}
+		return -1;
+	}
+	return 0;
+}
+
+static int dsm_eval_revision(const unsigned char *body, const unsigned char *end, const unsigned char *uuid,
+			     unsigned long long revision, unsigned long long function, struct dsm_value *out)
+{
+	struct dsm_call call = { uuid, revision, function };
+	return dsm_run(body, end, &call, out) == 1;
+}
+
+/* Revision ID 1, as the specification gives it for most functions. */
+static int dsm_eval(const unsigned char *body, const unsigned char *end, const unsigned char *uuid,
+		    unsigned long long function, struct dsm_value *out)
+{
+	return dsm_eval_revision(body, end, uuid, 1, function, out);
+}
+
+static int dsm_is_integer(const unsigned char *body, const unsigned char *end, const unsigned char *uuid,
+			  unsigned function, unsigned long long value)
+{
+	struct dsm_value v;
+	return dsm_eval(body, end, uuid, function, &v) && v.kind == DSM_INTEGER && v.integer == value;
+}
+
+static int dsm_is_bytes(const unsigned char *body, const unsigned char *end, const unsigned char *uuid,
+			unsigned function, enum dsm_kind kind, const void *bytes, size_t count)
+{
+	struct dsm_value v;
+	return dsm_eval(body, end, uuid, function, &v) && v.kind == kind && v.count == count &&
+	       !memcmp(v.bytes, bytes, count);
+}
+
+/* The answers of the _DSM, function by function. The return values are those of the TCG PC Client Platform
+ * Physical Presence Interface Specification, version 1.30 revision 00.52, section 8.1 (functions 1 to 8); function 0
+ * is the standard query of ACPI 6.5 section 9.1.1. */
+static void check_tpm_dsm(const unsigned char *body, const unsigned char *end, const unsigned char *ppi,
+			  const unsigned char *mor)
+{
+	static const unsigned char ppi_functions[2] = {0xFF, 0x01};	/* functions 0 to 8 */
+	static const unsigned char other[16] = {0};
+	static const unsigned char zero[1] = {0};
+	struct dsm_value v;
+
+	CHECK(dsm_is_bytes(body, end, ppi, 0, DSM_BUFFER, ppi_functions, 2));
+	CHECK(dsm_is_bytes(body, end, ppi, 1, DSM_STRING, "1.3", 3));		/* the interface version */
+	CHECK(dsm_is_integer(body, end, ppi, 2, 1));				/* 1: not implemented */
+	/* Function 3: success, no pending operation; with Revision ID 1 two integers only, with Revision ID 2 also
+	 * the parameter of a pending operation. Windows asks with Revision ID 1 and fails on three integers. */
+	CHECK(dsm_eval_revision(body, end, ppi, 1, 3, &v) && v.kind == DSM_PACKAGE && v.count == 2 &&
+	      v.element[0] == 0 && v.element[1] == 0);
+	CHECK(dsm_eval_revision(body, end, ppi, 2, 3, &v) && v.kind == DSM_PACKAGE && v.count == 3 &&
+	      v.element[0] == 0 && v.element[1] == 0 && v.element[2] == 0);
+	CHECK(dsm_is_integer(body, end, ppi, 4, 0));				/* 0: no action of the OS is necessary */
+	/* Function 5: success, no most recent operation, so no response. */
+	CHECK(dsm_eval(body, end, ppi, 5, &v) && v.kind == DSM_PACKAGE && v.count == 3 && v.element[0] == 0 &&
+	      v.element[1] == 0 && v.element[2] == 0);
+	CHECK(dsm_is_integer(body, end, ppi, 6, 3));				/* 3: not implemented */
+	CHECK(dsm_is_integer(body, end, ppi, 7, 1));				/* 1: not implemented */
+	CHECK(dsm_is_integer(body, end, ppi, 8, 0));				/* 0: not implemented */
+	CHECK(dsm_is_bytes(body, end, ppi, 9, DSM_BUFFER, zero, 1));		/* past the last function */
+
+	/* No Memory Clear _DSM: version 1.2 of the Reset Attack Mitigation specification deleted it. */
+	CHECK(dsm_is_bytes(body, end, mor, 0, DSM_BUFFER, zero, 1));
+	CHECK(dsm_is_bytes(body, end, mor, 1, DSM_BUFFER, zero, 1));
+
+	CHECK(dsm_is_bytes(body, end, other, 0, DSM_BUFFER, zero, 1));		/* an unknown UUID */
+}
+
 static void test_stock(const char *dir, const char *label, const char *out_dir)
 {
 	static struct ar_input in;
@@ -224,54 +394,89 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 		size_t nb = ar_build_stubs(&plan, t, sizeof(t));
 		/* The header's length field carries the size the builder returns. */
 		CHECK(nb > 36u && t[4] == (unsigned char)nb && ar_table_sound(t, nb));
-		CHECK(memcmp(t + nb - 15u, "\x08_HID\x0dMSFT0101", 15) == 0);
+		/* _HID is present wherever the device body puts it, and _DSM follows it when the TPM option is on. */
+		{
+			size_t q, hit = 0;
+			for (q = 36u; q + 15u <= nb; q++)
+				if (!memcmp(t + q, "\x08_HID\x0dMSFT0101", 15)) { hit = 1; break; }
+			CHECK(hit == 1);
+		}
 	}
-	/* The real case of trial s8: MSFT0101 with the reserved page, so _HID followed by _CRS. */
+	/* The real case of trial s8: MSFT0101 with the reserved page, so _HID, _CRS and the _DSM methods. */
 	plan.crb_base = 0x12345000ull;
 	{
-		unsigned char t[512];
+		static const unsigned char ppi_uuid[16] = {0xA6, 0xFA, 0xDD, 0x3D, 0x1B, 0x36, 0xB4, 0x4E,
+							 0xA4, 0x24, 0x8D, 0x10, 0x08, 0x9D, 0x16, 0x53};
+		static const unsigned char mor_uuid[16] = {0xED, 0x54, 0x60, 0x37, 0x13, 0xCC, 0x75, 0x46,
+							 0x90, 0x1C, 0x47, 0x56, 0xD7, 0xF2, 0xD4, 0x5D};
+		unsigned char t[2048];
 		size_t nb = ar_build_stubs(&plan, t, sizeof(t));
-		const unsigned char *crs;
-		size_t at, seen = 0, base = 0, len = 0, rw = 0, ended = 0;
-		/* Header, the three stub methods, the scope, the device, _HID, Name(_CRS) and the buffer object. */
-		CHECK(nb == 36u + 3u * 7u + 7u + 7u + 15u + 5u + 18u);
+		size_t at, dev = 0, body, body_end, m = 0, p, plen = 0;
+		CHECK(nb > 200u);
 		CHECK(ar_table_sound(t, nb));
-		CHECK(memcmp(t + 36u + 3u * 7u + 7u + 7u, "\x08_HID\x0dMSFT0101", 15) == 0);
-		/* The resource template is the buffer's payload: BufferOp, package length, the size byte pair, then
-		 * the template up to the End Tag. Walk it the way a consumer does - a large descriptor carries a
-		 * 16-bit length, the End Tag is the only small one and ends the walk - not a byte compare at a fixed
-		 * offset. The buffer header must declare the same 14 bytes the walk consumes. */
-		CHECK(t[nb - 18u] == 0x11);			/* BufferOp */
-		CHECK(t[nb - 16u] == 0x0A && t[nb - 15u] == 14u);	/* BytePrefix, the size the encoder chose */
-		crs = t + nb - 14u;
-		for (at = 0; at + 2u <= 14u;) {
-			/* A large descriptor sets bit 7: type in the low bits, a 16-bit length, then the payload.
-			 * A small one keeps bit 7 clear: type in bits 6:3, one length byte. */
-			unsigned tag = crs[at] & 0x7Fu, large = (crs[at] & 0x80u) != 0;
-			if (!large) {
-				CHECK((crs[at] >> 3) == 0x0Fu);	/* only the End Tag is small here */
-				ended = at + 2u;
-				break;
-			}
-			{
-			unsigned dlen = (unsigned)crs[at + 1] | ((unsigned)crs[at + 2] << 8);
-			if (tag == 0x0Fu) {		/* End Tag never sets bit 7; this is a malformed template */
-				ended = 0;
-				break;
-			}
-			if (tag == 0x06u && dlen == 9) {	/* Memory32Fixed */
-				seen++;
-				rw = crs[at + 3] & 1u;
-				base = (size_t)crs[at + 4] | ((size_t)crs[at + 5] << 8) | ((size_t)crs[at + 6] << 16) |
-				       ((size_t)crs[at + 7] << 24);
-				len = (size_t)crs[at + 8] | ((size_t)crs[at + 9] << 8) | ((size_t)crs[at + 10] << 16) |
-				      ((size_t)crs[at + 11] << 24);
-			}
-			at += 3u + dlen;
-			}
+		/* Locate the device by its encoding, not by an offset: ExtOp, DeviceOp, a package length of one
+		 * to four bytes, then "TPM0". The length field grows with the body, so it must be parsed. */
+		{
+			size_t lb = 0;
+			for (at = 36u; at + 8u < nb; at++)
+				if (t[at] == 0x5B && t[at + 1] == 0x82 && (lb = efl_aml_pkg_length(t + at + 2u, t + nb, &plen)) > 0 &&
+				    !memcmp(t + at + 2u + lb, "TPM0", 4)) { dev = at; break; }
+			CHECK(dev != 0);
+			if (dev != 0) {
+				body = dev + 2u + lb + 4u;
+				body_end = (dev + 2u + plen <= nb) ? dev + 2u + plen : nb;
+			} else { body = body_end = 0; }
 		}
-		CHECK(seen == 1 && rw == 1 && base == 0x12345000u && len == 0x1000u);
-		CHECK(ended == 14u);			/* the End Tag is the last descriptor and nothing follows it */
+		CHECK(body < body_end && body_end <= nb);
+		CHECK(memcmp(t + body, "\x08_HID\x0dMSFT0101", 15) == 0);
+		/* The resource template: find a large Memory32Fixed descriptor in the device body and walk the
+		 * template from it - the walk a consumer performs, not a compare at a fixed offset. */
+		for (p = body; p + 14u <= body_end; p++) {
+			const unsigned char *crs = t + p;
+			size_t a, seen = 0, base = 0, len = 0, rw = 0, ended = 0;
+			if (crs[0] != 0x86 || crs[1] != 0x09) continue;
+			for (a = 0; a + 2u <= 14u;) {
+				unsigned tag = crs[a] & 0x7Fu, large = (crs[a] & 0x80u) != 0;
+				if (!large) {
+					if ((crs[a] >> 3) != 0x0Fu) break;
+					ended = a + 2u;
+					break;
+				}
+				{
+					unsigned dlen = (unsigned)crs[a + 1] | ((unsigned)crs[a + 2] << 8);
+					if (tag == 0x06u && dlen == 9) {
+						seen++;
+						rw = crs[a + 3] & 1u;
+						base = (size_t)crs[a + 4] | ((size_t)crs[a + 5] << 8) |
+						       ((size_t)crs[a + 6] << 16) | ((size_t)crs[a + 7] << 24);
+						len = (size_t)crs[a + 8] | ((size_t)crs[a + 9] << 8) |
+						      ((size_t)crs[a + 10] << 16) | ((size_t)crs[a + 11] << 24);
+					}
+					a += 3u + dlen;
+				}
+			}
+			if (seen == 1 && rw == 1 && base == 0x12345000u && len == 0x1000u && ended == 14u) { m = p; break; }
+		}
+		CHECK(m != 0);				/* one well-formed template with the page, read-write, End Tag last */
+		/* The _DSM method inside the device: MethodOp, then the name, then the flags. */
+		{
+			size_t meth = 0, meth_end = 0, flen = 0, lb = 0;
+			{
+				size_t mlen = 0;
+				for (at = body; at + 8u < body_end; at++)
+					if (t[at] == 0x14 && (lb = efl_aml_pkg_length(t + at + 1u, t + nb, &mlen)) > 0 &&
+					    !memcmp(t + at + 1u + lb, "_DSM", 4)) { meth = at; flen = mlen; break; }
+			}
+			CHECK(meth != 0);
+			CHECK((t[meth + 1u + lb + 4u] & 0x07u) == 4u && (t[meth + 1u + lb + 4u] & 0x08u) != 0u);	/* 4 args, serialized */
+			meth_end = meth + 1u + flen;
+			if (meth_end > nb) meth_end = nb;
+			CHECK(meth_end <= body_end);
+			if (meth != 0 && meth_end <= body_end)
+				check_tpm_dsm(t + meth + 1u + lb + 5u, t + meth_end, ppi_uuid, mor_uuid);
+		}
+		/* ACPICA reads this table in the build script, as the second parser of the _DSM. */
+		save(out_dir, "ar-stubs-tpm.aml", t, nb);
 	}
 	plan.crb_base = 0;
 	plan.hid_msft = 0;

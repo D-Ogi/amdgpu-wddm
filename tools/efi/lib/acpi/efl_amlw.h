@@ -57,6 +57,17 @@ void efl_amlw_buffer(struct efl_amlw *w, const void *bytes, size_t count);
 /* A named string: Name(_HID, "BC250001"). */
 void efl_amlw_name_string(struct efl_amlw *w, const char *segment, const char *text);
 
+/* A method with a body: the caller writes the body and closes it with efl_amlw_end(mark). Serialized sets bit 3. */
+size_t efl_amlw_method_begin(struct efl_amlw *w, const char *segment, unsigned arguments, int serialized);
+/* If (predicate) {, closed with efl_amlw_end(mark). */
+size_t efl_amlw_if_begin(struct efl_amlw *w);
+/* Return (<the object that follows>). */
+void efl_amlw_return(struct efl_amlw *w);
+/* ArgN, index 0 to 6. */
+void efl_amlw_arg(struct efl_amlw *w, unsigned index);
+/* The LEqual operator of two operands. */
+void efl_amlw_lequal(struct efl_amlw *w);
+
 /* A method with an empty body: Method (segment, arguments, NotSerialized) {}. */
 void efl_amlw_empty_method(struct efl_amlw *w, const char *segment, unsigned arguments);
 
