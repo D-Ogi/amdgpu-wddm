@@ -5,7 +5,7 @@
  * stored tables, and the UEFI bindings against a model of the firmware (firmware_test.c).
  *
  *   host_test <evidence ACPI directory> <unit A ACPI dump directory> <fixture directory> <output directory>
- *             [<real signed image> [<second real signed image>]]
+ *             [<real signed image> [<second real signed image> [<real TCG log>]]]
  *
  * A directory that is not there makes the tests that need it say SKIP. It does not make them fail.
  */
@@ -17,6 +17,7 @@ unsigned lib_tests(unsigned *check_count);
 unsigned ar_tests(const char *evidence_dir, const char *dump_dir, const char *out_dir, unsigned *check_count);
 unsigned firmware_tests(const char *acpi_dir, const char *fixture_dir, unsigned *check_count);
 unsigned sb_tests(const char *fixture_dir, const char *real_image, const char *second_image, unsigned *check_count);
+unsigned tl_tests(const char *real_log, const char *real_image, unsigned *check_count);
 
 static unsigned total_checks, total_failures;
 
@@ -32,6 +33,7 @@ int main(int argc, char **argv)
 	const char *evidence = argc > 1 ? argv[1] : NULL, *dump = argc > 2 ? argv[2] : NULL;
 	const char *fixtures = argc > 3 ? argv[3] : NULL, *out = argc > 4 ? argv[4] : NULL;
 	const char *real_image = argc > 5 ? argv[5] : NULL, *second_image = argc > 6 ? argv[6] : NULL;
+	const char *real_log = argc > 7 ? argv[7] : NULL;
 	unsigned count = 0, failed;
 
 	failed = lib_tests(&count);
@@ -44,6 +46,8 @@ int main(int argc, char **argv)
 	report("acpi-repair", failed, count);
 	failed = sb_tests(fixtures, real_image, second_image, &count);
 	report("secure-boot", failed, count);
+	failed = tl_tests(real_log, real_image, &count);
+	report("tpm", failed, count);
 	failed = firmware_tests(evidence, fixtures, &count);
 	report("bindings", failed, count);
 	printf("bc250-stage host tests: %u checks, %u failures\n", total_checks, total_failures);

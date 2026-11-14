@@ -23,6 +23,9 @@ param(
     # Two real signed images, the positive controls of the Secure Boot tests. They are necessary.
     [string]$SignedImage = 'C:\Windows\Boot\EFI\bootmgfw.efi',
     [string]$SecondSignedImage = 'C:\Windows\System32\winload.efi',
+    # A real crypto-agile TCG log, the positive control of the log reader of the TPM module: a copy of a Windows
+    # measured-boot log, outside the repository. Not there: that check says SKIP.
+    [string]$TcgLog = 'P:\BC-250\scratch\t39\tpm-preos-fixtures\devpc-measuredboot.log',
     [switch]$SkipTests
 )
 
@@ -49,13 +52,15 @@ function Invoke-Tool([string]$exe, [string[]]$argv) {
 function Sources([string]$directory, [string[]]$names) { $names | ForEach-Object { Join-Path $efiRoot "$directory\$_" } }
 
 # The pure code of each part: it builds for the firmware and for the host tests.
-$libPure = Sources 'lib' @('efl_sha256.c', 'efl_smbios.c', 'efl_text.c', 'acpi\efl_acpi.c', 'acpi\efl_aml.c', 'acpi\efl_amlw.c')
+$libPure = Sources 'lib' @('efl_sha256.c', 'efl_pe.c', 'efl_smbios.c', 'efl_text.c', 'acpi\efl_acpi.c', 'acpi\efl_aml.c',
+    'acpi\efl_amlw.c')
 $corePure = Sources 'stage\src' @('stage_options.c')
 $unlockPure = Sources 'core-unlock\src' @('cu_bar.c', 'cu_decide.c', 'cu_run.c', 'cu_smu.c', 'cu_msr.c', 'cu_report.c', 'cu_options.c')
 $repairPure = Sources 'acpi-repair\src' @('ar_plan.c')
-$securePure = Sources 'secure-boot\src' @('sb_der.c', 'sb_rsa.c', 'sb_x509.c', 'sb_pe.c', 'sb_pkcs7.c', 'sb_siglist.c',
+$securePure = Sources 'secure-boot\src' @('sb_der.c', 'sb_rsa.c', 'sb_x509.c', 'sb_pkcs7.c', 'sb_siglist.c',
     'sb_verify.c', 'sb_policy.c', 'sb_crc32.c')
-$pure = @($libPure) + @($corePure) + @($unlockPure) + @($repairPure) + @($securePure)
+$tpmPure = Sources 'tpm\src' @('tl_log.c', 'tl_tpm2.c', 'tl_measure.c', 'tl_tcg2.c')
+$pure = @($libPure) + @($corePure) + @($unlockPure) + @($repairPure) + @($securePure) + @($tpmPure)
 # The UEFI bindings: the core and one file for each module.
 $bindings = @(Sources 'stage\src' @('main.c')) + @(Sources 'core-unlock\src' @('cu_module.c', 'report_uefi.c')) +
     @(Sources 'acpi-repair\src' @('ar_module.c')) + @(Sources 'secure-boot\src' @('sb_module.c', 'sb_windows.c'))
@@ -68,10 +73,11 @@ $shared = @((Join-Path $shim 'bc250_smu.c'), (Join-Path $shim 'bc250_cpu.c'), (J
 $tests = @((Join-Path $efiRoot 'stage\test\host_main.c'), (Join-Path $efiRoot 'stage\test\stage_test.c'),
     (Join-Path $efiRoot 'lib\test\lib_test.c'), (Join-Path $efiRoot 'core-unlock\test\host_test.c'),
     (Join-Path $efiRoot 'core-unlock\test\report_test.c'), (Join-Path $efiRoot 'acpi-repair\test\ar_test.c'),
-    (Join-Path $efiRoot 'secure-boot\test\sb_test.c'), (Join-Path $efiRoot 'stage\test\firmware_test.c'))
+    (Join-Path $efiRoot 'secure-boot\test\sb_test.c'), (Join-Path $efiRoot 'stage\test\firmware_test.c'),
+    (Join-Path $efiRoot 'tpm\test\tl_test.c'))
 
 $includes = @("-I$efiRoot\lib", "-I$efiRoot\lib\acpi", "-I$efiRoot\stage\src", "-I$efiRoot\core-unlock\src",
-    "-I$efiRoot\acpi-repair\src", "-I$efiRoot\secure-boot\src",
+    "-I$efiRoot\acpi-repair\src", "-I$efiRoot\secure-boot\src", "-I$efiRoot\tpm\src",
     "-I$shim\include", "-I$shim", "-I$repo\driver\amdgpu-import", "-I$repo\third_party\linux-amdgpu", "-I$repo\driver\kmd", "-I$repo\driver\common\board")
 $strict = @('-Wall', '-Wextra', '-Werror')
 $relaxed = @('-Wall', '-Wno-unknown-pragmas', '-Wno-unused-parameter')
@@ -144,7 +150,7 @@ if ($changed.Status -ne 'HashMismatch') { throw 'Windows does not refuse the cha
 
 Write-Host 'run (host tests)'
 # The first directory is the stock ACPI tables that the repository stores as evidence.
-& $test (Join-Path $repo 'evidence\linux\2026-09-21-E01-recon-binaries\acpi') $AcpiDump $fixtures $tables $SignedImage $SecondSignedImage
+& $test (Join-Path $repo 'evidence\linux\2026-09-21-E01-recon-binaries\acpi') $AcpiDump $fixtures $tables $SignedImage $SecondSignedImage $TcgLog
 $code = $LASTEXITCODE
 Write-Host "bc250-stage host tests exit code $code"
 

@@ -129,6 +129,7 @@ typedef enum {
 } EFI_MEMORY_TYPE;
 typedef enum { AllHandles = 0, ByRegisterNotify = 1, ByProtocol = 2 } EFI_LOCATE_SEARCH_TYPE;
 typedef enum { AllocateAnyPages = 0, AllocateMaxAddress = 1, AllocateAddress = 2 } EFI_ALLOCATE_TYPE;
+typedef enum { EFI_NATIVE_INTERFACE = 0 } EFI_INTERFACE_TYPE;
 typedef EFI_STATUS (EFIAPI *EFI_ALLOCATE_PAGES)(EFI_ALLOCATE_TYPE, EFI_MEMORY_TYPE, UINTN, EFI_PHYSICAL_ADDRESS *);
 
 typedef struct {
@@ -147,16 +148,17 @@ typedef struct {
 	VOID *SignalEvent;
 	EFI_STATUS (EFIAPI *CloseEvent)(EFI_EVENT Event);
 	VOID *CheckEvent;
-	VOID *InstallProtocolInterface;
+	EFI_STATUS (EFIAPI *InstallProtocolInterface)(EFI_HANDLE *Handle, const EFI_GUID *Protocol,
+						      EFI_INTERFACE_TYPE InterfaceType, VOID *Interface);
 	EFI_STATUS (EFIAPI *ReinstallProtocolInterface)(EFI_HANDLE Handle, const EFI_GUID *Protocol, VOID *OldInterface,
 							VOID *NewInterface);
-	VOID *UninstallProtocolInterface;
+	EFI_STATUS (EFIAPI *UninstallProtocolInterface)(EFI_HANDLE Handle, const EFI_GUID *Protocol, VOID *Interface);
 	EFI_STATUS (EFIAPI *HandleProtocol)(EFI_HANDLE Handle, const EFI_GUID *Protocol, VOID **Interface);
 	VOID *Reserved;
 	VOID *RegisterProtocolNotify;
 	VOID *LocateHandle;
 	VOID *LocateDevicePath;
-	VOID *InstallConfigurationTable;
+	EFI_STATUS (EFIAPI *InstallConfigurationTable)(const EFI_GUID *Guid, VOID *Table);
 	EFI_STATUS (EFIAPI *LoadImage)(BOOLEAN BootPolicy, EFI_HANDLE ParentImageHandle,
 				       EFI_DEVICE_PATH_PROTOCOL *DevicePath, VOID *SourceBuffer, UINTN SourceSize,
 				       EFI_HANDLE *ImageHandle);
