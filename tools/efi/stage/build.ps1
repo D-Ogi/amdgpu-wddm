@@ -63,7 +63,7 @@ $repairPure = Sources 'acpi-repair\src' @('ar_plan.c')
 $securePure = Sources 'secure-boot\src' @('sb_der.c', 'sb_rsa.c', 'sb_x509.c', 'sb_pkcs7.c', 'sb_siglist.c',
     'sb_verify.c', 'sb_policy.c', 'sb_crc32.c')
 $tpmPure = @(Sources 'tpm\src' @('tl_log.c', 'tl_tpm2.c', 'tl_measure.c', 'tl_tcg2.c')) +
-    @(Join-Path $repo 'driver\tpm\handoff.c')
+    @((Join-Path $repo 'driver\tpm\handoff.c'), (Join-Path $repo 'driver\tpm\statefile.c'))
 $pure = @($libPure) + @($corePure) + @($unlockPure) + @($repairPure) + @($securePure) + @($tpmPure)
 # The UEFI bindings: the core and one file for each module.
 $bindings = @(Sources 'stage\src' @('main.c')) + @(Sources 'core-unlock\src' @('cu_module.c', 'report_uefi.c')) +

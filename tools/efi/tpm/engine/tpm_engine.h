@@ -77,6 +77,12 @@ size_t tpm_engine_arena_peak(void);
  * engine for the rest of the image. For the last step before the arena goes to the next owner. */
 void tpm_engine_wipe(void);
 
+/* AES-256-GCM with the OpenSSL of the engine, in the contract of tpm_statefile_gcm (driver/tpm/statefile.h): the
+ * cipher of the state files on the EFI system partition. Returns 0 before tpm_engine_init and after
+ * tpm_engine_wipe, because the OpenSSL state lives in the arena. */
+int tpm_engine_gcm(int seal, const unsigned char key[32], const unsigned char nonce[12], const unsigned char *aad,
+		   size_t aad_bytes, const unsigned char *in, size_t n, unsigned char *out, unsigned char tag[16]);
+
 /* An optional sink for the log lines of libtpms and the C runtime (one call for each piece of text). NULL: none. */
 void tpm_engine_set_log(void (*sink)(void *ctx, const char *text, size_t bytes), void *ctx);
 

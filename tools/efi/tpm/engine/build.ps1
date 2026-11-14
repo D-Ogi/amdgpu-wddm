@@ -177,8 +177,10 @@ foreach ($source in Get-ChildItem "$crt\*.c") {
 $engineFlags = $stageFlags + $noWindows + $strict + @('-include', $platformHeader, "-I$crt\include", "-I$crt", "-I$here",
     '-isystem', "$ssl\include", '-isystem', "$Libtpms\include")
 foreach ($source in Get-ChildItem "$here\*.c") {
-    Invoke-Tool $clang ($engineFlags + @('-c', $source.FullName, '-o', (Join-Path $objOwn "engine_$($source.BaseName).o")))
+    Invoke-Tool $clang ($engineFlags + @("-I$repo\driver\tpm", '-c', $source.FullName, '-o', (Join-Path $objOwn "engine_$($source.BaseName).o")))
 }
+# The AES-256-GCM of the state file: one source with the Windows core (driver\tpm\gcm_openssl.c).
+Invoke-Tool $clang ($engineFlags + @("-I$repo\driver\tpm", '-c', (Join-Path $repo 'driver\tpm\gcm_openssl.c'), '-o', (Join-Path $objOwn 'engine_gcm_openssl.o')))
 
 # ---- the archive
 $lib = Join-Path $Out 'tpm_engine.lib'
@@ -258,7 +260,7 @@ if ($code -ne 0) { exit $code }
 
 # Each mutation breaks one check on purpose (engine_test.c). A mutation that passes means that its check proves
 # nothing, so the build fails.
-foreach ($mutation in @('pcr-after-resume', 'volatile-intact')) {
+foreach ($mutation in @('pcr-after-resume', 'volatile-intact', 'gcm-tag')) {
     $lines = & $test "--mutate=$mutation"
     $mutationCode = $LASTEXITCODE
     $lines | Where-Object { $_ -match '^  FAIL |^(PASS|FAIL):' } | ForEach-Object { Write-Host "  $_" }

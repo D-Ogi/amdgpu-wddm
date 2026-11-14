@@ -16,6 +16,7 @@
 #include "tl_tcg2.h"
 #include "tl_tpm2.h"
 #include "handoff.h"
+#include "statefile.h"
 
 struct model_tpm {
 	unsigned char pcr[24][TL_SHA256_BYTES];
@@ -480,10 +481,163 @@ static void test_handoff(void)
 	CHECK(tpm_handoff_read(record, sizeof(record), efl_sha256, NULL) == TPM_HANDOFF_NONE);
 }
 
+/* A model of AES-256-GCM for the frame tests of the state file: a keystream of SHA-256(key, nonce, counter) and a
+ * tag of SHA-256(key, nonce, additional data, ciphertext). It is an authenticated cipher in the same contract, so
+ * every frame rule of statefile.c is exercised; the real GCM has its known-answer test in the engine test. */
+static int model_gcm(int seal, const unsigned char key[32], const unsigned char nonce[12], const unsigned char *aad,
+		     size_t aad_bytes, const unsigned char *in, size_t n, unsigned char *out, unsigned char tag[16])
+{
+	unsigned char t[32], block[32];
+	struct efl_sha256 s;
+	size_t i;
+
+	efl_sha256_init(&s);
+	efl_sha256_update(&s, key, 32);
+	efl_sha256_update(&s, nonce, 12);
+	efl_sha256_update(&s, aad, aad_bytes);
+	if (!seal) {
+		efl_sha256_update(&s, in, n);
+		efl_sha256_final(&s, t);
+		if (memcmp(t, tag, 16) != 0) return 0;
+	}
+	for (i = 0; i < n; i++) {
+		if (i % 32 == 0) {
+			unsigned char ctr[44];
+			memcpy(ctr, key, 32);
+			memcpy(ctr + 32, nonce, 12);
+			ctr[31] ^= (unsigned char)(i / 32);
+			efl_sha256(ctr, sizeof(ctr), block);
+		}
+		out[i] = (unsigned char)(in[i] ^ block[i % 32]);
+	}
+	if (seal) {
+		efl_sha256_update(&s, out, n);
+		efl_sha256_final(&s, t);
+		memcpy(tag, t, 16);
+	}
+	return 1;
+}
+
+/* An RSMB table: the 8-byte header, a type 1 with a UUID, a type 2 whose serial is string 4, the end structure. */
+static size_t make_rsmb(unsigned char *t, int with_type1, int with_type2, unsigned char uuid_first)
+{
+	static const unsigned char type2_strings[] = "maker\0board\0v1\0SERIAL-42\0";
+	size_t p = 8, i;
+	memset(t, 0, 256);
+	t[1] = 3; t[2] = 3;
+	if (with_type1) {
+		t[p] = 1; t[p + 1] = 0x1B; t[p + 2] = 1;
+		for (i = 0; i < 16; i++) t[p + 8 + i] = (unsigned char)(uuid_first + i);
+		p += 0x1B;
+		t[p] = 0; t[p + 1] = 0;	/* no strings: the double zero */
+		p += 2;
+	}
+	if (with_type2) {
+		t[p] = 2; t[p + 1] = 0x0F; t[p + 2] = 2;
+		t[p + 4] = 1; t[p + 5] = 2; t[p + 6] = 3; t[p + 7] = 4;
+		p += 0x0F;
+		memcpy(t + p, type2_strings, sizeof(type2_strings));	/* the last NUL of the literal ends the set */
+		p += sizeof(type2_strings);
+	}
+	t[p] = 127; t[p + 1] = 4; p += 4;
+	t[p] = 0; t[p + 1] = 0; p += 2;
+	t[4] = (unsigned char)(p - 8);
+	return p;
+}
+
+/* The expected key, built here from its definition and not from statefile.c. */
+static void expect_key(unsigned char uuid_first, const char *serial, unsigned char key[32])
+{
+	static const char label[] = "BC-250 TPM state key, version 1";
+	unsigned char in[128];
+	size_t n = sizeof(label) - 1u, len = strlen(serial), i;
+	memcpy(in, label, n);
+	for (i = 0; i < 16; i++) in[n + i] = (unsigned char)(uuid_first + i);
+	in[n + 16] = (unsigned char)len;
+	in[n + 17] = 0;
+	memcpy(in + n + 18, serial, len);
+	efl_sha256(in, n + 18 + len, key);
+}
+
+/* The state file (driver/tpm/statefile.c): the board key, the round trip, each defect, and the A/B choice. */
+static void test_statefile(void)
+{
+	static unsigned char file[TPM_STATEFILE_HEADER_BYTES + 100 + TPM_STATEFILE_TAG_BYTES], blob[100], back[100];
+	static const unsigned char nonce[12] = { 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 1, 2 };
+	unsigned char rsmb[256], key[32], other[32], want[32];
+	unsigned long long seq = 0, next = 0;
+	size_t n, got = 0, i, r;
+	int bad = 0;
+
+	/* The key: label, UUID, serial; another UUID or no serial is another key; no type 1 is no key. */
+	r = make_rsmb(rsmb, 1, 1, 0x10);
+	expect_key(0x10, "SERIAL-42", want);
+	CHECK(tpm_statefile_board_key(rsmb, r, efl_sha256, key) == 1 && !memcmp(key, want, 32));
+	r = make_rsmb(rsmb, 1, 0, 0x10);
+	expect_key(0x10, "", want);
+	CHECK(tpm_statefile_board_key(rsmb, r, efl_sha256, other) == 1 && !memcmp(other, want, 32) && memcmp(other, key, 32));
+	r = make_rsmb(rsmb, 1, 1, 0x11);
+	CHECK(tpm_statefile_board_key(rsmb, r, efl_sha256, other) == 1 && memcmp(other, key, 32));
+	r = make_rsmb(rsmb, 0, 1, 0x10);
+	CHECK(tpm_statefile_board_key(rsmb, r, efl_sha256, other) == 0);
+	/* A table cut inside the type 1 structure: no key, no read past the end. */
+	r = make_rsmb(rsmb, 1, 1, 0x10);
+	CHECK(tpm_statefile_board_key(rsmb, 8 + 20, efl_sha256, other) == 0);
+	CHECK(tpm_statefile_board_key(rsmb, 4, efl_sha256, other) == 0);
+
+	/* The round trip. */
+	for (i = 0; i < sizeof(blob); i++) blob[i] = (unsigned char)(0x30 + i);
+	n = tpm_statefile_write(file, sizeof(file), 5, nonce, key, blob, sizeof(blob), model_gcm);
+	CHECK(n == sizeof(file) && !memcmp(file, "BCTS", 4) && memcmp(file + TPM_STATEFILE_HEADER_BYTES, blob, 16));
+	CHECK(tpm_statefile_read(file, n, key, model_gcm, back, sizeof(back), &got, &seq) == TPM_STATEFILE_OK &&
+	      got == sizeof(blob) && seq == 5u && !memcmp(back, blob, sizeof(blob)));
+	/* Another key: the tag fails, and the buffer holds no plaintext. */
+	memset(back, 0xEE, sizeof(back));
+	CHECK(tpm_statefile_read(file, n, other, model_gcm, back, sizeof(back), &got, &seq) == TPM_STATEFILE_BAD_TAG);
+	for (i = 0; i < sizeof(back); i++) bad |= back[i] != 0;
+	CHECK(!bad);
+	/* A buffer too small for the blob. */
+	CHECK(tpm_statefile_read(file, n, key, model_gcm, back, sizeof(back) - 1u, &got, &seq) == TPM_STATEFILE_SMALL);
+
+	/* Each byte is covered: a changed byte is never OK. The magic gives NONE, the frame fields BAD_FRAME, every
+	 * other byte BAD_TAG (the header is the additional data, so the reserved bytes and the nonce count too). */
+	for (i = 0; i < n; i++) {
+		enum tpm_statefile_result want_result = TPM_STATEFILE_BAD_TAG, res;
+		if (i < 4) want_result = TPM_STATEFILE_NONE;			/* the magic */
+		else if (i < 8 || (i >= 16 && i < 20)) want_result = TPM_STATEFILE_BAD_FRAME;	/* version, sizes */
+		file[i] ^= 0x01;
+		res = tpm_statefile_read(file, n, key, model_gcm, back, sizeof(back), &got, &seq);
+		file[i] ^= 0x01;
+		if (res != want_result) { CHECK(!"one changed byte of the state file gave another result"); break; }
+	}
+	checks++;
+	/* The frame: a file shorter or longer than its sizes, sequence 0. */
+	CHECK(tpm_statefile_read(file, n - 1u, key, model_gcm, back, sizeof(back), &got, &seq) == TPM_STATEFILE_BAD_FRAME);
+	CHECK(tpm_statefile_read(file, 10, key, model_gcm, back, sizeof(back), &got, &seq) == TPM_STATEFILE_NONE);
+	memset(file + 8, 0, 8);
+	CHECK(tpm_statefile_read(file, n, key, model_gcm, back, sizeof(back), &got, &seq) == TPM_STATEFILE_BAD_FRAME);
+	/* The writer refuses sequence 0, an empty blob and a buffer too small. */
+	CHECK(tpm_statefile_write(file, sizeof(file), 0, nonce, key, blob, sizeof(blob), model_gcm) == 0);
+	CHECK(tpm_statefile_write(file, sizeof(file), 1, nonce, key, blob, 0, model_gcm) == 0);
+	CHECK(tpm_statefile_write(file, sizeof(file) - 1u, 1, nonce, key, blob, sizeof(blob), model_gcm) == 0);
+
+	/* The choice and the next write. */
+	CHECK(tpm_statefile_choose(TPM_STATEFILE_OK, 4, TPM_STATEFILE_OK, 5) == 1);
+	CHECK(tpm_statefile_choose(TPM_STATEFILE_OK, 6, TPM_STATEFILE_OK, 5) == 0);
+	CHECK(tpm_statefile_choose(TPM_STATEFILE_OK, 5, TPM_STATEFILE_OK, 5) == 0);
+	CHECK(tpm_statefile_choose(TPM_STATEFILE_BAD_TAG, 9, TPM_STATEFILE_OK, 2) == 1);
+	CHECK(tpm_statefile_choose(TPM_STATEFILE_OK, 2, TPM_STATEFILE_NONE, 0) == 0);
+	CHECK(tpm_statefile_choose(TPM_STATEFILE_BAD_FRAME, 0, TPM_STATEFILE_BAD_TAG, 0) == -1);
+	CHECK(tpm_statefile_next(-1, 0, 0, &next) == 0 && next == 1u);
+	CHECK(tpm_statefile_next(0, 7, 3, &next) == 1 && next == 8u);
+	CHECK(tpm_statefile_next(1, 7, 9, &next) == 0 && next == 10u);
+}
+
 unsigned tl_tests(const char *real_log, const char *real_image, unsigned *check_count)
 {
 	checks = failures = 0;
 	test_handoff();
+	test_statefile();
 	test_log_format();
 	test_log_full();
 	test_real_log(real_log);

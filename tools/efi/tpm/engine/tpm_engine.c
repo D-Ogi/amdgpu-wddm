@@ -35,6 +35,7 @@
 #include "crt.h"
 #include "tpm_engine.h"
 #include "tpm_engine_internal.h"
+#include "gcm_openssl.h"
 
 /* libtpms 165c303, src/tpm_library.c: the clear of the blobs that TPMLIB_SetState cached. TPMLIB_SetState with NULL
  * does not clear; it caches an empty state, which TPMLIB_MainInit would take as an empty NV image. */
@@ -166,6 +167,24 @@ int tpm_engine_init(const struct tpm_engine_platform *p)
 	}
 	g_initialized = 1;
 	return 1;
+}
+
+int tpm_engine_gcm(int seal, const unsigned char key[32], const unsigned char nonce[12], const unsigned char *aad,
+		   size_t aad_bytes, const unsigned char *in, size_t n, unsigned char *out, unsigned char tag[16])
+{
+	crt_jmp_buf jb;
+	int ok;
+
+	if (!usable()) return 0;
+	/* OpenSSL allocates the cipher context from the arena: a failure there ends under the guard. */
+	if (crt_setjmp(&jb)) {
+		broken(&jb);
+		return 0;
+	}
+	crt_guard_enter(&jb);
+	ok = tpm_gcm_openssl(seal, key, nonce, aad, aad_bytes, in, n, out, tag);
+	crt_guard_leave(&jb);
+	return ok;
 }
 
 /* A start that did not work, still under its guard. */
