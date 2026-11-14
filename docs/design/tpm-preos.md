@@ -42,8 +42,8 @@ The stage module `tpm` (load option `tpm=0` turns it off) runs after the core un
 1. **run.** The module reads the state file of the EFI system partition, starts libtpms with it (or manufactures a
    new TPM when no file is there), sends `TPM2_Startup(CLEAR)`, reads the active PCR banks, and installs
    `EFI_TCG2_PROTOCOL` and the final events table. It measures the pre-OS events (next section). It allocates the
-   handoff range as `EfiReservedMemoryType` and gives its address to the core of the stage (`stage->tpm_handoff`);
-   the ACPI repair describes it in `Device (TPM0)`.
+   handoff range as `EfiReservedMemoryType` and gives its address to the core of the stage (`stage->tpm_handoff`).
+   The ACPI repair describes it in `Device (TPM0)`.
 2. **gate.** The module measures the Authenticode digest of the next image into PCR 4 and answers
    `STAGE_GATE_BIND`, so that the bytes that start are the bytes that were measured.
 3. **The Boot Manager and the boot loader** use the protocol: `GetEventLog`, `HashLogExtendEvent`, `SubmitCommand`.
@@ -81,7 +81,7 @@ BitLocker.
 
 One range of `EfiReservedMemoryType` pages: a header (`handoff.h`: magic, version, length, the partition GUID of
 the stage volume, the sizes of the two blobs, a SHA-256 over all of it), then the permanent state, then the volatile
-state. The ACPI repair writes `Name (BCHO, Package () { address, length })` into `Device (TPM0)`; the filter reads it
+state. The ACPI repair writes `Name (BCHO, Package () { address, length })` into `Device (TPM0)`. The filter reads it
 with `IOCTL_ACPI_EVAL_METHOD` from the device below it. The range is not in `_CRS`, so the arbiter does not see it.
 
 The filter maps the range cached (it is RAM, written by the processor), checks the header, copies the record for one
@@ -91,13 +91,20 @@ TPM, and no later reader must find them there.
 ## The state on the EFI system partition
 
 - **Where.** `\EFI\BC250\tpm\state-a.bin` and `state-b.bin` on the volume of the stage. The core finds that volume
-  by the partition GUID in the handoff header.
+  by the partition GUID in the handoff header: it asks each volume for `IOCTL_DISK_GET_PARTITION_INFO_EX` and takes
+  the GPT partition with that GUID (`driver/tpm/core/espstate.c`).
 - **Format.** `magic | version | sequence | length | nonce | encrypted blob | tag`. The blob is the permanent state
-  of libtpms. AES-256-GCM with a key that both sides derive from the board identity: SHA-256 over a fixed label and
+  of libtpms. AES-256-GCM with a key that both sides derive from the board identity: SHA-256 over a constant label and
   the SMBIOS system UUID and baseboard serial. The key never goes to a file.
-- **Writers.** Only the Windows core writes. It writes on each NV store of libtpms and at its stop, to the file with
-  the older sequence, flushes it, and the higher valid sequence wins at the next start. A power cut leaves the
-  previous copy.
+- **Writers.** Only the Windows core writes, and only for a TPM that it resumed from a handoff. It writes on each
+  store of the permanent state of libtpms (`tpmcore_on_permanent`), and at once when the handoff says that the stage
+  manufactured the TPM or changed its NV. It writes to the copy that is not the state, with the next sequence and a
+  random nonce, and flushes it. The higher valid sequence wins at the next start. A power cut leaves the previous
+  copy.
+- **Key.** SHA-256 over the label "BC-250 TPM state key, version 1", the 16 bytes of the SMBIOS type 1 UUID, the
+  length (two bytes) and the bytes of the type 2 serial. Both sides read the same SMBIOS table: the stage from the
+  configuration table, the core from `GetSystemFirmwareTable('RSMB')`. Any administrator of the running system can
+  read that table, so the key protects the files on a disk away from its board, not against the system itself.
 - **Reader.** The stage reads both files and takes the valid copy with the higher sequence. Pre-OS NV changes (the
   clock, the dictionary attack counter) go to Windows in the handoff and are written by the core.
 - **No valid copy.** Both files absent: the stage manufactures a new TPM. One or both files present and none
@@ -106,8 +113,8 @@ TPM, and no later reader must find them there.
 
 ## The failure policy
 
-The stage starts Windows on every path. A TPM that did not start means no protocol and no device; BitLocker then asks
-for the recovery key, which is the correct answer to a changed platform. The core without a handoff (stage with
+The stage starts Windows on every path. A TPM that did not start means no protocol and no device. BitLocker then asks
+for the recovery key, which is the right answer to a changed platform. The core without a handoff (stage with
 `tpm=0`, or the stage of an earlier version) keeps the behaviour of the servicer: its own `TPM2_Startup`.
 
 ## The test plan
@@ -117,7 +124,7 @@ for the recovery key, which is the correct answer to a changed platform. The cor
   (sequence choice, refusal, key derivation), and the engine: the same objects of the stage target linked into a host
   program run `TPM2_Startup`, `PCR_Extend`, `Create`, `Unseal`, `GetState` and `SetState`, and a resumed TPM answers
   the unseal of a key that was sealed before the handoff.
-- **Lab steps.** (1) The stage with the module: the log shows the TPM start and the measurements; `Get-Tpm` in
+- **Lab steps.** (1) The stage with the module: the log shows the TPM start and the measurements. `Get-Tpm` in
   Windows is ready, and `TPM2_PCR_Read` of PCR 0 and 4 equals the replay of the Windows measured-boot log. (2) Two
   stage boots give the same PCR 0, 2 and 4. (3) BitLocker: the recovery password to `secrets\`, a TPM protector on
   `C:`, encryption of the used space, then a stage boot that unlocks without a prompt.
