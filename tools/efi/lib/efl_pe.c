@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
-/* The Authenticode digest of a PE image (sb_pe.h). Each offset below is named once, from the "PE Format"
+/* The Authenticode digest of a PE image (efl_pe.h). Each offset below is named once, from the "PE Format"
  * specification. */
 #include <stddef.h>
 #include <string.h>
 #include "efl_sha256.h"
-#include "sb_pe.h"
+#include "efl_pe.h"
 
 #define DOS_MAGIC		0x5A4Du		/* "MZ" */
 #define DOS_LFANEW		0x3Cu		/* the file offset of the PE signature */
@@ -38,7 +38,7 @@ static size_t le32(const unsigned char *p)
 	return (size_t)p[0] | ((size_t)p[1] << 8) | ((size_t)p[2] << 16) | ((size_t)p[3] << 24);
 }
 
-int sb_pe_read(const unsigned char *image, size_t bytes, struct sb_pe *out)
+int efl_pe_read(const unsigned char *image, size_t bytes, struct efl_pe *out)
 {
 	struct efl_sha256 hash;
 	size_t pe, opt, opt_bytes, headers, checksum, directories, directory_count, security, sections_at, sum, end;
@@ -120,7 +120,7 @@ int sb_pe_read(const unsigned char *image, size_t bytes, struct sb_pe *out)
 	return 1;
 }
 
-int sb_pe_next_signature(const unsigned char *image, const struct sb_pe *pe, size_t *cursor,
+int efl_pe_next_signature(const unsigned char *image, const struct efl_pe *pe, size_t *cursor,
 			 const unsigned char **signature, size_t *signature_bytes)
 {
 	while (*cursor < pe->cert_bytes) {

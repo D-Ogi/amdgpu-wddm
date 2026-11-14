@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <string.h>
 #include "efl_sha256.h"
-#include "sb_pe.h"
+#include "efl_pe.h"
 #include "sb_pkcs7.h"
 #include "sb_siglist.h"
 #include "sb_verify.h"
@@ -95,7 +95,7 @@ static enum chain walk(const struct sb_pkcs7 *p7, const struct sb_cert *signer, 
 void sb_verify_image(const unsigned char *image, size_t bytes, const struct sb_databases *d, struct sb_result *out)
 {
 	struct sb_siglist_count count;
-	struct sb_pe pe;
+	struct efl_pe pe;
 	const unsigned char *signature;
 	size_t cursor = 0, signature_bytes;
 	unsigned valid = 0, allowed = 0, forbidden = 0, seen = 0;
@@ -106,7 +106,7 @@ void sb_verify_image(const unsigned char *image, size_t bytes, const struct sb_d
 		out->verdict = SB_BAD_DATABASE;
 		return;
 	}
-	if (!sb_pe_read(image, bytes, &pe)) {
+	if (!efl_pe_read(image, bytes, &pe)) {
 		out->verdict = SB_NOT_AN_IMAGE;
 		return;
 	}
@@ -115,7 +115,7 @@ void sb_verify_image(const unsigned char *image, size_t bytes, const struct sb_d
 		out->verdict = SB_FORBIDDEN_DIGEST;
 		return;
 	}
-	while ((more = sb_pe_next_signature(image, &pe, &cursor, &signature, &signature_bytes)) == 1) {
+	while ((more = efl_pe_next_signature(image, &pe, &cursor, &signature, &signature_bytes)) == 1) {
 		struct sb_pkcs7 p7;
 		struct sb_cert signer;
 		enum chain chain;

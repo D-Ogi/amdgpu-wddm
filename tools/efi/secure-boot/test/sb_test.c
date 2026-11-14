@@ -14,7 +14,7 @@
 #include "efi.h"
 #include "efl_sha256.h"
 #include "sb_der.h"
-#include "sb_pe.h"
+#include "efl_pe.h"
 #include "sb_pkcs7.h"
 #include "sb_policy.h"
 #include "sb_siglist.h"
@@ -164,10 +164,10 @@ static void test_digests(const char *dir)
 	unsigned i;
 	for (i = 0; i < 3; i++) {
 		struct file image = load(dir, names[i]), want;
-		struct sb_pe pe;
+		struct efl_pe pe;
 		snprintf(digest_name, sizeof(digest_name), "%s.digest", names[i]);
 		want = load(dir, digest_name);
-		CHECK(sb_pe_read(image.data, image.bytes, &pe) == 1);
+		CHECK(efl_pe_read(image.data, image.bytes, &pe) == 1);
 		CHECK(want.bytes == 32 && !memcmp(pe.digest, want.data, 32));
 		CHECK((pe.cert_bytes != 0) == (i == 2));
 		free(image.data);
@@ -330,7 +330,7 @@ static void test_real_image(const char *path, const char *option)
 	struct file image = { NULL, 0 }, none = { NULL, 0 }, db = { NULL, 0 };
 	const unsigned char *signature;
 	size_t cursor = 0, signature_bytes;
-	struct sb_pe pe;
+	struct efl_pe pe;
 	struct sb_pkcs7 p7;
 	struct sb_cert signer, issuer;
 	struct sb_span bag;
@@ -347,8 +347,8 @@ static void test_real_image(const char *path, const char *option)
 		printf("FAIL secure-boot, real signed image: %s did not read\n", path);
 		return;
 	}
-	CHECK(sb_pe_read(image.data, image.bytes, &pe) == 1 && pe.cert_bytes != 0);
-	CHECK(sb_pe_next_signature(image.data, &pe, &cursor, &signature, &signature_bytes) == 1);
+	CHECK(efl_pe_read(image.data, image.bytes, &pe) == 1 && pe.cert_bytes != 0);
+	CHECK(efl_pe_next_signature(image.data, &pe, &cursor, &signature, &signature_bytes) == 1);
 	CHECK(sb_pkcs7_parse(signature, signature_bytes, &p7) == 1);
 	/* The digest that the signer put into the signature is the digest that this code computes. */
 	CHECK(p7.image_digest.n == 32 && !memcmp(p7.image_digest.p, pe.digest, 32));
