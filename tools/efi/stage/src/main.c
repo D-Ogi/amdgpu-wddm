@@ -217,8 +217,7 @@ void stage_acpi(struct stage *stage, struct efl_acpi *acpi)
 	acpi->rsdp = (UINTN)rsdp;
 }
 
-/* The SMBIOS table in the RSMB form, in pool memory the caller frees. NULL when there is none. */
-static unsigned char *smbios_rsmb(struct stage *stage, size_t *bytes)
+unsigned char *stage_smbios_rsmb(struct stage *stage, size_t *bytes)
 {
 	struct efl_smbios_table table;
 	const unsigned char *data;
@@ -252,7 +251,7 @@ static int identify_board(struct stage *stage)
 	unsigned matches = 0, candidates = 0, reason = 0, bios = 0;
 	unsigned char machine[16];
 
-	rsmb = smbios_rsmb(stage, &rsmb_bytes);
+	rsmb = stage_smbios_rsmb(stage, &rsmb_bytes);
 	if (rsmb == NULL) {
 		stage_say(stage, NULL, "no SMBIOS table that ends with a type 127 structure");
 		return 0;

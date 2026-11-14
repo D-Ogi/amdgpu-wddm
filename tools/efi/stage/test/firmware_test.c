@@ -24,8 +24,11 @@
 #include "sb_crc32.h"
 #include "sb_windows.h"
 #include "engine_model.h"
+#include "tpm_engine.h"
 #include "efl_pe.h"
 #include "handoff.h"
+#include "statefile.h"
+#include "efl_smbios.h"
 #include "efl_sha256.h"
 #include "tl_log.h"
 #include "tl_tpm2.h"
@@ -1687,6 +1690,7 @@ static struct {
 	int ran, protocol, capability, log_matches, image_measured, stage_measured, extend_matches, record, record_pcrs;
 	unsigned final_events;
 	int final_in_nvs, after_exit_absent;
+	unsigned long long want_sequence;	/* set by the test: the sequence that the handoff must carry */
 } seen;
 
 static unsigned le32(const unsigned char *p)
@@ -1773,7 +1777,8 @@ static void tpm_application(void)
 		if (fw.page_type[i] == EfiReservedMemoryType) {
 			struct tpm_handoff_view view;
 			seen.record = tpm_handoff_read(fw.page_block[i], fw.page_bytes[i], efl_sha256, &view) == TPM_HANDOFF_OK &&
-				      view.flags == (TPM_HANDOFF_STARTED | TPM_HANDOFF_PERMANENT_CHANGED) && view.sequence == 0 &&
+				      view.flags == (TPM_HANDOFF_STARTED | TPM_HANDOFF_PERMANENT_CHANGED) &&
+				      view.sequence == seen.want_sequence &&
 				      view.permanent_bytes == 9u && view.permanent[8] == 1;	/* the model: SHA-256 only */
 			/* The volatile state of the model is its PCRs: they must be the replay of the whole log. */
 			seen.record_pcrs = view.volatile_bytes == sizeof(replay) && !memcmp(view.volatile_state, replay, sizeof(replay));
@@ -1791,6 +1796,73 @@ static void tpm_firmware(const char *acpi_dir, const char *fixtures)
 	add_file(NEXT, fixtures, "signed.efi");
 	fw.real_stall = 1;
 	memset(&seen, 0, sizeof(seen));
+}
+
+/* A state file on the stage volume: the permanent blob of the model ("MODELTPM" and the SHA-256-only byte), sealed with
+ * the board key of the SMBIOS table of the model, or with another key. damage: one byte of the ciphertext changed. */
+static void add_state(const char *name, unsigned long long sequence, int other_key, int damage)
+{
+	static const unsigned char nonce[12] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+	unsigned char blob[9] = { 'M', 'O', 'D', 'E', 'L', 'T', 'P', 'M', 1 };
+	unsigned char rsmb[8 + sizeof(fw_smbios)], key[32];
+	size_t extent = efl_smbios_extent(fw_smbios, sizeof(fw_smbios)), n;
+	struct fw_file *f = &fw.file[fw.files];
+
+	n = efl_smbios_rsmb(fw_smbios, extent, 3, 4, rsmb, sizeof(rsmb));
+	if (!tpm_statefile_board_key(rsmb, n, efl_sha256, key)) { CHECK(!"the model SMBIOS table gives a board key"); return; }
+	if (other_key) key[0] ^= 1;
+	engine_model_init_cipher();
+	snprintf(f->path, sizeof(f->path), "\\EFI\\BC250\\tpm\\%s", name);
+	f->data = malloc(TPM_STATEFILE_HEADER_BYTES + sizeof(blob) + TPM_STATEFILE_TAG_BYTES);
+	f->bytes = tpm_statefile_write(f->data, TPM_STATEFILE_HEADER_BYTES + sizeof(blob) + TPM_STATEFILE_TAG_BYTES, sequence,
+				       nonce, key, blob, sizeof(blob), tpm_engine_gcm);
+	CHECK(f->bytes != 0);
+	if (damage) f->data[TPM_STATEFILE_HEADER_BYTES + 3] ^= 0x01;
+	fw.files++;
+}
+
+/* The state files: which copy the TPM starts from, and the refusal when copies are there and none opens. */
+static void test_tpm_state(const char *acpi_dir, const char *fixtures)
+{
+	int reset;
+
+	/* A alone: the TPM continues from it, and the handoff names its sequence. */
+	tpm_firmware(acpi_dir, fixtures);
+	add_state("state-a.bin", 4, 0, 0);
+	seen.want_sequence = 4;
+	fw.on_start = tpm_application;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 tpm=1", &reset) == EFI_SUCCESS);
+	CHECK(said("state file A, sequence 4, 9 bytes: the TPM continues (A is sound, B is absent)") && engine_model.from_state);
+	CHECK(said("TCG2 protocol installed: the stored TPM") && engine_model.starts == 1 && seen.record && seen.log_matches);
+
+	/* Both sound: the higher sequence wins, B here. */
+	tpm_firmware(acpi_dir, fixtures);
+	add_state("state-a.bin", 4, 0, 0);
+	add_state("state-b.bin", 5, 0, 0);
+	seen.want_sequence = 5;
+	fw.on_start = tpm_application;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 tpm=1", &reset) == EFI_SUCCESS);
+	CHECK(said("state file B, sequence 5, 9 bytes: the TPM continues (A is sound, B is sound)") && seen.record);
+
+	/* A damaged newer copy: the older sound copy wins (a write that a power cut broke). */
+	tpm_firmware(acpi_dir, fixtures);
+	add_state("state-a.bin", 7, 0, 1);
+	add_state("state-b.bin", 6, 0, 0);
+	seen.want_sequence = 6;
+	fw.on_start = tpm_application;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 tpm=1", &reset) == EFI_SUCCESS);
+	CHECK(said("state file B, sequence 6, 9 bytes: the TPM continues (A is another key or a changed byte, B is sound)"));
+
+	/* Copies of another board (another key): no TPM, and nothing stays. */
+	tpm_firmware(acpi_dir, fixtures);
+	add_state("state-a.bin", 3, 1, 0);
+	add_state("state-b.bin", 2, 1, 0);
+	fw.on_start = tpm_application;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 tpm=1", &reset) == EFI_SUCCESS);
+	CHECK(said("state file A is another key or a changed byte, state file B is another key or a changed byte: no TPM"));
+	CHECK(engine_model.starts == 0 && seen.ran && !seen.protocol && fw.page_blocks == 0 && fw.pool_live == 0);
+	CHECK(engine_model.wipes == 1);
+	seen.want_sequence = 0;
 }
 
 static void test_tpm(const char *acpi_dir, const char *fixtures)
@@ -1847,6 +1919,8 @@ static void test_tpm(const char *acpi_dir, const char *fixtures)
 	CHECK(run_stage("unlock=0 acpi=0 sb=0 tpm=1", &reset) == EFI_SUCCESS);
 	CHECK(said("the stage file did not read: no TPM") && !seen.protocol && !engine_model_running());
 	CHECK(find_protocol(NULL, &guid_tcg2) == NULL && fw.exit_notify == NULL && fw.pool_live == 0);
+
+	test_tpm_state(acpi_dir, fixtures);
 
 	/* tpm=0: nothing. */
 	tpm_firmware(acpi_dir, fixtures);

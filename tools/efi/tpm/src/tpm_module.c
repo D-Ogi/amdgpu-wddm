@@ -7,16 +7,17 @@
  *
  * The run:
  * 1. Only on a positively identified BC-250, and only when the firmware has no TCG2 protocol of its own.
- * 2. The engine starts from a new state (a manufactured TPM) and gets TPM2_Startup(CLEAR). The PCRs are set to
- *    the SHA-256 bank only; when the TPM has other banks, TPM2_PCR_Allocate and a restart of the engine do this.
+ * 2. The engine starts from the state file of the stage volume (driver/tpm/statefile.h), or from a new state (a
+ *    manufactured TPM) when neither copy is there, and gets TPM2_Startup(CLEAR). A copy that is there and does not
+ *    open gives no TPM: a new TPM in its place would lose every sealed key in silence. The PCRs are set to the
+ *    SHA-256 bank only; when the TPM has other banks, TPM2_PCR_Allocate and a restart of the engine do this.
  * 3. The event log and the final events table are made, and the events before the boot application are measured.
  * 4. EFI_TCG2_PROTOCOL is installed, and an event waits for ExitBootServices.
  * 5. The handoff range is reserved, and stage->tpm_handoff tells the ACPI repair where it is.
  * The gate measures the next image into PCR 4 and binds the start to those bytes. At ExitBootServices the module
  * measures the two PCR 5 events and writes the libtpms state into the handoff range for the Windows core.
  *
- * The state files on the volume of the stage are not read yet: each start gives a new TPM. Keys that the TPM
- * seals do not survive a restart until the state files work, so BitLocker must not use this TPM before then.
+ * The stage only reads the state files. The Windows core writes them, from the handoff and at each NV change.
  *
  * The callbacks of ExitBootServices must not call the memory services of the firmware (UEFI 2.10, section 7.4.6).
  * The module therefore allocates every buffer of that path in its run.
@@ -29,6 +30,7 @@
 #include "efl_sha256.h"
 #include "stage.h"
 #include "handoff.h"
+#include "statefile.h"
 #include "tl_log.h"
 #include "tl_measure.h"
 #include "tl_tcg2.h"
@@ -75,6 +77,7 @@ static struct {
 	unsigned long long ticks_per_ms;
 	unsigned char *state;		/* STATE_BYTES for the two states at ExitBootServices */
 	unsigned char *handoff;		/* the reserved range */
+	unsigned long long sequence;	/* the sequence of the state file that the TPM started from, 0 for a new TPM */
 	int handoff_written;
 	int final_installed;		/* the final events table is in the system table */
 	/* The pages of the module, given back when the TPM is not offered or the boot application returns. */
@@ -335,15 +338,17 @@ static EFI_TCG2_PROTOCOL tcg2 = {
 static VOID EFIAPI exit_boot_services(EFI_EVENT Event, VOID *Context)
 {
 	size_t permanent, volatile_bytes;
-	unsigned flags = TPM_HANDOFF_STARTED | TPM_HANDOFF_PERMANENT_CHANGED;	/* a new TPM: the core stores it */
+	unsigned flags = TPM_HANDOFF_STARTED;
 	(void)Event;
 	(void)Context;
 	if (!tpm.present) return;
 	tl_measure_exit_boot_services(&tpm.measurer);
+	/* A new TPM, or NV that changed in the stage (the clock, the lockout counter): the core stores it. */
+	if (tpm.sequence == 0 || tpm_engine_permanent_dirty()) flags |= TPM_HANDOFF_PERMANENT_CHANGED;
 	permanent = tpm_engine_get_state(TPM_ENGINE_PERMANENT, tpm.state, STATE_BYTES);
 	volatile_bytes = permanent ? tpm_engine_get_state(TPM_ENGINE_VOLATILE, tpm.state + permanent, STATE_BYTES - permanent) : 0;
 	if (permanent && volatile_bytes)
-		tpm.handoff_written = tpm_handoff_write(tpm.handoff, TPM_HANDOFF_MAX_BYTES, tpm.volume, 0, flags, tpm.state,
+		tpm.handoff_written = tpm_handoff_write(tpm.handoff, TPM_HANDOFF_MAX_BYTES, tpm.volume, tpm.sequence, flags, tpm.state,
 							(unsigned)permanent, tpm.state + permanent, (unsigned)volatile_bytes,
 							efl_sha256) != 0;
 	/* Without a record the range keeps zeros: the core finds no magic and the device has no TPM. */
@@ -473,6 +478,86 @@ static int measure_preboot(struct stage *stage)
 	return ok;
 }
 
+/* ---- the state files ---------------------------------------------------------------------------------- */
+
+struct state_copy {
+	enum stage_read read;		/* STAGE_READ_ABSENT: no file */
+	enum tpm_statefile_result result;
+	unsigned long long sequence;
+	size_t bytes;
+};
+
+static const char *copy_text(const struct state_copy *c)
+{
+	static const char *const results[] = { "sound", "not a state file", "a damaged frame", "another key or a changed byte",
+					       "too large" };
+	if (c->read == STAGE_READ_ABSENT) return "absent";
+	if (c->read == STAGE_READ_FAILED) return "unread";
+	return results[c->result];
+}
+
+/* Reads one copy and opens it into out. */
+static void read_copy(struct stage *stage, const char *name, const unsigned char key[32], unsigned char *out,
+		      size_t capacity, struct state_copy *c)
+{
+	unsigned short path[STAGE_PATH_CHARS];
+	unsigned char *file = NULL;
+	size_t bytes = 0;
+
+	c->result = TPM_STATEFILE_NONE;
+	c->sequence = 0;
+	c->bytes = 0;
+	c->read = stage_sibling(stage, name, path, STAGE_PATH_CHARS)
+			  ? stage_read_file(stage, path, TPM_STATEFILE_MAX_BYTES, &file, &bytes)
+			  : STAGE_READ_ABSENT;
+	if (c->read != STAGE_READ_OK) return;
+	c->result = tpm_statefile_read(file, bytes, key, tpm_engine_gcm, out, capacity, &c->bytes, &c->sequence);
+	stage_free(stage, file);
+}
+
+/* The permanent state to start from, into tpm.state. Returns 1 with *bytes 0 for a new TPM (neither copy is
+ * there), 1 with the blob, or 0: a copy is there and none opens, so the module offers no TPM. */
+static int load_state(struct stage *stage, size_t *bytes)
+{
+	struct state_copy a, b;
+	unsigned char key[32];
+	unsigned char *rsmb;
+	size_t rsmb_bytes = 0;
+	int have_key = 0, chosen;
+
+	*bytes = 0;
+	tpm.sequence = 0;
+	rsmb = stage_smbios_rsmb(stage, &rsmb_bytes);
+	if (rsmb != NULL) {
+		have_key = tpm_statefile_board_key(rsmb, rsmb_bytes, efl_sha256, key);
+		stage_free(stage, rsmb);
+	}
+	if (!have_key) memset(key, 0, sizeof(key));	/* no copy opens: absent files still give a new TPM */
+	/* A is read into the state buffer, B into its second half: the buffer holds two permanent states. */
+	read_copy(stage, "tpm\\state-a.bin", key, tpm.state, STATE_BYTES / 2u, &a);
+	read_copy(stage, "tpm\\state-b.bin", key, tpm.state + STATE_BYTES / 2u, STATE_BYTES / 2u, &b);
+	memset(key, 0, sizeof(key));
+	if (a.read == STAGE_READ_ABSENT && b.read == STAGE_READ_ABSENT) {
+		stage_say(stage, TPM_NAME, "no state file: a new TPM is manufactured");
+		return 1;
+	}
+	chosen = tpm_statefile_choose(a.read == STAGE_READ_OK ? a.result : TPM_STATEFILE_NONE, a.sequence,
+				      b.read == STAGE_READ_OK ? b.result : TPM_STATEFILE_NONE, b.sequence);
+	if (chosen < 0) {
+		stage_sayf(stage, TPM_NAME, "state file A is %s, state file B is %s%s: no TPM", copy_text(&a), copy_text(&b),
+			   have_key ? "" : ", and the SMBIOS table gives no board key");
+		memset(tpm.state, 0, STATE_BYTES);
+		return 0;
+	}
+	if (chosen == 1) memmove(tpm.state, tpm.state + STATE_BYTES / 2u, b.bytes);
+	*bytes = chosen == 0 ? a.bytes : b.bytes;
+	tpm.sequence = chosen == 0 ? a.sequence : b.sequence;
+	memset(tpm.state + *bytes, 0, STATE_BYTES - *bytes);
+	stage_sayf(stage, TPM_NAME, "state file %s, sequence %llu, %u bytes: the TPM continues (A is %s, B is %s)",
+		   chosen == 0 ? "A" : "B", tpm.sequence, (unsigned)*bytes, copy_text(&a), copy_text(&b));
+	return 1;
+}
+
 static void stop(struct stage *stage)
 {
 	if (tpm.installed) {
@@ -503,6 +588,7 @@ static void run(struct stage *stage)
 	struct tpm_engine_platform platform;
 	void *firmware = NULL, *arena;
 	unsigned char *area, *final;
+	size_t permanent_bytes = 0;
 	unsigned rc;
 	EFI_STATUS status;
 
@@ -542,8 +628,20 @@ static void run(struct stage *stage)
 	platform.ctx = NULL;
 	tpm_engine_set_log(engine_log, stage);
 	tpm.engine_initialized = tpm_engine_init(&platform);
-	if (!tpm.engine_initialized || (rc = tpm_engine_start(NULL, 0, NULL, 0, BUFFER_BYTES)) != 0) {
+	if (!tpm.engine_initialized) {
 		stage_say(stage, TPM_NAME, "the engine did not start: no TPM");
+		stop(stage);
+		return;
+	}
+	/* The state file opens with the cipher of the engine, so it is read after the init. */
+	if (!load_state(stage, &permanent_bytes)) {
+		stop(stage);
+		return;
+	}
+	rc = tpm_engine_start(permanent_bytes ? tpm.state : NULL, permanent_bytes, NULL, 0, BUFFER_BYTES);
+	memset(tpm.state, 0, permanent_bytes);	/* the engine has its own copy */
+	if (rc != 0) {
+		stage_sayf(stage, TPM_NAME, "the engine did not start, rc 0x%x: no TPM", rc);
 		stop(stage);
 		return;
 	}
@@ -589,9 +687,9 @@ static void run(struct stage *stage)
 	tpm.installed = 1;
 	stage->tpm_handoff = (unsigned long long)(UINTN)tpm.handoff;
 	stage->tpm_handoff_bytes = TPM_HANDOFF_MAX_BYTES;
-	stage_sayf(stage, TPM_NAME, "TCG2 protocol installed: a new TPM, SHA-256 bank, %u log bytes, engine arena peak %u KiB",
-		   (unsigned)tpm.log.used, (unsigned)(tpm_engine_arena_peak() / 1024u));
-	stage_say(stage, TPM_NAME, "the state files are not read yet: the TPM is new at each start");
+	stage_sayf(stage, TPM_NAME, "TCG2 protocol installed: %s, SHA-256 bank, %u log bytes, engine arena peak %u KiB",
+		   tpm.sequence ? "the stored TPM" : "a new TPM", (unsigned)tpm.log.used,
+		   (unsigned)(tpm_engine_arena_peak() / 1024u));
 }
 
 /* ---- the gate, the unwind and the probe ------------------------------------------------------------------ */

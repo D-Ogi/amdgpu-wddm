@@ -5,6 +5,9 @@
  * extends, so that a test can replay the event log of the module against PCR_Read:
  * - Startup, Shutdown, PCR_Extend (SHA-256 bank), PCR_Read (SHA-256, up to 8 PCRs), PCR_Allocate,
  *   GetCapability(PCRS) and GetCapability(TPM_PROPERTIES, TPM_PT_MANUFACTURER).
+ * - tpm_engine_gcm: an authenticated cipher in the contract of AES-256-GCM (a SHA-256 keystream and a SHA-256 tag),
+ *   so that a test can write state files that the module opens, and damage them. The real GCM has its known-answer
+ *   test in the engine test.
  * A new model TPM has two banks, SHA-1 and SHA-256, as libtpms has, so that the module must allocate. The
  * allocation takes effect at the next start, as in TPM 2.0 Part 3, section 22.5.
  */
@@ -25,7 +28,7 @@
 struct engine_model_state engine_model;
 
 static unsigned char pcr[PCRS][DIGEST];
-static int running, started, sha256_only, pending_sha256_only;
+static int running, started, sha256_only, pending_sha256_only, initialized;
 
 static unsigned long get(const unsigned char *p, unsigned n)
 {
@@ -60,6 +63,7 @@ int tpm_engine_init(const struct tpm_engine_platform *p)
 	/* The platform functions must work: the module gives real ones. */
 	if (!p->entropy(p->ctx, probe, sizeof(probe))) return 0;
 	(void)p->monotonic_ms(p->ctx);
+	initialized = 1;
 	return 1;
 }
 
@@ -70,6 +74,7 @@ unsigned tpm_engine_start(const unsigned char *permanent, size_t permanent_bytes
 	(void)volatile_bytes;
 	engine_model.starts++;
 	if (running || max_buffer < 1024u) return RC_FAILURE;
+	engine_model.from_state = permanent != NULL;
 	if (permanent == NULL) {
 		sha256_only = engine_model.new_sha256_only;
 	} else {
@@ -240,6 +245,7 @@ size_t tpm_engine_arena_peak(void)
 void tpm_engine_wipe(void)
 {
 	tpm_engine_stop();
+	initialized = 0;
 	engine_model.wipes++;
 }
 
@@ -253,9 +259,50 @@ void engine_model_reset(void)
 	memset(&engine_model, 0, sizeof(engine_model));
 	running = 0;
 	started = 0;
+	initialized = 0;
 }
 
 int engine_model_running(void)
 {
 	return running;
+}
+
+int tpm_engine_gcm(int seal, const unsigned char key[32], const unsigned char nonce[12], const unsigned char *aad,
+		   size_t aad_bytes, const unsigned char *in, size_t n, unsigned char *out, unsigned char tag[16])
+{
+	unsigned char t[32], block[32], ctr[44];
+	struct efl_sha256 s;
+	size_t i;
+
+	engine_model.gcm_calls++;
+	if (!initialized) return 0;	/* as the engine: the cipher lives in the arena */
+	efl_sha256_init(&s);
+	efl_sha256_update(&s, key, 32);
+	efl_sha256_update(&s, nonce, 12);
+	efl_sha256_update(&s, aad, aad_bytes);
+	if (!seal) {
+		efl_sha256_update(&s, in, n);
+		efl_sha256_final(&s, t);
+		if (memcmp(t, tag, 16) != 0) return 0;
+	}
+	for (i = 0; i < n; i++) {
+		if (i % 32 == 0) {
+			memcpy(ctr, key, 32);
+			memcpy(ctr + 32, nonce, 12);
+			ctr[31] ^= (unsigned char)(i / 32);
+			efl_sha256(ctr, sizeof(ctr), block);
+		}
+		out[i] = (unsigned char)(in[i] ^ block[i % 32]);
+	}
+	if (seal) {
+		efl_sha256_update(&s, out, n);
+		efl_sha256_final(&s, t);
+		memcpy(tag, t, 16);
+	}
+	return 1;
+}
+
+void engine_model_init_cipher(void)
+{
+	initialized = 1;
 }

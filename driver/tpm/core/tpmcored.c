@@ -178,12 +178,22 @@ static void sha256(const void *data, size_t bytes, unsigned char digest[32])
 		memset(digest, 0, 32);	/* a zero digest never matches a record: the check fails closed */
 }
 
+/* 1 with the status of the filter. 0 says why: a filter of another version (an older package that the driver store
+ * kept) answers with another size or version, and the core must not read its fields. */
 static int get_status(HANDLE dev, struct tpmserv_status *s)
 {
 	DWORD got = 0;
 	memset(s, 0, sizeof(*s));
-	return ioctl_wait(dev, IOCTL_TPMSERV_GET_STATUS, NULL, 0, s, sizeof(*s), &got) && got == sizeof(*s) &&
-	       s->version == TPMSERV_STATUS_VERSION;
+	if (!ioctl_wait(dev, IOCTL_TPMSERV_GET_STATUS, NULL, 0, s, sizeof(*s), &got)) {
+		say("no TPM: the status of the filter did not read (%lu)", GetLastError());
+		return 0;
+	}
+	if (got != sizeof(*s) || s->version != TPMSERV_STATUS_VERSION) {
+		say("no TPM: the filter answers status version %u in %lu bytes, this core needs version %u in %u bytes",
+		    got >= sizeof(s->version) ? s->version : 0u, got, TPMSERV_STATUS_VERSION, (unsigned)sizeof(*s));
+		return 0;
+	}
+	return 1;
 }
 
 /* Starts the core, once per run of the service. With a handoff record of the pre-OS TPM the core continues that
@@ -199,9 +209,11 @@ static int start_core(HANDLE dev)
 	enum tpm_handoff_result check;
 
 	/* The filter looks at BCHO when the TPM device starts, which is before this service as a rule. */
-	for (waited = 0; get_status(dev, &s) && s.handoff == TPMSERV_HANDOFF_PENDING && waited < HANDOFF_WAIT_MS;
-	     waited += 250)
+	for (waited = 0;; waited += 250) {
+		if (!get_status(dev, &s)) return 0;
+		if (s.handoff != TPMSERV_HANDOFF_PENDING || waited >= HANDOFF_WAIT_MS) break;
 		if (WaitForSingleObject(g_stop, 250) == WAIT_OBJECT_0) return 0;
+	}
 	say("handoff state %u, %u bytes", s.handoff, s.handoff_bytes);
 	if (s.handoff == TPMSERV_HANDOFF_NONE || s.handoff == TPMSERV_HANDOFF_TAKEN) {
 		/* TAKEN: this service took the record in an earlier run and stopped. The PCRs of that run are lost; the

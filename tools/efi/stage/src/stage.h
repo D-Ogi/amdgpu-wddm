@@ -56,6 +56,10 @@ void stage_log_flush(struct stage *stage);
  * check (driver/common/board/board_identity.c). The answer is found once. */
 int stage_board_bc250(struct stage *stage);
 
+/* The SMBIOS table in the RSMB form of GetSystemFirmwareTable (efl_smbios.h), in pool memory that the caller frees
+ * with stage_free. NULL when there is none. */
+unsigned char *stage_smbios_rsmb(struct stage *stage, size_t *bytes);
+
 /* The ACPI tables as they are now. The address of the RSDP is read again at each call, because an installed or
  * removed table can move the root tables. */
 void stage_acpi(struct stage *stage, struct efl_acpi *acpi);

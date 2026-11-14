@@ -52,7 +52,18 @@ Invoke-Tool (Join-Path $bin 'link.exe') @('/nologo', '/DRIVER', '/SUBSYSTEM:NATI
 '  {0}  tpmserv.sys (unsigned)' -f (Get-FileHash "$pkg\tpmserv.sys").Hash
 if ($CompileOnly) { return }
 
-Copy-Item (Join-Path $here 'tpmserv.inf') $pkg -Force
+# DriverVer changes with each build: the driver store keys a package by its INF, and an INF with the same bytes as
+# an installed package is "already in the system", so pnputil keeps the old binary (servicer kit r8, 2026-11-14). The
+# version is the time of the commit on a clean tree, so a commit always gives the same package, and the build time
+# on a changed tree: 1.0.<days since 2020-01-01>.<minute of that day>, each part below 65536.
+$dirty = @(& git -C $here status --porcelain -- . 2>$null).Count -gt 0
+$when = if ($dirty) { [DateTime]::UtcNow } else { [DateTimeOffset]::FromUnixTimeSeconds([long](& git -C $here log -1 --format=%ct -- .)).UtcDateTime }
+$driverVer = '{0},1.0.{1}.{2}' -f $when.ToString('MM/dd/yyyy', [Globalization.CultureInfo]::InvariantCulture),
+    [int]($when.Date - [DateTime]'2020-01-01').TotalDays, ($when.Hour * 60 + $when.Minute)
+$inf = (Get-Content -Raw (Join-Path $here 'tpmserv.inf')) -replace '(?m)^DriverVer(\s*)=[^\r\n]*', "DriverVer`$1= $driverVer"
+if ($inf -notmatch [regex]::Escape("= $driverVer")) { throw 'tpmserv.inf has no DriverVer line' }
+Set-Content -NoNewline -Encoding ascii (Join-Path $pkg 'tpmserv.inf') $inf
+"  DriverVer $driverVer$(if ($dirty) { ' (a changed tree: the build time)' })"
 Write-Host 'catalog'
 Invoke-Tool "$wdk\bin\$KitVersion\x86\Inf2Cat.exe" @("/driver:$pkg", '/os:10_X64')
 $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq $CertSubject -and $_.NotAfter -gt (Get-Date) } | Select-Object -First 1
