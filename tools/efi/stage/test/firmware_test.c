@@ -1806,6 +1806,7 @@ static void test_tpm(const char *acpi_dir, const char *fixtures)
 	/* The image returned: the stage takes its protocol and its table away. */
 	CHECK(find_protocol(NULL, &guid_tcg2) == NULL && configuration_table(&guid_final_events) == NULL);
 	CHECK(fw.exit_notify == NULL && !engine_model_running() && fw.pool_live == 0 && fw.page_blocks == 0);
+	CHECK(engine_model.wipes == 1 && said("tpm: model engine"));
 
 	/* A new TPM with the SHA-256 bank only: no allocation and one start. */
 	tpm_firmware(acpi_dir, fixtures);

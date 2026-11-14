@@ -237,6 +237,17 @@ size_t tpm_engine_arena_peak(void)
 	return 4096u;
 }
 
+void tpm_engine_wipe(void)
+{
+	tpm_engine_stop();
+	engine_model.wipes++;
+}
+
+void tpm_engine_set_log(void (*sink)(void *ctx, const char *text, size_t bytes), void *ctx)
+{
+	if (sink != NULL) sink(ctx, "model engine\n", 13);	/* the binding must take a piece with a line end */
+}
+
 void engine_model_reset(void)
 {
 	memset(&engine_model, 0, sizeof(engine_model));

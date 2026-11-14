@@ -26,6 +26,9 @@ param(
     # A real crypto-agile TCG log, the positive control of the log reader of the TPM module: a copy of a Windows
     # measured-boot log, outside the repository. Not there: that check says SKIP.
     [string]$TcgLog = 'P:\BC-250\scratch\t39\tpm-preos-fixtures\devpc-measuredboot.log',
+    # The TPM engine archive (libtpms, OpenSSL and their C runtime), built by tools\efi\tpm\engine\build.ps1. It is
+    # necessary: the TPM module of the stage links against it.
+    [string]$TpmEngine = 'P:\BC-250\scratch\build\tpm-engine\tpm_engine.lib',
     [switch]$SkipTests
 )
 
@@ -104,7 +107,10 @@ Write-Host 'link (UEFI image)'
 $link = Join-Path $Llvm 'lld-link.exe'
 $linkFlags = @('/nologo', '/entry:efi_main', '/nodefaultlib', '/machine:x64', '/opt:ref', '/Brepro', '/debug:none')
 $stage = Join-Path $Out 'bc250-stage.efi'
-Invoke-Tool $link ($linkFlags + @('/subsystem:efi_application', "/out:$stage") + (Get-ChildItem "$objStage\*.o").FullName)
+if (-not (Test-Path -LiteralPath $TpmEngine -PathType Leaf)) {
+    throw "the TPM engine archive '$TpmEngine' is not there: build it with tools\efi\tpm\engine\build.ps1 (-TpmEngine)"
+}
+Invoke-Tool $link ($linkFlags + @('/subsystem:efi_application', "/out:$stage") + (Get-ChildItem "$objStage\*.o").FullName + @($TpmEngine))
 $sums = foreach ($image in @($stage)) {
     $hash = (Get-FileHash -Algorithm SHA256 $image).Hash
     Write-Host "$(Split-Path -Leaf $image) $((Get-Item $image).Length) bytes, SHA256 $hash"

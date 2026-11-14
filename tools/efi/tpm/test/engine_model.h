@@ -6,7 +6,7 @@
 struct engine_model_state {
 	int fail_init;		/* tpm_engine_init fails */
 	int new_sha256_only;	/* a new TPM has the SHA-256 bank only: no PCR_Allocate */
-	unsigned inits, starts, stops, commands, extends;
+	unsigned inits, starts, stops, commands, extends, wipes;
 };
 
 extern struct engine_model_state engine_model;

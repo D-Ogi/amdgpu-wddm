@@ -60,7 +60,8 @@ static const EFI_GUID device_path_guid = EFI_DEVICE_PATH_PROTOCOL_GUID;
 static struct {
 	struct stage *stage;
 	int present;			/* the TPM answers: cleared at ExitBootServices */
-	int engine_running;		/* tpm_engine_start succeeded and tpm_engine_stop is due */
+	int engine_initialized;		/* tpm_engine_init succeeded: the arena belongs to the engine until the wipe */
+	int engine_running;		/* tpm_engine_start succeeded */
 	int installed;			/* the protocol is on tcg2_handle */
 	EFI_HANDLE tcg2_handle;
 	EFI_EVENT exit_event;
@@ -142,6 +143,17 @@ static int entropy(void *context, unsigned char *out, size_t n)
 		for (i = 0; i < 8u && n > 0; i++, n--) *out++ = (unsigned char)(word >> (8u * i));
 	}
 	return 1;
+}
+
+/* The diagnostics of libtpms and OpenSSL: each piece of text as one console line, cut at the line end. */
+static void engine_log(void *context, const char *text, size_t bytes)
+{
+	char line[160];
+	size_t n = bytes < sizeof(line) - 1u ? bytes : sizeof(line) - 1u;
+	memcpy(line, text, n);
+	while (n > 0 && (line[n - 1u] == '\n' || line[n - 1u] == '\r')) n--;
+	line[n] = 0;
+	if (n > 0) stage_say((struct stage *)context, TPM_NAME, line);
 }
 
 /* ---- commands that the module sends itself --------------------------------------------------------------- */
@@ -471,7 +483,10 @@ static void stop(struct stage *stage)
 		stage->bs->CloseEvent(tpm.exit_event);
 		tpm.exit_event = NULL;
 	}
-	if (tpm.engine_running) tpm_engine_stop();
+	/* The arena holds the seeds, the keys and the OpenSSL state even after a stop: zeros over it before the pages
+	 * go back. The engine refuses to start afterwards, which is right, because the module ends here. */
+	if (tpm.engine_initialized) tpm_engine_wipe();
+	tpm.engine_initialized = 0;
 	tpm.engine_running = 0;
 	tpm.present = 0;
 	free_pages(stage);
@@ -520,7 +535,9 @@ static void run(struct stage *stage)
 	platform.monotonic_ms = monotonic_ms;
 	platform.entropy = entropy;
 	platform.ctx = NULL;
-	if (!tpm_engine_init(&platform) || (rc = tpm_engine_start(NULL, 0, NULL, 0, BUFFER_BYTES)) != 0) {
+	tpm_engine_set_log(engine_log, stage);
+	tpm.engine_initialized = tpm_engine_init(&platform);
+	if (!tpm.engine_initialized || (rc = tpm_engine_start(NULL, 0, NULL, 0, BUFFER_BYTES)) != 0) {
 		stage_say(stage, TPM_NAME, "the engine did not start: no TPM");
 		stop(stage);
 		return;
