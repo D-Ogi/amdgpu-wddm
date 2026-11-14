@@ -104,26 +104,49 @@ static unsigned be32(const unsigned char *p)
 	return ((unsigned)p[0] << 24) | ((unsigned)p[1] << 16) | ((unsigned)p[2] << 8) | (unsigned)p[3];
 }
 
-unsigned tpmcore_start(const wchar_t *state_dir, unsigned max_buffer)
+/* The steps before _TPM_Init that both starts share. */
+static TPM_RESULT prepare(const wchar_t *state_dir, unsigned max_buffer)
 {
 	static struct libtpms_callbacks cb = {
 		sizeof(struct libtpms_callbacks), nv_init, nv_load, nv_store, nv_delete, io_init, io_locality, io_presence,
 	};
-	/* TPM2_Startup(TPM_SU_CLEAR): the platform's duty at every TPM reset, which a start of this core is. */
-	static const unsigned char startup[12] = {0x80, 0x01, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x00, 0x01, 0x44, 0x00, 0x00};
-	unsigned char rsp[16];
 	uint32_t min_size = 0, max_size = 0;
 	TPM_RESULT r;
-	size_t n;
 
 	if (wcslen(state_dir) + 32 >= MAX_PATH) return TPM_FAIL;
 	wcscpy(g_dir, state_dir);
 	if (!CreateDirectoryW(g_dir, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) return TPM_FAIL;
+	/* First: a change of the TPM version clears the cached states of libtpms. */
 	r = TPMLIB_ChooseTPMVersion(TPMLIB_TPM_VERSION_2);
 	if (r != TPM_SUCCESS) return r;
 	r = TPMLIB_RegisterCallbacks(&cb);
 	if (r != TPM_SUCCESS) return r;
-	if (TPMLIB_SetBufferSize(max_buffer, &min_size, &max_size) != max_buffer) return TPM_FAIL;
+	return TPMLIB_SetBufferSize(max_buffer, &min_size, &max_size) == max_buffer ? TPM_SUCCESS : TPM_FAIL;
+}
+
+unsigned tpmcore_resume(const wchar_t *state_dir, unsigned max_buffer, const unsigned char *permanent,
+			unsigned permanent_bytes, const unsigned char *volatile_state, unsigned volatile_bytes)
+{
+	TPM_RESULT r = prepare(state_dir, max_buffer);
+	if (r != TPM_SUCCESS) return r;
+	/* The permanent state first: TPMLIB_SetState(VOLATILE) reads the permanent state to check the volatile one.
+	 * TPMLIB_MainInit then takes both from the cache instead of nv_load, and the TPM runs on without Startup. */
+	r = TPMLIB_SetState(TPMLIB_STATE_PERMANENT, permanent, permanent_bytes);
+	if (r == TPM_SUCCESS) r = TPMLIB_SetState(TPMLIB_STATE_VOLATILE, volatile_state, volatile_bytes);
+	if (r == TPM_SUCCESS) r = TPMLIB_MainInit();
+	return r;
+}
+
+unsigned tpmcore_start(const wchar_t *state_dir, unsigned max_buffer)
+{
+	/* TPM2_Startup(TPM_SU_CLEAR): the platform's duty at every TPM reset, which a start of this core is. */
+	static const unsigned char startup[12] = {0x80, 0x01, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x00, 0x01, 0x44, 0x00, 0x00};
+	unsigned char rsp[16];
+	TPM_RESULT r;
+	size_t n;
+
+	r = prepare(state_dir, max_buffer);
+	if (r != TPM_SUCCESS) return r;
 	r = TPMLIB_MainInit();
 	if (r != TPM_SUCCESS) return r;
 	n = tpmcore_process(startup, sizeof(startup), rsp, sizeof(rsp));

@@ -37,7 +37,9 @@
 
 #define TPM_NAME		"tpm"
 #define PAGE_BYTES		4096u
-#define ARENA_BYTES		(8u * 1024u * 1024u)	/* libtpms and OpenSSL; the engine reports its peak */
+/* libtpms and OpenSSL. The host test of the engine measured a peak of 567 KiB (2026-11-14); the log line of the run
+ * gives the peak on the board. */
+#define ARENA_BYTES		(4u * 1024u * 1024u)
 #define LOG_BYTES		(64u * 1024u)
 #define FINAL_BYTES		(32u * 1024u)
 #define BUFFER_BYTES		4096u			/* MaxCommandSize and MaxResponseSize */
@@ -350,13 +352,15 @@ static VOID EFIAPI exit_boot_services(EFI_EVENT Event, VOID *Context)
 
 /* ---- the run ------------------------------------------------------------------------------------------- */
 
-static void *pages(struct stage *stage, EFI_MEMORY_TYPE type, size_t bytes)
+/* below_4g: the pages end below 4 GiB (AllocateMaxAddress). */
+static void *pages(struct stage *stage, EFI_MEMORY_TYPE type, size_t bytes, int below_4g)
 {
-	EFI_PHYSICAL_ADDRESS page = 0;
+	EFI_PHYSICAL_ADDRESS page = below_4g ? 0xFFFFFFFFull : 0;
 	UINTN count = (bytes + PAGE_BYTES - 1u) / PAGE_BYTES;
 	EFI_STATUS status;
 	if (tpm.blocks == PAGE_BLOCKS) return NULL;
-	status = ((EFI_ALLOCATE_PAGES)stage->bs->AllocatePages)(AllocateAnyPages, type, count, &page);
+	status = ((EFI_ALLOCATE_PAGES)stage->bs->AllocatePages)(below_4g ? AllocateMaxAddress : AllocateAnyPages, type,
+								    count, &page);
 	if (EFI_ERROR(status) || page == 0) {
 		stage_sayf(stage, TPM_NAME, "AllocatePages of %u bytes failed, status 0x%llx", (unsigned)bytes,
 			   (unsigned long long)status);
@@ -518,12 +522,13 @@ static void run(struct stage *stage)
 	}
 	find_volume(stage);
 
-	arena = pages(stage, EfiBootServicesData, ARENA_BYTES);
-	area = pages(stage, EfiBootServicesData, LOG_BYTES);
+	arena = pages(stage, EfiBootServicesData, ARENA_BYTES, 0);
+	area = pages(stage, EfiBootServicesData, LOG_BYTES, 0);
 	/* The final events table stays after ExitBootServices (section 6.6), as in edk2. */
-	final = pages(stage, EfiACPIMemoryNVS, FINAL_BYTES);
-	tpm.state = pages(stage, EfiBootServicesData, STATE_BYTES);
-	tpm.handoff = pages(stage, EfiReservedMemoryType, TPM_HANDOFF_MAX_BYTES);
+	final = pages(stage, EfiACPIMemoryNVS, FINAL_BYTES, 0);
+	tpm.state = pages(stage, EfiBootServicesData, STATE_BYTES, 0);
+	/* Below 4 GiB: Name (BCHO) gives the address as an AML integer, which is 32 bits in a table of revision 1. */
+	tpm.handoff = pages(stage, EfiReservedMemoryType, TPM_HANDOFF_MAX_BYTES, 1);
 	if (arena == NULL || area == NULL || final == NULL || tpm.state == NULL || tpm.handoff == NULL ||
 	    !tl_log_init(&tpm.log, area, LOG_BYTES, final, FINAL_BYTES)) {
 		stop(stage);

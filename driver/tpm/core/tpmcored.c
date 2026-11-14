@@ -9,6 +9,9 @@
  * tpm.sys starts before any service, so its first commands find no core and the device can fail its start. After
  * the core is up and connected, the service restarts an ACPI\MSFT0101 device node that has a problem.
  *
+ * At its first connection to the filter the service starts the core: as the continuation of the pre-OS TPM when the
+ * filter holds a handoff record of the stage (handoff.h), else from its own state.
+ *
  *   tpmcored.exe            run as the service (the SCM starts it)
  *   tpmcored.exe --console  run in this console until Ctrl+C (lab diagnosis)
  */
@@ -21,10 +24,13 @@
 #include <stdarg.h>
 #include <string.h>
 #include <wchar.h>
+#include <openssl/sha.h>
 #include "tpmcore.h"
+#include "../handoff.h"
 #include "../tpmserv_ioctl.h"
 
 #define SERVICE_NAME	L"Bc250TpmCore"
+#define HANDOFF_WAIT_MS	30000u	/* the longest wait for the filter to look at BCHO */
 #define TPM_RC_FAILURE	0x101u
 
 static SERVICE_STATUS_HANDLE g_status_handle;
@@ -165,9 +171,76 @@ static void serve(HANDLE dev)
 	}
 }
 
+static void sha256(const void *data, size_t bytes, unsigned char digest[32])
+{
+	/* OpenSSL: the core links its libcrypto for libtpms anyway. */
+	if (SHA256((const unsigned char *)data, bytes, digest) == NULL)
+		memset(digest, 0, 32);	/* a zero digest never matches a record: the check fails closed */
+}
+
+static int get_status(HANDLE dev, struct tpmserv_status *s)
+{
+	DWORD got = 0;
+	memset(s, 0, sizeof(*s));
+	return ioctl_wait(dev, IOCTL_TPMSERV_GET_STATUS, NULL, 0, s, sizeof(*s), &got) && got == sizeof(*s) &&
+	       s->version == TPMSERV_STATUS_VERSION;
+}
+
+/* Starts the core, once per run of the service. With a handoff record of the pre-OS TPM the core continues that
+ * TPM; without one it starts its own state (the in-OS TPM, a stage without the TPM module). Returns 1 when the core
+ * runs. A record that does not check out starts no TPM: a TPM that did not measure this boot must not answer for it. */
+static int start_core(HANDLE dev)
+{
+	struct tpmserv_status s;
+	struct tpm_handoff_view view;
+	unsigned char *record;
+	DWORD got = 0;
+	unsigned r, waited;
+	enum tpm_handoff_result check;
+
+	/* The filter looks at BCHO when the TPM device starts, which is before this service as a rule. */
+	for (waited = 0; get_status(dev, &s) && s.handoff == TPMSERV_HANDOFF_PENDING && waited < HANDOFF_WAIT_MS;
+	     waited += 250)
+		if (WaitForSingleObject(g_stop, 250) == WAIT_OBJECT_0) return 0;
+	say("handoff state %u, %u bytes", s.handoff, s.handoff_bytes);
+	if (s.handoff == TPMSERV_HANDOFF_NONE || s.handoff == TPMSERV_HANDOFF_TAKEN) {
+		/* TAKEN: this service took the record in an earlier run and stopped. The PCRs of that run are lost; the
+		 * TPM continues from the permanent state that libtpms stored here. */
+		if (s.handoff == TPMSERV_HANDOFF_TAKEN) say("the handoff was taken by an earlier run: the PCRs start again");
+		r = tpmcore_start(g_dir, TPMSERV_MAX_COMMAND);
+		say("core start rc=0x%x", r);
+		return r == 0;
+	}
+	if (s.handoff != TPMSERV_HANDOFF_READY) {
+		say("no TPM: the handoff state is %u", s.handoff);
+		return 0;
+	}
+	record = (unsigned char *)VirtualAlloc(NULL, TPM_HANDOFF_MAX_BYTES, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	if (record == NULL) return 0;
+	if (!ioctl_wait(dev, IOCTL_TPMSERV_GET_HANDOFF, NULL, 0, record, TPM_HANDOFF_MAX_BYTES, &got)) {
+		say("get_handoff failed (%lu)", GetLastError());
+		VirtualFree(record, 0, MEM_RELEASE);
+		return 0;
+	}
+	check = tpm_handoff_read(record, got, sha256, &view);
+	if (check != TPM_HANDOFF_OK) {
+		say("no TPM: the handoff record does not check out (%d)", (int)check);
+		r = 1;
+	} else {
+		say("handoff: permanent %u bytes, volatile %u bytes, flags 0x%x, sequence %llu", view.permanent_bytes,
+		    view.volatile_bytes, view.flags, view.sequence);
+		r = tpmcore_resume(g_dir, TPMSERV_MAX_COMMAND, view.permanent, view.permanent_bytes, view.volatile_state,
+				   view.volatile_bytes);
+		say("core resume rc=0x%x", r);
+	}
+	SecureZeroMemory(record, TPM_HANDOFF_MAX_BYTES);	/* the seeds of the TPM */
+	VirtualFree(record, 0, MEM_RELEASE);
+	return check == TPM_HANDOFF_OK && r == 0;
+}
+
 static void run(void)
 {
-	unsigned r;
+	int started = 0;
 
 	if (!make_state_dir()) { say("state directory failed (%lu)", GetLastError()); return; }
 	{
@@ -175,9 +248,6 @@ static void run(void)
 		_snwprintf(path, MAX_PATH, L"%ls\\core.log", g_dir);
 		g_log = _wfopen(path, L"a");
 	}
-	r = tpmcore_start(g_dir, TPMSERV_MAX_COMMAND);
-	say("core start rc=0x%x", r);
-	if (r != 0) return;
 	while (WaitForSingleObject(g_stop, 0) != WAIT_OBJECT_0) {
 		HANDLE dev = CreateFileW(TPMSERV_USER_PATH, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
 					 FILE_FLAG_OVERLAPPED, NULL);
@@ -187,6 +257,13 @@ static void run(void)
 			continue;
 		}
 		say("connected to the filter");
+		if (!started) {
+			started = start_core(dev);
+			if (!started) {
+				CloseHandle(dev);
+				break;
+			}
+		}
 		/* The restart waits for the start of tpm.sys, and tpm.sys waits for answers from serve(): it must run on
 		 * its own thread, or the two wait for each other. */
 		{
@@ -197,8 +274,10 @@ static void run(void)
 		serve(dev);
 		CloseHandle(dev);
 	}
-	tpmcore_stop();
-	say("core stopped");
+	if (started) {
+		tpmcore_stop();
+		say("core stopped");
+	}
 }
 
 static DWORD WINAPI control(DWORD code, DWORD type, LPVOID data, LPVOID context)

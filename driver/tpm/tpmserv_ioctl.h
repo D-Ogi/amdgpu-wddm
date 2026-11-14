@@ -30,9 +30,22 @@
 #define IOCTL_TPMSERV_GET_STATUS \
 	CTL_CODE(TPMSERV_DEVICE_TYPE, 0x803, METHOD_BUFFERED, FILE_READ_ACCESS)
 
+/* Output: the handoff record of the pre-OS TPM (handoff.h), at most TPM_HANDOFF_MAX_BYTES. The filter gives it once:
+ * after a successful call it zeros and frees its copy. STATUS_NOT_FOUND when there is none (status.handoff says
+ * why), STATUS_BUFFER_TOO_SMALL when the output buffer is smaller than the record. */
+#define IOCTL_TPMSERV_GET_HANDOFF \
+	CTL_CODE(TPMSERV_DEVICE_TYPE, 0x804, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
 #define TPMSERV_MAX_COMMAND	0xF80u	/* the CRB data buffer; see crb.h */
 
-#define TPMSERV_STATUS_VERSION	2u
+/* status.handoff */
+#define TPMSERV_HANDOFF_PENDING	0u	/* the TPM device has not started yet: the filter has not looked */
+#define TPMSERV_HANDOFF_NONE	1u	/* Device (TPM0) has no BCHO, or its range holds no record: no pre-OS TPM */
+#define TPMSERV_HANDOFF_READY	2u	/* a record with a sound frame waits for GET_HANDOFF */
+#define TPMSERV_HANDOFF_TAKEN	3u	/* the service took the record */
+#define TPMSERV_HANDOFF_BAD	4u	/* BCHO names a range, and the range holds no sound record */
+
+#define TPMSERV_STATUS_VERSION	3u
 struct tpmserv_status {
 	unsigned int version;		/* TPMSERV_STATUS_VERSION */
 	unsigned int attached;		/* 1 while the filter has a started TPM device with a mapped page */
@@ -41,6 +54,8 @@ struct tpmserv_status {
 	unsigned int ready, idle, locality_requests, locality_relinquish;
 	unsigned int redelivered;	/* commands given out again after the service closed its handle */
 	unsigned int failed;		/* commands answered with TPM_RC_FAILURE because no service was connected */
+	unsigned int handoff;		/* TPMSERV_HANDOFF_* */
+	unsigned int handoff_bytes;	/* the size of the record while it is READY or after it was TAKEN */
 };
 
 #endif

@@ -41,14 +41,14 @@ $clFlags = @('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/we4013', '/we40
     "/I$wdk\Include\wdf\kmdf\$kmdf", "/I$sdk\Include\$KitVersion\shared",
     "/Fo$obj\", "/Fd$obj\cl.pdb")
 Write-Host 'compile'
-Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + @((Join-Path $here 'tpmserv.c'), (Join-Path $tpm 'crb.c'), (Join-Path (Split-Path $tpm) 'common\board\board_identity.c')))
+Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + @((Join-Path $here 'tpmserv.c'), (Join-Path $tpm 'crb.c'), (Join-Path $tpm 'handoff.c'), (Join-Path (Split-Path $tpm) 'common\board\board_identity.c')))
 Write-Host 'link'
 Invoke-Tool (Join-Path $bin 'link.exe') @('/nologo', '/DRIVER', '/SUBSYSTEM:NATIVE,10.00', '/ENTRY:FxDriverEntry', '/NODEFAULTLIB',
     '/RELEASE', '/DEBUG', '/OPT:REF', '/OPT:ICF', '/MACHINE:X64', '/Brepro', '/PDBALTPATH:%_PDB%',
     "/LIBPATH:$wdk\Lib\$KitVersion\km\x64", "/LIBPATH:$wdk\Lib\wdf\kmdf\x64\$kmdf",
     'wdfdriverentry.lib', 'wdfldr.lib', 'aux_klib.lib', 'wdmsec.lib', 'ntoskrnl.lib', 'hal.lib',
     'bufferoverflowfastfailk.lib', 'libcntpr.lib',
-    "/OUT:$pkg\tpmserv.sys", "/PDB:$Out\tpmserv.pdb", "$obj\tpmserv.obj", "$obj\crb.obj", "$obj\board_identity.obj")
+    "/OUT:$pkg\tpmserv.sys", "/PDB:$Out\tpmserv.pdb", "$obj\tpmserv.obj", "$obj\crb.obj", "$obj\handoff.obj", "$obj\board_identity.obj")
 '  {0}  tpmserv.sys (unsigned)' -f (Get-FileHash "$pkg\tpmserv.sys").Hash
 if ($CompileOnly) { return }
 

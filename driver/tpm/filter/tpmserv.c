@@ -24,7 +24,9 @@
 #include <wdmsec.h>
 #include <aux_klib.h>
 #include <TraceLoggingProvider.h>
+#include <acpiioct.h>
 #include "../crb.h"
+#include "../handoff.h"
 #include "../tpmserv_ioctl.h"
 #include "../../common/board/board_identity.h"
 
@@ -66,6 +68,10 @@ typedef struct _SERVICER {
 	struct crb Crb;
 	UCHAR Command[TPMSERV_MAX_COMMAND];
 	SIZE_T CommandBytes;
+	/* The handoff record of the pre-OS TPM: read at the first start of the device, given out once. */
+	ULONG Handoff;			/* TPMSERV_HANDOFF_* */
+	PUCHAR HandoffRecord;		/* nonpaged copy while READY */
+	ULONG HandoffBytes;
 } SERVICER;
 
 static SERVICER g;
@@ -265,9 +271,13 @@ static VOID GetStatus(WDFREQUEST request)
 	s->locality_relinquish = g.Crb.count.locality_relinquish;
 	s->redelivered = g.Redelivered;
 	s->failed = g.Crb.count.failed;
+	s->handoff = g.Handoff;
+	s->handoff_bytes = g.HandoffBytes;
 	WdfSpinLockRelease(g.Lock);
 	WdfRequestCompleteWithInformation(request, STATUS_SUCCESS, sizeof(*s));
 }
+
+static VOID GetHandoff(WDFREQUEST request);
 
 static VOID EvtControlIoctl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request, _In_ size_t OutputBufferLength,
 			    _In_ size_t InputBufferLength, _In_ ULONG IoControlCode)
@@ -279,6 +289,7 @@ static VOID EvtControlIoctl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request, _In_ s
 	case IOCTL_TPMSERV_GET_COMMAND: GetCommand(Request); break;
 	case IOCTL_TPMSERV_PUT_RESPONSE: PutResponse(Request); break;
 	case IOCTL_TPMSERV_GET_STATUS: GetStatus(Request); break;
+	case IOCTL_TPMSERV_GET_HANDOFF: GetHandoff(Request); break;
 	default: WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST); break;
 	}
 }
@@ -361,14 +372,144 @@ static NTSTATUS CreateControlDevice(_In_ WDFDRIVER Driver)
 	return STATUS_SUCCESS;
 }
 
+/* Name (BCHO, Package () { base, bytes }) of Device (TPM0): the handoff range of the pre-OS TPM
+ * (docs/design/tpm-preos.md, "The handoff range"). The ACPI bus driver below this filter evaluates it. Returns
+ * STATUS_SUCCESS with the range, or the status of the evaluation (STATUS_OBJECT_NAME_NOT_FOUND: no BCHO). */
+static NTSTATUS EvaluateBcho(WDFDEVICE device, PULONGLONG base, PULONG bytes)
+{
+	ACPI_EVAL_INPUT_BUFFER in;
+	UCHAR outBuffer[sizeof(ACPI_EVAL_OUTPUT_BUFFER) + 2 * sizeof(ACPI_METHOD_ARGUMENT) + 16];
+	PACPI_EVAL_OUTPUT_BUFFER out = (PACPI_EVAL_OUTPUT_BUFFER)outBuffer;
+	WDF_MEMORY_DESCRIPTOR inDesc, outDesc;
+	PACPI_METHOD_ARGUMENT arg;
+	ULONGLONG value[2];
+	ULONG_PTR got = 0;
+	ULONG i;
+	NTSTATUS status;
+
+	RtlZeroMemory(&in, sizeof(in));
+	RtlZeroMemory(outBuffer, sizeof(outBuffer));
+	in.Signature = ACPI_EVAL_INPUT_BUFFER_SIGNATURE;
+	in.MethodNameAsUlong = (ULONG)'OHCB';	/* "BCHO" in memory order */
+	WDF_MEMORY_DESCRIPTOR_INIT_BUFFER(&inDesc, &in, sizeof(in));
+	WDF_MEMORY_DESCRIPTOR_INIT_BUFFER(&outDesc, outBuffer, sizeof(outBuffer));
+	status = WdfIoTargetSendIoctlSynchronously(WdfDeviceGetIoTarget(device), NULL, IOCTL_ACPI_EVAL_METHOD, &inDesc,
+						   &outDesc, NULL, &got);
+	if (!NT_SUCCESS(status)) return status;
+	/* A package comes back as its elements (ACPI_EVAL_OUTPUT_BUFFER): two integers, 32 or 64 bits each. */
+	if (got < FIELD_OFFSET(ACPI_EVAL_OUTPUT_BUFFER, Argument) || out->Signature != ACPI_EVAL_OUTPUT_BUFFER_SIGNATURE ||
+	    out->Count != 2 || out->Length > got)
+		return STATUS_ACPI_INVALID_DATA;
+	arg = out->Argument;
+	for (i = 0; i < 2; i++) {
+		if ((PUCHAR)arg + FIELD_OFFSET(ACPI_METHOD_ARGUMENT, Data) > outBuffer + got ||
+		    arg->Type != ACPI_METHOD_ARGUMENT_INTEGER ||
+		    (arg->DataLength != sizeof(ULONG) && arg->DataLength != sizeof(ULONGLONG)) ||
+		    (PUCHAR)arg + FIELD_OFFSET(ACPI_METHOD_ARGUMENT, Data) + arg->DataLength > outBuffer + got)
+			return STATUS_ACPI_INVALID_DATA;
+		value[i] = arg->DataLength == sizeof(ULONG) ? *(UNALIGNED ULONG *)arg->Data : *(UNALIGNED ULONGLONG *)arg->Data;
+		arg = ACPI_METHOD_NEXT_ARGUMENT(arg);
+	}
+	if (value[1] > TPM_HANDOFF_MAX_BYTES || value[1] < TPM_HANDOFF_HEADER_BYTES || (value[0] & (PAGE_SIZE - 1)) != 0 ||
+	    value[0] == 0)
+		return STATUS_ACPI_INVALID_DATA;
+	*base = value[0];
+	*bytes = (ULONG)value[1];
+	return STATUS_SUCCESS;
+}
+
+/* At the first start of the device: copy the handoff record out of its range and write zeros over the range, which
+ * holds the seeds of the TPM. Only the frame is checked here; the core checks the digest of its copy. */
+static VOID ReadHandoff(WDFDEVICE device)
+{
+	ULONGLONG base = 0;
+	ULONG bytes = 0, state, record = 0;
+	PHYSICAL_ADDRESS at;
+	PUCHAR window, copy = NULL;
+	struct tpm_handoff_view view;
+	enum tpm_handoff_result r;
+	NTSTATUS status = EvaluateBcho(device, &base, &bytes);
+
+	RtlZeroMemory(&view, sizeof(view));
+	if (!NT_SUCCESS(status)) {
+		state = status == STATUS_OBJECT_NAME_NOT_FOUND ? TPMSERV_HANDOFF_NONE : TPMSERV_HANDOFF_BAD;
+		TraceLoggingWrite(g_TpmServ, "handoff", TraceLoggingNTStatus(status, "bcho"), TraceLoggingUInt32(state, "state"));
+		WdfSpinLockAcquire(g.Lock);
+		g.Handoff = state;
+		WdfSpinLockRelease(g.Lock);
+		return;
+	}
+	at.QuadPart = (LONGLONG)base;
+	/* Cached: the range is reserved DRAM that only this filter reads, after the firmware wrote it. */
+	window = (PUCHAR)MmMapIoSpaceEx(at, bytes, PAGE_READWRITE);
+	if (window == NULL) {
+		state = TPMSERV_HANDOFF_BAD;
+	} else {
+		r = tpm_handoff_read(window, bytes, NULL, &view);
+		if (r == TPM_HANDOFF_OK) {
+			record = view.record_bytes;
+			copy = (PUCHAR)ExAllocatePool2(POOL_FLAG_NON_PAGED, record, 'hmsT');
+			if (copy != NULL) RtlCopyMemory(copy, window, record);
+		}
+		state = r == TPM_HANDOFF_NONE ? TPMSERV_HANDOFF_NONE : copy != NULL ? TPMSERV_HANDOFF_READY : TPMSERV_HANDOFF_BAD;
+		RtlSecureZeroMemory(window, bytes);
+		MmUnmapIoSpace(window, bytes);
+	}
+	TraceLoggingWrite(g_TpmServ, "handoff", TraceLoggingHexUInt64(base, "base"), TraceLoggingUInt32(bytes, "range"),
+			  TraceLoggingUInt32(state, "state"), TraceLoggingUInt32(copy ? record : 0, "record"));
+	WdfSpinLockAcquire(g.Lock);
+	g.Handoff = state;
+	g.HandoffRecord = copy;
+	g.HandoffBytes = copy ? record : 0;
+	WdfSpinLockRelease(g.Lock);
+}
+
+static VOID GetHandoff(WDFREQUEST request)
+{
+	PUCHAR record = NULL;
+	ULONG bytes = 0;
+	PVOID out;
+	size_t outBytes = 0;
+	NTSTATUS status = WdfRequestRetrieveOutputBuffer(request, 1, &out, &outBytes);
+
+	if (!NT_SUCCESS(status)) {
+		WdfRequestComplete(request, status);
+		return;
+	}
+	/* Take the record out under the lock, copy it outside: a copy of up to 1 MiB does not belong under a spin lock. */
+	WdfSpinLockAcquire(g.Lock);
+	if (g.Handoff != TPMSERV_HANDOFF_READY) {
+		status = STATUS_NOT_FOUND;
+	} else if (outBytes < g.HandoffBytes) {
+		status = STATUS_BUFFER_TOO_SMALL;
+	} else {
+		record = g.HandoffRecord;
+		bytes = g.HandoffBytes;
+		g.HandoffRecord = NULL;
+		g.Handoff = TPMSERV_HANDOFF_TAKEN;
+	}
+	WdfSpinLockRelease(g.Lock);
+	if (record != NULL) {
+		RtlCopyMemory(out, record, bytes);
+		RtlSecureZeroMemory(record, bytes);
+		ExFreePoolWithTag(record, 'hmsT');
+	}
+	TraceLoggingWrite(g_TpmServ, "gethandoff", TraceLoggingNTStatus(status, "status"), TraceLoggingUInt32(bytes, "bytes"));
+	WdfRequestCompleteWithInformation(request, status, bytes);
+}
+
 static NTSTATUS EvtPrepareHardware(_In_ WDFDEVICE Device, _In_ WDFCMRESLIST Raw, _In_ WDFCMRESLIST Translated)
 {
 	ULONG i, count = WdfCmResourceListGetCount(Translated);
 	PHYSICAL_ADDRESS at;
 	PVOID window;
+	BOOLEAN look;
 
-	UNREFERENCED_PARAMETER(Device);
 	UNREFERENCED_PARAMETER(Raw);
+	WdfSpinLockAcquire(g.Lock);
+	look = g.Handoff == TPMSERV_HANDOFF_PENDING;
+	WdfSpinLockRelease(g.Lock);
+	if (look) ReadHandoff(Device);
 	for (i = 0; i < count; i++) {
 		PCM_PARTIAL_RESOURCE_DESCRIPTOR d = WdfCmResourceListGetDescriptor(Translated, i);
 		if (d == NULL || d->Type != CmResourceTypeMemory) continue;
@@ -444,6 +585,11 @@ static NTSTATUS EvtDeviceAdd(_In_ WDFDRIVER Driver, _Inout_ PWDFDEVICE_INIT Devi
 static VOID EvtDriverUnload(_In_ WDFDRIVER Driver)
 {
 	UNREFERENCED_PARAMETER(Driver);
+	if (g.HandoffRecord != NULL) {
+		RtlSecureZeroMemory(g.HandoffRecord, g.HandoffBytes);
+		ExFreePoolWithTag(g.HandoffRecord, 'hmsT');
+		g.HandoffRecord = NULL;
+	}
 	TraceLoggingWrite(g_TpmServ, "unload");
 	TraceLoggingUnregister(g_TpmServ);
 }

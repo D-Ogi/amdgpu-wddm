@@ -109,6 +109,7 @@ static struct {
 	int new_handle[FW_NEW_HANDLES];
 	unsigned new_handles;
 	int real_stall;
+	unsigned below_4g_requests;
 	void (*on_start)(void);
 } fw;
 
@@ -300,7 +301,14 @@ static EFI_STATUS EFIAPI fw_stall(UINTN microseconds)
 static EFI_STATUS EFIAPI fw_allocate_pages(EFI_ALLOCATE_TYPE type, EFI_MEMORY_TYPE memory, UINTN pages, EFI_PHYSICAL_ADDRESS *address)
 {
 	void *block;
-	if (type != AllocateAnyPages || pages == 0 || address == NULL || fw.page_blocks == FW_PAGE_BLOCKS) return EFI_INVALID_PARAMETER;
+	/* AllocateMaxAddress: the model's host memory can be anywhere, so it counts the request and checks its form. */
+	if ((type != AllocateAnyPages && type != AllocateMaxAddress) || pages == 0 || address == NULL ||
+	    fw.page_blocks == FW_PAGE_BLOCKS)
+		return EFI_INVALID_PARAMETER;
+	if (type == AllocateMaxAddress) {
+		if (*address != 0xFFFFFFFFull) return EFI_INVALID_PARAMETER;
+		fw.below_4g_requests++;
+	}
 	if (fw.allocate_fails) return EFI_OUT_OF_RESOURCES;
 	block = _aligned_malloc((size_t)pages * 4096u, 4096u);
 	if (block == NULL) return EFI_OUT_OF_RESOURCES;
@@ -1806,7 +1814,7 @@ static void test_tpm(const char *acpi_dir, const char *fixtures)
 	/* The image returned: the stage takes its protocol and its table away. */
 	CHECK(find_protocol(NULL, &guid_tcg2) == NULL && configuration_table(&guid_final_events) == NULL);
 	CHECK(fw.exit_notify == NULL && !engine_model_running() && fw.pool_live == 0 && fw.page_blocks == 0);
-	CHECK(engine_model.wipes == 1 && said("tpm: model engine"));
+	CHECK(engine_model.wipes == 1 && said("tpm: model engine") && fw.below_4g_requests == 1);
 
 	/* A new TPM with the SHA-256 bank only: no allocation and one start. */
 	tpm_firmware(acpi_dir, fixtures);

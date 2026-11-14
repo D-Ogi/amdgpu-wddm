@@ -15,6 +15,7 @@
 #include "tl_measure.h"
 #include "tl_tcg2.h"
 #include "tl_tpm2.h"
+#include "handoff.h"
 
 struct model_tpm {
 	unsigned char pcr[24][TL_SHA256_BYTES];
@@ -420,9 +421,69 @@ static void test_tcg2(const char *real_image)
 	      !memcmp(replay[0], tpm.pcr[0], 32));
 }
 
+/* The handoff record (driver/tpm/handoff.c): the round trip, and each defect that the filter and the core refuse. */
+static void test_handoff(void)
+{
+	static unsigned char record[TPM_HANDOFF_HEADER_BYTES + 64];
+	static const unsigned char volume[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+	unsigned char permanent[40], volatile_state[24];
+	struct tpm_handoff_view view;
+	size_t n, i;
+
+	for (i = 0; i < sizeof(permanent); i++) permanent[i] = (unsigned char)(0x40 + i);
+	for (i = 0; i < sizeof(volatile_state); i++) volatile_state[i] = (unsigned char)(0x90 + i);
+	n = tpm_handoff_write(record, sizeof(record), volume, 7, TPM_HANDOFF_STARTED, permanent, sizeof(permanent),
+			      volatile_state, sizeof(volatile_state), efl_sha256);
+	CHECK(n == TPM_HANDOFF_HEADER_BYTES + 64u && !memcmp(record, "BCTH", 4));
+	CHECK(tpm_handoff_read(record, n, efl_sha256, &view) == TPM_HANDOFF_OK && view.record_bytes == n &&
+	      view.permanent_bytes == 40u && view.volatile_bytes == 24u && !memcmp(view.permanent, permanent, 40) &&
+	      !memcmp(view.volatile_state, volatile_state, 24) && view.flags == TPM_HANDOFF_STARTED &&
+	      view.sequence == 7u && !memcmp(view.volume, volume, 16));
+	/* A larger range than the record: the bytes after it are not part of it. */
+	CHECK(tpm_handoff_read(record, sizeof(record), efl_sha256, &view) == TPM_HANDOFF_OK);
+	/* Too small for the record: no write. */
+	CHECK(tpm_handoff_write(record, n - 1u, volume, 7, 0, permanent, 40, volatile_state, 24, efl_sha256) == 0);
+	n = tpm_handoff_write(record, sizeof(record), volume, 7, TPM_HANDOFF_STARTED, permanent, 40, volatile_state, 24,
+			      efl_sha256);
+
+	/* Each byte after the digest is covered: a change in a blob, the flags or the sequence is BAD_DIGEST. */
+	for (i = TPM_HANDOFF_DIGEST_FROM + 12u; i < n; i++) {
+		if (i >= 40u && i < 52u) continue;	/* the sizes: BAD_FRAME, below */
+		record[i] ^= 0x01;
+		if (tpm_handoff_read(record, n, efl_sha256, NULL) != TPM_HANDOFF_BAD_DIGEST) {
+			CHECK(!"one changed byte of the record was not found");
+			record[i] ^= 0x01;
+			break;
+		}
+		/* The filter does not check the digest: the same record passes its frame check. */
+		if (tpm_handoff_read(record, n, NULL, NULL) != TPM_HANDOFF_OK) CHECK(!"the frame check reads the digest");
+		record[i] ^= 0x01;
+	}
+	checks++;
+	/* The frame: no magic, another version, a wrong header size, sizes that do not add up, a record beyond the range. */
+	record[0] ^= 1;
+	CHECK(tpm_handoff_read(record, n, efl_sha256, NULL) == TPM_HANDOFF_NONE);
+	record[0] ^= 1;
+	record[4] = 2;
+	CHECK(tpm_handoff_read(record, n, NULL, NULL) == TPM_HANDOFF_BAD_FRAME);
+	record[4] = 1;
+	record[6] = 81;
+	CHECK(tpm_handoff_read(record, n, NULL, NULL) == TPM_HANDOFF_BAD_FRAME);
+	record[6] = 80;
+	record[44] = 41;
+	CHECK(tpm_handoff_read(record, n, NULL, NULL) == TPM_HANDOFF_BAD_FRAME);
+	record[44] = 40;
+	CHECK(tpm_handoff_read(record, n - 1u, NULL, NULL) == TPM_HANDOFF_BAD_FRAME);
+	CHECK(tpm_handoff_read(record, 10, NULL, NULL) == TPM_HANDOFF_NONE);
+	/* A cleared range (the filter zeros it after the copy): no record. */
+	memset(record, 0, sizeof(record));
+	CHECK(tpm_handoff_read(record, sizeof(record), efl_sha256, NULL) == TPM_HANDOFF_NONE);
+}
+
 unsigned tl_tests(const char *real_log, const char *real_image, unsigned *check_count)
 {
 	checks = failures = 0;
+	test_handoff();
 	test_log_format();
 	test_log_full();
 	test_real_log(real_log);
