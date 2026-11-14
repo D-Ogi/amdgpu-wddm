@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /*
  * The writer of the state files (core/espstate.c) in a directory of the host: the A/B order, the sequence after a
- * new open, a damaged newer copy, and the files in the format that the stage reads (statefile.h with the same
- * OpenSSL GCM). It does not touch an EFI system partition: espstate_open_at takes the directory and the key.
+ * new open, a damaged newer copy, no write of an unchanged state, and the files in the format that the stage reads
+ * (statefile.h with the same OpenSSL GCM). It does not touch an EFI system partition: espstate_open_at takes the
+ * directory and the key.
  *
  *   espstate_test.exe <empty directory>
  */
@@ -84,27 +85,35 @@ int wmain(int argc, wchar_t **argv)
 	/* An empty directory: the first write is A with sequence 1. The directory is made. */
 	CHECK(espstate_open_at(&e, g_dir, key) == ESPSTATE_OK && e.next_slot == 0 && e.next_sequence == 1u);
 	CHECK(espstate_written_sequence(&e) == 0u);
-	CHECK(espstate_write(&e, one, sizeof(one), &error) && espstate_written_sequence(&e) == 1u);
+	CHECK(espstate_write(&e, one, sizeof(one), &error) == ESPSTATE_WRITTEN && espstate_written_sequence(&e) == 1u);
 	CHECK(stage_read(L"state-a.bin", key, blob, &n, &seq) == TPM_STATEFILE_OK && seq == 1u && n == sizeof(one) &&
 	      !memcmp(blob, one, n));
 	/* The second write goes to B and does not touch A. */
-	CHECK(espstate_write(&e, two, sizeof(two), &error) && espstate_written_sequence(&e) == 2u);
+	CHECK(espstate_write(&e, two, sizeof(two), &error) == ESPSTATE_WRITTEN && espstate_written_sequence(&e) == 2u);
 	CHECK(stage_read(L"state-b.bin", key, blob, &n, &seq) == TPM_STATEFILE_OK && seq == 2u && n == sizeof(two) &&
 	      !memcmp(blob, two, n));
+	CHECK(stage_read(L"state-a.bin", key, blob, &n, &seq) == TPM_STATEFILE_OK && seq == 1u);
+	/* The same state again is not written: no file changes, and the next write still goes to A with 3. */
+	CHECK(espstate_write(&e, two, sizeof(two), &error) == ESPSTATE_UNCHANGED && espstate_written_sequence(&e) == 2u);
+	CHECK(e.next_slot == 0 && e.next_sequence == 3u);
 	CHECK(stage_read(L"state-a.bin", key, blob, &n, &seq) == TPM_STATEFILE_OK && seq == 1u);
 	espstate_close(&e);
 	CHECK(!e.open && e.key[0] == 0);
 
-	/* A new open after a restart: B (2) is the state, the next write is A with 3. */
+	/* A new open after a restart: B (2) is the state, the next write is A with 3. The state of B itself is not
+	 * written again (a resume stores the state that it was given), another state is. */
 	CHECK(espstate_open_at(&e, g_dir, key) == ESPSTATE_OK && e.next_slot == 0 && e.next_sequence == 3u);
+	CHECK(espstate_write(&e, two, sizeof(two), &error) == ESPSTATE_UNCHANGED && e.next_sequence == 3u);
+	CHECK(espstate_write(&e, one, sizeof(one), &error) == ESPSTATE_WRITTEN && espstate_written_sequence(&e) == 3u);
+	CHECK(stage_read(L"state-a.bin", key, blob, &n, &seq) == TPM_STATEFILE_OK && seq == 3u && n == sizeof(one));
 	espstate_close(&e);
 
-	/* B damaged (a write that a power cut broke): A (1) is the state, the next write repairs B with 2. */
-	flip(L"state-b.bin", 60);
-	CHECK(stage_read(L"state-b.bin", key, blob, &n, &seq) == TPM_STATEFILE_BAD_TAG);
-	CHECK(espstate_open_at(&e, g_dir, key) == ESPSTATE_OK && e.next_slot == 1 && e.next_sequence == 2u);
-	CHECK(espstate_write(&e, two, sizeof(two), &error));
-	CHECK(stage_read(L"state-b.bin", key, blob, &n, &seq) == TPM_STATEFILE_OK && seq == 2u);
+	/* A damaged (a write that a power cut broke): B (2) is the state, the next write repairs A with 3. */
+	flip(L"state-a.bin", 60);
+	CHECK(stage_read(L"state-a.bin", key, blob, &n, &seq) == TPM_STATEFILE_BAD_TAG);
+	CHECK(espstate_open_at(&e, g_dir, key) == ESPSTATE_OK && e.next_slot == 0 && e.next_sequence == 3u);
+	CHECK(espstate_write(&e, one, sizeof(one), &error) == ESPSTATE_WRITTEN);
+	CHECK(stage_read(L"state-a.bin", key, blob, &n, &seq) == TPM_STATEFILE_OK && seq == 3u);
 	espstate_close(&e);
 
 	/* Another key opens neither copy: the stage gives no TPM then, and the reader of this side sees no state. */

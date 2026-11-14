@@ -177,10 +177,16 @@ static void serve(HANDLE dev)
 static void store_esp(const unsigned char *blob, unsigned bytes)
 {
 	unsigned long error = 0;
-	if (espstate_write(&g_esp, blob, bytes, &error))
+	switch (espstate_write(&g_esp, blob, bytes, &error)) {
+	case ESPSTATE_WRITTEN:
 		say("state file: sequence %llu written, %u bytes", espstate_written_sequence(&g_esp), bytes);
-	else
+		break;
+	case ESPSTATE_UNCHANGED:
+		break;	/* the newest copy holds this state */
+	default:
 		say("state file: the write failed (%lu): the stage starts from the older copy", error);
+		break;
+	}
 }
 
 /* The state files of the stage volume for the resumed TPM. A TPM that the stage manufactured, or NV that changed in

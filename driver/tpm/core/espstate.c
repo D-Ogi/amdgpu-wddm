@@ -67,9 +67,10 @@ static int path_of(const struct espstate *e, int slot, wchar_t *out, size_t cap)
 	return n > 0 && (size_t)n < cap;
 }
 
-/* The result and sequence of one copy, with the blob into scratch (wiped by the caller). */
+/* The result and sequence of one copy, with the blob into scratch (wiped by the caller) and its SHA-256 into digest
+ * on TPM_STATEFILE_OK. */
 static enum tpm_statefile_result read_copy(const struct espstate *e, int slot, unsigned char *scratch,
-					   unsigned long long *sequence)
+					   unsigned long long *sequence, unsigned char digest[32])
 {
 	wchar_t path[MAX_PATH];
 	unsigned char *file;
@@ -92,6 +93,7 @@ static enum tpm_statefile_result read_copy(const struct espstate *e, int slot, u
 		r = tpm_statefile_read(file, got, e->key, tpm_gcm_openssl, scratch, TPM_STATEFILE_MAX_BLOB, &blob, sequence);
 	else
 		r = TPM_STATEFILE_BAD_FRAME;
+	if (r == TPM_STATEFILE_OK) sha256(scratch, blob, digest);
 	CloseHandle(h);
 	free(file);
 	return r;
@@ -117,8 +119,9 @@ enum espstate_result espstate_open_at(struct espstate *e, const wchar_t *dir, co
 {
 	unsigned long long seq[2];
 	enum tpm_statefile_result r[2];
+	unsigned char digest[2][32];
 	unsigned char *scratch;
-	int slot;
+	int slot, chosen;
 
 	memset(e, 0, sizeof(*e));
 	if (wcslen(dir) + 16 >= sizeof(e->dir) / sizeof(e->dir[0])) return ESPSTATE_NO_DIRECTORY;
@@ -130,23 +133,28 @@ enum espstate_result espstate_open_at(struct espstate *e, const wchar_t *dir, co
 	}
 	scratch = (unsigned char *)malloc(TPM_STATEFILE_MAX_BLOB);
 	for (slot = 0; slot < 2; slot++) {
-		r[slot] = scratch != NULL ? read_copy(e, slot, scratch, &seq[slot]) : TPM_STATEFILE_NONE;
+		r[slot] = scratch != NULL ? read_copy(e, slot, scratch, &seq[slot], digest[slot]) : TPM_STATEFILE_NONE;
 		if (r[slot] != TPM_STATEFILE_OK) seq[slot] = 0;
 	}
 	if (scratch != NULL) {
 		SecureZeroMemory(scratch, TPM_STATEFILE_MAX_BLOB);
 		free(scratch);
 	}
-	e->next_slot = tpm_statefile_next(tpm_statefile_choose(r[0], seq[0], r[1], seq[1]), seq[0], seq[1],
-					  &e->next_sequence);
+	chosen = tpm_statefile_choose(r[0], seq[0], r[1], seq[1]);
+	if (chosen >= 0) {
+		memcpy(e->state, digest[chosen], sizeof(e->state));
+		e->have_state = 1;
+	}
+	e->next_slot = tpm_statefile_next(chosen, seq[0], seq[1], &e->next_sequence);
 	e->open = 1;
 	return ESPSTATE_OK;
 }
 
-int espstate_write(struct espstate *e, const unsigned char *blob, size_t bytes, unsigned long *error)
+enum espstate_write_result espstate_write(struct espstate *e, const unsigned char *blob, size_t bytes,
+					  unsigned long *error)
 {
 	wchar_t path[MAX_PATH];
-	unsigned char nonce[12];
+	unsigned char nonce[12], digest[32];
 	unsigned char *file;
 	size_t n, cap = TPM_STATEFILE_HEADER_BYTES + bytes + TPM_STATEFILE_TAG_BYTES;
 	DWORD put = 0;
@@ -154,15 +162,17 @@ int espstate_write(struct espstate *e, const unsigned char *blob, size_t bytes, 
 	int ok;
 
 	*error = 0;
-	if (!e->open || !path_of(e, e->next_slot, path, MAX_PATH)) return 0;
+	if (!e->open || !path_of(e, e->next_slot, path, MAX_PATH)) return ESPSTATE_WRITE_FAILED;
+	sha256(blob, bytes, digest);
+	if (e->have_state && memcmp(digest, e->state, sizeof(digest)) == 0) return ESPSTATE_UNCHANGED;
 	/* A random nonce for each write: 96 bits, so a repeat under one key is not a practical event. */
-	if (BCryptGenRandom(NULL, nonce, sizeof(nonce), BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0) return 0;
+	if (BCryptGenRandom(NULL, nonce, sizeof(nonce), BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0) return ESPSTATE_WRITE_FAILED;
 	file = (unsigned char *)malloc(cap);
-	if (file == NULL) return 0;
+	if (file == NULL) return ESPSTATE_WRITE_FAILED;
 	n = tpm_statefile_write(file, cap, e->next_sequence, nonce, e->key, blob, bytes, tpm_gcm_openssl);
 	if (n == 0) {
 		free(file);
-		return 0;
+		return ESPSTATE_WRITE_FAILED;
 	}
 	/* In place: a write that a power cut breaks leaves this copy unsound and the other copy as the state. */
 	h = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -175,11 +185,13 @@ int espstate_write(struct espstate *e, const unsigned char *blob, size_t bytes, 
 		*error = GetLastError();
 	}
 	free(file);
-	if (!ok) return 0;
+	if (!ok) return ESPSTATE_WRITE_FAILED;
 	e->written = e->next_sequence;
 	e->next_slot ^= 1;
 	e->next_sequence++;
-	return 1;
+	memcpy(e->state, digest, sizeof(digest));
+	e->have_state = 1;
+	return ESPSTATE_WRITTEN;
 }
 
 unsigned long long espstate_written_sequence(const struct espstate *e)

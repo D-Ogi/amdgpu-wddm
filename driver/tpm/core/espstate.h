@@ -18,7 +18,15 @@ struct espstate {
 	int next_slot;			/* 0: A, 1: B */
 	unsigned long long next_sequence;
 	unsigned long long written;	/* the sequence of the last write, 0 before any */
+	unsigned char state[32];	/* SHA-256 of the state in the newest sound copy, when have_state */
+	int have_state;
 	int open;
+};
+
+enum espstate_write_result {
+	ESPSTATE_WRITTEN = 0,	/* the next copy holds the blob */
+	ESPSTATE_UNCHANGED,	/* the newest copy holds this blob already: no file is written */
+	ESPSTATE_WRITE_FAILED	/* *error has the Win32 error, or 0 when the encryption failed */
 };
 
 enum espstate_result {
@@ -36,9 +44,11 @@ enum espstate_result espstate_open(struct espstate *e, const unsigned char parti
 /* The same in a given directory with a given key: the second half of espstate_open, and the entry of the host test. */
 enum espstate_result espstate_open_at(struct espstate *e, const wchar_t *dir, const unsigned char key[32]);
 
-/* Writes the permanent state of libtpms to the next copy and flushes it. Returns 1, or 0 with the Win32 error in
- * *error (0 when the encryption failed). After a success the next write goes to the other copy. */
-int espstate_write(struct espstate *e, const unsigned char *blob, size_t bytes, unsigned long *error);
+/* Writes the permanent state of libtpms to the next copy and flushes it. After ESPSTATE_WRITTEN the next write goes
+ * to the other copy. A blob that the newest sound copy holds already (a store that left the state as it was, or the
+ * state that the stage read) gives ESPSTATE_UNCHANGED and no write: each write is a flushed write on the partition. */
+enum espstate_write_result espstate_write(struct espstate *e, const unsigned char *blob, size_t bytes,
+					  unsigned long *error);
 
 /* The sequence of the copy that the last espstate_write wrote, 0 before any write. */
 unsigned long long espstate_written_sequence(const struct espstate *e);
