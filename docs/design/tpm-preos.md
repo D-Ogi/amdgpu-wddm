@@ -63,12 +63,16 @@ checks see a familiar log.
 |---|---|---|
 | 0 | `EV_NO_ACTION` (log only) | The Spec ID event: the algorithms and digest sizes of the active banks |
 | 0 | `EV_S_CRTM_VERSION` | The stage version string, UTF-16 |
-| 0 | `EV_S_CRTM_CONTENTS` | The Authenticode digest of the stage image |
+| 0 | `EV_S_CRTM_CONTENTS` | The Authenticode digest of the stage file |
+| 7 | `EV_EFI_VARIABLE_DRIVER_CONFIG` | `SecureBoot`, `PK`, `KEK`, `db`, `dbx` as `GetVariable` returns them (an absent one with no data) |
+| 7 | `EV_SEPARATOR` | Four zero bytes, before any image is verified |
 | 4 | `EV_EFI_ACTION` | "Calling EFI Application from Boot Option" |
-| 7 | `EV_EFI_VARIABLE_DRIVER_CONFIG` | `SecureBoot`, `PK`, `KEK`, `db`, `dbx` as `GetVariable` returns them |
-| 0-7 | `EV_SEPARATOR` | Four zero bytes |
-| 4 | `EV_EFI_BOOT_SERVICES_APPLICATION` | The next image (gate) |
-| 5 | `EV_EFI_ACTION` | "Exit Boot Services Invocation" (at `ExitBootServices`) |
+| 0-6 | `EV_SEPARATOR` | Four zero bytes |
+| 4 | `EV_EFI_BOOT_SERVICES_APPLICATION` | The next image (gate), with `UEFI_IMAGE_LOAD_EVENT` |
+| 5 | `EV_EFI_ACTION` | "Exit Boot Services Invocation", "Exit Boot Services Returned with Success" |
+
+The digest of the stage is the Authenticode digest of its file on the volume, not of the loaded image: the loaded
+image holds relocations that depend on the load address, and PCR 0 must be the same at each start.
 
 Without Secure Boot, BitLocker uses the PCR profile 0, 2, 4, 11. PCR 2 holds only its separator, PCR 11 belongs to
 BitLocker.

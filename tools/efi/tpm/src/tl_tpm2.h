@@ -36,11 +36,18 @@ size_t tl_tpm2_get_pcrs(unsigned char *out, size_t cap);
 /* *sha256_only = 1 when SHA-256 is the only bank with selected PCRs; *sha256_full = 1 when SHA-256 selects all
  * 24 PCRs. */
 unsigned tl_tpm2_get_pcrs_answer(const unsigned char *rsp, size_t bytes, int *sha256_only, int *sha256_full);
+/* The TPM_ALG_ID of each bank in the same answer, in its order. TL_TPM2_MALFORMED also when more than capacity. */
+unsigned tl_tpm2_get_pcrs_banks(const unsigned char *rsp, size_t bytes, unsigned *banks, unsigned capacity, unsigned *count);
 
 /* TPM2_PCR_Allocate with platform auth (empty password): SHA-256 with all 24 PCRs, every other bank of the list
  * with none. It takes effect at the next TPM reset (TPM 2.0 Part 3, section 22.5). */
 size_t tl_tpm2_pcr_allocate_sha256(unsigned char *out, size_t cap, const unsigned *other_banks, unsigned other_count);
 unsigned tl_tpm2_pcr_allocate_answer(const unsigned char *rsp, size_t bytes, int *allocation_success);
+
+/* TPM2_GetCapability(TPM_CAP_TPM_PROPERTIES) of one property, for example TL_TPM_PT_MANUFACTURER. */
+#define TL_TPM_PT_MANUFACTURER	0x00000105u	/* PT_FIXED + 5 */
+size_t tl_tpm2_get_property(unsigned char *out, size_t cap, unsigned long property);
+unsigned tl_tpm2_get_property_answer(const unsigned char *rsp, size_t bytes, unsigned long property, unsigned long *value);
 
 /* The response code of any answer: 0 = success. */
 unsigned tl_tpm2_rc(const unsigned char *rsp, size_t bytes);

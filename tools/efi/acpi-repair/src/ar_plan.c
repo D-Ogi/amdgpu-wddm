@@ -551,6 +551,14 @@ size_t ar_build_stubs(const struct ar_plan *plan, unsigned char *out, size_t cap
 			efl_amlw_buffer(&w, crs, sizeof(crs));
 		}
 		if (plan->hid_msft) write_ppi_dsm(&w);
+		if (plan->hid_msft && plan->handoff_base != 0 && plan->handoff_bytes != 0) {
+			size_t package;
+			efl_amlw_name(&w, "BCHO");
+			package = efl_amlw_package_begin(&w, 2);
+			efl_amlw_integer(&w, plan->handoff_base);
+			efl_amlw_integer(&w, plan->handoff_bytes);
+			efl_amlw_end(&w, package);
+		}
 		efl_amlw_end(&w, mark);
 		efl_amlw_end(&w, scope);
 	}

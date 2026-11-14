@@ -13,6 +13,7 @@
 #define TPM_CC_PCR_Read		0x0000017Eu
 #define TPM_CC_PCR_Extend	0x00000182u
 #define TPM_CAP_PCRS		0x00000005u
+#define TPM_CAP_TPM_PROPERTIES	0x00000006u
 #define TPM_RS_PW		0x40000009u
 #define TPM_RH_PLATFORM		0x4000000Cu
 #define TPM_ALG_SHA256		0x000Bu
@@ -229,6 +230,58 @@ unsigned tl_tpm2_get_pcrs_answer(const unsigned char *rsp, size_t bytes, int *sh
 	*sha256_only = sha256 && !other;
 	*sha256_full = full;
 	return 0;
+}
+
+unsigned tl_tpm2_get_pcrs_banks(const unsigned char *rsp, size_t bytes, unsigned *banks, unsigned capacity, unsigned *count)
+{
+	unsigned rc = tl_tpm2_rc(rsp, bytes);
+	size_t at = HEADER_BYTES + 1u;
+	unsigned long n, i;
+	*count = 0;
+	if (rc != 0) return rc;
+	if (bytes < at + 8u || get(rsp + at, 4) != TPM_CAP_PCRS) return TL_TPM2_MALFORMED;
+	n = get(rsp + at + 4, 4);
+	at += 8;
+	for (i = 0; i < n; i++) {
+		unsigned select_bytes;
+		if (bytes < at + 3u) return TL_TPM2_MALFORMED;
+		select_bytes = rsp[at + 2];
+		if (bytes < at + 3u + select_bytes) return TL_TPM2_MALFORMED;
+		if (*count == capacity) return TL_TPM2_MALFORMED;
+		banks[(*count)++] = (unsigned)get(rsp + at, 2);
+		at += 3u + select_bytes;
+	}
+	return 0;
+}
+
+size_t tl_tpm2_get_property(unsigned char *out, size_t cap, unsigned long property)
+{
+	struct out o;
+	begin(&o, out, cap, TPM_ST_NO_SESSIONS, TPM_CC_GetCapability);
+	put(&o, TPM_CAP_TPM_PROPERTIES, 4);
+	put(&o, property, 4);
+	put(&o, 1, 4);
+	return end(&o);
+}
+
+unsigned tl_tpm2_get_property_answer(const unsigned char *rsp, size_t bytes, unsigned long property, unsigned long *value)
+{
+	unsigned rc = tl_tpm2_rc(rsp, bytes);
+	size_t at = HEADER_BYTES + 1u;	/* after moreData */
+	unsigned long count, i;
+	*value = 0;
+	if (rc != 0) return rc;
+	if (bytes < at + 8u || get(rsp + at, 4) != TPM_CAP_TPM_PROPERTIES) return TL_TPM2_MALFORMED;
+	count = get(rsp + at + 4, 4);
+	at += 8;
+	for (i = 0; i < count; i++, at += 8) {
+		if (bytes < at + 8u) return TL_TPM2_MALFORMED;
+		if (get(rsp + at, 4) == property) {
+			*value = get(rsp + at + 4, 4);
+			return 0;
+		}
+	}
+	return TL_TPM2_MALFORMED;	/* the TPM did not report it */
 }
 
 size_t tl_tpm2_pcr_allocate_sha256(unsigned char *out, size_t cap, const unsigned *other_banks, unsigned other_count)

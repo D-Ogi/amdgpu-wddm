@@ -131,6 +131,7 @@ typedef enum { AllHandles = 0, ByRegisterNotify = 1, ByProtocol = 2 } EFI_LOCATE
 typedef enum { AllocateAnyPages = 0, AllocateMaxAddress = 1, AllocateAddress = 2 } EFI_ALLOCATE_TYPE;
 typedef enum { EFI_NATIVE_INTERFACE = 0 } EFI_INTERFACE_TYPE;
 typedef EFI_STATUS (EFIAPI *EFI_ALLOCATE_PAGES)(EFI_ALLOCATE_TYPE, EFI_MEMORY_TYPE, UINTN, EFI_PHYSICAL_ADDRESS *);
+typedef EFI_STATUS (EFIAPI *EFI_FREE_PAGES)(EFI_PHYSICAL_ADDRESS Memory, UINTN Pages);
 
 typedef struct {
 	EFI_TABLE_HEADER Hdr;
@@ -442,6 +443,28 @@ typedef EFI_STATUS (EFIAPI *EFI_SECURITY2_FILE_AUTHENTICATION)(const EFI_SECURIT
 							       UINTN FileSize, BOOLEAN BootPolicy);
 struct EFI_SECURITY2_ARCH_PROTOCOL {
 	EFI_SECURITY2_FILE_AUTHENTICATION FileAuthentication;
+};
+
+/* ---- the TPM (TCG EFI Protocol Specification, family 2.0, level 00 revision 00.13, section 6; edk2
+ * MdePkg/Include/Protocol/Tcg2Protocol.h, fetched 2026-11-14) ------------------------------------------ */
+
+#define EFI_TCG2_PROTOCOL_GUID \
+	{ 0x607F766C, 0x7455, 0x42BE, { 0x93, 0x0B, 0xE4, 0xD7, 0x6D, 0xB2, 0x72, 0x0F } }
+#define EFI_TCG2_FINAL_EVENTS_TABLE_GUID \
+	{ 0x1E2ED096, 0x30E2, 0x4254, { 0xBD, 0x89, 0x86, 0x3B, 0xBE, 0xF8, 0x23, 0x25 } }
+typedef struct EFI_TCG2_PROTOCOL EFI_TCG2_PROTOCOL;
+/* The capability structure and the event are byte layouts: tools/efi/tpm/src/tl_tcg2.h reads and writes them. */
+struct EFI_TCG2_PROTOCOL {
+	EFI_STATUS (EFIAPI *GetCapability)(EFI_TCG2_PROTOCOL *This, VOID *ProtocolCapability);
+	EFI_STATUS (EFIAPI *GetEventLog)(EFI_TCG2_PROTOCOL *This, UINT32 EventLogFormat, EFI_PHYSICAL_ADDRESS *EventLogLocation,
+					 EFI_PHYSICAL_ADDRESS *EventLogLastEntry, BOOLEAN *EventLogTruncated);
+	EFI_STATUS (EFIAPI *HashLogExtendEvent)(EFI_TCG2_PROTOCOL *This, UINT64 Flags, EFI_PHYSICAL_ADDRESS DataToHash,
+						UINT64 DataToHashLen, VOID *EfiTcgEvent);
+	EFI_STATUS (EFIAPI *SubmitCommand)(EFI_TCG2_PROTOCOL *This, UINT32 InputParameterBlockSize, UINT8 *InputParameterBlock,
+					   UINT32 OutputParameterBlockSize, UINT8 *OutputParameterBlock);
+	EFI_STATUS (EFIAPI *GetActivePcrBanks)(EFI_TCG2_PROTOCOL *This, UINT32 *ActivePcrBanks);
+	EFI_STATUS (EFIAPI *SetActivePcrBanks)(EFI_TCG2_PROTOCOL *This, UINT32 ActivePcrBanks);
+	EFI_STATUS (EFIAPI *GetResultOfSetActivePcrBanks)(EFI_TCG2_PROTOCOL *This, UINT32 *OperationPresent, UINT32 *Response);
 };
 
 /* ---- configuration tables -------------------------------------------------------------------- */

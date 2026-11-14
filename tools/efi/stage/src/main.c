@@ -22,7 +22,6 @@
 #include "stage.h"
 #include "board_identity.h"
 
-#define STAGE_VERSION		"4"
 #define STAGE_LINE_CHARS	256u
 #define STAGE_DEVPATH_MAX_BYTES	4096u
 #define STAGE_SMBIOS_MAX_BYTES	(1024u * 1024u)	/* the bound driver/kmd/board_memory_identity.c sets on 'RSMB' */
@@ -46,8 +45,10 @@ static const char default_next[] = "\\EFI\\Microsoft\\Boot\\bootmgfw.efi";
 static unsigned short next_image[STAGE_OPTION_CHARS];
 
 /* The modules, in the order of their work. The core unlock goes first: when it resets the board, the work of the
- * other two would be lost, and they must see the processor count that Windows gets. */
-static const struct stage_module *const modules[] = { &cu_module, &ar_module, &sb_module };
+ * others would be lost, and they must see the processor count that Windows gets. The TPM goes before the ACPI
+ * repair, which describes the handoff range of the TPM, and before the Secure Boot check, so that the TPM measures
+ * the image that the check then sees. */
+static const struct stage_module *const modules[] = { &cu_module, &tpm_module, &ar_module, &sb_module };
 #define MODULES (sizeof(modules) / sizeof(modules[0]))
 static int module_on[MODULES];
 

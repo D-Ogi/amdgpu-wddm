@@ -402,8 +402,11 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 			CHECK(hit == 1);
 		}
 	}
-	/* The real case of trial s8: MSFT0101 with the reserved page, so _HID, _CRS and the _DSM methods. */
+	/* The real case of trial s8: MSFT0101 with the reserved page, so _HID, _CRS and the _DSM methods, and with the
+	 * handoff range of the pre-OS TPM. */
 	plan.crb_base = 0x12345000ull;
+	plan.handoff_base = 0x23456000ull;
+	plan.handoff_bytes = 0x80000u;
 	{
 		static const unsigned char ppi_uuid[16] = {0xA6, 0xFA, 0xDD, 0x3D, 0x1B, 0x36, 0xB4, 0x4E,
 							 0xA4, 0x24, 0x8D, 0x10, 0x08, 0x9D, 0x16, 0x53};
@@ -475,11 +478,31 @@ static void test_stock(const char *dir, const char *label, const char *out_dir)
 			if (meth != 0 && meth_end <= body_end)
 				check_tpm_dsm(t + meth + 1u + lb + 5u, t + meth_end, ppi_uuid, mor_uuid);
 		}
-		/* ACPICA reads this table in the build script, as the second parser of the _DSM. */
+		/* The handoff name inside the device: NameOp "BCHO", PackageOp, a one-byte package length, two elements,
+		 * each a DWordPrefix integer. */
+		{
+			static const unsigned char want[] = {0x08, 'B', 'C', 'H', 'O', 0x12, 0x0C, 0x02, 0x0C, 0x00, 0x60, 0x45,
+							     0x23, 0x0C, 0x00, 0x00, 0x08, 0x00};
+			size_t found = 0;
+			for (p = body; p + sizeof(want) <= body_end; p++)
+				if (!memcmp(t + p, want, sizeof(want))) found++;
+			CHECK(found == 1);
+		}
+		/* ACPICA reads this table in the build script, as the second parser of the _DSM and the handoff name. */
 		save(out_dir, "ar-stubs-tpm.aml", t, nb);
+		/* Without a range there is no name. */
+		plan.handoff_base = 0;
+		nb = ar_build_stubs(&plan, t, sizeof(t));
+		{
+			size_t found = 0;
+			for (p = 36u; p + 4u <= nb; p++)
+				if (!memcmp(t + p, "BCHO", 4)) found++;
+			CHECK(nb > 200u && found == 0);
+		}
 	}
 	plan.crb_base = 0;
 	plan.hid_msft = 0;
+	plan.handoff_bytes = 0;
 
 	/* Device on and no stub needed: the table is still built, and it holds the device alone. */
 	{

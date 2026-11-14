@@ -13,6 +13,8 @@
 #include "efl_acpi.h"
 #include "stage_options.h"
 
+/* The version of the stage. The pre-OS TPM measures it into PCR 0 (EV_S_CRTM_VERSION). */
+#define STAGE_VERSION		"4"
 #define STAGE_PATH_CHARS	260u
 #define STAGE_PCI_CONFIG_BYTES	64u
 
@@ -29,6 +31,11 @@ struct stage {
 	int board_checked, board_bc250;
 	EFI_PCI_IO_PROTOCOL *gpu;			/* the GPU function of a BC-250, else NULL */
 	unsigned char gpu_config[STAGE_PCI_CONFIG_BYTES];
+	/* The handoff range of the pre-OS TPM (driver/tpm/handoff.h): reserved pages that the TPM module fills at
+	 * ExitBootServices. The TPM module sets it in its run; the ACPI repair describes it in Device (TPM0). 0 when
+	 * no pre-OS TPM runs. */
+	unsigned long long tpm_handoff;
+	unsigned tpm_handoff_bytes;
 };
 
 /* ---- what the core gives a module ---------------------------------------------------------------- */
@@ -96,5 +103,6 @@ struct stage_module {
 extern const struct stage_module cu_module;	/* core-unlock/src/cu_module.c */
 extern const struct stage_module ar_module;	/* acpi-repair/src/ar_module.c */
 extern const struct stage_module sb_module;	/* secure-boot/src/sb_module.c */
+extern const struct stage_module tpm_module;	/* tpm/src/tpm_module.c */
 
 #endif

@@ -59,11 +59,13 @@ $unlockPure = Sources 'core-unlock\src' @('cu_bar.c', 'cu_decide.c', 'cu_run.c',
 $repairPure = Sources 'acpi-repair\src' @('ar_plan.c')
 $securePure = Sources 'secure-boot\src' @('sb_der.c', 'sb_rsa.c', 'sb_x509.c', 'sb_pkcs7.c', 'sb_siglist.c',
     'sb_verify.c', 'sb_policy.c', 'sb_crc32.c')
-$tpmPure = Sources 'tpm\src' @('tl_log.c', 'tl_tpm2.c', 'tl_measure.c', 'tl_tcg2.c')
+$tpmPure = @(Sources 'tpm\src' @('tl_log.c', 'tl_tpm2.c', 'tl_measure.c', 'tl_tcg2.c')) +
+    @(Join-Path $repo 'driver\tpm\handoff.c')
 $pure = @($libPure) + @($corePure) + @($unlockPure) + @($repairPure) + @($securePure) + @($tpmPure)
 # The UEFI bindings: the core and one file for each module.
 $bindings = @(Sources 'stage\src' @('main.c')) + @(Sources 'core-unlock\src' @('cu_module.c', 'report_uefi.c')) +
-    @(Sources 'acpi-repair\src' @('ar_module.c')) + @(Sources 'secure-boot\src' @('sb_module.c', 'sb_windows.c'))
+    @(Sources 'acpi-repair\src' @('ar_module.c')) + @(Sources 'secure-boot\src' @('sb_module.c', 'sb_windows.c')) +
+    @(Sources 'tpm\src' @('tpm_module.c'))
 # The small C library of the UEFI image. The host tests use the C library of the host.
 $libc = @(Sources 'lib' @('efl_libc.c'))
 # The repository sources that the stage shares with the driver. They keep their own warning level: they are the
@@ -74,10 +76,11 @@ $tests = @((Join-Path $efiRoot 'stage\test\host_main.c'), (Join-Path $efiRoot 's
     (Join-Path $efiRoot 'lib\test\lib_test.c'), (Join-Path $efiRoot 'core-unlock\test\host_test.c'),
     (Join-Path $efiRoot 'core-unlock\test\report_test.c'), (Join-Path $efiRoot 'acpi-repair\test\ar_test.c'),
     (Join-Path $efiRoot 'secure-boot\test\sb_test.c'), (Join-Path $efiRoot 'stage\test\firmware_test.c'),
-    (Join-Path $efiRoot 'tpm\test\tl_test.c'))
+    (Join-Path $efiRoot 'tpm\test\tl_test.c'), (Join-Path $efiRoot 'tpm\test\engine_model.c'))
 
 $includes = @("-I$efiRoot\lib", "-I$efiRoot\lib\acpi", "-I$efiRoot\stage\src", "-I$efiRoot\core-unlock\src",
-    "-I$efiRoot\acpi-repair\src", "-I$efiRoot\secure-boot\src", "-I$efiRoot\tpm\src",
+    "-I$efiRoot\acpi-repair\src", "-I$efiRoot\secure-boot\src", "-I$efiRoot\tpm\src", "-I$efiRoot\tpm\engine",
+    "-I$repo\driver\tpm",
     "-I$shim\include", "-I$shim", "-I$repo\driver\amdgpu-import", "-I$repo\third_party\linux-amdgpu", "-I$repo\driver\kmd", "-I$repo\driver\common\board")
 $strict = @('-Wall', '-Wextra', '-Werror')
 $relaxed = @('-Wall', '-Wno-unknown-pragmas', '-Wno-unused-parameter')
@@ -121,7 +124,7 @@ foreach ($control in @($SignedImage, $SecondSignedImage)) {
 # The address sanitizer stops the test at a read or a write outside a buffer. Its run-time library is a DLL beside
 # the compiler.
 $env:PATH = "$Mingw;$env:PATH"
-$hostFlags = @('-std=c11', '-O1', '-g', '-fsanitize=address,undefined', '-fno-sanitize-recover=undefined', '-fno-omit-frame-pointer', '-DSB_RT_IN_PLACE', "-I$efiRoot\lib\include", "-I$efiRoot\lib\test") + $includes
+$hostFlags = @('-std=c11', '-O1', '-g', '-fsanitize=address,undefined', '-fno-sanitize-recover=undefined', '-fno-omit-frame-pointer', '-DSB_RT_IN_PLACE', "-I$efiRoot\lib\include", "-I$efiRoot\lib\test", "-I$efiRoot\tpm\test") + $includes
 # The bindings are in the host build too: firmware_test.c runs them against a model of the firmware.
 Build-Objects $hostCc $hostFlags $objHost ($pure + $bindings + $tests) $strict
 Build-Objects $hostCc $hostFlags $objHost $shared $relaxed
@@ -215,10 +218,12 @@ else {
     if (Test-Path (Join-Path $tables 'ar-stubs-tpm.aml')) {
         $result = Read-InNamespace 'ar-stubs-tpm.aml' @('DSDT.aml', 'SSDT2.aml', 'ar-idle.aml')
         $text = $result.Lines -join "`n"
+        # The handoff name of the pre-OS TPM is a package of the base and the length of the range.
         if (-not (Test-Loaded $result) -or $text -notmatch 'Method \(_DSM, 4, Serialized\)' -or
-            $text -notmatch '(?i)3dddfaa6-361b-4eb4-a424-8d10089d1653') {
-            Write-Host "FAIL ACPICA did not read the TPM _DSM of ar-stubs-tpm.aml:`n$($result.Log)"; $code = 1
-        } else { Write-Host "ACPICA loaded ar-stubs-tpm.aml: Method (_DSM, 4, Serialized) with the PPI UUID, $($result.Lines.Count) lines of ASL" }
+            $text -notmatch '(?i)3dddfaa6-361b-4eb4-a424-8d10089d1653' -or
+            $text -notmatch '(?s)Name \(BCHO, Package \(0x02\)\s*\{\s*0x23456000,\s*0x00080000\s*\}') {
+            Write-Host "FAIL ACPICA did not read the TPM _DSM and BCHO of ar-stubs-tpm.aml:`n$($result.Log)"; $code = 1
+        } else { Write-Host "ACPICA loaded ar-stubs-tpm.aml: Method (_DSM, 4, Serialized) with the PPI UUID and Name (BCHO), $($result.Lines.Count) lines of ASL" }
     } else { Write-Host 'FAIL the tests wrote no ar-stubs-tpm.aml'; $code = 1 }
     # With the stubs in the namespace, the DSDT has no method without a definition.
     $result = Read-InNamespace 'DSDT.aml' @('SSDT2.aml', 'ar-idle.aml', 'ar-stubs.aml')

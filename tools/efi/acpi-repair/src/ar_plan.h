@@ -103,6 +103,11 @@ struct ar_plan {
 	int device;			/* 1: ar_build_stubs writes the experiment device */
 	int hid_msft;			/* 1: the device carries _HID MSFT0101 instead of the experiment ID */
 	unsigned long long crb_base;	/* the reserved page that _CRS describes, 0 when no page is reserved */
+	/* The handoff range of the pre-OS TPM (stage->tpm_handoff), written as Name (BCHO, Package () {base,
+	 * length}) in the MSFT0101 device; 0 when there is none. It is not a resource of the device: the filter reads
+	 * the name and maps the range itself. */
+	unsigned long long handoff_base;
+	unsigned handoff_bytes;
 };
 
 void ar_plan_make(const struct ar_input *in, struct ar_plan *plan);

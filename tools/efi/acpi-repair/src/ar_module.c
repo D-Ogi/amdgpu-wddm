@@ -180,6 +180,11 @@ static void ar_module_run(struct stage *stage)
 	input.want_device = want_device;
 	input.want_hid_msft = want_hid_msft;
 	ar_plan_make(&input, &plan);
+	plan.handoff_base = stage->tpm_handoff;
+	plan.handoff_bytes = stage->tpm_handoff_bytes;
+	if (plan.device && plan.hid_msft && plan.handoff_base != 0)
+		stage_sayf(stage, AR_NAME, "the TPM device names the handoff range at 0x%llx, %u bytes", plan.handoff_base,
+			   plan.handoff_bytes);
 	if (plan.device) {
 		/* The page that _CRS describes. acpi.ssdt.tpm.nvs=1 takes EfiACPIMemoryNVS, the type that firmware TPMs use
 		 * (AMD CRB ranges live in ACPI NVS; see the tpm_crb thread of 2019 and the 2026 memremap patch). edk2

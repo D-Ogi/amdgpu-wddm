@@ -211,6 +211,18 @@ static void test_tpm2(void)
 		      cmd[33] == 3 && cmd[34] == 0xFF && cmd[36] == 0xFF && cmd[38] == 0x04 && cmd[39] == 3 && cmd[40] == 0 &&
 		      cmd[42] == 0 && cmd[44] == 0x0C && cmd[48] == 0);
 	}
+	/* TPM_PT_MANUFACTURER: the command, and an answer with two properties of which the second is asked. */
+	{
+		unsigned long value = 0;
+		CHECK(tl_tpm2_get_property(cmd, sizeof(cmd), TL_TPM_PT_MANUFACTURER) == 22 && cmd[13] == 6 && cmd[16] == 1 &&
+		      cmd[17] == 0x05 && cmd[21] == 1);
+		memset(rsp, 0, sizeof(rsp));
+		rsp[0] = 0x80; rsp[1] = 0x01; rsp[5] = 35; rsp[14] = 6; rsp[18] = 2;
+		rsp[21] = 0x01; rsp[22] = 0x04; rsp[26] = 7;				/* 0x104 = 7 */
+		rsp[29] = 0x01; rsp[30] = 0x05; memcpy(rsp + 31, "IBM ", 4);	/* 0x105 = "IBM " */
+		CHECK(tl_tpm2_get_property_answer(rsp, 35, TL_TPM_PT_MANUFACTURER, &value) == 0 && value == 0x49424D20ul);
+		CHECK(tl_tpm2_get_property_answer(rsp, 35, 0x106u, &value) == TL_TPM2_MALFORMED);
+	}
 	memset(rsp, 0, sizeof(rsp));
 	rsp[0] = 0x80; rsp[1] = 0x02; rsp[5] = 27; rsp[13] = 17; rsp[14] = 1;
 	CHECK(tl_tpm2_pcr_allocate_answer(rsp, 27, &ok) == 0 && ok);

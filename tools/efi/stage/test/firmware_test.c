@@ -13,6 +13,7 @@
  * Its probe runs here: the dump and the identification of the register BAR over a model of the PCI I/O and the
  * PCI Root Bridge I/O protocols.
  */
+#include <malloc.h>
 #include <setjmp.h>
 #include <stdio.h>
 #include "efl_test.h"
@@ -22,6 +23,12 @@
 #include "cu_bar.h"
 #include "sb_crc32.h"
 #include "sb_windows.h"
+#include "engine_model.h"
+#include "efl_pe.h"
+#include "handoff.h"
+#include "efl_sha256.h"
+#include "tl_log.h"
+#include "tl_tpm2.h"
 
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st);
 
@@ -34,6 +41,9 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st);
 #define SDT_HEADER	36u
 #define FW_BARS		6u
 #define FW_BAR5		0xFE800000ull	/* test data: the address of BAR5 in the model */
+#define FW_PAGE_BLOCKS	16u
+#define FW_NEW_HANDLES	4u
+#define FW_CONFIG	6u
 
 struct fw_file { char path[96]; unsigned char *data; size_t bytes; };
 struct fw_open { EFI_FILE_PROTOCOL protocol; struct fw_file *file; UINT64 position; };
@@ -89,6 +99,17 @@ static struct {
 	size_t bridge_bytes;
 	unsigned control_value;
 	unsigned mem_reads, mem_writes, bridge_reads;
+	/* The TPM module: pages, the event of ExitBootServices, the handles of new protocols, a real stall. */
+	void *page_block[FW_PAGE_BLOCKS];
+	EFI_MEMORY_TYPE page_type[FW_PAGE_BLOCKS];
+	size_t page_bytes[FW_PAGE_BLOCKS];
+	unsigned page_blocks;
+	EFI_EVENT_NOTIFY exit_notify;
+	VOID *exit_context;
+	int new_handle[FW_NEW_HANDLES];
+	unsigned new_handles;
+	int real_stall;
+	void (*on_start)(void);
 } fw;
 
 static int fw_handle_image, fw_handle_device, fw_handle_security, fw_handle_gpu, fw_handle_child, fw_handle_bridge;
@@ -104,7 +125,7 @@ static EFI_SECURITY2_ARCH_PROTOCOL fw_security2, fw_child_security2;
 static EFI_ACPI_TABLE_PROTOCOL fw_acpi_table;
 static EFI_ACPI_SDT_PROTOCOL fw_acpi_sdt;
 static EFI_PCI_IO_PROTOCOL fw_pci;
-static EFI_CONFIGURATION_TABLE fw_config[2];
+static EFI_CONFIGURATION_TABLE fw_config[FW_CONFIG];
 static unsigned char fw_device_path[4] = { EFI_DP_TYPE_END, EFI_DP_END_ENTIRE, 4, 0 };
 static unsigned char fw_image_path[160];
 static unsigned char fw_smbios_entry[24], fw_smbios[512];
@@ -157,6 +178,9 @@ static EFI_STATUS EFIAPI fw_output(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *this, const 
 #ifdef _WIN32
 __declspec(dllimport) void *__stdcall VirtualAlloc(void *address, size_t size, unsigned int type, unsigned int protect);
 __declspec(dllimport) int __stdcall VirtualFree(void *address, size_t size, unsigned int type);
+/* The real wait of fw_stall, with the same reason for the own declarations. */
+__declspec(dllimport) int __stdcall QueryPerformanceCounter(long long *count);
+__declspec(dllimport) int __stdcall QueryPerformanceFrequency(long long *frequency);
 #endif
 #define FW_MEM_COMMIT		0x00001000u
 #define FW_MEM_RESERVE		0x00002000u
@@ -212,6 +236,13 @@ static EFI_STATUS EFIAPI fw_create_event(UINT32 type, UINTN notify_tpl, EFI_EVEN
 {
 	(void)notify_tpl;
 	if (fw.create_event_fails) return EFI_OUT_OF_RESOURCES;
+	if (type == EVT_SIGNAL_EXIT_BOOT_SERVICES && notify != NULL && event != NULL) {
+		if (fw.exit_notify != NULL) return EFI_OUT_OF_RESOURCES;	/* the model keeps one */
+		fw.exit_notify = notify;
+		fw.exit_context = context;
+		*event = &fw_bs;
+		return EFI_SUCCESS;
+	}
 	if (type != EVT_SIGNAL_VIRTUAL_ADDRESS_CHANGE || notify == NULL || event == NULL) return EFI_INVALID_PARAMETER;
 	fw.event_notify = notify;
 	fw.event_context = context;
@@ -223,6 +254,11 @@ static EFI_STATUS EFIAPI fw_create_event(UINT32 type, UINTN notify_tpl, EFI_EVEN
 static EFI_STATUS EFIAPI fw_close_event(EFI_EVENT event)
 {
 	if (event == NULL) return EFI_INVALID_PARAMETER;
+	if (event == &fw_bs) {
+		fw.exit_notify = NULL;
+		fw.exit_context = NULL;
+		return EFI_SUCCESS;
+	}
 	if (fw.events_open > 0u) fw.events_open--;
 	fw.event_notify = NULL;
 	fw.event_context = NULL;
@@ -247,9 +283,110 @@ static EFI_STATUS EFIAPI fw_crc32(VOID *data, UINTN bytes, UINT32 *crc)
 
 static EFI_STATUS EFIAPI fw_stall(UINTN microseconds)
 {
-	(void)microseconds;
 	fw.stalls++;
+	/* A real wait only where a test asks for one: the TPM module measures the time stamp counter over a stall. */
+	if (fw.real_stall) {
+		long long frequency, start, now;
+		QueryPerformanceFrequency(&frequency);
+		QueryPerformanceCounter(&start);
+		do QueryPerformanceCounter(&now);
+		while ((unsigned long long)(now - start) * 1000000ull < (unsigned long long)microseconds * (unsigned long long)frequency);
+	}
 	return EFI_SUCCESS;
+}
+
+/* -- pages, the protocol interfaces that a module adds, the configuration tables -- */
+
+static EFI_STATUS EFIAPI fw_allocate_pages(EFI_ALLOCATE_TYPE type, EFI_MEMORY_TYPE memory, UINTN pages, EFI_PHYSICAL_ADDRESS *address)
+{
+	void *block;
+	if (type != AllocateAnyPages || pages == 0 || address == NULL || fw.page_blocks == FW_PAGE_BLOCKS) return EFI_INVALID_PARAMETER;
+	if (fw.allocate_fails) return EFI_OUT_OF_RESOURCES;
+	block = _aligned_malloc((size_t)pages * 4096u, 4096u);
+	if (block == NULL) return EFI_OUT_OF_RESOURCES;
+	memset(block, 0xA5, (size_t)pages * 4096u);	/* the firmware does not clear pages */
+	fw.page_block[fw.page_blocks] = block;
+	fw.page_type[fw.page_blocks] = memory;
+	fw.page_bytes[fw.page_blocks++] = (size_t)pages * 4096u;
+	*address = (EFI_PHYSICAL_ADDRESS)(size_t)block;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fw_free_pages(EFI_PHYSICAL_ADDRESS address, UINTN pages)
+{
+	unsigned i;
+	for (i = 0; i < fw.page_blocks; i++)
+		if (fw.page_block[i] == (void *)(size_t)address) {
+			if (fw.page_bytes[i] != (size_t)pages * 4096u) failures++;	/* the caller gives back what it took */
+			memset(fw.page_block[i], 0xDD, fw.page_bytes[i]);
+			_aligned_free(fw.page_block[i]);
+			fw.page_blocks--;
+			fw.page_block[i] = fw.page_block[fw.page_blocks];
+			fw.page_type[i] = fw.page_type[fw.page_blocks];
+			fw.page_bytes[i] = fw.page_bytes[fw.page_blocks];
+			return EFI_SUCCESS;
+		}
+	return EFI_NOT_FOUND;
+}
+
+/* The memory type of the pages at this address, or -1. */
+static int page_type(const void *address)
+{
+	unsigned i;
+	for (i = 0; i < fw.page_blocks; i++)
+		if (fw.page_block[i] == address) return (int)fw.page_type[i];
+	return -1;
+}
+
+static void add_protocol(EFI_HANDLE handle, const EFI_GUID *guid, VOID *interface);
+static struct fw_protocol *find_protocol(EFI_HANDLE handle, const EFI_GUID *guid);
+
+static EFI_STATUS EFIAPI fw_install_protocol(EFI_HANDLE *handle, const EFI_GUID *guid, EFI_INTERFACE_TYPE type, VOID *interface)
+{
+	if (handle == NULL || guid == NULL || type != EFI_NATIVE_INTERFACE || fw.protocols == FW_PROTOCOLS) return EFI_INVALID_PARAMETER;
+	if (*handle == NULL) *handle = &fw.new_handle[fw.new_handles++ % FW_NEW_HANDLES];
+	if (find_protocol(*handle, guid) != NULL) return EFI_INVALID_PARAMETER;
+	add_protocol(*handle, guid, interface);
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI fw_uninstall_protocol(EFI_HANDLE handle, const EFI_GUID *guid, VOID *interface)
+{
+	struct fw_protocol *p = find_protocol(handle, guid);
+	if (p == NULL || p->interface != interface) return EFI_NOT_FOUND;
+	memmove(p, p + 1, (size_t)(&fw.protocol[fw.protocols] - (p + 1)) * sizeof(*p));
+	fw.protocols--;
+	return EFI_SUCCESS;
+}
+
+/* InstallConfigurationTable (UEFI 2.10, section 7.3.16): a NULL table removes the entry. The model keeps the
+ * module's tables beside its own two, which stay first. */
+static EFI_STATUS EFIAPI fw_install_configuration(const EFI_GUID *guid, VOID *table)
+{
+	unsigned i;
+	for (i = 0; i < fw_st.NumberOfTableEntries; i++)
+		if (!memcmp(&fw_config[i].VendorGuid, guid, sizeof(*guid))) {
+			if (table != NULL) {
+				fw_config[i].VendorTable = table;
+				return EFI_SUCCESS;
+			}
+			memmove(&fw_config[i], &fw_config[i + 1u], (fw_st.NumberOfTableEntries - i - 1u) * sizeof(fw_config[0]));
+			fw_st.NumberOfTableEntries--;
+			return EFI_SUCCESS;
+		}
+	if (table == NULL) return EFI_NOT_FOUND;
+	if (fw_st.NumberOfTableEntries == FW_CONFIG) return EFI_OUT_OF_RESOURCES;
+	fw_config[fw_st.NumberOfTableEntries].VendorGuid = *guid;
+	fw_config[fw_st.NumberOfTableEntries++].VendorTable = table;
+	return EFI_SUCCESS;
+}
+
+static VOID *configuration_table(const EFI_GUID *guid)
+{
+	unsigned i;
+	for (i = 0; i < fw_st.NumberOfTableEntries; i++)
+		if (!memcmp(&fw_config[i].VendorGuid, guid, sizeof(*guid))) return fw_config[i].VendorTable;
+	return NULL;
 }
 
 static VOID EFIAPI fw_reset_system(EFI_RESET_TYPE type, EFI_STATUS status, UINTN size, VOID *data)
@@ -522,6 +659,7 @@ static EFI_STATUS EFIAPI fw_start_image(EFI_HANDLE image, UINTN *exit_size, CHAR
 	fw.log_at_start = file_has(LOG_FILE, "starting the next image");
 	fw.stage_check_at_start = security != NULL && security->interface != &fw_security2;
 	if (fw.child_hooks && security != NULL) security->interface = &fw_child_security2;
+	if (fw.on_start != NULL) fw.on_start();	/* what the started image does, as a test gives it */
 	return fw.start_status;
 }
 
@@ -836,7 +974,9 @@ static void free_firmware(void)
 	free(fw.xsdt);
 	free(fw.dsdt);
 	free(fw.variable_dbx);
+	for (i = 0; i < fw.page_blocks; i++) _aligned_free(fw.page_block[i]);
 	memset(&fw, 0, sizeof(fw));
+	engine_model_reset();
 }
 
 /* A new firmware: a BC-250 with the stock ACPI tables of acpi_dir, and a Security2 protocol. */
@@ -862,6 +1002,11 @@ static int new_firmware(const char *acpi_dir)
 	fw_bs.CreateEvent = fw_create_event;
 	fw_bs.CloseEvent = fw_close_event;
 	fw_bs.CalculateCrc32 = fw_crc32;
+	fw_bs.AllocatePages = (VOID *)fw_allocate_pages;
+	fw_bs.FreePages = (VOID *)fw_free_pages;
+	fw_bs.InstallProtocolInterface = fw_install_protocol;
+	fw_bs.UninstallProtocolInterface = fw_uninstall_protocol;
+	fw_bs.InstallConfigurationTable = fw_install_configuration;
 	fw_rt.ConvertPointer = fw_convert_pointer;
 	fw_rt.GetVariable = fw_get_variable;
 	fw_rt.ResetSystem = fw_reset_system;
@@ -939,8 +1084,12 @@ static int new_firmware(const char *acpi_dir)
 static EFI_STATUS run_stage(const char *options, int *reset)
 {
 	EFI_STATUS status = EFI_ABORTED;
+	char line[sizeof(fw_options) / sizeof(fw_options[0])];
 	size_t i;
-	for (i = 0; options[i] && i + 1u < sizeof(fw_options) / sizeof(fw_options[0]); i++) fw_options[i] = (unsigned char)options[i];
+	/* The TPM module is off unless a test names it: only test_tpm sees it, so that the other tests count the same
+	 * firmware calls as before the module. */
+	snprintf(line, sizeof(line), strstr(options, "tpm=") ? "%s" : "%s tpm=0", options);
+	for (i = 0; line[i] && i + 1u < sizeof(fw_options) / sizeof(fw_options[0]); i++) fw_options[i] = (unsigned char)line[i];
 	fw_options[i] = 0;
 	fw_loaded.LoadOptions = fw_options;
 	fw_loaded.LoadOptionsSize = (UINT32)((i + 1u) * sizeof(CHAR16));
@@ -1517,6 +1666,187 @@ static void test_probe(const char *acpi_dir, const char *fixtures)
 }
 
 /* The probe of core-unlock: unlock=0 probe=1 identifies the register BAR and reads the control register only. */
+/* ---- the TPM module ------------------------------------------------------------------------------ */
+
+typedef EFI_TCG2_PROTOCOL test_tcg2;
+static const EFI_GUID guid_tcg2 = EFI_TCG2_PROTOCOL_GUID;
+static const EFI_GUID guid_final_events = EFI_TCG2_FINAL_EVENTS_TABLE_GUID;
+#define STAGE_FILE	"\\EFI\\BC250\\bc250-stage.efi"
+#define TPM_LOG_BYTES	(64u * 1024u)	/* the size of the log area of tpm_module.c */
+
+/* What the boot application saw, for the checks after the run. */
+static struct {
+	int ran, protocol, capability, log_matches, image_measured, stage_measured, extend_matches, record, record_pcrs;
+	unsigned final_events;
+	int final_in_nvs, after_exit_absent;
+} seen;
+
+static unsigned le32(const unsigned char *p)
+{
+	return p[0] | ((unsigned)p[1] << 8) | ((unsigned)p[2] << 16) | ((unsigned)p[3] << 24);
+}
+
+/* PCR 0 to 23 through SubmitCommand. 1 when all 24 read. */
+static int read_pcrs(test_tcg2 *tcg2, unsigned char pcrs[24][32])
+{
+	unsigned char cmd[64], rsp[512];
+	unsigned first, got, total = 0;
+	for (first = 0; first < 24u; first += 8u) {
+		size_t n = tl_tpm2_pcr_read(cmd, sizeof(cmd), first, 8);
+		if (tcg2->SubmitCommand(tcg2, (UINT32)n, cmd, sizeof(rsp), rsp) != EFI_SUCCESS) return 0;
+		size_t bytes = ((size_t)rsp[2] << 24) | ((size_t)rsp[3] << 16) | ((size_t)rsp[4] << 8) | rsp[5];	/* big-endian */
+		if (bytes > sizeof(rsp) || tl_tpm2_pcr_read_answer(rsp, bytes, first, pcrs, &got) != 0)
+			return 0;
+		total += got;
+	}
+	return total == 24u;
+}
+
+/* 1 when the log has an event of this PCR and type whose digest is the Authenticode digest of the file. */
+static int log_has_image(const unsigned char *log, unsigned pcr, unsigned type, const char *path)
+{
+	struct fw_file *file = find_file(path);
+	struct efl_pe pe;
+	struct tl_reader reader;
+	struct tl_event event;
+	size_t cursor = 0;
+	if (file == NULL || !efl_pe_read(file->data, file->bytes, &pe)) return 0;
+	memset(&reader, 0, sizeof(reader));
+	while (tl_log_next(log, TPM_LOG_BYTES, &cursor, &reader, &event) == 1)
+		if (event.pcr == pcr && event.type == type && event.digest != NULL && !memcmp(event.digest, pe.digest, 32)) return 1;
+	return 0;
+}
+
+/* The work of a boot application: the calls that bootmgr makes, then ExitBootServices. */
+static void tpm_application(void)
+{
+	struct fw_protocol *p = find_protocol(NULL, &guid_tcg2);
+	test_tcg2 *tcg2;
+	unsigned char capability[36], replay[24][32], pcrs[24][32], event[18 + 5];
+	EFI_PHYSICAL_ADDRESS location = 0, last = 0;
+	BOOLEAN truncated = 1;
+	const unsigned char *log, *final;
+	unsigned i;
+
+	seen.ran = 1;
+	if (p == NULL) return;
+	seen.protocol = 1;
+	tcg2 = p->interface;
+	memset(capability, 0, sizeof(capability));
+	capability[0] = sizeof(capability);
+	seen.capability = tcg2->GetCapability(tcg2, capability) == EFI_SUCCESS && capability[16] == 1 &&
+			  le32(capability + 8) == 2u && le32(capability + 12) == 2u && le32(capability + 24) == 0x42434D44u &&
+			  le32(capability + 28) == 1u && le32(capability + 32) == 2u;
+	if (tcg2->GetEventLog(tcg2, 2, &location, &last, &truncated) != EFI_SUCCESS || location == 0 || truncated) return;
+	log = (const unsigned char *)(size_t)location;
+	seen.log_matches = tl_log_replay(log, TPM_LOG_BYTES, replay) > 0 && read_pcrs(tcg2, pcrs) && !memcmp(replay, pcrs, sizeof(pcrs));
+	seen.image_measured = log_has_image(log, 4, TL_EV_EFI_BOOT_SERVICES_APPLICATION, NEXT);
+	seen.stage_measured = log_has_image(log, 0, TL_EV_S_CRTM_CONTENTS, STAGE_FILE);
+
+	/* HashLogExtendEvent as a boot application uses it: PCR 8, EV_IPL, data "hello". */
+	memset(event, 0, sizeof(event));
+	event[0] = sizeof(event);
+	event[4] = 14;
+	event[8] = 1;
+	event[10] = 8;
+	event[14] = 0x0D;
+	memcpy(event + 18, "hello", 5);
+	seen.extend_matches = tcg2->HashLogExtendEvent(tcg2, 0, (EFI_PHYSICAL_ADDRESS)(size_t)"hello", 5, event) == EFI_SUCCESS &&
+			      tl_log_replay(log, TPM_LOG_BYTES, replay) > 0 && read_pcrs(tcg2, pcrs) &&
+			      !memcmp(replay, pcrs, sizeof(pcrs));
+
+	/* ExitBootServices: the module measures PCR 5 and writes the handoff record. */
+	if (fw.exit_notify != NULL) fw.exit_notify(&fw_bs, fw.exit_context);
+	final = configuration_table(&guid_final_events);
+	seen.final_in_nvs = final != NULL && page_type(final) == EfiACPIMemoryNVS;
+	if (final != NULL) seen.final_events = le32(final + 8);	/* NumberOfEvents, low half */
+	(void)tl_log_replay(log, TPM_LOG_BYTES, replay);
+	for (i = 0; i < fw.page_blocks; i++)
+		if (fw.page_type[i] == EfiReservedMemoryType) {
+			struct tpm_handoff_view view;
+			seen.record = tpm_handoff_read(fw.page_block[i], fw.page_bytes[i], efl_sha256, &view) == TPM_HANDOFF_OK &&
+				      view.flags == (TPM_HANDOFF_STARTED | TPM_HANDOFF_PERMANENT_CHANGED) && view.sequence == 0 &&
+				      view.permanent_bytes == 9u && view.permanent[8] == 1;	/* the model: SHA-256 only */
+			/* The volatile state of the model is its PCRs: they must be the replay of the whole log. */
+			seen.record_pcrs = view.volatile_bytes == sizeof(replay) && !memcmp(view.volatile_state, replay, sizeof(replay));
+		}
+	memset(capability, 0, sizeof(capability));
+	capability[0] = sizeof(capability);
+	seen.after_exit_absent = tcg2->GetCapability(tcg2, capability) == EFI_SUCCESS && capability[16] == 0 &&
+				 tcg2->SubmitCommand(tcg2, 10, event, sizeof(capability), capability) == EFI_DEVICE_ERROR;
+}
+
+static void tpm_firmware(const char *acpi_dir, const char *fixtures)
+{
+	new_firmware(acpi_dir);
+	add_file(STAGE_FILE, fixtures, "signed_other.efi");
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.real_stall = 1;
+	memset(&seen, 0, sizeof(seen));
+}
+
+static void test_tpm(const char *acpi_dir, const char *fixtures)
+{
+	static int firmware_tcg2;
+	int reset;
+
+	/* The whole path: a new TPM, the PCR_Allocate restart, the log, the protocol, the gate, ExitBootServices. */
+	tpm_firmware(acpi_dir, fixtures);
+	fw.on_start = tpm_application;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 tpm=1", &reset) == EFI_SUCCESS && !reset);
+	CHECK(said("PCR banks: SHA-256 only, after PCR_Allocate and a restart") && said("TCG2 protocol installed"));
+	CHECK(engine_model.starts == 2 && said("next image measured into PCR 4"));
+	CHECK(seen.ran && seen.protocol && seen.capability);
+	CHECK(seen.log_matches && seen.image_measured && seen.stage_measured && seen.extend_matches);
+	/* After GetEventLog: the event of HashLogExtendEvent and the two of ExitBootServices. */
+	CHECK(seen.final_in_nvs && seen.final_events == 3u);
+	CHECK(seen.record && seen.record_pcrs && seen.after_exit_absent);
+	/* The bytes that started are the bytes that were measured. */
+	CHECK(fw.loads == 1 && fw.loads_from_buffer == 1 && fw.buffer_is_file && fw.starts == 1);
+	/* The image returned: the stage takes its protocol and its table away. */
+	CHECK(find_protocol(NULL, &guid_tcg2) == NULL && configuration_table(&guid_final_events) == NULL);
+	CHECK(fw.exit_notify == NULL && !engine_model_running() && fw.pool_live == 0 && fw.page_blocks == 0);
+
+	/* A new TPM with the SHA-256 bank only: no allocation and one start. */
+	tpm_firmware(acpi_dir, fixtures);
+	engine_model.new_sha256_only = 1;
+	fw.on_start = tpm_application;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 tpm=1", &reset) == EFI_SUCCESS);
+	CHECK(engine_model.starts == 1 && !said("after PCR_Allocate") && seen.log_matches && seen.record);
+
+	/* The firmware has its own TCG2 protocol: the stage adds none. */
+	tpm_firmware(acpi_dir, fixtures);
+	add_protocol(&fw_handle_security, &guid_tcg2, &firmware_tcg2);
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 tpm=1", &reset) == EFI_SUCCESS);
+	CHECK(said("the firmware has a TCG2 protocol") && engine_model.inits == 0 && fw.loads_from_buffer == 0);
+
+	/* The engine does not start: no protocol, and the image loads from its path. */
+	tpm_firmware(acpi_dir, fixtures);
+	engine_model.fail_init = 1;
+	fw.on_start = tpm_application;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 tpm=1", &reset) == EFI_SUCCESS);
+	CHECK(said("the engine did not start: no TPM") && seen.ran && !seen.protocol && fw.loads_from_buffer == 0);
+	CHECK(fw.page_blocks == 0 && fw_st.NumberOfTableEntries == 2);	/* nothing stays reserved */
+
+	/* The stage file does not read: the TPM is not offered, because PCR 0 would not describe the stage. */
+	tpm_firmware(acpi_dir, fixtures);
+	fw.files = 0;
+	free(fw.file[0].data);
+	free(fw.file[1].data);
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.on_start = tpm_application;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 tpm=1", &reset) == EFI_SUCCESS);
+	CHECK(said("the stage file did not read: no TPM") && !seen.protocol && !engine_model_running());
+	CHECK(find_protocol(NULL, &guid_tcg2) == NULL && fw.exit_notify == NULL && fw.pool_live == 0);
+
+	/* tpm=0: nothing. */
+	tpm_firmware(acpi_dir, fixtures);
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 tpm=0", &reset) == EFI_SUCCESS);
+	CHECK(engine_model.inits == 0 && fw.page_blocks == 0 && fw.loads_from_buffer == 0);
+	fw.on_start = NULL;
+	fw.real_stall = 0;
+}
+
 static void test_probe_bar(const char *acpi_dir, const char *fixtures)
 {
 	int reset;
@@ -1607,6 +1937,7 @@ unsigned firmware_tests(const char *acpi_dir, const char *fixture_dir, unsigned 
 		test_acpi(acpi_dir, fixture_dir);
 		test_secure_boot(acpi_dir, fixture_dir);
 		test_sb_windows(acpi_dir, fixture_dir);
+		test_tpm(acpi_dir, fixture_dir);
 	}
 	free(probe);
 	free_firmware();
