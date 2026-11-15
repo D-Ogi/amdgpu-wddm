@@ -731,4 +731,4 @@ static void probe(struct stage *stage)
 		   has_rdseed() ? "yes" : "no", has_rdrand() ? "yes" : "no");
 }
 
-const struct stage_module tpm_module = { TPM_NAME, "tpm", run, probe, gate, NULL, unwind };
+const struct stage_module tpm_module = { TPM_NAME, "tpm", 1, run, probe, gate, NULL, unwind };

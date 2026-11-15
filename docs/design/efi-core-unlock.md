@@ -25,12 +25,13 @@ starts the Windows Boot Manager. The application changes no firmware setting and
 | `src/cu_decide.c` | the decision table below, a pure function of four observations | yes, every combination |
 | `src/cu_run.c` | the steps of one start, over a table of operations | yes, with recorded operations |
 | `src/cu_smu.c` | the message, over the shim's transport and policy | yes, against a model of queue 3 |
-| `src/cu_bar.c` | the identification of the register BAR: the descriptor parse, the access path and the positive control | yes, with test descriptors and a model of the control read |
 | `src/cu_options.c` | the load options of this module, read from the options of the stage | yes |
 | `src/cu_msr.c` | the register list of the report and the CPUID check before each read | yes, with a model of CPUID |
 | `src/cu_report.c` | the text of the report | yes, with the stored tables of unit A |
 | `src/report_uefi.c` | the UEFI binding of the report: MP Services, the register reads, GOP, the report file | no, the lab runs it |
-| `src/cu_module.c` | the UEFI binding of the module: the operations, the dump of the register BAR and the reset | the probe only, against a model of the firmware. The lab runs the rest |
+| `src/cu_module.c` | the UEFI binding of the module: the operations and the reset | the probe only, against a model of the firmware. The lab runs the rest |
+| `../stage/src/stage_bar.c` | shared: the identification of the register BAR: the descriptor parse, the access path and the positive control | yes, with test descriptors and a model of the control read |
+| `../stage/src/stage_reg.c` | shared: the UEFI binding of the register BAR: the dump, the identification and the register access of every module | the probe, against a model of the firmware |
 | `../lib/acpi/efl_acpi.c` | shared: the FADT reset register and the MADT processor count | yes, with synthetic tables |
 | `../lib/acpi/efl_aml.c` | shared: the name scan of a DSDT or SSDT for the report | yes, with the stored tables of unit A |
 | `../lib/efl_smbios.c` | shared: the SMBIOS table in the form the driver's identity check reads | yes, with the driver's check |

@@ -20,7 +20,7 @@
 #include "efi.h"
 #include "efl_text.h"
 #include "stage.h"
-#include "cu_bar.h"
+#include "stage_bar.h"
 #include "sb_crc32.h"
 #include "sb_windows.h"
 #include "engine_model.h"
@@ -821,7 +821,7 @@ static EFI_STATUS EFIAPI pci_bar_attributes(EFI_PCI_IO_PROTOCOL *this, UINT8 ind
 /* A read of the register BAR gives the control value at the control register and 0 elsewhere. */
 static EFI_STATUS mem_read(unsigned long long offset, VOID *buffer)
 {
-	UINT32 v = offset == cu_bar_control_offset() ? fw.control_value : 0u;
+	UINT32 v = offset == stage_bar_control_offset() ? fw.control_value : 0u;
 	memcpy(buffer, &v, sizeof(v));
 	fw.mem_reads++;
 	return EFI_SUCCESS;
@@ -1097,9 +1097,10 @@ static EFI_STATUS run_stage(const char *options, int *reset)
 	EFI_STATUS status = EFI_ABORTED;
 	char line[sizeof(fw_options) / sizeof(fw_options[0])];
 	size_t i;
-	/* The TPM module is off unless a test names it: only test_tpm sees it, so that the other tests count the same
-	 * firmware calls as before the module. */
-	snprintf(line, sizeof(line), strstr(options, "tpm=") ? "%s" : "%s tpm=0", options);
+	/* The TPM and IOMMU modules are off unless a test names them, so that the other tests count the same firmware
+	 * calls as before the modules. */
+	snprintf(line, sizeof(line), "%s%s%s", options, strstr(options, "tpm=") ? "" : " tpm=0",
+		 strstr(options, "iommu=") ? "" : " iommu=0");
 	for (i = 0; line[i] && i + 1u < sizeof(fw_options) / sizeof(fw_options[0]); i++) fw_options[i] = (unsigned char)line[i];
 	fw_options[i] = 0;
 	fw_loaded.LoadOptions = fw_options;
@@ -1949,7 +1950,7 @@ static void test_probe_bar(const char *acpi_dir, const char *fixtures)
 	bar_descriptor(1, 0xD0000000ull, 0x200000ull);
 	bar_descriptor(3, FW_BAR5, 0x80000ull);
 	fw.register_index = 3;
-	fw.control_value = CU_BAR_CONTROL_VALUE;
+	fw.control_value = STAGE_BAR_CONTROL_VALUE;
 	CHECK(run_stage("unlock=0 acpi=0 sb=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == 1);
 	CHECK(said("configuration BAR0 to BAR5: 0xC000000C 0x0 0xD000000C 0x0 0xE001 0xFE800000"));
 	CHECK(said("bar: BarIndex 3 descriptor 0: minimum 0xFE800000, maximum 0x7FFFF, translation 0x0, length 0x80000"));
@@ -1964,7 +1965,7 @@ static void test_probe_bar(const char *acpi_dir, const char *fixtures)
 	unit_a_bars();
 	bar_descriptor(5, 0x300000ull, 0);
 	fw.register_index = 5;
-	fw.control_value = CU_BAR_CONTROL_VALUE;
+	fw.control_value = STAGE_BAR_CONTROL_VALUE;
 	CHECK(run_stage("unlock=0 acpi=0 sb=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == 1);
 	CHECK(said("bar: BarIndex 5 descriptor 0: minimum 0x300000, maximum 0x0, translation 0x0, length 0x0"));
 	CHECK(said("bar: 0 root bridges") && said("no single root bridge serves its address"));
@@ -1976,7 +1977,7 @@ static void test_probe_bar(const char *acpi_dir, const char *fixtures)
 	unit_a_bars();
 	bar_descriptor(5, 0x300000ull, 0);
 	add_bridge(0xC0000000ull, 0x3F000000ull);
-	fw.control_value = CU_BAR_CONTROL_VALUE;
+	fw.control_value = STAGE_BAR_CONTROL_VALUE;
 	CHECK(run_stage("unlock=0 acpi=0 sb=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == 1);
 	CHECK(said("bar: root bridge 0 descriptor 0: minimum 0xC0000000") && said("one root bridge serves its address"));
 	CHECK(said("reads 0x44, known 0x44: the control register has its known value"));
@@ -2000,7 +2001,7 @@ static void test_probe_bar(const char *acpi_dir, const char *fixtures)
 	bar_descriptor(3, FW_BAR5, 0x40000ull);
 	add_bridge(0xC0000000ull, 0x3F000000ull);
 	fw.register_index = 3;
-	fw.control_value = CU_BAR_CONTROL_VALUE;
+	fw.control_value = STAGE_BAR_CONTROL_VALUE;
 	CHECK(run_stage("unlock=0 acpi=0 sb=0 probe=1", &reset) == EFI_SUCCESS && said("has another length"));
 	CHECK(fw.mem_reads == 0 && fw.mem_writes == 0 && fw.pool_live == 0);
 }

@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include "efi.h"
 #include "efl_acpi.h"
+#include "stage_bar.h"
 #include "stage_options.h"
 
 /* The version of the stage. The pre-OS TPM measures it into PCR 0 (EV_S_CRTM_VERSION). */
@@ -31,6 +32,10 @@ struct stage {
 	int board_checked, board_bc250;
 	EFI_PCI_IO_PROTOCOL *gpu;			/* the GPU function of a BC-250, else NULL */
 	unsigned char gpu_config[STAGE_PCI_CONFIG_BYTES];
+	/* The register BAR as the last stage_reg_identify found it (stage_reg.h). */
+	int reg_identified;
+	struct stage_bar_choice reg_choice;
+	EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *reg_bridge;	/* for STAGE_BAR_PATH_BRIDGE */
 	/* The handoff range of the pre-OS TPM (driver/tpm/handoff.h): reserved pages that the TPM module fills at
 	 * ExitBootServices. The TPM module sets it in its run; the ACPI repair describes it in Device (TPM0). 0 when
 	 * no pre-OS TPM runs. */
@@ -90,6 +95,7 @@ enum stage_gate {
 struct stage_module {
 	const char *name;		/* the console prefix */
 	const char *off_switch;		/* the load option whose value 0 turns the whole module off */
+	int default_on;			/* 1: runs unless off_switch=0; 0: off unless off_switch=1 */
 	/* The work before Windows starts. A module that resets the board does not return. */
 	void (*run)(struct stage *stage);
 	/* Called in place of run when the module is off and the load option probe=1 is set: says whether the
@@ -108,5 +114,6 @@ extern const struct stage_module cu_module;	/* core-unlock/src/cu_module.c */
 extern const struct stage_module ar_module;	/* acpi-repair/src/ar_module.c */
 extern const struct stage_module sb_module;	/* secure-boot/src/sb_module.c */
 extern const struct stage_module tpm_module;	/* tpm/src/tpm_module.c */
+extern const struct stage_module iommu_module;	/* iommu/src/iommu_module.c */
 
 #endif

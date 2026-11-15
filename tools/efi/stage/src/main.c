@@ -48,7 +48,7 @@ static unsigned short next_image[STAGE_OPTION_CHARS];
  * others would be lost, and they must see the processor count that Windows gets. The TPM goes before the ACPI
  * repair, which describes the handoff range of the TPM, and before the Secure Boot check, so that the TPM measures
  * the image that the check then sees. */
-static const struct stage_module *const modules[] = { &cu_module, &tpm_module, &ar_module, &sb_module };
+static const struct stage_module *const modules[] = { &cu_module, &tpm_module, &ar_module, &iommu_module, &sb_module };
 #define MODULES (sizeof(modules) / sizeof(modules[0]))
 static int module_on[MODULES];
 
@@ -480,7 +480,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st)
 	probe = stage_option_flag(&stage.options, "probe", 0);
 
 	for (i = 0; i < MODULES; i++) {
-		module_on[i] = stage_option_flag(&stage.options, modules[i]->off_switch, 1);
+		module_on[i] = stage_option_flag(&stage.options, modules[i]->off_switch, modules[i]->default_on);
 		if (!module_on[i]) {
 			stage_sayf(&stage, modules[i]->name, "off by the load option %s=0", modules[i]->off_switch);
 			/* probe=1: a module that is off says what the firmware has for it, and changes nothing. */

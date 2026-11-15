@@ -9,7 +9,7 @@
 #ifndef CU_SMU_H
 #define CU_SMU_H
 
-/* Access to the register BAR (BAR5 of the configuration header, identified by cu_bar.h) by byte offset. 0 is
+/* Access to the register BAR (BAR5 of the configuration header, identified by stage_bar.h) by byte offset. 0 is
  * success. */
 struct cu_regs {
 	void *context;

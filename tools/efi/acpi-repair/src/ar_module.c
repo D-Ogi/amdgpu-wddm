@@ -270,4 +270,4 @@ static void ar_module_probe(struct stage *stage)
 		   EFI_ERROR(stage->bs->LocateProtocol(&acpi_sdt_guid, NULL, &found)) || found == NULL ? "absent" : "present");
 }
 
-const struct stage_module ar_module = { AR_NAME, "acpi", ar_module_run, ar_module_probe, NULL, NULL, NULL };
+const struct stage_module ar_module = { AR_NAME, "acpi", 1, ar_module_run, ar_module_probe, NULL, NULL, NULL };

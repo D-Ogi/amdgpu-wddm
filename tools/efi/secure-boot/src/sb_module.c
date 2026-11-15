@@ -419,5 +419,5 @@ static void sb_module_probe(struct stage *stage)
 		   EFI_ERROR(stage->bs->LocateProtocol(&security_guid, NULL, &older)) || older == NULL ? "absent" : "present");
 }
 
-const struct stage_module sb_module = { SB_NAME, "sb", sb_module_run, sb_module_probe, sb_module_gate,
+const struct stage_module sb_module = { SB_NAME, "sb", 1, sb_module_run, sb_module_probe, sb_module_gate,
 					sb_module_loaded, sb_module_unwind };
