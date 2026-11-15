@@ -111,7 +111,8 @@ static void put(struct sink *s, char c)
 	if (s->used + 1u < s->capacity) s->out[s->used++] = c;
 }
 
-static void put_number(struct sink *s, unsigned long long value, unsigned base)
+static void put_number(struct sink *s, unsigned long long value, unsigned base,
+		       int width, char fill)
 {
 	char digits[24];
 	int n = 0;
@@ -120,6 +121,7 @@ static void put_number(struct sink *s, unsigned long long value, unsigned base)
 		digits[n++] = (char)(d < 10u ? '0' + d : 'A' + d - 10u);
 		value /= base;
 	} while (value && n < (int)sizeof(digits));
+	while (n < width) { put(s, fill); width--; }
 	while (n) put(s, digits[--n]);
 }
 
@@ -131,9 +133,12 @@ size_t efl_vformat(char *out, size_t capacity, const char *format, va_list args)
 	s.used = 0;
 	if (out == NULL || capacity == 0) return 0;
 	for (; *format; format++) {
-		int wide = 0;
+		int wide = 0, width = 0;
+		char fill = ' ';
 		if (*format != '%') { put(&s, *format); continue; }
 		format++;
+		if (*format == '0') { fill = '0'; format++; }
+		while (*format >= '0' && *format <= '9') { width = width * 10 + (*format - '0'); format++; }
 		if (format[0] == 'l' && format[1] == 'l') { wide = 1; format += 2; }
 		switch (*format) {
 		case 's': {
@@ -144,21 +149,20 @@ size_t efl_vformat(char *out, size_t capacity, const char *format, va_list args)
 		}
 		case 'd': {
 			int v = va_arg(args, int);
-			if (v < 0) { put(&s, '-'); put_number(&s, (unsigned long long)(-(long long)v), 10u); }
-			else put_number(&s, (unsigned long long)v, 10u);
+			if (v < 0) { put(&s, '-'); put_number(&s, (unsigned long long)(-(long long)v), 10u, width ? width - 1 : 0, fill); }
+			else put_number(&s, (unsigned long long)v, 10u, width, fill);
 			break;
 		}
 		case 'u':
-			put_number(&s, wide ? va_arg(args, unsigned long long) : va_arg(args, unsigned), 10u);
+			put_number(&s, wide ? va_arg(args, unsigned long long) : va_arg(args, unsigned), 10u, width, fill);
 			break;
 		case 'x':
-			put_number(&s, wide ? va_arg(args, unsigned long long) : va_arg(args, unsigned), 16u);
+			put_number(&s, wide ? va_arg(args, unsigned long long) : va_arg(args, unsigned), 16u, width, fill);
 			break;
 		case '%':
 			put(&s, '%');
 			break;
 		default:
-			/* An unknown conversion is printed as it stands, and the format ends at a lone '%'. */
 			put(&s, '%');
 			if (*format == 0) { out[s.used] = 0; return s.used; }
 			put(&s, *format);
