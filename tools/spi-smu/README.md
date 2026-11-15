@@ -13,9 +13,9 @@ python -m unittest discover -s tools/spi-smu -v
 ```
 
 The report includes directory entries, header hashes, load addresses, flags, and authenticated ranges.
-It checks stock signatures before testing three mutations per entry in memory.
+It checks stock signatures before testing four mutations per entry in memory.
 It reconstructs both entries and opaque gaps without changing any bytes.
-This checks the extraction path. It does not check every enclosing firmware container.
+This checks span arithmetic only, not parser extraction. It does not check every enclosing firmware container.
 Ranges use file offsets and exclude their end position.
 
 To review a future patch recipe:

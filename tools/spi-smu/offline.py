@@ -54,7 +54,7 @@ def patch(image, entry, edits, expected_sha256):
 
 
 def rebuild(image, spans):
-    """Extract disjoint regions and gaps, then serialize them in original order."""
+    """Test byte-level span arithmetic, not PSPTool extraction."""
     cursor, pieces = 0, []
     for start, end in sorted(spans):
         if not cursor <= start < end <= len(image):
@@ -69,11 +69,11 @@ def inspect(path):
     import psptool
     from psptool import PSPTool
     from psptool.header_file import HeaderFile
-    image = Path(path).read_bytes()
+    image = path if isinstance(path, bytes) else Path(path).read_bytes()
     pt = PSPTool(bytearray(image))
     package = Path(psptool.__file__).parent
     sources = {p.name: digest(p.read_bytes()) for p in sorted(package.glob('*.py'))}
-    report = {"image": str(Path(path).resolve()), "bytes": len(image),
+    report = {"image": None if isinstance(path, bytes) else str(Path(path).resolve()), "bytes": len(image),
               "sha256": digest(image), "python": platform.python_version(),
               "psptool": importlib.metadata.version('psptool'),
               "cryptography": importlib.metadata.version('cryptography'),
@@ -117,12 +117,13 @@ def inspect(path):
                "version": f.get_readable_version(), "encrypted": f.encrypted, "compressed": f.compressed,
                "key_id": f.signature_fingerprint.decode(), "stock_signature_valid": True,
                "keys": [{"offset": k.get_address(), "sha256": digest(k._crypto_material.get_bytes())} for k in accepted]}
-        # Three independent, in-memory mutations exercise the actual cryptographic verifier.
+        # Mutate the signed header and three body bytes independently in RAM.
+        # These verifier controls do not use the body-only candidate patch API.
         rec['negative_controls'] = []
-        for pos in (body_start, (body_start + body_end) // 2, body_end - 1):
-            edits = [{"offset": pos, "before": image[pos:pos+1].hex(),
-                      "after": bytes([image[pos] ^ 1]).hex()}]
-            changed = patch(image, rec, edits, digest(image))
+        for pos in (body_start - 1, body_start, (body_start + body_end) // 2, body_end - 1):
+            changed = bytearray(image)
+            changed[pos] ^= 1
+            changed = bytes(changed)
             altered = changed[start:start+len(signed)]
             rejected = all(not k.get_public_key().verify_blob(altered, f.signature.get_bytes()) for k in accepted)
             if not rejected or digest(altered) == digest(signed):
@@ -132,7 +133,8 @@ def inspect(path):
         report['smu'].append(rec)
         spans.append((start, end))
     restored = rebuild(image, spans)
-    report['s1'] = {"method": "extract both SMU entries and opaque gaps, serialize unchanged",
+    report['s1'] = {"scope": "span arithmetic only, does not test parser extraction",
+                    "method": "split image at SMU spans and rejoin unchanged slices",
                     "equal": restored == image, "sha256": digest(restored)}
     report['smu_bodies_equal'] = files[0].body.get_bytes() == files[1].body.get_bytes()
     return report

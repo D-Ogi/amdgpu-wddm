@@ -1,0 +1,344 @@
+{
+  "image": "P:\\BC-250\\firmware\\bios\\P3.00-stock\\BC250_3.00.ROM",
+  "bytes": 16777216,
+  "sha256": "07595ca3aecf8a4caa28a397b5298f3946a1b769f87b16f67adc369c3f69045c",
+  "python": "3.14.0",
+  "psptool": "3.7",
+  "cryptography": "46.0.4",
+  "parser_sources": {
+    "__init__.py": "2c62ed2db5369496dfd6a65ad36f4fdc181aec822bb4e27d519c23e1482478f9",
+    "__main__.py": "52e0927d1ad4f9c39cd9789b785ab37545102650fb9ea874e6dd9ed3aebb6577",
+    "blob.py": "53ff2a87d52b38a86db63c24a7a2e86604fa4c95b5b2f115c9fd85450097042c",
+    "cert_tree.py": "e560f0d31606139129cca03e6bd1b200e5f20912ecb97531e8e8df9aa971b1ea",
+    "crypto.py": "bfe6a23f2925def71d184f8971e145956e862acc23a00b77444cd96e34743020",
+    "directory.py": "669894c48357ee486369a1698e7169d2232edeeed557d01c3d4b8874491279a1",
+    "entry.py": "1b111e89d843c2e3e8fa2c31fef55da99bd0867bce78e96d9567a006bcc79c1c",
+    "errors.py": "0e79325eea2b2bb628d860fc6a183070649758808c50791ea8ca6accd51846f1",
+    "fet.py": "60b8b5bbe2b8bcbb21c8e0a338b1128f477dbe600716c89b5662ff4f1c722b39",
+    "file.py": "8a2edb08b535fec6b5782bfbb5c44003ac361c9ff3804358294dab25e386cedf",
+    "firmware.py": "554b6feebc898516af03029eab430dcb594b3e6ff29effea10e8e2c1879aa9ae",
+    "header_file.py": "413a1ecb927a4774165102a9c4763d340a444c4c4e89eab8bd242eb9bb11ce30",
+    "key_store_file.py": "683261bbf73f243b9c78428e49d4a05afc7d677d8978b8bb4156297efbb43a9a",
+    "microcode_file.py": "b26d87f455029773cbd1d3bec02c74c1cc921ab307bc255f1e10191164aa70c9",
+    "psptool.py": "dad914e39eeb92a14cb554705c2a21b3cc05aad8766fad5a1e64c9e06cfeb5fd",
+    "pubkey_file.py": "7fc8bc52dbd2187938b840af0cfb9f3b6eb96e3cb39dbd30c8bb54d7b6f227d4",
+    "rom.py": "76bbbd134a17f527f701bd1f263cd1f0602d124d360a0f50d74da38d43e737a9",
+    "utils.py": "bec8c54dc46f85e9050db082e7464428d26d974f1397e68bda2322c77477d652"
+  },
+  "tool_sha256": "fb1cadfea0cbbc1e6c07454e6cb8139eee4bae109bc580ef3d6aa8b95723a79d",
+  "directories": [
+    {
+      "offset": 9306112,
+      "entries": [
+        {
+          "type": 2,
+          "offset": 9350144,
+          "bytes": 82768,
+          "sha256": "fc6459ae7833c5ba2f942904ad9c5d97aa3a069267e7344aa33934dd9536d11a"
+        },
+        {
+          "type": 8,
+          "offset": 9433088,
+          "bytes": 262656,
+          "sha256": "6a3da1ef6024c3143283fb92468fd71d628e9402a751c4a9799a20f473549ad9"
+        },
+        {
+          "type": 9,
+          "offset": 9695744,
+          "bytes": 1088,
+          "sha256": "347eb437947a9f41c65bb764e331afd0ac4e368738217c3b3bf3c61499723ba0"
+        },
+        {
+          "type": 18,
+          "offset": 9697024,
+          "bytes": 262656,
+          "sha256": "dbd60a2154461ee517c70bdfd9d2f64b43fc429d42fa9cc20a9a8626be3f26fd"
+        },
+        {
+          "type": 19,
+          "offset": 9959680,
+          "bytes": 8192,
+          "sha256": "13c2b04a901321e48a31f7945700465e7bd3223673841093d8587b3d517b3800"
+        },
+        {
+          "type": 32,
+          "offset": 9967872,
+          "bytes": 1616,
+          "sha256": "d64943c125658784fd192607e15544e509616ee050c576bdccb3be2e370267a9"
+        },
+        {
+          "type": 36,
+          "offset": 9969664,
+          "bytes": 11856,
+          "sha256": "b365d5b135da12b097a4ef5aecc47a284f1ccd49ac3d251b35b2c0a6de8c9e55"
+        },
+        {
+          "type": 40,
+          "offset": 9981696,
+          "bytes": 108400,
+          "sha256": "ebd9a7d279c5ac5751ebcc76fa7380c2da003e8f9bb49c1a419ef4c951e320e1"
+        },
+        {
+          "type": 48,
+          "offset": 10090240,
+          "bytes": 1088,
+          "sha256": "8591b9e8429f74aff7e1a38c79fb385ffbab017cb30295432ff1d9a9313e0adf"
+        },
+        {
+          "type": 49,
+          "offset": 10091520,
+          "bytes": 48848,
+          "sha256": "a13925644a95648e9867e333c0c7d11b4cfe9b91ed83febcc8cd55b3b1da2f83"
+        },
+        {
+          "type": 50,
+          "offset": 10140416,
+          "bytes": 16240,
+          "sha256": "7bec60035bd5c969bb37d6c9d2b44622babf1cdccd10c761d620e0621cf9fd4f"
+        },
+        {
+          "type": 51,
+          "offset": 10156800,
+          "bytes": 41312,
+          "sha256": "a29f61ad3c67f56d81f4ce3b2d6c4c3e8cd3ee30960eaaa73945213354e81ada"
+        },
+        {
+          "type": 52,
+          "offset": 10198272,
+          "bytes": 40928,
+          "sha256": "8ae6efffc2d111cbb9f49c2271879ade621dd7be901360ebfc8b6155b560589f"
+        },
+        {
+          "type": 68,
+          "offset": 10239232,
+          "bytes": 528,
+          "sha256": "305c09095dbdd6ab4ad3cfa2d50c10af028903f2a62297c58a0513521ce1dc7f"
+        },
+        {
+          "type": 69,
+          "offset": 10265600,
+          "bytes": 1760,
+          "sha256": "272514c082e604915f1f48bd1ef1ce1c439011cdb1b2240271e9608bbe6f9931"
+        },
+        {
+          "type": 79,
+          "offset": 10267392,
+          "bytes": 66048,
+          "sha256": "4435c945ce914b29cc45965ea48a59d2e4d8deb584292e316ebc5258fbd4cf57"
+        },
+        {
+          "type": 80,
+          "offset": 10333440,
+          "bytes": 3536,
+          "sha256": "78c3fe9b99ca6c815715303c440de2a5ece6ef267ee5b50c89f559fe59eb963a"
+        },
+        {
+          "type": 81,
+          "offset": 10337024,
+          "bytes": 1856,
+          "sha256": "1ca4d22f6eb87b0806aeb3061e0e4a31c567ea2c1b21df3d2132a1c4b90c0ede"
+        }
+      ]
+    },
+    {
+      "offset": 11206656,
+      "entries": [
+        {
+          "type": 96,
+          "offset": 11210752,
+          "bytes": 8192,
+          "sha256": "616e9187575864b7b437dc24502d8e5b04c15e941384b0d3d05e18831fefb567"
+        },
+        {
+          "type": 97,
+          "offset": 0,
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "type": 98,
+          "offset": 14688256,
+          "bytes": 2088960,
+          "sha256": "5aea760ba5d94e9ad0668603712dfc7802205306d462b2f0c7f4edb825134979"
+        },
+        {
+          "type": 99,
+          "offset": 11218944,
+          "bytes": 8192,
+          "sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f"
+        }
+      ]
+    }
+  ],
+  "smu": [
+    {
+      "type": 8,
+      "range": [
+        9433088,
+        9695744
+      ],
+      "body_range": [
+        9433344,
+        9695488
+      ],
+      "header_sha256": "f4cdc76d0eb17e3521f608281d0b2573f34be7713ae0f11ff2d6053eea20a86d",
+      "entry_sha256": "6a3da1ef6024c3143283fb92468fd71d628e9402a751c4a9799a20f473549ad9",
+      "body_sha256": "5c805026581ace101ba43ef4d0f6b34354f4a61461a1c78d2fa6a335a53d9936",
+      "signed_sha256": "742120972f24e3a0b7ae46f912b57badff974f433def4eb01334a8cdd31b2d0c",
+      "signature_sha256": "e61ee411bee9df70c7a237fac2d6e1ed7c7063c1d6d49d7dd556fbf0062aced1",
+      "signature_range": [
+        9695488,
+        9695744
+      ],
+      "load_address": 0,
+      "version": "0.58.6.0",
+      "encrypted": false,
+      "compressed": false,
+      "key_id": "8b8df41e2a6649beb8f232cef3133650",
+      "stock_signature_valid": true,
+      "keys": [
+        {
+          "offset": 10335136,
+          "sha256": "53743e25644294bd855686edce96f73aa15b25ade63f314d62332fe82df03ba8"
+        }
+      ],
+      "negative_controls": [
+        {
+          "offset": 9433343,
+          "rejected": true,
+          "image_sha256": "0f9e6cc3fa164d4f25757230b164e979306c4607672bce54c4fc6bc2d685bf47",
+          "diff_ranges": [
+            [
+              9433343,
+              9433344
+            ]
+          ]
+        },
+        {
+          "offset": 9433344,
+          "rejected": true,
+          "image_sha256": "9f3f0b2c7058185e997d91fa0d240e924486567820d03d97d27aeb41d99bc979",
+          "diff_ranges": [
+            [
+              9433344,
+              9433345
+            ]
+          ]
+        },
+        {
+          "offset": 9564416,
+          "rejected": true,
+          "image_sha256": "1cc1c04a42628647a5752661da27f64b4c736fb38317e924cad42a0f5f69cd0f",
+          "diff_ranges": [
+            [
+              9564416,
+              9564417
+            ]
+          ]
+        },
+        {
+          "offset": 9695487,
+          "rejected": true,
+          "image_sha256": "e18943f5e81c8409988781455c8681e58bbaaa39362fc0bc1bf7c74c0e9a9377",
+          "diff_ranges": [
+            [
+              9695487,
+              9695488
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "type": 18,
+      "range": [
+        9697024,
+        9959680
+      ],
+      "body_range": [
+        9697280,
+        9959424
+      ],
+      "header_sha256": "3c00658f26eda748385490e90cb82e049f7181f62901a6fe178935fd3fa0d5aa",
+      "entry_sha256": "dbd60a2154461ee517c70bdfd9d2f64b43fc429d42fa9cc20a9a8626be3f26fd",
+      "body_sha256": "f22e2815c99e9bf4a4fbdcc8d6498d3eee59181dd46185f83a0130ff73190b06",
+      "signed_sha256": "5af653a91bca18427c5af591ffa320289e7048531e6ed9bea01d8adc349f8b38",
+      "signature_sha256": "977096dbe444de04b3e207d75ba107d0c2c09a111d34d16b1ac2766926bb05b2",
+      "signature_range": [
+        9959424,
+        9959680
+      ],
+      "load_address": 0,
+      "version": "0.58.6.0",
+      "encrypted": false,
+      "compressed": false,
+      "key_id": "8b8df41e2a6649beb8f232cef3133650",
+      "stock_signature_valid": true,
+      "keys": [
+        {
+          "offset": 10335136,
+          "sha256": "53743e25644294bd855686edce96f73aa15b25ade63f314d62332fe82df03ba8"
+        }
+      ],
+      "negative_controls": [
+        {
+          "offset": 9697279,
+          "rejected": true,
+          "image_sha256": "aebe1bcdf6bd25f1d04286d30f00b8a3c74c959e5570964a7de9405552e1805c",
+          "diff_ranges": [
+            [
+              9697279,
+              9697280
+            ]
+          ]
+        },
+        {
+          "offset": 9697280,
+          "rejected": true,
+          "image_sha256": "a68dfdb9477f1282a454b03d6cfa9f921ed9e2e1724ed8c5707564b552d1fdbd",
+          "diff_ranges": [
+            [
+              9697280,
+              9697281
+            ]
+          ]
+        },
+        {
+          "offset": 9828352,
+          "rejected": true,
+          "image_sha256": "287772f6fc4f4d697dce813a489d3c39114b960dee2ed67fad1d5bed5fe9e291",
+          "diff_ranges": [
+            [
+              9828352,
+              9828353
+            ]
+          ]
+        },
+        {
+          "offset": 9959423,
+          "rejected": true,
+          "image_sha256": "f65dcaf3233202cec963a7527b344604f7d13581661561046d9bab5e66982f08",
+          "diff_ranges": [
+            [
+              9959423,
+              9959424
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Directory coverage is PSPTool discovery, not exhaustive container validation.",
+    "Key verification does not establish a silicon trust anchor or boot acceptance.",
+    "Entry selection, ABI, free-space ownership and power semantics remain unknown.",
+    "Negative mutations are verifier tests, not inert S2 candidates."
+  ],
+  "s1": {
+    "scope": "span arithmetic only, does not test parser extraction",
+    "method": "split image at SMU spans and rejoin unchanged slices",
+    "equal": true,
+    "sha256": "07595ca3aecf8a4caa28a397b5298f3946a1b769f87b16f67adc369c3f69045c"
+  },
+  "smu_bodies_equal": false
+}

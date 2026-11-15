@@ -7,7 +7,7 @@ from offline import inspect, patch, digest, diff_ranges
 
 def plan(image_path, recipe):
     image = Path(image_path).read_bytes()
-    report = inspect(image_path)
+    report = inspect(image)
     if recipe['stage'] not in ('S2', 'S3', 'S4'):
         raise ValueError('unknown stage')
     entries = [e for e in report['smu'] if e['type'] == recipe['entry_type']]
@@ -18,18 +18,21 @@ def plan(image_path, recipe):
     changed = patch(image, entries[0], recipe['edits'], recipe['stock_sha256'])
     from psptool import PSPTool
     parsed = PSPTool(bytearray(changed))
+    if entries[0]['range'][0] not in parsed.files_by_offset:
+        raise ValueError('entry offset missing after re-parse')
     candidate = parsed.files_by_offset[entries[0]['range'][0]]
     if not candidate.signed_entity or not candidate.signed_entity.certifying_keys:
         raise ValueError('candidate verification key missing')
-    if candidate.signed_entity.verify_with_tree():
+    candidate_signature_valid = candidate.signed_entity.verify_with_tree()
+    if candidate_signature_valid:
         raise ValueError('changed authenticated body still verifies')
-    return {'stage': recipe['stage'], 'entry_type': recipe['entry_type'],
+    return {'image': str(Path(image_path).resolve()), 'stage': recipe['stage'], 'entry_type': recipe['entry_type'],
             'stock_sha256': digest(image), 'candidate_sha256': digest(changed),
             'diff_ranges': diff_ranges(image, changed), 'bytes': len(changed),
             'entry_sha256': digest(changed[slice(*entries[0]['range'])]),
             'signature_preserved': image[slice(*entries[0]['signature_range'])] == changed[slice(*entries[0]['signature_range'])],
             'release_ready': False,
-            'candidate_signature_valid': False,
+            'candidate_signature_valid': candidate_signature_valid,
             'unresolved': ['runtime role of edits', 'entry selection', 'code ownership',
                            'ABI and instruction review', 'enclosing integrity checks',
                            'installed-image identity', 'owner authorization'],

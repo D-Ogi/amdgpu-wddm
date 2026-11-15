@@ -1,6 +1,5 @@
 """Optional real-image integration tests. Set SPI_SMU_TEST_IMAGE explicitly."""
 import os
-from unittest.mock import patch
 import unittest
 from pathlib import Path
 from offline import inspect
@@ -26,10 +25,13 @@ class ImageTests(unittest.TestCase):
         self.assertTrue(self.report['s1']['equal'])
         for entry in self.report['smu']:
             self.assertTrue(entry['stock_signature_valid'])
+            self.assertEqual(len(entry['negative_controls']), 4)
+            self.assertEqual(entry['negative_controls'][0]['offset'], entry['body_range'][0] - 1)
             self.assertTrue(all(c['rejected'] for c in entry['negative_controls']))
 
     def test_recipe(self):
         result = plan(self.path, self.recipe())
+        self.assertEqual(result['image'], str(Path(self.path).resolve()))
         self.assertTrue(result['signature_preserved'])
         self.assertFalse(result['candidate_signature_valid'])
         self.assertFalse(result['release_ready'])
@@ -43,7 +45,6 @@ class ImageTests(unittest.TestCase):
             plan(self.path, recipe)
 
     def test_truncated_image(self):
-        with patch('offline.Path.read_bytes', return_value=self.image[:4096]):
-            with self.assertRaises((ValueError, AssertionError)):
-                inspect('truncated-memory-fixture')
+        with self.assertRaises((ValueError, AssertionError)):
+            inspect(self.image[:4096])
 

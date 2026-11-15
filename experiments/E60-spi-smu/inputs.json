@@ -48,5 +48,6 @@
     "powershell": "7.6.10",
     "parser": "not selected",
     "hash": "PowerShell Get-FileHash SHA256"
-  }
+  },
+  "experiment": "E60-spi-smu"
 }

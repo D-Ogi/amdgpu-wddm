@@ -1,4 +1,4 @@
-# E53: SPI SMU preparation
+# E60: SPI SMU preparation
 
 Status: not run. Offline inspection now covers P3 and P5. Candidate release remains gated.
 The source plan and review have identities in [inputs.json](inputs.json).
@@ -90,7 +90,7 @@ A unique marker with a stock negative control supports modified execution.
 Named, reviewed status transitions support a power-state measurement only.
 Missing markers and unexplained fallback remain inconclusive.
 
-Future captures belong in evidence/linux/YYYY-MM-DD-E53-spi-smu/ or the corresponding Windows directory.
+Future captures belong in evidence/linux/YYYY-MM-DD-E60-spi-smu/ or the corresponding Windows directory.
 Keep raw programmer logs, full readback hashes, boot logs, thermal traces, and transport records unchanged.
 Preserve backups outside the source tree. Record tool commits and any private-data removal.
 Require full stock restoration and a successful control boot after every trial.

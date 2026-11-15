@@ -7,12 +7,12 @@
 - Inspected both P3.00 and P5.00 stock images with the installed PSPTool.
 - Recorded exact dependency versions, parser source hashes, image hashes, entries, flags, and authenticated ranges.
 - Checked all four stock SMU signatures with their recorded keys.
-- Checked twelve negative signature controls in memory. All failed verification as expected.
-- Reconstructed both images from extracted SMU entries and opaque gaps. Both matched stock byte for byte.
+- Checked sixteen negative signature controls in memory. All failed verification as expected.
+- Rejoined image slices at SMU span boundaries; this checks span arithmetic only. Both matched stock byte for byte.
 - Added a recipe planner that checks one entry and emits a review manifest without saving firmware.
 - Preserved original inputs. No lab access, firmware write, SPI write, or push occurred.
 
-Reports: [P3](experiments/E53-spi-smu/p3-offline.json), [P5](experiments/E53-spi-smu/p5-offline.json).
+Reports: [P3](p3-offline-reconciled.json), [P5](p5-offline-reconciled.json).
 These describe offline files. They do not establish hardware behavior or approve candidates.
 The tool README gives commands and limits.
 
@@ -22,9 +22,7 @@ Select the target BIOS and the intended trial entry after selection analysis.
 The plan names P5.00. The review reports P3.00 on unit A.
 Authorize each later candidate write, restoration write, and experimental message by identity.
 
-Git staging and commits remain unavailable.
-Git cannot create the index lock under the shared repository metadata outside this writable worktree.
-The commit attempt used the repository identity. No alternate identity or repository was created.
+The initial implementation is in commit acdea3d4b. Reconciliation changes are uncommitted.
 
 ## Needs the lab
 

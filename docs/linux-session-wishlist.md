@@ -26,7 +26,7 @@ specific procedure before any potentially hanging unload/reload comparison.
 
 E53 follow-up (2026-11-15): Capture the installed BIOS identity and approved SMU telemetry on the same unit.
 Record boot history and independent thermal readings for the SPI SMU stock control.
-Do not access the denied UVD/VCN window. See experiments/E53-spi-smu/README.md.
+Do not access the denied UVD/VCN window. See experiments/E60-spi-smu/README.md.
 
 
 | # | What to capture | Why we want it | Noticed |
