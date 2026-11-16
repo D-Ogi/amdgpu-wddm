@@ -1,118 +1,292 @@
-# Guarded write of the unit A SPI flash with flashrom and a CH341A on the J4004 header (README.md).
-# Precondition (operator): the same as spi_read.ps1. Unit A in S5 (plug on, clean shutdown), CH341A jumper on
-# 1-2, programmer on USB first, then the 5 wires to J4004 pins 2/3/5/6/7, J4004 pin 1 (VCC) open.
-# Use: only for consented writes (the VCN load and repair), each with a written plan.
-#
-# Guards, in this order. Each guard that fails stops the script before the write:
-#   1. The image file has the SHA-256 that the plan names, and the size of the chip.
-#   2. The written plan file exists. Its SHA-256 goes into the log.
-#   3. The probe finds exactly one chip definition and reports the status register.
-#   4. The chip holds the image that the plan names as the base (-BaseSha256). -Restore skips this guard: use it
-#      only to write a verified backup back when the chip state is not known.
-#   5. The difference touches at most -MaxSectors 4 KiB sectors (not checked with -Restore).
-# Then flashrom writes (it erases and writes only the changed blocks and verifies), and two independent reads
-# must give the image SHA-256.
-# The images hold the UEFI variable store (board identifiers): they stay outside every repository.
-# Usage: pwsh -NoProfile -File spi_write.ps1 -Image <file> -ImageSha256 <hex> -BaseSha256 <hex> -PlanFile <file>
-#        -OutRoot <dir> [-MaxSectors 16] [-Restore] [-Chip <name>] [-Flashrom <exe>]
+# Guarded unit A write/restore. The pinned JSON plan binds the exact change and recovery image.
+# Physical setup is an operator precondition. This script never restores or retries automatically.
+[CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$Image,
     [Parameter(Mandatory)][string]$ImageSha256,
     [string]$BaseSha256 = '',
     [Parameter(Mandatory)][string]$PlanFile,
+    [Parameter(Mandatory)][string]$PlanSha256,
     [Parameter(Mandatory)][string]$OutRoot,
     [int]$MaxSectors = 16,
     [switch]$Restore,
     [string]$Chip = 'MX25L12835F/MX25L12845E/MX25L12865E',
     [string]$Flashrom = ''
 )
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $false
 $ChipSize = 16777216
 $Sector = 4096
+$phase = 'inputs'
+$arrayWriteInvoked = $false
+$statusMayHaveChanged = $false
+$out = $null
+$mutex = $null
+$held = $false
+$snapshotHandles = @()
+$receipt = [ordered]@{ verdict = 'REFUSED'; phase = $phase; array_write_invoked = $false; status_probes = [ordered]@{} }
 
-function Stop-Write([string]$why) { "SPI-WRITE VERDICT REFUSED: $why (nothing was written)"; exit 2 }
-
-if (-not $Flashrom) {
-    $root = if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path }
-    $Flashrom = Join-Path $root 'scratch\t39\spi-tools\root\ucrt64\bin\flashrom.exe'
+function Require([bool]$Condition, [string]$Why) { if (-not $Condition) { throw $Why } }
+function Digest([byte[]]$Bytes) {
+    [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($Bytes)).ToLowerInvariant()
 }
-if (-not $Restore -and -not $BaseSha256) { Stop-Write 'give -BaseSha256 (the image the chip must hold now), or -Restore' }
-
-$utc = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
-$out = Join-Path $OutRoot "spi-write-unitA-$utc"
-New-Item -ItemType Directory -Force $out | Out-Null
-$log = Join-Path $out 'write-log.txt'
-function Note([string]$s) { $s; Add-Content $log $s }
-$chipArg = @(); if ($Chip) { $chipArg = @('-c', $Chip) }
-
-# Guard 1: the image.
-if (-not (Test-Path $Image)) { Stop-Write "no image file $Image" }
-$img = [IO.File]::ReadAllBytes((Resolve-Path $Image).Path)
-$imgSha = (Get-FileHash $Image -Algorithm SHA256).Hash
-if ($imgSha -ne $ImageSha256.ToUpperInvariant()) { Stop-Write "the image SHA-256 is $imgSha, the plan names $ImageSha256" }
-if ($img.Length -ne $ChipSize) { Stop-Write "the image has $($img.Length) bytes, the chip has $ChipSize" }
-
-# Guard 2: the plan.
-if (-not (Test-Path $PlanFile)) { Stop-Write "no plan file $PlanFile" }
-Note "plan $((Resolve-Path $PlanFile).Path) SHA-256 $((Get-FileHash $PlanFile -Algorithm SHA256).Hash)"
-Note "image $((Resolve-Path $Image).Path) SHA-256 $imgSha"
-Note "mode $(if ($Restore) { 'restore' } else { 'write' }) base $BaseSha256 max-sectors $MaxSectors"
-
-# Guard 3: the probe.
-Note '== probe (verbose, no read: records the status register)'
-$probe = & $Flashrom -p ch341a_spi @chipArg -V 2>&1 | Out-String
-$probe | Set-Content (Join-Path $out 'probe-verbose.txt')
-if ($probe -match 'Multiple flash chip definitions match') { Stop-Write 'several chip definitions match: give -Chip <name>' }
-if ($probe -notmatch 'Found .* flash chip') { Stop-Write 'no chip found: check the wires, the jumper (1-2) and the USB connection' }
-if ($probe -notmatch 'status register is (0x[0-9a-fA-F]{2})') { Stop-Write 'the probe did not report the status register' }
-Note "status register before the write: $($Matches[1])"
-
-# Guard 4: the chip holds the base.
-$cur = Join-Path $out 'before.bin'
-& $Flashrom -p ch341a_spi @chipArg -r $cur 2>&1 | Out-String | Add-Content $log
-if (-not (Test-Path $cur)) { Stop-Write 'the read before the write made no file' }
-$curSha = (Get-FileHash $cur -Algorithm SHA256).Hash
-Note "chip before the write: SHA-256 $curSha"
-if (-not $Restore -and $curSha -ne $BaseSha256.ToUpperInvariant()) { Stop-Write "the chip holds $curSha, the plan names the base $BaseSha256" }
-
-# Guard 5: the difference.
-$before = [IO.File]::ReadAllBytes($cur)
-if ($before.Length -ne $ChipSize) { Stop-Write "the read gave $($before.Length) bytes" }
-$ranges = New-Object System.Collections.Generic.List[object]
-$sectors = New-Object System.Collections.Generic.HashSet[int]
-$diffBytes = 0
-$i = 0
-while ($i -lt $ChipSize) {
-    if ($img[$i] -ne $before[$i]) {
-        $start = $i
-        while ($i -lt $ChipSize -and $img[$i] -ne $before[$i]) { [void]$sectors.Add([int][Math]::Floor($i / $Sector)); $diffBytes++; $i++ }
-        $ranges.Add([ordered]@{ start = ('0x{0:X6}' -f $start); length = ($i - $start) })
-    } else { $i++ }
+function Hash-Text([string]$Value) {
+    Require ($Value -match '^[0-9a-fA-F]{64}$') 'expected a 64-digit SHA-256'
+    $Value.ToLowerInvariant()
 }
-[ordered]@{ base = $curSha; image = $imgSha; bytes = $diffBytes; sectors = $sectors.Count; ranges = $ranges } |
-    ConvertTo-Json -Depth 4 | Set-Content (Join-Path $out 'diff.json')
-Note "difference: $diffBytes bytes in $($ranges.Count) ranges, $($sectors.Count) sectors of 4 KiB"
-if ($diffBytes -eq 0) { Note "SPI-WRITE VERDICT PASS: the chip already holds the image (nothing written); $out"; exit 0 }
-if (-not $Restore -and $sectors.Count -gt $MaxSectors) { Stop-Write "the difference touches $($sectors.Count) sectors, more than -MaxSectors $MaxSectors" }
-
-# The write.
-Note '== write (flashrom erases and writes the changed blocks, then verifies)'
-$w = & $Flashrom -p ch341a_spi @chipArg -w (Resolve-Path $Image).Path 2>&1 | Out-String
-$w | Add-Content $log
-$flashromOk = $w -match 'VERIFIED'
-
-# Two independent reads.
-$hashes = @()
-foreach ($n in 1, 2) {
-    $f = Join-Path $out "after$n.bin"
-    & $Flashrom -p ch341a_spi @chipArg -r $f 2>&1 | Out-String | Add-Content $log
-    if (-not (Test-Path $f)) { Note "SPI-WRITE VERDICT FAIL: read $n after the write made no file; restore the backup with -Restore"; exit 1 }
-    $h = (Get-FileHash $f -Algorithm SHA256).Hash
-    $hashes += $h
-    Note "read $n after the write: SHA-256 $h"
+function Existing-File([string]$Value) {
+    $p = (Resolve-Path -LiteralPath $Value).ProviderPath
+    Require ([IO.File]::Exists($p)) "not a file: $Value"
+    $p
 }
-if ($hashes[0] -ne $imgSha -or $hashes[1] -ne $imgSha) {
-    Note "SPI-WRITE VERDICT FAIL: the chip does not hold the image (flashrom verify: $flashromOk); restore the backup with -Restore"
-    exit 1
+function Private-Path([string]$Value) {
+    $p = [IO.Path]::GetFullPath($Value)
+    Require ([bool]$env:BC250_ROOT) 'set BC250_ROOT to the private workspace'
+    $workspace = [IO.Path]::GetFullPath($env:BC250_ROOT).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    Require ($p.StartsWith($workspace, [StringComparison]::OrdinalIgnoreCase)) 'private path is outside BC250_ROOT'
+    if (Test-Path -LiteralPath $p) {
+        Require (((Get-Item -LiteralPath $p -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) "reparse path is not permitted: $Value"
+    }
+    $at = if ([IO.File]::Exists($p)) { [IO.Path]::GetDirectoryName($p) } else { $p }
+    while ($at) {
+        Require (-not (Test-Path -LiteralPath (Join-Path $at '.git'))) "image/output path is inside a repository: $Value"
+        if (Test-Path -LiteralPath $at) {
+            Require (((Get-Item -LiteralPath $at -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) "reparse path is not permitted: $Value"
+        }
+        $parent = [IO.Directory]::GetParent($at)
+        $at = if ($parent) { $parent.FullName } else { $null }
+    }
+    $p
 }
-Note "SPI-WRITE VERDICT PASS: the chip holds $imgSha ($diffBytes bytes changed, flashrom verify: $flashromOk); $out"
+function Note([string]$Text) {
+    Write-Host $Text
+    if ($out) { Add-Content -LiteralPath (Join-Path $out 'write-log.txt') -Value $Text }
+}
+function Invoke-Flashrom([string]$Name, [string[]]$Arguments) {
+    $global:LASTEXITCODE = 0
+    $text = & $Flashrom @Arguments 2>&1 | Out-String
+    $code = $LASTEXITCODE
+    [IO.File]::WriteAllText((Join-Path $out "$Name.txt"), $text)
+    Note "$Name exit=$code"
+    [pscustomobject]@{ Text = $text; Code = $code }
+}
+function Probe([string]$Name) {
+    $r = Invoke-Flashrom $Name @('-p', 'ch341a_spi', '-c', $Chip, '-V')
+    Require ($r.Code -eq 0) "$Name failed"
+    Require ($r.Text -notmatch 'Multiple flash chip definitions match') 'multiple chip definitions match'
+    $found = [regex]::Matches($r.Text, '(?m)^Found .* flash chip.*$')
+    Require ($found.Count -eq 1) 'probe must identify exactly one chip'
+    Require ($found[0].Value.Contains('"' + $Chip + '"')) 'probe chip differs from the plan'
+    Require ($found[0].Value -match '\(16384 kB, SPI\)') 'probe size or bus differs from the plan'
+    Require ($r.Text -match 'status register is (0x[0-9a-fA-F]{2})') 'probe omitted the status register'
+    $status = $Matches[1]
+    $receipt.status_probes[$Name] = $status
+    # The reviewed unlock may clear BP/SRWD (mask 0xBC). Record this permitted change.
+    Require (([Convert]::ToInt32($status.Substring(2), 16) -band 0x43) -eq 0x40) "$Name unexpected non-protection status bits: $status"
+    if ($Name -eq 'probe-after') { Require ($status -eq '0x40') "protection remains set after access: $status" }
+    $status
+}
+function Read-Image([string]$Name) {
+    $file = Join-Path $out "$Name.bin"
+    Require (-not (Test-Path -LiteralPath $file)) "read destination exists: $Name"
+    $null = Probe ($Name + '-status')
+    $script:statusMayHaveChanged = $true # flashrom 1.2 can unlock status bits even for -r.
+    $r = Invoke-Flashrom $Name @('-p', 'ch341a_spi', '-c', $Chip, '-r', $file)
+    Require ($r.Code -eq 0) "$Name command failed"
+    Require ([IO.File]::Exists($file)) "$Name did not produce a file"
+    $bytes = [IO.File]::ReadAllBytes($file)
+    Require ($bytes.Length -eq $ChipSize) "$Name has the wrong length"
+    [pscustomobject]@{ Bytes = $bytes; Sha256 = (Digest $bytes) }
+}
+function Hex-Bytes([string]$Value) {
+    Require ($Value -match '^(?:[0-9a-fA-F]{2})+$') 'edit bytes must be nonempty hexadecimal pairs'
+    ,([Convert]::FromHexString($Value))
+}
+function Difference([byte[]]$Before, [byte[]]$After) {
+    $ranges = [Collections.Generic.List[object]]::new()
+    $sectors = 0
+    $changed = 0
+    for ($sectorStart = 0; $sectorStart -lt $ChipSize; $sectorStart += $Sector) {
+        # Skip equal sectors in native code rather than looping over every image byte in PowerShell.
+        if ([Convert]::ToBase64String($Before, $sectorStart, $Sector) -ceq
+            [Convert]::ToBase64String($After, $sectorStart, $Sector)) { continue }
+        $sectors++
+        $i = $sectorStart
+        $end = $sectorStart + $Sector
+        while ($i -lt $end) {
+            if ($Before[$i] -eq $After[$i]) { $i++; continue }
+            $start = $i
+            while ($i -lt $end -and $Before[$i] -ne $After[$i]) { $i++; $changed++ }
+            if ($ranges.Count -gt 0 -and ($ranges[-1].offset + $ranges[-1].length) -eq $start) {
+                $ranges[-1].length += $i - $start
+            } else { $ranges.Add([ordered]@{ offset = $start; length = $i - $start }) }
+        }
+    }
+    [ordered]@{ bytes = $changed; sectors_4k = $sectors; ranges = @($ranges.ToArray()) }
+}
+function Snapshot([string]$Name, [byte[]]$Bytes) {
+    $path = Join-Path $out $Name
+    $stream = [IO.File]::Open($path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try { $stream.Write($Bytes, 0, $Bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
+    # The held read-only handle permits flashrom reads and denies replacement or concurrent writes.
+    $script:snapshotHandles += [IO.File]::Open($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    Require ((Digest ([IO.File]::ReadAllBytes($path))) -eq (Digest $Bytes)) 'snapshot hash mismatch under held lock'
+    $path
+}
+function Pin-File([string]$Path, [string]$Hash) {
+    $script:snapshotHandles += [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    Require ((Digest ([IO.File]::ReadAllBytes($Path))) -eq (Hash-Text $Hash)) "pinned file hash mismatch: $([IO.Path]::GetFileName($Path))"
+}
+
+try {
+    $imgHash = Hash-Text $ImageSha256
+    $planHash = Hash-Text $PlanSha256
+    Require ($MaxSectors -ge 1 -and $MaxSectors -le ($ChipSize / $Sector)) 'MaxSectors must be 1..4096'
+    $Image = Existing-File $Image
+    $null = Private-Path $Image
+    $PlanFile = Existing-File $PlanFile
+    $OutRoot = Private-Path $OutRoot
+    $planBytes = [IO.File]::ReadAllBytes($PlanFile)
+    Require ((Digest $planBytes) -eq $planHash) 'plan hash mismatch'
+    $plan = [Text.Encoding]::UTF8.GetString($planBytes) | ConvertFrom-Json -AsHashtable
+    Require ($plan.schema -eq 1) 'unsupported plan schema'
+    Require ($plan.unit -eq 'A' -and $plan.purpose -in @('vcn-load', 'vcn-repair')) 'plan is not for unit A VCN work'
+    $mode = if ($Restore) { 'restore' } else { 'write' }
+    Require ($plan.mode -eq $mode) 'plan mode differs from invocation'
+    Require ((Hash-Text $plan.image_sha256) -eq $imgHash) 'plan image hash differs from invocation'
+    Require ($plan.chip -eq $Chip -and $plan.chip_size -eq $ChipSize) 'plan chip or size differs'
+    $img = [IO.File]::ReadAllBytes($Image)
+    Require ($img.Length -eq $ChipSize) 'image has the wrong length'
+    Require ((Digest $img) -eq $imgHash) 'image hash mismatch'
+    $backupPath = Existing-File $plan.backup.path
+    $null = Private-Path $backupPath
+    $backup = [IO.File]::ReadAllBytes($backupPath)
+    $backupHash = Hash-Text $plan.backup.sha256
+    Require ($backup.Length -eq $ChipSize -and (Digest $backup) -eq $backupHash) 'backup identity mismatch'
+    if ($Restore) {
+        Require ($imgHash -eq $backupHash) 'restore image is not the identified backup'
+    } else {
+        $baseHash = Hash-Text $BaseSha256
+        Require ((Hash-Text $plan.base_sha256) -eq $baseHash -and $backupHash -eq $baseHash) 'base/backup/plan hashes differ'
+        Require ($plan.edits -is [array]) 'plan edits must be an array'
+        $expected = [byte[]]$backup.Clone()
+        $used = [Collections.Generic.HashSet[int]]::new()
+        foreach ($edit in $plan.edits) {
+            Require ($edit.offset -is [long] -or $edit.offset -is [int]) 'edit offset must be an integer'
+            $old = Hex-Bytes $edit.before
+            $new = Hex-Bytes $edit.after
+            Require ($old.Length -eq $new.Length) 'edit lengths differ'
+            Require ($edit.offset -ge 0 -and $edit.offset -le ($ChipSize - $old.Length)) 'edit outside image'
+            Require (($used.Count + $old.Length) -le ($MaxSectors * $Sector)) 'declared edits exceed sector budget'
+            for ($n = 0; $n -lt $old.Length; $n++) {
+                $pos = [int]$edit.offset + $n
+                Require ($used.Add($pos)) 'overlapping edits'
+                Require ($backup[$pos] -eq $old[$n]) 'edit expected bytes differ from backup'
+                $expected[$pos] = $new[$n]
+            }
+        }
+        Require ((Digest $expected) -eq $imgHash) 'candidate differs outside the approved edits'
+    }
+    if (-not $Flashrom) {
+        Require ([bool]$env:BC250_ROOT) 'set BC250_ROOT or give -Flashrom'
+        $Flashrom = Join-Path $env:BC250_ROOT 'scratch\t39\spi-tools\root\ucrt64\bin\flashrom.exe'
+    }
+    $Flashrom = Existing-File $Flashrom
+    Pin-File $Flashrom $plan.flashrom_sha256
+    Require ($plan.flashrom_dependencies -is [array]) 'flashrom_dependencies must be an array'
+    $dependencyNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($dependency in $plan.flashrom_dependencies) {
+        $dependencyPath = Existing-File $dependency.path
+        Require ([IO.Path]::GetDirectoryName($dependencyPath) -eq [IO.Path]::GetDirectoryName($Flashrom)) 'dependency must be beside flashrom'
+        Require ($dependencyNames.Add([IO.Path]::GetFileName($dependencyPath))) 'duplicate dependency'
+        Pin-File $dependencyPath $dependency.sha256
+    }
+    foreach ($required in @('libusb-1.0.dll', 'libftdi1.dll', 'libwinpthread-1.dll')) {
+        Require ($dependencyNames.Contains($required)) "missing pinned dependency: $required"
+    }
+    Require ($plan.flashrom_version -eq 'flashrom v1.2') 'only the reviewed flashrom v1.2 contract is supported'
+    $compatibility = Existing-File $plan.write_compatibility.path
+    Require ((Digest ([IO.File]::ReadAllBytes($compatibility))) -eq (Hash-Text $plan.write_compatibility.sha256)) 'write compatibility review hash mismatch'
+
+    $mutex = [Threading.Mutex]::new($false, 'Global\BC250-CH341A-SPI')
+    $held = $mutex.WaitOne(0)
+    Require $held 'another process owns the SPI programmer'
+    $name = 'spi-write-unitA-' + (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssfffZ') + '-' + [Guid]::NewGuid().ToString('N')
+    $null = New-Item -ItemType Directory -Path $OutRoot -Force
+    $out = Join-Path $OutRoot $name
+    $null = New-Item -ItemType Directory -Path $out
+    [IO.File]::WriteAllBytes((Join-Path $out 'plan.json'), $planBytes)
+    $snapshot = Snapshot 'candidate.bin' $img
+    $backupSnapshot = Snapshot 'backup.bin' $backup
+    $receipt.plan_sha256 = $planHash
+    $receipt.image_sha256 = $imgHash
+    $receipt.backup_sha256 = $backupHash
+    $receipt.mode = $mode
+    $receipt.write_exit = $null
+    $receipt.readback_matches = $false
+    $receipt.recovery = [ordered]@{ backup = $backupSnapshot; sha256 = $backupHash; automatic = $false }
+    Note "plan=$planHash image=$imgHash mode=$mode"
+    $phase = 'version'
+    $version = Invoke-Flashrom 'version' @('--version')
+    Require ($version.Code -eq 0 -and $version.Text -match '(?m)^flashrom v1\.2(?:\s|$)') 'flashrom version command failed or differs'
+    $phase = 'probe'
+    $receipt.status_before = Probe 'probe-before'
+    $phase = 'base-read'
+    $current = Read-Image 'before1'
+    $second = Read-Image 'before2'
+    Require ($current.Sha256 -eq $second.Sha256) 'base reads differ'
+    if (-not $Restore) { Require ($current.Sha256 -eq $baseHash) 'chip base hash mismatch: obtain a fresh backup and rebuild the candidate' }
+    $receipt.base_sha256 = $current.Sha256
+    $diff = Difference $current.Bytes $img
+    $diff | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $out 'diff.json')
+    Note "difference=$($diff.bytes) bytes, $($diff.sectors_4k) logical 4 KiB regions; physical erase extent is not bounded by this count"
+    if (-not $Restore) { Require ($diff.sectors_4k -le $MaxSectors) 'changed-sector limit exceeded' }
+    if ($diff.bytes -eq 0) {
+        $receipt.status_after = Probe 'probe-after'
+        $receipt.verdict = 'PASS'
+        $receipt.readback_matches = $true
+        $successMessage = 'SPI-WRITE VERDICT PASS: chip already holds the image; no array write invoked'
+    } else {
+        $phase = 'write'
+        Require ((Digest ([IO.File]::ReadAllBytes($snapshot))) -eq $imgHash) 'snapshot hash changed before programming'
+        $arrayWriteInvoked = $true
+        $write = Invoke-Flashrom 'write' @('-p', 'ch341a_spi', '-c', $Chip, '-w', $snapshot)
+        $receipt.write_exit = $write.Code
+        $receipt.flashrom_verified = $write.Text -match '(?m)^Verifying flash\.\.\. VERIFIED\.\s*$'
+        $phase = 'readback'
+        $after1 = Read-Image 'after1'
+        $after2 = Read-Image 'after2'
+        $receipt.readback_matches = $after1.Sha256 -eq $imgHash -and $after2.Sha256 -eq $imgHash
+        $receipt.status_after = Probe 'probe-after'
+        Require ($write.Code -eq 0) 'write command failed; readback result is recorded separately'
+        Require $receipt.flashrom_verified 'flashrom did not confirm its verification'
+        Require $receipt.readback_matches 'readback hash mismatch'
+        $receipt.verdict = 'PASS'
+        $successMessage = "SPI-WRITE VERDICT PASS: write succeeded and two readbacks equal $imgHash"
+    }
+    $phase = 'complete'
+    $exitCode = 0
+} catch {
+    $receipt.verdict = if ($arrayWriteInvoked) { 'FAIL' } else { 'REFUSED' }
+    $receipt.error = $_.Exception.Message
+    $exitCode = if ($arrayWriteInvoked) { 1 } else { 2 }
+    Write-Host "SPI-WRITE VERDICT $($receipt.verdict): $($receipt.error)"
+    Write-Host "phase=$phase array_write_invoked=$arrayWriteInvoked status_register_changes_possible=$statusMayHaveChanged"
+    if ($arrayWriteInvoked) {
+        Write-Host 'Chip state needs recovery assessment. Keep S5. Use the pinned backup and an explicit restore plan; do not boot or retry automatically.'
+    }
+} finally {
+    $receipt.phase = $phase
+    $receipt.array_write_invoked = $arrayWriteInvoked
+    $receipt.status_register_changes_possible = $statusMayHaveChanged
+    if ($out) {
+        try { $receipt | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $out 'result.json') }
+        catch { Write-Host "SPI-WRITE VERDICT FAIL: receipt write failed: $($_.Exception.Message)"; $exitCode = 1 }
+    }
+    foreach ($handle in $snapshotHandles) { $handle.Dispose() }
+    if ($held) { $mutex.ReleaseMutex() }
+    if ($mutex) { $mutex.Dispose() }
+}
+if ($exitCode -eq 0) { Write-Host $successMessage }
+exit $exitCode

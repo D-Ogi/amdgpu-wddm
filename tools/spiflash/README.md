@@ -2,16 +2,20 @@
 
 Reads the BIOS SPI flash of the BC-250 through the J4004 header with a CH341A programmer: a full image with
 flashrom, and the chip registers, SFDP, protection bits and secured OTP with an own raw-SPI transport. No
-tool here can write the flash. Measured state of unit A:
+raw-SPI transport can write the flash. A separate guarded wrapper can write through flashrom.
+Measured state of unit A:
 [M965](../../docs/facts/hardware.md#m965), [M966](../../docs/facts/hardware.md#m966).
 
 | File | Use |
 |------|-----|
 | `spi_read.ps1` | Image backup: probe with `-V` (records the status register), then 3 flashrom reads, equal hashes, optional NAS copy |
+| `spi_write.ps1` | Planned write or explicit restore with pinned inputs and complete readbacks |
 | `ch341a.py` | CH341A raw-SPI transport (libusb through ctypes, no pip package), read-class opcodes only |
 | `spi_regs.py` | Registers, SFDP, lock, fast boot, password, SPB/DPB, secured OTP. RDID and a READ against the backup gate it |
 | `miso_float_check.py` | Negative control: the MISO level while the chip does not drive SO |
 | `test_spiflash.py` | Host tests against a simulated programmer: `python -m unittest discover -s tools/spiflash` |
+| `test_spi_write.py` | Writer tests with synthetic images and a fake flashrom process |
+| `check_spi_write_mutations.py` | Checks that removing a write guard makes its test fail |
 | `winusb/` | WinUSB binding for the CH341A (inbox driver, own INF, local self-signed catalog) |
 | `j4004-wiring.svg` | Wiring diagram |
 
@@ -46,7 +50,110 @@ tool here can write the flash. Measured state of unit A:
    An unpowered CH341A gets power through its inputs from the board.
 6. Backup: `pwsh -File tools/spiflash/spi_read.ps1 -OutRoot <firmware dir> -NasRoot <NAS dir>`.
 7. Registers: `python -I tools/spiflash/spi_regs.py <read1.bin> <new dir>`.
-8. Remove the wires, then do an AC cycle and a boot test.
+8. Disconnect the wires, then do an AC cycle and a boot test.
+
+## Write and restore
+
+Use PowerShell 7. Set `BC250_ROOT` to the private workspace.
+Keep images, backups and output directories under that workspace, outside every repository.
+Do not use reparse paths for these files or directories.
+
+Keep one operator in control of the programmer.
+The writer mutex excludes another writer using this wrapper.
+It does not exclude raw-SPI tools, the backup wrapper or another program.
+Stop those tools before this procedure.
+
+1. Complete the candidate's offline gates and record the recovery procedure.
+2. Review the write, erase and unlock compatibility of the chip definition.
+   Matching read commands or a JEDEC ID alone does not establish write compatibility.
+3. Put the board in S5 and connect J4004 as specified above.
+4. Take consistent fresh backups and preserve an independent copy.
+   A boot can change the variable store after an earlier backup.
+5. Build the candidate from that fresh base and the exact approved edits.
+   Preserve all bytes outside those edits.
+6. Prepare a JSON plan with the fields below and compute its SHA-256.
+7. Run the writer with the plan and image hashes.
+8. Inspect `result.json`, both readback hashes and the status-register records.
+9. Disconnect the programmer wires before the planned boot test.
+
+The plan has these fields:
+
+| Field | Required value |
+|---|---|
+| `schema`, `unit`, `purpose` | `1`, `A`, and `vcn-load` or `vcn-repair` |
+| `mode` | `write` or `restore` |
+| `chip`, `chip_size` | Exact flashrom chip definition and `16777216` bytes |
+| `image_sha256` | Full candidate hash |
+| `base_sha256` | Full fresh backup hash for write mode |
+| `backup` | Object with `path` and `sha256` of the recovery image |
+| `edits` | Write-mode array of objects with integer `offset` and equal-length hexadecimal `before` and `after` |
+| `flashrom_sha256`, `flashrom_version` | Executable hash and `flashrom v1.2` |
+| `flashrom_dependencies` | Array of objects with `path` and `sha256` for the shipped DLLs |
+| `write_compatibility` | Object with `path` and `sha256` of the reviewed chip-write contract |
+
+Pin `libusb-1.0.dll`, `libftdi1.dll` and `libwinpthread-1.dll` beside this flashrom build.
+These are its non-system PE imports, including transitive imports.
+Windows components and libusb's conditional system backend loaders are outside that file pin set.
+The compatibility review must cover the selected USB backend and programming setup.
+The wrapper checks the review's identity. It cannot judge its technical contents.
+
+```powershell
+$env:BC250_ROOT = '<private-workspace>'
+pwsh -NoProfile -File tools/spiflash/spi_write.ps1 `
+  -Image <candidate.bin> -ImageSha256 <candidate-sha256> `
+  -BaseSha256 <fresh-backup-sha256> -PlanFile <write-plan.json> -PlanSha256 <plan-sha256> `
+  -OutRoot <private-output-directory> -Flashrom <reviewed-flashrom.exe> -MaxSectors 1
+```
+
+The writer checks inputs before it calls flashrom.
+It reconstructs the candidate from the backup and the approved edits.
+It programs a private snapshot with a held handle that prevents replacement or writes.
+Two fresh pre-reads must agree and match the planned base.
+Every native exit code is checked.
+PASS requires flashrom's verification, two complete matching readbacks and a saved result.
+A write error stays FAIL even when the readbacks match.
+
+`MaxSectors` counts differing 4 KiB regions, not physical erase operations.
+Flashrom selects erase blocks. The count does not bound its physical erase extent or fallback strategy.
+This flashrom version can retry with larger blocks, up to a whole-chip erase.
+Flashrom's read operation can also change status-register protection bits.
+The wrapper records the status before each read and after the operation.
+It permits BP/SRWD protection bits to be cleared by the reviewed unlock hook.
+Other status bits must match the reviewed `0x40` state. The final status must be `0x40`.
+Check CR and SCUR separately during preflight. The status value alone does not establish the complete protection state.
+The result distinguishes an array-write invocation from possible status-register changes.
+
+On a failed write, keep S5 and assess recovery from the recorded state.
+Do not boot or retry automatically.
+Prepare a separate `restore` plan whose image hash equals the identified backup hash.
+Use the pinned backup snapshot from the failed run, or its verified independent copy.
+Restore mode bypasses the old-base and edit-count limits.
+It retains input pins, two consistent pre-reads, native exit checks and full verification.
+
+```powershell
+pwsh -NoProfile -File tools/spiflash/spi_write.ps1 `
+  -Restore -Image <verified-backup.bin> -ImageSha256 <backup-sha256> `
+  -PlanFile <restore-plan.json> -PlanSha256 <restore-plan-sha256> `
+  -OutRoot <private-output-directory> -Flashrom <reviewed-flashrom.exe>
+```
+
+## Host checks without hardware
+
+Set `BC250_TEST_TMP` to an existing private workspace directory outside repositories.
+The tests use synthetic 16 MiB images and an explicit fake process.
+They never select the real flashrom executable or open USB.
+Run CPU jobs through the workspace host slot when that rule applies.
+
+```powershell
+$env:BC250_TEST_TMP = '<private-test-directory>'
+python -m unittest discover -s tools/spiflash -v
+python tools/spiflash/check_spi_write_mutations.py
+```
+
+The mutation check first runs each selected control test.
+It then disables one production guard in a private script copy.
+The same test must fail when the fake write incorrectly reaches PASS.
+The check never edits the production script.
 
 ## Traps
 
