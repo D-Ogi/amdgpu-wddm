@@ -1,5 +1,6 @@
 import unittest
-from offline import digest, diff_ranges, patch, rebuild, rebuild_parsed
+from types import SimpleNamespace
+from offline import digest, diff_ranges, patch, rebuild, rebuild_parsed, directory_coverage
 
 
 class OfflineTests(unittest.TestCase):
@@ -50,6 +51,93 @@ class OfflineTests(unittest.TestCase):
         self.assertEqual(diff_ranges(b'abcde', b'xbcdy'), [[0, 1], [4, 5]])
         with self.assertRaises(ValueError):
             diff_ranges(b'a', b'ab')
+
+
+class DirectoryCoverageTests(unittest.TestCase):
+    def setUp(self):
+        self.entry = SimpleNamespace(type=8, size=16, offset=0xff000020,
+                                     entry_offset=0, address_mode=0, file_offset=lambda: 32)
+        self.directory = SimpleNamespace(entries=[self.entry], files=[], HEADER_SIZE=16,
+                                         magic=b'$PSP', address_mode=0, get_address=lambda: 0)
+
+    def parsed(self, size=16, type_=8):
+        class File:
+            type = type_
+
+            def get_address(self):
+                return 32
+
+            def __len__(self):
+                return size
+        self.directory.files.append(File())
+
+    def record(self):
+        return directory_coverage(self.directory, 64)[0]
+
+    def test_dropped_record_remains_visible(self):
+        rec = self.record()
+        self.assertEqual(rec['coverage_status'], 'missing')
+        self.assertEqual(rec['raw_location'], 0xff000020)
+        self.assertEqual(rec['normalized_offset'], 32)
+        self.assertEqual(rec['record_offset'], 16)
+        self.assertEqual(rec['unparsed_ranges'], [[32, 48]])
+        self.assertIsNone(rec['parsed_range'])
+
+    def test_complete_and_shorter_file(self):
+        self.parsed(8)
+        rec = self.record()
+        self.assertEqual(rec['coverage_status'], 'partial')
+        self.assertEqual(rec['parsed_range'], [32, 40])
+        self.assertEqual(rec['unparsed_ranges'], [[40, 48]])
+        self.directory.files.clear()
+        self.parsed()
+        self.assertEqual(self.record()['coverage_status'], 'complete')
+
+    def test_out_of_range_or_empty_record_is_not_missing(self):
+        for size in (0, 33):
+            self.entry.size = size
+            with self.subTest(size=size):
+                self.assertEqual(self.record()['coverage_status'], 'unsupported')
+
+    def test_larger_or_ambiguous_parsed_file_is_not_complete(self):
+        self.parsed(17)
+        self.assertEqual(self.record()['coverage_status'], 'unsupported')
+        self.directory.files.clear()
+        self.parsed()
+        self.parsed()
+        self.assertEqual(self.record()['reason'], 'multiple-parsed-files')
+
+    def test_inline_fuse_is_not_an_image_extent(self):
+        self.entry.type, self.entry.size = 0x0b, 0xffffffff
+        rec = self.record()
+        self.assertEqual(rec['coverage_status'], 'special')
+        self.assertIsNone(rec['declared_range'])
+        self.assertEqual(rec['unparsed_ranges'], [])
+
+    def test_bios_records_and_directory_references_are_not_firmware_extents(self):
+        self.directory.magic = b'$BHD'
+        self.parsed()
+        self.assertEqual(self.record()['coverage_status'], 'unsupported')
+        self.assertIsNone(self.record()['declared_range'])
+        self.directory.magic, self.entry.type = b'$PSP', 0x40
+        self.assertEqual(self.record()['coverage_status'], 'special')
+
+    def test_slot_normalization_is_not_claimed_as_proven(self):
+        self.directory.address_mode = self.entry.address_mode = 3
+        self.parsed()
+        rec = self.record()
+        self.assertEqual(rec['normalized_offset'], 32)
+        self.assertEqual(rec['coverage_status'], 'unsupported')
+        self.assertEqual(rec['reason'], 'slot-relative-offset-not-established')
+
+    def test_normalization_failure_remains_visible(self):
+        def bad_offset():
+            raise ValueError('unsupported layout')
+        self.entry.file_offset = bad_offset
+        rec = self.record()
+        self.assertEqual(rec['reason'], 'offset-normalization-failed')
+        self.assertEqual(rec['normalization_error'], 'ValueError')
+        self.assertEqual(rec['raw_location'], 0xff000020)
 
 
 class ParsedRebuildTests(unittest.TestCase):

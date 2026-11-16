@@ -33,6 +33,33 @@ class ImageTests(unittest.TestCase):
             self.assertEqual(entry['negative_controls'][0]['offset'], entry['body_range'][0] - 1)
             self.assertTrue(all(c['rejected'] for c in entry['negative_controls']))
 
+    def test_smu_directory_extents(self):
+        raw = [e for d in self.report['directories'] for e in d['raw_entries']]
+        for smu in self.report['smu']:
+            entries = [e for e in raw if e['type'] == smu['type'] and
+                       e['normalized_offset'] == smu['range'][0]]
+            self.assertTrue(entries)
+            for entry in entries:
+                self.assertEqual(entry['coverage_status'], 'complete')
+                self.assertEqual(entry['declared_range'], smu['range'])
+                self.assertEqual(entry['parsed_range'], smu['range'])
+
+    def test_installed_p3_missing_loader_and_partial_type44(self):
+        if self.report['sha256'] != '09fb260f498bbce5d2e67729d9b6d35d4a75ee833be52f32d22bc84cd2693103':
+            self.skipTest('exact installed P3 fixture only')
+        directory = next(d for d in self.report['directories'] if d['offset'] == 0x8e0000)
+        self.assertEqual(len(directory['entries']), 18)
+        self.assertEqual(len(directory['raw_entries']), 19)
+        loader = next(e for e in directory['raw_entries'] if e['type'] == 1)
+        self.assertEqual(loader['coverage_status'], 'missing')
+        self.assertEqual(loader['raw_location'], 0xff8e0400)
+        self.assertEqual(loader['declared_range'], [0x8e0400, 0x8eac00])
+        other = next(e for e in directory['raw_entries'] if e['type'] == 0x44)
+        self.assertEqual(other['coverage_status'], 'partial')
+        self.assertEqual(other['declared_size'], 0x6610)
+        self.assertEqual(other['parsed_range'], [0x9c3d00, 0x9c3f10])
+        self.assertEqual(other['unparsed_ranges'], [[0x9c3f10, 0x9ca310]])
+
     def test_recipe(self):
         result = plan(self.path, self.recipe())
         self.assertEqual(result['image'], str(Path(self.path).resolve()))

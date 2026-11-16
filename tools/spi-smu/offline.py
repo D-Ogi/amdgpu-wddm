@@ -103,6 +103,72 @@ def rebuild_parsed(image, files):
     return b''.join(pieces), records
 
 
+def directory_coverage(directory, image_size):
+    """Compare raw directory records with parsed files, without interpreting gaps.
+
+    Offsets use PSPTool's normalization. A complete extent is not proof of
+    complete format interpretation, authentication, or directory discovery.
+    """
+    records = []
+    for entry in directory.entries:
+        rec = {'type': entry.type, 'raw_location': entry.offset,
+               'declared_size': entry.size,
+               'record_offset': directory.get_address() + directory.HEADER_SIZE + entry.entry_offset,
+               'normalized_offset': None, 'declared_range': None,
+               'parsed_range': None, 'unparsed_ranges': [],
+               'coverage_status': 'unsupported', 'reason': None}
+        records.append(rec)
+        try:
+            start = entry.file_offset()
+        except (ValueError, AssertionError, NotImplementedError) as error:
+            rec['reason'] = 'offset-normalization-failed'
+            rec['normalization_error'] = type(error).__name__
+            continue
+        rec['normalized_offset'] = start
+        matches = [f for f in directory.files if f.type == entry.type and f.get_address() == start]
+        if len(matches) == 1:
+            rec['parsed_range'] = [start, start + len(matches[0])]
+        # BIOS records can describe memory destinations or encoded storage. Do
+        # not apply PSP firmware extent rules to them, even when a file exists.
+        if directory.magic not in (b'$PSP', b'$PL2'):
+            rec['reason'] = 'directory-semantics-not-assessed'
+            continue
+        if entry.type == 0x0b:
+            rec['coverage_status'], rec['reason'] = 'special', 'inline-soft-fuse-record'
+            continue
+        if entry.type in (0x40, 0x48, 0x49, 0x4a, 0x70):
+            rec['coverage_status'], rec['reason'] = 'special', 'directory-reference'
+            continue
+        mode = directory.address_mode
+        if mode in (2, 3):
+            mode = entry.address_mode
+        elif mode == 1 and entry.address_mode == 0 and entry.offset >= 0xff000000:
+            mode = 0
+        rec['effective_address_mode'] = mode
+        # PSPTool itself marks slot-relative normalization as unresolved.
+        if mode == 3:
+            rec['reason'] = 'slot-relative-offset-not-established'
+            continue
+        end = start + entry.size
+        rec['declared_range'] = [start, end]
+        if not 0 <= start < end <= image_size:
+            rec['reason'] = 'declared-range-outside-image-or-empty'
+            continue
+        if len(matches) > 1:
+            rec['reason'] = 'multiple-parsed-files'
+        elif not matches:
+            rec['coverage_status'], rec['reason'] = 'missing', 'no-parsed-file'
+            rec['unparsed_ranges'] = [[start, end]]
+        elif rec['parsed_range'] == rec['declared_range']:
+            rec['coverage_status'], rec['reason'] = 'complete', 'extent-match-only'
+        elif start < rec['parsed_range'][1] < end:
+            rec['coverage_status'], rec['reason'] = 'partial', 'parsed-file-shorter-than-record'
+            rec['unparsed_ranges'] = [[rec['parsed_range'][1], end]]
+        else:
+            rec['reason'] = 'parsed-range-outside-record-or-empty'
+    return records
+
+
 def inspect(path):
     import psptool
     from psptool import PSPTool
@@ -118,11 +184,13 @@ def inspect(path):
               "parser_sources": sources, "tool_sha256": digest(Path(__file__).read_bytes()),
               "directories": [], "smu": [], "limitations": [
                   "Directory coverage is PSPTool discovery, not exhaustive container validation.",
+                  "Raw entry coverage compares extents only; BIOS and slot-relative semantics are not assessed.",
                   "Key verification does not establish a silicon trust anchor or boot acceptance.",
                   "Entry selection, ABI, free-space ownership and power semantics remain unknown.",
                   "Negative mutations are verifier tests, not inert S2 candidates."]}
     for offset, directory in sorted(pt.directories_by_offset.items()):
-        report['directories'].append({"offset": offset, "entries": [
+        report['directories'].append({"offset": offset,
+            "raw_entries": directory_coverage(directory, len(image)), "entries": [
             {"type": f.type, "offset": f.get_address(), "bytes": len(f),
              "sha256": digest(f.get_bytes())} for f in directory.files]})
     files = sorted((f for f in pt.files_by_offset.values() if f.type in (8, 18)),

@@ -19,6 +19,16 @@ preserves opaque gaps, compares the full image and reparses the result. This is 
 SMU rebuild path. It does not reconstruct or check every enclosing firmware container.
 Ranges use file offsets and exclude their end position.
 
+Each directory keeps `entries`, the original list of parsed files, and adds `raw_entries`.
+The raw list retains records that the parser could not turn into files.
+It records the raw location, parser-normalized offset, declared size, parsed range, and coverage status.
+`missing` means no parsed file. `partial` identifies an unparsed tail. `complete` means the extents match.
+These statuses do not establish authentication or complete interpretation of a file.
+Inline soft-fuse records and directory references have status `special`.
+BIOS directory records, unresolved slot-relative offsets, and invalid extents have status `unsupported`.
+Their metadata remains visible, but ordinary PSP file-range rules do not apply to them.
+Directory discovery still depends on PSPTool and is not exhaustive container validation.
+
 To review a future patch recipe:
 
 ```powershell
