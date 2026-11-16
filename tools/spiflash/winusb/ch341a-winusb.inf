@@ -1,0 +1,35 @@
+; WinUSB binding for the CH341A in SPI/I2C mode (USB\VID_1A86&PID_5512), so that flashrom (libusb) can open it.
+; Only the inbox WinUSB driver is used; this package adds no driver binary.
+
+[Version]
+Signature   = "$Windows NT$"
+Class       = USBDevice
+ClassGUID   = {88BAE032-5A81-49f0-BC3D-A4FF138216D6}
+Provider    = %ManufacturerName%
+CatalogFile = ch341a.cat
+DriverVer   = 11/15/2026,1.0.0.0
+PnpLockdown = 1
+
+[Manufacturer]
+%ManufacturerName% = Standard,NTamd64
+
+[Standard.NTamd64]
+%DeviceName% = USB_Install, USB\VID_1A86&PID_5512
+
+[USB_Install]
+Include = winusb.inf
+Needs   = WINUSB.NT
+
+[USB_Install.Services]
+Include = winusb.inf
+Needs   = WINUSB.NT.Services
+
+[USB_Install.HW]
+AddReg = Dev_AddReg
+
+[Dev_AddReg]
+HKR,,DeviceInterfaceGUIDs,0x10000,"{a6a15508-f299-4b61-86e7-748caa12c562}"
+
+[Strings]
+ManufacturerName = "BC-250 lab (local)"
+DeviceName       = "CH341A SPI programmer (WinUSB)"

@@ -1,0 +1,103 @@
+{
+  "tool": "spi-regs.py",
+  "tool_sha256": "1b95f970124bca8dedd420e0551424e8d75f28396b718f5d1c0ab6638496f771",
+  "backup_sha256": "09fb260f498bbce5d2e67729d9b6d35d4a75ee833be52f32d22bc84cd2693103",
+  "steps": [
+    {
+      "step": "RDID",
+      "ok": true,
+      "value": "c22018"
+    },
+    {
+      "step": "READ 0x000000 equals backup",
+      "ok": true,
+      "sha256": "e865d670c380ff49c42037bd99e37905a2db3dbe2d9e9dd7330a5422ba57792c"
+    },
+    {
+      "step": "READ 0x900000 equals backup",
+      "ok": true,
+      "sha256": "08a2281da795b16ebc4abed024d4e8a7c2d6b5e2e0a06f4f0a2e1094cc45855e"
+    },
+    {
+      "step": "write enable latch is 0",
+      "ok": true,
+      "status_register": "0x40"
+    },
+    {
+      "step": "SFDP signature",
+      "ok": true,
+      "head": "53464450060102ff00060110300000ff"
+    },
+    {
+      "step": "READ 0x900000 after register sweep equals backup",
+      "ok": true
+    },
+    {
+      "step": "READ 0x000000 after EXSO equals backup",
+      "ok": true
+    },
+    {
+      "step": "registers unchanged",
+      "ok": true,
+      "status_register": "0x40",
+      "security_register": "0x00",
+      "lock_register": "0xFFFF",
+      "fast_boot_register": "0xFFFFFFFF"
+    }
+  ],
+  "drained_bytes_at_open": 0,
+  "before": {
+    "status_register": "0x40",
+    "config_register": "0x07",
+    "security_register": "0x00"
+  },
+  "sfdp_headers": [
+    {
+      "id": "0xFF00",
+      "rev": "1.6",
+      "dwords": 16,
+      "pointer": "0x000030"
+    },
+    {
+      "id": "0xFFC2",
+      "rev": "1.0",
+      "dwords": 4,
+      "pointer": "0x000110"
+    },
+    {
+      "id": "0xFF84",
+      "rev": "1.0",
+      "dwords": 2,
+      "pointer": "0x0000C0"
+    }
+  ],
+  "extra_registers": {
+    "REMS": "c217",
+    "RES_device_id": "17",
+    "lock_register": "0xFFFF",
+    "spb_lock_register": "ffff",
+    "fast_boot_register": "0xFFFFFFFF",
+    "password_register": "0xFFFFFFFFFFFFFFFF"
+  },
+  "spb_values": {
+    "0xFF": 4096
+  },
+  "dpb_values": {
+    "0xFF": 4096
+  },
+  "otp": {
+    "bytes_read": 1024,
+    "sha256": "5f4ecdb7b71c3e403983fe405cddcdc2f2576b655fdb3e80d94a6f7c32e58bc2",
+    "esn_0_15": "ffffffffffffffffffffffffffffffff",
+    "first_512_all_ff": true,
+    "second_half_repeats_first": true,
+    "distinct_byte_values_first_512": 1
+  },
+  "after": {
+    "status_register": "0x40",
+    "security_register": "0x00",
+    "lock_register": "0xFFFF",
+    "fast_boot_register": "0xFFFFFFFF"
+  },
+  "verdict": "PASS"
+}

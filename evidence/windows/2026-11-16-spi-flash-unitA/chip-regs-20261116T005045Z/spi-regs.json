@@ -1,0 +1,55 @@
+{
+  "tool": "spi-regs.py",
+  "tool_sha256": "c90ff7a3a0b49706c4c47a5a4fd0bc96ed97879173763b33f40ae74494f2beb5",
+  "backup_sha256": "09fb260f498bbce5d2e67729d9b6d35d4a75ee833be52f32d22bc84cd2693103",
+  "steps": [
+    {
+      "step": "RDID",
+      "ok": true,
+      "value": "c22018"
+    },
+    {
+      "step": "READ 0x000000 equals backup",
+      "ok": true,
+      "sha256": "e865d670c380ff49c42037bd99e37905a2db3dbe2d9e9dd7330a5422ba57792c"
+    },
+    {
+      "step": "READ 0x900000 equals backup",
+      "ok": true,
+      "sha256": "08a2281da795b16ebc4abed024d4e8a7c2d6b5e2e0a06f4f0a2e1094cc45855e"
+    },
+    {
+      "step": "SFDP signature",
+      "ok": true,
+      "head": "53464450060102ff00060110300000ff"
+    },
+    {
+      "step": "READ 0x000000 after EXSO equals backup",
+      "ok": true
+    },
+    {
+      "step": "registers unchanged",
+      "ok": true,
+      "status_register": "0x40",
+      "security_register": "0x00"
+    }
+  ],
+  "drained_bytes_at_open": 124,
+  "before": {
+    "status_register": "0x40",
+    "config_register": "0x07",
+    "security_register": "0x00"
+  },
+  "otp": {
+    "bytes_read": 1024,
+    "sha256": "5f4ecdb7b71c3e403983fe405cddcdc2f2576b655fdb3e80d94a6f7c32e58bc2",
+    "first_512_all_ff": true,
+    "second_half_repeats_first": true,
+    "distinct_byte_values_first_512": 1
+  },
+  "after": {
+    "status_register": "0x40",
+    "security_register": "0x00"
+  },
+  "verdict": "PASS"
+}

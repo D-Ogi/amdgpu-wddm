@@ -1,0 +1,24 @@
+flashrom v1.2 on Windows 10.0 (x86_64)
+flashrom is free software, get the source code at https://flashrom.org
+
+flashrom was built with GCC 11.2.0, little endian
+Command line (5 args): P:\BC-250\scratch\t39\spi-tools\root\ucrt64\bin\flashrom.exe -p ch341a_spi -c MX25L12835F/MX25L12845E/MX25L12865E -V
+Using clock_gettime for delay loops (clk_id: 1, resolution: 100ns).
+Initializing ch341a_spi programmer
+Device revision is 3.0.4
+The following protocols are supported: SPI.
+Probing for Macronix MX25L12835F/MX25L12845E/MX25L12865E, 16384 kB: probe_spi_rdid_generic: id1 0xc2, id2 0x2018
+Found Macronix flash chip "MX25L12835F/MX25L12845E/MX25L12865E" (16384 kB, SPI) on ch341a_spi.
+Chip status register is 0x40.
+Chip status register: Status Register Write Disable (SRWD, SRP, ...) is not set
+Chip status register: Bit 6 is set
+Chip status register: Block Protect 3 (BP3) is not set
+Chip status register: Block Protect 2 (BP2) is not set
+Chip status register: Block Protect 1 (BP1) is not set
+Chip status register: Block Protect 0 (BP0) is not set
+Chip status register: Write Enable Latch (WEL) is not set
+Chip status register: Write In Progress (WIP/BUSY) is not set
+This chip may contain one-time programmable memory. flashrom cannot read
+and may never be able to write it, hence it may not be able to completely
+clone the contents of this chip (see man page for details).
+No operations were specified.

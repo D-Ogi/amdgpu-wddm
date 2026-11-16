@@ -1,0 +1,6 @@
+miso-float-check.py run 20261116T011621Z with 10k pull-up CH341A 3.3V to MISO
+RDID    command-phase ff data c22018
+RDSR    command-phase ff data 40
+RDLR    command-phase ff data ffff
+RDFBR   command-phase ff data ffffffff
+READ    command-phase ffffffff data c064e22e

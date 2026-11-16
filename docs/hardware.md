@@ -26,7 +26,10 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   runtime `memcpy`, called for each row, reaches 8.7 GB/s ([M908](facts/hardware.md#m908)). A build for this CPU
   uses `-march=x86-64-v3 -mtune=znver2`. Do not use `-march=znver2`, because SSE4a is absent on Intel CPUs.
   `tools/win/cpubench` measures M906 to M908, and the evidence of M910 holds its own kernels.
-- Our unit: board revision TBD, BIOS version TBD, VRAM carve-out TBD.
+- Unit A: BIOS P3.00 with SMU firmware 0.58.6.0 ([M965](facts/hardware.md#m965)). The BIOS flash is a
+  Macronix MX25L12873F on header J4004 ([M966](facts/hardware.md#m966)). `tools/spiflash` reads it with a
+  CH341A, and a programmer-made backup of unit A exists outside the repository. VRAM carve-out 8 GiB
+  ([M14](facts/hardware.md#m14)). Board revision TBD.
 
 ## Platform setup (community consensus)
 

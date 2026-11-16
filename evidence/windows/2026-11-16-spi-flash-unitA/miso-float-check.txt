@@ -1,0 +1,6 @@
+miso-float-check.py run 2026-11-16T01:00:14Z (negative control: MISO value while the chip does not drive SO)
+RDID    command-phase 00 data c22018
+RDSR    command-phase 00 data 40
+RDLR    command-phase 00 data 0000
+RDFBR   command-phase 00 data 00000000
+READ    command-phase 00000000 data c064e22e
