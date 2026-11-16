@@ -65,6 +65,44 @@ def rebuild(image, spans):
     return b"".join(pieces)
 
 
+def rebuild_parsed(image, files):
+    """Rebuild selected plaintext entries from parser components, retaining opaque gaps.
+
+    This is the supported same-size SMU rebuild path. It does not rebuild other
+    firmware containers or establish their integrity rules. No bytes are saved.
+    """
+    cursor, pieces, records = 0, [], []
+    if not files:
+        raise ValueError('no parsed entries')
+    for f in sorted(files, key=lambda f: f.get_address()):
+        start, end = f.get_address(), f.get_address() + len(f)
+        if f.encrypted or f.compressed:
+            raise ValueError('encoded entry cannot use plaintext rebuild')
+        if not cursor <= start < end <= len(image):
+            raise ValueError('overlapping or invalid parsed entry range')
+        parts, part_cursor, component_records = [], start, []
+        for name in ('header', 'body', 'signature'):
+            component = getattr(f, name)
+            data = component.get_bytes()
+            if component.get_address() != part_cursor or not data or len(data) != len(component):
+                raise ValueError('non-contiguous or invalid parser component')
+            parts.append(data)
+            component_records.append({'name': name, 'offset': part_cursor,
+                                      'bytes': len(data), 'sha256': digest(data)})
+            part_cursor += len(data)
+        if part_cursor != end:
+            raise ValueError('parser components do not cover the entry')
+        extracted = b''.join(parts)
+        if extracted != f.get_bytes() or extracted != image[start:end]:
+            raise ValueError('parsed extraction differs from source entry')
+        pieces.extend((bytes(image[cursor:start]), extracted))
+        records.append({'type': f.type, 'range': [start, end], 'components': component_records,
+                        'sha256': digest(extracted)})
+        cursor = end
+    pieces.append(bytes(image[cursor:]))
+    return b''.join(pieces), records
+
+
 def inspect(path):
     import psptool
     from psptool import PSPTool
@@ -91,7 +129,6 @@ def inspect(path):
                    key=lambda f: f.get_address())
     if len(files) != 2 or {f.type for f in files} != {8, 18}:
         raise ValueError('expected exactly one SMU entry of each type')
-    spans = []
     for f in files:
         if not isinstance(f, HeaderFile) or f.encrypted or f.compressed or not f.is_signed:
             raise ValueError('unsupported SMU encoding')
@@ -131,11 +168,19 @@ def inspect(path):
             rec['negative_controls'].append({"offset": pos, "rejected": rejected,
                 "image_sha256": digest(changed), "diff_ranges": diff_ranges(image, changed)})
         report['smu'].append(rec)
-        spans.append((start, end))
-    restored = rebuild(image, spans)
-    report['s1'] = {"scope": "span arithmetic only, does not test parser extraction",
-                    "method": "split image at SMU spans and rejoin unchanged slices",
-                    "equal": restored == image, "sha256": digest(restored)}
+    restored, components = rebuild_parsed(image, files)
+    if restored != image:
+        raise ValueError('parsed rebuild differs from source image')
+    reparsed = PSPTool(bytearray(restored))
+    for original in files:
+        copied = reparsed.files_by_offset.get(original.get_address())
+        if copied is None or copied.type != original.type or copied.get_bytes() != original.get_bytes():
+            raise ValueError('rebuilt entry failed parser round trip')
+    report['s1'] = {"scope": "selected plaintext SMU entries; other image bytes retained unchanged",
+                    "method": "parser header/body/signature extraction, reassembly, full equality and reparse",
+                    "equal": True, "sha256": digest(restored), "components": components,
+                    "reparse_equal": True,
+                    "all_firmware_containers_rebuilt": False}
     report['smu_bodies_equal'] = files[0].body.get_bytes() == files[1].body.get_bytes()
     return report
 

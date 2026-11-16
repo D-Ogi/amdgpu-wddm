@@ -1,5 +1,21 @@
 # SPI SMU work report
 
+## Update: installed P3.00, 2026-11-16
+
+The target decision below is superseded: the experiment uses the installed P3.00 backup,
+SHA256 09fb260f498bbce5d2e67729d9b6d35d4a75ee833be52f32d22bc84cd2693103.
+No hardware was accessed for this update. The private input and detailed reports remain outside this repo.
+
+The S1 tool now extracts header, body and signature components through PSPTool, reassembles both SMU
+entries, retains opaque image bytes and reparses the result. Full-image equality passes on the installed
+backup. This tests the selected plaintext-entry rebuild path, not every enclosing firmware container.
+Nineteen tests pass on that backup and nineteen on the existing P5 regression input. The controls reject
+changed component bytes, component gaps/overlaps, missing tails, duplicate entries and encoded entries.
+
+Entry selection, actual runtime mapping, complete ABI/free-space proof and an inert S2 change remain open.
+The older report below is retained as historical context; its span-only S1 and undecided target describe
+the earlier tool revision. The earlier reconciliation was committed as 4bdb56e6e.
+
 ## Done
 
 - Added read-only image inspection and in-memory patch planning in tools/spi-smu/.

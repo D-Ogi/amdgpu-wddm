@@ -23,6 +23,10 @@ class ImageTests(unittest.TestCase):
 
     def test_controls(self):
         self.assertTrue(self.report['s1']['equal'])
+        self.assertTrue(self.report['s1']['reparse_equal'])
+        self.assertEqual(self.report['s1']['sha256'], self.report['sha256'])
+        self.assertEqual(len(self.report['s1']['components']), 2)
+        self.assertFalse(self.report['s1']['all_firmware_containers_rebuilt'])
         for entry in self.report['smu']:
             self.assertTrue(entry['stock_signature_valid'])
             self.assertEqual(len(entry['negative_controls']), 4)

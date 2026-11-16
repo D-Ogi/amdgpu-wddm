@@ -12,19 +12,21 @@ Successful boot alone does not establish H1. Handler completion alone does not e
 
 ## Target decision
 
-No target is selected. The plan names P5.00. The review reports P3.00 on unit A.
-Neither report establishes the installed image identity for this experiment.
-The owner must select the installed-image route or a separate BIOS upgrade experiment.
-Do not mix P5 SMU entries into P3. Do not substitute another image.
-S0 requires the selected image and a later comparison with matching programmer reads.
+The target is the installed P3.00 image, selected on 2026-11-16.
+Its programmer-read SHA256 is 09fb260f498bbce5d2e67729d9b6d35d4a75ee833be52f32d22bc84cd2693103.
+The private input remains outside this repository. This selects the image, not the active SMU entry.
+Do not mix P5 SMU entries into P3 or substitute the stock distribution image for the installed backup.
+The offline tool now reconstructs each plaintext SMU entry from parser header, body and signature
+components, retains the other bytes, and checks full-image equality and a parser round trip.
+This does not rebuild all enclosing firmware containers or establish their integrity rules.
 
 ## Review disposition
 
 | Review item | Disposition |
 |---|---|
-| Target mismatch | Open. No candidate release before the target decision. |
+| Target mismatch | Resolved for offline work: installed P3.00, hash above. Active entry remains open. |
 | Entry selection | Open. Equal versions cannot distinguish the two entries. |
-| P5 ABI | Open. Derive helpers, dispatch table, and completion semantics from the selected image. |
+| Exact-image ABI | Open. Derive helpers, dispatch table, and completion semantics from the selected P3.00 entry. |
 | Handler length | Input length is 134 bytes. A 32-byte literal pool leaves 102 bytes. |
 | PCI transport | Do not describe the whole transport as rejected. The cited mailbox log needs evidence review. |
 | Flash protection | Record status registers, protection bits, WP pin state, and expected values before any write. |

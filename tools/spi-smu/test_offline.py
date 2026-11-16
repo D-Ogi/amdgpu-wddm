@@ -1,5 +1,5 @@
 import unittest
-from offline import digest, diff_ranges, patch, rebuild
+from offline import digest, diff_ranges, patch, rebuild, rebuild_parsed
 
 
 class OfflineTests(unittest.TestCase):
@@ -50,6 +50,66 @@ class OfflineTests(unittest.TestCase):
         self.assertEqual(diff_ranges(b'abcde', b'xbcdy'), [[0, 1], [4, 5]])
         with self.assertRaises(ValueError):
             diff_ranges(b'a', b'ab')
+
+
+class ParsedRebuildTests(unittest.TestCase):
+    class Component:
+        def __init__(self, offset, data):
+            self.offset, self.data = offset, data
+
+        def get_address(self):
+            return self.offset
+
+        def get_bytes(self):
+            return self.data
+
+        def __len__(self):
+            return len(self.data)
+
+    class Entry(Component):
+        pass
+
+    def setUp(self):
+        self.image = b'gapHDRbodySIGtail'
+        self.entry = self.Entry(3, b'HDRbodySIG')
+        self.entry.type = 8
+        self.entry.encrypted = self.entry.compressed = False
+        self.entry.header = self.Component(3, b'HDR')
+        self.entry.body = self.Component(6, b'body')
+        self.entry.signature = self.Component(10, b'SIG')
+
+    def test_round_trip_preserves_opaque_data(self):
+        rebuilt, records = rebuild_parsed(self.image, [self.entry])
+        self.assertEqual(rebuilt, self.image)
+        self.assertEqual([c['name'] for c in records[0]['components']], ['header', 'body', 'signature'])
+
+    def test_extraction_corruption_is_not_hidden_by_original_slices(self):
+        self.entry.body.data = b'Body'
+        with self.assertRaisesRegex(ValueError, 'differs'):
+            rebuild_parsed(self.image, [self.entry])
+
+    def test_component_gap_and_overlap(self):
+        for offset in (5, 7):
+            self.entry.body.offset = offset
+            with self.subTest(offset=offset), self.assertRaisesRegex(ValueError, 'non-contiguous'):
+                rebuild_parsed(self.image, [self.entry])
+
+    def test_missing_tail(self):
+        self.entry.signature.data = b'SI'
+        with self.assertRaisesRegex(ValueError, 'cover'):
+            rebuild_parsed(self.image, [self.entry])
+
+    def test_duplicate_entries_and_empty_set(self):
+        for entries in ([self.entry, self.entry], []):
+            with self.subTest(count=len(entries)), self.assertRaises(ValueError):
+                rebuild_parsed(self.image, entries)
+
+    def test_encoded_entry_refused(self):
+        for flag in ('encrypted', 'compressed'):
+            setattr(self.entry, flag, True)
+            with self.subTest(flag=flag), self.assertRaisesRegex(ValueError, 'encoded'):
+                rebuild_parsed(self.image, [self.entry])
+            setattr(self.entry, flag, False)
 
 
 if __name__ == '__main__':
