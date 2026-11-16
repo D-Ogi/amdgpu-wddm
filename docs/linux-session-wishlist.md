@@ -24,6 +24,11 @@ specific procedure before any potentially hanging unload/reload comparison.
 
 ## Open
 
+E53 follow-up (2026-11-15): Capture the installed BIOS identity and approved SMU telemetry on the same unit.
+Record boot history and independent thermal readings for the SPI SMU stock control.
+Do not access the denied UVD/VCN window. See experiments/E60-spi-smu/README.md.
+
+
 | # | What to capture | Why we want it | Noticed |
 |---|---|---|---|
 | L50 | The LG FHD monitor behind the passive DP-to-HDMI adapter under amdgpu. Its EDID preferred mode is 1920x1080 at 100 Hz: 228.8 MHz, total 2080x1100, 20 lines of vertical blanking. Record the connector modes that `modetest -c` lists. Set the 100 Hz mode and record the result. For that mode, read `OTG0_OTG_V_TOTAL` and `OTG0_OTG_VSTARTUP_PARAM`. Record any underflow or black screen | BD-177: up to tester.35 our display plan refused this mode with an input check that upstream does not have. The check used `min_vblank_lines` (30) as a limit. Without it, the DCN 2.0.1 plan admits the mode with VSTARTUP 13 in the host test. The Linux reading is the positive control on the same monitor | 2026-11-01 |

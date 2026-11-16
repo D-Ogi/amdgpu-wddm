@@ -1,0 +1,53 @@
+{
+  "initial_worktree": "clean",
+  "branch": "t39/spi-smu",
+  "inputs": [
+    {
+      "sha256": "f87a9e06762dfbaef4aa47cebc05b94f8ea584eed9c18e985645466fbcae0dc9",
+      "bytes": 15073,
+      "path": "P:\\BC-250\\scratch\\t39\\psp-a0\\SPI-SMU-PLAN.md"
+    },
+    {
+      "sha256": "578e38473f769b4ca7c3015f7d2ee8afb769fd8758251edd8e2864b0f356d52c",
+      "bytes": 7230,
+      "path": "P:\\BC-250\\scratch\\t39\\psp-a0\\SPI-SMU-PLAN-Deep3-comments.md"
+    },
+    {
+      "sha256": "180454f9e224fd2305addb6e2c2a52e1b9a21d9514d8ad51f979b07556bbfb67",
+      "bytes": 4601,
+      "path": "P:\\BC-250\\scratch\\t39\\psp-a0\\SPI-ANALYSIS.md"
+    },
+    {
+      "sha256": "65fb5a03fd199b77e982bdc9c5d8d7cc2d2b565d1b2f4a9fa29e203515e7c286",
+      "bytes": 7064,
+      "path": "P:\\BC-250\\scratch\\t39\\psp-a0\\HOTPATCH-PLAN.md"
+    },
+    {
+      "sha256": "0d6f136cb120cf3b2de26d5c4d7f255604fdbf4b9442af5ba55419b95b89aa82",
+      "bytes": 16777216,
+      "path": "P:\\BC-250\\firmware\\bios\\P5.00-stock\\Robin5.00"
+    },
+    {
+      "sha256": "a764f253c7c7caf3ce3c25e0053aa710307e9d1022a27ce4fcd0e8c065c48ecd",
+      "bytes": 134,
+      "path": "P:\\BC-250\\scratch\\deep3\\vcn-repair\\smu\\hotpatch-handler.bin"
+    },
+    {
+      "sha256": "7d6d4c665a576a230e129ef744a469aca2128baa1cc56e2619d93f558d6ea0d6",
+      "bytes": 10202,
+      "path": "P:\\BC-250\\scratch\\deep3\\vcn-repair\\smu\\hotpatch-verify2.log"
+    }
+  ],
+  "repository_commit": "5f5ce794e99b8c17450c3eacbef8b9a344628c6d",
+  "date": "2026-11-15",
+  "tools": {
+    "assembler": "not selected",
+    "disassembler": "not selected",
+    "python": "3.14.0",
+    "signature_verifier": "not selected",
+    "powershell": "7.6.10",
+    "parser": "not selected",
+    "hash": "PowerShell Get-FileHash SHA256"
+  },
+  "experiment": "E60-spi-smu"
+}
