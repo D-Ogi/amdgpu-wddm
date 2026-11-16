@@ -1,0 +1,25 @@
+{
+  "image": {
+    "name": "read1.bin",
+    "bytes": 16777216,
+    "sha256": "09fb260f498bbce5d2e67729d9b6d35d4a75ee833be52f32d22bc84cd2693103"
+  },
+  "reference": {
+    "name": "BC250_3.00.ROM",
+    "bytes": 16777216,
+    "sha256": "07595ca3aecf8a4caa28a397b5298f3946a1b769f87b16f67adc369c3f69045c"
+  },
+  "differing_bytes": 99450,
+  "differing_runs": 4175,
+  "regions_merged_4k": [
+    [
+      "0x00044A",
+      "0x01B87A"
+    ],
+    [
+      "0x01FE60",
+      "0x01FEA0"
+    ]
+  ],
+  "last_differing_offset": "0x01FE9F"
+}

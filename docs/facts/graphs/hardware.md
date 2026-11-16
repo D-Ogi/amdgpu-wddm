@@ -46,6 +46,7 @@ flowchart LR
   M922["M922"]
   M924["M924"]
   M936["M936"]
+  M965["M965"]
   S1["S1"]
   S2["S2"]
   S3["S3"]
@@ -73,6 +74,7 @@ flowchart LR
   M924 ==>|supports| M14
   M924 ==>|supports| M815
   M936 ==>|supports| M35
+  M965 ==>|supports| M14
   M870 ==>|supports| M13
   M870 ==>|supports| M14
   M5 -.->|refutes| S3
