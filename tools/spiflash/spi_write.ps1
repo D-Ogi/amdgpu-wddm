@@ -10,6 +10,7 @@ param(
     [Parameter(Mandatory)][string]$OutRoot,
     [int]$MaxSectors = 16,
     [switch]$Restore,
+    [switch]$SecondReadback,
     [string]$Chip = 'MX25L12835F/MX25L12845E/MX25L12865E',
     [string]$Flashrom = ''
 )
@@ -225,6 +226,7 @@ try {
     $receipt.mode = $mode
     $receipt.write_exit = $null
     $receipt.readback_matches = $false
+    $receipt.readbacks = 0
     $receipt.recovery = [ordered]@{ backup = $backupSnapshot; sha256 = $backupHash; automatic = $false }
     Note "plan=$planHash image=$imgHash mode=$mode"
     $phase = 'version'
@@ -255,15 +257,23 @@ try {
         $receipt.write_exit = $write.Code
         $receipt.flashrom_verified = $write.Text -match '(?m)^Verifying flash\.\.\. VERIFIED\.\s*$'
         $phase = 'readback'
-        $after1 = Read-Image 'after1'
-        $after2 = Read-Image 'after2'
-        $receipt.readback_matches = $after1.Sha256 -eq $imgHash -and $after2.Sha256 -eq $imgHash
+        # flashrom verifies the whole chip in the write command. One complete readback in a new
+        # process is the independent check. A second one is a diagnostic option.
+        $readbackNames = if ($SecondReadback) { @('after1', 'after2') } else { @('after1') }
+        $allMatch = $true
+        foreach ($readbackName in $readbackNames) {
+            $after = Read-Image $readbackName
+            $receipt.readbacks = [int]$receipt.readbacks + 1
+            if ($after.Sha256 -ne $imgHash) { $allMatch = $false }
+        }
+        $receipt.readback_matches = $allMatch
         $receipt.status_after = Probe 'probe-after'
         Require ($write.Code -eq 0) 'write command failed; readback result is recorded separately'
         Require $receipt.flashrom_verified 'flashrom did not confirm its verification'
         Require $receipt.readback_matches 'readback hash mismatch'
         $receipt.verdict = 'PASS'
-        $successMessage = "SPI-WRITE VERDICT PASS: write succeeded and two readbacks equal $imgHash"
+        $count = if ($receipt.readbacks -eq 1) { '1 complete readback equals' } else { "$($receipt.readbacks) complete readbacks equal" }
+        $successMessage = "SPI-WRITE VERDICT PASS: write succeeded, flashrom verified it and $count $imgHash"
     }
     $phase = 'complete'
     $exitCode = 0

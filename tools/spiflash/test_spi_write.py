@@ -69,7 +69,9 @@ class WriterTests(unittest.TestCase):
         plan = self.plan if plan is None else plan
         planfile = self.temp / 'plan.json'
         planfile.write_text(json.dumps(plan))
-        (self.temp / 'config.json').write_text(json.dumps({'scenario': scenario, 'chip_name': CHIP, 'original': str(self.image)}))
+        (self.temp / 'config.json').write_text(json.dumps({
+            'scenario': scenario, 'chip_name': CHIP, 'original': str(self.image),
+            'second_readback': '-SecondReadback' in extra}))
         callfile = self.temp / 'calls.jsonl'
         callfile.unlink(missing_ok=True)
         (self.temp / 'status.txt').unlink(missing_ok=True)
@@ -103,8 +105,27 @@ class WriterTests(unittest.TestCase):
         diff = json.loads((runs[0] / 'diff.json').read_text(encoding='utf-8-sig'))
         self.assertEqual(diff, {'bytes': 2, 'sectors_4k': 2, 'ranges': [{'offset': 4095, 'length': 2}]})
         self.assertEqual([x['operation'] for x in calls], ['version', 'probe', 'probe', 'before1',
-            'probe-between-before', 'before2', 'write', 'probe-before-readback', 'after1',
+            'probe-between-before', 'before2', 'write', 'probe-before-readback', 'after1', 'probe-after'])
+        self.assertEqual(receipt['readbacks'], 1)
+        self.assertEqual(len(list(runs[0].glob('after*.bin'))), 1)
+        self.assertIn('1 complete readback', self.details)
+
+    def test_second_readback_is_an_explicit_option(self):
+        p, calls, receipt, runs = self.run_writer(extra=('-SecondReadback',))
+        self.assertEqual(p.returncode, 0, self.details)
+        self.assertEqual([x['operation'] for x in calls][6:], ['write', 'probe-before-readback', 'after1',
             'probe-between-after', 'after2', 'probe-after'])
+        self.assertEqual(receipt['readbacks'], 2)
+        self.assertIn('2 complete readbacks', self.details)
+    def test_bad_second_readback(self):
+        p, _, receipt, _ = self.run_writer('second-readback-mismatch', extra=('-SecondReadback',))
+        self.assertEqual(p.returncode, 1, self.details)
+        self.assertEqual(receipt['readbacks'], 2)
+        self.assertFalse(receipt['readback_matches'])
+    def test_failed_readback_is_not_counted(self):
+        p, _, receipt, _ = self.run_writer('after-fail')
+        self.assertEqual(p.returncode, 1, self.details)
+        self.assertEqual(receipt['readbacks'], 0)
 
     def test_plan_hash(self): self.assert_refused(self.run_writer(wrong_plan_hash=True), 'plan hash mismatch')
     def test_plan_identity_guards(self):

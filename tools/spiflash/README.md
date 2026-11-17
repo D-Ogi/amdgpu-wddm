@@ -73,7 +73,7 @@ Stop those tools before this procedure.
    Preserve all bytes outside those edits.
 6. Prepare a JSON plan with the fields below and compute its SHA-256.
 7. Run the writer with the plan and image hashes.
-8. Inspect `result.json`, both readback hashes and the status-register records.
+8. Inspect `result.json`, the readback hash and the status-register records.
 9. Disconnect the programmer wires before the planned boot test.
 
 The plan has these fields:
@@ -110,8 +110,10 @@ It reconstructs the candidate from the backup and the approved edits.
 It programs a private snapshot with a held handle that prevents replacement or writes.
 Two fresh pre-reads must agree and match the planned base.
 Every native exit code is checked.
-PASS requires flashrom's verification, two complete matching readbacks and a saved result.
-A write error stays FAIL even when the readbacks match.
+PASS requires flashrom's verification, one complete matching readback and a saved result.
+`-SecondReadback` adds a second complete readback for diagnosis; it costs about three minutes.
+`result.json` records the number of readbacks that completed (`readbacks`).
+A write error stays FAIL even when the readback matches.
 
 `MaxSectors` counts differing 4 KiB regions, not physical erase operations.
 Flashrom selects erase blocks. The count does not bound its physical erase extent or fallback strategy.

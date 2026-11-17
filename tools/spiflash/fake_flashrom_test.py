@@ -19,7 +19,7 @@ if operation == 'probe':
     if 'write' in past and 'after1' not in past:
         operation = 'probe-before-readback'
     elif 'after1' in past and 'after2' not in past:
-        operation = 'probe-between-after'
+        operation = 'probe-between-after' if config.get('second_readback') else 'probe-after'
     elif 'before2' in past:
         operation = 'probe-after'
     elif 'before1' in past:
@@ -74,7 +74,8 @@ else:
     data = bytearray(chip.read_bytes())
     if scenario == 'before-short' and operation == 'before1': data = data[:64]
     if ((scenario == 'base-unstable' and operation == 'before2') or
-            (scenario == 'readback-mismatch' and operation == 'after2')):
+            (scenario == 'readback-mismatch' and operation == 'after1') or
+            (scenario == 'second-readback-mismatch' and operation == 'after2')):
         data[7] ^= 1
     if not (scenario == 'before-missing' and operation == 'before1'):
         path.write_bytes(data)
