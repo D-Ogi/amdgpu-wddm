@@ -986,6 +986,15 @@ facts:
     status_text: "MEASURED (read-class opcodes only, MISO idle level 00 and FF compared)"
     detail: "RDID `C2 20 18`, status register 0x40 (QE, BP3-BP0 0, SRWD 0), configuration register 0x07, security register 0x00 (WPSEL 0, not factory-locked, LDSO 0); these stay equal with a MISO pull-up, so the chip drives them. Secured OTP: 512 bytes FF including the ESN field. RDLR, RDSPBLK, RDFBR, RDPASS, RDSPB and RDDPB follow the idle level of MISO, so the chip does not answer them. SFDP 1.6 with 3 headers, newer than datasheet rev 1.2 (SFDP 1.0, 2 headers). The status register value before the first flashrom read is not known, because flashrom 1.2 runs its unlock hook before a read"
     evidence: "[SPI flash unit A](../evidence/windows/2026-11-16-spi-flash-unitA/RESULT.md)"
+  - id: M967
+    status: MEASURED
+    date: "2026-11-17"
+    claim: "On unit A with stock P3 firmware, two SMU transfers produced the expected words in distinct kernel-owned buffers."
+    status_text: "MEASURED (one Linux 6.18.52 run, two one-word transfers)"
+    detail: "C100 read 0x00580600 from firmware SRAM offset 0 and 0xAD004136 from offset 0xEBC. Both complete 4096-byte snapshot hashes match the word and unchanged canary tail. Each sub14 request returned a fresh (1,3). Both preceding LOAD requests returned (1,2), which remains a refusal. Queue 0 controls, setup00 and restore04 passed. This does not show VCN activation, arbitrary SRAM access, an accepted LOAD state or a general hardware DMA-drain guarantee."
+    evidence: "[C099 and C100](../evidence/linux/2026-11-17-C100-smu-transfer/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M968"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

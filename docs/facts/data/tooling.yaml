@@ -232,6 +232,13 @@ facts:
     status_text: "MEASURED (unit A, one listing, no capture)"
     detail: "The other sources are `Timer` (0), `BranchInstructions` (6), `DcacheMisses` (8), `IcacheMisses` (9), `CacheMisses` (10), `BranchMispredictions` (11), `IcacheIssues` (20), `DcacheAccesses` (21), `ICFetch` (26), `ICMiss` (27), `FRRetiredx86Instructions` (28), `FRRetiredBranches` (29), `FRRetiredBranchesMispredicted` (30), `DCAccess` (31) and `InstructionsRetiredFixed` (32). The listing names sources and their intervals only. Which hardware event each source programs on this core, and whether a capture runs at all, is not shown, because the arm ran no capture. Dispatch-stall events have no named source here and need their event numbers from the AMD processor reference"
     evidence: "[K137 round 2](../evidence/windows/2026-10-12-BD093-k137-round2/RESULT.md)"
+  - id: M968
+    status: MEASURED
+    date: "2026-11-17"
+    claim: "The C096 diagnostic buffer provider retained both allocations after address exposure, including failed descriptor copyout and client termination, in the C099 Linux trial."
+    status_text: "MEASURED (one Linux 6.18.52 lifecycle trial)"
+    detail: "A fresh unexposed load passed fill and snapshot checks and unloaded normally. A second fresh load passed descriptor-copyout EFAULT retention and actual client SIGKILL. After reopening, both full canaries were intact, the module reference count was 1 and ordinary unload was refused. Five child commands exited 0 with 48 client assertions. This measures the tested ownership behavior, not SMU address translation, DMA completion or VCN operation."
+    evidence: "[C099 and C100](../evidence/linux/2026-11-17-C100-smu-transfer/RESULT.md)"
   - id: M970
     status: MEASURED
     date: "2026-11-18"
