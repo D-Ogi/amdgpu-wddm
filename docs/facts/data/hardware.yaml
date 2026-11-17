@@ -995,6 +995,13 @@ facts:
     evidence: "[C099 and C100](../evidence/linux/2026-11-17-C100-smu-transfer/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M968"}
+  - id: M969
+    status: MEASURED
+    date: "2026-11-17"
+    claim: "On unit A with stock P3, a q3 register-read request returned a fresh 0xFD before any target data sample."
+    status_text: "MEASURED (one Linux 6.18.52 trial)"
+    detail: "C103 r2 passed q0 version and first increment controls, then cleared and read back the q3 response and argument before issuing message 0x2A. The next q3 response was 0xFD. The only commands were q0/2, q0/1 and q3/0x2A. The worker stopped with exit 2; there was no mapping sample, second challenge, DMA, permission change or VCN access. The dispatcher-permission interpretation comes from static P3 analysis. The permission variable, address translation and VCN state were not measured. Clean shutdown, AC cycle, Linux return and exact boot-configuration restoration completed."
+    evidence: "[C103](../evidence/linux/2026-11-17-C103-q3-refusal/RESULT.md)"
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

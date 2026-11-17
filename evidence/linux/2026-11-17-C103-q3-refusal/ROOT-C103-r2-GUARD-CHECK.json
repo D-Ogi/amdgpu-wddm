@@ -1,0 +1,14 @@
+{
+  "source_sha256": "85666af99ac8e8a50c1d7497b6e330cfce57395e62a47f449272f85b3834e2ec",
+  "checks": [
+    {
+      "injection": "stop",
+      "stopped": true
+    },
+    {
+      "injection": "deadline",
+      "stopped": true
+    }
+  ],
+  "hardware_access": false
+}

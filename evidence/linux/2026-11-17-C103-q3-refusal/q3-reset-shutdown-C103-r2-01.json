@@ -1,0 +1,9 @@
+{
+  "utc": "2026-11-17T16:08:00.173991+00:00",
+  "approval": "C-103-r2",
+  "action": "shutdown",
+  "source_sha256": "b9ed54ff1331588189130918be02ce08d4552e1c5b24b77df800f14841b06d93",
+  "exit": 0,
+  "stdout": "{\"stage_ivrs\": false, \"stage_iommu_log\": false, \"network_boot\": true, \"cfg_sha256\": \"97a5906372446889b7af9ace4047fa80220b90c2fd27fc11e775b87a32852455\", \"env_sha256\": \"d824be8cf1612cac8cab3f7d4a166e72d02740a0ddba55eefc4bf533e2cb59a9\", \"loader_sha256\": \"2b707cc62b030bb3c6dfe375763da6d4ba4342c02bb953ea0ab3236ef067bf48\", \"restore\": false}\n{\"selected_entry\": 4, \"cfg_sha256\": \"ff547f7d1a9c9cb40f36c69fb65dc020aecbee65a208bbba865bf155a7f7b111\", \"approval\": \"C-103-r2\"}\nCLEAN_SHUTDOWN_SCHEDULED\n",
+  "stderr": ""
+}
