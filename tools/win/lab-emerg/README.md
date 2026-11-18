@@ -28,9 +28,10 @@ Each command prints one JSON object and exits 0 only when the unit reported succ
 16 MB in both directions. Nothing stays running on the development PC.
 
 `usb-boot` on a stick with a signed menu (a file `grub.cfg.sig` next to `grub.cfg`): the listener does not
-edit `grub.cfg`. It writes the choice into `grubenv` as `bc250_default` (`linux:N`, N from 0 to 5) or removes
-that variable (`windows`), through the functions of `stick-env.ps1`. These functions refuse each name and value
-that the signed menu does not read. On a stick without that file the command works as before. Install
+edit `grub.cfg`. `linux:N` with N from 0 to 5 writes `bc250_default` into `grubenv`. `linux:6` removes that
+variable: the signed menu then starts entry 6, Windows through the X3 counter. Both switch the stick loader on.
+`windows` switches the stick loader off, as on the old stick (Windows directly from NVMe). The writes go through
+the functions of `stick-env.ps1`, which refuse each name and value that the signed menu does not read. Install
 `stick-env.ps1` together with `listener.ps1`. Host tests: `stick-env.test.ps1`, `usb-steer.test.ps1`.
 
 ## How a request is protected
@@ -84,11 +85,12 @@ one the full timeout, because the Wi-Fi dongle drops out. No address is written 
 
 ## Installing or removing the channel
 
-`install.ps1` runs on the unit, elevated, through `target.py ps`, with `listener.ps1` and the key already pushed
-to `C:\BC250\tmp`:
+`install.ps1` runs on the unit, elevated, through `target.py ps`, with `listener.ps1`, `stick-env.ps1` and the
+key already pushed to `C:\BC250\tmp`. When one of the two script files is not there, `install.ps1` stops before
+it changes anything:
 
 ```
-python tools\win\target.py push tools\win\lab-emerg\listener.ps1 --to C:\BC250\tmp
+python tools\win\target.py push tools\win\lab-emerg\listener.ps1 tools\win\lab-emerg\stick-env.ps1 --to C:\BC250\tmp
 copy the key to C:\BC250\tmp under the name emergency-key.bin   (install.ps1 looks for that name and moves it)
 python tools\win\target.py ps tools\win\lab-emerg\install.ps1
 python tools\win\target.py ps tools\win\lab-emerg\install.ps1 -Uninstall

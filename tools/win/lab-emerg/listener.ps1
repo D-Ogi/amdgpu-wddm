@@ -73,7 +73,7 @@ function Usb-Default($u) {
     }
     $table = Read-StickEnv ([IO.File]::ReadAllBytes($u.env))
     if ($table.Contains('bc250_default')) { return $table['bc250_default'] }
-    return 'windows (no bc250_default in grubenv)'
+    return '6'   # no bc250_default: the signed menu starts entry 6, Windows through the X3 counter
 }
 # $value '' removes the variable (Windows). The first block is kept once as grubenv.orig.
 function Usb-SetSignedDefault($u, [string]$value) {
@@ -205,13 +205,16 @@ function Run-Action([string]$action, [string]$arg, [byte[]]$body) {
         'usb-boot' {
             # status | windows | linux:<grub entry index>. No restart here (use 'reboot').
             $u = Usb-Stick
-            if ($arg -eq 'windows' -and (Usb-Signed $u)) {
-                # The signed loader stays in place: its menu starts Windows when bc250_default is absent.
-                Usb-SetSignedDefault $u ''
-            } elseif ($arg -eq 'windows') {
+            if ($arg -eq 'windows') {
+                # Both stick forms: the stick loader is switched off, the firmware starts Windows from NVMe.
                 if (Test-Path $u.efi) { Rename-Item -LiteralPath $u.efi -NewName 'bootx64.off' }
             } elseif ($arg -match '^linux:(\d{1,2})$' -and (Usb-Signed $u)) {
-                Usb-SetSignedDefault $u $Matches[1]
+                # Entries 0 to 5 are Linux. Entry 6 is Windows through the X3 counter: the signed menu starts it
+                # when bc250_default is absent. Other numbers are refused before a file changes.
+                $n = $Matches[1]
+                if ($n -eq '6') { Usb-SetSignedDefault $u '' }
+                elseif ($n -match '^[0-5]$') { Usb-SetSignedDefault $u $n }
+                else { throw 'usb-boot: the signed menu has the entries 0 to 6 for this command' }
                 if (Test-Path $u.off) { Rename-Item -LiteralPath $u.off -NewName 'bootx64.efi' }
             } elseif ($arg -match '^linux:(\d{1,2})$') {
                 $n = $Matches[1]
