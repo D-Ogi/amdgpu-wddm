@@ -154,7 +154,9 @@ try {
     Require ((Digest $planBytes) -eq $planHash) 'plan hash mismatch'
     $plan = [Text.Encoding]::UTF8.GetString($planBytes) | ConvertFrom-Json -AsHashtable
     Require ($plan.schema -eq 1) 'unsupported plan schema'
-    Require ($plan.unit -ceq 'A' -and $plan.purpose -cin $ApprovedPurposes) 'plan is not for an approved unit A purpose'
+    # A comparison operator filters a collection instead of comparing it, so the type is checked first.
+    Require ($plan.unit -is [string] -and $plan.purpose -is [string] -and
+             $plan.unit -ceq 'A' -and $plan.purpose -cin $ApprovedPurposes) 'plan is not for an approved unit A purpose'
     $mode = if ($Restore) { 'restore' } else { 'write' }
     Require ($plan.mode -eq $mode) 'plan mode differs from invocation'
     Require ((Hash-Text $plan.image_sha256) -eq $imgHash) 'plan image hash differs from invocation'
