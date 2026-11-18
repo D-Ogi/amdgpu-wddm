@@ -71,9 +71,18 @@ function Usb-Default($u) {
     if (-not (Usb-Signed $u)) {
         return [regex]::Match([IO.File]::ReadAllText($u.grub), '(?m)^set default=(\S+)').Groups[1].Value
     }
+    # A status never fails because of grubenv: with no readable block the signed menu starts its own fallback
+    # (network-only Linux, entry 4), and Usb-Env says why.
+    if ((Usb-Env $u) -ne 'ok') { return 'unknown (grubenv not readable; the menu falls back to entry 4)' }
     $table = Read-StickEnv ([IO.File]::ReadAllBytes($u.env))
     if ($table.Contains('bc250_default')) { return $table['bc250_default'] }
     return '6'   # no bc250_default: the signed menu starts entry 6, Windows through the X3 counter
+}
+# 'ok', 'missing' or 'damaged: <reason>'. A write of a Linux choice into a block that is not 'ok' is refused
+# by Usb-SetSignedDefault (the read throws); only the report is tolerant.
+function Usb-Env($u) {
+    if (-not (Test-Path -LiteralPath $u.env)) { return 'missing' }
+    try { $null = Read-StickEnv ([IO.File]::ReadAllBytes($u.env)); return 'ok' } catch { return "damaged: $($_.Exception.Message)" }
 }
 # $value '' removes the variable (Windows). The first block is kept once as grubenv.orig.
 function Usb-SetSignedDefault($u, [string]$value) {
@@ -85,6 +94,7 @@ function Usb-SetSignedDefault($u, [string]$value) {
 function Usb-State($u) {
     $cfg = [IO.File]::ReadAllText($u.grub)
     [ordered]@{ root = $u.root; signed = [bool](Usb-Signed $u); default = Usb-Default $u
+        grubenv = $(if (Usb-Signed $u) { Usb-Env $u } else { 'not used' })
         loader = $(if (Test-Path $u.efi) { 'bootx64.efi (USB boots: Linux)' } elseif (Test-Path $u.off) { 'bootx64.off (falls through to NVMe: Windows)' } else { 'missing' })
         entries = @([regex]::Matches($cfg, '(?m)^\s*menuentry\s+[''"]([^''"]+)[''"]') | ForEach-Object { $_.Groups[1].Value }) }
 }

@@ -10,7 +10,7 @@ $utf8 = New-Object Text.UTF8Encoding($false)
 $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile("$PSScriptRoot\listener.ps1", [ref]$null, [ref]$errors)
 if ($errors.Count) { throw "listener.ps1 has $($errors.Count) parse errors" }
-foreach ($name in 'Usb-Signed', 'Usb-Default', 'Usb-SetSignedDefault', 'Usb-State', 'Run-Action') {
+foreach ($name in 'Usb-Signed', 'Usb-Env', 'Usb-Default', 'Usb-SetSignedDefault', 'Usb-State', 'Run-Action') {
     $f = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
     if (-not $f) { throw "listener.ps1 has no function $name" }
     . ([scriptblock]::Create($f.Extent.Text))
@@ -69,6 +69,19 @@ $s = Run-Action 'usb-boot' 'linux:2' $null
 Check 'linux:2 with the loader off: value written, loader on' ($s.default -eq '2' -and (Test-Path $tree.efi))
 Check 'grub.cfg is never changed and has no .orig copy' ((Sha $tree.grub) -eq $cfgHash -and -not (Test-Path -LiteralPath ($tree.grub + '.orig')))
 Check 'the block is 1024 bytes' ((Get-Item -LiteralPath $tree.env).Length -eq 1024)
+
+'-- the signed stick with no grubenv, and with a damaged one'
+foreach ($case in 'missing', 'damaged') {
+    $script:tree = New-Tree "signed-$case"
+    [IO.File]::WriteAllText($tree.grub + '.sig', 'x')
+    if ($case -eq 'missing') { Remove-Item -LiteralPath $tree.env } else { [IO.File]::WriteAllText($tree.env, 'not a block') }
+    $s = Run-Action 'usb-boot' 'status' $null
+    Check "$case grubenv: status succeeds and reports it" ($s.signed -and $s.grubenv -like "$case*" -and $s.loader -like 'bootx64.efi*')
+    Check "$case grubenv: linux:4 is refused" (Refused { Run-Action 'usb-boot' 'linux:4' $null })
+    Check "$case grubenv: the refused write made no file" (-not (Test-Path -LiteralPath ($tree.env + '.orig')) -and ($case -eq 'damaged' -or -not (Test-Path -LiteralPath $tree.env)))
+    $s = Run-Action 'usb-boot' 'windows' $null
+    Check "$case grubenv: windows succeeds and the loader is off" ($s.loader -like 'bootx64.off*' -and (Test-Path $tree.off) -and $s.grubenv -like "$case*")
+}
 
 '-- install.ps1 with a missing script file'
 $src = Join-Path $Work 'src'
