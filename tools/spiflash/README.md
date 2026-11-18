@@ -18,6 +18,7 @@ Measured state of unit A:
 | `check_spi_write_mutations.py` | Checks that removing a write guard makes its test fail |
 | `winusb/` | WinUSB binding for the CH341A (inbox driver, own INF, local self-signed catalog) |
 | `j4004-wiring.svg` | Wiring diagram |
+| `j4004-pico-h-wiring.svg` | Wiring diagram for the Pico H with the libreboot serprog firmware |
 
 ## The flash and J4004 on unit A
 
@@ -90,6 +91,20 @@ The plan has these fields:
 | `flashrom_sha256`, `flashrom_version` | Executable hash and `flashrom v1.2` |
 | `flashrom_dependencies` | Array of objects with `path` and `sha256` for the shipped DLLs |
 | `write_compatibility` | Object with `path` and `sha256` of the reviewed chip-write contract |
+| `programmer` | Optional. Absent: the CH341A (`ch341a_spi`). Present: the object below, for the Pico with the serprog firmware |
+
+The `programmer` object has these fields, and each must have exactly this value or form:
+`kind` = `serprog`, `port` = `COM<n>`, `baud` = `115200`, `spispeed` = `2M`, `name` = `pico-serprog`, and
+`transport_review` = an object with `path` and `sha256` of the reviewed transport contract (serprog and the
+firmware). The writer makes the flashrom programmer string from these fields. A command-line parameter cannot
+change the programmer.
+
+For a serprog programmer the writer first runs the Windows `mode` command for that port with `dtr=on rts=on`
+and stops when the answer does not show DTR on. flashrom 1.2 on Windows does not assert DTR. Measured on
+unit A: with DTR off a probe passes and an array read fails, and with DTR on full reads are equal.
+Each probe must report the chip on the planned programmer, and for serprog also the firmware name.
+`-ModeExe` names another program for the port setup. It is for the host tests.
+`result.json` records the programmer (`programmer`) and the port setup (`port_setup`).
 
 Pin `libusb-1.0.dll`, `libftdi1.dll` and `libwinpthread-1.dll` beside this flashrom build.
 These are its non-system PE imports, including transitive imports.

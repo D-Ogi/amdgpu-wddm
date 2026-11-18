@@ -15,6 +15,19 @@ HERE = Path(__file__).resolve().parent
 SIZE = 16 * 1024 * 1024
 CHIP = 'MX25L12835F/MX25L12845E/MX25L12865E'
 
+SERPROG = 'serprog:dev=COM6:115200,spispeed=2M'
+# Stand-in for the Windows mode command. It records its call in the same list as the fake flashrom.
+FAKE_MODE = r'''$root = $env:BC250_FAKE_SPI
+$config = Get-Content -Raw -LiteralPath (Join-Path $root 'config.json') | ConvertFrom-Json
+$record = [ordered]@{ operation = 'port-setup'; args = @($args | ForEach-Object { "$_" }) } | ConvertTo-Json -Compress
+Add-Content -LiteralPath (Join-Path $root 'calls.jsonl') -Value $record
+switch ($config.mode_scenario) {
+    'absent' { 'Illegal device name - COM6'; exit 1 }
+    'dtr-off' { 'Status for device COM6:'; '    DTR circuit:     OFF'; '    RTS circuit:     ON'; exit 0 }
+    default { 'Status for device COM6:'; '    DTR circuit:     ON'; '    RTS circuit:     ON'; exit 0 }
+}
+'''
+
 def sha(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -64,14 +77,26 @@ class WriterTests(unittest.TestCase):
             path = self.temp / name
             path.write_bytes(('Synthetic unused dependency: ' + name).encode())
             self.plan['flashrom_dependencies'].append({'path': str(path), 'sha256': sha(path.read_bytes())})
+        self.transport = self.temp / 'transport-review.txt'
+        self.transport.write_text('Synthetic transport only. Not a hardware compatibility approval.\n')
+        self.mode = self.temp / 'fake mode.ps1'
+        self.mode.write_text(FAKE_MODE)
 
-    def run_writer(self, scenario='ok', *, plan=None, extra=(), script=None, wrong_plan_hash=False, outroot=None):
+    def serprog_plan(self):
+        plan = copy.deepcopy(self.plan)
+        plan['programmer'] = {'kind': 'serprog', 'port': 'COM6', 'baud': 115200, 'spispeed': '2M',
+                              'name': 'pico-serprog',
+                              'transport_review': {'path': str(self.transport), 'sha256': sha(self.transport.read_bytes())}}
+        return plan
+
+    def run_writer(self, scenario='ok', *, plan=None, extra=(), script=None, wrong_plan_hash=False, outroot=None,
+                   mode_scenario='ok', real_mode=False):
         plan = self.plan if plan is None else plan
         planfile = self.temp / 'plan.json'
         planfile.write_text(json.dumps(plan))
         (self.temp / 'config.json').write_text(json.dumps({
             'scenario': scenario, 'chip_name': CHIP, 'original': str(self.image),
-            'second_readback': '-SecondReadback' in extra}))
+            'second_readback': '-SecondReadback' in extra, 'mode_scenario': mode_scenario}))
         callfile = self.temp / 'calls.jsonl'
         callfile.unlink(missing_ok=True)
         (self.temp / 'status.txt').unlink(missing_ok=True)
@@ -81,8 +106,10 @@ class WriterTests(unittest.TestCase):
                 '-Image', str(self.image), '-ImageSha256', plan['image_sha256'],
                 '-BaseSha256', plan.get('base_sha256', sha(self.base)), '-PlanFile', str(planfile),
                 '-PlanSha256', '0' * 64 if wrong_plan_hash else sha(planfile.read_bytes()),
-                '-OutRoot', str(outroot or self.temp / 'outputs'), '-Flashrom', str(self.mock), *extra]
-        p = subprocess.run(args, env=env, capture_output=True, text=True, timeout=90)
+                '-OutRoot', str(outroot or self.temp / 'outputs'), '-Flashrom', str(self.mock),
+                *(() if real_mode else ('-ModeExe', str(self.mode))), *extra]
+        # errors='replace': a localized system message in the output must not lose the whole capture.
+        p = subprocess.run(args, env=env, capture_output=True, text=True, errors='replace', timeout=90)
         calls = [json.loads(x) for x in callfile.read_text().splitlines()] if callfile.exists() else []
         runs = list(set((self.temp / 'outputs').glob('spi-write-*')) - previous)
         receipt_path = runs[0] / 'result.json' if runs else None
@@ -319,6 +346,78 @@ class WriterTests(unittest.TestCase):
             self.assert_refused(self.run_writer(), 'another process owns')
         finally:
             process.communicate('\n', timeout=5)
+    def test_default_programmer_is_the_ch341a(self):
+        p, calls, receipt, _ = self.run_writer()
+        self.assertEqual(p.returncode, 0, self.details)
+        self.assertEqual(receipt['programmer'], 'ch341a_spi')
+        self.assertNotIn('port-setup', [c['operation'] for c in calls])
+        for call in calls:
+            if call['operation'] != 'version': self.assertEqual(call['args'][:2], ['-p', 'ch341a_spi'], call)
+    def test_serprog_programmer_comes_from_the_plan(self):
+        p, calls, receipt, runs = self.run_writer(plan=self.serprog_plan())
+        self.assertEqual(p.returncode, 0, self.details)
+        self.assertEqual(receipt['verdict'], 'PASS')
+        self.assertEqual(receipt['programmer'], SERPROG)
+        self.assertEqual(receipt['port_setup'], 'COM6 dtr=on rts=on')
+        self.assertEqual(self.chip.read_bytes(), self.candidate)
+        # The port setup is the first child process: before the version call and before every chip access.
+        self.assertEqual([x['operation'] for x in calls], ['port-setup', 'version', 'probe', 'probe', 'before1',
+            'probe-between-before', 'before2', 'write', 'probe-before-readback', 'after1', 'probe-after'])
+        self.assertEqual(calls[0]['args'], ['COM6:', 'dtr=on', 'rts=on'])
+        for call in calls[2:]: self.assertEqual(call['args'][:2], ['-p', SERPROG], call)
+        self.assertTrue((runs[0] / 'port-setup.txt').is_file())
+    def test_serprog_restore(self):
+        plan = self.serprog_plan(); plan['mode'] = 'restore'; plan['image_sha256'] = sha(self.base)
+        self.image.write_bytes(self.base); self.chip.write_bytes(self.candidate)
+        p, calls, receipt, _ = self.run_writer(plan=plan, extra=('-Restore', '-MaxSectors', '1'))
+        self.assertEqual(p.returncode, 0, self.details)
+        self.assertEqual(receipt['programmer'], SERPROG)
+        self.assertEqual(self.chip.read_bytes(), self.base)
+        self.assertEqual(next(c for c in calls if c['operation'] == 'write')['args'][:2], ['-p', SERPROG])
+    def test_programmer_field_guards(self):
+        review = {'path': str(self.transport), 'sha256': sha(self.transport.read_bytes())}
+        good = {'kind': 'serprog', 'port': 'COM6', 'baud': 115200, 'spispeed': '2M', 'name': 'pico-serprog',
+                'transport_review': review}
+        form = 'not a reviewed form'
+        for change, reason in [({'kind': 'dummy'}, form), ({'kind': 'ch341a_spi'}, form), ({'kind': ['serprog']}, form),
+                               ({'port': 'COM6,spispeed=8M'}, form), ({'port': '/dev/ttyACM0'}, form),
+                               ({'port': 'COM0'}, form), ({'port': 'com6'}, form), ({'port': None}, form),
+                               ({'baud': 9600}, form), ({'baud': '115200'}, form),
+                               ({'spispeed': '8M'}, form), ({'spispeed': 2000000}, form),
+                               ({'name': 'other'}, form), ({'name': None}, form),
+                               ({'transport_review': None}, 'no transport review'),
+                               ({'transport_review': dict(review, sha256='0' * 64)}, 'transport review hash mismatch')]:
+            with self.subTest(change=change):
+                plan = copy.deepcopy(self.plan); plan['programmer'] = dict(good, **change)
+                result = self.run_writer(plan=plan)
+                self.assert_refused(result, reason)
+                self.assertEqual(result[1], [], 'no child process may run for a refused programmer')
+        for value in ('serprog:dev=COM6:115200', ['serprog'], 7, None):
+            with self.subTest(value=value):
+                plan = copy.deepcopy(self.plan); plan['programmer'] = value
+                self.assert_refused(self.run_writer(plan=plan), form)
+    def test_absent_port_is_refused_before_flashrom(self):
+        result = self.run_writer(plan=self.serprog_plan(), mode_scenario='absent')
+        self.assert_refused(result, 'port setup failed')
+        self.assertEqual([c['operation'] for c in result[1]], ['port-setup'])
+    def test_windows_mode_refuses_an_absent_port(self):
+        # The default port setup program is the Windows mode command. COM250 does not exist on a test host.
+        # This opens no device: the command fails for a name that is not a port.
+        plan = self.serprog_plan(); plan['programmer']['port'] = 'COM250'
+        result = self.run_writer(plan=plan, real_mode=True)
+        self.assert_refused(result, 'port setup failed')
+        self.assertEqual(result[1], [], 'flashrom must not run when the port setup fails')
+    def test_dtr_off_is_refused_before_flashrom(self):
+        result = self.run_writer(plan=self.serprog_plan(), mode_scenario='dtr-off')
+        self.assert_refused(result, 'DTR is not on')
+        self.assertEqual([c['operation'] for c in result[1]], ['port-setup'])
+    def test_probe_must_name_the_planned_firmware(self):
+        self.assert_refused(self.run_writer('probe-programmer-name', plan=self.serprog_plan()),
+                            'probe programmer name differs')
+    def test_probe_must_be_on_the_planned_programmer(self):
+        self.assert_refused(self.run_writer('probe-programmer-kind', plan=self.serprog_plan()),
+                            'probe programmer differs')
+        self.assert_refused(self.run_writer('probe-programmer-kind'), 'probe programmer differs')
     def test_explicit_restore(self):
         self.plan['mode'] = 'restore'; self.plan['image_sha256'] = sha(self.base)
         self.image.write_bytes(self.base); self.chip.write_bytes(self.candidate)

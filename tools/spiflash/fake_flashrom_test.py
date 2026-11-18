@@ -39,8 +39,16 @@ if operation == 'version':
 elif operation.startswith('probe'):
     name = 'WRONG' if scenario == 'probe-chip' else config['chip_name']
     size = 8192 if scenario == 'probe-size' else 16384
+    # The programmer of the call decides what the probe names, as the real tool does.
+    programmer = args[args.index('-p') + 1] if '-p' in args else ''
+    kind = 'serprog' if programmer.startswith('serprog:') else programmer
+    if kind == 'serprog':
+        firmware = 'other-serprog' if scenario == 'probe-programmer-name' else 'pico-serprog'
+        print(f'serprog: Programmer name is "{firmware}"')
+    if scenario == 'probe-programmer-kind':
+        kind = 'serprog' if kind == 'ch341a_spi' else 'ch341a_spi'
     if scenario != 'probe-none':
-        print(f'Found Macronix flash chip "{name}" ({size} kB, SPI) on ch341a_spi.')
+        print(f'Found Macronix flash chip "{name}" ({size} kB, SPI) on {kind}.')
     if scenario == 'probe-multiple': print('Multiple flash chip definitions match')
     if scenario != 'probe-status':
         status = statusfile.read_text() if statusfile.exists() else '0x40'
