@@ -272,7 +272,9 @@ try {
         $global:LASTEXITCODE = 0
         $portText = & $ModeExe "${serialPort}:" 'dtr=on' 'rts=on' 2>&1 | Out-String
         $portCode = $LASTEXITCODE
-        [IO.File]::WriteAllText((Join-Path $out 'port-setup.txt'), $portText)
+        # The program is not pinned by the plan. Its path is recorded so that a stand-in is visible.
+        $receipt.port_setup_program = $ModeExe
+        [IO.File]::WriteAllText((Join-Path $out 'port-setup.txt'), "program: $ModeExe`r`n$portText")
         Note "port-setup exit=$portCode"
         Require ($portCode -eq 0) 'port setup failed'
         Require ($portText -match '(?m)^\s*DTR circuit:\s+ON\s*$') 'DTR is not on after the port setup'

@@ -365,7 +365,8 @@ class WriterTests(unittest.TestCase):
             'probe-between-before', 'before2', 'write', 'probe-before-readback', 'after1', 'probe-after'])
         self.assertEqual(calls[0]['args'], ['COM6:', 'dtr=on', 'rts=on'])
         for call in calls[2:]: self.assertEqual(call['args'][:2], ['-p', SERPROG], call)
-        self.assertTrue((runs[0] / 'port-setup.txt').is_file())
+        self.assertEqual(Path(receipt['port_setup_program']), self.mode.resolve())
+        self.assertIn('program: ' + str(self.mode.resolve()), (runs[0] / 'port-setup.txt').read_text())
     def test_serprog_restore(self):
         plan = self.serprog_plan(); plan['mode'] = 'restore'; plan['image_sha256'] = sha(self.base)
         self.image.write_bytes(self.base); self.chip.write_bytes(self.candidate)

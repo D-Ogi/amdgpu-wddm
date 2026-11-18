@@ -108,7 +108,8 @@ and stops when the answer does not show DTR on. flashrom 1.2 on Windows does not
 unit A: with DTR off a probe passes and an array read fails, and with DTR on full reads are equal.
 Each probe must report the chip on the planned programmer, and for serprog also the firmware name.
 `-ModeExe` names another program for the port setup. It is for the host tests.
-`result.json` records the programmer (`programmer`) and the port setup (`port_setup`).
+`result.json` records the programmer (`programmer`), the port setup (`port_setup`) and the program that made
+it (`port_setup_program`).
 
 Pin `libusb-1.0.dll`, `libftdi1.dll` and `libwinpthread-1.dll` beside this flashrom build.
 These are its non-system PE imports, including transitive imports.
