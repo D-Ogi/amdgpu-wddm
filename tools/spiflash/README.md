@@ -14,6 +14,7 @@ Measured state of unit A:
 | `spi_regs.py` | Registers, SFDP, lock, fast boot, password, SPB/DPB, secured OTP. RDID and a READ against the backup gate it |
 | `miso_float_check.py` | Negative control: the MISO level while the chip does not drive SO |
 | `test_spiflash.py` | Host tests against a simulated programmer: `python -m unittest discover -s tools/spiflash` |
+| `spi_read_test.ps1` | Backup script test with the flashrom dummy programmer and a synthetic image |
 | `test_spi_write.py` | Writer tests with synthetic images and a fake flashrom process |
 | `check_spi_write_mutations.py` | Checks that removing a write guard makes its test fail |
 | `winusb/` | WinUSB binding for the CH341A (inbox driver, own INF, local self-signed catalog) |
@@ -50,6 +51,9 @@ Measured state of unit A:
 5. Connect the programmer to USB first, then the 5 wires (CS, MISO, GND, CLK, MOSI to J4004 pins 2, 3, 5, 6, 7).
    An unpowered CH341A gets power through its inputs from the board.
 6. Backup: `pwsh -File tools/spiflash/spi_read.ps1 -OutRoot <firmware dir> -NasRoot <NAS dir>`.
+   For the Pico H add `-Programmer serprog:dev=COM<n>:115200,spispeed=2M` and use the wiring of
+   `j4004-pico-h-wiring.svg`. Steps 1 to 3 are for the CH341A only. Unit A gave three equal full reads through
+   the Pico. A write through the Pico has not been tried.
 7. Registers: `python -I tools/spiflash/spi_regs.py <read1.bin> <new dir>`.
 8. Disconnect the wires, then do an AC cycle and a boot test.
 
@@ -165,7 +169,10 @@ Run CPU jobs through the workspace host slot when that rule applies.
 $env:BC250_TEST_TMP = '<private-test-directory>'
 python -m unittest discover -s tools/spiflash -v
 python tools/spiflash/check_spi_write_mutations.py
+pwsh -NoProfile -File tools/spiflash/spi_read_test.ps1 -Flashrom <flashrom.exe>
 ```
+
+`spi_read_test.ps1` runs the real flashrom executable with its `dummy` programmer. It opens no device.
 
 The mutation check first runs each selected control test.
 It then disables one production guard in a private script copy.
