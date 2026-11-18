@@ -19,6 +19,8 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $ChipSize = 16777216
 $Sector = 4096
+# One name for each purpose that has explicit consent for an SPI write on unit A.
+$ApprovedPurposes = @('vcn-load', 'vcn-repair', 'p6-l1')
 $phase = 'inputs'
 $arrayWriteInvoked = $false
 $statusMayHaveChanged = $false
@@ -152,7 +154,7 @@ try {
     Require ((Digest $planBytes) -eq $planHash) 'plan hash mismatch'
     $plan = [Text.Encoding]::UTF8.GetString($planBytes) | ConvertFrom-Json -AsHashtable
     Require ($plan.schema -eq 1) 'unsupported plan schema'
-    Require ($plan.unit -eq 'A' -and $plan.purpose -in @('vcn-load', 'vcn-repair')) 'plan is not for unit A VCN work'
+    Require ($plan.unit -ceq 'A' -and $plan.purpose -cin $ApprovedPurposes) 'plan is not for an approved unit A purpose'
     $mode = if ($Restore) { 'restore' } else { 'write' }
     Require ($plan.mode -eq $mode) 'plan mode differs from invocation'
     Require ((Hash-Text $plan.image_sha256) -eq $imgHash) 'plan image hash differs from invocation'

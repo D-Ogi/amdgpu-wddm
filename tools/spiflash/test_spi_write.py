@@ -130,8 +130,9 @@ class WriterTests(unittest.TestCase):
     def test_plan_hash(self): self.assert_refused(self.run_writer(wrong_plan_hash=True), 'plan hash mismatch')
     def test_plan_identity_guards(self):
         for field, value, reason in [('schema', 2, 'unsupported plan schema'),
-                                     ('unit', 'B', 'unit A VCN work'),
-                                     ('purpose', 'unrelated', 'unit A VCN work'),
+                                     ('unit', 'B', 'approved unit A purpose'),
+                                     ('purpose', 'unrelated', 'approved unit A purpose'),
+                                     ('purpose', 'P6-L1', 'approved unit A purpose'),
                                      ('mode', 'restore', 'mode differs'),
                                      ('chip', 'other', 'chip or size differs'),
                                      ('chip_size', 1024, 'chip or size differs'),
@@ -140,6 +141,29 @@ class WriterTests(unittest.TestCase):
             with self.subTest(field=field):
                 plan = copy.deepcopy(self.plan); plan[field] = value
                 self.assert_refused(self.run_writer(plan=plan), reason)
+    def test_each_approved_purpose_is_accepted(self):
+        for purpose in ('vcn-load', 'vcn-repair', 'p6-l1'):
+            with self.subTest(purpose=purpose):
+                self.chip.write_bytes(self.base)
+                plan = copy.deepcopy(self.plan); plan['purpose'] = purpose
+                p, _, receipt, _ = self.run_writer(plan=plan)
+                self.assertEqual(p.returncode, 0, self.details)
+                self.assertEqual(receipt['verdict'], 'PASS')
+    def test_change_of_322_sectors_in_one_edit(self):
+        # The size of a rebuilt main volume: one run of 322 sectors that starts and ends inside a sector.
+        start, end = 0xAE0088, 0xC21E7A
+        candidate = bytearray(self.base)
+        for i in range(start, end): candidate[i] ^= 0x5A
+        self.candidate = bytes(candidate); self.image.write_bytes(self.candidate)
+        self.plan['image_sha256'] = sha(self.candidate)
+        self.plan['edits'] = [{'offset': start, 'before': self.base[start:end].hex(), 'after': self.candidate[start:end].hex()}]
+        self.assert_refused(self.run_writer(extra=('-MaxSectors', '321')), 'exceed')
+        p, _, receipt, runs = self.run_writer(extra=('-MaxSectors', '322'))
+        self.assertEqual(p.returncode, 0, self.details)
+        self.assertEqual(receipt['verdict'], 'PASS')
+        self.assertEqual(self.chip.read_bytes(), self.candidate)
+        diff = json.loads((runs[0] / 'diff.json').read_text(encoding='utf-8-sig'))
+        self.assertEqual(diff, {'bytes': end - start, 'sectors_4k': 322, 'ranges': [{'offset': start, 'length': end - start}]})
     def test_edit_shape_guards(self):
         for edits, reason in [([{'offset': -1, 'before': '00', 'after': '01'}], 'outside image'),
                               ([{'offset': SIZE, 'before': '00', 'after': '01'}], 'outside image'),

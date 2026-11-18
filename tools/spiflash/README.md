@@ -80,7 +80,7 @@ The plan has these fields:
 
 | Field | Required value |
 |---|---|
-| `schema`, `unit`, `purpose` | `1`, `A`, and `vcn-load` or `vcn-repair` |
+| `schema`, `unit`, `purpose` | `1`, `A`, and `vcn-load`, `vcn-repair` or `p6-l1` (exact lower case) |
 | `mode` | `write` or `restore` |
 | `chip`, `chip_size` | Exact flashrom chip definition and `16777216` bytes |
 | `image_sha256` | Full candidate hash |
@@ -111,7 +111,7 @@ It programs a private snapshot with a held handle that prevents replacement or w
 Two fresh pre-reads must agree and match the planned base.
 Every native exit code is checked.
 PASS requires flashrom's verification, one complete matching readback and a saved result.
-`-SecondReadback` adds a second complete readback for diagnosis; it costs about three minutes.
+`-SecondReadback` adds a second complete readback for diagnosis. It costs about three minutes.
 `result.json` records the number of readbacks that completed (`readbacks`).
 A write error stays FAIL even when the readback matches.
 
