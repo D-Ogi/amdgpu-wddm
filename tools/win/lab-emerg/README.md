@@ -27,6 +27,12 @@ python tools\win\lab-emerg\lab-emerg.py reboot reboot-now
 Each command prints one JSON object and exits 0 only when the unit reported success. Files are limited to
 16 MB in both directions. Nothing stays running on the development PC.
 
+`usb-boot` on a stick with a signed menu (a file `grub.cfg.sig` next to `grub.cfg`): the listener does not
+edit `grub.cfg`. It writes the choice into `grubenv` as `bc250_default` (`linux:N`, N from 0 to 5) or removes
+that variable (`windows`), through the functions of `stick-env.ps1`. These functions refuse each name and value
+that the signed menu does not read. On a stick without that file the command works as before. Install
+`stick-env.ps1` together with `listener.ps1`. Host tests: `stick-env.test.ps1`, `usb-steer.test.ps1`.
+
 ## How a request is protected
 
 The listener is `listener.ps1`. It runs as SYSTEM from the scheduled task **"Lab emergency channel"** (at

@@ -27,6 +27,8 @@ if ($Uninstall) {
 }
 New-Item -ItemType Directory -Force (Join-Path $base 'scripts') | Out-Null
 Copy-Item 'C:\BC250\tmp\listener.ps1' (Join-Path $base 'listener.ps1') -Force
+# The listener dot-sources this file (grubenv functions for the signed stick). Push it with listener.ps1.
+Copy-Item 'C:\BC250\tmp\stick-env.ps1' (Join-Path $base 'stick-env.ps1') -Force
 $tmpKey = 'C:\BC250\tmp\emergency-key.bin'
 if (Test-Path $tmpKey) {
     Move-Item $tmpKey (Join-Path $base 'key.bin') -Force
