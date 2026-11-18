@@ -53,7 +53,7 @@ Measured state of unit A:
 6. Backup: `pwsh -File tools/spiflash/spi_read.ps1 -OutRoot <firmware dir> -NasRoot <NAS dir>`.
    For the Pico H add `-Programmer serprog:dev=COM<n>:115200,spispeed=2M` and use the wiring of
    `j4004-pico-h-wiring.svg`. Steps 1 to 3 are for the CH341A only. Unit A gave three equal full reads through
-   the Pico. A write through the Pico has not been tried.
+   the Pico ([M970](../../docs/facts/tooling.md#m970)). A write through the Pico has not been tried.
 7. Registers: `python -I tools/spiflash/spi_regs.py <read1.bin> <new dir>`.
 8. Disconnect the wires, then do an AC cycle and a boot test.
 
@@ -105,7 +105,8 @@ change the programmer.
 
 For a serprog programmer the writer first runs the Windows `mode` command for that port with `dtr=on rts=on`
 and stops when the answer does not show DTR on. flashrom 1.2 on Windows does not assert DTR. Measured on
-unit A: with DTR off a probe passes and an array read fails, and with DTR on full reads are equal.
+unit A: with DTR off a probe passes and an array read fails, and with DTR on full reads are equal
+([M970](../../docs/facts/tooling.md#m970)).
 Each probe must report the chip on the planned programmer, and for serprog also the firmware name.
 `-ModeExe` names another program for the port setup. It is for the host tests.
 `result.json` records the programmer (`programmer`), the port setup (`port_setup`) and the program that made

@@ -1,0 +1,16 @@
+flashrom v1.2 on Windows 10.0 (x86_64)
+flashrom is free software, get the source code at https://flashrom.org
+
+Using clock_gettime for delay loops (clk_id: 1, resolution: 100ns).
+serprog: Programmer name is "pico-serprog"
+Found Macronix flash chip "MX25L12835F/MX25L12845E/MX25L12865E" (16384 kB, SPI) on serprog.
+Reading flash... done.
+
+flashrom v1.2 on Windows 10.0 (x86_64)
+flashrom is free software, get the source code at https://flashrom.org
+
+Using clock_gettime for delay loops (clk_id: 1, resolution: 100ns).
+serprog: Programmer name is "pico-serprog"
+Found Macronix flash chip "MX25L12835F/MX25L12845E/MX25L12865E" (16384 kB, SPI) on serprog.
+Reading flash... done.
+

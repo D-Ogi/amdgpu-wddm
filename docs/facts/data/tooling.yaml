@@ -232,3 +232,10 @@ facts:
     status_text: "MEASURED (unit A, one listing, no capture)"
     detail: "The other sources are `Timer` (0), `BranchInstructions` (6), `DcacheMisses` (8), `IcacheMisses` (9), `CacheMisses` (10), `BranchMispredictions` (11), `IcacheIssues` (20), `DcacheAccesses` (21), `ICFetch` (26), `ICMiss` (27), `FRRetiredx86Instructions` (28), `FRRetiredBranches` (29), `FRRetiredBranchesMispredicted` (30), `DCAccess` (31) and `InstructionsRetiredFixed` (32). The listing names sources and their intervals only. Which hardware event each source programs on this core, and whether a capture runs at all, is not shown, because the arm ran no capture. Dispatch-stall events have no named source here and need their event numbers from the AMD processor reference"
     evidence: "[K137 round 2](../evidence/windows/2026-10-12-BD093-k137-round2/RESULT.md)"
+  - id: M970
+    status: MEASURED
+    date: "2026-11-18"
+    claim: "flashrom 1.2 on Windows reads the unit A BIOS flash through a Pico H with the pico-serprog firmware only when DTR is on at the serial port: three full reads are then equal, and with DTR off the first array read fails"
+    status_text: "MEASURED (3 equal reads with DTR on, 3 failed runs with DTR off, n = 1 unit, reads only)"
+    detail: "J4004, unit in S5, `serprog:dev=COM6:115200,spispeed=2M`, firmware libreboot 26.11rev1. With the default port settings the probe passes and the first 65536-byte read reports `invalid response 0x00 from device (to command 0x13)`. After `mode COM6: dtr=on rts=on` each read completes in about 120 s, image SHA-256 `0b0dfd52...fa0ed28c`. Against the CH341A read of the same day 299 bytes differ, all in the UEFI variable store; the unit ran between the two reads. flashrom 1.2 does not assert DTR on Windows (`serial.c`). The cause in the firmware is not established. A program or an erase through this programmer was not tried"
+    evidence: "[Pico serprog read of unit A](../evidence/windows/2026-11-18-spi-pico-serprog-unitA/RESULT.md)"
