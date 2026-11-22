@@ -84,8 +84,10 @@ check.gpu.ignored|mt|cced4549|No se encontró ningún chip gráfico BC-250; esta
 check.secureboot.off|mt|a107f361|Secure Boot está desactivado.
 check.secureboot.on|mt|1a594fe8|Secure Boot está activado. Desactívelo en la configuración del firmware de la PC antes de instalar.
 check.secureboot.unknown|mt|349a2c6d|La instalación no pudo leer si Secure Boot está activado.
+check.secureboot.kernel-signers|mt|0435d99a|Secure Boot está activado y hay una directiva firmada de integridad de código (Code Integrity) activa. La instalación instala el controlador sin el modo de prueba de Windows.
 check.testsigning.active|mt|f6138193|El modo de prueba de Windows está activado.
 check.testsigning.inactive|mt|1f2ea753|El modo de prueba de Windows está desactivado. La instalación lo activa como parte del proceso.
+check.testsigning.not-needed|mt|c3755afa|El modo de prueba de Windows no es necesario: la directiva firmada de integridad de código permite que Windows cargue el controlador.
 check.bitlocker.ok|mt|f6019261|BitLocker no requiere atención.
 check.bitlocker.on|mt|833d9bbb|BitLocker está activado. La instalación lo pausa durante los reinicios y luego se vuelve a activar solo.
 check.bitlocker.unknown|mt|74c5d56a|La instalación no pudo leer el estado de BitLocker. Si BitLocker está activado, tenga a mano su clave de recuperación.
@@ -139,6 +141,7 @@ plan.restarts.choice|mt|e2801100|Cada reinicio empieza solo después de una brev
 plan.change.test-mode|mt|7c5a1301|Windows cambia al modo de prueba para poder cargar este controlador.
 plan.change.test-mode.note|mt|9a9c5086|Después, "Modo de prueba" aparece en una esquina del escritorio. Al quitar el controlador se desactiva de nuevo.
 plan.change.test-mode.on|mt|cf315297|Windows ya se ejecuta en modo de prueba, así que ahí no cambia nada.
+plan.change.kernel-signers|mt|ad5b4221|El modo de prueba de Windows sigue desactivado: la directiva firmada de integridad de código de esta PC permite que Windows cargue el controlador.
 plan.change.bitlocker|mt|f43553fa|La protección de BitLocker se pausa durante los reinicios de esta instalación y se vuelve a activar sola, así Windows no pide la clave de recuperación.
 plan.change.bitlocker.unknown|mt|67f2277e|La instalación no pudo leer el estado de BitLocker de esta PC. Continúa de todos modos: tenga a mano su clave de recuperación por si Windows la pide después de un reinicio.
 plan.change.vcruntime|mt|65d68876|Primero se instala el runtime de Microsoft Visual C++ 2015-2022 (x64), porque los programas del controlador lo necesitan.

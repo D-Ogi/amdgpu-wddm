@@ -83,8 +83,10 @@ check.gpu.ignored|mt|cced4549|BC-250 그래픽 칩을 찾을 수 없지만 이 �
 check.secureboot.off|mt|a107f361|보안 부팅이 꺼져 있습니다.
 check.secureboot.on|mt|1a594fe8|보안 부팅이 켜져 있습니다. 설치하기 전에 PC의 펌웨어 설정에서 끄세요.
 check.secureboot.unknown|mt|349a2c6d|보안 부팅이 켜져 있는지 읽을 수 없었습니다.
+check.secureboot.kernel-signers|mt|0435d99a|보안 부팅이 켜져 있고 서명된 코드 무결성 정책이 활성화되어 있습니다. 설치 프로그램은 Windows 테스트 모드 없이 드라이버를 설치합니다.
 check.testsigning.active|mt|f6138193|Windows 테스트 모드가 켜져 있습니다.
 check.testsigning.inactive|mt|1f2ea753|Windows 테스트 모드가 꺼져 있습니다. 설치 프로그램이 설치 과정에서 켭니다.
+check.testsigning.not-needed|mt|c3755afa|Windows 테스트 모드가 필요하지 않습니다. 서명된 코드 무결성 정책이 Windows가 드라이버를 로드하도록 허용합니다.
 check.bitlocker.ok|mt|f6019261|BitLocker에 대해 할 일은 없습니다.
 check.bitlocker.on|mt|833d9bbb|BitLocker가 켜져 있습니다. 설치 프로그램이 설치에 필요한 다시 시작 동안만 일시 중지하고, 이후 자동으로 다시 켜집니다.
 check.bitlocker.unknown|mt|74c5d56a|BitLocker 상태를 읽을 수 없었습니다. BitLocker가 켜져 있다면 복구 키를 준비하세요.
@@ -138,6 +140,7 @@ plan.restarts.choice|mt|e2801100|다시 시작은 짧은 카운트다운 후에 
 plan.change.test-mode|mt|7c5a1301|이 드라이버를 불러올 수 있도록 Windows를 테스트 모드로 전환합니다.
 plan.change.test-mode.note|mt|9a9c5086|바탕 화면 구석에 "테스트 모드"가 표시됩니다. 드라이버를 제거하면 다시 꺼집니다.
 plan.change.test-mode.on|mt|cf315297|Windows가 이미 테스트 모드로 실행 중이므로 여기서는 바뀌는 것이 없습니다.
+plan.change.kernel-signers|mt|ad5b4221|Windows 테스트 모드는 꺼진 상태로 유지됩니다. 이 PC의 서명된 코드 무결성 정책이 Windows가 드라이버를 로드하도록 허용합니다.
 plan.change.bitlocker|mt|f43553fa|BitLocker 보호는 이 설치의 다시 시작 동안만 일시 중지되고 이후 자동으로 다시 켜지므로 Windows가 복구 키를 묻지 않습니다.
 plan.change.bitlocker.unknown|mt|67f2277e|이 PC의 BitLocker 상태를 읽을 수 없었습니다. 설치는 계속합니다. 다시 시작한 후 Windows가 요청할 경우를 대비해 복구 키를 준비해 두세요.
 plan.change.vcruntime|mt|65d68876|드라이버 프로그램에 필요하므로 Microsoft Visual C++ 2015-2022 런타임(x64)을 먼저 설치합니다.

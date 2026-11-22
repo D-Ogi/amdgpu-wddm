@@ -81,6 +81,35 @@ To read the setting yourself, open PowerShell as administrator and type `Confirm
 
 The installer does not change BIOS or firmware settings.
 
+### Secure Boot on: custom kernel signers
+
+Windows can load this driver while Secure Boot is on when a signed Code Integrity policy names the driver
+certificate. Microsoft calls this feature
+[custom kernel signers](https://learn.microsoft.com/windows/security/application-security/application-control/app-control-for-business/design/custom-kernel-signers).
+It needs:
+
+- Windows 11 24H2 or later with the update of April 2026 or later. The Home edition does not have it.
+- A Secure Boot PK or KEK that you control. The key that signs the policy must chain to it.
+- A reset of Windows after the policy is on the EFI system partition. Windows reads a new policy of this kind
+  only at the first start after a reset or a new installation. A normal restart is not sufficient.
+
+The steps:
+
+1. Make the policy: `tools\win\cks-policy\New-CksPolicy.ps1 -UpdateSigner <your KEK certificate> -KernelSigner
+   payload\cert\amdgpu-wddm-release.cer -Out <empty folder>`. The tool reads public certificates only.
+2. Sign the policy with your key. `SIGN.txt` in the output folder has the `signtool` command.
+3. Copy the signed policy to `\EFI\Microsoft\Boot\CiPolicies\Active\` on the EFI system partition, under the name
+   that `SIGN.txt` gives.
+4. Reset Windows: Settings > System > Recovery > Reset this PC. The reset removes your apps.
+5. Run the installer. The preflight shows Secure Boot `on` and names the active policy. The installer does not
+   turn on test mode and does not change the boot options.
+
+If the policy does not name the driver certificate, the GPU shows problem code 52 after the install. The report
+of the installer then says that the policy does not trust the driver certificate.
+
+Do not remove the policy from the EFI system partition while Secure Boot is on, because Windows then does not
+start. To recover, turn Secure Boot off in the BIOS setup.
+
 ## Smart App Control and SmartScreen
 
 Two protections of Windows can stop this release: Smart App Control and Microsoft Defender SmartScreen. This

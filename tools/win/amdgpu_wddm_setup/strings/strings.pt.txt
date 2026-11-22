@@ -84,8 +84,10 @@ check.gpu.ignored|mt|cced4549|Nenhum chip gráfico da BC-250 foi encontrado; est
 check.secureboot.off|mt|a107f361|O Secure Boot está desligado.
 check.secureboot.on|mt|1a594fe8|O Secure Boot está ligado. Desligue-o nas configurações de firmware do PC antes de instalar.
 check.secureboot.unknown|mt|349a2c6d|O Setup não conseguiu ler se o Secure Boot está ligado.
+check.secureboot.kernel-signers|mt|0435d99a|O Secure Boot está ligado e uma política assinada de Integridade de Código (Code Integrity) está ativa. O Setup instala o driver sem o modo de teste do Windows.
 check.testsigning.active|mt|f6138193|O modo de teste do Windows está ligado.
 check.testsigning.inactive|mt|1f2ea753|O modo de teste do Windows está desligado. O Setup o liga durante a instalação.
+check.testsigning.not-needed|mt|c3755afa|O modo de teste do Windows não é necessário: a política assinada de Integridade de Código permite que o Windows carregue o driver.
 check.bitlocker.ok|mt|f6019261|O BitLocker não precisa de atenção.
 check.bitlocker.on|mt|833d9bbb|O BitLocker está ligado. O Setup o pausa durante as reinicializações da instalação e ele volta a ligar sozinho.
 check.bitlocker.unknown|mt|74c5d56a|O Setup não conseguiu ler o estado do BitLocker. Se o BitLocker estiver ligado, tenha sua chave de recuperação à mão.
@@ -139,6 +141,7 @@ plan.restarts.choice|mt|e2801100|Cada reinicialização começa sozinha após um
 plan.change.test-mode|mt|7c5a1301|O Windows passa para o modo de teste, para poder carregar este driver.
 plan.change.test-mode.note|mt|9a9c5086|Aí aparece "Modo de Teste" em um canto da área de trabalho. Remover o driver o desliga de novo.
 plan.change.test-mode.on|mt|cf315297|O Windows já roda em modo de teste, então nada muda aí.
+plan.change.kernel-signers|mt|ad5b4221|O modo de teste do Windows continua desligado: a política assinada de Integridade de Código deste PC permite que o Windows carregue o driver.
 plan.change.bitlocker|mt|f43553fa|A proteção do BitLocker é pausada durante as reinicializações desta instalação e volta a ligar sozinha, para que o Windows não peça a chave de recuperação.
 plan.change.bitlocker.unknown|mt|67f2277e|O Setup não conseguiu ler o estado do BitLocker deste PC. Ele continua mesmo assim: tenha sua chave de recuperação à mão caso o Windows a peça após uma reinicialização.
 plan.change.vcruntime|mt|65d68876|Primeiro é instalado o runtime do Microsoft Visual C++ 2015-2022 (x64), porque os programas do driver precisam dele.

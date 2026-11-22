@@ -682,8 +682,17 @@ static partial class UnitTests
         foreach (var on in new[] { true, false })
             foreach (var state in new[] { "off", "on", "unknown", "suspended", null })
                 foreach (var vc in new[] { true, false })
-                    foreach (var id in InstallFlow.PlanChangeIds(on, state, vc))
-                        Check(Strings.Has(id), "no confirmations: " + id + " has words");
+                    foreach (var signers in new[] { true, false })
+                        foreach (var id in InstallFlow.PlanChangeIds(on, state, vc, false, signers))
+                            Check(Strings.Has(id), "no confirmations: " + id + " has words");
+        // Custom kernel signers (Secure Boot on, a signed Code Integrity policy active): test mode stays off, and the
+        // start options do not change, so there is no BitLocker pause either.
+        Check(InstallFlow.PlanChangeIds(false, "on", false, false, true).SequenceEqual(new[] { "plan.change.kernel-signers" }),
+            "kernel signers: the plan states that test mode stays off, and nothing about BitLocker");
+        Check(InstallFlow.PlanChangeIds(true, "on", true, true, true).SequenceEqual(new[] { "plan.change.smartappcontrol", "plan.change.kernel-signers", "plan.change.vcruntime" }),
+            "kernel signers: the line takes the place of the test mode lines, in the same order");
+        Check(InstallFlow.KernelSignersCheck == "secureboot.kernel-signers" && Strings.Has("check." + InstallFlow.KernelSignersCheck) && Strings.Has("check.testsigning.not-needed"),
+            "kernel signers: the two preflight lines of that route have words");
         // The Microsoft Visual C++ runtime: the plan states that the install brings it, and
         // says nothing when the PC already has it. It is the last line either way, after the start options.
         Check(InstallFlow.PlanChangeIds(true, "off", true).SequenceEqual(new[] { "plan.change.test-mode", "plan.change.vcruntime" }),

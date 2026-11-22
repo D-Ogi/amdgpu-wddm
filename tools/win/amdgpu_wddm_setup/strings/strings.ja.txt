@@ -83,8 +83,10 @@ check.gpu.ignored|mt|cced4549|BC-250 のグラフィックス チップが見つ
 check.secureboot.off|mt|a107f361|セキュア ブートはオフです。
 check.secureboot.on|mt|1a594fe8|セキュア ブートがオンです。インストールの前に PC のファームウェア設定でオフにしてください。
 check.secureboot.unknown|mt|349a2c6d|セキュア ブートがオンかどうかを読み取れませんでした。
+check.secureboot.kernel-signers|mt|0435d99a|セキュア ブートはオンで、署名済みのコード整合性ポリシーが有効です。セットアップは Windows のテスト モードを使わずにドライバーをインストールします。
 check.testsigning.active|mt|f6138193|Windows のテスト モードはオンです。
 check.testsigning.inactive|mt|1f2ea753|Windows のテスト モードはオフです。セットアップはインストールの一部としてオンにします。
+check.testsigning.not-needed|mt|c3755afa|Windows のテスト モードは不要です。署名済みのコード整合性ポリシーにより、Windows はドライバーを読み込めます。
 check.bitlocker.ok|mt|f6019261|BitLocker について対応は不要です。
 check.bitlocker.on|mt|833d9bbb|BitLocker がオンです。セットアップはインストールの再起動の間だけ一時停止し、その後は自動的に再開します。
 check.bitlocker.unknown|mt|74c5d56a|BitLocker の状態を読み取れませんでした。BitLocker がオンの場合は、回復キーを用意してください。
@@ -138,6 +140,7 @@ plan.restarts.choice|mt|e2801100|再起動は短いカウントダウンのあ�
 plan.change.test-mode|mt|7c5a1301|このドライバーを読み込めるように、Windows をテスト モードに切り替えます。
 plan.change.test-mode.note|mt|9a9c5086|デスクトップの隅に「テスト モード」と表示されます。ドライバーを削除すると元に戻ります。
 plan.change.test-mode.on|mt|cf315297|Windows はすでにテスト モードで動作しているため、ここでは何も変わりません。
+plan.change.kernel-signers|mt|ad5b4221|Windows のテスト モードはオフのままです。この PC の署名済みコード整合性ポリシーにより、Windows はドライバーを読み込めます。
 plan.change.bitlocker|mt|f43553fa|BitLocker の保護はこのインストールの再起動の間だけ一時停止し、その後は自動的に再開するので、Windows が回復キーを求めることはありません。
 plan.change.bitlocker.unknown|mt|67f2277e|この PC の BitLocker の状態を読み取れませんでした。処理は続行します。再起動後に Windows が求めた場合に備えて、回復キーを用意しておいてください。
 plan.change.vcruntime|mt|65d68876|ドライバーのプログラムが必要とするため、最初に Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールします。

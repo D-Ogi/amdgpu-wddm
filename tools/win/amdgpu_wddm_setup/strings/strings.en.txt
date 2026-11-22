@@ -85,8 +85,10 @@ check.gpu.ignored|src|-|No BC-250 graphics chip was found; this test run continu
 check.secureboot.off|src|-|Secure Boot is off.
 check.secureboot.on|src|-|Secure Boot is on. Turn it off in the PC's firmware settings before you install.
 check.secureboot.unknown|src|-|Setup could not read whether Secure Boot is on.
+check.secureboot.kernel-signers|src|-|Secure Boot is on, and a signed Code Integrity policy is active. Setup installs the driver without Windows test mode.
 check.testsigning.active|src|-|Windows test mode is on.
 check.testsigning.inactive|src|-|Windows test mode is off. Setup turns it on as part of the installation.
+check.testsigning.not-needed|src|-|Windows test mode is not needed: the signed Code Integrity policy lets Windows load the driver.
 check.bitlocker.ok|src|-|BitLocker needs no attention.
 check.bitlocker.on|src|-|BitLocker is on. Setup pauses it for the restarts of the installation and it turns itself on again.
 check.bitlocker.unknown|src|-|Setup could not read the BitLocker state. If BitLocker is on, have your recovery key ready.
@@ -140,6 +142,7 @@ plan.restarts.choice|src|-|Each restart starts by itself after a short countdown
 plan.change.test-mode|src|-|Windows switches to test mode, so it can load this driver.
 plan.change.test-mode.note|src|-|"Test Mode" then shows in a corner of the desktop. Removing the driver turns it off again.
 plan.change.test-mode.on|src|-|Windows already runs in test mode, so nothing changes there.
+plan.change.kernel-signers|src|-|Windows test mode stays off: the signed Code Integrity policy of this PC lets Windows load the driver.
 plan.change.bitlocker|src|-|BitLocker protection is paused for the restarts of this installation and turns itself on again, so Windows does not ask for the recovery key.
 plan.change.bitlocker.unknown|src|-|Setup could not read the BitLocker state of this PC. It goes on anyway: keep your recovery key at hand in case Windows asks for it after a restart.
 plan.change.vcruntime|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is installed first, because the driver's programs need it.
