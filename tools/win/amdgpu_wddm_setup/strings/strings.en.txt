@@ -145,7 +145,7 @@ plan.change.test-mode.on|src|-|Windows already runs in test mode, so nothing cha
 plan.change.kernel-signers|src|-|Windows test mode stays off: the signed Code Integrity policy of this PC lets Windows load the driver.
 plan.change.bitlocker|src|-|BitLocker protection is paused for the restarts of this installation and turns itself on again, so Windows does not ask for the recovery key.
 plan.change.bitlocker.unknown|src|-|Setup could not read the BitLocker state of this PC. It goes on anyway: keep your recovery key at hand in case Windows asks for it after a restart.
-plan.change.vcruntime|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is installed first, because the driver's programs need it.
+plan.change.vcruntime|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is installed first, because the extra program llama.cpp needs it.
 plan.change.smartappcontrol|src|-|Smart App Control will be turned off. Windows can turn it back on only by a reset of the system.
 shortcuts.title|src|-|Shortcuts and Nagi
 shortcuts.start-menu|src|-|In the Start menu

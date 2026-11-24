@@ -144,7 +144,7 @@ plan.change.test-mode.on|mt|cf315297|Windows ya se ejecuta en modo de prueba, as
 plan.change.kernel-signers|mt|ad5b4221|El modo de prueba de Windows sigue desactivado: la directiva firmada de integridad de código de esta PC permite que Windows cargue el controlador.
 plan.change.bitlocker|mt|f43553fa|La protección de BitLocker se pausa durante los reinicios de esta instalación y se vuelve a activar sola, así Windows no pide la clave de recuperación.
 plan.change.bitlocker.unknown|mt|67f2277e|La instalación no pudo leer el estado de BitLocker de esta PC. Continúa de todos modos: tenga a mano su clave de recuperación por si Windows la pide después de un reinicio.
-plan.change.vcruntime|mt|65d68876|Primero se instala el runtime de Microsoft Visual C++ 2015-2022 (x64), porque los programas del controlador lo necesitan.
+plan.change.vcruntime|mt|9ceb4e18|Primero se instala el runtime de Microsoft Visual C++ 2015-2022 (x64), porque el programa adicional llama.cpp lo necesita.
 plan.change.smartappcontrol|mt|90e7f550|Control inteligente de aplicaciones se desactivará. Windows solo puede volver a activarlo con un restablecimiento del sistema.
 shortcuts.title|mt|19544092|Accesos directos y Nagi
 shortcuts.start-menu|mt|f7bdc16b|En el menú Inicio

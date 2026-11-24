@@ -144,7 +144,7 @@ plan.change.test-mode.on|mt|cf315297|O Windows já roda em modo de teste, então
 plan.change.kernel-signers|mt|ad5b4221|O modo de teste do Windows continua desligado: a política assinada de Integridade de Código deste PC permite que o Windows carregue o driver.
 plan.change.bitlocker|mt|f43553fa|A proteção do BitLocker é pausada durante as reinicializações desta instalação e volta a ligar sozinha, para que o Windows não peça a chave de recuperação.
 plan.change.bitlocker.unknown|mt|67f2277e|O Setup não conseguiu ler o estado do BitLocker deste PC. Ele continua mesmo assim: tenha sua chave de recuperação à mão caso o Windows a peça após uma reinicialização.
-plan.change.vcruntime|mt|65d68876|Primeiro é instalado o runtime do Microsoft Visual C++ 2015-2022 (x64), porque os programas do driver precisam dele.
+plan.change.vcruntime|mt|9ceb4e18|Primeiro é instalado o runtime do Microsoft Visual C++ 2015-2022 (x64), porque o programa extra llama.cpp precisa dele.
 plan.change.smartappcontrol|mt|90e7f550|O Controle Inteligente de Aplicativos será desligado. O Windows só pode ligá-lo de novo com uma redefinição do sistema.
 shortcuts.title|mt|19544092|Atalhos e Nagi
 shortcuts.start-menu|mt|f7bdc16b|No menu Iniciar

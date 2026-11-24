@@ -1010,8 +1010,8 @@ namespace AmdgpuWddmSetup
             // by itself: test mode is turned on, and BitLocker protection is paused for the restarts of the install.
             // The window states them here so that nothing happens to the PC that this screen did not say.
             bool testModeOff = _plan != null && _plan.Checks.Any(c => c.Id == "testsigning.inactive");
-            // The Microsoft Visual C++ runtime the driver's programs need: when the plan found it missing or too
-            // old, the install brings it, and this screen says so before it happens.
+            // The Microsoft Visual C++ runtime of the llama.cpp extra (the driver set does not need it): when the plan
+            // found it missing or too old, the install brings it, and this screen says so before it happens.
             bool vcMissing = _plan != null && _plan.Checks.Any(c => c.Id == "vcruntime.missing");
             // Smart App Control on or in evaluation mode: the install turns it off, as information like the lines
             // above. There is no box to tick and no other question: Install is the consent.

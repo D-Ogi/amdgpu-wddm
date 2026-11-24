@@ -42,8 +42,8 @@ happens by itself after a visible 15-second countdown, in the window and on the 
 are offered, and neither is required. Every preflight refusal that protects the machine is unchanged.
 
 **The Microsoft Visual C++ runtime comes with the package**.
-The driver's programs are built against the Microsoft Visual C++ 2015-2022 runtime (x64). The package carries
-Microsoft's own installer as `payload\redist\vc_redist.x64.exe`. The preflight check `vcruntime` reads the file
+The driver set does not need the Microsoft Visual C++ 2015-2022 runtime (x64): no file of the package imports it
+(BD-389). The llama.cpp extra, which the user can select, needs it. The package carries Microsoft's own installer as `payload\redist\vc_redist.x64.exe`. The preflight check `vcruntime` reads the file
 versions of `vcruntime140.dll`, `vcruntime140_1.dll` and `msvcp140.dll` in `System32` and asks for the install when
 one is missing or older than 14.44 (`Get-VcRuntimeDecision` / `Get-VcRuntimeState` in `installer\common.ps1`). That
 check is `warn`, not `fail`: the plan screen states the step as information (`plan.change.vcruntime`), and the first

@@ -145,7 +145,7 @@ plan.change.test-mode.on|rev|cf315297|Windows już działa w trybie testowym, wi
 plan.change.kernel-signers|mt|ad5b4221|Tryb testowy Windows pozostaje wyłączony: podpisana zasada integralności kodu na tym komputerze pozwala Windows załadować sterownik.
 plan.change.bitlocker|rev|f43553fa|Ochrona BitLocker zostaje wstrzymana na czas ponownych uruchomień tej instalacji i potem włącza się sama, więc Windows nie poprosi o klucz odzyskiwania.
 plan.change.bitlocker.unknown|rev|67f2277e|Instalator nie mógł odczytać stanu funkcji BitLocker na tym komputerze. Mimo to kontynuuje pracę: miej klucz odzyskiwania pod ręką, jeśli Windows poprosi o niego po ponownym uruchomieniu.
-plan.change.vcruntime|rev|65d68876|Najpierw instalowane jest środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), którego potrzebują programy sterownika.
+plan.change.vcruntime|mt|9ceb4e18|Najpierw instalowane jest środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), którego potrzebuje program dodatkowy llama.cpp.
 plan.change.smartappcontrol|mt|90e7f550|Inteligentna kontrola aplikacji zostanie wyłączona. Windows może ją ponownie włączyć tylko przez zresetowanie systemu.
 shortcuts.title|mt|19544092|Skróty i Nagi
 shortcuts.start-menu|rev|f7bdc16b|W menu Start

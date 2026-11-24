@@ -1935,12 +1935,13 @@ function Invoke-LegacyParametersArchive {
     } finally { $key.Dispose() }
 }
 
-# ---- the Microsoft Visual C++ runtime our programs need ---------------------------------------------------------
-# Our control application, the CLI and the user-mode drivers are built against the Microsoft Visual C++ 2015-2022
-# runtime. Until now a PC without it was refused at the preflight and the tester had to fetch the runtime from
-# Microsoft. Now the package carries
-# Microsoft's own installer (payload\redist\vc_redist.x64.exe, release-sources.json) and the install runs it.
-# Running the installer is the consent for it, like every other change this engine makes.
+# ---- the Microsoft Visual C++ runtime of the llama.cpp extra ----------------------------------------------------
+# The driver set, the control application and the CLI do not need the Microsoft Visual C++ 2015-2022 runtime: no file
+# of the package imports one of its DLLs, and tools\quality\runtime_import_gate.py refuses a package that does
+# (BD-389). The llama.cpp extra, which the user can select, needs it: its programs and libraries import
+# vcruntime140.dll and msvcp140.dll (compute\hip\patches\pack-llama-asset.ps1 reads the minimum version below).
+# The package carries Microsoft's own installer (payload\redist\vc_redist.x64.exe, release-sources.json) and the
+# install runs it. Running the installer is the consent for it, like every other change this engine makes.
 $script:VcRuntimeFiles = @('vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll')
 $script:VcRuntimePackagePath = 'payload\redist\vc_redist.x64.exe'
 # The version the package carries, and the lowest version we accept in System32. A runtime older than this is

@@ -281,8 +281,8 @@ function Invoke-Preflight {
     elseif ($sac.state -eq 'unknown') { Add-Check 'Smart App Control' 'warn' "state unknown: $($sac.detail). If Windows blocks the setup or the driver, $($script:SacSteps)." 'smartappcontrol.unknown' }
     else { Add-Check 'Smart App Control' 'ok' $sac.detail 'smartappcontrol.off' }
 
-    # The Microsoft Visual C++ runtime our programs need. A PC without it is no longer refused: the package carries Microsoft's own installer and phase 2 runs it. The only
-    # refusal left is a package that does not carry that installer, or carries a changed copy of it.
+    # The Microsoft Visual C++ runtime of the llama.cpp extra (common.ps1; the driver set does not need it). A PC without it is not refused: the package
+    # carries Microsoft's own installer and phase 2 runs it. The only refusal left is a package that does not carry that installer, or carries a changed copy of it.
     $vc = Get-VcRuntimeState
     $vcExe = Join-Path $package $script:VcRuntimePackagePath
     if (-not $vc.install) { Add-Check 'Visual C++ runtime' 'ok' $vc.detail 'vcruntime.ok' }
@@ -1510,8 +1510,8 @@ if (-not $script:DryRunMode -and -not $script:TestSigningActive -and $script:Ker
     Write-Fail 'test signing is not active'
     Exit-Engine -Code 5 -Outcome 'failed' -MessageId 'result.testsigning-not-active' -Detail 'phase 2 needs test signing in the running boot'
 }
-# The Microsoft Visual C++ runtime, before our own files go on the PC: our control application, the CLI and the
-# user-mode drivers need it. Microsoft's own installer travels
+# The Microsoft Visual C++ runtime, before our own files go on the PC. The llama.cpp extra needs it; the driver set,
+# the control application and the CLI do not (common.ps1, BD-389). Microsoft's own installer travels
 # in the package; it runs only when the runtime is missing or older than 14.44, and only after its SHA-256 and its
 # Microsoft signature are checked here again, so a changed copy never runs. A code that asks for a restart is folded
 # into the restart this installation makes at the end of phase 2.

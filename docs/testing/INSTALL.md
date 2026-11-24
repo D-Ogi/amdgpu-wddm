@@ -20,8 +20,9 @@ Use this package only on a BC-250. The installer stops on every other computer a
   "Smart App Control and SmartScreen" below).
 - If BitLocker is on: your BitLocker recovery key, in case something goes wrong. The installer pauses BitLocker
   by itself for the restarts it needs and tells you that it did.
-- Nothing to install first. The driver's programs need the Microsoft Visual C++ 2015-2022 Redistributable (x64),
-  and the package carries Microsoft's own installer for it. The installer runs it when this PC has no
+- Nothing to install first. The driver does not need the Microsoft Visual C++ 2015-2022 Redistributable (x64).
+  The llama.cpp extra, which you can select, needs it, and the package carries Microsoft's own installer for it.
+  The installer runs it when this PC has no
   `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll` in `System32`, or when one of them is older than
   14.44. It checks the SHA-256 and the Microsoft signature of that file first, and it needs no internet for this
   step. Nothing happens when the runtime is already there. If Windows answers that the runtime is registered but a

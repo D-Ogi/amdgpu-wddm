@@ -143,7 +143,7 @@ plan.change.test-mode.on|mt|cf315297|Windows はすでにテスト モードで�
 plan.change.kernel-signers|mt|ad5b4221|Windows のテスト モードはオフのままです。この PC の署名済みコード整合性ポリシーにより、Windows はドライバーを読み込めます。
 plan.change.bitlocker|mt|f43553fa|BitLocker の保護はこのインストールの再起動の間だけ一時停止し、その後は自動的に再開するので、Windows が回復キーを求めることはありません。
 plan.change.bitlocker.unknown|mt|67f2277e|この PC の BitLocker の状態を読み取れませんでした。処理は続行します。再起動後に Windows が求めた場合に備えて、回復キーを用意しておいてください。
-plan.change.vcruntime|mt|65d68876|ドライバーのプログラムが必要とするため、最初に Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールします。
+plan.change.vcruntime|mt|9ceb4e18|追加プログラムの llama.cpp が必要とするため、最初に Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールします。
 plan.change.smartappcontrol|mt|90e7f550|スマート アプリ コントロールをオフにします。Windows でこれを再びオンにするには、システムのリセットが必要です。
 shortcuts.title|mt-safe|19544092|ショートカットと Nagi
 shortcuts.start-menu|mt-safe|f7bdc16b|スタート メニュー

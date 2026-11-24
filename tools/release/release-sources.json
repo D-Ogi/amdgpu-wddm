@@ -2825,7 +2825,7 @@
         "sha256": "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B"
       },
       "size": 25635768,
-      "role": "Microsoft Visual C++ 2015-2022 Redistributable (x64) 14.44.35211, as Microsoft publishes it, signed by Microsoft Corporation. Our programs need this runtime, so the installer installs it when System32 has no vcruntime140.dll, vcruntime140_1.dll or msvcp140.dll, or when one of them is older than 14.44 (the installer brings it). It stays in the package: no file of payload\\redist is copied to the install root.",
+      "role": "Microsoft Visual C++ 2015-2022 Redistributable (x64) 14.44.35211, as Microsoft publishes it, signed by Microsoft Corporation. The llama.cpp extra, which the user can select, needs this runtime; the driver set does not (BD-389). The installer installs it when System32 has no vcruntime140.dll, vcruntime140_1.dll or msvcp140.dll, or when one of them is older than 14.44 (the installer brings it). It stays in the package: no file of payload\\redist is copied to the install root.",
       "flavour": "release"
     },
     {
@@ -2839,7 +2839,7 @@
         "sha256": "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B"
       },
       "size": 25635768,
-      "role": "Microsoft Visual C++ 2015-2022 Redistributable (x64) 14.44.35211, as Microsoft publishes it, signed by Microsoft Corporation. Our programs need this runtime, so the installer installs it when System32 has no vcruntime140.dll, vcruntime140_1.dll or msvcp140.dll, or when one of them is older than 14.44 (the installer brings it). It stays in the package: no file of payload\\redist is copied to the install root.",
+      "role": "Microsoft Visual C++ 2015-2022 Redistributable (x64) 14.44.35211, as Microsoft publishes it, signed by Microsoft Corporation. The llama.cpp extra, which the user can select, needs this runtime; the driver set does not (BD-389). The installer installs it when System32 has no vcruntime140.dll, vcruntime140_1.dll or msvcp140.dll, or when one of them is older than 14.44 (the installer brings it). It stays in the package: no file of payload\\redist is copied to the install root.",
       "flavour": "lab",
       "note": "Microsoft redistributable, not ours to flavour"
     },

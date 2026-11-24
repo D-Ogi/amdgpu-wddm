@@ -143,7 +143,7 @@ plan.change.test-mode.on|mt|cf315297|Windows가 이미 테스트 모드로 실�
 plan.change.kernel-signers|mt|ad5b4221|Windows 테스트 모드는 꺼진 상태로 유지됩니다. 이 PC의 서명된 코드 무결성 정책이 Windows가 드라이버를 로드하도록 허용합니다.
 plan.change.bitlocker|mt|f43553fa|BitLocker 보호는 이 설치의 다시 시작 동안만 일시 중지되고 이후 자동으로 다시 켜지므로 Windows가 복구 키를 묻지 않습니다.
 plan.change.bitlocker.unknown|mt|67f2277e|이 PC의 BitLocker 상태를 읽을 수 없었습니다. 설치는 계속합니다. 다시 시작한 후 Windows가 요청할 경우를 대비해 복구 키를 준비해 두세요.
-plan.change.vcruntime|mt|65d68876|드라이버 프로그램에 필요하므로 Microsoft Visual C++ 2015-2022 런타임(x64)을 먼저 설치합니다.
+plan.change.vcruntime|mt|9ceb4e18|추가 프로그램 llama.cpp에 필요하므로 Microsoft Visual C++ 2015-2022 런타임(x64)을 먼저 설치합니다.
 plan.change.smartappcontrol|mt|90e7f550|스마트 앱 컨트롤이 꺼집니다. Windows에서 다시 켜려면 시스템을 초기화해야 합니다.
 shortcuts.title|mt-safe|19544092|바로 가기와 Nagi
 shortcuts.start-menu|mt-safe|f7bdc16b|시작 메뉴
