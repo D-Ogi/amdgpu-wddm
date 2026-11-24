@@ -19,6 +19,11 @@
  * front of GetVariable answers SecureBoot=1, SetupMode=0 and the kit's PK, KEK, db and dbx (sb_windows.c). Every
  * other name, and every variable that the firmware has, goes to the firmware's own function. The state lives for
  * this start only and in memory only: no NVRAM write, and no SetVariable call exists in the stage.
+ *
+ * sb.windows=off gives the operating system of one start the state "Secure Boot is off" on a firmware that has
+ * Secure Boot on: the same filter answers SecureBoot=0, and every other answer is the firmware's. In this state the
+ * module reports and does not check: the firmware's own Secure Boot verifies each image, and the check of the stage
+ * needs the database files beside the stage. sb.mode is not read.
  */
 #include <stddef.h>
 #include <string.h>
@@ -37,12 +42,18 @@
 static const EFI_GUID security2_guid = EFI_SECURITY2_ARCH_PROTOCOL_GUID;
 /* EFI_IMAGE_SECURITY_DATABASE_GUID (edk2 MdePkg/Include/Guid/ImageAuthentication.h, commit 8628578dacd3). */
 static const EFI_GUID database_guid = { 0xD719B2CB, 0x3D3A, 0x4596, { 0xA3, 0xBC, 0xDA, 0xD0, 0x0E, 0x67, 0x65, 0x6F } };
+/* EFI_GLOBAL_VARIABLE_GUID (edk2 MdePkg/Include/Guid/GlobalVariable.h, commit 8628578dacd3). */
+static const EFI_GUID global_guid = { 0x8BE4DF61, 0x93CA, 0x11D2, { 0xAA, 0x0D, 0x00, 0xE0, 0x98, 0x03, 0x2B, 0x8C } };
 
 enum { MODE_AUDIT = 0, MODE_ENFORCE = 1 };
 static const char *const mode_names[] = { "audit", "enforce" };
+/* The values of sb.windows: 0 (no filter), 1 (Secure Boot on, with sb.mode=enforce) and off (Secure Boot off). */
+enum { WINDOWS_NONE = 0, WINDOWS_ON = 1, WINDOWS_OFF = 2, WINDOWS_COUNT = 3 };
+static const char *const windows_names[WINDOWS_COUNT] = { "0", "1", "off" };
 
 static struct stage *sb_stage;
 static int mode;
+static int windows_off;		/* 1 while a start with sb.windows=off runs: the module reports and does not check */
 static const char *defect;		/* enforce mode: the reason why every image is refused, or NULL */
 static unsigned char *db, *dbx;
 static struct sb_databases databases;
@@ -336,6 +347,34 @@ static void windows_install(struct stage *stage)
 	stage_say(stage, SB_NAME, "Windows sees SecureBoot=1 from this stage (sb.windows=1), the firmware has no Secure Boot");
 }
 
+/* The state "Secure Boot is off" for the operating system of this start (sb.windows=off). The line with the value of
+ * the firmware comes before the filter is in place: it is the firmware's own answer, and the log of the start keeps
+ * it. No database file is read. */
+static void windows_off_install(struct stage *stage)
+{
+	struct sb_windows_inputs inputs;
+	unsigned char value = 0;
+	UINTN size = sizeof(value);
+	EFI_STATUS status;
+	int result;
+
+	memset(&inputs, 0, sizeof(inputs));
+	inputs.secure_boot_off = 1;
+	status = stage->st->RuntimeServices->GetVariable(u"SecureBoot", (EFI_GUID *)&global_guid, NULL, &size, &value);
+	if (status == EFI_SUCCESS)
+		stage_sayf(stage, SB_NAME, "the firmware reports SecureBoot=%u", (unsigned)value);
+	else if (status == EFI_NOT_FOUND)
+		stage_say(stage, SB_NAME, "the firmware has no SecureBoot variable");
+	else
+		stage_sayf(stage, SB_NAME, "SecureBoot did not read from the firmware, status 0x%llx", (unsigned long long)status);
+	result = sb_windows_install(stage, &inputs);
+	if (result != 0) {
+		stage_sayf(stage, SB_NAME, "sb.windows=off: the state is not installed: %s", sb_windows_result_text(result));
+		return;
+	}
+	stage_say(stage, SB_NAME, "Windows sees SecureBoot=0 from this stage (sb.windows=off)");
+}
+
 /* ---- the module ---------------------------------------------------------------------------------- */
 
 static void sb_module_run(struct stage *stage)
@@ -343,7 +382,16 @@ static void sb_module_run(struct stage *stage)
 	int windows;
 	sb_stage = stage;
 	mode = (int)stage_option_choice(&stage->options, "sb.mode", mode_names, 2u, MODE_AUDIT);
-	windows = stage_option_flag(&stage->options, "sb.windows", 0);
+	windows = (int)stage_option_choice(&stage->options, "sb.windows", windows_names, WINDOWS_COUNT, WINDOWS_NONE);
+	if (windows == WINDOWS_OFF) {
+		/* The module reports "Secure Boot is off" and does not check: no database is read, and the hook is not put
+		 * in its place. The Secure Boot of the firmware verifies each image of this start. */
+		windows_off = 1;
+		if (mode == MODE_ENFORCE)
+			stage_say(stage, SB_NAME, "sb.windows=off with sb.mode=enforce: the module reports and does not check, so sb.mode is not read");
+		windows_off_install(stage);
+		return;
+	}
 	read_databases(stage);
 	if (mode == MODE_ENFORCE && defect != NULL) {
 		/* Fail closed: the operator asked for a refusal, and the inputs cannot give a sound verdict. */
@@ -367,6 +415,10 @@ static enum stage_gate sb_module_gate(struct stage *stage, const unsigned char *
 {
 	struct sb_result result;
 	hook_calls = 0;
+	if (windows_off) {
+		stage_say(stage, SB_NAME, "the next image is not checked (sb.windows=off)");
+		return STAGE_GATE_PASS;
+	}
 	if (mode == MODE_ENFORCE && defect != NULL) {
 		stage_sayf(stage, SB_NAME, "the next image is refused: %s", defect);
 		return STAGE_GATE_DENY;
@@ -394,6 +446,7 @@ static void sb_module_unwind(struct stage *stage)
 {
 	sb_windows_unwind(stage);
 	unhook(stage);
+	windows_off = 0;
 	firmware_security2 = NULL;
 	stage_free(stage, db);
 	stage_free(stage, dbx);

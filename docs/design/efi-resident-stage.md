@@ -115,7 +115,7 @@ An option is `name=value`. An option that no module understands is counted on th
 | `acpi.idle=0` | 1 | no idle state table |
 | `acpi.stubs=0` | 1 | no method stub table |
 | `sb.mode=audit`, `sb.mode=enforce` | `audit` | report each verdict, or refuse an image that is not allowed |
-| `sb.windows=1` | 0 | with `sb.mode=enforce` only: the operating system reads a Secure Boot state from this stage (see "The reported mode: sb.windows"). Ignored in every other mode |
+| `sb.windows=1`, `sb.windows=off` | 0 | the operating system reads a Secure Boot state from this stage (see "The reported mode: sb.windows"). `1` needs `sb.mode=enforce`, and the stage ignores it in every other mode. `off` is the state "Secure Boot is off" on a firmware that has Secure Boot on |
 | `acpi.apply=0` | 1 | the ACPI module builds and checks its tables, and installs and removes none |
 | `probe=1` | 0 | a module that is off says which protocols the firmware has for it. The core unlock also gives its register BAR lines |
 | `log=0`, `log=1`, `log=line` | `1` | the log file: none, written before the next image starts, or written after each line |
@@ -360,6 +360,25 @@ firmware's own state, because nothing is written.
 
 The mode is not a security boundary. It reports a state. It measures nothing and it protects nothing.
 
+#### The state "Secure Boot is off": sb.windows=off
+
+`sb.windows=off` is for a firmware that has Secure Boot on. The filter answers `SecureBoot` = 0 and changes nothing
+else. The status, the size and the attributes are those of the variable of the firmware, and every other name gets
+the answer of the firmware. The filter does not serve the databases of the kit. The state is the state of a PC on
+which a user disabled Secure Boot in the firmware menu and kept the keys.
+
+In this state the module reports and does not check. It reads no database file, and it does not put its check in
+front of the `EFI_SECURITY2_ARCH_PROTOCOL` of the firmware. The Secure Boot of the firmware verifies each image of
+the start. The module does not read `sb.mode`, and the log says so when that option is in the load options.
+
+Before the filter is in place, the module reads `SecureBoot` from the firmware and writes the value in the log. That
+line is the record of the start: the firmware has Secure Boot on, and the operating system reads it as off.
+
+The state exists for a start in which Windows is to obey the boot option `testsigning` (point (b) above). The
+filter makes Windows read `SecureBoot` = 0 from the boot manager to the kernel, at boot services time and at run
+time. Whether Windows obeys the option in such a start is measured on the lab. The state lives for one start and
+in memory only, as with `sb.windows=1`.
+
 ### What each mode gives, and what it does not give
 
 | Mode | What the user gets | What the user does not get |
@@ -368,6 +387,7 @@ The mode is not a security boundary. It reports a state. It measures nothing and
 | `sb.mode=audit` (default) | a console line with the verdict and the digest of each image that the stage starts. Nothing is refused | no protection. Windows reports Secure Boot as not available |
 | `sb.mode=enforce` | an image that `db` does not allow, or that `dbx` forbids, does not start through the stage | no report to Windows. No check of what the Windows Boot Manager loads later. Windows makes those checks only when it reads `SecureBoot` = 1 |
 | `sb.mode=enforce` with `sb.windows=1` | Windows reads Secure Boot as on, with the kit's four databases, for this start | the test-signed driver does not load. No protection: the state is a report, not a measurement |
+| `sb.windows=off` | Windows reads Secure Boot as off for this start. The keys of the firmware stay | no check by the stage in that start: the Secure Boot of the firmware verifies the images. The next start without the option reads the state of the firmware |
 
 In every mode the root of trust is a set of files on the EFI System Partition that nobody signed: the stage
 itself, `db.esl` and `dbx.esl`. The firmware starts the stage without a check. So no mode protects against an
@@ -421,6 +441,7 @@ firmware.
 | Secure Boot, real images | necessary: the Windows Boot Manager and the Windows loader of the build PC must pass under the issuer of their signer. This is the positive control on bytes and signatures that this project did not make. The build fails without them |
 | UEFI bindings | the real entry point of the stage against a model of the firmware in the test. The start from the path and from the verified buffer. A refused image and each defect of the enforce inputs. An image that the firmware does not start. Lab step s4b: an image that `dbx` refuses by its digest, with `log=line` and with `log=1`. The log holds the refusal, the unwind and the return line in that order. The return line is the last line of the file. The hook and its unwind, with a firmware that does not take its protocol back. The installation of the tables and the removal of the stock table |
 | Secure Boot, fixtures | the signature check of Windows reads the signed fixture and refuses the changed fixture. This is the control of the fixtures, by code that this project did not write |
+| The state "Secure Boot is off" (`sb.windows=off`) | the next image reads `SecureBoot` = 0 while the firmware has `SecureBoot` = 1, and reads 1 again after the return of the stage. A firmware without the variable. The attributes of the firmware stay. The databases of the kit are not served. `sb.mode=enforce` with the option does not refuse the image. The control: the same firmware without the option reads 1 |
 
 The test keys are made at each run and are never written to a file. The repository holds no private key. The
 host tests run with the address sanitizer of the compiler, so a read outside a buffer stops the test.
@@ -446,12 +467,16 @@ Each step uses `log=line` and reads `bc250-stage.log` in Windows after the start
    the digest of the boot manager into `dbx.esl`: the stage must refuse the boot manager, and the firmware goes on
    with its boot order.
 5. Start it with all modules, `reset=warm` and `report=1`.
+6. On a firmware that has Secure Boot on, start it with `unlock=0 acpi=0 sb.windows=off`. Read the log: the line
+   `the firmware reports SecureBoot=1` comes first, then `Windows sees SecureBoot=0 from this stage (sb.windows=off)`.
+   In Windows, `Confirm-SecureBootUEFI` answers False.
 
 ## What is measured and what is not
 
 | Statement | Status |
 |---|---|
 | The defects of the stock tables | MEASURED, M965, M966, M47 |
+| A start with `sb.windows=off` on unit A: Windows reads Secure Boot as off and obeys `testsigning` while the firmware has Secure Boot on | not measured. Lab step 6 and a start with `testsigning` in the BCD store answer it |
 | The built tables are well formed and hold the firmware's objects | tested on the host, with two parsers |
 | The firmware has `EFI_ACPI_TABLE_PROTOCOL` and `EFI_ACPI_SDT_PROTOCOL`, and accepts the tables | not measured |
 | Windows and Linux use the idle states of the new table | not measured. Row L56 |

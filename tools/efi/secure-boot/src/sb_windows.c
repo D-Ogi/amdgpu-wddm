@@ -14,7 +14,9 @@
  * freed memory.
  *
  * sb.windows=1 is honoured only together with sb.mode=enforce: the stage really verifies the boot manager against db
- * and dbx in that mode. No SetVariable call exists: the state is served from memory for this start only.
+ * and dbx in that mode. sb.windows=off changes one answer: the operating system reads SecureBoot as 0, with the
+ * attributes of the firmware's variable, and every other answer is the firmware's. No SetVariable call exists: the
+ * state is served from memory for this start only.
  */
 #include <stddef.h>
 #include "efi.h"
@@ -48,6 +50,7 @@ struct sb_rt_state {
 	EFI_STATUS (EFIAPI *original)(CHAR16 *name, EFI_GUID *vendor, UINT32 *attributes, UINTN *size, VOID *data);
 	const unsigned char *pk, *kek, *db, *dbx;
 	UINTN pk_bytes, kek_bytes, db_bytes, dbx_bytes;
+	unsigned char secure_boot_off;	/* 1 with sb.windows=off: SecureBoot answers 0 and nothing else is served */
 };
 
 static struct {
@@ -198,34 +201,51 @@ SB_RT_TEXT(b) static VOID EFIAPI sb_rt_notify(EFI_EVENT event, VOID *context)
 	p = (VOID *)converted->original;
 	(void)rs->ConvertPointer(0, &p);
 	converted->original = (EFI_STATUS (EFIAPI *)(CHAR16 *, EFI_GUID *, UINT32 *, UINTN *, VOID *))p;
-	p = (VOID *)converted->pk;
-	(void)rs->ConvertPointer(0, &p);
-	converted->pk = (const unsigned char *)p;
-	p = (VOID *)converted->kek;
-	(void)rs->ConvertPointer(0, &p);
-	converted->kek = (const unsigned char *)p;
-	p = (VOID *)converted->db;
-	(void)rs->ConvertPointer(0, &p);
-	converted->db = (const unsigned char *)p;
-	p = (VOID *)converted->dbx;
-	(void)rs->ConvertPointer(0, &p);
-	converted->dbx = (const unsigned char *)p;
+	/* With sb.windows=off the four database pointers are NULL: the filter does not read them. */
+	if (!converted->secure_boot_off) {
+		p = (VOID *)converted->pk;
+		(void)rs->ConvertPointer(0, &p);
+		converted->pk = (const unsigned char *)p;
+		p = (VOID *)converted->kek;
+		(void)rs->ConvertPointer(0, &p);
+		converted->kek = (const unsigned char *)p;
+		p = (VOID *)converted->db;
+		(void)rs->ConvertPointer(0, &p);
+		converted->db = (const unsigned char *)p;
+		p = (VOID *)converted->dbx;
+		(void)rs->ConvertPointer(0, &p);
+		converted->dbx = (const unsigned char *)p;
+	}
 	/* The slot holds the converted address of the state from here on. */
 	*(volatile UINT64 *)rt_slot_ptr() = (UINT64)(UINTN)converted;
 	rt_table_crc(converted->rs);
 }
 
 /* The filter in front of the firmware's GetVariable. It serves the Secure Boot state that the stage has when the
- * firmware has none, and calls the firmware's own function for everything else. */
+ * firmware has none, and calls the firmware's own function for everything else. With sb.windows=off it asks the
+ * firmware for each variable and changes only SecureBoot, to 0. */
 SB_RT_TEXT(c) static EFI_STATUS EFIAPI sb_rt_filter(CHAR16 *name, EFI_GUID *vendor, UINT32 *attributes, UINTN *size,
 						 VOID *data)
 {
 	struct sb_rt_state *st = rt_state();
 	UINTN probe = 0;
-	/* The two values live on the stack: a static would be a reference into the image, and the image is freed. */
+	EFI_STATUS status;
+	/* The three values live on the stack: a static would be a reference into the image, and the image is freed. */
 	unsigned char secure_boot_on = 1;
 	unsigned char setup_mode_off = 0;
+	unsigned char secure_boot_off = 0;
 	if (st == NULL || st->magic != SB_RT_MAGIC || st->original == NULL) return EFI_DEVICE_ERROR;
+	if (st->secure_boot_off) {
+		if (!rt_is_global(vendor) || !rt_name_is(name, "SecureBoot"))
+			return st->original(name, vendor, attributes, size, data);
+		/* The firmware's answer stands: its status, its size and its attributes. Only the value changes. */
+		status = st->original(name, vendor, attributes, size, data);
+		if (status == EFI_SUCCESS && size != NULL && *size != 0) ((unsigned char *)data)[0] = secure_boot_off;
+		else if (status == EFI_NOT_FOUND)
+			/* A firmware without the variable is in that state too: the answer is 0 with the attributes of UEFI 2.10. */
+			return rt_serve(&secure_boot_off, 1u, SB_RT_GLOBAL_ATTR, attributes, size, data);
+		return status;
+	}
 	if (rt_is_global(vendor)) {
 		/* PK and KEK live in this namespace, not in the database one: edk2 8628578dacd3 puts
 		 * EFI_PLATFORM_KEY_NAME and EFI_KEY_EXCHANGE_KEY_NAME in Guid\GlobalVariable.h, and the database names
@@ -291,7 +311,9 @@ int sb_windows_install(struct stage *stage, const struct sb_windows_inputs *inpu
 	    (const unsigned char *)(void *)&sb_rt_filter >= code_end)
 		return 2;
 	code_bytes = (UINTN)(code_end - code_start);
-	blob_bytes = inputs->pk_bytes + inputs->kek_bytes + inputs->db_bytes + inputs->dbx_bytes;
+	/* With sb.windows=off the filter serves no database: the state holds the flag only. */
+	blob_bytes = inputs->secure_boot_off ? 0u
+						   : inputs->pk_bytes + inputs->kek_bytes + inputs->db_bytes + inputs->dbx_bytes;
 	/* One 8-byte slot follows the copy: the address of the state. */
 	if (EFI_ERROR(stage->bs->AllocatePool(EfiRuntimeServicesCode, code_bytes + sizeof(UINT64), &sbw.code)) ||
 	    sbw.code == NULL) {
@@ -311,22 +333,27 @@ int sb_windows_install(struct stage *stage, const struct sb_windows_inputs *inpu
 	st->magic = SB_RT_MAGIC;
 	st->rs = stage->st->RuntimeServices;
 	st->original = st->rs->GetVariable;
+	/* The specification does not say that pool memory is zeroed (UEFI 2.10, EFI_BOOT_SERVICES.AllocatePool): every
+	 * field gets its value here. */
+	st->secure_boot_off = (unsigned char)(inputs->secure_boot_off ? 1u : 0u);
 	offset = 0;
-	rt_copy(blobs + offset, inputs->pk, inputs->pk_bytes);
-	st->pk = blobs + offset;
-	st->pk_bytes = inputs->pk_bytes;
-	offset += inputs->pk_bytes;
-	rt_copy(blobs + offset, inputs->kek, inputs->kek_bytes);
-	st->kek = blobs + offset;
-	st->kek_bytes = inputs->kek_bytes;
-	offset += inputs->kek_bytes;
-	rt_copy(blobs + offset, inputs->db, inputs->db_bytes);
-	st->db = blobs + offset;
-	st->db_bytes = inputs->db_bytes;
-	offset += inputs->db_bytes;
-	rt_copy(blobs + offset, inputs->dbx, inputs->dbx_bytes);
-	st->dbx = blobs + offset;
-	st->dbx_bytes = inputs->dbx_bytes;
+	if (!st->secure_boot_off) {
+		rt_copy(blobs + offset, inputs->pk, inputs->pk_bytes);
+		st->pk = blobs + offset;
+		st->pk_bytes = inputs->pk_bytes;
+		offset += inputs->pk_bytes;
+		rt_copy(blobs + offset, inputs->kek, inputs->kek_bytes);
+		st->kek = blobs + offset;
+		st->kek_bytes = inputs->kek_bytes;
+		offset += inputs->kek_bytes;
+		rt_copy(blobs + offset, inputs->db, inputs->db_bytes);
+		st->db = blobs + offset;
+		st->db_bytes = inputs->db_bytes;
+		offset += inputs->db_bytes;
+		rt_copy(blobs + offset, inputs->dbx, inputs->dbx_bytes);
+		st->dbx = blobs + offset;
+		st->dbx_bytes = inputs->dbx_bytes;
+	}
 	/* The slot holds the address of the state while this start runs. */
 #ifdef SB_RT_IN_PLACE
 	*rt_slot_ptr() = (UINT64)(UINTN)st;

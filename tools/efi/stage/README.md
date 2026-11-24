@@ -38,6 +38,8 @@ image alone. The Secure Boot tests read two signed images of the Windows install
 | `log=line` | no | write the log file after each console line, not only before the next image starts |
 | `sb.mode=audit` | yes | report the verdict on each image, and refuse none |
 | `sb.mode=enforce` | no | do not start an image that the databases do not allow. A defect in `db.esl` or `dbx.esl` refuses each image |
+| `sb.windows=1` | no | with `sb.mode=enforce`: Windows reads Secure Boot as on, with the four databases of the kit |
+| `sb.windows=off` | no | on a firmware that has Secure Boot on: Windows reads Secure Boot as off for this start. The module does not check in that start |
 
 The stage counts each option that no module understands and prints the count.
 

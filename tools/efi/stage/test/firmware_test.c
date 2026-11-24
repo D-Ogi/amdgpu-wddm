@@ -1483,6 +1483,147 @@ static void test_sb_windows(const char *acpi_dir, const char *fixtures)
 	fw.create_event_fails = 0;
 }
 
+/* ---- the state that Windows reads as off (sb.windows=off) ----------------------------------------- */
+
+/* Gives the model firmware a SecureBoot variable of one byte, or takes the variable away (a value below 0). */
+static int set_firmware_secureboot(const char *fixtures, int value)
+{
+	free(fw.variable_secureboot);
+	fw.variable_secureboot = NULL;
+	fw.variable_secureboot_bytes = 0;
+	if (value < 0) return 1;
+	fw.variable_secureboot = efl_test_load(fixtures, "empty.esl", &fw.variable_secureboot_bytes);
+	if (fw.variable_secureboot == NULL) return 0;
+	fw.variable_secureboot_bytes = 1;
+	fw.variable_secureboot[0] = (unsigned char)value;
+	return 1;
+}
+
+static unsigned char next_image_secureboot;
+
+/* What the started image reads for SecureBoot through the runtime table of that moment. 0xFF when the read did not
+ * answer. */
+static void next_image_reads_secureboot(void)
+{
+	UINTN size = 1;
+	next_image_secureboot = 0xFF;
+	if (fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, NULL, &size, &next_image_secureboot) != EFI_SUCCESS)
+		next_image_secureboot = 0xFF;
+}
+
+static void test_sb_windows_off(const char *acpi_dir, const char *fixtures)
+{
+	static unsigned char pk[4] = { 0x11, 0x22, 0x33, 0x44 };
+	struct sb_windows_inputs in;
+	struct stage st;
+	unsigned char data[16];
+	UINT32 attr = 0;
+	UINTN size = 0;
+	int reset;
+
+	memset(&in, 0, sizeof(in));
+	in.pk = pk;
+	in.pk_bytes = sizeof(pk);
+	if (!new_firmware(acpi_dir)) return;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw.on_start = next_image_reads_secureboot;
+
+	/* The control: a firmware that has SecureBoot = 1, and a start without the option. The next image reads 1, and
+	 * the check of the module is in front of the Security2 protocol. */
+	CHECK(set_firmware_secureboot(fixtures, 1));
+	CHECK(run_stage("unlock=0 acpi=0 log=line", &reset) == EFI_SUCCESS && !reset);
+	CHECK(next_image_secureboot == 1 && fw.stage_check_at_start);
+	CHECK(!said("Windows sees SecureBoot"));
+	/* sb.windows=off on the same firmware: the next image reads 0. The log keeps the value of the firmware, the
+	 * check is not put in its place, and the filter is gone when the stage returns. */
+	CHECK(run_stage("unlock=0 acpi=0 sb.windows=off log=line", &reset) == EFI_SUCCESS && !reset);
+	CHECK(next_image_secureboot == 0 && !fw.stage_check_at_start);
+	CHECK(said("secure-boot: the firmware reports SecureBoot=1"));
+	CHECK(said("secure-boot: Windows sees SecureBoot=0 from this stage (sb.windows=off)"));
+	CHECK(said("secure-boot: the next image is not checked (sb.windows=off)"));
+	CHECK(!said("putting the image check in front of the Security2 protocol"));
+	CHECK(!said("no db.esl beside the stage"));
+	CHECK(fw_rt.GetVariable == fw_get_variable && fw.events_open == 0 && fw.pool_live == 0);
+	/* After the return of the stage the firmware answers with its own value again. */
+	size = 1;
+	data[0] = 0xFF;
+	CHECK(fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_SUCCESS && data[0] == 1);
+	/* sb.mode=enforce with sb.windows=off and no database file: the start is not refused. */
+	CHECK(run_stage("unlock=0 acpi=0 sb.mode=enforce sb.windows=off log=line", &reset) == EFI_SUCCESS && !reset);
+	CHECK(said("sb.windows=off with sb.mode=enforce: the module reports and does not check"));
+	CHECK(said("Windows sees SecureBoot=0 from this stage (sb.windows=off)") && next_image_secureboot == 0);
+	CHECK(!said("refused"));
+	/* A value that is not a state of the option is not understood: no filter, and the next image reads 1. */
+	CHECK(run_stage("unlock=0 acpi=0 sb.windows=2 log=line", &reset) == EFI_SUCCESS && !reset);
+	CHECK(said("1 load option(s) not understood and ignored") && next_image_secureboot == 1);
+	CHECK(fw_rt.GetVariable == fw_get_variable && !said("Windows sees SecureBoot"));
+	/* A firmware without the variable: the next image reads 0 as well. */
+	CHECK(set_firmware_secureboot(fixtures, -1));
+	CHECK(run_stage("unlock=0 acpi=0 sb.windows=off log=line", &reset) == EFI_SUCCESS && !reset);
+	CHECK(said("secure-boot: the firmware has no SecureBoot variable") && next_image_secureboot == 0);
+
+	/* The filter itself, between its install and its unwind. */
+	if (!new_firmware(acpi_dir)) return;
+	CHECK(set_firmware_secureboot(fixtures, 1));
+	memset(&st, 0, sizeof(st));
+	st.st = &fw_st;
+	st.bs = &fw_bs;
+	/* Control: without the state, a firmware that has SecureBoot answers with its own value. */
+	in.secure_boot_off = 0;
+	CHECK(sb_windows_install(&st, &in) == 0);
+	size = 1;
+	CHECK(fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_SUCCESS && data[0] == 1);
+	sb_windows_unwind(&st);
+	CHECK(fw_rt.GetVariable == fw_get_variable);
+	in.secure_boot_off = 1;
+	CHECK(sb_windows_install(&st, &in) == 0);
+	CHECK(fw_rt.GetVariable != fw_get_variable && fw.events_open == 1 && fw.event_notify != NULL);
+	/* SecureBoot = 0 with the size of the firmware's variable. The attributes stay as the caller gave them: the model
+	 * firmware does not write them, and the filter does not write over the firmware's answer. */
+	attr = 0x7;
+	size = 1;
+	CHECK(fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_SUCCESS);
+	CHECK(size == 1 && data[0] == 0 && attr == 0x7);
+	/* The size first, as an operating system asks. */
+	size = 0;
+	CHECK(fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, &attr, &size, NULL) == EFI_BUFFER_TOO_SMALL);
+	CHECK(size == 1);
+	/* Every other name is the answer of the firmware. The database of the kit is not served in this state. */
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"PK", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_NOT_FOUND);
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"SetupMode", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_NOT_FOUND);
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"db", (EFI_GUID *)&guid_database, &attr, &size, data) == EFI_NOT_FOUND);
+	size = sizeof(data);
+	CHECK(fw_rt.GetVariable(u"BootOrder", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_NOT_FOUND);
+	/* The address change: the state, the runtime table and the original function are converted. */
+	{
+		unsigned before = fw.converts;
+		CHECK(fw.event_notify != NULL);
+		fw.event_notify((EFI_EVENT)&fw_rt, fw.event_context);
+		CHECK(fw.converts - before >= 3);
+	}
+	size = 1;
+	data[0] = 0xFF;
+	CHECK(fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_SUCCESS && data[0] == 0);
+	/* The unwind puts the firmware back, and its own value is 1 again. */
+	sb_windows_unwind(&st);
+	CHECK(fw_rt.GetVariable == fw_get_variable && fw.events_open == 0 && fw.pool_live == 0);
+	size = 1;
+	CHECK(fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_SUCCESS && data[0] == 1);
+	/* A firmware without the variable: 0, with the attributes that UEFI 2.10 gives SecureBoot. */
+	CHECK(set_firmware_secureboot(fixtures, -1));
+	CHECK(sb_windows_install(&st, &in) == 0);
+	attr = 0;
+	size = sizeof(data);
+	data[0] = 0xFF;
+	CHECK(fw_rt.GetVariable(u"SecureBoot", (EFI_GUID *)&guid_global, &attr, &size, data) == EFI_SUCCESS);
+	CHECK(size == 1 && data[0] == 0 && attr == 0x6);
+	sb_windows_unwind(&st);
+	CHECK(fw_rt.GetVariable == fw_get_variable && fw.events_open == 0 && fw.pool_live == 0);
+}
+
 static void test_core(const char *acpi_dir, const char *fixtures)
 {
 	int reset;
@@ -2021,6 +2162,7 @@ unsigned firmware_tests(const char *acpi_dir, const char *fixture_dir, unsigned 
 		test_acpi(acpi_dir, fixture_dir);
 		test_secure_boot(acpi_dir, fixture_dir);
 		test_sb_windows(acpi_dir, fixture_dir);
+		test_sb_windows_off(acpi_dir, fixture_dir);
 		test_tpm(acpi_dir, fixture_dir);
 	}
 	free(probe);
