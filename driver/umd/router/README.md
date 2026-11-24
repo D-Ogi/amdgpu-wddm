@@ -112,7 +112,10 @@ flags are the msvc flags in clang-cl form, with x86-64-v3, the system-header SDK
 `-Werror=cast-calling-convention`. `-Compiler msvc` needs `-MsvcReason`. The msvc recipe is the recipe of
 `674AD261`: Visual Studio 2022 `vcvars64` (MSVC 14.44.35207, cl
 19.44.35221) with the WDK 10.0.26100.0 `um` and `shared` headers from `<BC250_ROOT>\toolchain\nuget` in front of
-`INCLUDE`. `/O2 /MD /W4 /WX /Zi /LD`, linked `/DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:%_PDB%`. The same run builds
+`INCLUDE`. `/O2 /MD /W4 /WX /Zi /LD`, linked `/DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:%_PDB%`. Since BD-389 both
+architectures link `/MT` in place of `/MD`: a clean Windows has no `VCRUNTIME140.dll`, and without it `dwm.exe`
+did not start on the device. After the link the recipe refuses an image that imports a C or C++ runtime DLL. The
+same run builds
 five UMD doubles from `tests/fake-umd.cpp` and the harness `tests/test-router.cpp`. Output goes to
 `<BC250_ROOT>\scratch\build\umd-router` unless `-OutputDir` says otherwise.
 

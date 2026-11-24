@@ -19,9 +19,12 @@
 # concrete -MsvcReason (compiler policy). The app-settings host test (test-umd-app-settings.ps1) builds with
 # clang-cl by default, as it does for the shells.
 #
-# -Arch x86 builds the 32-bit router for UserModeDriverNameWow (BD-064). It links /MT, not /MD, so the 32-bit UMD
-# set needs no x86 Visual C++ redistributable; the shells, engines, ICD and CPU UMD are /MT already. The recipe
-# then checks that the image is an x86 one.
+# -Arch x86 builds the 32-bit router for UserModeDriverNameWow (BD-064). The recipe then checks that the image is an
+# x86 one. Both architectures link /MT, not /MD: the 32-bit router since BD-064, the 64-bit one since BD-389. A clean
+# Windows has no Visual C++ runtime DLL, and the x64 router of tester.39 rc3 imported VCRUNTIME140.dll: with the
+# driver package installed alone, dwm.exe did not start on the device. The router passes no C runtime object to
+# the UMDs it loads (D3D DDI tables and runtime handles only), so its own copy of the runtime is safe. After the link
+# the recipe refuses an image that imports a C or C++ runtime DLL, the UCRT included.
 #
 # The msvc recipe is the one that built the registered router 674AD261 (2026-10-01, driver/umd/router/README.md):
 # VS 2022 vcvars64 (MSVC 14.44.35207, cl 19.44.35221) with the WDK 10.0.26100.0 um and shared headers in front of
@@ -72,7 +75,7 @@ try {
         return @(ConvertTo-Bc250ClangFlags $Flags $Arch @($repo)) + '/clang:-Werror=cast-calling-convention'
     }
     $ltcg = @(if ($Compiler -eq 'msvc') { '/LTCG' })
-    $crt = if ($Arch -eq 'x86') { '/MT' } else { '/MD' }
+    $crt = '/MT'
     # /Brepro: a content hash where cl and link write a time. /FC with /d1trimfile: __FILE__ and the name that MSVC
     # gives an anonymous namespace (a hash of the source path) see only the path below the repository.
     $repro = @('/Brepro', '/FC', "/d1trimfile:$repo")
@@ -152,6 +155,13 @@ try {
         $want = if ($Arch -eq 'x86') { '14C machine (x86)' } else { '8664 machine (x64)' }
         Write-Host "header: $machine"
         if (-not $machine.Contains($want)) { throw "router image is not $Arch" }
+        # BD-389: the router loads into dwm.exe and into every D3D9, D3D10 and D3D11 process. It must import no C or
+        # C++ runtime DLL (import or delay import). A clean Windows has no VCRUNTIME140.dll, and without it DWM did
+        # not start on the device.
+        $runtime = @(& dumpbin.exe /nologo /dependents bc250d3d_router.dll |
+            Where-Object { $_ -match '^\s+(msvcp|vcruntime|concrt|ucrtbase|api-ms-win-crt-)\S*\.dll\s*$' } | ForEach-Object { $_.Trim() })
+        if ($runtime.Count) { throw "router imports a C or C++ runtime DLL: $($runtime -join ', ')" }
+        Write-Host 'imports: no C or C++ runtime DLL'
     } finally { Pop-Location }
 } finally { Restore-ProcessEnvironment $saved }
 Set-Bc250VersionStamp -Repo $repo -Files @((Join-Path $OutputDir 'bc250d3d_router.dll')) -Names @('bc250d3d_router.dll') `
