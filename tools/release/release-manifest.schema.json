@@ -15,7 +15,7 @@
       "defect": {"type": "string", "pattern": "^BD-[0-9]{3,}$"},
       "repo": {"type": "string", "description": "The repository of the fix, a name in 'repositories'."},
       "commit": {"$ref": "#/$defs/commit"},
-      "rows": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "description": "Row ids or components of this manifest, or '@recipe' for recipe_commit."},
+      "rows": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "description": "Row ids or components of this manifest, '@recipe' for recipe_commit, or '@recipe:<row id or component>' for the commit of the recipe that builds each row that the name matches (the row's own recipe_commit, else its own commit for a row of recipe_repository, else recipe_commit)."},
       "note": {"type": "string"}}}},
     "recipe_repository": {"type": "string", "description": "The name of this repository in 'repositories'."},
     "recipe_commit": {"$ref": "#/$defs/commit", "description": "The commit of this repository whose recipes build every row of another repository that names no recipe_commit of its own. A row of this repository takes the recipe of its own commit, as provenance.py reads a row without recipe_commit."},

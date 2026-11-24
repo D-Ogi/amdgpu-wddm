@@ -807,6 +807,18 @@
         "router-x64-lab"
       ],
       "note": "The x64 router links the static C runtime (/MT) and its recipe refuses an image that imports a C or C++ runtime DLL: a clean Windows has no VCRUNTIME140.dll, and dwm.exe loads the router"
+    },
+    {
+      "defect": "BD-389",
+      "repo": "amdgpu-wddm",
+      "commit": "e4bf8e3ca9fe164f333228d3406ceef4cf638c85",
+      "rows": [
+        "@recipe:zink-x64-rel",
+        "@recipe:zink-x64-lab",
+        "@recipe:desktop-x64-rel",
+        "@recipe:desktop-x64-lab"
+      ],
+      "note": "The radv and zink-umd option sets link the static C runtime (-Db_vscrt=mt) and build-mesa.ps1 refuses a target that imports a C or C++ runtime DLL: dwm.exe loads the desktop RADV and the Zink UMD"
     }
   ],
   "rows": [

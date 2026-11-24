@@ -9,12 +9,16 @@ says which commits those are, in its "containment" list:
       {"defect": "BD-317", "repo": "amdgpu-wddm", "commit": "<40 hex>", "rows": ["@recipe"]}
     ]
 
-"rows" names row ids or components of the manifest, or "@recipe" for the recipe commit. For each row that a name
-matches, the commits that the row builds from the entry's repository are its targets: the row commit when the row
-is of that repository, and each pinned input of that repository. A row of a component with no target in that
-repository (for example the dxvk rows of d3d11-umd for a fix in amdgpu-wddm) is passed over; a name that gives no
-target at all is an error. Each target must have the fix commit as an ancestor (git merge-base --is-ancestor) in a
-checkout that holds both.
+"rows" names row ids or components of the manifest, "@recipe" for the recipe commit, or "@recipe:<row id or
+component>" for the recipe that builds each row that the name matches. For each row that a plain name matches, the
+commits that the row builds from the entry's repository are its targets: the row commit when the row is of that
+repository, and each pinned input of that repository. A row of a component with no target in that repository (for
+example the dxvk rows of d3d11-umd for a fix in amdgpu-wddm) is passed over; a name that gives no target at all is
+an error. "@recipe:<name>" is for a fix in a recipe of the recipe repository: the target of each row that the name
+matches is the commit of the recipe that builds the row (recipe_commit_of), also for a row of another repository
+with a recipe_commit of its own (BD-389: the static C runtime of the Mesa rows is a change of build-mesa.ps1 and
+mesa-configs.json, not of Mesa). Each target must have the fix commit as an ancestor (git merge-base
+--is-ancestor) in a checkout that holds both.
 
 From tester.38 on the list is required (VERIFY-MATRIX G5): a manifest without it fails the gate, so that a release
 cannot claim fixed rows without a check. An empty list is allowed and says so.
@@ -34,11 +38,20 @@ import provenance  # noqa: E402
 
 REQUIRED_FROM = 38
 RECIPE = "@recipe"
+ROW_RECIPE = RECIPE + ":"
 
 
 def release_number(release):
     m = re.fullmatch(r"tester\.(\d+)(v\d+)?", release or "")
     return int(m.group(1)) if m else None
+
+
+def recipe_commit_of(row, recipe_repo, recipe_commit):
+    """The commit of the recipe that builds a row: its own recipe_commit, else its own commit for a row of the recipe
+    repository, else the manifest's recipe_commit. This is the rule of define() in build_release_set.py and of
+    select_recipe_inputs() in build_context.py; those files are runtime helpers of the reuse key of a release set, so
+    this module keeps its own copy and the tests hold it to the same three cases."""
+    return row.get("recipe_commit") or (row["commit"] if row["repo"] == recipe_repo else recipe_commit)
 
 
 def targets(entry, rows, recipe_repo, recipe_commit):
@@ -49,6 +62,18 @@ def targets(entry, rows, recipe_repo, recipe_commit):
         if name == RECIPE:
             if entry["repo"] == recipe_repo:
                 found.append((name, "recipe", recipe_commit))
+        elif name.startswith(ROW_RECIPE):
+            wanted = name[len(ROW_RECIPE):]
+            matched = [row for row in rows if wanted in (row["id"], row["component"])]
+            if entry["repo"] != recipe_repo:
+                errors.append(f"{entry['defect']}: '{name}' names a recipe, and the recipes are commits of "
+                              f"{recipe_repo}, not of {entry['repo']}")
+                continue
+            if not matched:
+                errors.append(f"{entry['defect']}: '{name}' names no row")
+                continue
+            for row in matched:
+                found.append((name, f"{row['id']} recipe", recipe_commit_of(row, recipe_repo, recipe_commit)))
         else:
             for row in rows:
                 if name not in (row["id"], row["component"]):
@@ -122,11 +147,17 @@ def check_plan(plan):
 
 def plan_rows(rows):
     """The fields of the manifest rows that the gate reads; the plan carries them for every row, not only the
-    rows that this run builds."""
-    return [{"id": r["id"], "component": r["component"], "repo": r["repo"], "commit": r["commit"],
-             "inputs": {n: {"repo": s["repo"], "commit": s["commit"]}
-                        for n, s in (r.get("inputs") or {}).items() if "repo" in s and "commit" in s}}
-            for r in rows]
+    rows that this run builds. A row's own recipe_commit is carried as the manifest writes it: targets() applies
+    the default of recipe_commit_of() with the recipe repository and commit of the plan."""
+    out = []
+    for r in rows:
+        row = {"id": r["id"], "component": r["component"], "repo": r["repo"], "commit": r["commit"],
+               "inputs": {n: {"repo": s["repo"], "commit": s["commit"]}
+                          for n, s in (r.get("inputs") or {}).items() if "repo" in s and "commit" in s}}
+        if r.get("recipe_commit"):
+            row["recipe_commit"] = r["recipe_commit"]
+        out.append(row)
+    return out
 
 
 def main():
