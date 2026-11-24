@@ -19,7 +19,7 @@ if operation == 'probe':
     if 'write' in past and 'after1' not in past:
         operation = 'probe-before-readback'
     elif 'after1' in past and 'after2' not in past:
-        operation = 'probe-between-after'
+        operation = 'probe-between-after' if config.get('second_readback') else 'probe-after'
     elif 'before2' in past:
         operation = 'probe-after'
     elif 'before1' in past:
@@ -39,8 +39,16 @@ if operation == 'version':
 elif operation.startswith('probe'):
     name = 'WRONG' if scenario == 'probe-chip' else config['chip_name']
     size = 8192 if scenario == 'probe-size' else 16384
+    # The programmer of the call decides what the probe names, as the real tool does.
+    programmer = args[args.index('-p') + 1] if '-p' in args else ''
+    kind = 'serprog' if programmer.startswith('serprog:') else programmer
+    if kind == 'serprog':
+        firmware = 'other-serprog' if scenario == 'probe-programmer-name' else 'pico-serprog'
+        print(f'serprog: Programmer name is "{firmware}"')
+    if scenario == 'probe-programmer-kind':
+        kind = 'serprog' if kind == 'ch341a_spi' else 'ch341a_spi'
     if scenario != 'probe-none':
-        print(f'Found Macronix flash chip "{name}" ({size} kB, SPI) on ch341a_spi.')
+        print(f'Found Macronix flash chip "{name}" ({size} kB, SPI) on {kind}.')
     if scenario == 'probe-multiple': print('Multiple flash chip definitions match')
     if scenario != 'probe-status':
         status = statusfile.read_text() if statusfile.exists() else '0x40'
@@ -74,7 +82,8 @@ else:
     data = bytearray(chip.read_bytes())
     if scenario == 'before-short' and operation == 'before1': data = data[:64]
     if ((scenario == 'base-unstable' and operation == 'before2') or
-            (scenario == 'readback-mismatch' and operation == 'after2')):
+            (scenario == 'readback-mismatch' and operation == 'after1') or
+            (scenario == 'second-readback-mismatch' and operation == 'after2')):
         data[7] ^= 1
     if not (scenario == 'before-missing' and operation == 'before1'):
         path.write_bytes(data)

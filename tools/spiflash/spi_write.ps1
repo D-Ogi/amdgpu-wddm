@@ -10,14 +10,23 @@ param(
     [Parameter(Mandatory)][string]$OutRoot,
     [int]$MaxSectors = 16,
     [switch]$Restore,
+    [switch]$SecondReadback,
     [string]$Chip = 'MX25L12835F/MX25L12845E/MX25L12865E',
-    [string]$Flashrom = ''
+    [string]$Flashrom = '',
+    [string]$ModeExe = ''
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $ChipSize = 16777216
 $Sector = 4096
+# One name for each purpose that has explicit consent for an SPI write on unit A.
+$ApprovedPurposes = @('vcn-load', 'vcn-repair', 'p6-l1')
+# The programmer comes from the pinned plan. A plan without the field means the CH341A.
+$programmer = 'ch341a_spi'
+$programmerKind = 'ch341a_spi'
+$programmerName = $null
+$serialPort = $null
 $phase = 'inputs'
 $arrayWriteInvoked = $false
 $statusMayHaveChanged = $false
@@ -72,13 +81,17 @@ function Invoke-Flashrom([string]$Name, [string[]]$Arguments) {
     [pscustomobject]@{ Text = $text; Code = $code }
 }
 function Probe([string]$Name) {
-    $r = Invoke-Flashrom $Name @('-p', 'ch341a_spi', '-c', $Chip, '-V')
+    $r = Invoke-Flashrom $Name @('-p', $programmer, '-c', $Chip, '-V')
     Require ($r.Code -eq 0) "$Name failed"
     Require ($r.Text -notmatch 'Multiple flash chip definitions match') 'multiple chip definitions match'
     $found = [regex]::Matches($r.Text, '(?m)^Found .* flash chip.*$')
     Require ($found.Count -eq 1) 'probe must identify exactly one chip'
     Require ($found[0].Value.Contains('"' + $Chip + '"')) 'probe chip differs from the plan'
     Require ($found[0].Value -match '\(16384 kB, SPI\)') 'probe size or bus differs from the plan'
+    Require ($found[0].Value -match (' on ' + [regex]::Escape($programmerKind) + '\.\s*$')) 'probe programmer differs from the plan'
+    if ($programmerName) {
+        Require ($r.Text.Contains('serprog: Programmer name is "' + $programmerName + '"')) 'probe programmer name differs from the plan'
+    }
     Require ($r.Text -match 'status register is (0x[0-9a-fA-F]{2})') 'probe omitted the status register'
     $status = $Matches[1]
     $receipt.status_probes[$Name] = $status
@@ -92,7 +105,7 @@ function Read-Image([string]$Name) {
     Require (-not (Test-Path -LiteralPath $file)) "read destination exists: $Name"
     $null = Probe ($Name + '-status')
     $script:statusMayHaveChanged = $true # flashrom 1.2 can unlock status bits even for -r.
-    $r = Invoke-Flashrom $Name @('-p', 'ch341a_spi', '-c', $Chip, '-r', $file)
+    $r = Invoke-Flashrom $Name @('-p', $programmer, '-c', $Chip, '-r', $file)
     Require ($r.Code -eq 0) "$Name command failed"
     Require ([IO.File]::Exists($file)) "$Name did not produce a file"
     $bytes = [IO.File]::ReadAllBytes($file)
@@ -151,11 +164,33 @@ try {
     Require ((Digest $planBytes) -eq $planHash) 'plan hash mismatch'
     $plan = [Text.Encoding]::UTF8.GetString($planBytes) | ConvertFrom-Json -AsHashtable
     Require ($plan.schema -eq 1) 'unsupported plan schema'
-    Require ($plan.unit -eq 'A' -and $plan.purpose -in @('vcn-load', 'vcn-repair')) 'plan is not for unit A VCN work'
+    # A comparison operator filters a collection instead of comparing it, so the type is checked first.
+    Require ($plan.unit -is [string] -and $plan.purpose -is [string] -and
+             $plan.unit -ceq 'A' -and $plan.purpose -cin $ApprovedPurposes) 'plan is not for an approved unit A purpose'
     $mode = if ($Restore) { 'restore' } else { 'write' }
     Require ($plan.mode -eq $mode) 'plan mode differs from invocation'
     Require ((Hash-Text $plan.image_sha256) -eq $imgHash) 'plan image hash differs from invocation'
     Require ($plan.chip -eq $Chip -and $plan.chip_size -eq $ChipSize) 'plan chip or size differs'
+    if ($plan.Contains('programmer')) {
+        # One reviewed form only: the Pico with the serprog firmware at the measured speed.
+        $pg = $plan['programmer']
+        Require ($pg -is [Collections.IDictionary]) 'plan programmer is not a reviewed form'
+        Require ($pg['kind'] -is [string] -and $pg['kind'] -ceq 'serprog' -and
+                 $pg['port'] -is [string] -and $pg['port'] -cmatch '^COM[1-9][0-9]{0,2}$' -and
+                 ($pg['baud'] -is [long] -or $pg['baud'] -is [int]) -and $pg['baud'] -eq 115200 -and
+                 $pg['spispeed'] -is [string] -and $pg['spispeed'] -ceq '2M' -and
+                 $pg['name'] -is [string] -and $pg['name'] -ceq 'pico-serprog') 'plan programmer is not a reviewed form'
+        Require ($pg['transport_review'] -is [Collections.IDictionary]) 'plan programmer has no transport review'
+        $transport = Existing-File $pg['transport_review']['path']
+        Require ((Digest ([IO.File]::ReadAllBytes($transport))) -eq (Hash-Text $pg['transport_review']['sha256'])) 'transport review hash mismatch'
+        $programmerKind = 'serprog'
+        $programmerName = $pg['name']
+        $serialPort = $pg['port']
+        $programmer = "serprog:dev=${serialPort}:115200,spispeed=2M"
+        if (-not $ModeExe) { $ModeExe = Join-Path $env:SystemRoot 'System32\mode.com' }
+        $ModeExe = Existing-File $ModeExe
+    }
+    $receipt.programmer = $programmer
     $img = [IO.File]::ReadAllBytes($Image)
     Require ($img.Length -eq $ChipSize) 'image has the wrong length'
     Require ((Digest $img) -eq $imgHash) 'image hash mismatch'
@@ -225,8 +260,26 @@ try {
     $receipt.mode = $mode
     $receipt.write_exit = $null
     $receipt.readback_matches = $false
+    $receipt.readbacks = 0
     $receipt.recovery = [ordered]@{ backup = $backupSnapshot; sha256 = $backupHash; automatic = $false }
-    Note "plan=$planHash image=$imgHash mode=$mode"
+    Note "plan=$planHash image=$imgHash mode=$mode programmer=$programmer"
+    if ($serialPort) {
+        # flashrom 1.2 on Windows does not assert DTR. Measured on unit A with the Pico serprog firmware: with
+        # DTR off a probe passes and an array read fails; after the Windows mode command sets DTR on, full
+        # reads are equal. flashrom keeps that port setting. The two base reads below fail when DTR is off,
+        # so a write cannot start in that state; this check stops the run before the first chip access.
+        $phase = 'port-setup'
+        $global:LASTEXITCODE = 0
+        $portText = & $ModeExe "${serialPort}:" 'dtr=on' 'rts=on' 2>&1 | Out-String
+        $portCode = $LASTEXITCODE
+        # The program is not pinned by the plan. Its path is recorded so that a stand-in is visible.
+        $receipt.port_setup_program = $ModeExe
+        [IO.File]::WriteAllText((Join-Path $out 'port-setup.txt'), "program: $ModeExe`r`n$portText")
+        Note "port-setup exit=$portCode"
+        Require ($portCode -eq 0) 'port setup failed'
+        Require ($portText -match '(?m)^\s*DTR circuit:\s+ON\s*$') 'DTR is not on after the port setup'
+        $receipt.port_setup = "$serialPort dtr=on rts=on"
+    }
     $phase = 'version'
     $version = Invoke-Flashrom 'version' @('--version')
     Require ($version.Code -eq 0 -and $version.Text -match '(?m)^flashrom v1\.2(?:\s|$)') 'flashrom version command failed or differs'
@@ -251,19 +304,27 @@ try {
         $phase = 'write'
         Require ((Digest ([IO.File]::ReadAllBytes($snapshot))) -eq $imgHash) 'snapshot hash changed before programming'
         $arrayWriteInvoked = $true
-        $write = Invoke-Flashrom 'write' @('-p', 'ch341a_spi', '-c', $Chip, '-w', $snapshot)
+        $write = Invoke-Flashrom 'write' @('-p', $programmer, '-c', $Chip, '-w', $snapshot)
         $receipt.write_exit = $write.Code
         $receipt.flashrom_verified = $write.Text -match '(?m)^Verifying flash\.\.\. VERIFIED\.\s*$'
         $phase = 'readback'
-        $after1 = Read-Image 'after1'
-        $after2 = Read-Image 'after2'
-        $receipt.readback_matches = $after1.Sha256 -eq $imgHash -and $after2.Sha256 -eq $imgHash
+        # flashrom verifies the whole chip in the write command. One complete readback in a new
+        # process is the independent check. A second one is a diagnostic option.
+        $readbackNames = if ($SecondReadback) { @('after1', 'after2') } else { @('after1') }
+        $allMatch = $true
+        foreach ($readbackName in $readbackNames) {
+            $after = Read-Image $readbackName
+            $receipt.readbacks = [int]$receipt.readbacks + 1
+            if ($after.Sha256 -ne $imgHash) { $allMatch = $false }
+        }
+        $receipt.readback_matches = $allMatch
         $receipt.status_after = Probe 'probe-after'
         Require ($write.Code -eq 0) 'write command failed; readback result is recorded separately'
         Require $receipt.flashrom_verified 'flashrom did not confirm its verification'
         Require $receipt.readback_matches 'readback hash mismatch'
         $receipt.verdict = 'PASS'
-        $successMessage = "SPI-WRITE VERDICT PASS: write succeeded and two readbacks equal $imgHash"
+        $count = if ($receipt.readbacks -eq 1) { '1 complete readback equals' } else { "$($receipt.readbacks) complete readbacks equal" }
+        $successMessage = "SPI-WRITE VERDICT PASS: write succeeded, flashrom verified it and $count $imgHash"
     }
     $phase = 'complete'
     $exitCode = 0

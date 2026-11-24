@@ -14,10 +14,12 @@ Measured state of unit A:
 | `spi_regs.py` | Registers, SFDP, lock, fast boot, password, SPB/DPB, secured OTP. RDID and a READ against the backup gate it |
 | `miso_float_check.py` | Negative control: the MISO level while the chip does not drive SO |
 | `test_spiflash.py` | Host tests against a simulated programmer: `python -m unittest discover -s tools/spiflash` |
+| `spi_read_test.ps1` | Backup script test with the flashrom dummy programmer and a synthetic image |
 | `test_spi_write.py` | Writer tests with synthetic images and a fake flashrom process |
 | `check_spi_write_mutations.py` | Checks that removing a write guard makes its test fail |
 | `winusb/` | WinUSB binding for the CH341A (inbox driver, own INF, local self-signed catalog) |
 | `j4004-wiring.svg` | Wiring diagram |
+| `j4004-pico-h-wiring.svg` | Wiring diagram for the Pico H with the libreboot serprog firmware |
 
 ## The flash and J4004 on unit A
 
@@ -49,6 +51,9 @@ Measured state of unit A:
 5. Connect the programmer to USB first, then the 5 wires (CS, MISO, GND, CLK, MOSI to J4004 pins 2, 3, 5, 6, 7).
    An unpowered CH341A gets power through its inputs from the board.
 6. Backup: `pwsh -File tools/spiflash/spi_read.ps1 -OutRoot <firmware dir> -NasRoot <NAS dir>`.
+   For the Pico H add `-Programmer serprog:dev=COM<n>:115200,spispeed=2M` and use the wiring of
+   `j4004-pico-h-wiring.svg`. Steps 1 to 3 are for the CH341A only. Unit A gave three equal full reads through
+   the Pico ([M970](../../docs/facts/tooling.md#m970)). A write through the Pico has not been tried.
 7. Registers: `python -I tools/spiflash/spi_regs.py <read1.bin> <new dir>`.
 8. Disconnect the wires, then do an AC cycle and a boot test.
 
@@ -73,14 +78,14 @@ Stop those tools before this procedure.
    Preserve all bytes outside those edits.
 6. Prepare a JSON plan with the fields below and compute its SHA-256.
 7. Run the writer with the plan and image hashes.
-8. Inspect `result.json`, both readback hashes and the status-register records.
+8. Inspect `result.json`, the readback hash and the status-register records.
 9. Disconnect the programmer wires before the planned boot test.
 
 The plan has these fields:
 
 | Field | Required value |
 |---|---|
-| `schema`, `unit`, `purpose` | `1`, `A`, and `vcn-load` or `vcn-repair` |
+| `schema`, `unit`, `purpose` | `1`, `A`, and `vcn-load`, `vcn-repair` or `p6-l1` (exact lower case) |
 | `mode` | `write` or `restore` |
 | `chip`, `chip_size` | Exact flashrom chip definition and `16777216` bytes |
 | `image_sha256` | Full candidate hash |
@@ -90,6 +95,22 @@ The plan has these fields:
 | `flashrom_sha256`, `flashrom_version` | Executable hash and `flashrom v1.2` |
 | `flashrom_dependencies` | Array of objects with `path` and `sha256` for the shipped DLLs |
 | `write_compatibility` | Object with `path` and `sha256` of the reviewed chip-write contract |
+| `programmer` | Optional. Absent: the CH341A (`ch341a_spi`). Present: the object below, for the Pico with the serprog firmware |
+
+The `programmer` object has these fields, and each must have exactly this value or form:
+`kind` = `serprog`, `port` = `COM<n>`, `baud` = `115200`, `spispeed` = `2M`, `name` = `pico-serprog`, and
+`transport_review` = an object with `path` and `sha256` of the reviewed transport contract (serprog and the
+firmware). The writer makes the flashrom programmer string from these fields. A command-line parameter cannot
+change the programmer.
+
+For a serprog programmer the writer first runs the Windows `mode` command for that port with `dtr=on rts=on`
+and stops when the answer does not show DTR on. flashrom 1.2 on Windows does not assert DTR. Measured on
+unit A: with DTR off a probe passes and an array read fails, and with DTR on full reads are equal
+([M970](../../docs/facts/tooling.md#m970)).
+Each probe must report the chip on the planned programmer, and for serprog also the firmware name.
+`-ModeExe` names another program for the port setup. It is for the host tests.
+`result.json` records the programmer (`programmer`), the port setup (`port_setup`) and the program that made
+it (`port_setup_program`).
 
 Pin `libusb-1.0.dll`, `libftdi1.dll` and `libwinpthread-1.dll` beside this flashrom build.
 These are its non-system PE imports, including transitive imports.
@@ -110,8 +131,10 @@ It reconstructs the candidate from the backup and the approved edits.
 It programs a private snapshot with a held handle that prevents replacement or writes.
 Two fresh pre-reads must agree and match the planned base.
 Every native exit code is checked.
-PASS requires flashrom's verification, two complete matching readbacks and a saved result.
-A write error stays FAIL even when the readbacks match.
+PASS requires flashrom's verification, one complete matching readback and a saved result.
+`-SecondReadback` adds a second complete readback for diagnosis. It costs about three minutes.
+`result.json` records the number of readbacks that completed (`readbacks`).
+A write error stays FAIL even when the readback matches.
 
 `MaxSectors` counts differing 4 KiB regions, not physical erase operations.
 Flashrom selects erase blocks. The count does not bound its physical erase extent or fallback strategy.
@@ -148,7 +171,10 @@ Run CPU jobs through the workspace host slot when that rule applies.
 $env:BC250_TEST_TMP = '<private-test-directory>'
 python -m unittest discover -s tools/spiflash -v
 python tools/spiflash/check_spi_write_mutations.py
+pwsh -NoProfile -File tools/spiflash/spi_read_test.ps1 -Flashrom <flashrom.exe>
 ```
+
+`spi_read_test.ps1` runs the real flashrom executable with its `dummy` programmer. It opens no device.
 
 The mutation check first runs each selected control test.
 It then disables one production guard in a private script copy.

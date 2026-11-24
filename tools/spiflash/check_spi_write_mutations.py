@@ -18,6 +18,16 @@ CASES = [
     ('readback', 'test_bad_readback', "        Require $receipt.readback_matches 'readback hash mismatch'"),
     ('sector-limit', 'test_sector_limit', "    if (-not $Restore) { Require ($diff.sectors_4k -le $MaxSectors) 'changed-sector limit exceeded' }"),
     ('fresh-base', 'test_current_variable_store_changed', "    if (-not $Restore) { Require ($current.Sha256 -eq $baseHash) 'chip base hash mismatch: obtain a fresh backup and rebuild the candidate' }"),
+    ('port-setup-dtr', 'test_dtr_off_is_refused_before_flashrom', "        Require ($portText -match '(?m)^\\s*DTR circuit:\\s+ON\\s*$') 'DTR is not on after the port setup'"),
+    ('probe-programmer-kind', 'test_probe_must_be_on_the_planned_programmer', "    Require ($found[0].Value -match (' on ' + [regex]::Escape($programmerKind) + '\\.\\s*$')) 'probe programmer differs from the plan'"),
+    ('probe-programmer-name', 'test_probe_must_name_the_planned_firmware', "        Require ($r.Text.Contains('serprog: Programmer name is \"' + $programmerName + '\"')) 'probe programmer name differs from the plan'"),
+    ('programmer-form', 'test_programmer_field_guards',
+     "        Require ($pg['kind'] -is [string] -and $pg['kind'] -ceq 'serprog' -and\n"
+     "                 $pg['port'] -is [string] -and $pg['port'] -cmatch '^COM[1-9][0-9]{0,2}$' -and\n"
+     "                 ($pg['baud'] -is [long] -or $pg['baud'] -is [int]) -and $pg['baud'] -eq 115200 -and\n"
+     "                 $pg['spispeed'] -is [string] -and $pg['spispeed'] -ceq '2M' -and\n"
+     "                 $pg['name'] -is [string] -and $pg['name'] -ceq 'pico-serprog') 'plan programmer is not a reviewed form'"),
+    ('transport-review-pin', 'test_programmer_field_guards', "        Require ((Digest ([IO.File]::ReadAllBytes($transport))) -eq (Hash-Text $pg['transport_review']['sha256'])) 'transport review hash mismatch'"),
 ]
 
 def main():

@@ -80,7 +80,7 @@
 
   <!-- Panel B: Pico H -->
   <line x1="60" y1="528" x2="1040" y2="528" stroke="#e2e8f0" stroke-width="2"/>
-  <text x="60" y="562" font-size="17" font-weight="700" fill="#1a202c">B. Alternative: Pico H with pico-serprog, F-F wires, same colours</text>
+  <text x="60" y="562" font-size="17" font-weight="700" fill="#1a202c">B. Alternative: Pico H, libreboot pico-serprog only (CS on GP5), drawing: j4004-pico-h-wiring.svg</text>
   <g font-size="15">
     <rect x="60" y="580" width="16" height="16" fill="#d69e2e"/><text x="88" y="594">GP2 (physical pin 4) · CLK  →  J4004 pin 6</text>
     <rect x="60" y="610" width="16" height="16" fill="#2b6cb0"/><text x="88" y="624">GP3 (physical pin 5) · MOSI  →  J4004 pin 7</text>
