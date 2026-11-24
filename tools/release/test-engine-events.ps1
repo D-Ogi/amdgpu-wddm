@@ -423,7 +423,18 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 $env:AMDGPU_WDDM_TEST_CHILD_SECONDS = '120'
 try { $r = Invoke-Engine 'children at the end' @('-Plan', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_CHILD_SECONDS }
 $tc = @(Get-Events $r 'test-child')
-Check (($r.code -eq 0) -and $tc.Count -and ($r.result.children.left_at_exit -ge 2) -and ($r.result.children.ended -eq $r.result.children.left_at_exit) -and ($r.result.children.closure -eq 'complete') -and ($r.result.children.remaining -eq 0) -and -not (Get-Process -Id ([int]$tc[0].pid) -ErrorAction SilentlyContinue) -and @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$([int]$tc[0].pid)").Count -eq 0) "normal end: the engine ended its $($r.result.children.left_at_exit) left-over child process(es) (cmd.exe and its ping) and recorded them"
+# The engine's own job accounting (left_at_exit, ended, closure, remaining) is exact and is read from the result.
+# The two outside observations - the recorded child gone, and no ping left under it - follow the operating system
+# tearing the terminated processes down, which lags the job's accounting by a short, variable time, and lags more
+# when the host is busy. Poll for them with a 5 s bound, as the terminate-by-caller check just below does, so the
+# gate reads a settled state and does not flake on host timing (the same class as BD-357).
+$childPid = if ($tc.Count) { [int]$tc[0].pid } else { 0 }
+$childGone = $false
+for ($i = 0; $tc.Count -and $i -lt 50 -and -not $childGone; $i++) {
+    $childGone = -not (Get-Process -Id $childPid -ErrorAction SilentlyContinue) -and @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$childPid").Count -eq 0
+    if (-not $childGone) { Start-Sleep -Milliseconds 100 }
+}
+Check (($r.code -eq 0) -and $tc.Count -and ($r.result.children.left_at_exit -ge 2) -and ($r.result.children.ended -eq $r.result.children.left_at_exit) -and ($r.result.children.closure -eq 'complete') -and ($r.result.children.remaining -eq 0) -and $childGone) "normal end: the engine ended its $($r.result.children.left_at_exit) left-over child process(es) (cmd.exe and its ping) and recorded them"
 # The caller terminates the engine while its child and grandchild run: Windows ends both with the job.
 $kdir = Join-Path $work 'kill'
 [void][IO.Directory]::CreateDirectory($kdir)
