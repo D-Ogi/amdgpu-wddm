@@ -5103,6 +5103,81 @@
         }
       ],
       "workspace_from_kits": true
+    },
+    {
+      "recipe": "tools/build/build-mesa.ps1",
+      "commit": "472904a4e48b786311723328b90d81a0f9ba4f1e",
+      "bindings": {
+        "tools/build/build-mesa.ps1": "992afa8fbc57712015e7e2cc750f7de163767fae",
+        "tools/build": "0898e07757bfff003f6a6f2b148ead553e008c14",
+        "tools/quality": "3492ef52e40d19be6d905672a3c5e677ccef490f",
+        "tools/release/installer": "d4a7b8a2634dabadc9f66268ce4dfaecd412d8f2",
+        "tools/firmware": "c0c6e66c0b944e1b33d65d0e26d8398ea813e699"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        },
+        {
+          "path": "{root}/scratch/py",
+          "required": true,
+          "parameter": "PythonPath"
+        },
+        {
+          "path": "{root}/scratch/glslang/bin",
+          "required": true,
+          "parameter": "Glslang"
+        },
+        {
+          "path": "{root}/toolchain/winflexbison-2.5.25",
+          "required": true,
+          "parameter": "FlexBison"
+        }
+      ],
+      "workspace_from_kits": false
+    },
+    {
+      "recipe": "tools/build/build-umd-router.ps1",
+      "commit": "472904a4e48b786311723328b90d81a0f9ba4f1e",
+      "bindings": {
+        "tools/build/build-umd-router.ps1": "f1ea5c99d3ee3737f6c4aebfd15d45952b75ba79",
+        "tools/build": "0898e07757bfff003f6a6f2b148ead553e008c14",
+        "tools/quality": "3492ef52e40d19be6d905672a3c5e677ccef490f",
+        "tools/release/installer": "d4a7b8a2634dabadc9f66268ce4dfaecd412d8f2",
+        "tools/firmware": "c0c6e66c0b944e1b33d65d0e26d8398ea813e699"
+      },
+      "inputs": [
+        {
+          "path": "{root}/toolchain/llvm-23.1.4-win64",
+          "required": true,
+          "parameter": "ClangToolchain"
+        },
+        {
+          "path": "{root}/toolchain/nuget",
+          "required": true,
+          "parameter": "Kits",
+          "children": [
+            "microsoft.windows.sdk.cpp",
+            "microsoft.windows.sdk.cpp.x64",
+            "microsoft.windows.sdk.cpp.x86",
+            "microsoft.windows.wdk.x64"
+          ]
+        }
+      ],
+      "workspace_from_kits": false
     }
   ]
 }
