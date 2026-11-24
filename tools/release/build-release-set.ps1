@@ -60,13 +60,8 @@
 #    Before the first step, it names in one message every output of an earlier round that a step would refuse
 #    (setup, package, submission CAB, package worktrees; PackageRound.psm1). -SetAside <name> moves them into
 #    <Out>\rounds\<name>\ instead, with the SHA-256 of each file before and after in set-aside.json (BD-272).
-# 6. A notes-only repack, when the notes change after the packages are built and gated:
-#      pwsh -File tools\release\build-release-set.ps1 -RepackNotes -From <Out> [-Flavours release,lab]
-#    For each flavour, repack-notes.ps1 makes <Out>\package-notes\<flavour> from <Out>\package\<flavour> with the
-#    committed notes of this tree: every file but the notes and manifest.json byte for byte, manifest.json changed in
-#    the notes values only, the zip and the single exe made again. Then the flavour gate and the installer dry run on
-#    the new package. <Out>\repack-report.json holds the new zip and exe hashes (BD-265). The repack signs the new
-#    single exe and, for the release flavour, writes and signs nagi-update.json over the new zip (BD-294).
+#    Then it asks the size guard, before the work ledger gate and every other step. It asks again before the setup
+#    window and the package of each flavour; an answer stays good for 10 minutes (BD-382).
 #    The tree must be clean and pushed, and its release-sources.json must hold every row of <Out> unchanged. For each
 #    flavour it builds the setup window, sets the router inputs of the quality gates and runs build-release.ps1 with
 #    -BuildRecords <Out>\artifacts (the release flavour also writes the submission CAB). <Out>\package\<flavour> holds
@@ -77,6 +72,13 @@
 #    (the setup window build writes intermediate files into the tree). Each process writes
 #    <Out>\package-report-<flavour>.json and <Out>\logs\package-<flavour>.out; this process merges the reports, runs
 #    the byte check and removes the worktrees.
+# 6. A notes-only repack, when the notes change after the packages are built and gated:
+#      pwsh -File tools\release\build-release-set.ps1 -RepackNotes -From <Out> [-Flavours release,lab]
+#    For each flavour, repack-notes.ps1 makes <Out>\package-notes\<flavour> from <Out>\package\<flavour> with the
+#    committed notes of this tree: every file but the notes and manifest.json byte for byte, manifest.json changed in
+#    the notes values only, the zip and the single exe made again. Then the flavour gate and the installer dry run on
+#    the new package. <Out>\repack-report.json holds the new zip and exe hashes (BD-265). The repack signs the new
+#    single exe and, for the release flavour, writes and signs nagi-update.json over the new zip (BD-294).
 #
 # -Plan prints the gates, the builds with their expanded command lines, outputs, tests and disk budget, and builds
 # nothing. The default reuses verified rows in -Out and selects changed rows and their consumers. Repeat the same
@@ -522,6 +524,20 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
         "$(Get-Utc) package: $($setAsideRecord.outputs.Count) output(s) of an earlier round moved to $($setAsideRecord.round) (set-aside.json)"
         $pr.set_aside = $setAsideRecord.round
     }
+    # The size guard walks the workspace, about 2 minutes. The round asks it here, before every other step
+    # (package run 5 of tester.39 was refused 13 minutes in, after the work ledger gate: BD-382), and again
+    # before the setup window and the package of each flavour. An answer stays good for $guardGood seconds, so
+    # the steps of one flavour do not each pay for the walk; a flavour that starts later asks again.
+    $guardGood = 600
+    $script:guardOkAt = $null
+    function Test-Guard([string]$What) {
+        if ($script:guardOkAt -and ([DateTime]::UtcNow - $script:guardOkAt).TotalSeconds -lt $guardGood) { return }
+        $guard = (& $python -I $PackageGuard 2>&1 | Select-Object -Last 1)
+        "$(Get-Utc) $guard"
+        if ($LASTEXITCODE -ne 0 -or $guard -notmatch 'size ok') { Stop-Package "the size guard refuses ${What}: $guard" }
+        $script:guardOkAt = [DateTime]::UtcNow
+    }
+    Test-Guard 'the package round'
     $rowsDoc = Read-Json (Join-Path $From 'release-sources.rows.json')
     $registered = Read-Json (Join-Path $PSScriptRoot 'release-sources.json')
     $missing = @()
@@ -566,12 +582,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
         if ((Get-FileHash -LiteralPath $p).Hash -ine $rows[0].sha256) { Stop-Package "$p does not match its registered sha256" }
         return $p
     }
-    function Test-Guard([string]$What) {
-        $guard = (& $python -I $PackageGuard 2>&1 | Select-Object -Last 1)
-        "$(Get-Utc) $guard"
-        if ($LASTEXITCODE -ne 0 -or $guard -notmatch 'size ok') { Stop-Package "the size guard refuses ${What}: $guard" }
-    }
-    $serial = @($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+    $serial =@($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
     if ($Parallel -and $serial.Count -gt 1) {
         # One process and one detached worktree of $head per flavour. Each child runs the serial path below for its
         # flavour and writes its own report; the byte check of both runs here after every child ends.

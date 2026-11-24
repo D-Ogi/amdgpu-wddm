@@ -74,5 +74,15 @@ foreach ($later in "scratch\ledger\ledger.py", 'check_source_versions.py', 'amdg
     Assert ($i -gt $at) "the check comes before $later"
 }
 
+# The size guard is asked at the start of the round, before the work ledger gate: package run 5 of tester.39 was
+# refused 13 minutes in, after that gate (BD-382).
+$guardAt = $text.IndexOf("Test-Guard 'the package round'")
+Assert ($guardAt -gt $at) 'build-release-set.ps1 asks the size guard at the start of the round'
+Assert ($text.IndexOf('function Test-Guard') -lt $guardAt) 'the guard function is defined before its first call'
+foreach ($later in "scratch\ledger\ledger.py", 'check_source_versions.py', 'third_party_doc.py', 'amdgpu_wddm_setup\build.ps1') {
+    $i = $text.IndexOf($later, $at)
+    Assert ($i -gt $guardAt) "the size guard comes before $later"
+}
+
 Remove-Item -LiteralPath $base -Recurse -Force
 "PASS: package round outputs, $passed checks (BD-272)"
