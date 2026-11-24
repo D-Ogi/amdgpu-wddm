@@ -289,6 +289,9 @@
     "spawn-loop": {
       "timeout": 600
     },
+    "driver-state-history": {
+      "timeout": 600
+    },
     "kmdread": {
       "timeout": 600
     },
