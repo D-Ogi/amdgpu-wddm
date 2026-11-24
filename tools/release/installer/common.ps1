@@ -1047,13 +1047,18 @@ function Get-FirmwareStaged {
 # did, and each skipped probe is still recorded under its own name with the reason.
 #
 # ProblemCode: ConfigManagerErrorCode of the device. Status: the Windows device status, for the reason text only.
+# KernelTrust: the route the install used (Read-KernelTrustRoute). On the custom kernel signers route, problem code 52
+# (CM_PROB_UNSIGNED_DRIVER, cfgmgr32.h) means that the active policy does not trust the driver certificate.
 function Get-VerifyStartState {
-    param([int]$ProblemCode = 0, [string]$Status = '')
+    param([int]$ProblemCode = 0, [string]$Status = '', [string]$KernelTrust = '')
     $started = ($ProblemCode -eq 0)
     $reason = $null
     if (-not $started) {
         $reason = "the device reports problem code $ProblemCode"
         if ($Status -and $Status -ne 'OK') { $reason = "$reason and Windows reports it as $Status" }
+        if ($ProblemCode -eq 52 -and $KernelTrust -eq 'custom-kernel-signers') {
+            $reason = "${reason}: Windows did not accept the driver signature, so the active Code Integrity policy does not name the driver certificate as a kernel signer (sign a policy that does, put it on the ESP, then reset Windows)"
+        }
     }
     return [pscustomobject]@{ started = $started; reason = $reason }
 }
@@ -1287,6 +1292,62 @@ function Read-SecureBootState {
     if ($reg -eq 0) { return (Result 'off' "off (source: registry SecureBoot\State UEFISecureBootEnabled = 0, because the $why)" 'registry') }
     return (Result 'unknown' "the $why; $confirm; no SecureBoot\State UEFISecureBootEnabled value" 'none')
 }
+# The kernel trust route: how Windows can come to trust the kernel driver of this package.
+#   testsigning            Secure Boot is off, not in the firmware, or unknown. The installer turns test signing on.
+#   custom-kernel-signers  Secure Boot is on, and an active base policy is enforced, signed and not a system policy.
+#                          Microsoft "Custom kernel signers for App Control for Business": a policy that the owner of
+#                          the Secure Boot PK or KEK signed can name the driver certificate as a kernel signer, and
+#                          Windows then loads the driver with Secure Boot on and test signing off. CiTool does not show
+#                          the signers of a policy, so the route is a candidate here; the driver load after the install
+#                          is the proof (Get-VerifyStartState).
+#   none                   Secure Boot is on and no such policy is active: Windows ignores test signing.
+# The policy reader is a parameter for the host test (test-engine-units.ps1). Proof of the route in a VM with the
+# test B policy: scratch\t39\efi-sb-tpm\attestation-check-20261122\RESULT.md of the workspace.
+function Read-KernelTrustRoute {
+    param([string]$SecureBoot, [scriptblock]$ReadPolicies = { Read-ActiveCiPolicies })
+    function Route([string]$Name, [string]$Detail, $Policy = $null) {
+        [pscustomobject]@{ route = $Name; detail = $Detail; policy_id = $(if ($Policy) { [string]$Policy.PolicyID } else { $null }); policy_name = $(if ($Policy) { [string]$Policy.FriendlyName } else { $null }) }
+    }
+    if ($SecureBoot -ne 'on') { return (Route 'testsigning' "Secure Boot $SecureBoot`: the driver needs Windows test signing") }
+    try { $all = @(& $ReadPolicies) }
+    catch { return (Route 'none' "Secure Boot on; the list of active Code Integrity policies could not be read: $($_.Exception.Message)") }
+    $candidates = @($all | Where-Object { ($_.IsEnforced -eq $true) -and ($_.IsSignedPolicy -eq $true) -and ($_.IsSystemPolicy -ne $true) -and
+        ([string]$_.PolicyID -eq [string]$_.BasePolicyID) })
+    if ($candidates.Count -eq 0) {
+        return (Route 'none' "Secure Boot on; no active base policy is enforced, signed and not a system policy ($($all.Count) active)")
+    }
+    $p = $candidates[0]
+    return (Route 'custom-kernel-signers' ("Secure Boot on; the signed base policy {{{0}}} '{1}' is active (custom kernel signers: the driver load after the install proves that it names the driver certificate)" -f $p.PolicyID, $p.FriendlyName) $p)
+}
+# The JSON object of a CiTool --json answer: from its first '{' to its last '}', so lines before it and line breaks
+# inside it do not matter. $null when there is none or it does not parse.
+function Get-CiToolJson([string]$Text) {
+    $i = $Text.IndexOf('{'); $j = $Text.LastIndexOf('}')
+    if ($i -lt 0 -or $j -le $i) { return $null }
+    try { return ($Text.Substring($i, $j - $i + 1) | ConvertFrom-Json) } catch { return $null }
+}
+# CiTool --list-policies --json. The output carries OperationResult, an HRESULT: a refused list (for example a run
+# without administrator rights) is an error, never an empty list.
+function ConvertFrom-CiPolicyList {
+    param([string]$Text, [int]$ExitCode)
+    $o = Get-CiToolJson $Text
+    if (-not $o) { return [pscustomobject]@{ policies = $null; error = "the CiTool output is not JSON (exit code $ExitCode)" } }
+    $hr = 0
+    if ($null -ne $o.OperationResult) { $hr = [int64]$o.OperationResult }
+    if ($ExitCode -ne 0 -or $hr -ne 0) {
+        return [pscustomobject]@{ policies = $null; error = ('CiTool refused the list: OperationResult 0x{0:X8}, exit code {1}' -f ([uint32]($hr -band 0xFFFFFFFFL)), $ExitCode) }
+    }
+    return [pscustomobject]@{ policies = @($o.Policies); error = $null }
+}
+function Read-ActiveCiPolicies {
+    $exe = Join-Path $env:SystemRoot 'System32\CiTool.exe'
+    if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'CiTool.exe is not on this Windows' }
+    $n = Invoke-NativeBounded -File $exe -Arguments @('--list-policies', '--json') -TimeoutSeconds 60
+    if ($n.timed_out) { throw 'CiTool --list-policies gave no answer within 60 s' }
+    $r = ConvertFrom-CiPolicyList -Text ([string]$n.text) -ExitCode ([int]$n.code)
+    if ($r.error) { throw $r.error }
+    return $r.policies
+}
 # The raw read: bytes, or the Win32 error (and the error of enabling SeSystemEnvironmentPrivilege, which the read needs).
 function Read-SecureBootVariable {
     if (-not ('AmdgpuWddmInstaller.FirmwareVariable' -as [type])) {
@@ -1498,10 +1559,8 @@ function Disable-SmartAppControl {
             $n = & $RunCiTool
             $r.citool_code = $n.code
             $text = [string]$n.text
-            $i = $text.IndexOf('{'); $j = $text.LastIndexOf('}')
-            if ($i -ge 0 -and $j -gt $i) {
-                try { $json = $text.Substring($i, $j - $i + 1) | ConvertFrom-Json; if ($null -ne $json.OperationResult) { $r.citool_result = [int64]$json.OperationResult } } catch { }
-            }
+            $json = Get-CiToolJson $text
+            if ($json -and $null -ne $json.OperationResult) { $r.citool_result = [int64]$json.OperationResult }
             $shown = ($text -replace '\s+', ' ').Trim()
             if ($shown.Length -gt 200) { $shown = $shown.Substring(0, 200) + '...' }
             $parts.Add("CiTool.exe --refresh --json: $(if ($n.timed_out) { 'no answer within its time bound' } else { "exit $($n.code)" }), OperationResult $(if ($null -eq $r.citool_result) { 'not found' } else { $r.citool_result }) ($shown)")

@@ -47,11 +47,16 @@ namespace AmdgpuWddmSetup
         //                       off before its first program runs (checks smartappcontrol.on and .evaluation;
         //                       install.ps1, Invoke-SmartAppControlOff). It is the first change of the run, so its
         //                       line comes first.
-        public static string[] PlanChangeIds(bool testModeOff, string bitLockerState, bool vcRuntimeMissing = false, bool smartAppControlOff = false)
+        //   kernelSigners: Secure Boot is on and a signed Code Integrity policy is active (check KernelSignersCheck;
+        //                  install.ps1, Read-KernelTrustRoute). The install does not touch test mode or the start
+        //                  options, so one line replaces the test mode and BitLocker lines.
+        public static string[] PlanChangeIds(bool testModeOff, string bitLockerState, bool vcRuntimeMissing = false, bool smartAppControlOff = false,
+            bool kernelSigners = false)
         {
             var ids = new List<string>();
             if (smartAppControlOff) ids.Add("plan.change.smartappcontrol");
-            if (!testModeOff) ids.Add("plan.change.test-mode.on");
+            if (kernelSigners) ids.Add("plan.change.kernel-signers");
+            else if (!testModeOff) ids.Add("plan.change.test-mode.on");
             else
             {
                 ids.Add("plan.change.test-mode");
@@ -61,6 +66,9 @@ namespace AmdgpuWddmSetup
             if (vcRuntimeMissing) ids.Add("plan.change.vcruntime");
             return ids.ToArray();
         }
+
+        // The preflight line of the custom kernel signers route.
+        public const string KernelSignersCheck = "secureboot.kernel-signers";
 
         // The preflight lines that make the install turn Smart App Control off.
         public static readonly string[] SmartAppControlOffChecks = { "smartappcontrol.on", "smartappcontrol.evaluation" };

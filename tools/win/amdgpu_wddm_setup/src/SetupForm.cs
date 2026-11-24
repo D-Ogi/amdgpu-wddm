@@ -1016,10 +1016,13 @@ namespace AmdgpuWddmSetup
             // Smart App Control on or in evaluation mode: the install turns it off, as information like the lines
             // above. There is no box to tick and no other question: Install is the consent.
             bool sacOff = _plan != null && _plan.Checks.Any(c => InstallFlow.SmartAppControlOffChecks.Contains(c.Id));
-            foreach (var id in InstallFlow.PlanChangeIds(testModeOff, PlanBitLocker(), vcMissing, sacOff))
+            // Secure Boot on with a signed Code Integrity policy: the install leaves test mode and the start options alone.
+            bool kernelSigners = _plan != null && _plan.Checks.Any(c => c.Id == InstallFlow.KernelSignersCheck);
+            foreach (var id in InstallFlow.PlanChangeIds(testModeOff, PlanBitLocker(), vcMissing, sacOff, kernelSigners))
             {
                 switch (id)
                 {
+                    case "plan.change.kernel-signers": steps.Row(Icons.Check, Theme.Good, Strings.T(id)); break;
                     case "plan.change.test-mode": steps.Row(Icons.Lock, Theme.Teal, Strings.T(id), Strings.T("plan.change.test-mode.note")); break;
                     case "plan.change.test-mode.on": steps.Row(Icons.Check, Theme.Good, Strings.T(id)); break;
                     case "plan.change.bitlocker": steps.Row(Icons.Shield, Theme.Teal, Strings.T(id)); break;

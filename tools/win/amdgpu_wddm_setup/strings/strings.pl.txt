@@ -85,8 +85,10 @@ check.gpu.ignored|rev|cced4549|Nie znaleziono układu graficznego BC-250; ten pr
 check.secureboot.off|rev|a107f361|Secure Boot jest wyłączony.
 check.secureboot.on|rev|1a594fe8|Secure Boot jest włączony. Przed instalacją wyłącz go w ustawieniach firmware komputera.
 check.secureboot.unknown|rev|349a2c6d|Instalator nie mógł odczytać, czy Secure Boot jest włączony.
+check.secureboot.kernel-signers|mt|0435d99a|Secure Boot jest włączony i aktywna jest podpisana zasada integralności kodu (Code Integrity). Instalator zainstaluje sterownik bez trybu testowego Windows.
 check.testsigning.active|rev|f6138193|Tryb testowy Windows jest włączony.
 check.testsigning.inactive|rev|1f2ea753|Tryb testowy Windows jest wyłączony. Instalator włączy go w ramach instalacji.
+check.testsigning.not-needed|mt|c3755afa|Tryb testowy Windows nie jest potrzebny: podpisana zasada integralności kodu pozwala Windows załadować sterownik.
 check.bitlocker.ok|rev|f6019261|BitLocker nie wymaga żadnych działań.
 check.bitlocker.on|rev|833d9bbb|BitLocker jest włączony. Instalator wstrzyma go na czas ponownych uruchomień instalacji, a potem BitLocker włączy się sam.
 check.bitlocker.unknown|rev|74c5d56a|Instalator nie mógł odczytać stanu funkcji BitLocker. Jeśli BitLocker jest włączony, przygotuj klucz odzyskiwania.
@@ -140,6 +142,7 @@ plan.restarts.choice|rev|e2801100|Każde ponowne uruchomienie zaczyna się samo 
 plan.change.test-mode|rev|7c5a1301|Windows przełącza się w tryb testowy, aby móc wczytać ten sterownik.
 plan.change.test-mode.note|rev|9a9c5086|W rogu pulpitu pojawi się wtedy napis „Tryb testowy”. Usunięcie sterownika wyłącza ten tryb.
 plan.change.test-mode.on|rev|cf315297|Windows już działa w trybie testowym, więc nic się tu nie zmienia.
+plan.change.kernel-signers|mt|ad5b4221|Tryb testowy Windows pozostaje wyłączony: podpisana zasada integralności kodu na tym komputerze pozwala Windows załadować sterownik.
 plan.change.bitlocker|rev|f43553fa|Ochrona BitLocker zostaje wstrzymana na czas ponownych uruchomień tej instalacji i potem włącza się sama, więc Windows nie poprosi o klucz odzyskiwania.
 plan.change.bitlocker.unknown|rev|67f2277e|Instalator nie mógł odczytać stanu funkcji BitLocker na tym komputerze. Mimo to kontynuuje pracę: miej klucz odzyskiwania pod ręką, jeśli Windows poprosi o niego po ponownym uruchomieniu.
 plan.change.vcruntime|rev|65d68876|Najpierw instalowane jest środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), którego potrzebują programy sterownika.

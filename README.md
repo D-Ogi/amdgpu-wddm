@@ -26,8 +26,9 @@ You need an ASRock BC-250 with Windows 11 x64, version 23H2 or newer, and an int
    Windows and restarts the computer.
 3. After the restart, Nagi Control App shows the driver, the clocks, the temperature and the fan.
 
-The installer stops on a computer that is not a BC-250 and changes nothing there. Secure Boot must be off. The stock
-BC-250 BIOS has no Secure Boot, so it is off already. Removal, settings and what to do when something fails:
+The installer stops on a computer that is not a BC-250 and changes nothing there. Secure Boot must be off, or a signed
+custom kernel signers policy must name the driver certificate. The stock BC-250 BIOS has no Secure Boot, so it is
+off already. Removal, settings and what to do when something fails:
 [installation guide](docs/testing/INSTALL.md). Report a problem in [Issues](https://github.com/D-Ogi/amdgpu-wddm/issues)
 and attach the support file that the installer or the control app makes.
 

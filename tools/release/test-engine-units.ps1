@@ -744,6 +744,50 @@ $live = Read-SecureBootVariable
 Check (($null -ne $live.bytes) -or ($live.error -gt 0)) "the real read compiles and runs on this host: bytes $(if ($null -ne $live.bytes) { [BitConverter]::ToString([byte[]]$live.bytes) } else { 'none' }), Win32 error $($live.error), privilege error $($live.privilege_error)"
 Check ((Get-SecureBootState) -in 'on', 'off', 'legacy-bios', 'unknown') "Get-SecureBootState keeps its four values on this host: $(Get-SecureBootState)"
 
+'[CKS] the kernel trust route: test signing, or custom kernel signers with Secure Boot on'
+# The policy rows as CiTool --list-policies --json gives them (the fields of a run as SYSTEM in the test B VM,
+# 2026-11-22). The CKS row is the test B policy: a signed, enforced base policy that is not a system policy.
+$cks = [pscustomobject]@{ PolicyID = '8cdf6779-286e-4e64-8e1f-1f3641c9925b'; BasePolicyID = '8cdf6779-286e-4e64-8e1f-1f3641c9925b'; FriendlyName = 'BC-250 test B custom kernel signers'; IsSystemPolicy = $false; IsSignedPolicy = $true; IsEnforced = $true; IsOnDisk = $true }
+$sysPolicy = [pscustomobject]@{ PolicyID = 'd2bda982-ccf6-4344-ac5b-0b44427b6816'; BasePolicyID = 'd2bda982-ccf6-4344-ac5b-0b44427b6816'; FriendlyName = 'Microsoft Windows Driver Policy'; IsSystemPolicy = $true; IsSignedPolicy = $true; IsEnforced = $true; IsOnDisk = $false }
+$unsignedBase = [pscustomobject]@{ PolicyID = '11111111-1111-1111-1111-111111111111'; BasePolicyID = '11111111-1111-1111-1111-111111111111'; FriendlyName = 'unsigned base'; IsSystemPolicy = $false; IsSignedPolicy = $false; IsEnforced = $true; IsOnDisk = $true }
+$auditBase = [pscustomobject]@{ PolicyID = '22222222-2222-2222-2222-222222222222'; BasePolicyID = '22222222-2222-2222-2222-222222222222'; FriendlyName = 'audit base'; IsSystemPolicy = $false; IsSignedPolicy = $true; IsEnforced = $false; IsOnDisk = $true }
+$supplemental = [pscustomobject]@{ PolicyID = '33333333-3333-3333-3333-333333333333'; BasePolicyID = '8cdf6779-286e-4e64-8e1f-1f3641c9925b'; FriendlyName = 'signed supplemental'; IsSystemPolicy = $false; IsSignedPolicy = $true; IsEnforced = $true; IsOnDisk = $true }
+$policyReads = @{ n = 0 }
+function Read-Route([string]$Sb, $Rows) { $policyReads.n = 0; return Read-KernelTrustRoute -SecureBoot $Sb -ReadPolicies { $policyReads.n++; $Rows }.GetNewClosure() }
+foreach ($sb in 'off', 'legacy-bios', 'unknown') {
+    $r = Read-Route $sb @($cks)
+    Check (($r.route -eq 'testsigning') -and ($policyReads.n -eq 0)) "Secure Boot ${sb}: route testsigning, the policies are not read ($($r.detail))"
+}
+$r = Read-Route 'on' @($sysPolicy, $cks)
+Check (($r.route -eq 'custom-kernel-signers') -and ($r.policy_id -eq $cks.PolicyID) -and ($r.detail -match [regex]::Escape($cks.FriendlyName)) -and ($r.detail -match 'driver load after the install')) "Secure Boot on with a signed enforced base policy: route custom-kernel-signers ($($r.detail))"
+$r = Read-Route 'on' @($sysPolicy, $unsignedBase, $auditBase, $supplemental)
+Check (($r.route -eq 'none') -and ($null -eq $r.policy_id) -and ($r.detail -match '4 active')) "a system policy, an unsigned base, an audit base and a signed supplemental give no route: $($r.detail)"
+$r = Read-Route 'on' @()
+Check ($r.route -eq 'none') "Secure Boot on, no policy: route none ($($r.detail))"
+$r = Read-KernelTrustRoute -SecureBoot 'on' -ReadPolicies { throw 'CiTool.exe is not on this Windows' }
+Check (($r.route -eq 'none') -and ($r.detail -match 'could not be read') -and ($r.detail -match 'CiTool\.exe is not on this Windows')) "a policy list that cannot be read gives route none and says why: $($r.detail)"
+# The CiTool output with its OperationResult: a refused list (not elevated) is an error, never an empty list.
+$r = ConvertFrom-CiPolicyList -Text '{"OperationResult":-2147024891}' -ExitCode 5
+Check (($null -eq $r.policies) -and ($r.error -match '0x80070005') -and ($r.error -match 'exit code 5')) "CiTool refused: $($r.error)"
+$r = ConvertFrom-CiPolicyList -Text ('{"Policies":[' + ($cks | ConvertTo-Json -Compress) + '],"OperationResult":0}') -ExitCode 0
+Check (($null -eq $r.error) -and (@($r.policies).Count -eq 1) -and ($r.policies[0].FriendlyName -eq $cks.FriendlyName)) 'CiTool list: one policy row read back'
+$r = ConvertFrom-CiPolicyList -Text ("CiTool output`r`n{`r`n  `"Policies`": [" + ($cks | ConvertTo-Json -Compress) + "],`r`n  `"OperationResult`": 0`r`n}`r`n") -ExitCode 0
+Check (($null -eq $r.error) -and (@($r.policies).Count -eq 1)) 'CiTool list after another line and across lines: read (the parser of the Smart App Control refresh)'
+$r = ConvertFrom-CiPolicyList -Text 'not json' -ExitCode 0
+Check (($null -eq $r.policies) -and ($r.error -match 'not JSON')) "CiTool text that is not JSON: $($r.error)"
+# The start state on that route: problem code 52 (CM_PROB_UNSIGNED_DRIVER) names the policy, not test signing.
+$s52 = Get-VerifyStartState -ProblemCode 52 -Status 'Error' -KernelTrust 'custom-kernel-signers'
+Check ((-not $s52.started) -and ($s52.reason -match 'problem code 52') -and ($s52.reason -match 'does not name the driver certificate')) "code 52 on the custom kernel signers route: $($s52.reason)"
+$s52t = Get-VerifyStartState -ProblemCode 52 -Status 'Error' -KernelTrust 'testsigning'
+Check ((-not $s52t.started) -and ($s52t.reason -notmatch 'Code Integrity policy')) "negative control, code 52 on the test signing route: no policy text ($($s52t.reason))"
+$installText = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+Check ($installText -match '\$script:KernelTrust = Read-KernelTrustRoute -SecureBoot \$sb') 'install.ps1: the preflight reads the route from the Secure Boot state it read'
+Check ($installText -match "'secureboot\.kernel-signers'") 'install.ps1: Secure Boot on with a policy is its own check id'
+Check ($installText -match "'testsigning\.not-needed'") 'install.ps1: the test signing line says that test mode is not needed on that route'
+Check ($installText -match "Set-StateValue \`$state 'kernel_trust_route'") 'install.ps1: phase 1 keeps the route in the state'
+Check ($installText -match "if \(\`$script:KernelTrust\.route -eq 'custom-kernel-signers'\) \{[^\n]*\n[^\n]*no test signing") 'install.ps1: phase 1 goes to phase 2 without test signing on that route'
+Check ($installText -match '-KernelTrust \(\[string\]\$state\.kernel_trust_route\)') 'install.ps1: verify gives the saved route to the start state'
+
 $cerPath = 'C:\pkg dir\payload\cert\amdgpu-wddm-release.cer'
 $denied = New-Object UnauthorizedAccessException 'Access is denied.'
 $e1 = New-CertificateStoreError -Store 'Root' -Certificate $cerPath -Exception $denied -Remaining @('TrustedPublisher')

@@ -347,6 +347,9 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  Check 'installer-engine-units' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-engine-units.ps1" -WorkRoot "$Out\installer-engine-units" }
  # BD-325: the dry-run reading of the GPU firmware preflight line ([ok] with one or both hosts, refusals for the rest).
  Check 'release-firmware-preflight' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-firmware-preflight.ps1" }
+ # The custom kernel signers policy builder: two throwaway certificates in memory, the policy it writes for them,
+ # and its refusals. The ConfigCI cmdlets of Windows PowerShell 5.1. Files under Out only, no policy is activated.
+ Check 'cks-policy' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\win\cks-policy\test.ps1" -WorkRoot "$Out\cks-policy" }
  # BD-296: the production removal block and the packaged dry-run assertion must agree before packaging.
  # The source-only test uses memory-only removal functions; it never invokes the uninstaller or registry.
  Check 'installer-uninstall-policy' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-uninstall-policy.ps1" }

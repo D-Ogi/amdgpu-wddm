@@ -242,7 +242,11 @@ function Invoke-Preflight {
     $sbRead = Read-SecureBootState
     $sb = $sbRead.state
     $script:SecureBoot = $sb
-    if ($sb -eq 'on') { Add-Check 'Secure Boot' 'fail' "$($sbRead.detail): test signing cannot be enabled. Turn Secure Boot off in the BIOS setup first (see INSTALL.md, section Secure Boot)." 'secureboot.on' }
+    # With Secure Boot on, Windows ignores test signing; a signed custom kernel signers policy is the other route
+    # (Read-KernelTrustRoute, INSTALL.md section Secure Boot).
+    $script:KernelTrust = Read-KernelTrustRoute -SecureBoot $sb
+    if ($script:KernelTrust.route -eq 'custom-kernel-signers') { Add-Check 'Secure Boot' 'ok' "$($sbRead.detail); $($script:KernelTrust.detail)" 'secureboot.kernel-signers' }
+    elseif ($sb -eq 'on') { Add-Check 'Secure Boot' 'fail' "$($sbRead.detail): test signing cannot be enabled, and $($script:KernelTrust.detail -replace '^Secure Boot on; ', ''). Turn Secure Boot off in the BIOS setup first, or activate a custom kernel signers policy (see INSTALL.md, section Secure Boot)." 'secureboot.on' }
     elseif ($sb -eq 'unknown') { Add-Check 'Secure Boot' 'warn' "state unknown: $($sbRead.detail)" 'secureboot.unknown' }
     else { Add-Check 'Secure Boot' 'ok' $sbRead.detail 'secureboot.off' }
 
@@ -250,7 +254,9 @@ function Invoke-Preflight {
     $tsNext = Get-TestSigningConfigured
     $script:TestSigningActive = $tsActive
     $script:TestSigningConfigured = $tsNext
-    Add-Check 'test signing' 'ok' ("active in this boot: $tsActive; explicit setting on this boot entry: $(if ($null -eq $tsNext) { 'unknown' } else { $tsNext })") $(if ($tsActive) { 'testsigning.active' } else { 'testsigning.inactive' })
+    $tsText = "active in this boot: $tsActive; explicit setting on this boot entry: $(if ($null -eq $tsNext) { 'unknown' } else { $tsNext })"
+    if ($script:KernelTrust.route -eq 'custom-kernel-signers') { Add-Check 'test signing' 'ok' "not needed on the custom kernel signers route; $tsText" 'testsigning.not-needed' }
+    else { Add-Check 'test signing' 'ok' $tsText $(if ($tsActive) { 'testsigning.active' } else { 'testsigning.inactive' }) }
 
     $bl = Get-BitLockerState
     $script:BitLockerState = $bl
@@ -677,7 +683,7 @@ function Invoke-Verify {
     $pspVerdict = Get-PspFunctionVerdict -Readings (Read-PspFunctionState)
     if ($pspVerdict.level -eq 'warn') { Add-Warning 'secure processor' $pspVerdict.text } else { Add-Info 'secure processor' $pspVerdict.text }
     # Everything below that needs a running driver asks this first.
-    $startState = Get-VerifyStartState -ProblemCode ([int]$dev[0].ConfigManagerErrorCode) -Status ([string]$pnp.Status)
+    $startState = Get-VerifyStartState -ProblemCode ([int]$dev[0].ConfigManagerErrorCode) -Status ([string]$pnp.Status) -KernelTrust ([string]$state.kernel_trust_route)
     $drv = Get-CimInstance Win32_PnPSignedDriver -Filter "DeviceID='$($id -replace '\\', '\\')'" -ErrorAction SilentlyContinue
     $want = $null
     if ($script:Manifest) { $want = Get-ManifestDriverQuad $script:Manifest }
@@ -1186,7 +1192,7 @@ if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
         (Get-DriverSetAction $state.driver_set (Get-Sha256 $planInf) ([string](Get-BootIdentity).boot_id)) -eq 'verify-binding') {
         $restarts = 1 # this driver set has already crossed its shutdown boundary
     }
-    if ($state.phase -in @('new', 'testsigning-pending') -and -not $script:TestSigningActive) { $restarts++ }
+    if ($state.phase -in @('new', 'testsigning-pending') -and -not $script:TestSigningActive -and $script:KernelTrust.route -ne 'custom-kernel-signers') { $restarts++ }
 }
 $script:PlannedRestarts = $restarts
 $firmwareSource = $(if (-not $FirmwareDir) { 'download' } elseif (Test-SamePath $FirmwareDir (Join-Path $package 'firmware')) { 'package-folder' } else { 'folder' })
@@ -1257,7 +1263,9 @@ $script:EngineConsents = @($consents)
 if ($Plan) {
     Write-Host ''
     Write-Host "Plan: $($action.action); restarts: $restarts; firmware: $firmwareSource. Nothing was changed." -ForegroundColor Green
-    if ($action.action -in @('install', 'upgrade', 'repair', 'resume') -and $state.phase -eq 'new' -and -not $script:TestSigningActive) {
+    if ($action.action -in @('install', 'upgrade', 'repair', 'resume') -and $state.phase -eq 'new' -and $script:KernelTrust.route -eq 'custom-kernel-signers') {
+        Write-Host '      Windows test mode stays off: the signed Code Integrity policy of this PC lets Windows load the driver.' -ForegroundColor White
+    } elseif ($action.action -in @('install', 'upgrade', 'repair', 'resume') -and $state.phase -eq 'new' -and -not $script:TestSigningActive) {
         # What the install changes about the way Windows starts, as information: the console says the same as the
         # setup window's plan screen, and neither asks for an answer.
         Write-Host '      Windows test mode is turned on, and "Test Mode" then shows on the desktop. Uninstall turns it off again.' -ForegroundColor White
@@ -1414,7 +1422,13 @@ if ($state.phase -eq 'new') {
     Set-StateValue $state 'install_root' $InstallRoot
     Set-StateValue $state 'package_version' $script:Manifest.version
     New-RestorePoint
-    if ($script:TestSigningActive) {
+    Set-StateValue $state 'kernel_trust_route' ([string]$script:KernelTrust.route)
+    if ($script:KernelTrust.route -eq 'custom-kernel-signers') {
+        Write-Info "Secure Boot is on and a signed Code Integrity policy is active: no test signing, no restart before the install ($($script:KernelTrust.policy_name))"
+        Set-StateValue $state 'testsigning_set_by_installer' $false
+        # The phase name is the one older states know: phase 2 starts from it on both routes.
+        Save-Phase 'testsigning-active'
+    } elseif ($script:TestSigningActive) {
         Write-Info 'test signing is already active in this boot: no restart needed before the install'
         Set-StateValue $state 'testsigning_set_by_installer' $false
         Save-Phase 'testsigning-active'
@@ -1476,7 +1490,7 @@ if ($state.phase -eq 'testsigning-pending') {
 
 # ---- phase 2: install ------------------------------------------------------------------------------------------
 Enter-Stage 'install' 'Phase 2: install'
-if (-not $script:DryRunMode -and -not $script:TestSigningActive) {
+if (-not $script:DryRunMode -and -not $script:TestSigningActive -and $script:KernelTrust.route -ne 'custom-kernel-signers') {
     Write-Fail 'test signing is not active'
     Exit-Engine -Code 5 -Outcome 'failed' -MessageId 'result.testsigning-not-active' -Detail 'phase 2 needs test signing in the running boot'
 }
