@@ -289,16 +289,19 @@ with RC1106. `build-vkd3d.ps1` has no resource step and gives `--target=i686-pc-
 
 ```
 -Dbuildtype=debugoptimized -Db_ndebug=true -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false
--Dvulkan-drivers=amd -Dgallium-drivers=[] -Ddefault_library=static -Dplatforms=windows -Dvideo-codecs=[]
--Degl=disabled -Dglx=disabled -Dzstd=disabled
+-Dvulkan-drivers=amd -Dgallium-drivers=[] -Db_vscrt=mt -Ddefault_library=static -Dplatforms=windows
+-Dvideo-codecs=[] -Degl=disabled -Dglx=disabled -Dzstd=disabled
 ```
 
-Target `src/amd/vulkan/vulkan_radeon.dll`: ACO only, no LLVM, and glslangValidator is required. It links the
-DLL C runtime (`MSVCP140.dll`, `VCRUNTIME140.dll`, `VCRUNTIME140_1.dll`). Candidate patches on top of the base
-are listed in the [E33 README](../experiments/E33-m12-applications/README.md).
+Target `src/amd/vulkan/vulkan_radeon.dll`: ACO only, no LLVM, and glslangValidator is required. The release
+ships it as the desktop ICD `payload/desktop/amdgpu_wddm_radv.dll`, which the Zink D3D10 UMD loads into
+`dwm.exe`. It links the static C runtime (`-Db_vscrt=mt`, BD-389). Up to tester.39 rc3 the set linked the DLL C
+runtime, and the ICD imported `MSVCP140.dll`, `VCRUNTIME140.dll` and `VCRUNTIME140_1.dll`. A clean Windows does
+not have these files. With the driver package installed alone, DWM did not start on the device and Windows
+stopped the device with Code 43. Candidate patches on top of the base are listed in the
+[E33 README](../experiments/E33-m12-applications/README.md).
 
-`-Config radv-mt` is the same set with `-Db_vscrt=mt` before `-Ddefault_library=static`: the static C runtime,
-no `MSVCP140.dll` import. It also takes `-Dforce_fallback_for=zlib,libzstd` and `-Dzstd=enabled`: the ICDs of
+`-Config radv-mt` is the same set with `-Dforce_fallback_for=zlib,libzstd` and `-Dzstd=enabled`: the ICDs of
 game processes have the shader disk cache, which compresses its entries with zstd at level 3 when zstd is
 there and with zlib at its highest level when it is not (`src/util/compress.c`, BD-256). The Mesa line must
 carry `subprojects/zstd.wrap` (zstd 1.5.7, meson WrapDB). The desktop, Zink UMD and llvmpipe configs keep
@@ -307,7 +310,10 @@ carry `subprojects/zstd.wrap` (zstd 1.5.7, meson WrapDB). The desktop, Zink UMD 
 built by newer STL headers then faults in the old `_Mtx_lock` (Rise of the Tomb Raider, 2026-10-01). ICDs
 for game processes use it. The Mesa tree needs the fork's RADV link fix (D-Ogi/mesa-amdgpu-wddm
 `amdgpu-wddm/icd-v3-0004b`, dec624fe "radv: Exclude the C runtime the build does not use, by b_vscrt"): before it,
-the port's `/NODEFAULTLIB:libcmt.lib` left every CRT symbol unresolved under `-Db_vscrt=mt` (LNK1120).
+the port's `/NODEFAULTLIB:libcmt.lib` left every CRT symbol unresolved under `-Db_vscrt=mt` (LNK1120). The
+`radv` set needs the same fix with `-Compiler msvc`. The port gives that flag only when the meson compiler ID is
+`msvc`, so a clang-cl build, which every release row uses, does not need the fix. The desktop line `e155ebe5`
+does not carry it.
 
 `-Config radv-system` builds the x64 system Vulkan ICD (`payload/vulkan/vulkan_radeon.dll`).
 It uses the `radv-mt` options, including `-Db_vscrt=mt` and `-Db_ndebug=true`.
@@ -355,11 +361,12 @@ option builds the set above, as recorded.
 
 ```
 -Dbuildtype=debugoptimized -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false -Dvulkan-drivers=[]
--Dgallium-drivers=zink -Dgallium-d3d10umd=true -Dgallium-d3d10-dll-name=bc250d3d_zink -Ddefault_library=static
--Dplatforms=windows -Dvideo-codecs=[] -Degl=disabled -Dglx=disabled -Dzstd=disabled
+-Dgallium-drivers=zink -Dgallium-d3d10umd=true -Dgallium-d3d10-dll-name=bc250d3d_zink -Db_vscrt=mt
+-Ddefault_library=static -Dplatforms=windows -Dvideo-codecs=[] -Degl=disabled -Dglx=disabled -Dzstd=disabled
 ```
 
-Target `src/gallium/targets/d3d10umd/bc250d3d_zink.dll`, linked against the DLL C runtime. Upstream
+Target `src/gallium/targets/d3d10umd/bc250d3d_zink.dll`. It links the static C runtime (`-Db_vscrt=mt`), for the
+reason of the `radv` set (BD-389): the router loads it into `dwm.exe`. Upstream
 `meson.build` refuses d3d10umd without softpipe or llvmpipe. The patched tree accepts Zink. The release flavour
 adds `-Db_ndebug=true`, as for `llvmpipe-umd`, and the lab flavour keeps the asserts.
 

@@ -33,7 +33,7 @@
   },
   "configs": {
     "radv": {
-      "description": "RADV Vulkan ICD with the WDDM2 winsys, ACO only (no LLVM)",
+      "description": "RADV Vulkan ICD with the WDDM2 winsys, ACO only (no LLVM), static C runtime: the desktop ICD (payload/desktop/amdgpu_wddm_radv.dll) that the Zink D3D10 UMD loads into dwm.exe. With the DLL runtime it imported VCRUNTIME140.dll, VCRUNTIME140_1.dll and MSVCP140.dll, which a clean Windows does not have, and DWM could not start on the device (BD-389). zstd stays off: this line has no disk cache",
       "needs_llvm": false,
       "glslang": "required",
       "options": [
@@ -44,6 +44,7 @@
         "-Damd-use-llvm=false",
         "-Dvulkan-drivers=amd",
         "-Dgallium-drivers=[]",
+        "-Db_vscrt=mt",
         "-Ddefault_library=static",
         "-Dplatforms=windows",
         "-Dvideo-codecs=[]",
@@ -53,7 +54,7 @@
       ],
       "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
       "ships": {"src/amd/vulkan/vulkan_radeon.dll": ["amdgpu_wddm_radv.dll"]},
-      "recorded_script": "experiments/E27-m9-inference/radv-main/build.cmd"
+      "recorded_script": "experiments/E27-m9-inference/radv-main/build.cmd, plus -Db_vscrt=mt (BD-389)"
     },
     "radv-mt": {
       "description": "RADV Vulkan ICD with the WDDM2 winsys, ACO only (no LLVM), static C runtime (the radv set plus -Db_vscrt=mt): the ICD runs inside every game, and a game that ships an older msvcp140.dll beside its exe hands it to every DLL that imports MSVCP140.dll by name",
@@ -136,7 +137,7 @@
       "recorded_script": "experiments/E26-wddm-desktop/build-mesa-main-llvm23.cmd"
     },
     "zink-umd": {
-      "description": "Native D3D10 UMD: Gallium d3d10umd frontend on Zink over the Vulkan ICD, no LLVM",
+      "description": "Native D3D10 UMD: Gallium d3d10umd frontend on Zink over the Vulkan ICD, no LLVM, static C runtime: the router loads it into dwm.exe, and with the DLL runtime it imported VCRUNTIME140.dll, VCRUNTIME140_1.dll and MSVCP140.dll, which a clean Windows does not have (BD-389)",
       "needs_llvm": false,
       "glslang": "on-path",
       "options": [
@@ -148,6 +149,7 @@
         "-Dgallium-drivers=zink",
         "-Dgallium-d3d10umd=true",
         "-Dgallium-d3d10-dll-name=bc250d3d_zink",
+        "-Db_vscrt=mt",
         "-Ddefault_library=static",
         "-Dplatforms=windows",
         "-Dvideo-codecs=[]",
@@ -158,7 +160,7 @@
       "release_options": ["-Db_ndebug=true"],
       "targets": ["src/gallium/targets/d3d10umd/bc250d3d_zink.dll"],
       "ships": {"src/gallium/targets/d3d10umd/bc250d3d_zink.dll": ["bc250d3d_zink.dll"]},
-      "recorded_script": "experiments/E34-native-d3d-zink/build.cmd"
+      "recorded_script": "experiments/E34-native-d3d-zink/build.cmd, plus -Db_vscrt=mt (BD-389)"
     },
     "zink-gl": {
       "description": "OpenGL through Zink (WGL): app-local opengl32.dll plus libgallium_wgl.dll, no LLVM",

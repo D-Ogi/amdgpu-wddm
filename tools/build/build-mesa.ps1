@@ -6,11 +6,11 @@ Configures and builds one of the lab's Mesa components with its recorded meson o
 .DESCRIPTION
 -Config picks the option set from mesa-configs.json next to this script (the only copy of those options):
 
-  radv          RADV Vulkan ICD (vulkan_radeon.dll)
-  radv-mt       the same with the static C runtime (-Db_vscrt=mt), for ICDs loaded into games
+  radv          RADV Vulkan ICD (vulkan_radeon.dll), static C runtime: the desktop ICD that loads into dwm.exe
+  radv-mt       the same with zstd for the shader disk cache, for ICDs loaded into games
   radv-system   the x64 system Vulkan ICD: static C runtime, asserts off (Mesa a7f44c96 or later)
   llvmpipe-umd  desktop D3D10 UMD on llvmpipe (bc250d3d.dll), needs -Llvm
-  zink-umd      native D3D10 UMD on Zink (bc250d3d_zink.dll)
+  zink-umd      native D3D10 UMD on Zink (bc250d3d_zink.dll), static C runtime
   zink-gl       OpenGL on Zink (libgallium_wgl.dll, opengl32.dll)
   zink-gl-icd   system OpenGL ICD on Zink (amdgpu_wddm_gl.dll), x64 and x86
 

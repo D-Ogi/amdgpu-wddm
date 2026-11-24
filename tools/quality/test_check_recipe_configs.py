@@ -218,6 +218,22 @@ class RecipeConfigs(unittest.TestCase):
         mesa = json.loads(self.read("mesa-configs.json"))["configs"]
         self.assertEqual(["vulkan_radeon.dll"], mesa["radv-system"]["ships"]["src/amd/vulkan/vulkan_radeon.dll"])
 
+    def test_desktop_route_resolves_static_crt_in_both_flavours(self):
+        # BD-389: the desktop RADV (radv) and the Zink D3D10 UMD (zink-umd) load into dwm.exe. With the dynamic CRT
+        # they imported VCRUNTIME140.dll, VCRUNTIME140_1.dll and MSVCP140.dll, which a clean Windows does not have,
+        # and DWM could not start on the device.
+        code, text, out = self.run_gate()
+        self.assertEqual(0, code, text)
+        with open(os.path.join(out, "resolved.json"), encoding="utf-8") as fh:
+            resolved = json.load(fh)
+        for config in ("radv", "zink-umd"):
+            for flavour in ("release", "lab"):
+                for compiler in ("msvc", "clang-cl"):
+                    for variants in ("", " +release", " +release+lto+isa"):
+                        name = "build-mesa.ps1 %s %s %s%s" % (config, flavour, compiler, variants)
+                        options = resolved[name]
+                        self.assertEqual(["-Db_vscrt=mt"], [x for x in options if x.startswith("-Db_vscrt=")], name)
+
     def test_the_mesa_sets_resolve_as_recorded_and_variants_only_add(self):
         # The shipped sets stay as recorded; -Compiler names the compiler and -Variant adds named
         # changes. No variant may touch an option it does not name.
