@@ -23,6 +23,8 @@
 #      harness run under the Khronos validation layer (toolchain\vvl) with synchronization validation, which must
 #      report no message and must show the loader line that inserts the layer (the witness that "no message" is not
 #      "no layer").
+# D3D12 headers: -DdiInclude (d3d12umddi.h) and -ApiInclude (d3d12.h); without them, the roots of the release recipes
+# (common.ps1, Get-Bc250D3D12HeaderRoots). The 26100 headers alone cannot compile the library.
 # Any failed step fails the script. Output goes to <workspace>\scratch\build\d3d12-engine-ddi unless -OutputDir.
 param(
     [string]$OutputDir,
@@ -112,7 +114,11 @@ try {
     $null = Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir -Arch $Arch
     $compilerExe=Resolve-Bc250UmdCompiler $root $Compiler $MsvcReason $OutputDir $Arch
     $wdk = Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
-    # DDI-only headers may override the SDK/WDK while shared headers and tools stay pinned.
+    # DDI-only headers may override the SDK/WDK while shared headers and tools stay pinned. Without -DdiInclude and
+    # -ApiInclude the build uses the roots of the release recipes (common.ps1, Get-Bc250D3D12HeaderRoots).
+    $d3d12Headers = Get-Bc250D3D12HeaderRoots $root
+    if (-not $DdiInclude) { $DdiInclude = $d3d12Headers.Ddi }
+    if (-not $ApiInclude) { $ApiInclude = $d3d12Headers.Api }
     if($DdiInclude){
         $DdiInclude=[IO.Path]::GetFullPath($DdiInclude)
         if(!(Test-Path -LiteralPath (Join-Path $DdiInclude 'd3d12umddi.h'))){throw 'DdiInclude lacks d3d12umddi.h'}
@@ -133,12 +139,13 @@ try {
                "/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$VulkanInclude", "/external:I$EngineInclude",
                "/external:I$repo\driver\contract\third_party", "/external:I$repo\driver\contract\uapi-shim", "/I$src")
     if ($Lab) { $flags += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
-    # raytracing-tier12.h names values and layouts that the 26100 headers of this build lack, and checks them against
-    # the headers that have them only where those headers are on the include path. This step puts them there: d3d12.h
-    # of Agility SDK 1.619.6 and d3d12umddi.h of WDK 10.0.28000 (its um directory; the 26100 shared headers serve
-    # both). Both are required, so the checks run in every build of the library.
-    $rt12Api = Join-Path $root 'toolchain\nuget\microsoft.direct3d.d3d12.1.619.6\build\native\include'
-    $rt12Ddi = Join-Path $root 'toolchain\nuget\wdk-28000.2526-um\c\Include\10.0.28000.0\um'
+    # raytracing-tier12.h names values and layouts that the 26100 headers lack, and checks them against the headers
+    # that have them only where those headers are on the include path. This step puts them there: d3d12.h of Agility
+    # SDK 1.619.6 and d3d12umddi.h of WDK 10.0.28000 (its um directory; the 26100 shared headers serve both), the
+    # roots of Get-Bc250D3D12HeaderRoots whatever -DdiInclude and -ApiInclude select. Both are required, so the checks
+    # run in every build of the library.
+    $rt12Api = $d3d12Headers.Api
+    $rt12Ddi = $d3d12Headers.Ddi
     foreach ($h in @((Join-Path $rt12Api 'd3d12.h'), (Join-Path $rt12Ddi 'd3d12umddi.h'))) {
         if (-not (Test-Path -LiteralPath $h)) { throw "raytracing tier 1.2 header test: $h does not exist" }
     }
