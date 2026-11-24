@@ -191,6 +191,19 @@ if ($tree -and (Test-Path -LiteralPath $tree)) {
     Check ($loaded.Count -eq 0) "reader: no file of the driver set is loaded into this process ($($loaded.Count))"
 } else { '  SKIP the attempt 6 driver set: BC250_ROOT does not hold it' }
 
+# ---- the task's one reading of the GPU device ---------------------------------------------------------------------
+# start-confirm.ps1 reads the device for the fallback's view and for the cause line of an unconfirmed run. Both
+# go through one function, so that the hardware id is in one place of that script.
+$tokens = $null; $parseErrors = $null
+$task = [Management.Automation.Language.Parser]::ParseFile((Join-Path $Installer 'start-confirm.ps1'), [ref]$tokens, [ref]$parseErrors)
+$ids = @($task.FindAll({ param($a) $a -is [Management.Automation.Language.StringConstantExpressionAst] -or $a -is [Management.Automation.Language.ExpandableStringExpressionAst] }, $true) |
+    Where-Object { $_.Value -match 'DEV_13FE' })
+$cims = @($task.FindAll({ param($a) $a -is [Management.Automation.Language.CommandAst] -and $a.GetCommandName() -eq 'Get-CimInstance' -and $a.Extent.Text -match 'Win32_PnPEntity' }, $true))
+$callers = @($task.FindAll({ param($a) $a -is [Management.Automation.Language.CommandAst] -and $a.GetCommandName() -eq 'Get-StartConfirmGpuDevices' }, $true) |
+    ForEach-Object { $f = $_.Parent; while ($f -and $f -isnot [Management.Automation.Language.FunctionDefinitionAst]) { $f = $f.Parent }; $(if ($f) { $f.Name } else { 'top level' }) })
+Check (@($parseErrors).Count -eq 0 -and $ids.Count -eq 1 -and $cims.Count -eq 1) "start-confirm.ps1: the hardware id $($ids.Count) time(s), one Win32_PnPEntity query ($($cims.Count))"
+Check ((($callers | Sort-Object) -join ',') -eq 'Get-FallbackView,top level') "start-confirm.ps1: the fallback view and the cause line read the device through Get-StartConfirmGpuDevices ($($callers -join ','))"
+
 if ($fail) { "FAIL: $fail check(s)"; exit 1 }
 'PASS: all checks'
 exit 0

@@ -166,8 +166,13 @@ function Confirm-Health([uint64]$Generation, [uint64]$Epoch) {
 function Format-Reading($r) { if (!$r) { return 'none' }; return "version $($r.version) flags $($r.flags) generation $($r.generation) epoch $($r.epoch) completed $($r.completed) age_ms $($r.age_ms) ready_ms $($r.ready_ms)" }
 
 # ---- the fallback's view: device, driver version, last stage ------------------------------------------------------
+# The present GPU devices whose instance id carries the hardware id of bc250kmd.inf. The one reading of the device in
+# this script: the fallback's view and the cause line of an unconfirmed run (BD-389) both take it.
+function Get-StartConfirmGpuDevices {
+    return @(Get-CimInstance Win32_PnPEntity -Filter "DeviceID LIKE 'PCI\\VEN_1002&DEV_13FE%'" -ErrorAction SilentlyContinue)
+}
 function Get-FallbackView {
-    $dev = @(Get-CimInstance Win32_PnPEntity -Filter "DeviceID LIKE 'PCI\\VEN_1002&DEV_13FE%'" -ErrorAction SilentlyContinue)
+    $dev = @(Get-StartConfirmGpuDevices)
     $problem = $(if ($dev.Count -eq 1) { [int]$dev[0].ConfigManagerErrorCode } else { -1 })
     $info = Invoke-Cli @('info')
     $version = $null
@@ -290,7 +295,7 @@ Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); $(Format
 # that confirmed nothing reads it. The line confirms nothing and changes no exit code.
 if ($script:exitCode -ne 0) {
     try {
-        $gpu = @(Get-CimInstance Win32_PnPEntity -Filter "DeviceID LIKE 'PCI\\VEN_1002&DEV_13FE%'" -ErrorAction SilentlyContinue)
+        $gpu = @(Get-StartConfirmGpuDevices)
         $one = $(if ($gpu.Count -eq 1) { $gpu[0] } else { $null })
         $causeRecord = $null
         try { $causeRecord = Read-StartRecord } catch { }
