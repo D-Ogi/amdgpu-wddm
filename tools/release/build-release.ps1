@@ -617,6 +617,17 @@ function Invoke-FlavourGate([string]$Receipt, [string[]]$Arguments) {
     '  ' + @($r.text -split "`r?`n" | Where-Object { $_ -like 'flavour gate: *' })[-1]
 }
 Invoke-FlavourGate 'flavour-gate-payload' @()
+# BD-389: no PE file of the package imports a C or C++ runtime DLL that Windows does not ship (the Visual C++
+# runtime libraries and the debug runtimes). The Universal CRT is a part of Windows and passes. The gate reads the
+# import and delay-import tables of every PE under the package top, the driver package and its wow64 tree included.
+# Signing adds a certificate table and changes no import table, so this one run covers the bytes that ship. The
+# negative control rewrites one import of the CPU UMD to MSVCP140.dll in memory, and the gate must refuse it. The
+# receipt is runtime-import-gate\runtime-import-gate.json under -Out.
+$runtimeGate = Invoke-Headless -File $pythonExe -Arguments @('-I', (Join-Path $repo 'tools\quality\runtime_import_gate.py'),
+    '--scan', $pkgRoot, '--negative-control', 'files/payload/kmd/desktop/bc250d3d.dll',
+    '--out', (Join-Path $Out 'runtime-import-gate')) -TimeoutSeconds 600
+if ($runtimeGate.code -ne 0) { throw "runtime import gate: $($runtimeGate.text)" }
+'  ' + @($runtimeGate.text -split "`r?`n" | Where-Object { $_ -like 'runtime import gate: *' })[-1]
 if ($SubmissionCab) {
     # The submission contains the original images and exact symbols. The local
     # test-signing simulation below produces the separately installed package.

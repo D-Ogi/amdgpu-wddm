@@ -688,6 +688,85 @@ python -m unittest discover -s tools/quality -p test_flavour_gate.py
 - `tools/release/release_flavour.py` is a different tool. It selects the payload of each flavour for
   `tools/release/build-release.ps1`.
 
+## C runtime imports (BD-389)
+
+The files of the driver package load into processes that the driver does not control: `dwm.exe`, every D3D9,
+D3D10, D3D11, D3D12, Vulkan and OpenGL process. Windows must load each file with only the files that Windows has.
+Up to tester.39 rc3, three x64 files of the desktop route imported the Visual C++ runtime DLLs:
+`bc250d3d_router.dll` (`VCRUNTIME140.dll`), `bc250d3d_zink.dll` and `amdgpu_wddm_radv.dll` (`MSVCP140.dll`,
+`VCRUNTIME140.dll`, `VCRUNTIME140_1.dll`). A clean Windows 11 26200 had none of these files in System32. With the
+driver package installed alone, DWM stopped 8 times in 36 seconds, and Windows stopped the device with Code 43.
+The kernel driver was healthy. The product installer hid the defect, because it installs the redistributable
+before the driver. BD-178 is the same class from the other side: a process that has its own copy of
+`msvcp140.dll` gives that copy to each module that imports the name.
+
+`tools/quality/runtime_import_gate.py` reads the import table and the delay-import table of each PE file in a
+package (`tools/quality/pe_image.py`). It applies this rule to each DLL name, in any letter case:
+
+| Class | DLL names | Result |
+|---|---|---|
+| Visual C++ runtime libraries | `vcruntime*`, `msvcp<version>*`, `msvcr<version>*`, `concrt*`, `vccorlib*`, `vcomp*`, `vcamp*`, `mfc<version>*`, `mfcm<version>*` | Refused |
+| Debug runtimes | `ucrtbased.dll` and the debug names of the libraries above, for example `vcruntime140d.dll` | Refused |
+| Universal CRT | `ucrtbase.dll`, `api-ms-win-crt-*.dll` | Allowed |
+| All other names | for example `kernel32.dll`, `msvcrt.dll`, `msvcp_win.dll`, `msvcp60.dll`, `mfc42u.dll` | Not in the rule |
+
+`<version>` starts with two or three digits. Thus the Windows files `msvcrt.dll`, `msvcp60.dll`, `msvcp_win.dll`,
+`mfc42.dll` and `mfc42u.dll` are not in the refused classes. The pages below do not describe them, and no file of
+the package imports them.
+
+The sources of the rule (Microsoft Learn, read 2026-11-24):
+
+- [Universal CRT deployment](https://learn.microsoft.com/en-us/cpp/windows/universal-crt-deployment)
+  (ms.date 2022-02-07): the UCRT is a component of the operating system in Windows 10 and later. On Windows 10
+  and Windows 11, Windows always uses the UCRT of the system directory.
+- [Determining which DLLs to redistribute](https://learn.microsoft.com/en-us/cpp/windows/determining-which-dlls-to-redistribute)
+  (ms.date 2022-06-28): its table names the Visual C++ library DLLs (`vcruntime`, `vccorlib`, `msvcp`, `concrt`,
+  `mfc`, `vcamp`, `vcomp`). The users of an application that uses them must have them, and the application
+  must supply them. The debug versions of the Microsoft DLLs must not be redistributed. The UCRT is a system
+  component of Windows 10 and later.
+- [C runtime (CRT) and C++ standard library (STL) .lib files](https://learn.microsoft.com/en-us/cpp/c-runtime-library/crt-library-features)
+  (ms.date 2021-03-05): `/MT` links `libucrt.lib`, `libvcruntime.lib` and `libcmt.lib` into the module, with no
+  associated DLL. `ucrtbased.dll` and the debug `vcruntime` are not redistributable.
+- [Latest supported Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
+  (ms.date 2025-12-03): an application that uses the DLL runtime needs a Visual C++ Redistributable on the
+  target system, at least as recent as the build tools.
+
+The pages do not say that Windows does not have the Visual C++ runtime DLLs. The lab reading of BD-389 shows it
+for one system: Windows 11 26200 with no redistributable. The gate does not use the name of a file to say that
+Windows has it. It refuses only the classes that the pages tell an application to supply.
+
+Every release row links the static C runtime: the Mesa sets with `-Db_vscrt=mt`, the shells, the engines and the
+router with `/MT`. With a static runtime, each module has its own CRT state. CRT objects, such as file handles,
+environment variables, locales and heap allocations, are valid only in the module that made them
+([Potential errors passing CRT objects across DLL boundaries](https://learn.microsoft.com/en-us/cpp/c-runtime-library/potential-errors-passing-crt-objects-across-dll-boundaries),
+ms.date 2022-06-29). The borders of the desktop route carry no CRT object. The router and the UMDs exchange the
+D3D DDI tables and the handles of the D3D runtime. The D3D runtime allocates the private memory of each object.
+Zink and RADV exchange Vulkan calls with no allocation callbacks, and the C structures of
+`src/util/bc250_host_bootstrap.h` in Mesa. The caller of each structure owns its memory, and a CPU address in it is
+a mapping of the D3D runtime. Mesa reads its options with `GetEnvironmentVariableA` on Windows, not through the
+CRT environment (`src/util/os_misc.c`).
+
+```
+python tools/quality/runtime_import_gate.py --scan <package top folder> --negative-control files/payload/kmd/desktop/bc250d3d.dll [--out <dir>]
+python tools/quality/runtime_import_gate.py --scan <dir|file> [--scan ...] [--out <dir>]
+python -m unittest discover -s tools/quality -p test_runtime_import_gate.py
+```
+
+- `tools/release/build-release.ps1` runs the gate one time on the whole package, after the first flavour gate run
+  and before the submission CAB. The scan includes `setup.exe`, the driver package and its `wow64` tree. Signing
+  changes no import table. The receipt is `runtime-import-gate\runtime-import-gate.json` under `-Out`.
+- The negative control changes, in memory, the first import name of 12 or more characters of one file to
+  `MSVCP140.dll`. The set fails if the gate does not refuse that file.
+- The gate fails closed: no PE file, a file with a PE suffix that is not a PE image, an import table that it
+  cannot read, or a negative control file that the scan does not include.
+- The build scripts refuse a runtime import of their own targets after the build: `build-mesa.ps1` for each
+  `-Db_vscrt=mt` set, `build-umd-router.ps1`, `build-umd-dxvk.ps1` and `build-umd-d3d12.ps1`. These checks also
+  refuse the UCRT, because those targets link it statically. The gate is the release check of the bytes that
+  ship.
+- Real input: the signed driver set of tester.39 rc3 package attempt 6
+  (`scratch/glm/efi-signing/cks-manual/run6-staged/files/payload/kmd`, 25 PE files). The gate refuses exactly
+  the three files above. The self-test reads that tree when `BC250_ROOT` holds it.
+
 ## Firmware
 
 The KMD loads eight PSP firmware files from its Driver Store image directory
