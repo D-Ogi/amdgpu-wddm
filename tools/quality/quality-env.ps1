@@ -29,6 +29,32 @@ function Get-QualityInputValues {
     return $v
 }
 
+# The number of gates that run at once, and where the number comes from. -Jobs wins; a run that names no -Jobs takes
+# BC250_QUALITY_JOBS; without both it is one gate per logical processor. The variable is for a caller that starts
+# more than one suite at the same time and cannot pass a parameter through quick.cmd: two package flavours with one
+# gate per logical processor each put twice the processors' worth of gates on the development PC, and gates then
+# ended at their deadlines and at time limits of their own (tester.39 rc2, BD-382). A value that is not a whole
+# number of 1 or more refuses the run: a typing error must not become a full-width run.
+function Get-QualityJobs([bool]$Given, [int]$Jobs, [string]$EnvValue, [int]$Processors) {
+    if ($Given) {
+        if ($Jobs -lt 1) { return @{ jobs = $null; source = 'parameter'; refusal = "-Jobs is not 1 or more: $Jobs" } }
+        return @{ jobs = $Jobs; source = 'parameter'; refusal = $null }
+    }
+    if ($EnvValue) {
+        $n = 0
+        if (-not [int]::TryParse($EnvValue, [Globalization.NumberStyles]::None, [cultureinfo]::InvariantCulture, [ref]$n) -or $n -lt 1) {
+            return @{ jobs = $null; source = 'BC250_QUALITY_JOBS'; refusal = "BC250_QUALITY_JOBS is not a whole number of 1 or more: '$EnvValue'" }
+        }
+        return @{ jobs = $n; source = 'BC250_QUALITY_JOBS'; refusal = $null }
+    }
+    return @{ jobs = [Math]::Max(1, $Processors); source = 'processors'; refusal = $null }
+}
+
+# The share of the logical processors that one of $Suites suites gets when they run at the same time, at least 1.
+function Get-ParallelQualityJobs([int]$Processors, [int]$Suites) {
+    return [Math]::Max(1, [int][Math]::Floor($Processors / [Math]::Max(1, $Suites)))
+}
+
 # Imports the x64 developer environment into this process when it is not there. Returns what it did, for the run's
 # log. common.ps1 is dot-sourced inside this function, so its Set-StrictMode stays in this function's scope.
 function Initialize-QualityDevEnvironment([Parameter(Mandatory)][string]$Repo, [Parameter(Mandatory)][string]$TempDir, [string]$Kits = '') {

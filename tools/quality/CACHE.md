@@ -25,7 +25,10 @@ The default cache is `<workspace>/scratch/quality/gate-cache`. Set
 local development cache, not a release attestation or a shared trust boundary.
 
 The runner uses one worker per logical processor by default. `-Jobs` changes
-that limit. Every check has its own process and deadline. On Windows, a job
+that limit. A run without `-Jobs` takes the limit from the environment variable
+`BC250_QUALITY_JOBS` when it is set. A package run with `-Parallel` sets that
+variable, so that each flavour gets its share of the processors. Every check
+has its own process and deadline. On Windows, a job
 object closes the worker and its children at timeout. Failed prerequisites
 prevent dependent checks from running.
 
