@@ -184,8 +184,9 @@ files are never written: `+set basedir` points at the game folder, which is only
 which the game writes with C's `printf`, so the number is read with a dot whatever the language of Windows.
 
 What stops a pass. Each pass is bounded to three minutes. The chip's temperature and clock come from the driver
-snapshot the Performance page already polls, every 2 s. A pass stops at 89 C at once, or at 87 C held for 10 s (the
-rule of the lab trials). The card then says the chip got too hot. "Stop the test" ends it as well.
+snapshot the Performance page already polls, every 2 s. A pass does not start when the chip is at 87 C or hotter:
+the card says so and asks the person to let the chip cool down. A pass stops when the chip stays above 93 C for more
+than 10 s, or at 97 C at once. The driver lowers the clock from 87 C, and a pass that this throttle holds runs on. The card then says the chip got too hot. "Stop the test" ends it as well.
 Where that snapshot carries no temperature, the card says so instead of promising a stop it cannot make, and the
 three minutes of each pass are the whole bound.
 

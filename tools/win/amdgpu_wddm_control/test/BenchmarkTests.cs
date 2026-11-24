@@ -318,36 +318,48 @@ static partial class UnitTests
         Check(last != null && last.Frames == 120, "benchmark: a log of two timed runs gives the last one");
     }
 
-    // The thermal stop: 89 C at once, 87 C held for 10 s, and a reading the driver cannot give
-    // is never a temperature.
+    // The thermal stop: above 93 C held for more than 10 s, or 97 C at once, and a reading the driver cannot give
+    // is never a temperature. The driver throttles from 87 C, so a throttled pass at 87 C to 93 C runs on (BD-388).
     static void BenchThermal()
     {
-        Equal(89000, ThermalGuard.StopMc, "benchmark: the chip stops a pass at 89 C");
-        Equal(87000, ThermalGuard.HoldMc, "benchmark: 87 C starts the hold");
+        Equal(97000, ThermalGuard.StopMc, "benchmark: the chip stops a pass at once at 97 C");
+        Equal(93000, ThermalGuard.HoldMc, "benchmark: a reading above 93 C starts the hold");
         Equal(10000, ThermalGuard.HoldMs, "benchmark: the hold is ten seconds");
 
-        var at89 = new ThermalGuard();
-        Check(at89.Hot(0, 89000), "benchmark: 89 C stops the pass at once");
+        var at97 = new ThermalGuard();
+        Check(at97.Hot(0, 97000), "benchmark: 97 C stops the pass at once");
         var cool = new ThermalGuard();
         Check(!cool.Hot(0, 70000) && !cool.Hot(60000, 86999), "benchmark: a cool chip never stops a pass");
         Check(cool.HotSinceMs == null, "benchmark: a cool chip holds nothing");
 
+        var throttled = new ThermalGuard();
+        Check(!throttled.Hot(0, 87000) && !throttled.Hot(60000, 87800) && !throttled.Hot(120000, 93000),
+            "benchmark: a pass that the driver throttle holds at 87 C to 93 C runs on");
+        Check(throttled.HotSinceMs == null, "benchmark: 93 C exactly starts no hold");
+
         var hold = new ThermalGuard();
-        Check(!hold.Hot(0, 87000), "benchmark: 87 C alone does not stop the pass");
-        Check(hold.HotSinceMs == 0, "benchmark: 87 C starts the hold at that sample");
-        Check(!hold.Hot(8000, 87500), "benchmark: eight seconds at 87 C is not yet ten");
-        Check(hold.Hot(10000, 87500), "benchmark: ten seconds at 87 C or hotter stops the pass");
+        Check(!hold.Hot(0, 93001), "benchmark: a reading above 93 C alone does not stop the pass");
+        Check(hold.HotSinceMs == 0, "benchmark: a reading above 93 C starts the hold at that sample");
+        Check(!hold.Hot(8000, 93500), "benchmark: eight seconds above 93 C is not yet ten");
+        Check(!hold.Hot(10000, 93500), "benchmark: ten seconds exactly above 93 C is not more than ten");
+        Check(hold.Hot(12000, 93500), "benchmark: more than ten seconds above 93 C stops the pass");
 
         var cleared = new ThermalGuard();
-        Check(!cleared.Hot(0, 88000) && !cleared.Hot(4000, 80000), "benchmark: a chip that cooled down clears the hold");
-        Check(cleared.HotSinceMs == null && !cleared.Hot(14000, 88000), "benchmark: the hold starts again from the new hot sample");
+        Check(!cleared.Hot(0, 94000) && !cleared.Hot(4000, 90000), "benchmark: a chip that cooled down clears the hold");
+        Check(cleared.HotSinceMs == null && !cleared.Hot(14000, 94000), "benchmark: the hold starts again from the new hot sample");
+
+        // The start gate (BD-388): no pass starts at the driver's throttle level or above it.
+        Equal(87000, ThermalGuard.StartBelowMc, "benchmark: a pass starts only below 87 C");
+        Check(!ThermalGuard.StartRefused(86999), "benchmark: a chip below 87 C may start a pass");
+        Check(ThermalGuard.StartRefused(87000) && ThermalGuard.StartRefused(97000), "benchmark: a chip at 87 C or hotter starts no pass");
+        Check(!ThermalGuard.StartRefused(null), "benchmark: a reading the driver cannot give refuses no start");
 
         var unreadable = new ThermalGuard();
         Check(!unreadable.Hot(0, null) && !unreadable.Hot(60000, null) && unreadable.HotSinceMs == null,
             "benchmark: a reading the driver cannot give never stops a pass by itself");
         var kept = new ThermalGuard();
-        Check(!kept.Hot(0, 88000) && !kept.Hot(4000, null), "benchmark: a reading that is missing does not clear the hold");
-        Check(kept.HotSinceMs == 0 && kept.Hot(10000, null), "benchmark: the hold runs out even while the readings are missing");
+        Check(!kept.Hot(0, 94000) && !kept.Hot(4000, null), "benchmark: a reading that is missing does not clear the hold");
+        Check(kept.HotSinceMs == 0 && kept.Hot(12000, null), "benchmark: the hold runs out even while the readings are missing");
     }
 
     // The two lines the card writes about a run: the state line above the results, and the list of earlier runs
@@ -422,6 +434,8 @@ static partial class UnitTests
 
         var stopped = BenchHistory.Parse(BenchHistory.Render(new List<RunRecord> { BenchRun(Recovery.Stamp(now), PassOutcome.TooHot, null, PassOutcome.TooHot, null) }));
         Equal(PassOutcome.TooHot, stopped[0].Pass(RtApi.Query).Outcome, "benchmark: a pass stopped by the heat is kept as that");
+        var refused = BenchHistory.Parse(BenchHistory.Render(new List<RunRecord> { BenchRun(Recovery.Stamp(now), PassOutcome.HotStart, null, PassOutcome.HotStart, null) }));
+        Equal(PassOutcome.HotStart, refused[0].Pass(RtApi.Query).Outcome, "benchmark: a pass that the heat refused to start is kept as that");
         Equal(null, stopped[0].Pass(RtApi.Query).Fps, "benchmark: a pass without a number keeps none");
 
         var left = BenchRun(Recovery.Stamp(now), PassOutcome.TimedOut, null, PassOutcome.TimedOut, null);
@@ -489,7 +503,7 @@ static partial class UnitTests
         Check(BenchReference.LowFps < BenchReference.HighFps && Strings.Has("bench.reference.why"),
             "benchmark: the band is a band, and the card says why the number moves inside it");
         Check(BenchReference.Width == 1280 && BenchReference.Height == 720, "benchmark: our own board's numbers belong to 1280 by 720");
-        Check(PassOutcome.All.Length == 6 && PassOutcome.Known(PassOutcome.Done) && !PassOutcome.Known("invented") && !PassOutcome.Known(null),
+        Check(PassOutcome.All.Length == 7 && PassOutcome.Known(PassOutcome.HotStart) && PassOutcome.Known(PassOutcome.Done) && !PassOutcome.Known("invented") && !PassOutcome.Known(null),
             "benchmark: the reasons a pass can have are a closed list");
 
         // F8: a pass that was stopped before its game started has no temperature and no clock of its own. The one
@@ -498,7 +512,8 @@ static partial class UnitTests
         Check(!PassTelemetry.Keep(PassOutcome.Cancelled, false), "F8: a pass stopped before its game ran reports no reading");
         Check(!PassTelemetry.Keep(PassOutcome.Failed, false), "F8: a pass whose game never started reports no reading");
         Check(!PassTelemetry.Keep(PassOutcome.NoResult, false), "F8: a pass with no game and no result reports no reading");
-        Check(PassTelemetry.Keep(PassOutcome.TooHot, false), "F8: the reading that refused a start is the reason, so it is kept");
+        Check(PassTelemetry.Keep(PassOutcome.TooHot, false), "F8: the reading that stopped a pass is the reason, so it is kept");
+        Check(PassTelemetry.Keep(PassOutcome.HotStart, false), "F8: the reading that refused a start is the reason, so it is kept");
         Check(PassTelemetry.Keep(PassOutcome.Cancelled, true), "F8: a pass stopped while its game ran keeps what it measured");
         Check(PassTelemetry.Keep(PassOutcome.Done, true) && PassTelemetry.Keep(PassOutcome.TimedOut, true),
             "F8: a pass that ran keeps what it measured, whatever ended it");

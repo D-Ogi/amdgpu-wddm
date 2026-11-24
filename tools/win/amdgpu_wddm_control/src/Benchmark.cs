@@ -424,12 +424,19 @@ namespace AmdgpuWddmControl
         }
     }
 
-    // The thermal stop of a pass: at 89 C at once, or at 87 C held for 10 s. A sample the driver
-    // cannot give is never a temperature: it neither stops a pass nor clears a hold, which is the rule the lab
-    // harness keeps as well.
+    // The thermal stop of a pass: a reading above 93 C held for more than 10 s, or 97 C at once. The driver lowers
+    // the clock from 87 C, so a pass that the throttle holds a little above 87 C is a valid measurement and runs on
+    // (BD-388). A sample the driver cannot give is never a temperature: it neither stops a pass nor clears a hold,
+    // which is the rule the lab harness keeps as well.
     public sealed class ThermalGuard
     {
-        public const int StopMc = 89000, HoldMc = 87000, HoldMs = 10000;
+        public const int StopMc = 97000, HoldMc = 93000, HoldMs = 10000;
+
+        // The start gate: no pass starts at 87 C or above, the level from which the driver lowers the clock. A pass
+        // that starts there measures the throttle and not the chip. A reading the driver cannot give refuses nothing.
+        public const int StartBelowMc = 87000;
+
+        public static bool StartRefused(int? milliCelsius) { return milliCelsius != null && milliCelsius.Value >= StartBelowMc; }
 
         long? _hotSince;
 
@@ -437,11 +444,11 @@ namespace AmdgpuWddmControl
 
         public bool Hot(long nowMs, int? milliCelsius)
         {
-            if (milliCelsius == null) return _hotSince != null && nowMs - _hotSince.Value >= HoldMs;
-            if (milliCelsius.Value >= HoldMc) { if (_hotSince == null) _hotSince = nowMs; }
+            if (milliCelsius == null) return _hotSince != null && nowMs - _hotSince.Value > HoldMs;
+            if (milliCelsius.Value > HoldMc) { if (_hotSince == null) _hotSince = nowMs; }
             else _hotSince = null;
             if (milliCelsius.Value >= StopMc) return true;
-            return _hotSince != null && nowMs - _hotSince.Value >= HoldMs;
+            return _hotSince != null && nowMs - _hotSince.Value > HoldMs;
         }
     }
 
@@ -449,8 +456,8 @@ namespace AmdgpuWddmControl
 
     public static class PassOutcome
     {
-        public const string Done = "done", NoResult = "no-result", TimedOut = "timeout", TooHot = "hot", Cancelled = "cancelled", Failed = "failed";
-        public static readonly string[] All = { Done, NoResult, TimedOut, TooHot, Cancelled, Failed };
+        public const string Done = "done", NoResult = "no-result", TimedOut = "timeout", TooHot = "hot", HotStart = "hot-start", Cancelled = "cancelled", Failed = "failed";
+        public static readonly string[] All = { Done, NoResult, TimedOut, TooHot, HotStart, Cancelled, Failed };
         public static bool Known(string outcome) { return outcome != null && All.Contains(outcome); }
     }
 
@@ -725,13 +732,13 @@ namespace AmdgpuWddmControl
     //
     // A pass reads the chip once before it starts its game, to refuse a start on a hot chip. Where the pass then
     // ends before the game runs, that reading says nothing about the pass, and the card showed "74 C, 1300 MHz"
-    // for a way that never ran (b23 lab round 2, F8). The one exception is the pass that was refused because the
-    // chip was too hot: there the reading is the reason, so it is kept and shown.
+    // for a way that never ran (b23 lab round 2, F8). The one exception is the pass that was refused or stopped
+    // because the chip was too hot: there the reading is the reason, so it is kept and shown.
     public static class PassTelemetry
     {
         public static bool Keep(string outcome, bool gameStarted)
         {
-            return gameStarted || outcome == PassOutcome.TooHot;
+            return gameStarted || outcome == PassOutcome.TooHot || outcome == PassOutcome.HotStart;
         }
     }
 

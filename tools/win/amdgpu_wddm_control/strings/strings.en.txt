@@ -1219,6 +1219,7 @@ bench.result.detail|src|-|{0} pictures in {1} seconds
 bench.result.none|src|-|No result: the game closed before it finished the scene.
 bench.result.timeout|src|-|No result: the scene took longer than three minutes, so the test stopped it.
 bench.result.hot|src|-|Stopped because the chip got too hot.
+bench.result.hotstart|src|-|Not started: the chip is at 87 °C or hotter. Let it cool down, then start the test again.
 bench.result.cancelled|src|-|Stopped by you.
 bench.result.failed|src|-|The game did not start.
 bench.temp.max|src|-|Highest temperature
@@ -1234,7 +1235,7 @@ bench.history|src|-|Earlier runs
 bench.history.none|src|-|No earlier run on this computer.
 bench.history.line|src|-|{0}  -  first way: {1}  -  second way: {2}
 bench.busy|src|-|The test is already running.
-bench.note|src|-|The game opens in a window of its own and closes by itself. Leave it alone while it measures, and do not start the game a second time. The test stops by itself when the chip stays at 87 °C, and after three minutes for each way.
+bench.note|src|-|The game opens in a window of its own and closes by itself. Leave it alone while it measures, and do not start the game a second time. The test does not start when the chip is at 87 °C or hotter. It stops by itself when the chip stays above 93 °C for more than 10 seconds or reaches 97 °C, and after three minutes for each way.
 bench.note.notemp|src|-|The game opens in a window of its own and closes by itself. Leave it alone while it measures, and do not start the game a second time. This card does not report its temperature, so the test only stops after three minutes for each way.
 search.perf.benchmark|src|-|Ray tracing benchmark
 search.perf.benchmark.terms|src|-|benchmark|fps|frames per second|speed|score|measure|ray tracing|path tracing|quake|quake 2|q2rtx|how fast

@@ -13,8 +13,8 @@
 // there ends the whole run: two copies of Quake II RTX must never trace at once.
 //
 // What the run reads while it waits: the driver's DPM snapshot, the same Level-One read the Performance page polls,
-// every two seconds. It gives the chip temperature for the thermal stop (89 C at once, or 87 C
-// held for 10 s) and the clock it measured for the run's average. A reading the driver cannot give is never a
+// every two seconds. It gives the chip temperature for the thermal stop (above 93 C held for more than 10 s, or
+// 97 C at once) and the clock it measured for the run's average. A reading the driver cannot give is never a
 // temperature, and a clock the driver only asked for is never part of the average.
 using System;
 using System.Collections.Generic;
@@ -90,7 +90,7 @@ namespace AmdgpuWddmControl
                 // A pass the person stopped, one the chip was too hot for, one that ran out of time, and one whose
                 // game was still there when the pass gave up on it: each of them ends the run. The next pass would
                 // otherwise meet a GPU the first game has not released, and measure a number that means nothing.
-                if (record.Alive || record.Outcome == PassOutcome.Cancelled || record.Outcome == PassOutcome.TooHot ||
+                if (record.Alive || record.Outcome == PassOutcome.Cancelled || record.Outcome == PassOutcome.TooHot || record.Outcome == PassOutcome.HotStart ||
                     record.Outcome == PassOutcome.TimedOut) stopped = record.Outcome;
             }
             var run = snapshot();
@@ -123,7 +123,7 @@ namespace AmdgpuWddmControl
             int? first; uint? firstClock;
             Telemetry(out first, out firstClock);
             sample(first, firstClock);
-            if (guard.Hot(0, first)) { record.Outcome = PassOutcome.TooHot; store(); return record; }
+            if (ThermalGuard.StartRefused(first)) { record.Outcome = PassOutcome.HotStart; store(); return record; }
             lock (Gate) { if (_cancel) { record.Outcome = PassOutcome.Cancelled; store(); return record; } }
 
             var home = BenchPaths.Home;

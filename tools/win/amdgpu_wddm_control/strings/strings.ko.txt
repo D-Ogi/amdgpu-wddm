@@ -1200,6 +1200,7 @@ bench.result.detail|mt-safe|6554b9d5|{1}초에 {0}장
 bench.result.none|mt|a82cd647|결과 없음: 장면이 끝나기 전에 게임이 닫혔습니다.
 bench.result.timeout|mt|e866995b|결과 없음: 장면이 3분을 넘겨서 테스트가 멈췄습니다.
 bench.result.hot|mt|de80c33a|칩이 너무 뜨거워져서 멈췄습니다.
+bench.result.hotstart|mt|d4b436d7|시작하지 않았습니다. 칩이 87 °C 이상입니다. 식을 때까지 기다린 뒤 테스트를 다시 시작하세요.
 bench.result.cancelled|mt-safe|ce2e1c7c|사용자가 멈췄습니다.
 bench.result.failed|mt|388150f9|게임이 시작되지 않았습니다.
 bench.temp.max|mt-safe|251b0a10|최고 온도
@@ -1215,7 +1216,7 @@ bench.history|mt-safe|04ab162c|이전 실행
 bench.history.none|mt|d590dba0|이 컴퓨터에 이전 실행이 없습니다.
 bench.history.line|mt|afe87a67|{0}  -  첫 번째 방식: {1}  -  두 번째 방식: {2}
 bench.busy|mt-safe|3a08423a|테스트가 이미 실행 중입니다.
-bench.note|mt|a3725789|게임은 자기 창에서 열리고 스스로 닫힙니다. 측정하는 동안 그대로 두고, 게임을 두 번 실행하지 마세요. 칩이 87 °C를 유지하면, 그리고 각 방식마다 3분이 지나면 테스트는 스스로 멈춥니다.
+bench.note|mt|245d2335|게임은 자기 창에서 열리고 스스로 닫힙니다. 측정하는 동안 그대로 두고, 게임을 두 번 실행하지 마세요. 칩이 87 °C 이상이면 테스트는 시작하지 않습니다. 칩이 93 °C를 넘은 채로 10초 넘게 유지되거나 97 °C에 이르면, 그리고 각 방식마다 3분이 지나면 테스트는 스스로 멈춥니다.
 bench.note.notemp|mt|a2b8397f|게임은 자기 창에서 열리고 스스로 닫힙니다. 측정하는 동안 그대로 두고, 게임을 두 번 실행하지 마세요. 이 카드는 자기 온도를 알려 주지 않아서, 테스트는 각 방식마다 3분이 지난 뒤에만 멈춥니다.
 search.perf.benchmark|mt-safe|0cc4b592|레이 트레이싱 벤치마크
 search.perf.benchmark.terms|mt|8e2c7bdd|벤치마크|fps|초당 프레임|속도|점수|측정|레이 트레이싱|패스 트레이싱|퀘이크|quake|q2rtx|얼마나 빠른가
