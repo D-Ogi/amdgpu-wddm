@@ -797,7 +797,12 @@ $mustRun = @('umd-contract', 'umd-analysis', 'surface-control', 'kmd-contract', 
              'hang-witness', 'object-index')
 $qualityReceipt = Join-Path $qualityOut 'result.json'
 if (-not (Test-Path -LiteralPath $qualityReceipt)) { throw "the quality suite left no receipt at $qualityReceipt" }
-$qualityChecks = (Get-Content -LiteralPath $qualityReceipt -Raw | ConvertFrom-Json).checks
+$qualityResult = Get-Content -LiteralPath $qualityReceipt -Raw | ConvertFrom-Json
+$qualityChecks = $qualityResult.checks
+# A check that failed beside the other checks and passed alone (gate_cache.py, run_failed_again) does not stop the
+# package. It is named here, in the log that the operator reads: each one is a flaky check, to record as a defect.
+$ranAgain = @($qualityResult.run_again | Where-Object { $_ })
+if ($ranAgain.Count) { Write-Host ("quality gates: $($ranAgain.Count) check(s) failed in the suite and passed on a second run, alone: " + ($ranAgain -join ', ')) }
 $notRun = @()
 # $gate, not $name: $name is the package's own name, and the check below reads it back against the package folder.
 foreach ($gate in $mustRun) {
