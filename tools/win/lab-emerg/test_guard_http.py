@@ -24,6 +24,11 @@ BASH = GIT_BASH if GIT_BASH.is_file() else None
 LEVELS = thermal_levels.load()
 # The readings come this far apart: the hold of the rule is longer than one step and not longer than two.
 STEP = int(LEVELS.stop_held_s // 2) + 1
+# The length of a run that must end with a STOP. The guard ends at the STOP, so a pass takes only as long as its
+# readings take; this bound ends a guard that never stops. It was 4 * STEP, and then the speed of the host decided the
+# result: in the full quality suite of a package run (2026-11-24 10:17Z, 24 gates at once) one reading took 11 s,
+# the 24 s were over after the first reading, and two tests failed with no fault in the guard (BD-318, BD-382).
+STOP_BOUND = 40 * STEP
 
 FAKE_EMERG = r'''import os, sys
 from pathlib import Path
@@ -65,13 +70,13 @@ class GuardHttp(unittest.TestCase):
             return log + done.stdout + done.stderr, (root / 'lab-emerg/killed.txt').exists()
 
     def test_a_reading_at_the_once_level_stops_at_once(self):
-        out, killed = self.run_guard([str(LEVELS.stop_at_once_c + 0.5)], 20)
+        out, killed = self.run_guard([str(LEVELS.stop_at_once_c + 0.5)], STOP_BOUND)
         self.assertIn('STOP Tctl %s C at or above' % (LEVELS.stop_at_once_c + 0.5), out)
         self.assertTrue(killed, out)
 
     def test_a_hot_run_stops_when_it_has_lasted_the_hold(self):
         hot = str(LEVELS.stop_held_c + 0.5)
-        out, killed = self.run_guard([hot, hot, hot, hot], 4 * STEP)
+        out, killed = self.run_guard([hot, hot, hot, hot], STOP_BOUND)
         self.assertIn('STOP Tctl at or above %s C, held' % thermal_levels.number(LEVELS.stop_held_c), out)
         self.assertTrue(killed, out)
 
@@ -83,7 +88,7 @@ class GuardHttp(unittest.TestCase):
 
     def test_an_unreadable_reading_does_not_end_the_hot_run(self):
         hot = str(LEVELS.stop_held_c + 0.5)
-        out, killed = self.run_guard([hot, '', hot, hot], 4 * STEP)
+        out, killed = self.run_guard([hot, '', hot, hot], STOP_BOUND)
         self.assertIn('STOP Tctl at or above', out)
         self.assertTrue(killed, out)
 
