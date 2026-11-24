@@ -23,6 +23,11 @@ $ErrorActionPreference='Stop'
 $env:__COMPAT_LAYER='RunAsInvoker'
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $root=Get-Bc250Root $repo
+# Without -DdiInclude and -ApiInclude the shell and its engine-ddi library use the header roots of the release
+# recipes (common.ps1, Get-Bc250D3D12HeaderRoots), so that both always compile against the same DDI headers.
+$d3d12Headers=Get-Bc250D3D12HeaderRoots $root
+if(!$DdiInclude){$DdiInclude=$d3d12Headers.Ddi}
+if(!$ApiInclude){$ApiInclude=$d3d12Headers.Api}
 if(!$EngineInclude){
  $pin=Get-Content (Join-Path $repo 'driver\umd\d3d12\engine-ddi\engine-abi.json') -Raw|ConvertFrom-Json
  $checkout=if($pin.source_checkout){$pin.source_checkout}else{'scratch/m15/vkd3d-1.2-src'}

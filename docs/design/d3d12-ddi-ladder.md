@@ -10,14 +10,15 @@ The header governs their exact C declarations.
 
 ## Build and table selection
 
-The default WDK 26100 build still offers versions 0092 through 0094.
-The explicit `-DdiInclude` argument selects the WDK 28000 UM headers for the shell and engine-ddi builds.
-Those headers enable the layouts through 0119 and the build 0120, which uses the 0119 layouts.
+The shell and engine-ddi builds use the WDK 28000 UM headers (`-DdiInclude`) and the Agility 1.619.6 API headers (`-ApiInclude`).
+Without these arguments, the build scripts select the same two header roots as the release recipes (`Get-Bc250D3D12HeaderRoots` in `tools/build/common.ps1`).
+The WDK 26100 and SDK 26100 headers alone cannot compile engine-ddi since the DDI 0122 byte-offset views (0007195fc).
+The WDK 28000 headers enable the layouts through 0119 and the build 0120, which uses the 0119 layouts.
 No public header defines 0120. A static analysis of D3D12Core 1.619.6 and 1.721.3 found no table, slot or caps payload change at 0120.
 At 0120 the runtime stops its 6_8 clamp of the shader model answer (caps type 1012).
-Both flavours offer the same versions: 0120 down to 0092 with the WDK 28000 header, 0094 down to 0092 without it.
+Both flavours offer the same versions: 0120 down to 0092.
 The build records the selected header path and SHA256.
-The ladder build also requires `-ApiInclude` with Agility 1.618 or newer API headers for tight alignment.
+The ladder build requires Agility 1.618 or newer API headers for tight alignment.
 Agility 1.619.6 is the tested header input. The build records its path and SHA256 separately from the DDI header.
 No automatic header upgrade changes the supported versions.
 

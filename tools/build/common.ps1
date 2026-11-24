@@ -13,6 +13,18 @@ function Get-Bc250Root([string]$Repo) {
     return Split-Path -Parent $Repo
 }
 
+# The D3D12 header roots that the D3D12 shell and engine-ddi compile against when the caller names none:
+# d3d12umddi.h of WDK 10.0.28000 (its um directory) and d3d12.h of Agility SDK 1.619.6, the two roots that the
+# release recipes pass (tools/release/release-sources.json). The 26100 SDK and WDK headers stay on the include
+# path for the shared headers only: since 0007195fc the sources use types that the 26100 headers do not have
+# (byte-offset-view.h: D3D12_BUFFER_SRV_BYTE_OFFSET), so a build with them alone cannot compile.
+function Get-Bc250D3D12HeaderRoots([string]$Root) {
+    return [pscustomobject]@{
+        Ddi = Join-Path $Root 'toolchain\nuget\wdk-28000.2526-um\c\Include\10.0.28000.0\um'
+        Api = Join-Path $Root 'toolchain\nuget\microsoft.direct3d.d3d12.1.619.6\build\native\include'
+    }
+}
+
 # The recipes change PATH, INCLUDE, TEMP and friends. Whoever runs one from an interactive session gets the
 # session back unchanged, success or failure.
 function Save-ProcessEnvironment {
