@@ -755,6 +755,9 @@ python -m unittest discover -s tools/quality -p test_runtime_import_gate.py
 - `tools/release/build-release.ps1` runs the gate one time on the whole package, after the first flavour gate run
   and before the submission CAB. The scan includes `setup.exe`, the driver package and its `wow64` tree. Signing
   changes no import table. The receipt is `runtime-import-gate\runtime-import-gate.json` under `-Out`.
+- The scan takes each file with a PE suffix (`.dll`, `.sys`, `.exe`). It takes a file with another suffix only when
+  its first 4 KiB hold the MZ header and the PE signature. Thus the firmware images that stay in the driver
+  directory for Inf2Cat at that time are not scanned, and a renamed PE file is.
 - The negative control changes, in memory, the first import name of 12 or more characters of one file to
   `MSVCP140.dll`. The set fails if the gate does not refuse that file.
 - The gate fails closed: no PE file, a file with a PE suffix that is not a PE image, an import table that it

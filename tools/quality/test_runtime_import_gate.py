@@ -212,6 +212,16 @@ class Command(unittest.TestCase):
         self.assertEqual(code, 1, text)
         self.assertIn('REFUSE negative control files/payload/kmd/desktop/bc250d3d.dll', text)
 
+    def test_a_renamed_pe_is_scanned_and_a_data_file_that_starts_with_mz_is_not(self):
+        # build-release.ps1 runs the gate while the firmware images are still in the driver directory.
+        self.clean_package()
+        self.write('files/payload/kmd/gc_firmware.bin', b'MZ' + bytes(range(256)) * 16)
+        self.write('files/payload/kmd/renamed.bin', image(('KERNEL32.dll', 'VCRUNTIME140.dll')))
+        code, text = self.run_gate('--scan', self.dir / 'pkg')
+        self.assertEqual(code, 1, text)
+        self.assertIn('REFUSE files/payload/kmd/renamed.bin: imports VCRUNTIME140.dll', text)
+        self.assertIn('FAIL, 5 PE file(s), 1 refused', text)
+
     def test_input_it_cannot_judge_fails_closed(self):
         cases = {
             'no PE file': lambda: self.write('readme.txt', b'text'),

@@ -20,8 +20,8 @@ letter case (the Windows loader compares DLL names without case):
 The Windows DLLs whose names start like a refused family stay outside it: msvcrt.dll (no version digits),
 msvcp60.dll and msvcp_win.dll (a version below 70 or no version), mfc42.dll and mfc42u.dll (a version below 100).
 
-A directory scan takes every file with a PE suffix (.dll, .sys, .exe) and every other file that starts with an MZ
-header. The gate fails closed: no PE file, a file with a PE suffix that is not a PE image, or an import table that
+A directory scan takes every file with a PE suffix (.dll, .sys, .exe) and every other file whose first 4 KiB hold
+the MZ header and the PE signature (a renamed PE). The gate fails closed: no PE file, a file with a PE suffix that is not a PE image, or an import table that
 cannot be read. --negative-control <path> rewrites, in memory, the name of one import of that file (the first one
 of 12 or more characters) to MSVCP140.dll, and the per-file check must refuse it; a check that does not refuse it
 fails the set. --out writes runtime-import-gate.json with the SHA256 of this gate, and of every scanned file with
@@ -108,13 +108,20 @@ def negative_control(data):
 
 
 def is_pe_candidate(path):
+    """A file with a PE suffix, or another file whose first 4 KiB hold the MZ header and the PE signature. A data
+    file that only starts with the two letters MZ (a firmware image, for example) is not a PE image."""
     if path.suffix.lower() in PE_SUFFIXES:
         return True
     try:
         with open(path, 'rb') as f:
-            return f.read(2) == b'MZ'
+            head = f.read(4096)
     except OSError as e:
         raise GateError('%s: unreadable: %s' % (path, e))
+    try:
+        pe_image.check(head)
+    except pe_image.PeError:
+        return False
+    return True
 
 
 def collect(scans):
