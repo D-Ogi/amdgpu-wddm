@@ -2,9 +2,12 @@ $ErrorActionPreference='Stop'
 . "$PSScriptRoot\verify-cpu.ps1"
 $saved=@{umd_registration=@('cpu');icd_registration=@('icd');umd_sha256='CPU'}
 $cpuFixture=@{umd_registration=@('cpu');icd_registration=@('icd');parameters=@{EnableGpuPresentBlit=0;EnableCddDwmInterop=0;UnconfirmedStarts=1};dwm=@(@{pid=42;start='start';modules=@(@{name='bc250d3d.dll';sha256='CPU'})})}
+# Every case here settles in a few readings. The deadline only ends a run that hangs, so it is far away: with 2 s
+# a loaded development PC ended a case after one reading, in a package build that ran two suites at once (BD-382).
+function New-TestDeadline { return [Diagnostics.Stopwatch]::GetTimestamp()+120*[Diagnostics.Stopwatch]::Frequency }
 function Run-Sequence([object[]]$Sequence,[int]$Expected){
  $script:attempt=0
- $r=Wait-KmdCpuBaseline -Saved $saved -Read {$cpuFixture} -AllowUnconfirmed -IntervalMs 1 -Deadline ([Diagnostics.Stopwatch]::GetTimestamp()+2*[Diagnostics.Stopwatch]::Frequency) -ReadHealth {
+ $r=Wait-KmdCpuBaseline -Saved $saved -Read {$cpuFixture} -AllowUnconfirmed -IntervalMs 1 -Deadline (New-TestDeadline) -ReadHealth {
   $entry=$Sequence[$script:attempt];$script:attempt++
   if($entry -eq 'error'){throw 'Escape temporarily unavailable'}
   @{generation=123;epoch=[uint64]$entry;flags=7;completed=1;age_ms=0;ready_ms=100}
@@ -19,7 +22,7 @@ $r=Wait-KmdCpuBaseline -Saved $saved -Read {
  $script:attempt++
  $cpuFixture.dwm[0].pid=if($script:attempt -eq 1){41}else{42}
  $cpuFixture
-} -AllowUnconfirmed -IntervalMs 1 -Deadline ([Diagnostics.Stopwatch]::GetTimestamp()+2*[Diagnostics.Stopwatch]::Frequency) -ReadHealth {
+} -AllowUnconfirmed -IntervalMs 1 -Deadline (New-TestDeadline) -ReadHealth {
  @{generation=123;epoch=5;flags=15;completed=1;age_ms=0;ready_ms=60000}
 }
 if($r.attempts -ne 3){throw 'DWM change did not reset stable pair'}
