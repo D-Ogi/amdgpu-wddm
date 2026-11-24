@@ -1218,6 +1218,7 @@ bench.result.detail|mt|6554b9d5|{0} imagens em {1} segundos
 bench.result.none|mt|a82cd647|Sem resultado: o jogo fechou antes de terminar a cena.
 bench.result.timeout|mt|e866995b|Sem resultado: a cena levou mais de três minutos, então o teste a interrompeu.
 bench.result.hot|mt|de80c33a|Interrompido porque o chip esquentou demais.
+bench.result.hotstart|mt|d4b436d7|Não iniciado: o chip está a 87 °C ou mais. Deixe-o esfriar e inicie o teste de novo.
 bench.result.cancelled|mt|ce2e1c7c|Interrompido por você.
 bench.result.failed|mt|388150f9|O jogo não iniciou.
 bench.temp.max|mt|251b0a10|Temperatura máxima
@@ -1233,7 +1234,7 @@ bench.history|mt|04ab162c|Execuções anteriores
 bench.history.none|mt|d590dba0|Nenhuma execução anterior neste computador.
 bench.history.line|mt|afe87a67|{0}  -  primeira forma: {1}  -  segunda forma: {2}
 bench.busy|mt|3a08423a|O teste já está em andamento.
-bench.note|mt|a3725789|O jogo abre em uma janela própria e fecha sozinho. Não mexa nele enquanto ele mede, e não inicie o jogo uma segunda vez. O teste para sozinho quando o chip fica a 87 °C, e após três minutos para cada forma.
+bench.note|mt|245d2335|O jogo abre em uma janela própria e fecha sozinho. Não mexa nele enquanto ele mede, e não inicie o jogo uma segunda vez. O teste não começa quando o chip está a 87 °C ou mais. Ele para sozinho quando o chip fica acima de 93 °C por mais de 10 segundos ou chega a 97 °C, e após três minutos para cada forma.
 bench.note.notemp|mt|a2b8397f|O jogo abre em uma janela própria e fecha sozinho. Não mexa nele enquanto ele mede, e não inicie o jogo uma segunda vez. Esta placa não informa a temperatura, então o teste só para após três minutos para cada forma.
 search.perf.benchmark|mt|0cc4b592|Benchmark de ray tracing
 search.perf.benchmark.terms|mt|8e2c7bdd|benchmark|fps|quadros por segundo|velocidade|pontuação|medir|teste|ray tracing|path tracing|traçado de raios|quake|quake 2|q2rtx|quão rápido

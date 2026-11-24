@@ -140,6 +140,7 @@ namespace AmdgpuWddmControl
             switch (pass.Outcome)
             {
                 case PassOutcome.TooHot: return Strings.T("bench.result.hot");
+                case PassOutcome.HotStart: return Strings.T("bench.result.hotstart");
                 case PassOutcome.TimedOut: return Strings.T("bench.result.timeout");
                 case PassOutcome.Cancelled: return Strings.T("bench.result.cancelled");
                 case PassOutcome.NoResult: return Strings.T("bench.result.none");

@@ -1200,6 +1200,7 @@ bench.result.detail|mt-safe|6554b9d5|{1} 秒で {0} 枚
 bench.result.none|mt|a82cd647|結果なし: 場面が終わる前にゲームが閉じました。
 bench.result.timeout|mt|e866995b|結果なし: 場面に 3 分以上かかったため、テストが止めました。
 bench.result.hot|mt|de80c33a|チップが熱くなりすぎたため止めました。
+bench.result.hotstart|mt|d4b436d7|開始しませんでした。チップが 87 °C 以上です。冷めるのを待ってから、もう一度テストを開始してください。
 bench.result.cancelled|mt-safe|ce2e1c7c|あなたが止めました。
 bench.result.failed|mt|388150f9|ゲームが起動しませんでした。
 bench.temp.max|mt-safe|251b0a10|最高温度
@@ -1215,7 +1216,7 @@ bench.history|mt-safe|04ab162c|これまでの実行
 bench.history.none|mt|d590dba0|このコンピューターにこれまでの実行はありません。
 bench.history.line|mt|afe87a67|{0}  -  1 つめの方法: {1}  -  2 つめの方法: {2}
 bench.busy|mt-safe|3a08423a|テストはすでに実行中です。
-bench.note|mt|a3725789|ゲームは自分の小さな窓で開き、自分で閉じます。測定中はそのままにして、ゲームを二重に起動しないでください。チップが 87 °C のままだったとき、また各方法で 3 分が過ぎたとき、テストは自分で止まります。
+bench.note|mt|245d2335|ゲームは自分の小さな窓で開き、自分で閉じます。測定中はそのままにして、ゲームを二重に起動しないでください。チップが 87 °C 以上のとき、テストは始まりません。チップが 93 °C を超えたまま 10 秒より長く続いたとき、97 °C に達したとき、また各方法で 3 分が過ぎたとき、テストは自分で止まります。
 bench.note.notemp|mt|a2b8397f|ゲームは自分の小さな窓で開き、自分で閉じます。測定中はそのままにして、ゲームを二重に起動しないでください。このカードは温度を知らせないため、テストは各方法で 3 分が過ぎたときにだけ止まります。
 search.perf.benchmark|mt-safe|0cc4b592|レイトレーシング ベンチマーク
 search.perf.benchmark.terms|mt|8e2c7bdd|ベンチマーク|fps|フレームレート|速度|スコア|測定|レイトレーシング|パストレーシング|クエイク|quake|q2rtx|どれくらい速い

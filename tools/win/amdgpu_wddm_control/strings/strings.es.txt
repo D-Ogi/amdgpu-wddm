@@ -1218,6 +1218,7 @@ bench.result.detail|mt|6554b9d5|{0} imágenes en {1} segundos
 bench.result.none|mt|a82cd647|Sin resultado: el juego se cerró antes de terminar la escena.
 bench.result.timeout|mt|e866995b|Sin resultado: la escena tardó más de tres minutos, así que la prueba la detuvo.
 bench.result.hot|mt|de80c33a|Se detuvo porque el chip se calentó demasiado.
+bench.result.hotstart|mt|d4b436d7|No se inició: el chip está a 87 °C o más. Deje que se enfríe y vuelva a iniciar la prueba.
 bench.result.cancelled|mt|ce2e1c7c|Detenida por usted.
 bench.result.failed|mt|388150f9|El juego no inició.
 bench.temp.max|mt|251b0a10|Temperatura máxima
@@ -1233,7 +1234,7 @@ bench.history|mt|04ab162c|Ejecuciones anteriores
 bench.history.none|mt|d590dba0|No hay ejecuciones anteriores en este equipo.
 bench.history.line|mt|afe87a67|{0}  -  primera forma: {1}  -  segunda forma: {2}
 bench.busy|mt|3a08423a|La prueba ya está en curso.
-bench.note|mt|a3725789|El juego se abre en su propia ventana y se cierra solo. No lo toque mientras mide, y no inicie el juego una segunda vez. La prueba se detiene sola cuando el chip se mantiene a 87 °C, y después de tres minutos por cada forma.
+bench.note|mt|245d2335|El juego se abre en su propia ventana y se cierra solo. No lo toque mientras mide, y no inicie el juego una segunda vez. La prueba no empieza cuando el chip está a 87 °C o más. Se detiene sola cuando el chip se mantiene por encima de 93 °C durante más de 10 segundos o llega a 97 °C, y después de tres minutos por cada forma.
 bench.note.notemp|mt|a2b8397f|El juego se abre en su propia ventana y se cierra solo. No lo toque mientras mide, y no inicie el juego una segunda vez. Esta tarjeta no informa su temperatura, así que la prueba solo se detiene después de tres minutos por cada forma.
 search.perf.benchmark|mt|0cc4b592|Prueba de rendimiento de trazado de rayos
 search.perf.benchmark.terms|mt|8e2c7bdd|benchmark|prueba de rendimiento|fps|fotogramas por segundo|velocidad|puntuación|medir|trazado de rayos|ray tracing|path tracing|quake|quake 2|q2rtx|qué tan rápido

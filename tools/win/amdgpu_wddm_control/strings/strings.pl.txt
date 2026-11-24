@@ -1202,6 +1202,7 @@ bench.result.detail|rev|6554b9d5|{0} obrazów w {1} s
 bench.result.none|rev|a82cd647|Brak wyniku: gra zamknęła się przed końcem sceny.
 bench.result.timeout|rev|e866995b|Brak wyniku: scena trwała dłużej niż trzy minuty, więc test ją zatrzymał.
 bench.result.hot|rev|de80c33a|Zatrzymano, bo układ zrobił się za gorący.
+bench.result.hotstart|mt|d4b436d7|Nie uruchomiono: układ ma 87 °C lub więcej. Poczekaj, aż ostygnie, i uruchom test jeszcze raz.
 bench.result.cancelled|rev|ce2e1c7c|Zatrzymany przez Ciebie.
 bench.result.failed|rev|388150f9|Gra się nie uruchomiła.
 bench.temp.max|rev|251b0a10|Najwyższa temperatura
@@ -1217,7 +1218,7 @@ bench.history|rev|04ab162c|Wcześniejsze przebiegi
 bench.history.none|rev|d590dba0|Brak wcześniejszych przebiegów na tym komputerze.
 bench.history.line|rev|afe87a67|{0}  -  pierwszy sposób: {1}  -  drugi sposób: {2}
 bench.busy|rev|3a08423a|Test już trwa.
-bench.note|rev|a3725789|Gra otwiera się we własnym okienku i sama się zamyka. Nie przeszkadzaj jej w czasie pomiaru i nie uruchamiaj gry po raz drugi. Test zatrzymuje się sam, gdy układ utrzyma 87 °C, oraz po trzech minutach na każdy sposób.
+bench.note|mt|245d2335|Gra otwiera się we własnym okienku i sama się zamyka. Nie przeszkadzaj jej w czasie pomiaru i nie uruchamiaj gry po raz drugi. Test nie rusza, gdy układ ma 87 °C lub więcej. Zatrzymuje się sam, gdy układ ma ponad 93 °C dłużej niż 10 sekund albo osiągnie 97 °C, oraz po trzech minutach na każdy sposób.
 bench.note.notemp|rev|a2b8397f|Gra otwiera się we własnym okienku i sama się zamyka. Nie przeszkadzaj jej w czasie pomiaru i nie uruchamiaj gry po raz drugi. Ta karta nie podaje swojej temperatury, więc test zatrzymuje się dopiero po trzech minutach na każdy sposób.
 search.perf.benchmark|rev|0cc4b592|Test ray tracingu
 search.perf.benchmark.terms|rev|8e2c7bdd|benchmark|fps|klatki na sekundę|obrazy na sekundę|szybkość|wynik|pomiar|ray tracing|path tracing|quake|quake 2|q2rtx|jak szybko

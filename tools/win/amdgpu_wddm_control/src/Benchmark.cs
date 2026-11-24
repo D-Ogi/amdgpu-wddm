@@ -432,6 +432,12 @@ namespace AmdgpuWddmControl
     {
         public const int StopMc = 97000, HoldMc = 93000, HoldMs = 10000;
 
+        // The start gate: no pass starts at 87 C or above, the level from which the driver lowers the clock. A pass
+        // that starts there measures the throttle and not the chip. A reading the driver cannot give refuses nothing.
+        public const int StartBelowMc = 87000;
+
+        public static bool StartRefused(int? milliCelsius) { return milliCelsius != null && milliCelsius.Value >= StartBelowMc; }
+
         long? _hotSince;
 
         public long? HotSinceMs { get { return _hotSince; } }
@@ -450,8 +456,8 @@ namespace AmdgpuWddmControl
 
     public static class PassOutcome
     {
-        public const string Done = "done", NoResult = "no-result", TimedOut = "timeout", TooHot = "hot", Cancelled = "cancelled", Failed = "failed";
-        public static readonly string[] All = { Done, NoResult, TimedOut, TooHot, Cancelled, Failed };
+        public const string Done = "done", NoResult = "no-result", TimedOut = "timeout", TooHot = "hot", HotStart = "hot-start", Cancelled = "cancelled", Failed = "failed";
+        public static readonly string[] All = { Done, NoResult, TimedOut, TooHot, HotStart, Cancelled, Failed };
         public static bool Known(string outcome) { return outcome != null && All.Contains(outcome); }
     }
 
@@ -726,13 +732,13 @@ namespace AmdgpuWddmControl
     //
     // A pass reads the chip once before it starts its game, to refuse a start on a hot chip. Where the pass then
     // ends before the game runs, that reading says nothing about the pass, and the card showed "74 C, 1300 MHz"
-    // for a way that never ran (b23 lab round 2, F8). The one exception is the pass that was refused because the
-    // chip was too hot: there the reading is the reason, so it is kept and shown.
+    // for a way that never ran (b23 lab round 2, F8). The one exception is the pass that was refused or stopped
+    // because the chip was too hot: there the reading is the reason, so it is kept and shown.
     public static class PassTelemetry
     {
         public static bool Keep(string outcome, bool gameStarted)
         {
-            return gameStarted || outcome == PassOutcome.TooHot;
+            return gameStarted || outcome == PassOutcome.TooHot || outcome == PassOutcome.HotStart;
         }
     }
 
