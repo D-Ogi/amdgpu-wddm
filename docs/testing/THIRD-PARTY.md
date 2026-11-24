@@ -16,9 +16,9 @@ and NOTICE in the package root).
 | `adl\atiadlxx.dll`, `wow64\adl\atiadlxy.dll` | amdgpu-wddm `0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a` (`driver/umd/adl`), public ADL subset. Both DriverStore members retain their unique ADL load names |
 | `kmd\bc250kmd.sys`, `kmd\bc250kmd.inf` | amdgpu-wddm `0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a`. The .sys also contains the Linux amdgpu code of the next table |
 | `d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `747c1aa06666bea0f4f63f20eb42774fa4ec6fbd` (`driver/umd/d3d12`), against the `src/util` host contract of Mesa `68fc203599c1ce0b7143fee6e41f9a552b2dacf9` |
-| `desktop\bc250d3d_router.dll` | amdgpu-wddm `0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a` (`driver/umd/router`) |
+| `desktop\bc250d3d_router.dll` | amdgpu-wddm `472904a4e48b786311723328b90d81a0f9ba4f1e` (`driver/umd/router`) |
 | `d3d11\amdgpu_wddm_d3d11.dll`, `d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8` (`driver/umd/dxvk`). The config is the record from `tools/build/write-umd-config.py` at `97b0f39ebc04f8c23c1b2110b9ee0d15034713f6` |
-| `wow64\desktop\bc250d3d_router.dll` | amdgpu-wddm `0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a` (`driver/umd/router`), x86 build |
+| `wow64\desktop\bc250d3d_router.dll` | amdgpu-wddm `472904a4e48b786311723328b90d81a0f9ba4f1e` (`driver/umd/router`), x86 build |
 | `wow64\d3d11\amdgpu_wddm_d3d11.dll`, `wow64\d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8` (`driver/umd/dxvk`), x86 build with the `-Arch x86` recipe and the `.def` export of the same commit. The config is the record from `tools/build/write-umd-config.py` at `97b0f39ebc04f8c23c1b2110b9ee0d15034713f6` |
 | `wow64\d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `747c1aa06666bea0f4f63f20eb42774fa4ec6fbd` (`driver/umd/d3d12`), x86 build with the `-Arch x86` recipe and the `.def` export of the same commit, against the `src/util` host contract of Mesa `68fc203599c1ce0b7143fee6e41f9a552b2dacf9` |
 | `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `747c1aa06666bea0f4f63f20eb42774fa4ec6fbd` (the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`) |
