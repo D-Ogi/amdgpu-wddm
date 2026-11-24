@@ -1,8 +1,10 @@
-"""The DLL names that a PE image imports, from its import directory and its delay-import directory.
+"""The DLL names that a PE image imports, from its import directory and its delay-import directory, and the
+functions of its import directory. The release gates (flavour_gate.py, runtime_import_gate.py) use this one reader.
 
     import pe_image
     data = pe_image.read(path)
     names = pe_image.import_dlls(data)    # {'import': [...], 'delay': [...]}, in table order
+    pairs = pe_image.imports(data)        # [(DLL, function or '#<ordinal>')], in table order
 
 No dependency outside the standard library. The reader fails closed: an image that it cannot judge raises PeError
 (no MZ or PE signature, an optional header that is neither PE32 nor PE32+, a directory or a name outside the image,
@@ -14,7 +16,9 @@ directory 1, an array of 20-byte descriptors (name RVA at offset 12). The delay-
 13, an array of 32-byte descriptors (attributes at offset 0, name at offset 4). Each array ends with a descriptor
 whose table and name fields are zero. A delay descriptor whose attribute bit 0 (dlattrRva of delayimp.h) is clear
 can hold a virtual address in place of an RVA (the form before Visual C++ 7.0): a name at or above the image base
-is taken as such an address.
+is taken as such an address. An entry of an import lookup table is 8 bytes (PE32+) or 4 bytes (PE32) and the table
+ends with a zero entry. When its high bit is set, its low 16 bits are an ordinal. Otherwise its bits 0 to 30 are the
+RVA of a hint/name entry: a 2-byte hint, then the name.
 """
 import pathlib
 
@@ -114,6 +118,29 @@ class _Image:
 
     def names(self, index):
         return [self.text(name) for name, _ in self.descriptors(index)]
+
+    def functions(self):
+        """[(DLL, function)] of the import directory: a function by name, or '#<ordinal>' when the high bit of its
+        lookup entry is set. The lookup table is the import lookup table, or the address table when the descriptor
+        has none."""
+        found, step = [], 8 if self.wide else 4
+        for name, at in self.descriptors(IMPORT_DIRECTORY):
+            dll = self.text(name)
+            t = self.offset(self.u(at, 4) or self.u(at + 16, 4))
+            for _ in range(len(self.data) // step + 1):
+                v = self.u(t, step)
+                if not v:
+                    break
+                found.append((dll, '#%d' % (v & 0xffff) if v >> (8 * step - 1) else self.text((v & 0x7fffffff) + 2)))
+                t += step
+            else:
+                raise PeError('the lookup table of %s has no terminating entry' % dll)
+        return found
+
+
+def imports(data):
+    """[(DLL, function)] of the import directory, in table order (functions() above)."""
+    return _Image(data).functions()
 
 
 def import_dlls(data):
