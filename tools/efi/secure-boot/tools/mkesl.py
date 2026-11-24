@@ -11,6 +11,10 @@ certificate goes in as EFI_CERT_X509_GUID. A PE image goes in as its Authenticod
     python mkesl.py --out dbx.esl --empty          # a database that forbids nothing
     python mkesl.py --digest bootmgfw.efi          # prints the Authenticode SHA-256 digest and writes nothing
 
+--empty writes one list with one image digest of 32 zero bytes. No image has that Authenticode digest, so the list
+forbids nothing. It is not a list without an entry: the Windows Boot Manager of 26300 answers EFI_INVALID_PARAMETER
+at once when the stage serves such a list as dbx with sb.windows=1 (BD-386).
+
 The tool needs only the Python standard library. It reads and writes files. It writes no UEFI variable.
 """
 import argparse
@@ -140,6 +144,13 @@ def signature_list(type_guid: uuid.UUID, owner: uuid.UUID, entries: list) -> byt
     return type_guid.bytes_le + struct.pack("<III", 28 + len(body), 0, entry_bytes) + body
 
 
+def forbids_nothing(owner: uuid.UUID = BC250_OWNER_GUID) -> bytes:
+    """A database that forbids nothing and that the Windows Boot Manager takes: one list with the image digest of
+    32 zero bytes. The file that the operator puts beside the stage is this one (the --empty of the command line).
+    The tests of the reader use the list without an entry (empty_list)."""
+    return signature_list(EFI_CERT_SHA256_GUID, owner, [bytes(32)])
+
+
 def database(certificates: list, digests: list, owner: uuid.UUID = BC250_OWNER_GUID, revoked: list = ()) -> bytes:
     """A database: one list for each certificate (their sizes differ), one list for all image digests, and one
     list for the revoked certificates. A revoked certificate goes in as the digest of its signed part with a
@@ -161,7 +172,8 @@ def main() -> int:
     parser.add_argument("--sha256", action="append", default=[], help="an Authenticode SHA-256 digest, 64 hex digits")
     parser.add_argument("--revoke-cert", action="append", default=[],
                         help="an X.509 certificate that is forbidden: the digest of its signed part goes in")
-    parser.add_argument("--empty", action="store_true", help="write a database with no entry")
+    parser.add_argument("--empty", action="store_true",
+                        help="write a database that forbids nothing: one list with the image digest of 32 zero bytes")
     parser.add_argument("--owner", default=str(BC250_OWNER_GUID), help="the owner GUID of the entries")
     parser.add_argument("--digest", help="print the Authenticode SHA-256 digest of this PE image and stop")
     args = parser.parse_args()
@@ -185,7 +197,9 @@ def main() -> int:
         revoked = [read_certificate(path) for path in args.revoke_cert]
         if not certificates and not digests and not revoked and not args.empty:
             parser.error("give one or more of --cert, --image, --sha256, --revoke-cert, or --empty")
-        data = database(certificates, digests, uuid.UUID(args.owner), revoked)
+        owner = uuid.UUID(args.owner)
+        data = database(certificates, digests, owner, revoked) if (certificates or digests or revoked) \
+            else forbids_nothing(owner)
     except (FormatError, OSError, ValueError) as error:
         print(f"mkesl: {error}", file=sys.stderr)
         return 1

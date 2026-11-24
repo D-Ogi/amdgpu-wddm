@@ -63,7 +63,9 @@ Put these files in the directory of `bc250-stage.efi`. Only the stage itself is 
 3. To allow one image by its digest, add `--image <file>` to that command.
 4. To forbid one image, run `python tools\efi\secure-boot\tools\mkesl.py --out dbx.esl --image <file>`.
 5. To forbid a certificate, add `--revoke-cert <certificate>` to that command.
-6. To forbid nothing, run `python tools\efi\secure-boot\tools\mkesl.py --out dbx.esl --empty`.
+6. To forbid nothing, run `python tools\efi\secure-boot\tools\mkesl.py --out dbx.esl --empty`. The file has one list with the image digest of 32 zero bytes: no image has that
+   digest. Do not make a dbx file without an entry: the Windows Boot Manager of 26300 does not start when the stage
+   serves it with `sb.windows=1` (BD-386).
 
 `sb.mode=enforce` needs the two files. `sb.mode=audit` works without them.
 

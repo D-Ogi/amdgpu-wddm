@@ -271,8 +271,10 @@ the lists of the files. The BC-250 firmware has none. A database that is not wel
 `sb.mode=enforce` starts an image only when each of these conditions is true.
 
 - `db.esl` is beside the stage and is well formed.
-- `dbx.esl` is beside the stage and is well formed. A file with one empty list forbids nothing, and
-  `mkesl.py --empty` makes it. A file that is not there is a defect, because a failed copy looks the same.
+- `dbx.esl` is beside the stage and is well formed. A file with one list of the image digest of 32 zero bytes
+  forbids nothing, and `mkesl.py --empty` makes it. A list without an entry forbids nothing for the stage, but the
+  Windows Boot Manager of 26300 does not start when the stage serves it with `sb.windows=1` (BD-386). A file that is
+  not there is a defect, because a failed copy looks the same.
 - Each `db` and `dbx` variable of the firmware that exists reads and is well formed.
 - `dbx` has no entry of a type that the stage does not read. Such an entry can forbid the image.
 
