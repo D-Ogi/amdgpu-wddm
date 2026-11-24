@@ -124,13 +124,15 @@ function Format-DiagnosticsProblemCode {
 #   $HealthReadyMs   the KMD start-health ready_ms of the same reading, $null when unknown
 #   $LastStage       the KMD's LastStage, 50 at the first mode set of a healthy start, 39 for a healthy start without
 #                    output (BD-343: no firmware display and no monitor, so no mode is committed)
+#   $Compositor      BD-389: the cause of compositor-cause.ps1 (Read-CompositorStartCause), or $null. Its reasons
+#                    and notes join the decision's, and its advice and evidence lines go into the file
 # Returns collect (true or false), the reasons in plain words, and a one-line summary for the log. The hard signals
 # below each mean the start failed on their own. An absent start record is NOT one of them: a KMD before 0.7.216.30
 # keeps none, and a healthy start of such a driver must not fetch a diagnostics file at every verify.
 function Get-StartFailureDecision {
     param([AllowNull()]$ProblemCode, [AllowNull()]$DevicePresent, [AllowNull()][string]$DeviceStatus,
           [AllowNull()]$Record, [AllowNull()]$BootUtc, [AllowNull()]$HealthFlags, [AllowNull()]$LastStage,
-          [AllowNull()]$HealthReadyMs)
+          [AllowNull()]$HealthReadyMs, [AllowNull()]$Compositor)
     $reasons = New-Object Collections.ArrayList
     $soft = New-Object Collections.ArrayList
     if ($null -ne $DevicePresent -and -not [bool]$DevicePresent) {
@@ -189,6 +191,12 @@ function Get-StartFailureDecision {
         else { [void]$reasons.Add("the start stopped at stage $stage, before the end of the start (39)") }
     }
     elseif ($stage -gt $wantStage) { [void]$reasons.Add("the device left the started stages (LastStage $stage)") }
+    # BD-389: a started driver whose desktop compositor did not start on the device, and the imports of the driver's
+    # files that this system does not have (compositor-cause.ps1).
+    if ($null -ne $Compositor) {
+        foreach ($r in @($Compositor.reasons)) { if ($r) { [void]$reasons.Add([string]$r) } }
+        foreach ($n in @($Compositor.notes)) { if ($n) { [void]$soft.Add([string]$n) } }
+    }
     $collect = [bool]$reasons.Count
     $all = @(@($reasons) + @($soft))
     return [ordered]@{
@@ -196,7 +204,22 @@ function Get-StartFailureDecision {
         reasons = @($reasons)
         notes = @($soft)
         summary = $(if ($collect) { 'start failure: ' + (@($reasons) -join '; ') } else { 'no start failure: ' + $(if ($all.Count) { $all -join '; ' } else { 'every reading is as a started driver gives it' }) })
+        advice = $(if ($null -ne $Compositor -and $Compositor.advice) { [string]$Compositor.advice } else { $null })
+        evidence = $(if ($null -ne $Compositor) { @($Compositor.lines) } else { @() })
     }
+}
+
+# The decision block of the diagnostics file: the summary, the reasons, the notes, the advice and the compositor
+# evidence (BD-389), one line each.
+function Get-DiagnosticsDecisionLines {
+    param([Parameter(Mandatory)]$Decision)
+    $lines = New-Object Collections.ArrayList
+    [void]$lines.Add([string]$Decision.summary)
+    foreach ($r in @($Decision.reasons)) { [void]$lines.Add("reason: $r") }
+    foreach ($r in @($Decision.notes)) { [void]$lines.Add("note: $r") }
+    if ($Decision.advice) { [void]$lines.Add("advice: $($Decision.advice)") }
+    foreach ($r in @($Decision.evidence)) { if ($r) { [void]$lines.Add("compositor: $r") } }
+    return @($lines)
 }
 
 # ---- the bounded sink -------------------------------------------------------------------------------------------
@@ -489,9 +512,7 @@ function Write-StartFailureDiagnostics {
     [void](Add-DiagnosticsLine -Sink $sink -Text "bounds $BudgetSeconds s and $([int]($MaxBytes / 1024)) KiB for the whole file")
     [void](Add-DiagnosticsLine -Sink $sink -Text '')
     [void](Add-DiagnosticsLine -Sink $sink -Text '== the decision ==')
-    [void](Add-DiagnosticsLine -Sink $sink -Text $([string]$Decision.summary))
-    foreach ($r in @($Decision.reasons)) { [void](Add-DiagnosticsLine -Sink $sink -Text "reason: $r") }
-    foreach ($r in @($Decision.notes)) { [void](Add-DiagnosticsLine -Sink $sink -Text "note: $r") }
+    [void](Add-DiagnosticsLines -Sink $sink -Lines (Get-DiagnosticsDecisionLines -Decision $Decision) -Where 'the decision')
 
     Add-Section 'the driver device' { Get-DiagnosticsDeviceLines -State $DeviceState }
     Add-Section 'this Windows' { if($WindowsReader){& $WindowsReader}else{Get-DiagnosticsWindowsLines -Root $Root -InstanceId $(if ($null -ne $DeviceState) { [string]$DeviceState.instance_id } else { $null })} }

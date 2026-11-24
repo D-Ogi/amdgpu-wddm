@@ -46,6 +46,7 @@ if (-not $ExpectedVersion) {
     if (-not $ExpectedVersion) { $ExpectedVersion = '0x000700D8' }   # this release's kmd_abi; test-dryrun.ps1 gates it
 }
 . (Join-Path $here 'start-confirm-core.ps1')
+. (Join-Path $here 'compositor-cause.ps1')
 . (Join-Path $here 'state-reader.ps1')
 # The boot identity (Get-BootIdentity), loaded here and not only before the witness at the end: the start record's
 # reading needs this boot's start time from the one place that defines it (start-confirm-core.ps1
@@ -285,6 +286,21 @@ while ($true) {
     Start-Sleep -Milliseconds 250
 }
 Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); $(Format-WindowTask); UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'); $(Format-Dpm); confirm calls $($state.confirms); start record: $(Format-StartRecordLine)"
+# BD-389: why this start stayed unconfirmed, when the desktop compositor says it (compositor-cause.ps1). Only a run
+# that confirmed nothing reads it. The line confirms nothing and changes no exit code.
+if ($script:exitCode -ne 0) {
+    try {
+        $gpu = @(Get-CimInstance Win32_PnPEntity -Filter "DeviceID LIKE 'PCI\\VEN_1002&DEV_13FE%'" -ErrorAction SilentlyContinue)
+        $one = $(if ($gpu.Count -eq 1) { $gpu[0] } else { $null })
+        $causeRecord = $null
+        try { $causeRecord = Read-StartRecord } catch { }
+        $cause = Read-CompositorStartCause -BootUtc $script:bootUtc -Record $causeRecord `
+            -ProblemCode $(if ($one) { $one.ConfigManagerErrorCode } else { $null }) `
+            -InstanceId $(if ($one) { [string]$one.DeviceID } else { $null }) -DeviceName $(if ($one) { [string]$one.Name } else { $null })
+        $causeLine = Get-StartConfirmCauseLine -Cause $cause -ExitCode $script:exitCode
+        if ($causeLine) { Write-StartConfirmLog $causeLine }
+    } catch { Write-StartConfirmLog "cause: not read, $($_.Exception.Message)" }
+}
 # The running-release witness of this boot: the loaded KMD image and its reply against the installed manifest. Written
 # whatever the confirmation's outcome (it names what runs, not how healthy it is); never fails the task. It takes the
 # installer's engine.lock for the whole reading and publication (up to 3 s wait): while an installer runs, no witness.

@@ -299,7 +299,8 @@ Write-Host 'installer and documents'
 # The logon tasks' scripts: the confirmation also writes the running-release witness (release-witness.ps1), and
 # start-window.ps1 is the window task's own script (BD-080), which the logged-on user runs with their own rights.
 # nagi-update.ps1 is the update step at the end of each confirmation run (docs/design/self-update.md).
-$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1', 'version-identity.ps1', 'state-reader.ps1', 'nagi-update.ps1')
+# compositor-cause.ps1 gives the cause line of a run that confirmed nothing (BD-389).
+$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'compositor-cause.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1', 'version-identity.ps1', 'state-reader.ps1', 'nagi-update.ps1')
 $inst = Join-Path $pkg 'installer'
 [void][IO.Directory]::CreateDirectory($inst)
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') -File) {

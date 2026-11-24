@@ -770,6 +770,17 @@ python -m unittest discover -s tools/quality -p test_runtime_import_gate.py
   (`scratch/glm/efi-signing/cks-manual/run6-staged/files/payload/kmd`, 25 PE files). The gate refuses exactly
   the three files above. The self-test reads that tree when `BC250_ROOT` holds it.
 
+On a tester's PC, `tools/release/installer/compositor-cause.ps1` names this cause when it occurs. The last step of
+the installer and the start-confirm task use it. It reads the events of this boot: the `Dwminit` exits that
+name the BC-250 GPU as the primary device, the `Application Error` entries of `dwm.exe`, DxgKrnl-Admin
+465 and Kernel-PnP 1011 of the device. It also reads the import tables of the DLLs in the DriverStore folder of the
+driver, as bytes, with no load of a DLL. An imported DLL is missing when it is not an API set, not a KnownDLL, not
+in the folder of the file and not in the system folder of its architecture. A start record of this boot that says
+`started`, Code 43 and a DWM exit on the device are a reason. The diagnostics file then gives that reason, each
+missing import and the advice to install the Visual C++ Redistributable. Without the DWM exits, a missing import is
+a note. `tools/release/test-compositor-cause.ps1` tests this with the readings of the lab unit
+(`tools/release/test-data/bd389/unit-a-20261124.txt`).
+
 ## Firmware
 
 The KMD loads eight PSP firmware files from its Driver Store image directory

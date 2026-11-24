@@ -367,6 +367,9 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # The installer's own diagnostics of a start that did not pass (the decision, the readers and
  # the bounds), with the field case as a fixture. Windows PowerShell 5.1, the shell a tester runs.
  Check 'installer-diagnostics' { & powershell -NoProfile -File "$repo\tools\release\test-diagnostics.ps1" }
+ # BD-389: the cause of a started driver whose desktop compositor did not start (the DWM events of this boot and
+ # the imports of the driver's files), with the lab unit's readings as the fixture. Windows PowerShell 5.1.
+ Check 'compositor-cause' { & powershell -NoProfile -File "$repo\tools\release\test-compositor-cause.ps1" }
  # BD-060 and BD-080: the INF restart directive, the resumed install's inputs, the DWM baseline, and the plan of the
  # two logon tasks (who confirms a driver start, and at whose logon). It writes files under Out and registers no
  # task. Until now it ran only inside test-dryrun.ps1, which needs a built package.

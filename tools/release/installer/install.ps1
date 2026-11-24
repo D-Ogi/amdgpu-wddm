@@ -89,6 +89,7 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'release-witness.ps1')
 # The readers of the KMD's start and stop records, and the automatic diagnostics of a start that did not pass.
 . (Join-Path $here 'start-confirm-core.ps1')
+. (Join-Path $here 'compositor-cause.ps1')
 . (Join-Path $here 'diagnostics.ps1')
 . (Join-Path $here 'compatibility.ps1')
 . (Join-Path $here 'mft-h264.ps1')
@@ -603,10 +604,25 @@ function Invoke-VerifyDiagnostics {
           [AllowNull()][string]$BootIdSource = (Get-StartRecordBootIdSource))
     $decision = $null
     try {
+        # BD-389: the desktop compositor's events of this boot and the imports of the driver's files
+        # (compositor-cause.ps1). A dry run reads nothing of this computer, and a reading that fails leaves the
+        # decision as it was without it.
+        $compositor = $null
+        if (-not $script:DryRunMode) {
+            try {
+                $compositor = Read-CompositorStartCause -BootUtc $BootUtc -Record $StartRecord -ProblemCode $DeviceState.problem_code `
+                    -InstanceId ([string]$DeviceState.instance_id) -DeviceName ([string]$DeviceState.name)
+            } catch { Write-Log "   diagnostics: the compositor cause was not read, $($_.Exception.Message)" }
+        }
         $decision = Get-StartFailureDecision -ProblemCode $DeviceState.problem_code -DevicePresent $DeviceState.present `
             -DeviceStatus ([string]$DeviceState.status) -Record $StartRecord -BootUtc $BootUtc `
-            -HealthFlags $DeviceState.health_flags -HealthReadyMs $DeviceState.health_ready_ms -LastStage $DeviceState.last_stage
+            -HealthFlags $DeviceState.health_flags -HealthReadyMs $DeviceState.health_ready_ms -LastStage $DeviceState.last_stage `
+            -Compositor $compositor
         Write-Log "   diagnostics: $($decision.summary)"
+        if ($decision.advice) {
+            Write-Log "   diagnostics advice: $($decision.advice)"
+            if ($Info) { & $Info 'diagnostics' "what to do: $($decision.advice)" }
+        }
         if (-not $decision.collect) { return }
         if ($script:DryRunMode) { Write-Log '   diagnostics: a dry run collects nothing'; return }
         $path = Join-Path $script:StateDir ('diagnostics-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '.txt')
@@ -806,7 +822,7 @@ function Invoke-Verify {
     $lastStage = $null; if ($view -match 'LastStage (\d+)') { $lastStage = [int]$Matches[1] }
     $replyVersion = $null; if ($view -match 'driver version (0x[0-9A-Fa-f]{8})') { $replyVersion = $Matches[1] }
     Invoke-VerifyDiagnostics -DeviceState ([ordered]@{
-            present = $true; instance_id = $id; problem_code = $dev[0].ConfigManagerErrorCode; status = [string]$pnp.Status
+            present = $true; instance_id = $id; name = [string]$dev[0].Name; problem_code = $dev[0].ConfigManagerErrorCode; status = [string]$pnp.Status
             service = $svc; driver_version = $(if ($drv) { [string]$drv.DriverVersion } else { $null }); inf = $inf
             provider = [string]$provider; package_version = (Get-ManifestDriverQuad $script:Manifest)
             reply_version = $replyVersion; last_stage = $lastStage; health_flags = $hflags; health_ready_ms = $hready

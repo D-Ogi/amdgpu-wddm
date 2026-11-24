@@ -1,0 +1,91 @@
+# BD-389: the readings of one lab unit (Windows 11 26200) on 2026-11-24, with the rc3 driver set alone and
+# no Visual C++ runtime. The lines are copies of the lab session log (scratch\glm\lab\20261124-sb-session
+# \session.log of the workspace, outside the repository), in the print form of the lab readers named in
+# each "===" line. Left out: the Windows Error Reporting entries (their file names), the computer name and
+# the report ids of the Application Error entries ("(left out)"). The "imports" block is the reading of
+# tools/quality/pe_image.py on the DLLs of the same driver set (attempt 6). test-compositor-cause.ps1 reads
+# this file; nothing else does.
+date 2026-11-24
+=== kmd-start-read.ps1, 2026-11-24T13:02:25Z
+boot 2026-11-24T12:58:02Z
+device 'BC-250 GPU (amdgpu-wddm)' status Error problem 43 problem status 0x00000000 node status 0x01802400
+--- record StartRecord (the Data key of the active state generation)
+  Result = started
+  Step = -
+  SubStep = -
+  Status = 0x00000000
+  Stage = 39
+  UnconfirmedStarts = 1
+  Version = 0x000700D8
+  TimeUtc = 2026-11-24T12:58:18.484Z
+  DisplayStart = 1
+--- log Microsoft-Windows-Kernel-PnP/Device Management: 6 events
+  12:56:35Z id 1065 L4: Device PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 with problem code 0 and problem status 0x0 requires the system to be rebooted. Additional information: 0x200000
+  12:58:14Z id 1011 L3: Device ACPI\PNP0303\0 has been surprise removed as it was reported to be failing. Count of devices removed: 1
+  12:58:14Z id 1011 L3: Device ACPI\PNP0F03\0 has been surprise removed as it was reported to be failing. Count of devices removed: 1
+  12:58:56Z id 1011 L3: Device PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 has been surprise removed as it was reported to be failing. Count of devices removed: 2
+  17:19:04Z id 1011 L3: Device ACPI\PNP0303\0 has been surprise removed as it was reported to be failing. Count of devices removed: 1
+  17:19:04Z id 1011 L3: Device ACPI\PNP0F03\0 has been surprise removed as it was reported to be failing. Count of devices removed: 1
+--- log Microsoft-Windows-Dxgkrnl-Admin: 1 events
+  12:58:56Z id 465 L2: Winlogon in session 1 (console) reuqested session stop using GPU, returned status STATUS_SUCCESS, with progress stage of successful
+=== dwm-read.ps1, 2026-11-24T13:04:39Z
+window 2026-11-24T12:57:02Z to 2026-11-24T13:04:46Z
+--- Application log: 41 events; by provider: Dwminit x8, Application Error x8, Windows Error Reporting x8, Microsoft-Windows-Security-SPP x7, SecurityCenter x3, Microsoft-Windows-WMI x2, Microsoft-Windows-Winlogon x2, Microsoft-Windows-User Profiles Service x1, Microsoft-Windows-Search x1, edgeupdate x1
+  12:58:20Z Microsoft-Windows-Winlogon id 6003 L4: The winlogon notification subscriber <SessionEnv> was unavailable to handle a critical notification event.
+  12:58:20Z Application Error id 1000 L2: Faulting application name: dwm.exe, version: 10.0.26100.9549, time stamp: 0x653fab24 Faulting module name: dwmcore.dll, version: 10.0.26100.9549, time stamp: 0x0465df26 Exception code: 0x889800b2 Fault offset: 0x00000000001d2488 Faulting process id: 0x66C Faulting application start time: 0x1DD7C137A6D02D3 Faulting application path: C:\Windows\system32\dwm.exe Faulting module path: C:\Windows\system32\dwmcore.dll Report Id: (left out) Faulting package full name: Faulting package-relative application ID:
+  12:58:21Z Microsoft-Windows-Winlogon id 6000 L4: The winlogon notification subscriber <SessionEnv> was unavailable to handle a notification event.
+  12:58:25Z Dwminit id 0 L3: The Desktop Window Manager process has exited. (Process exit code: 0x889800b2, Restart count: 1, Primary display device ID: BC-250 GPU (amdgpu-wddm))
+  12:58:26Z Application Error id 1000 L2: Faulting application name: dwm.exe, version: 10.0.26100.9549, time stamp: 0x653fab24 Faulting module name: dwmcore.dll, version: 10.0.26100.9549, time stamp: 0x0465df26 Exception code: 0x889800b2 Fault offset: 0x00000000001d2488 Faulting process id: 0x198C Faulting application start time: 0x1DD7C137E592215 Faulting application path: C:\Windows\system32\dwm.exe Faulting module path: C:\Windows\system32\dwmcore.dll Report Id: (left out) Faulting package full name: Faulting package-relative application ID:
+  12:58:30Z Dwminit id 0 L3: The Desktop Window Manager process has exited. (Process exit code: 0x889800b2, Restart count: 2, Primary display device ID: BC-250 GPU (amdgpu-wddm))
+  12:58:31Z Application Error id 1000 L2: Faulting application name: dwm.exe, version: 10.0.26100.9549, time stamp: 0x653fab24 Faulting module name: dwmcore.dll, version: 10.0.26100.9549, time stamp: 0x0465df26 Exception code: 0x889800b2 Fault offset: 0x00000000001d2488 Faulting process id: 0x2314 Faulting application start time: 0x1DD7C138160DAEB Faulting application path: C:\Windows\system32\dwm.exe Faulting module path: C:\Windows\system32\dwmcore.dll Report Id: (left out) Faulting package full name: Faulting package-relative application ID:
+  12:58:34Z Dwminit id 0 L3: The Desktop Window Manager process has exited. (Process exit code: 0x889800b2, Restart count: 3, Primary display device ID: BC-250 GPU (amdgpu-wddm))
+  12:58:36Z Application Error id 1000 L2: Faulting application name: dwm.exe, version: 10.0.26100.9549, time stamp: 0x653fab24 Faulting module name: dwmcore.dll, version: 10.0.26100.9549, time stamp: 0x0465df26 Exception code: 0x889800b2 Fault offset: 0x00000000001d2488 Faulting process id: 0x24B0 Faulting application start time: 0x1DD7C1383DFBA38 Faulting application path: C:\Windows\system32\dwm.exe Faulting module path: C:\Windows\system32\dwmcore.dll Report Id: (left out) Faulting package full name: Faulting package-relative application ID:
+  12:58:38Z Dwminit id 0 L3: The Desktop Window Manager process has exited. (Process exit code: 0x889800b2, Restart count: 4, Primary display device ID: BC-250 GPU (amdgpu-wddm))
+  12:58:40Z Application Error id 1000 L2: Faulting application name: dwm.exe, version: 10.0.26100.9549, time stamp: 0x653fab24 Faulting module name: dwmcore.dll, version: 10.0.26100.9549, time stamp: 0x0465df26 Exception code: 0x889800b2 Fault offset: 0x00000000001d2488 Faulting process id: 0x27B4 Faulting application start time: 0x1DD7C138645F788 Faulting application path: C:\Windows\system32\dwm.exe Faulting module path: C:\Windows\system32\dwmcore.dll Report Id: (left out) Faulting package full name: Faulting package-relative application ID:
+  12:58:43Z Dwminit id 0 L3: The Desktop Window Manager process has exited. (Process exit code: 0x889800b2, Restart count: 5, Primary display device ID: BC-250 GPU (amdgpu-wddm))
+  12:58:44Z Application Error id 1000 L2: Faulting application name: dwm.exe, version: 10.0.26100.9549, time stamp: 0x653fab24 Faulting module name: dwmcore.dll, version: 10.0.26100.9549, time stamp: 0x0465df26 Exception code: 0x889800b2 Fault offset: 0x00000000001d2488 Faulting process id: 0x1EE0 Faulting application start time: 0x1DD7C1388AB974A Faulting application path: C:\Windows\system32\dwm.exe Faulting module path: C:\Windows\system32\dwmcore.dll Report Id: (left out) Faulting package full name: Faulting package-relative application ID:
+  12:58:47Z Dwminit id 0 L3: The Desktop Window Manager process has exited. (Process exit code: 0x889800b2, Restart count: 6, Primary display device ID: BC-250 GPU (amdgpu-wddm))
+  12:58:48Z Application Error id 1000 L2: Faulting application name: dwm.exe, version: 10.0.26100.9549, time stamp: 0x653fab24 Faulting module name: dwmcore.dll, version: 10.0.26100.9549, time stamp: 0x0465df26 Exception code: 0x889800b2 Fault offset: 0x00000000001d2488 Faulting process id: 0x25E0 Faulting application start time: 0x1DD7C138B17E3FB Faulting application path: C:\Windows\system32\dwm.exe Faulting module path: C:\Windows\system32\dwmcore.dll Report Id: (left out) Faulting package full name: Faulting package-relative application ID:
+  12:58:51Z Dwminit id 0 L3: The Desktop Window Manager process has exited. (Process exit code: 0x889800b2, Restart count: 7, Primary display device ID: BC-250 GPU (amdgpu-wddm))
+  12:58:52Z Application Error id 1000 L2: Faulting application name: dwm.exe, version: 10.0.26100.9549, time stamp: 0x653fab24 Faulting module name: dwmcore.dll, version: 10.0.26100.9549, time stamp: 0x0465df26 Exception code: 0x889800b2 Fault offset: 0x00000000001d2488 Faulting process id: 0x26FC Faulting application start time: 0x1DD7C138DB501D1 Faulting application path: C:\Windows\system32\dwm.exe Faulting module path: C:\Windows\system32\dwmcore.dll Report Id: (left out) Faulting package full name: Faulting package-relative application ID:
+  12:58:56Z Dwminit id 0 L3: The Desktop Window Manager process has exited. (Process exit code: 0x889800b2, Restart count: 8, Primary display device ID: BC-250 GPU (amdgpu-wddm))
+=== vc-install.ps1, 2026-11-24T13:06:14Z
+before:
+  vcruntime140.dll absent
+  vcruntime140_1.dll absent
+  msvcp140.dll absent
+=== cks-manual.ps1 -Op State, 2026-11-24T13:12:00Z
+system: build 26200.9550; boot 2026-11-24T13:08:12Z
+=== cli-run.ps1 stages, 2026-11-24T13:12:19Z
+  StartRecord  started, step - / -, status 0x00000000 STATUS_SUCCESS
+               stage 39 start: done, at 2026-11-24T13:08:28.385Z, UnconfirmedStarts 2, written by 0x000700D8
+=== dwm-read.ps1, 2026-11-24T13:13:02Z
+window 2026-11-24T13:07:12Z to 2026-11-24T13:13:09Z
+--- Application log: 20 events; by provider: Microsoft-Windows-Security-SPP x9, SecurityCenter x3, Microsoft-Windows-Winlogon x2, Microsoft-Windows-WMI x2, Microsoft-Windows-User Profiles Service x1, edgeupdate x1, Microsoft-Windows-Search x1, VBScriptDeprecationAlert x1
+  13:08:31Z Microsoft-Windows-Winlogon id 6003 L4: The winlogon notification subscriber <SessionEnv> was unavailable to handle a critical notification event.
+  13:08:32Z Microsoft-Windows-Winlogon id 6000 L4: The winlogon notification subscriber <SessionEnv> was unavailable to handle a notification event.
+=== imports, tools/quality/pe_image.py on the attempt 6 driver set (files/payload/kmd)
+adl/atiadlxx.dll x64 import SETUPAPI.dll,ADVAPI32.dll,USER32.dll,GDI32.dll,KERNEL32.dll delay -
+d3d11/amdgpu_wddm_d3d11.dll x64 import bcrypt.dll,WINTRUST.dll,ADVAPI32.dll,KERNEL32.dll delay -
+d3d11/amdgpu_wddm_dxvk.dll x64 import GDI32.dll,ADVAPI32.dll,SHELL32.dll,ole32.dll,KERNEL32.dll,USER32.dll,SETUPAPI.dll delay -
+d3d11/amdgpu_wddm_radv_d3d11.dll x64 import dwmapi.dll,KERNEL32.dll,USER32.dll,GDI32.dll,ADVAPI32.dll,api-ms-win-core-synch-l1-2-0.dll delay -
+d3d12/amdgpu_wddm_d3d12.dll x64 import ADVAPI32.dll,api-ms-win-core-synch-l1-2-0.dll,KERNEL32.dll delay -
+d3d12/amdgpu_wddm_radv_d3d12.dll x64 import dwmapi.dll,KERNEL32.dll,USER32.dll,GDI32.dll,ADVAPI32.dll,api-ms-win-core-synch-l1-2-0.dll delay -
+d3d12/amdgpu_wddm_vkd3d.dll x64 import KERNEL32.dll,ADVAPI32.dll,GDI32.dll,api-ms-win-core-path-l1-1-0.dll,VERSION.dll,ntdll.dll delay -
+desktop/amdgpu_wddm_radv.dll x64 import dwmapi.dll,KERNEL32.dll,USER32.dll,GDI32.dll,api-ms-win-core-synch-l1-2-0.dll,MSVCP140.dll,ADVAPI32.dll,VCRUNTIME140.dll,VCRUNTIME140_1.dll,api-ms-win-crt-stdio-l1-1-0.dll,api-ms-win-crt-runtime-l1-1-0.dll,api-ms-win-crt-math-l1-1-0.dll,api-ms-win-crt-filesystem-l1-1-0.dll,api-ms-win-crt-time-l1-1-0.dll,api-ms-win-crt-string-l1-1-0.dll,api-ms-win-crt-convert-l1-1-0.dll,api-ms-win-crt-utility-l1-1-0.dll,api-ms-win-crt-heap-l1-1-0.dll,api-ms-win-crt-environment-l1-1-0.dll,api-ms-win-crt-locale-l1-1-0.dll delay -
+desktop/bc250d3d.dll x64 import KERNEL32.dll,USER32.dll,GDI32.dll,ntdll.dll,api-ms-win-core-synch-l1-2-0.dll,ADVAPI32.dll,ole32.dll,SHELL32.dll delay -
+desktop/bc250d3d_router.dll x64 import ADVAPI32.dll,KERNEL32.dll,SETUPAPI.dll,api-ms-win-service-core-l1-1-5.dll,VCRUNTIME140.dll,api-ms-win-crt-stdio-l1-1-0.dll,api-ms-win-crt-string-l1-1-0.dll,api-ms-win-crt-convert-l1-1-0.dll,api-ms-win-crt-runtime-l1-1-0.dll delay -
+desktop/bc250d3d_zink.dll x64 import KERNEL32.dll,MSVCP140.dll,api-ms-win-core-synch-l1-2-0.dll,VCRUNTIME140.dll,VCRUNTIME140_1.dll,api-ms-win-crt-stdio-l1-1-0.dll,api-ms-win-crt-filesystem-l1-1-0.dll,api-ms-win-crt-heap-l1-1-0.dll,api-ms-win-crt-runtime-l1-1-0.dll,api-ms-win-crt-math-l1-1-0.dll,api-ms-win-crt-string-l1-1-0.dll,api-ms-win-crt-utility-l1-1-0.dll,api-ms-win-crt-convert-l1-1-0.dll delay -
+mft/amdgpu_wddm_mft_h264.dll x64 import MFPlat.DLL,d3d11.dll,dxgi.dll,ole32.dll,KERNEL32.dll delay -
+opengl/amdgpu_wddm_gl.dll x64 import KERNEL32.dll,USER32.dll,GDI32.dll,api-ms-win-core-synch-l1-2-0.dll,ADVAPI32.dll delay -
+vulkan/vulkan_radeon.dll x64 import dwmapi.dll,KERNEL32.dll,USER32.dll,GDI32.dll,ADVAPI32.dll,api-ms-win-core-synch-l1-2-0.dll delay -
+wow64/adl/atiadlxy.dll x86 import SETUPAPI.dll,ADVAPI32.dll,USER32.dll,GDI32.dll,KERNEL32.dll delay -
+wow64/d3d11/amdgpu_wddm_d3d1132.dll x86 import bcrypt.dll,WINTRUST.dll,ADVAPI32.dll,KERNEL32.dll delay -
+wow64/d3d11/amdgpu_wddm_dxvk32.dll x86 import GDI32.dll,ADVAPI32.dll,SHELL32.dll,ole32.dll,KERNEL32.dll,USER32.dll,SETUPAPI.dll delay -
+wow64/d3d11/amdgpu_wddm_radv_d3d1132.dll x86 import dwmapi.dll,KERNEL32.dll,USER32.dll,GDI32.dll,ADVAPI32.dll,api-ms-win-core-synch-l1-2-0.dll delay -
+wow64/d3d12/amdgpu_wddm_d3d1232.dll x86 import ADVAPI32.dll,api-ms-win-core-synch-l1-2-0.dll,KERNEL32.dll delay -
+wow64/d3d12/amdgpu_wddm_radv_d3d1232.dll x86 import dwmapi.dll,KERNEL32.dll,USER32.dll,GDI32.dll,ADVAPI32.dll,api-ms-win-core-synch-l1-2-0.dll delay -
+wow64/d3d12/amdgpu_wddm_vkd3d32.dll x86 import KERNEL32.dll,ADVAPI32.dll,GDI32.dll,api-ms-win-core-path-l1-1-0.dll,VERSION.dll,ntdll.dll delay -
+wow64/desktop/bc250d3d32.dll x86 import KERNEL32.dll,USER32.dll,GDI32.dll,api-ms-win-core-synch-l1-2-0.dll,ntdll.dll,ADVAPI32.dll,ole32.dll,SHELL32.dll delay -
+wow64/desktop/bc250d3d_router32.dll x86 import ADVAPI32.dll,KERNEL32.dll,SETUPAPI.dll,api-ms-win-service-core-l1-1-5.dll delay -
+wow64/vulkan/vulkan_radeon32.dll x86 import dwmapi.dll,KERNEL32.dll,USER32.dll,GDI32.dll,ADVAPI32.dll,api-ms-win-core-synch-l1-2-0.dll delay -
