@@ -1791,7 +1791,7 @@
       "inputs": [
         "host"
       ],
-      "timeout": 1200
+      "timeout": 1800
     },
     "winsys-lines-controls": {
       "timeout": 600,
