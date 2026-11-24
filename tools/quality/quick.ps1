@@ -278,6 +278,10 @@ Check 'pdb-repro' { & pwsh -NoProfile -File "$repo\tools\build\test-pdb-repro.ps
  Check 'driver-state-settings' { & python "$repo\tools\state\check_settings.py" --root "$repo"; if($LASTEXITCODE -eq 0){ & python -I -m unittest discover -s "$repo\tools\state" -p 'test_check_settings.py' } }
  # BD-262: the catalog of every earlier published tester tag is in driver/state/history, so the state worker reads the
  # removal record of each of those releases by setting name. The release-set build runs the same check on each state worker row.
+ # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest (BD-382): the unit tests start about 100
+ # git processes on small repositories. 15 s on the idle development PC; in the full suite of the tester.39 package
+ # run of 2026-11-24 each of the 12 tests took 14 s to 24 s and the gate stopped at 180 s in the tenth test. The tests
+ # now share one repository template (9 s idle). 600 s is 3 times the full-suite time of the old tests.
  Check 'driver-state-history' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\driver-state-history").FullName; & python "$repo\tools\state\check_history.py" --repo "$repo"; if($LASTEXITCODE -eq 0){ & python -I -m unittest discover -s "$repo\tools\state" -p 'test_check_history.py' } }
  # The swap check of a KMD image: the host half reads the state catalog of an image, the lab half refuses a swap across
  # a catalog change before any change on the lab (A1 s3 of BD-223, tools/win/kmd-swap/README.md).
