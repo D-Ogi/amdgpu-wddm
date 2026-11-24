@@ -32,6 +32,14 @@ has its own process and deadline. On Windows, a job
 object closes the worker and its children at timeout. Failed prerequisites
 prevent dependent checks from running.
 
+The deadline of a check is its `timeout` in `gate-inputs.json`, or the
+`timeout` of the file when the check declares none. These values fit a check
+that runs alone or beside a small number of other checks. The `Full` profile
+runs every check, many at one time, while the host does other work. The time
+of a check in that profile is not a property of the check. Thus in `Full` no
+check has a deadline below `full_timeout`: there the deadline only stops a
+check that hangs. A deadline above `full_timeout` stays as declared.
+
 The host input group is broad. The blob reader has a separate input group for
 its ABI test, compile, contract, analysis, log-width and watchdog checks.
 Other KMD source edits can invalidate the whole host group. Tighten a group

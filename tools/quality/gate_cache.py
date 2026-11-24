@@ -194,6 +194,20 @@ def control_failure(code, log, step=None):
     return None
 
 
+def deadline(manifest, declaration, profile):
+    """The seconds after which a check is stopped with its process tree.
+
+    A declared deadline fits a check that runs alone or beside a few others. The Full profile is the release suite:
+    every check runs, many at once, beside the other work of the host, and the time of a check there is not a
+    property of the check (driver-state-history: 9 s alone, 326 s in a package suite of 2026-11-24; BD-357). So in
+    that profile the deadline has one task, to end a check that hangs, and no check has less than 'full_timeout'.
+    """
+    seconds = declaration.get('timeout', manifest['timeout'])
+    if profile == 'Full':
+        seconds = max(seconds, manifest.get('full_timeout', seconds))
+    return seconds
+
+
 def cache_key(job, declaration, input_hash, tool_hash, env_hash, context):
     return digest(encoded({'schema': SCHEMA, 'job': job, 'declaration': declaration,
                            'inputs': input_hash, 'toolchain': tool_hash, 'environment': env_hash,
@@ -375,7 +389,7 @@ def execute(plan, manifest, plan_path, no_cache=False, jobs=None):
         else:
             command = ['pwsh', '-NoProfile', '-File', str(repo / 'tools/quality/gate-worker.ps1'),
                        '-Plan', str(plan_path), '-Name', name]
-        timeout = declaration.get('timeout', manifest['timeout'])
+        timeout = deadline(manifest, declaration, variables['Profile'])
         code, timed_out = run_process(command, scratch, env, out / (name + '.log'), timeout)
         log = (out / (name + '.log')).read_bytes()
         why = control_failure(code, log, spec.get('step')) if spec.get('fails') and not timed_out else None

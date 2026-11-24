@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "timeout": 180,
+  "full_timeout": 1800,
   "release_only": [
     "driver-state-package",
     "driver-state-installer",
@@ -1791,7 +1792,7 @@
       "inputs": [
         "host"
       ],
-      "timeout": 1800
+      "timeout": 3600
     },
     "winsys-lines-controls": {
       "timeout": 600,

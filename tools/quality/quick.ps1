@@ -250,6 +250,9 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # 2026-11-24 (BD-357): 1800 s. In the full uncached suite of the tester.39 package runs of this day it took 807.91 s
  # and 985.03 s (82 per cent of the 1200 s limit) beside other work on the development PC. 1800 s is 1.8 times the
  # slower run.
+ # The same day, fourth run: stopped at 1800 s with 94 of 111 tests done, beside another build on the PC. 3600 s now.
+ # This is the longest check of the suite and the deadline is not its repair: its tests start the set tool and git
+ # for each case, and the check must become several smaller checks (BD-382).
  Check 'release-build-set' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-build-set").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_build*.py' }
  # BD-204: a fix marker on one RADV WDDM line and not on the other (marker_guard.py lines, winsys-lines.json). The
  # controls run on throwaway repositories; the gate reads the Mesa lines that release-sources.json pins, in the

@@ -249,6 +249,42 @@ class CacheTests(unittest.TestCase):
         time.sleep(1.7)
         self.assertFalse(marker.exists())
 
+    def test_full_profile_deadline_only_ends_a_hang(self):
+        # BD-357: the release suite runs its checks beside each other and beside the other work of the host, so the
+        # deadline that fits a check alone stops a good check there. The Full profile has one floor for every check.
+        seen = []
+
+        def record(command, cwd, env, log, timeout):
+            seen.append((self.plan['variables']['Profile'], timeout))
+            log.write_bytes(b'fixture PASS\n')
+            return 0, False
+
+        def run(profile, declared):
+            self.plan['variables']['Profile'] = profile
+            if declared is None:
+                self.manifest['checks']['sample'].pop('timeout', None)
+            else:
+                self.manifest['checks']['sample']['timeout'] = declared
+            self.plan_path.write_text(json.dumps(self.plan), encoding='utf-8')
+            with contextlib.redirect_stdout(io.StringIO()), patch.object(gate, 'run_process', record):
+                gate.execute(self.plan, self.manifest, self.plan_path, True, jobs=2)
+
+        self.manifest['full_timeout'] = 1800
+        run('KmdPackage', None)
+        run('KmdPackage', 600)
+        run('Full', None)
+        run('Full', 600)
+        run('Full', 2400)
+        self.assertEqual(seen, [('KmdPackage', 10), ('KmdPackage', 600), ('Full', 1800), ('Full', 1800),
+                                ('Full', 2400)])
+        # A manifest without the floor keeps the declared deadline in the Full profile too.
+        del self.manifest['full_timeout']
+        run('Full', 600)
+        self.assertEqual(seen[-1], ('Full', 600))
+        repo = Path(__file__).resolve().parents[2]
+        manifest = json.loads((repo / 'tools/quality/gate-inputs.json').read_bytes())
+        self.assertGreaterEqual(manifest['full_timeout'], 1800)
+
     def test_release_paths_force_uncached_children(self):
         repo = Path(__file__).resolve().parents[2]
         for name in ('build-release.ps1', 'rebuild-check.ps1'):
