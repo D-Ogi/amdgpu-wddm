@@ -292,10 +292,23 @@
     "driver-state-history": {
       "timeout": 600
     },
+    "shared-build-tree": {
+      "timeout": 600
+    },
+    "lab-emerg-watch": {
+      "timeout": 600
+    },
+    "lab-runner": {
+      "timeout": 600
+    },
+    "dev-swap": {
+      "timeout": 600
+    },
     "kmdread": {
       "timeout": 600
     },
     "third-party-doc": {
+      "timeout": 600,
       "inputs": [
         "documents"
       ]
@@ -708,6 +721,7 @@
       ]
     },
     "latch-probe": {
+      "timeout": 600,
       "inputs": [
         "host"
       ]
@@ -1780,6 +1794,7 @@
       "timeout": 1200
     },
     "winsys-lines-controls": {
+      "timeout": 600,
       "inputs": [
         "host"
       ]
