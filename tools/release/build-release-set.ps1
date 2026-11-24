@@ -579,6 +579,15 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
         $children = @()
         # A package worktree of an earlier run whose folder was deleted stays registered (BD-264).
         foreach ($p in @(Remove-StaleWorktrees $null $repo $From)) { "$(Get-Utc) removed the registration of $p (its folder is gone)" }
+        # Each flavour runs the full quality suite, and each suite starts one gate per logical processor unless it
+        # is told a number. Two suites at that width ended gates at their deadlines (tester.39 rc2, BD-382), so
+        # each flavour gets its share of the processors. A value that the operator set stays.
+        . (Join-Path $PSScriptRoot '..\quality\quality-env.ps1')
+        $qualityJobsBefore = $env:BC250_QUALITY_JOBS
+        if (-not $qualityJobsBefore) {
+            $env:BC250_QUALITY_JOBS = [string](Get-ParallelQualityJobs ([Environment]::ProcessorCount) $serial.Count)
+        }
+        "$(Get-Utc) quality gates at once in each flavour: $($env:BC250_QUALITY_JOBS) (BC250_QUALITY_JOBS$(if ($qualityJobsBefore) { ', set by the caller' }))"
         try {
             foreach ($flavour in $serial) {
                 $wt = Join-Path $From "package-wt-$flavour"
@@ -612,6 +621,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
                 "$(Get-Utc) package $($c.flavour) ended: $(@($cr.flavours | ForEach-Object { $_.zip.sha256 }) -join ', ')"
             }
         } finally {
+            $env:BC250_QUALITY_JOBS = $qualityJobsBefore
             foreach ($c in $children) {
                 if ($c.process.HasExited) { & git -C $repo worktree remove --force $c.wt 2>&1 | Out-Null }
             }

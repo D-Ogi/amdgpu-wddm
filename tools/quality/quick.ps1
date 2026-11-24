@@ -6,6 +6,9 @@ $repo=if($RepoRoot){$RepoRoot}else{Join-Path $Workspace 'bc250-win'}
 # missing, and import the developer environment when it is missing (quality-env.ps1).
 . (Join-Path $repo 'tools\quality\quality-env.ps1')
 $refusal=Get-QualityInputRefusal (Get-QualityInputValues)
+$gateJobs0=Get-QualityJobs -Given $PSBoundParameters.ContainsKey('Jobs') -Jobs $Jobs -EnvValue $env:BC250_QUALITY_JOBS -Processors ([Environment]::ProcessorCount)
+if(-not $refusal){$refusal=$gateJobs0.refusal}
+$gateJobCount=$gateJobs0.jobs
 if($refusal){
  Write-Host "quick.ps1 refused: $refusal"
  New-Item -ItemType Directory -Force $Out | Out-Null
@@ -546,6 +549,8 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'vidpn-flip-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-controls" -Mutation all }
  # The lab flavour's witnesses (BD-167 switch): read after the shipping decision, never change it; each control must fail.
  Check 'vidpn-flip-lab' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-lab" -Lab }
+ # Its deadline is 900 s in gate-inputs.json, as for vidpn-flip-controls: the same mutation run with the lab switch.
+ # 128 s in the tester.39 rc1 package, and a stop at the old 180 s in both flavours of the rc2 package (BD-382).
  Check 'vidpn-flip-lab-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-lab-controls" -Lab -Mutation all }
  Check 'scanout-admit' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scanout_admit.ps1" -Root $Workspace -Out "$Out\scanout-admit" -Kits "$Kits" }
  # BD-289: the flip target mapping under the scan-out mutex; the nolock control passes only when the model faults.
@@ -561,6 +566,8 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # modeset they made it run past its 180 s deadline.
  Check 'scaler-geometry' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scaler_geometry.ps1" -Root $Workspace -Out "$Out\scaler-geometry" }
  Check 'overlay-group' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group" }
+ # Its deadline is 900 s in gate-inputs.json: 144 s in the tester.39 rc1 package, 80 per cent of the old 180 s, and
+ # a stop at 180 s in the release flavour of the rc2 package, which ran beside the lab flavour (BD-382).
  Check 'overlay-group-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group-controls" -Mutation all }
  Check 'dc-types' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dc_types.ps1" -Root $Workspace -Out "$Out\dc-types" }
  Check 'latch-probe' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_latch_probe.ps1" -Root $Workspace -Out "$Out\latch-probe" -Mutations }
@@ -1045,7 +1052,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
  @{variables=$variables;context=$context;compiler=$compiler;jobs=$gateJobs;skips=$results} |
    ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $planPath -Encoding utf8
  if($PlanOnly){return}
- $argsGate=@('-B',"$repo/tools/quality/gate_cache.py",'--plan',$planPath,'--jobs',$Jobs)
+ Write-Host "quick.ps1: $gateJobCount gates at once (from $($gateJobs0.source))"
+ $argsGate=@('-B',"$repo/tools/quality/gate_cache.py",'--plan',$planPath,'--jobs',$gateJobCount)
  if($NoCache){$argsGate+='--no-cache'}
  & python @argsGate
  exit $LASTEXITCODE

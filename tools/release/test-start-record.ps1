@@ -191,18 +191,20 @@ try {
     # the function, so Get-BootIdentity is gone again on return and that script's own "read once per process" cache
     # is reset with it. The reading is therefore kept here, and a second call answers from it instead of paying
     # another Win32_OperatingSystem query (seconds on a tester's PC). A child process is the only honest witness:
-    # this one has the function loaded already.
+    # this one has the function loaded already. The witness counts the queries: the stand-in for Get-CimInstance
+    # adds one each time it runs. A limit in milliseconds on the second call failed a package build on a loaded
+    # development PC (486 ms against 250 ms, BD-382), although the second call made no query.
     $probeFile = Join-Path ([IO.Path]::GetTempPath()) ('amdgpu-bootutc-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.ps1')
     $probeBody = @(
         '$ErrorActionPreference = ''Stop''',
         'function Get-ItemProperty { return [pscustomobject]@{BootId=387} }',
-        'function Get-CimInstance { return [pscustomobject]@{LastBootUpTime=[datetime]''2026-10-11T22:19:45Z''} }',
+        '$global:CimQueries = 0',
+        'function Get-CimInstance { $global:CimQueries++; return [pscustomobject]@{LastBootUpTime=[datetime]''2026-10-11T22:19:45Z''} }',
         ". '$(Join-Path $Installer 'start-confirm-core.ps1')'",
         '$before = [bool](Get-Command -Name Get-BootIdentity -CommandType Function -ErrorAction SilentlyContinue)',
-        '$c1 = [Diagnostics.Stopwatch]::StartNew(); $a = Get-StartRecordBootUtc; $t1 = [int]$c1.ElapsedMilliseconds',
-        '$c2 = [Diagnostics.Stopwatch]::StartNew(); $b = Get-StartRecordBootUtc; $t2 = [int]$c2.ElapsedMilliseconds',
-        # Whole milliseconds, so that the reading travels through no decimal separator of a locale.
-        '"{0}|{1}|{2}|{3}|{4}" -f $before, $(if ($null -ne $a) { $a.ToString(''o'') } else { ''none'' }), $(if ($null -ne $b) { $b.ToString(''o'') } else { ''none'' }), $t1, $t2'
+        '$a = Get-StartRecordBootUtc; $q1 = [int]$global:CimQueries',
+        '$b = Get-StartRecordBootUtc; $q2 = [int]$global:CimQueries',
+        '"{0}|{1}|{2}|{3}|{4}" -f $before, $(if ($null -ne $a) { $a.ToString(''o'') } else { ''none'' }), $(if ($null -ne $b) { $b.ToString(''o'') } else { ''none'' }), $q1, $q2'
     )
     [IO.File]::WriteAllLines($probeFile, [string[]]$probeBody)
     try {
@@ -210,7 +212,7 @@ try {
         $parts = @(($probeOut | Where-Object { $_ -match '\|' } | Select-Object -Last 1) -split '\|')
         Check (@($parts).Count -eq 5 -and $parts[0] -eq 'False') "the child process loads the core alone, without Get-BootIdentity ($($probeOut -join ' '))"
         Check (@($parts).Count -eq 5 -and $parts[1] -eq $parts[2] -and $parts[1] -ne 'none') 'the fallback reads this boot''s start time and gives the same answer twice'
-        Check (@($parts).Count -eq 5 -and [int]$parts[4] -le 250) "and the second call answers from the kept reading, not from another CIM query ($($parts[3]) ms then $($parts[4]) ms)"
+        Check (@($parts).Count -eq 5 -and [int]$parts[3] -eq 1 -and [int]$parts[4] -eq 1) "and the second call answers from the kept reading, not from another CIM query ($($parts[3]) query after the first call, $($parts[4]) after the second)"
     } finally { Remove-Item -LiteralPath $probeFile -Force -ErrorAction SilentlyContinue }
 
     '4d. the field case 20261011T222253Z: the record of this boot was marked as a foreign one'

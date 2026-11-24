@@ -46,6 +46,21 @@ $r = Get-QualityInputRefusal @{ BC250_UMD_SOURCE = $dir; BC250_UMD_BUILD = $file
 Assert ($r -match '^BC250_UMD_BUILD names a directory that does not exist') "a file is not a tree: $r"
 Assert ($null -eq (Get-QualityInputRefusal @{ BC250_UMD_SOURCE = $dir; BC250_UMD_BUILD = $dir })) 'both set to directories'
 
+# The number of gates at once (BD-382): -Jobs wins, then BC250_QUALITY_JOBS, then the logical processors.
+$j = Get-QualityJobs -Given $false -Jobs 0 -EnvValue '' -Processors 24
+Assert ($j.jobs -eq 24 -and $j.source -eq 'processors' -and $null -eq $j.refusal) 'no parameter and no variable: one gate per logical processor'
+$j = Get-QualityJobs -Given $false -Jobs 0 -EnvValue '12' -Processors 24
+Assert ($j.jobs -eq 12 -and $j.source -eq 'BC250_QUALITY_JOBS' -and $null -eq $j.refusal) 'the variable caps the gates of a run that names no -Jobs'
+$j = Get-QualityJobs -Given $true -Jobs 6 -EnvValue '12' -Processors 24
+Assert ($j.jobs -eq 6 -and $j.source -eq 'parameter') '-Jobs wins over the variable'
+foreach ($bad in '0', '-3', 'many', '1.5', ' ') {
+    $j = Get-QualityJobs -Given $false -Jobs 0 -EnvValue $bad -Processors 24
+    Assert ($j.refusal -match '^BC250_QUALITY_JOBS is not a whole number of 1 or more' -and $null -eq $j.jobs) "a variable that is not a count refuses the run: '$bad'"
+}
+Assert ((Get-ParallelQualityJobs 24 2) -eq 12 -and (Get-ParallelQualityJobs 24 5) -eq 4 -and (Get-ParallelQualityJobs 2 4) -eq 1) 'suites at the same time share the processors, never less than one gate'
+$j = Get-QualityJobs -Given $true -Jobs 0 -EnvValue '' -Processors 24
+Assert ($j.refusal -match '^-Jobs is not 1 or more') '-Jobs 0 refuses the run'
+
 # TEMP: moved to the workspace when it is on another drive, kept when it is on the same drive.
 $savedTemp, $savedTmp = $env:TEMP, $env:TMP
 try {
@@ -167,6 +182,9 @@ $refuse = & $at 'if($refusal){'
 Assert ($refuse -gt 0 -and $refuse -lt (& $at 'Resolve-Bc250PackageContext -Repo')) 'quick.ps1 refuses before the package context'
 $import = & $at 'Initialize-QualityDevEnvironment -Repo $repo'
 Assert ($import -gt 0 -and $import -lt (& $at '$clExe=if(')) 'quick.ps1 imports before it resolves cl.exe'
+Assert ($text -match 'Get-QualityJobs -Given \$PSBoundParameters\.ContainsKey\(''Jobs''\)' -and $text -match '''--jobs'',\$gateJobCount') 'quick.ps1 takes the gate count from Get-QualityJobs'
+$setTool = [IO.File]::ReadAllText((Join-Path $repo 'tools\release\build-release-set.ps1'))
+Assert ($setTool -match 'Get-ParallelQualityJobs' -and $setTool -match '\$env:BC250_QUALITY_JOBS') 'a parallel package run gives each flavour a share of the processors'
 
 Remove-Item -LiteralPath $base -Recurse -Force
 "PASS: quality environment, $passed checks"
