@@ -36,6 +36,24 @@ inline void transition(ID3D12GraphicsCommandList* list, ID3D12Resource* resource
     b.Transition = {resource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before, after};
     list->ResourceBarrier(1, &b);
 }
+// The Vulkan driver under the engine device (GetVulkanHandles, vkGetPhysicalDeviceProperties2 with
+// VkPhysicalDeviceDriverProperties). False when the engine or the loader does not give it.
+inline bool vulkan_driver(Env& env, VkPhysicalDeviceDriverProperties& driver) {
+    VkInstance instance = VK_NULL_HANDLE;
+    VkPhysicalDevice physical = VK_NULL_HANDLE;
+    VkDevice device = VK_NULL_HANDLE;
+    uint32_t family = 0;
+    driver = VkPhysicalDeviceDriverProperties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
+    if (!env.funcs.GetVulkanHandles ||
+        env.funcs.GetVulkanHandles(env.engine, &instance, &physical, &device, &family) != S_OK || !physical)
+        return false;
+    const auto properties = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(
+        env.gipa(instance, "vkGetPhysicalDeviceProperties2"));
+    if (!properties) return false;
+    VkPhysicalDeviceProperties2 all{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &driver};
+    properties(physical, &all);
+    return driver.driverID != 0;
+}
 struct Commands {
     ID3D12GraphicsCommandList* list = nullptr;
     ID3D12CommandQueue* queue = nullptr;
