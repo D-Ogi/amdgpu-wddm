@@ -281,17 +281,8 @@ function Invoke-Preflight {
     elseif ($sac.state -eq 'unknown') { Add-Check 'Smart App Control' 'warn' "state unknown: $($sac.detail). If Windows blocks the setup or the driver, $($script:SacSteps)." 'smartappcontrol.unknown' }
     else { Add-Check 'Smart App Control' 'ok' $sac.detail 'smartappcontrol.off' }
 
-    # The Microsoft Visual C++ runtime of the llama.cpp extra (common.ps1; the driver set does not need it). A PC without it is not refused: the package
-    # carries Microsoft's own installer and phase 2 runs it. The only refusal left is a package that does not carry that installer, or carries a changed copy of it.
-    $vc = Get-VcRuntimeState
-    $vcExe = Join-Path $package $script:VcRuntimePackagePath
-    if (-not $vc.install) { Add-Check 'Visual C++ runtime' 'ok' $vc.detail 'vcruntime.ok' }
-    else {
-        $vcFile = Test-VcRuntimeInstaller -Path $vcExe
-        if ($vcFile.ok) { Add-Check 'Visual C++ runtime' 'warn' "$($vc.detail); the installer installs $($script:VcRuntimeVersion) from $($script:VcRuntimePackagePath) (SHA256 $($vcFile.sha256.Substring(0, 16)), signature $($vcFile.status), $($vcFile.signer))" 'vcruntime.missing' }
-        else { Add-Check 'Visual C++ runtime' 'fail' "$($vc.detail); $($vcFile.problem)" 'vcruntime.no-installer' }
-    }
-
+    # No check of the Microsoft Visual C++ runtime: the driver set does not need it (BD-389). The llama.cpp extra needs
+    # it, so the extras stage reads it for a chosen extra (components.ps1, the prerequisite table).
     $drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'"
     $freeGb = [math]::Round($drive.FreeSpace / 1GB, 1)
     if ($freeGb -lt 2) { Add-Check 'free space' 'fail' "$freeGb GB free on $($env:SystemDrive); 2 GB needed" 'space.low' } else { Add-Check 'free space' 'ok' "$freeGb GB free on $($env:SystemDrive)" 'space.ok' }
@@ -1317,19 +1308,25 @@ if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $mayChooseExtras = (-not $script:GuiMode) -or ($namedExtras.Count -gt 0)
     if ($null -ne $script:ComponentsManifest -and $null -eq $installInputs.components -and $mayChooseExtras) {
         Enter-Stage 'extras' 'Extras: llama.cpp, Ollama, models'
-        $rows = @(Get-ComponentRows $script:ComponentsManifest)
         $req = Resolve-ComponentRequest -Manifest $script:ComponentsManifest -Requested $Components -NoComponents ([bool]$NoComponents) -CanAsk (-not $script:GuiMode) -DefaultsWithoutAsking $false
         foreach ($u in @($req.unknown)) { Write-Warn2 "-Components names '$u', which this release does not have: it is not installed" }
+        # The prerequisites of the extras (components.ps1), read before the question: an extra whose prerequisite this
+        # package cannot install is refused like an extra without a pin. A run that installs no extra reads nothing.
+        $prerequisites = $null
+        if ($req.mode -ne 'none') { $prerequisites = Read-ComponentPrerequisites -Manifest $script:ComponentsManifest -PackageRoot $package }
+        $rows = @(Get-ComponentRows $script:ComponentsManifest $prerequisites)
         $chosen = @()
         if ($req.mode -eq 'ask') { $chosen = @(Read-ComponentChoice -Manifest $script:ComponentsManifest -Rows $rows) }
         else { $chosen = @($req.ids) }
-        # A component without a usable pin in this package is never installed, whatever the switch asked for.
+        # A component without a usable pin in this package, or with a prerequisite this package cannot install, is
+        # never installed, whatever the switch asked for.
         $refused = @($rows | Where-Object { $_.refused -and (@($chosen) -contains $_.id) })
         foreach ($r in $refused) { Write-Warn2 "$([string]$r.component.title) cannot be installed from this package: $($r.refused). It is skipped." }
         $refusedIds = @($refused | ForEach-Object { $_.id })
         $chosen = @($chosen | Where-Object { $refusedIds -notcontains $_ })
         $installInputs.components = @($chosen)
         if (@($chosen).Count) { Write-Info "extras to install: $(@($chosen) -join ', ')" } else { Write-Info 'extras: none' }
+        foreach ($line in @(Get-ComponentPrerequisiteLines -Manifest $script:ComponentsManifest -ComponentIds @($chosen) -Prerequisites $prerequisites)) { Write-Info $line }
         $offered = @()
         foreach ($id2 in @($chosen)) {
             $c2 = Get-ComponentById $script:ComponentsManifest $id2
@@ -1509,44 +1506,6 @@ Enter-Stage 'install' 'Phase 2: install'
 if (-not $script:DryRunMode -and -not $script:TestSigningActive -and $script:KernelTrust.route -ne 'custom-kernel-signers') {
     Write-Fail 'test signing is not active'
     Exit-Engine -Code 5 -Outcome 'failed' -MessageId 'result.testsigning-not-active' -Detail 'phase 2 needs test signing in the running boot'
-}
-# The Microsoft Visual C++ runtime, before our own files go on the PC. The llama.cpp extra needs it; the driver set,
-# the control application and the CLI do not (common.ps1, BD-389). Microsoft's own installer travels
-# in the package; it runs only when the runtime is missing or older than 14.44, and only after its SHA-256 and its
-# Microsoft signature are checked here again, so a changed copy never runs. A code that asks for a restart is folded
-# into the restart this installation makes at the end of phase 2.
-$vcNow = Get-VcRuntimeState
-if (-not $vcNow.install) { Write-Info "Microsoft Visual C++ runtime: $($vcNow.detail)" }
-else {
-    $vcExe = Join-Path $package $script:VcRuntimePackagePath
-    $vcFile = Test-VcRuntimeInstaller -Path $vcExe
-    if (-not $vcFile.ok) { throw "the Microsoft Visual C++ runtime has to be installed, and $($vcFile.problem). Nothing of the driver was installed. Download the release again." }
-    Write-Info "Microsoft Visual C++ runtime: $($vcNow.detail)"
-    $vcRun = Invoke-Change "install the Microsoft Visual C++ 2015-2022 Redistributable (x64) $($script:VcRuntimeVersion) from $($script:VcRuntimePackagePath) ($($script:VcRuntimeArguments -join ' '); SHA256 $($vcFile.sha256.Substring(0, 16)) and the Microsoft signature checked)" {
-        Invoke-VcRuntimeInstall -Path $vcExe
-    }
-    if ($null -ne $vcRun) {
-        Write-Log ($vcRun.text)
-        if (-not $vcRun.ok) { throw $vcRun.message }
-        Write-Info $vcRun.message
-        $vcAfter = Get-VcRuntimeState
-        # Code 1638 says a same or newer runtime is registered, so Microsoft's installer installed nothing. When a
-        # file of it is missing from System32 all the same, the registration is there and its files are not: the same
-        # program repairs that, and only a repair that does not help ends the installation.
-        if ($vcAfter.install -and $vcRun.code -eq 1638) {
-            Write-Info "the Microsoft Visual C++ runtime is registered on this PC and $($vcAfter.detail): the installer repairs it"
-            $vcRepair = Invoke-Change "repair the Microsoft Visual C++ 2015-2022 Redistributable (x64) from $($script:VcRuntimePackagePath) ($($script:VcRuntimeRepairArguments -join ' '))" {
-                Invoke-VcRuntimeInstall -Path $vcExe -Arguments $script:VcRuntimeRepairArguments
-            }
-            if ($null -ne $vcRepair) {
-                Write-Log ($vcRepair.text)
-                if (-not $vcRepair.ok) { throw $vcRepair.message }
-                $vcAfter = Get-VcRuntimeState
-            }
-        }
-        if ($vcAfter.install -and -not $vcRun.restart) { throw "Microsoft's installer reported success (code $($vcRun.code)), but the runtime is still not in place: $($vcAfter.detail). Repair the Microsoft Visual C++ 2015-2022 Redistributable (x64) in Windows Settings, Apps, Installed apps (or install it again from Microsoft), then run this installer again." }
-        Write-Info "Microsoft Visual C++ runtime after the step: $($vcAfter.detail)"
-    }
 }
 # The Vulkan loader (common.ps1, "the Vulkan loader"): LunarG's installer runs only when System32\vulkan-1.dll or
 # SysWOW64\vulkan-1.dll is missing or older than the version the package carries, and only after its SHA-256 and its
@@ -2460,6 +2419,9 @@ if ($null -ne $script:ComponentsManifest -and $componentsChosen.Count) {
     $staging = Join-Path $script:StateDir 'component-staging'
     $installedComponents = @()
     $componentRecords = @()
+    # The outcome of each prerequisite in this run (components.ps1, Invoke-ComponentPrerequisites): it runs before the
+    # files of the first extra that needs it, and its failure skips the extras that need it, through the catch below.
+    $prerequisitesDone = @{}
     foreach ($cid in $componentsChosen) {
         $c = Get-ComponentById $script:ComponentsManifest $cid
         if ($null -eq $c) { Write-Warn2 "extra '$cid' is not in this package: skipped"; continue }
@@ -2475,6 +2437,8 @@ if ($null -ne $script:ComponentsManifest -and $componentsChosen.Count) {
                 Write-Info "    SHA256 $(([string]$c.asset.sha256).ToUpperInvariant())"
                 $zip = Join-Path $staging ([string]$c.asset.name)
             }
+            # After the download, so a download that fails installs no prerequisite for nothing.
+            Invoke-ComponentPrerequisites -Component $c -PackageRoot $package -Done $prerequisitesDone
             $componentRecord = Install-ComponentFiles -Manifest $script:ComponentsManifest -Component $c -Zip $zip -InstallRoot $InstallRoot -Staging $staging -ModelsDir $modelsDir
             $componentRecords += $componentRecord
             $installedComponents += $c

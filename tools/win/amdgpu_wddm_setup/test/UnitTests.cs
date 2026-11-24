@@ -521,8 +521,8 @@ static partial class UnitTests
         Equal("Smart App Control will be turned off. Windows can turn it back on only by a reset of the system.", Strings.In("en", "plan.change.smartappcontrol"), "sac off: the plan line is the owner's sentence");
         foreach (var lang in Strings.Languages)
             Check(Strings.In(lang, "plan.change.smartappcontrol") != Strings.In("en", "plan.change.smartappcontrol") || lang == "en", "sac off: the plan line has its own words in " + lang);
-        Check(InstallFlow.PlanChangeIds(true, "off", false, true).SequenceEqual(new[] { "plan.change.smartappcontrol", "plan.change.test-mode" }), "sac off: the plan states the turn-off first, the first change of the run");
-        Check(InstallFlow.PlanChangeIds(false, "on", true, true).SequenceEqual(new[] { "plan.change.smartappcontrol", "plan.change.test-mode.on", "plan.change.vcruntime" }), "sac off: the line also comes with test mode on and the runtime");
+        Check(InstallFlow.PlanChangeIds(true, "off", true).SequenceEqual(new[] { "plan.change.smartappcontrol", "plan.change.test-mode" }), "sac off: the plan states the turn-off first, the first change of the run");
+        Check(InstallFlow.PlanChangeIds(false, "on", true).SequenceEqual(new[] { "plan.change.smartappcontrol", "plan.change.test-mode.on" }), "sac off: the line also comes with test mode on");
         Check(!InstallFlow.PlanChangeIds(true, "off").Contains("plan.change.smartappcontrol"), "sac off: a PC with Smart App Control off reads no line about it");
         // Every picture is a PNG under the build's size limits, and the ones a card cannot do without are named.
         Check(HelpCards.Images.All(i => Regex.IsMatch(i, @"^[a-z0-9-]+\.png$")), "help: picture names are plain PNG names");
@@ -681,28 +681,27 @@ static partial class UnitTests
             "no confirmations: test mode already on says so and nothing about the start options");
         foreach (var on in new[] { true, false })
             foreach (var state in new[] { "off", "on", "unknown", "suspended", null })
-                foreach (var vc in new[] { true, false })
+                foreach (var sac in new[] { true, false })
                     foreach (var signers in new[] { true, false })
-                        foreach (var id in InstallFlow.PlanChangeIds(on, state, vc, false, signers))
+                        foreach (var id in InstallFlow.PlanChangeIds(on, state, sac, signers))
                             Check(Strings.Has(id), "no confirmations: " + id + " has words");
         // Custom kernel signers (Secure Boot on, a signed Code Integrity policy active): test mode stays off, and the
         // start options do not change, so there is no BitLocker pause either.
-        Check(InstallFlow.PlanChangeIds(false, "on", false, false, true).SequenceEqual(new[] { "plan.change.kernel-signers" }),
+        Check(InstallFlow.PlanChangeIds(false, "on", false, true).SequenceEqual(new[] { "plan.change.kernel-signers" }),
             "kernel signers: the plan states that test mode stays off, and nothing about BitLocker");
-        Check(InstallFlow.PlanChangeIds(true, "on", true, true, true).SequenceEqual(new[] { "plan.change.smartappcontrol", "plan.change.kernel-signers", "plan.change.vcruntime" }),
+        Check(InstallFlow.PlanChangeIds(true, "on", true, true).SequenceEqual(new[] { "plan.change.smartappcontrol", "plan.change.kernel-signers" }),
             "kernel signers: the line takes the place of the test mode lines, in the same order");
         Check(InstallFlow.KernelSignersCheck == "secureboot.kernel-signers" && Strings.Has("check." + InstallFlow.KernelSignersCheck) && Strings.Has("check.testsigning.not-needed"),
             "kernel signers: the two preflight lines of that route have words");
-        // The Microsoft Visual C++ runtime: the plan states that the install brings it, and
-        // says nothing when the PC already has it. It is the last line either way, after the start options.
-        Check(InstallFlow.PlanChangeIds(true, "off", true).SequenceEqual(new[] { "plan.change.test-mode", "plan.change.vcruntime" }),
-            "runtime: the plan states that setup installs the Microsoft runtime");
-        Check(InstallFlow.PlanChangeIds(false, "off", true).SequenceEqual(new[] { "plan.change.test-mode.on", "plan.change.vcruntime" }),
-            "runtime: the line also shows when test mode is already on");
-        Check(InstallFlow.PlanChangeIds(true, "on", true).SequenceEqual(new[] { "plan.change.test-mode", "plan.change.bitlocker", "plan.change.vcruntime" }),
-            "runtime: the runtime line comes after the start options");
-        Check(!InstallFlow.PlanChangeIds(true, "off", false).Contains("plan.change.vcruntime") && !InstallFlow.PlanChangeIds(false, "off").Contains("plan.change.vcruntime"),
-            "runtime: a PC that has the runtime reads no line about it");
+        // BD-389: the driver does not need the Microsoft Visual C++ runtime. Only the llama.cpp extra needs it, and the
+        // window never chooses an extra, so the engine's plan has no runtime check and the plan screen no runtime line.
+        // No string table keeps words for a check or a step that the window cannot show.
+        Check(typeof(InstallFlow).GetMethod("PlanChangeIds").GetParameters().All(p => p.Name.IndexOf("vcRuntime", StringComparison.OrdinalIgnoreCase) < 0),
+            "runtime: the plan rule of the window has no input about the Visual C++ runtime");
+        foreach (var lang in Strings.Languages)
+            foreach (var id in new[] { "plan.change.vcruntime", "check.vcruntime.ok", "check.vcruntime.missing", "check.vcruntime.no-installer" })
+                Check(!Strings.Tables[lang].Entries.ContainsKey(id), "runtime: the " + lang + " table has no words for " + id);
+        Check(!ResultView.RetryCannotFix.Contains("vcruntime.no-installer"), "runtime: no check of the runtime is a refusal that a new try cannot fix");
         // The shortcuts of the control application: both on, and the switches only leave one out.
         Check(InstallFlow.ShortcutArguments(true, true).SequenceEqual(new[] { "-StartMenuShortcut", "-DesktopShortcut" }), "shortcuts: both places, the default, stated on the command line");
         Check(InstallFlow.ShortcutArguments(false, true).SequenceEqual(new[] { "-NoStartMenuShortcut", "-DesktopShortcut" }), "shortcuts: no Start menu entry");

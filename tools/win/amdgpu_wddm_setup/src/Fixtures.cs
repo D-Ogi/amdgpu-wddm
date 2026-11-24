@@ -72,9 +72,6 @@ namespace AmdgpuWddmSetup
                 Check("gpu.ok", "ok"), Check("secureboot.off", "ok"),
                 Check("testsigning.inactive", "ok"), Check(upgradeRows ? "bitlocker.on" : "bitlocker.unknown", "warn"), Check("hvci.off", "ok"),
                 Check("smartappcontrol." + sac, sac == "unknown" ? "warn" : "ok"),
-                // The Visual C++ runtime: "ok" is a PC that has it. The screen that draws the Windows lines also
-                // carries the missing runtime, so one render shows the step the install adds for it.
-                Check("vcruntime" + (windowsChecks == "ok" ? ".ok" : ".missing"), windowsChecks == "ok" ? "ok" : "warn"),
                 Check("space.ok", "ok"), Check(firmware == "package-folder" ? "firmware.folder-ok" : "firmware.download-ok", "ok"),
                 Ev("decision", "\"action\":\"" + action + "\",\"installed_version\":" + (installed == null ? "null" : "\"" + installed + "\"") + ",\"package_version\":\"" + Version +
                     "\",\"phase\":\"new\",\"consents\":[" + consents + "],\"consents_given\":{},\"restarts\":2,\"firmware_source\":\"" + firmware +
@@ -196,7 +193,7 @@ namespace AmdgpuWddmSetup
                 new Fixture { Name = "restart-countdown", Screen = Screen.Restart, RestartSecondsLeft = 7, Events = RunEvents("test-signing", false, true), Result = ResultJson("run", "restart-required", 3010, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
                 new Fixture { Name = "restart-later", Screen = Screen.Restart, RestartLater = true, Events = RunEvents("finish", false, true), Result = ResultJson("run", "restart-required", 3010, "result.installed-restart", true) },
                 new Fixture { Name = "result-verified", Flow = "continue", Screen = Screen.Result, Events = RunEvents("preflight", false, false, "verify"), Result = ResultJson("verify", "verified", 0, "result.verified", false) },
-                new Fixture { Name = "result-refused", RunKind = "plan", Screen = Screen.Result, Events = PlanEvents("install", null, "", "download", false).Take(6).ToArray(), Result = ResultJson("plan", "refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"gpu.missing\",\"secureboot.on\",\"vcruntime.no-installer\"]") },
+                new Fixture { Name = "result-refused", RunKind = "plan", Screen = Screen.Result, Events = PlanEvents("install", null, "", "download", false).Take(6).ToArray(), Result = ResultJson("plan", "refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"gpu.missing\",\"secureboot.on\"]") },
                 // Smart App Control did not turn off in the run: the run is refused before any program of the driver,
                 // the help card says how to turn it off by hand, and Try again stays the default (it is not in
                 // ResultView.RetryCannotFix). The registry write was a change, so the screen does not say that

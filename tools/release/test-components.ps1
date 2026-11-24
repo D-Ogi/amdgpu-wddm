@@ -11,7 +11,10 @@
 # question says what a model costs when two extras each keep a copy; an install writes the folder, the backend
 # setting, the PATH entry and the shortcuts, a dry run writes none of them; a hook is judged by its exit code, not by
 # its output, so a non-English Windows changes nothing (issue #35); the uninstall removes every registration and keeps
-# the models unless -RemoveModels.
+# the models unless -RemoveModels. The prerequisites of an extra (BD-389): llama.cpp requires the Microsoft Visual C++
+# runtime and Ollama nothing yet; an unknown name is refused; a package without the file of a prerequisite, or with a
+# changed copy, refuses only the extras that need it, and the reason names the file; a prerequisite runs one time, and
+# its failure skips only the extras that need it.
 param([Parameter(Mandatory)][string]$Installer, [string]$Source, [Parameter(Mandatory)][string]$WorkRoot,
       [string]$Release = '0.0.0.0-tester.0')   # used only when the installer folder has no components.json yet
 $ErrorActionPreference = 'Stop'
@@ -74,6 +77,10 @@ if ($null -ne $packageManifest) {
 if ($Source -and (Test-Path -LiteralPath $Source -PathType Leaf)) {
     $src = Get-Content -LiteralPath $Source -Raw | ConvertFrom-Json
     Check ([string]$src.release -eq '{release}') 'the repository copy keeps {release} for build-release.ps1 to expand'
+    $srcOllama = @(@($src.components) | Where-Object { [string]$_.id -eq 'ollama' })[0]
+    if ($null -ne $srcOllama) {
+        Check ($null -eq $srcOllama.requires -and [string]$srcOllama.comment -match 'requires' -and [string]$srcOllama.comment -match 'imports') 'the Ollama entry says why it has no "requires" yet: its asset is not pinned and its imports are not read'
+    }
 }
 
 'a manifest the installer must refuse, one message per fault'
@@ -434,6 +441,150 @@ Check (-not (Test-Path -LiteralPath $ownStore)) 'with -RemoveModels the componen
 Remove-PathOrSchedule $installRoot
 $foot = @(Get-ComponentFootprint $state $true)
 Check (@($foot | Where-Object { $_.present -and -not $_.kept }).Count -eq 0) 'nothing of the extras is left after the install root is removed'
+
+'the prerequisites of an extra: one table, a refusal that names the file, a failure that skips only its extras (BD-389)'
+# The driver does not need the Microsoft Visual C++ runtime; the llama.cpp extra does. A component names such a
+# program of Windows in "requires", and the table of components.ps1 is the one place that knows how to read it, how to
+# check the file of the package that installs it, and how to install it. Each call below is guarded, so an installer
+# without the table fails each check on its own line instead of ending the script.
+$table = $script:ComponentPrerequisites
+Check ($null -ne $table -and $table.Contains('vcruntime-x64')) 'the installer has one prerequisite table, and it knows the Microsoft Visual C++ runtime (vcruntime-x64)'
+if ($null -ne $table -and $table.Contains('vcruntime-x64')) {
+    $vcEntry = $table['vcruntime-x64']
+    Check (([string]$vcEntry.title) -match 'Microsoft Visual C\+\+ 2015-2022 runtime \(x64\)' -and $vcEntry.state -is [scriptblock] -and $vcEntry.check -is [scriptblock] -and $vcEntry.install -is [scriptblock]) 'its entry has a title, a reader of the PC, a check of the package file and an install step'
+}
+if ($null -ne $packageManifest) {
+    $llama = Get-ComponentById $packageManifest 'llama'
+    $ollama = Get-ComponentById $packageManifest 'ollama'
+    Check ($null -ne $llama -and (@($llama.requires) -join ',') -eq 'vcruntime-x64') 'llama.cpp requires the Microsoft Visual C++ runtime: its programs import vcruntime140.dll and msvcp140.dll'
+    Check ($null -eq $ollama -or $null -eq $ollama.requires) 'Ollama requires nothing yet: its asset is not pinned and its imports are not read'
+    $bad = Copy-Json $packageManifest
+    $bad.components[0] | Add-Member -NotePropertyName requires -NotePropertyValue @('no-such-runtime') -Force
+    Check (Matched (Test-ComponentsManifest $bad) "requires 'no-such-runtime'") 'a prerequisite that the installer does not know is refused'
+    $good = Copy-Json $packageManifest
+    $good.components[0] | Add-Member -NotePropertyName requires -NotePropertyValue @('vcruntime-x64') -Force
+    Check (@(Test-ComponentsManifest $good).Count -eq 0) 'a prerequisite of the table validates'
+}
+# A stand-in table: the state, the file check and the install step are handed in, so every path is walked without
+# Microsoft's installer. Three extras: two need the stand-in runtime, the third needs nothing.
+$script:rtState = $null; $script:rtFile = $null; $script:rtResult = $null
+$script:rtLog = New-Object System.Collections.Generic.List[string]
+$fakeTable = [ordered]@{
+    'demo-rt' = [pscustomobject]@{ title = 'the demo runtime'
+        state = { $script:rtState }
+        check = { param($PackageRoot) $script:rtFile }
+        install = { param($PackageRoot) $script:rtLog.Add("install $PackageRoot"); if ($script:rtResult -is [string]) { throw $script:rtResult }; $script:rtResult } }
+}
+$three = Copy-Json $one
+foreach ($n in 2, 3) {
+    $cn = Copy-Json $one.components[0]
+    $cn.id = "demo$n"; $cn.title = "Demo extra $n"; $cn.install_dir = "tools\demo$n"
+    $three.components = @(@($three.components) + $cn)
+}
+foreach ($cn in @($three.components)) { $cn.asset.size = 1 }
+$three.components[0] | Add-Member -NotePropertyName requires -NotePropertyValue @('demo-rt') -Force
+$three.components[1] | Add-Member -NotePropertyName requires -NotePropertyValue @('demo-rt') -Force
+$prRoot = Join-Path $WorkRoot 'prerequisite-package'
+function Read-Prereq($Manifest = $three) {
+    try { return (Read-ComponentPrerequisites -Manifest $Manifest -PackageRoot $prRoot -Table $fakeTable) } catch { "  -> $($_.Exception.Message)" | Write-Host; return $null }
+}
+function Get-RowsWith($Manifest, $Prereq) {
+    try { return @(Get-ComponentRows $Manifest $Prereq) } catch { "  -> $($_.Exception.Message)" | Write-Host; return @() }
+}
+function Get-Row($Rows, [string]$Id) { return @(@($Rows) | Where-Object { [string]$_.id -eq $Id })[0] }
+function Get-PrereqLines($Prereq, [string[]]$Ids) {
+    try { return @(Get-ComponentPrerequisiteLines -Manifest $three -ComponentIds $Ids -Prerequisites $Prereq) } catch { "  -> $($_.Exception.Message)" | Write-Host; return @() }
+}
+$script:rtState = [pscustomobject]@{ install = $true; detail = 'missing in System32: demo.dll' }
+$script:rtFile = [pscustomobject]@{ ok = $true; problem = $null }
+$p = Read-Prereq
+Check ($null -ne $p -and $p.Contains('demo-rt') -and $p['demo-rt'].install -and -not $p['demo-rt'].problem) 'a prerequisite this PC lacks, with a good file in the package: to be installed, no problem'
+$rows3 = Get-RowsWith $three $p
+Check (@($rows3).Count -eq 3 -and -not @(@($rows3) | Where-Object { $_.refused }).Count) 'no extra is refused for it'
+$lines = @(Get-PrereqLines $p @('demo', 'demo3'))
+"  -> $($lines -join ' | ')"
+Check (@($lines).Count -eq 1 -and $lines[0] -match 'the demo runtime, needed by Demo extra: missing in System32: demo\.dll; it is installed first') 'the extras stage states it in one line: what, for which extra, what this PC has, and that it comes first'
+Check (@(Get-PrereqLines $p @('demo3')).Count -eq 0) 'an extra that needs nothing gets no line'
+$script:rtState = [pscustomobject]@{ install = $false; detail = 'present: demo.dll 1.0.0.0' }
+$script:rtFile = [pscustomobject]@{ ok = $false; problem = "the package does not carry $prRoot\payload\redist\demo.exe" }
+$p = Read-Prereq
+Check ($null -ne $p -and $p.Contains('demo-rt') -and -not $p['demo-rt'].install -and -not $p['demo-rt'].problem) 'a PC that has the prerequisite needs no file from the package'
+$lines = @(Get-PrereqLines $p @('demo'))
+Check (@($lines).Count -eq 1 -and $lines[0] -match 'needed by Demo extra: present: demo\.dll' -and $lines[0] -notmatch 'installed first') 'the line then says what this PC has, and nothing about an install'
+$script:rtState = [pscustomobject]@{ install = $true; detail = 'missing in System32: demo.dll' }
+$p = Read-Prereq
+$rows3 = Get-RowsWith $three $p
+$r1 = Get-Row $rows3 'demo'; $r2 = Get-Row $rows3 'demo2'; $r3 = Get-Row $rows3 'demo3'
+"  -> $(if ($r1) { $r1.refused })"
+Check ($null -ne $r1 -and ([string]$r1.refused) -match 'needs the demo runtime' -and ([string]$r1.refused) -match 'does not carry .*payload\\redist\\demo\.exe') 'a package without the file of the prerequisite refuses the extra, and the reason names the missing file'
+Check ($null -ne $r2 -and ([string]$r2.refused) -match 'does not carry') 'the second extra that needs it is refused as well'
+Check ($null -ne $r3 -and -not $r3.refused) 'the extra that needs nothing is not refused'
+$script:rtFile = [pscustomobject]@{ ok = $false; problem = "SHA256 of $prRoot\payload\redist\demo.exe is 0000000000000000, the installer expects 1111111111111111" }
+$rows3 = Get-RowsWith $three (Read-Prereq)
+Check (([string](Get-Row $rows3 'demo').refused) -match 'SHA256 of .*demo\.exe is ') 'a changed copy of the file refuses the extra too (the SHA-256 check stays)'
+$odd = Copy-Json $three
+$odd.components[2] | Add-Member -NotePropertyName requires -NotePropertyValue @('nothing-known') -Force
+$rowsOdd = Get-RowsWith $odd (Read-Prereq $odd)
+Check (([string](Get-Row $rowsOdd 'demo3').refused) -match "nothing-known") 'an extra whose prerequisite the table does not know is refused, not installed without it'
+Check (@(Get-RowsWith $three $null | Where-Object { $_.refused }).Count -eq 0) 'without a reading of the prerequisites the rows carry only the pin refusals'
+# The install: once per run, inside the try/catch of the extra, and a failure skips only the extras that need it.
+function Invoke-Prereq([string]$Id, [hashtable]$Done) {
+    try { Invoke-ComponentPrerequisites -Component (Get-ComponentById $three $Id) -PackageRoot $prRoot -Done $Done -Table $fakeTable; return $null }
+    catch { return $_.Exception.Message }
+}
+$script:rtResult = [pscustomobject]@{ ok = $true; ran = $true; restart = $false; message = 'the demo runtime is installed' }
+$script:rtLog.Clear()
+$done = @{}
+$e1 = Invoke-Prereq 'demo' $done; $e2 = Invoke-Prereq 'demo2' $done; $e3 = Invoke-Prereq 'demo3' $done
+"  -> $e1 | $e2 | $e3"
+Check (-not $e1 -and -not $e2 -and -not $e3 -and $script:rtLog.Count -eq 1 -and $script:rtLog[0] -eq "install $prRoot") 'a prerequisite runs one time, for the first extra that needs it, with the package root'
+$script:rtResult = [pscustomobject]@{ ok = $false; ran = $true; restart = $false; message = "Microsoft's installer ended with code 1603" }
+$script:rtLog.Clear()
+$done = @{}
+$e1 = Invoke-Prereq 'demo' $done; $e2 = Invoke-Prereq 'demo2' $done; $e3 = Invoke-Prereq 'demo3' $done
+"  -> $e1 | $e2 | $e3"
+Check (([string]$e1) -match 'the demo runtime' -and ([string]$e1) -match 'code 1603') 'a failed prerequisite stops its extra with a message that names it and its cause'
+Check (([string]$e2) -match 'code 1603' -and $script:rtLog.Count -eq 1) 'the second extra that needs it is skipped with the same cause, and the step does not run again'
+Check (-not $e3) 'the extra that needs nothing installs all the same'
+$script:rtResult = 'the demo installer could not start'
+$script:rtLog.Clear()
+$done = @{}
+$e1 = Invoke-Prereq 'demo' $done
+Check (([string]$e1) -match 'could not start' -and $done.Count -eq 1) 'an install step that throws is a failed prerequisite like any other'
+# The real entry, against a package without Microsoft's installer. AMDGPU_WDDM_TEST_VCRUNTIME is read in a dry run only.
+$noRedist = Join-Path $WorkRoot 'package-without-redist'
+[void][IO.Directory]::CreateDirectory($noRedist)
+$llamaPin = $(if ($null -ne $packageManifest -and (Get-ComponentById $packageManifest 'llama')) { Get-ComponentPinProblem (Get-ComponentById $packageManifest 'llama') } else { 'no llama' })
+if ($llamaPin) { "  (llama.cpp has no pin in this manifest: $llamaPin; the cases of the real entry are skipped)" } else {
+    $savedDry = $script:DryRunMode
+    $script:DryRunMode = $true
+    try {
+        $env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
+        $rp = $null
+        try { $rp = Read-ComponentPrerequisites -Manifest $packageManifest -PackageRoot $noRedist } catch { "  -> $($_.Exception.Message)" }
+        $rowsReal = Get-RowsWith $packageManifest $rp
+        $rl = Get-Row $rowsReal 'llama'
+        "  -> $(if ($rl) { $rl.refused })"
+        Check ($null -ne $rl -and ([string]$rl.refused) -match 'Microsoft Visual C\+\+ 2015-2022 runtime \(x64\)' -and ([string]$rl.refused) -match 'does not carry .*payload\\redist\\vc_redist\.x64\.exe') 'a PC without the runtime and a package without vc_redist.x64.exe: llama.cpp is refused, and the reason names the file'
+        $ro = Get-Row $rowsReal 'ollama'
+        Check ($null -eq $ro -or ([string]$ro.refused) -notmatch 'Visual C\+\+') 'Ollama is not refused for the runtime'
+        $copy = Join-Path $noRedist 'payload\redist\vc_redist.x64.exe'
+        [void][IO.Directory]::CreateDirectory((Split-Path $copy))
+        [IO.File]::WriteAllText($copy, 'not the real installer')
+        $rp = $null
+        try { $rp = Read-ComponentPrerequisites -Manifest $packageManifest -PackageRoot $noRedist } catch { "  -> $($_.Exception.Message)" }
+        Check (([string](Get-Row (Get-RowsWith $packageManifest $rp) 'llama').refused) -match 'SHA256 of .*vc_redist\.x64\.exe is ') 'a changed copy of Microsoft''s installer refuses llama.cpp'
+        $msg = $null
+        try { Invoke-ComponentPrerequisites -Component (Get-ComponentById $packageManifest 'llama') -PackageRoot $noRedist -Done @{} } catch { $msg = $_.Exception.Message }
+        "  -> $msg"
+        Check (([string]$msg) -match 'SHA256 of .*vc_redist\.x64\.exe is ') 'the install step checks the file again and does not run a changed copy'
+        $env:AMDGPU_WDDM_TEST_VCRUNTIME = 'ok'
+        $rp = $null
+        try { $rp = Read-ComponentPrerequisites -Manifest $packageManifest -PackageRoot $noRedist } catch { "  -> $($_.Exception.Message)" }
+        Check ($null -ne $rp -and -not (Get-Row (Get-RowsWith $packageManifest $rp) 'llama').refused) 'a PC that has the runtime installs llama.cpp from the same package: the file is not needed'
+    } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME -ErrorAction SilentlyContinue; $script:DryRunMode = $savedDry }
+}
+Remove-Item -LiteralPath $prRoot, $noRedist -Recurse -Force -ErrorAction SilentlyContinue
 
 Remove-Item Env:\BC250_TEST_STORE -ErrorAction SilentlyContinue
 [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($scratchKey, $false)
