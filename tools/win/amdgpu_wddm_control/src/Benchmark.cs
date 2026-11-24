@@ -424,12 +424,13 @@ namespace AmdgpuWddmControl
         }
     }
 
-    // The thermal stop of a pass: at 89 C at once, or at 87 C held for 10 s. A sample the driver
-    // cannot give is never a temperature: it neither stops a pass nor clears a hold, which is the rule the lab
-    // harness keeps as well.
+    // The thermal stop of a pass: a reading above 93 C held for more than 10 s, or 97 C at once. The driver lowers
+    // the clock from 87 C, so a pass that the throttle holds a little above 87 C is a valid measurement and runs on
+    // (BD-388). A sample the driver cannot give is never a temperature: it neither stops a pass nor clears a hold,
+    // which is the rule the lab harness keeps as well.
     public sealed class ThermalGuard
     {
-        public const int StopMc = 89000, HoldMc = 87000, HoldMs = 10000;
+        public const int StopMc = 97000, HoldMc = 93000, HoldMs = 10000;
 
         long? _hotSince;
 
@@ -437,11 +438,11 @@ namespace AmdgpuWddmControl
 
         public bool Hot(long nowMs, int? milliCelsius)
         {
-            if (milliCelsius == null) return _hotSince != null && nowMs - _hotSince.Value >= HoldMs;
-            if (milliCelsius.Value >= HoldMc) { if (_hotSince == null) _hotSince = nowMs; }
+            if (milliCelsius == null) return _hotSince != null && nowMs - _hotSince.Value > HoldMs;
+            if (milliCelsius.Value > HoldMc) { if (_hotSince == null) _hotSince = nowMs; }
             else _hotSince = null;
             if (milliCelsius.Value >= StopMc) return true;
-            return _hotSince != null && nowMs - _hotSince.Value >= HoldMs;
+            return _hotSince != null && nowMs - _hotSince.Value > HoldMs;
         }
     }
 
