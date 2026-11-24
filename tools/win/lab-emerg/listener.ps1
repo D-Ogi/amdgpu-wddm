@@ -18,6 +18,7 @@ $sha = [Security.Cryptography.SHA256]::Create()
 $seen = @{}
 $utf8 = New-Object Text.UTF8Encoding($false)
 $maxBody = 16MB
+. (Join-Path $PSScriptRoot 'stick-env.ps1')
 
 function Log([string]$t) { try { Add-Content -LiteralPath $logFile -Value ('{0:o} {1}' -f [DateTime]::UtcNow, $t) -Encoding ascii } catch {} }
 function Hex([byte[]]$b) { -join ($b | ForEach-Object { $_.ToString('x2') }) }
@@ -60,11 +61,40 @@ function Usb-Stick {
     $disk = Get-Partition -DriveLetter $v[0].DriveLetter | Get-Disk
     if ($v[0].FileSystem -ne 'FAT32' -or $disk.BusType -ne 'USB' -or $disk.Size -ne 64160400896) { throw 'usb: identity mismatch' }
     $root = "$($v[0].DriveLetter):\"
-    [ordered]@{ root = $root; grub = Join-Path $root 'boot\grub\grub.cfg'; efi = Join-Path $root 'efi\boot\bootx64.efi'; off = Join-Path $root 'efi\boot\bootx64.off' }
+    [ordered]@{ root = $root; grub = Join-Path $root 'boot\grub\grub.cfg'; efi = Join-Path $root 'efi\boot\bootx64.efi'; off = Join-Path $root 'efi\boot\bootx64.off'
+        env = Join-Path $root 'boot\grub\grubenv' }
+}
+# A stick whose grub.cfg has a detached signature: the file must not change. The OS choice is then the grubenv
+# variable bc250_default (0 to 5 = that Linux entry; no variable = Windows), written through stick-env.ps1.
+function Usb-Signed($u) { Test-Path -LiteralPath ($u.grub + '.sig') }
+function Usb-Default($u) {
+    if (-not (Usb-Signed $u)) {
+        return [regex]::Match([IO.File]::ReadAllText($u.grub), '(?m)^set default=(\S+)').Groups[1].Value
+    }
+    # A status never fails because of grubenv: with no readable block the signed menu starts its own fallback
+    # (network-only Linux, entry 4), and Usb-Env says why.
+    if ((Usb-Env $u) -ne 'ok') { return 'unknown (grubenv not readable; the menu falls back to entry 4)' }
+    $table = Read-StickEnv ([IO.File]::ReadAllBytes($u.env))
+    if ($table.Contains('bc250_default')) { return $table['bc250_default'] }
+    return '6'   # no bc250_default: the signed menu starts entry 6, Windows through the X3 counter
+}
+# 'ok', 'missing' or 'damaged: <reason>'. A write of a Linux choice into a block that is not 'ok' is refused
+# by Usb-SetSignedDefault (the read throws); only the report is tolerant.
+function Usb-Env($u) {
+    if (-not (Test-Path -LiteralPath $u.env)) { return 'missing' }
+    try { $null = Read-StickEnv ([IO.File]::ReadAllBytes($u.env)); return 'ok' } catch { return "damaged: $($_.Exception.Message)" }
+}
+# $value '' removes the variable (Windows). The first block is kept once as grubenv.orig.
+function Usb-SetSignedDefault($u, [string]$value) {
+    $old = [IO.File]::ReadAllBytes($u.env)
+    $new = Set-StickEnvValue $old 'bc250_default' $value
+    if (-not (Test-Path -LiteralPath ($u.env + '.orig'))) { [IO.File]::WriteAllBytes($u.env + '.orig', $old) }
+    [IO.File]::WriteAllBytes($u.env, $new)
 }
 function Usb-State($u) {
     $cfg = [IO.File]::ReadAllText($u.grub)
-    [ordered]@{ root = $u.root; default = [regex]::Match($cfg, '(?m)^set default=(\S+)').Groups[1].Value
+    [ordered]@{ root = $u.root; signed = [bool](Usb-Signed $u); default = Usb-Default $u
+        grubenv = $(if (Usb-Signed $u) { Usb-Env $u } else { 'not used' })
         loader = $(if (Test-Path $u.efi) { 'bootx64.efi (USB boots: Linux)' } elseif (Test-Path $u.off) { 'bootx64.off (falls through to NVMe: Windows)' } else { 'missing' })
         entries = @([regex]::Matches($cfg, '(?m)^\s*menuentry\s+[''"]([^''"]+)[''"]') | ForEach-Object { $_.Groups[1].Value }) }
 }
@@ -186,7 +216,16 @@ function Run-Action([string]$action, [string]$arg, [byte[]]$body) {
             # status | windows | linux:<grub entry index>. No restart here (use 'reboot').
             $u = Usb-Stick
             if ($arg -eq 'windows') {
+                # Both stick forms: the stick loader is switched off, the firmware starts Windows from NVMe.
                 if (Test-Path $u.efi) { Rename-Item -LiteralPath $u.efi -NewName 'bootx64.off' }
+            } elseif ($arg -match '^linux:(\d{1,2})$' -and (Usb-Signed $u)) {
+                # Entries 0 to 5 are Linux. Entry 6 is Windows through the X3 counter: the signed menu starts it
+                # when bc250_default is absent. Other numbers are refused before a file changes.
+                $n = $Matches[1]
+                if ($n -eq '6') { Usb-SetSignedDefault $u '' }
+                elseif ($n -match '^[0-5]$') { Usb-SetSignedDefault $u $n }
+                else { throw 'usb-boot: the signed menu has the entries 0 to 6 for this command' }
+                if (Test-Path $u.off) { Rename-Item -LiteralPath $u.off -NewName 'bootx64.efi' }
             } elseif ($arg -match '^linux:(\d{1,2})$') {
                 $n = $Matches[1]
                 $cfg = [IO.File]::ReadAllText($u.grub)

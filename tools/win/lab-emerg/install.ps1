@@ -1,4 +1,4 @@
-param([switch]$Uninstall)
+param([switch]$Uninstall, [string]$Source = 'C:\BC250\tmp')
 # Installs (or removes) the emergency channel on unit A: C:\BC250\emergency\{listener.ps1,key.bin,scripts\},
 # firewall rule "BC250 emergency 8722" (TCP 8722, local subnet), task "Lab emergency channel" (SYSTEM, at
 # startup, restarted on failure). Expects listener.ps1 and emergency-key.bin pushed to C:\BC250\tmp; moves the key
@@ -25,9 +25,15 @@ if ($Uninstall) {
     'uninstalled (files kept in C:\BC250\emergency)'
     return
 }
+# The listener dot-sources stick-env.ps1 (grubenv functions for the signed stick). Both files must be in
+# -Source before anything changes: a listener without its helper does not start.
+foreach ($name in 'listener.ps1', 'stick-env.ps1') {
+    if (-not (Test-Path -LiteralPath (Join-Path $Source $name))) { throw "$name is not in $Source; nothing was changed" }
+}
 New-Item -ItemType Directory -Force (Join-Path $base 'scripts') | Out-Null
-Copy-Item 'C:\BC250\tmp\listener.ps1' (Join-Path $base 'listener.ps1') -Force
-$tmpKey = 'C:\BC250\tmp\emergency-key.bin'
+Copy-Item (Join-Path $Source 'stick-env.ps1') (Join-Path $base 'stick-env.ps1') -Force
+Copy-Item (Join-Path $Source 'listener.ps1') (Join-Path $base 'listener.ps1') -Force
+$tmpKey = Join-Path $Source 'emergency-key.bin'
 if (Test-Path $tmpKey) {
     Move-Item $tmpKey (Join-Path $base 'key.bin') -Force
 }
