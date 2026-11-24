@@ -58,17 +58,45 @@ RECONCILIATION = """\
 """
 
 
+def remove_tree(path: str) -> None:
+    """Remove a workspace. Git makes its object files read-only, which stops a plain removal on Windows."""
+    def writable(func, name, _exc):
+        os.chmod(name, 0o700)
+        func(name)
+    shutil.rmtree(path, onerror=writable)
+
+
 class Fixture:
-    """A throw-away workspace with one git repository and its published ref."""
+    """A throw-away workspace with one git repository and its published ref.
+
+    BD-382: setUpModule builds one workspace with git, and each case gets a copy of its files. Each case built its
+    own before (22 git processes), and in the full quality suite a git process start on the development PC took
+    more than a second: the 62 cases went past the 1200 s of the gate (package run of 2026-11-24, 36 cases done).
+    """
+
+    template: "Fixture | None" = None
+    COMMITS = ("base", "landed", "unlanded", "unlanded2", "sibling")
 
     def __init__(self) -> None:
         self.root = tempfile.mkdtemp(prefix="ledgertest-")
         self.scratch = os.path.join(self.root, "scratch")
+        self.repo = os.path.join(self.root, "bc250-win")
+        self.origin = os.path.join(self.root, "origin.git")
+        if Fixture.template is None:
+            self.build()
+            return
+        shutil.copytree(Fixture.template.root, self.root, dirs_exist_ok=True)
+        for name in self.COMMITS:
+            setattr(self, name, getattr(Fixture.template, name))
+        # The two repositories name each other by path: point the copies at each other, not at the template.
+        run_git(self.repo, "remote", "set-url", "origin", self.origin)
+        run_git(self.origin, "config", "remote.origin.url", self.repo)
+
+    def build(self) -> None:
         os.makedirs(os.path.join(self.scratch, "ledger"))
         os.makedirs(os.path.join(self.scratch, "m15", "video-encode"))
         os.makedirs(os.path.join(self.scratch, "evidence-dir"))
         # the repository and its "origin"
-        self.repo = os.path.join(self.root, "bc250-win")
         os.makedirs(self.repo)
         run_git(self.repo, "init", "-q")
         run_git(self.repo, "symbolic-ref", "HEAD", "refs/heads/main")
@@ -78,7 +106,6 @@ class Fixture:
                   encoding="utf-8") as fh:
             fh.write(RECONCILIATION)
         self.landed = commit(self.repo, "docs/landed.md", "landed\n")
-        self.origin = os.path.join(self.root, "origin.git")
         run_git(self.root, "clone", "-q", "--bare", self.repo, self.origin)
         run_git(self.repo, "remote", "add", "origin", self.origin)
         run_git(self.repo, "fetch", "-q", "origin")
@@ -103,7 +130,7 @@ class Fixture:
                                   "sha256": "x"}]}, fh)
 
     def close(self) -> None:
-        shutil.rmtree(self.root, ignore_errors=True)
+        remove_tree(self.root)
 
     # -- ledger construction
 
@@ -184,6 +211,16 @@ class Fixture:
     def load(self) -> dict:
         with open(L.ledger_path(self.root), encoding="utf-8") as fh:
             return json.load(fh)
+
+
+def setUpModule() -> None:
+    Fixture.template = Fixture()
+
+
+def tearDownModule() -> None:
+    template, Fixture.template = Fixture.template, None
+    if template is not None:
+        template.close()
 
 
 class LedgerTests(unittest.TestCase):
