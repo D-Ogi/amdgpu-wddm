@@ -887,7 +887,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -953,7 +953,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -1019,7 +1019,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -1085,7 +1085,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -3156,7 +3156,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3202,7 +3202,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3302,7 +3302,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3348,7 +3348,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
