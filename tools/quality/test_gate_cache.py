@@ -7,6 +7,8 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -237,17 +239,90 @@ class CacheTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == 'nt', 'Windows job object')
     def test_timeout_stops_process_tree(self):
-        marker = self.base / 'survivor.txt'
-        child = f'import time,pathlib; time.sleep(1.5); pathlib.Path({str(marker)!r}).write_text("alive")'
-        parent = 'import subprocess,sys,time; subprocess.Popen([sys.executable,"-c",sys.argv[1]]); time.sleep(10)'
-        code, timeout = gate.run_process([sys.executable, '-c', parent, child], self.base, dict(os.environ),
-                                         self.base / 'timeout.log', 0.5)
+        started = self.base / 'started.txt'
+        child = f'import time,pathlib; pathlib.Path({str(started)!r}).write_text("x"); time.sleep(60)'
+        parent = 'import subprocess,sys,time; subprocess.Popen([sys.executable,"-c",sys.argv[1]]); time.sleep(60)'
+        log = self.base / 'timeout.log'
+        code, timeout = gate.run_process([sys.executable, '-c', parent, child], self.base, dict(os.environ), log, 6)
         self.assertTrue(timeout)
         self.assertIsNone(code)
-        # An actual child must not outlive the worker's deadline.
-        import time
-        time.sleep(1.7)
-        self.assertFalse(marker.exists())
+        self.assertTrue(started.exists(), 'the child did not start before the deadline: the control proves nothing')
+        # The child had the log open as its output. No process of the tree is left when run_process returns, so the
+        # log can be removed at once. Before, the child was only told to end: in a package suite of 2026-11-24 it
+        # still held the log when the test removed its directory (BD-382).
+        log.unlink()
+
+    def spec_fail_first(self, fail_times):
+        """A process double: the check 'sample' fails this number of times, then passes. It records how many
+        checks ran at the moment of each call."""
+        active, seen, lock = [0], [], threading.Lock()
+        def process(command, cwd, env, log, timeout):
+            name = Path(cwd).name.split('.')[0]
+            with lock:
+                active[0] += 1
+                seen.append((name, active[0], Path(cwd).name))
+            try:
+                time.sleep(0.2)
+                fail = name == 'sample' and len([s for s in seen if s[0] == 'sample']) <= fail_times
+                log.write_bytes(b'FAIL fixture\n' if fail else b'fixture PASS\n')
+                return (1 if fail else 0), False
+            finally:
+                with lock:
+                    active[0] -= 1
+        return process, seen
+
+    def three_checks(self):
+        self.plan['variables']['Profile'] = 'Full'
+        self.plan['jobs'] += [{'name': 'child', 'action': 'exit 0'}, {'name': 'other', 'action': 'exit 0'}]
+        self.manifest['checks']['child'] = {'inputs': ['sample'], 'depends': ['sample']}
+        self.manifest['checks']['other'] = {'inputs': ['sample']}
+
+    def test_full_profile_runs_a_failed_check_again_alone(self):
+        # BD-382: six package attempts of tester.39 each ran every check again from the start, and each one
+        # lost one check to the load of the suite (a deadline, a timing rule, a file still held by a process).
+        self.three_checks()
+        process, seen = self.spec_fail_first(1)
+        with patch.object(self, 'fake_process', process):
+            report = self.run_gate()
+        rows = {row['name']: row for row in report['checks']}
+        self.assertEqual(report['status'], 'PASS')
+        self.assertEqual([s[0] for s in seen].count('sample'), 2)
+        again = [s for s in seen if s[0] == 'sample'][1]
+        self.assertEqual(again[1], 1, 'the second run of the check is alone')
+        self.assertNotEqual(again[2], 'sample', 'the second run has a work directory of its own')
+        self.assertEqual(rows['sample']['attempts'], 2)
+        self.assertEqual(rows['sample']['first']['status'], 'FAIL')
+        self.assertEqual(rows['sample']['first']['exit_code'], 1)
+        self.assertEqual((self.out / 'sample.first.log').read_bytes(), b'FAIL fixture\n')
+        self.assertEqual((self.out / 'sample.log').read_bytes(), b'fixture PASS\n')
+        # The check that waited for it runs after the second run, and the report names the check that ran twice.
+        self.assertEqual(rows['child']['status'], 'PASS')
+        self.assertEqual([s[0] for s in seen].count('child'), 1)
+        self.assertEqual(report['run_again'], ['sample'])
+        self.assertNotIn('attempts', rows['other'])
+
+    def test_full_profile_a_check_that_fails_two_times_fails(self):
+        self.three_checks()
+        process, seen = self.spec_fail_first(2)
+        with patch.object(self, 'fake_process', process):
+            report = self.run_gate()
+        rows = {row['name']: row for row in report['checks']}
+        self.assertEqual(report['status'], 'FAIL')
+        self.assertEqual([s[0] for s in seen].count('sample'), 2)
+        self.assertEqual(rows['sample']['status'], 'FAIL')
+        self.assertEqual(rows['sample']['attempts'], 2)
+        self.assertEqual(rows['child']['error'], 'prerequisite failed')
+        self.assertEqual([s[0] for s in seen].count('child'), 0)
+
+    def test_other_profiles_do_not_run_a_failed_check_again(self):
+        self.three_checks()
+        self.plan['variables']['Profile'] = 'KmdPackage'
+        process, seen = self.spec_fail_first(1)
+        with patch.object(self, 'fake_process', process):
+            report = self.run_gate(True)
+        self.assertEqual(report['status'], 'FAIL')
+        self.assertEqual([s[0] for s in seen].count('sample'), 1)
+        self.assertEqual(report['run_again'], [])
 
     def test_full_profile_deadline_only_ends_a_hang(self):
         # BD-357: the release suite runs its checks beside each other and beside the other work of the host, so the

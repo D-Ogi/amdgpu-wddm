@@ -40,6 +40,21 @@ of a check in that profile is not a property of the check. Thus in `Full` no
 check has a deadline below `full_timeout`: there the deadline only stops a
 check that hangs. A deadline above `full_timeout` stays as declared.
 
+In `Full`, a check that fails runs one more time. The second run starts after
+the other checks, and no other check runs beside it. A check that passes alone
+was stopped by the load of the suite. A check with a defect fails again, and
+the suite fails. A package attempt cannot repeat one check: the next attempt
+repeats all of them. The row of such a check in `result.json` has `attempts`
+2 and the result of the first run in `first`. The first log and the first
+output directory stay as `<name>.first.log` and `<name>.first`. The list
+`run_again` in the receipt names these checks. Each name in that list is a
+flaky check: record it as a defect and repair it. The other profiles do not
+repeat a check.
+
+At a deadline the runner ends each process of the check and waits for each
+one. A process that ends holds its open files for a short time. When the
+runner returns, the log and the work directory of the check are free.
+
 The host input group is broad. The blob reader has a separate input group for
 its ABI test, compile, contract, analysis, log-width and watchdog checks.
 Other KMD source edits can invalidate the whole host group. Tighten a group
