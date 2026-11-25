@@ -177,6 +177,19 @@
 #define BC250_PTE_GIANT_PAGE_BYTES	(1ULL << BC250_PTE_GIANT_PAGE_SHIFT)
 #define BC250_PTE_GIANT_PAGE_FRAG	(BC250_PTE_GIANT_PAGE_SHIFT - 12u)
 
+/* What a 64 KB page table is on this hardware. In VidMm's single PTE mode a leaf page table is of one
+ * of two types (Microsoft, "Support for 64KB Pages"): 512 entries of 4 KB, or 32 entries of 64 KB
+ * over the same 2 MiB. An update of the second type has DXGK_UPDATEPAGETABLEFLAGS::Use64KBPages
+ * (d3dkmddi.h:2086) and counts StartIndex and NumPageTableEntries in 64 KB entries. gfx10 has one
+ * leaf table format, 512 entries of 8 bytes, and maps 64 KB as amdgpu does: 16 consecutive entries,
+ * each with the address of its own 4 KB page and AMDGPU_PTE_FRAG(4). Evidence E17, buffer k64 on
+ * unit A: amdgpu_vm_set_ptes addr=010f1e0000 incr=4096 flags=267 count=16, read back from the table
+ * as 000000010f1e0267, 000000010f1e1267 ... 000000010f1ef267. So one 64 KB DXGK_PTE becomes
+ * BC250_PTE_64K_SLOTS entries, and entry n of the 64 KB table starts at slot 16 * n of the same 4 KB
+ * table page (the driver reports LeafPageTableSizeFor64KPagesInBytes = 4096). */
+#define BC250_PTE_64K_SLOTS		(1u << (BC250_PTE_LARGE_PAGE_SHIFT - 12u))   /* 16 */
+#define BC250_PTE_64K_TABLE_ENTRIES	(512u / BC250_PTE_64K_SLOTS)                 /* 32 */
+
 /* ---------------------------------------------------------------------------------------------
  * The context: what DXGK_PTE does not carry and this driver has to supply
  * ------------------------------------------------------------------------------------------- */
@@ -236,6 +249,13 @@ struct bc250_pte_context {
 	 * aligned 1 GiB address on such a base, and a segment below 1 GiB cannot hold the page. Zero
 	 * keeps both levels, for a base on 1 GiB. Read only when large_pages is nonzero. */
 	u32 huge_pages_only;
+
+	/* Nonzero when the driver reported DXGK_GPUMMUCAPS::SysMem64KBPageSupported and a
+	 * LeafPageTableSizeFor64KPagesInBytes for this start. Only then does bc250_pte_from_dxgk_64k
+	 * translate an entry of a 64 KB page table, and only then does bc250_pte_from_dxgk_level accept
+	 * PageTablePageSize = 64 KB on a level 1 entry. It needs no layout: a host page arrives as its
+	 * own physical address, and the alignment is checked on that address. */
+	u32 system_64k;
 };
 
 /* Every field of an AMD entry, for the inverse direction. */
@@ -313,6 +333,12 @@ int bc250_pte_from_dxgk(const struct bc250_pte_context *ctx, enum bc250_pte_kind
  * page table segment, or with large_pages 0; an address that is not aligned to the page size
  * (AllowNonAlignedLargePageAddress is not reported); and a range that does not lie inside the VRAM
  * segment.
+ *
+ * With ctx->system_64k, a valid level 1 entry that names a table (no LargePage) may carry
+ * PageTablePageSize = DXGK_PTE_PAGE_TABLE_PAGE_64KB. The field says how VidMm uses the leaf table
+ * (32 entries of 64 KB). The hardware entry is the same directory entry as for a 4 KB table: both
+ * types are the same 4 KB table page here, and the type arrives again with every leaf update
+ * (Use64KBPages). At any other level, and without system_64k, the value is refused as before.
  */
 int bc250_pte_from_dxgk_level(const struct bc250_pte_context *ctx, u32 level,
 			      u64 dxgk_flags, u64 dxgk_address, u64 *out);
@@ -329,6 +355,29 @@ int bc250_pte_from_dxgk_level(const struct bc250_pte_context *ctx, u32 level,
  */
 u64 bc250_pte_large_page_bytes(const struct bc250_pte_context *ctx, u32 level,
 			       const struct bc250_pte_fields *fields);
+
+/*
+ * One entry of a 64 KB page table (an update with Use64KBPages) as the BC250_PTE_64K_SLOTS hardware
+ * entries that map it. `dxgk_address` names the first 4 KB page of the 64 KB page, in the units of
+ * the context, as VidMm writes it (dxgmms2 expands such an entry to 4 KB entries by adding 0..15 to
+ * PageAddress when it converts a 64 KB table to a 4 KB one). out[n] maps page n: each slot is exactly
+ * what bc250_pte_from_dxgk(BC250_PTE_LEAF) gives for that page, so the mapping is the one VidMm
+ * asked for whatever *fragment says.
+ *
+ * *fragment is BC250_PTE_LARGE_PAGE_FRAG and every slot carries AMDGPU_PTE_FRAG(4) only when the
+ * entry is valid, in host memory, and its physical address is 64 KB aligned: the case of evidence
+ * E17 k64. Otherwise *fragment is 0 and the slots carry no fragment: a Zero entry (16 PRT leaves), a
+ * 64 KB page in a local segment (no segment of this driver has 64 KB pages), or a host page whose
+ * address is not 64 KB aligned. No fragment is a correct mapping; a fragment that the memory does
+ * not honour is not.
+ *
+ * An entry with neither Valid nor Zero gives 16 zero slots. Returns BC250_EINVAL with all slots 0
+ * for: system_64k 0 in the context, the GART aperture, LargePage set (the DXGK_PTE page forbids it
+ * on a leaf, and dxgmms2 sets it on directory entries only), and everything bc250_pte_from_dxgk
+ * refuses for any of the 16 pages (a page past the end of host memory or of its segment included).
+ */
+int bc250_pte_from_dxgk_64k(const struct bc250_pte_context *ctx, u64 dxgk_flags, u64 dxgk_address,
+			    u64 out[BC250_PTE_64K_SLOTS], u32 *fragment);
 
 /* The flags a leaf entry of each aperture carries, without an address. bc250_pte_gart_flags() is
  * the value fact M37 measured, 0x0003000000000077; both are exposed so a test can compare them

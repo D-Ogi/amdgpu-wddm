@@ -493,6 +493,14 @@ typedef struct _BC250_DEVICE {
     // layout only, 1 GiB at level 2 (LargePages 1 only, which needs a layout).
     UCHAR LargePageLayout;
     BOOLEAN LargePages;
+    // Bit 31 of ApertureSegmentMegabytes (paging_window.h), latched by WddmStart with the aperture size and not
+    // changed until stop. The GpuMmu caps report SysMem64KBPageSupported and a 64 KiB leaf table size, and
+    // vidmm.c maps an entry of a 64 KiB page table as 16 leaf entries with fragment 4. It does not use the
+    // large page layout, and alone it changes no allocation.
+    BOOLEAN SystemPages64K;
+    // Bit 30 next to bit 31: an allocation that may live in the aperture segment is also sized and aligned to
+    // 64 KiB (wddm.c WddmCreateAdmit). Never TRUE without SystemPages64K.
+    BOOLEAN SystemSizes64K;
     PVOID Wddm;                         // wddm.c, NULL unless FullWddm
     BOOLEAN MmioIhEnabled;
     BOOLEAN GfxStopPrepared;            // hardware retirement attempted in this device generation
@@ -1682,13 +1690,19 @@ void WddmGpuFenceCompute(_Inout_ BC250_DEVICE* Device);  // node 2's WddmGpuFenc
 #define BC250_LARGE_PAGE_LAYOUT_GIANT 1u    // the base is on 1 GiB: 2 MiB pages at level 1, 1 GiB pages at level 2
 #define BC250_LARGE_PAGE_LAYOUT_HUGE 2u     // the base is on 2 MiB, the segment below 1 GiB: 2 MiB pages at level 1,
                                             // level 2 refused
+// The host page of a start with Device->SystemPages64K, and what one entry of a 64 KiB page table becomes:
+// VidMmPageTableEntrySlots is 16 for an update of such a table (Use64KBPages, level 0) on that start, else 1.
+// VidMmEncodePageTable writes Count * slots hardware entries, and its Physical is the first of them.
+#define BC250_VIDMM_PAGE_64K_BYTES (64ull*1024)
+#define BC250_VIDMM_PAGE_64K_SLOTS 16u
+ULONG VidMmPageTableEntrySlots(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update);
 NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId,
                           ULONGLONG TableOffset, ULONGLONG TableLength, ULONG TableSegmentId);
 NTSTATUS VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId);
 void VidMmStop(void);
 BOOLEAN VidMmEncodePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update,
                             ULONG Start, ULONG Count, _Out_ ULONGLONG* Physical,
-                            _Out_writes_(Count) ULONGLONG* Entries);
+                            _Out_ ULONGLONG* Entries);   // Count * VidMmPageTableEntrySlots(Update) values
 NTSTATUS VidMmCommitPagingFill(ULONGLONG Physical, ULONGLONG Bytes, ULONG Pattern);
 NTSTATUS VidMmCommitPagingCopy(ULONGLONG Source, ULONGLONG Destination, ULONG Count);
 NTSTATUS VidMmCommitPagingUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update, ULONG Start, ULONG Count);

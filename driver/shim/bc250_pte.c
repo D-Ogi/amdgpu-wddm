@@ -336,6 +336,15 @@ int bc250_pte_from_dxgk_level(const struct bc250_pte_context *ctx, u32 level,
 
 	if (bc250_pte_large_level(ctx, level))
 		huge_shift = BC250_PTE_LEVEL_SHIFT(level);
+	/* The type of the leaf table a level 1 entry points at (see the header). dxgmms2 writes the
+	 * field only where it writes the address of a child table. A 64 KB table is the same 4 KB table
+	 * page on gfx10, so the directory entry is that of a 4 KB table. */
+	if (ctx != NULL && ctx->system_64k != 0 && level == 1 &&
+	    (dxgk_flags & (BC250_DXGK_PTE_VALID | BC250_DXGK_PTE_ZERO | BC250_DXGK_PTE_LARGEPAGE)) ==
+	    BC250_DXGK_PTE_VALID &&
+	    (dxgk_flags & BC250_DXGK_PTE_PAGESIZE_MASK) ==
+	    ((u64)BC250_DXGK_PAGE_TABLE_PAGE_64KB << BC250_DXGK_PTE_PAGESIZE_SHIFT))
+		dxgk_flags &= ~BC250_DXGK_PTE_PAGESIZE_MASK;
 	return bc250_pte_translate(ctx, level == 0 ? BC250_PTE_LEAF : BC250_PTE_DIRECTORY, huge_shift,
 				   dxgk_flags, dxgk_address, out);
 }
@@ -356,6 +365,58 @@ u64 bc250_pte_large_page_bytes(const struct bc250_pte_context *ctx, u32 level,
 	    fields->address - ctx->vram_base > ctx->vram_size - bytes)
 		return 0;
 	return bytes;
+}
+
+int bc250_pte_from_dxgk_64k(const struct bc250_pte_context *ctx, u64 dxgk_flags, u64 dxgk_address,
+			    u64 out[BC250_PTE_64K_SLOTS], u32 *fragment)
+{
+	struct bc250_pte_fields first;
+	u64 step;
+	u32 i;
+	int rc = 0;
+
+	if (out == NULL || fragment == NULL)
+		return BC250_EINVAL;
+	for (i = 0; i < BC250_PTE_64K_SLOTS; i++)
+		out[i] = 0;
+	*fragment = 0;
+
+	if (ctx == NULL || ctx->system_64k == 0 || ctx->aperture != BC250_PTE_VM)
+		return BC250_EINVAL;
+	if ((dxgk_flags & (BC250_DXGK_PTE_VALID | BC250_DXGK_PTE_ZERO)) == 0)
+		return 0;
+	if ((dxgk_flags & BC250_DXGK_PTE_LARGEPAGE) != 0)
+		return BC250_EINVAL;
+
+	/* Slot n is the 4 KB leaf of page n, through the one translation every other leaf uses, so that
+	 * the segment, the bounds and the reserved fields are checked for each of the 16 pages. */
+	step = (ctx->units == BC250_PTE_ADDR_PAGES) ? 1ull : (u64)AMDGPU_GPU_PAGE_SIZE;
+	if ((dxgk_flags & BC250_DXGK_PTE_ZERO) == 0 &&
+	    dxgk_address > ~0ull - (BC250_PTE_64K_SLOTS - 1u) * step)
+		rc = BC250_EINVAL;
+	for (i = 0; rc == 0 && i < BC250_PTE_64K_SLOTS; i++)
+		rc = bc250_pte_translate(ctx, BC250_PTE_LEAF, 0, dxgk_flags,
+					 (dxgk_flags & BC250_DXGK_PTE_ZERO) != 0 ? dxgk_address :
+					 dxgk_address + i * step, &out[i]);
+	if (rc != 0) {
+		for (i = 0; i < BC250_PTE_64K_SLOTS; i++)
+			out[i] = 0;
+		return rc;
+	}
+	if ((dxgk_flags & BC250_DXGK_PTE_ZERO) != 0)
+		return 0;		/* 16 PRT leaves, as 16 Zero entries of a 4 KB table */
+
+	/* The fragment is amdgpu's for this mapping (amdgpu_vm_pt.c:738-743, evidence E17 k64). It is a
+	 * promise that the 16 entries map one aligned, contiguous 64 KB. VidMm makes that promise for a
+	 * host page by sending a 64 KB entry. The part that can be checked is checked here: host memory,
+	 * and an address that can be the start of such a page. Anything else keeps the plain entries. */
+	bc250_pte_decode(out[0], BC250_PTE_LEAF, &first);
+	if (first.valid && first.system && (first.address & BC250_PTE_64K_MASK) == 0) {
+		for (i = 0; i < BC250_PTE_64K_SLOTS; i++)
+			out[i] |= AMDGPU_PTE_FRAG(BC250_PTE_LARGE_PAGE_FRAG);
+		*fragment = BC250_PTE_LARGE_PAGE_FRAG;
+	}
+	return 0;
 }
 
 /* ---------------------------------------------------------------------------------------------

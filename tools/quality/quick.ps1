@@ -823,6 +823,12 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   # translation context that keeps level 2 on that base, must each fail it.
   @{n='vram-geometry-huge-no-round';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace,'-LayoutMutation','huge-no-round');Fails=$true}
   @{n='vram-geometry-huge-both-levels';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace,'-LayoutMutation','huge-both-levels');Fails=$true}
+  # 64 KiB page tables of vidmm.c: 32 entries of 16 slots. The control is the encoder with one slot for each entry.
+  @{n='vidmm-64k';s='driver\kmd\test\run_vidmm_64k.ps1';a=@('-Root',$Workspace)}
+  @{n='vidmm-64k-one-slot';s='driver\kmd\test\run_vidmm_64k.ps1';a=@('-Root',$Workspace,'-Mutation','one-slot');Fails=$true}
+  # The bound of a native virtual fill is the size VidMm has. The control is the bound of the first 64 KiB build.
+  @{n='native-bound';s='driver\kmd\test\run_native_bound.ps1';a=@('-Root',$Workspace)}
+  @{n='native-bound-blob-size';s='driver\kmd\test\run_native_bound.ps1';a=@('-Root',$Workspace,'-Mutation','blob-size');Fails=$true}
   @{n='guard-start';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace)}
   # BD-122: the start record, and the four pre-fix behaviours as its controls, one per requirement.
   @{n='start-record';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace)}
