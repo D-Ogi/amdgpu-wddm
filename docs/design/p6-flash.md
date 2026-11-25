@@ -101,8 +101,12 @@ has the flash protocol.
 3. The module computes the digest of the image, the name of the base and the digest of the variable store. It reads
    the three volumes.
 4. The module writes `bc250-flash.dump` and `bc250-flash.result` beside the stage image, and frees the pages.
+5. With `flash.reset=1`, the module writes the log and restarts the board.
 
 The job writes nothing to the flash. An image file of an earlier job does not stay when a job fails.
+
+`flash.reset=1` is for a start that must not go on to Windows: a measurement with the other modules off, and each
+job that writes. Use `log=line` with it, so that the log is on the volume before the restart.
 
 The result file has one `key value` line for each item and a line feed at the end of each line. Its last line is the
 status line.

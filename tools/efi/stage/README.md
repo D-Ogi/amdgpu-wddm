@@ -41,6 +41,7 @@ image alone. The Secure Boot tests read two signed images of the Windows install
 | `sb.windows=1` | no | with `sb.mode=enforce`: Windows reads Secure Boot as on, with the four databases of the kit |
 | `sb.windows=off` | no | on a firmware that has Secure Boot on: Windows reads Secure Boot as off for this start. The module does not check in that start |
 | `flash=read` | no job | the flash module reads the firmware image of the board and writes it beside the stage image ([the flash page](../../docs/design/p6-flash.md)) |
+| `flash.reset=1` | 0 | with a flash job: the stage restarts the board after the job, and Windows does not start in this boot |
 
 The stage counts each option that no module understands and prints the count.
 

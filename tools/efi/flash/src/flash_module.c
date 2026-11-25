@@ -4,7 +4,8 @@
  * the option the module does nothing.
  *
  * Job read: the module reads the firmware image of the board through the flash protocol of the firmware. It writes
- * the image and a result file beside the stage image. It writes nothing to the flash.
+ * the image and a result file beside the stage image. It writes nothing to the flash. With flash.reset=1 the module
+ * restarts the board after the job.
  *
  * The module is the first in the order of the modules. A job must not depend on the work of another module, and the
  * read comes before the reset of the core unlock.
@@ -27,6 +28,7 @@
 #define FLASH_RESULT_NAME	"bc250-flash.result"
 #define FLASH_LINE_BYTES	160u
 #define FLASH_RESULT_BYTES	1024u
+#define FLASH_RESET_PAUSE_US	(2u * 1000u * 1000u)
 #define FLASH_TEXT_BYTES	(FLASH_DIGEST_BYTES * 2u + 1u)
 
 /* The flash protocol of the firmware: the FlashDriver of the stock image. Its functions take the address of the
@@ -212,6 +214,19 @@ static void job_read(struct stage *stage, struct firmware_flash *flash)
 	((EFI_FREE_PAGES)stage->bs->FreePages)(memory, FLASH_IMAGE_BYTES / FLASH_PAGE_BYTES);
 }
 
+/* Restarts the board when the load option flash.reset=1 is set. The option is for a start that must not go on to
+ * Windows after the job: a measurement, and each job that writes. The log is on the volume before the restart. */
+static void restart_if_asked(struct stage *stage)
+{
+	if (!stage_option_flag(&stage->options, "flash.reset", 0)) return;
+	stage_say(stage, FLASH_NAME, "restarting the board");
+	stage_log_flush(stage);
+	/* The pause gives the file system of the volume time to write its last bytes. */
+	stage->bs->Stall(FLASH_RESET_PAUSE_US);
+	stage->st->RuntimeServices->ResetSystem(EfiResetCold, EFI_SUCCESS, 0, NULL);
+	for (;;) {}
+}
+
 static void flash_run(struct stage *stage)
 {
 	const char *job = stage_option_text(&stage->options, FLASH_NAME);
@@ -239,8 +254,10 @@ static void flash_run(struct stage *stage)
 		return;
 	}
 	stage_sayf(stage, FLASH_NAME, "job %s, flash protocol at 0x%llx", job, (unsigned long long)(UINTN)flash);
-	if (!strcmp(job, "read")) job_read(stage, flash);
-	else {
+	if (!strcmp(job, "read")) {
+		job_read(stage, flash);
+		restart_if_asked(stage);
+	} else {
 		stage_sayf(stage, FLASH_NAME, "unknown job '%s': nothing done", job);
 		result_line("error unknown job");
 		result_line("status failed");

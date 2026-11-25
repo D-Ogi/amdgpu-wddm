@@ -121,6 +121,7 @@ An option is `name=value`. An option that no module understands is counted on th
 | `sb.windows=1`, `sb.windows=off` | 0 | the operating system reads a Secure Boot state from this stage (see "The reported mode: sb.windows"). `1` needs `sb.mode=enforce`, and the stage ignores it in every other mode. `off` is the state "Secure Boot is off" on a firmware that has Secure Boot on |
 | `acpi.apply=0` | 1 | the ACPI module builds and checks its tables, and installs and removes none |
 | `flash=read` | no job | the flash module reads the firmware image of the board and writes it beside the stage image ([the flash page](p6-flash.md)) |
+| `flash.reset=1` | 0 | with a flash job: the stage restarts the board after the job, and Windows does not start in this boot |
 | `probe=1` | 0 | a module that is off says which protocols the firmware has for it. The core unlock also gives its register BAR lines |
 | `log=0`, `log=1`, `log=line` | `1` | the log file: none, written before the next image starts, or written after each line |
 

@@ -2283,6 +2283,24 @@ static void test_flash(const char *acpi_dir, const char *fixtures)
 	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == starts + 1);
 	CHECK(said("flash: probe: flash protocol present") && fw_flash_reads == 0 && fw_flash_writes == 0);
 
+	/* flash.reset=1: the board restarts after the job, with the files and the log on the volume, and the next image
+	 * does not start. */
+	fw_flash_fail_at = FLASH_IMAGE_BYTES;
+	fw_flash_reads = 0;
+	starts = fw.starts;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=read flash.reset=1 log=line", &reset) == EFI_ABORTED && reset == 1);
+	CHECK(fw.starts == starts && fw.resets == 1);
+	CHECK(said("flash: restarting the board") && file_ends_with(FLASH_RESULT, "status ok"));
+	CHECK(find_file(FLASH_DUMP) != NULL && file_ends_with(LOG_FILE, "bc250-stage: flash: restarting the board"));
+	CHECK(fw.page_blocks == 0 && fw.pool_live == 0);
+	/* flash.reset=0: the start goes on to the next image. A value that is not 0 or 1 is not understood. */
+	starts = fw.starts;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=read flash.reset=0", &reset) == EFI_SUCCESS && reset == 0);
+	CHECK(fw.starts == starts + 1 && fw.resets == 1);
+	starts = fw.starts;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=read flash.reset=yes", &reset) == EFI_SUCCESS && reset == 0);
+	CHECK(fw.starts == starts + 1 && fw.resets == 1 && said("1 load option(s) not understood and ignored"));
+
 	/* A volume that takes no write: the read is complete, the image is not kept, and the result says so. */
 	if (!new_firmware(acpi_dir)) goto out;
 	add_file(NEXT, fixtures, "signed.efi");
