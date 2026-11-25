@@ -644,6 +644,22 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
     // envelope. The first request has no linear layout; kShareRequired asks for it.
     const bool shareable = res_desc && !linear && c->mode == MemoryMode::RuntimeBacked &&
                            shared_surface_shape(sized, desc, *res_desc);
+    // BD-408: the DDI does not say that a create is shared, so a shared texture outside the envelope gets an
+    // ordinary allocation with no record, and only its open fails, in this process or in another one. The closest
+    // signal the DDI gives is simultaneous access: the D3D12 translation layer (D3D9On12, D3D11On12) asks for it on
+    // every shared resource it creates (D3D12TranslationLayer Resource.cpp, the compatibility create). Such a
+    // texture outside the envelope gets one line, under the refusal budget, so that the next shape like format 88
+    // is visible at its create. The line is a hint, not a refusal: the create continues unchanged.
+    if (res_desc && !linear && !shareable && c->mode == MemoryMode::RuntimeBacked &&
+        desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D &&
+        (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS))
+        log_refusal("shared surface: a texture with simultaneous access is outside the shared surface envelope; if it "
+                    "is shared, no opener can read it (format %d, %llux%u, %u mips, %u slices, %u samples, %u castable "
+                    "formats, heap pool %u, cpu page %u, heap flags 0x%x)",
+                    static_cast<int>(desc.Format), static_cast<unsigned long long>(desc.Width), desc.Height,
+                    static_cast<unsigned>(desc.MipLevels), static_cast<unsigned>(desc.DepthOrArraySize),
+                    desc.SampleDesc.Count, res_desc->NumCastableFormats, static_cast<unsigned>(sized.MemoryPool),
+                    static_cast<unsigned>(sized.CPUPageProperty), static_cast<unsigned>(sized.Flags));
     if (res_desc) {
         if (!(sized.Flags & category_of(desc))) return E_INVALIDARG;
         if (linear) {

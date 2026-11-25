@@ -315,6 +315,26 @@ void test_shared_create(Env& env) {
         cast.castable = to_alpha;
         cast.castables = 1;
         outside(env, device, m, cast, "B8G8R8X8_UNORM castable to B8G8R8A8_UNORM");
+        // BD-408: a texture with simultaneous access, the translation layer's mark of a shared resource, that is
+        // outside the envelope names itself once at its create. One without the flag, and one inside the envelope
+        // with it, write no such line.
+        const char* const hint = "shared surface: a texture with simultaneous access is outside";
+        const size_t hints = refusal_lines(hint).size();
+        Shape marked{256, 256, DXGI_FORMAT_B8G8R8X8_TYPELESS};
+        marked.flags |= D3D12DDI_RESOURCE_FLAG_0003_SIMULTANEOUS_ACCESS;
+        outside(env, device, m, marked, "a typeless texture with simultaneous access");
+        const std::vector<std::string> after = refusal_lines(hint);
+        checkf(after.size() == hints + 1 && after.back().find("format 92, 256x256") != std::string::npos,
+               "shared create: a simultaneous-access texture outside the envelope writes one hint line (%zu lines, %s)",
+               after.size() - hints, after.size() > hints ? after.back().c_str() : "none");
+        Shape inside{64, 64, DXGI_FORMAT_B8G8R8A8_UNORM};
+        inside.flags |= D3D12DDI_RESOURCE_FLAG_0003_SIMULTANEOUS_ACCESS;
+        Buffer in_envelope;
+        hr = create_shared(env, device, inside, in_envelope);
+        if (hr == S_OK) destroy_buffer(env, device, in_envelope);
+        checkf(hr == S_OK && refusal_lines(hint).size() == hints + 1,
+               "shared create: inside the envelope, simultaneous access writes no hint line (hr %08lx)",
+               static_cast<unsigned long>(hr));
     }
 
     // A heap alone never asks to share: there is no resource to describe and nothing to place in it yet.
