@@ -207,6 +207,19 @@ with `D3D12_HEAP_FLAG_SHARED`, `ID3D12CompatibilityDevice::CreateSharedResource`
 (keyed mutex, whose mutex is the runtime's own object) and
 `ID3D12Device::OpenSharedHandle` of a resource all take that path.
 
+Since BD-217 the shell does not wait for that refusal. It asks for the linear
+surface before it allocates anything, for each committed texture of that shape.
+A private texture of that shape is thus linear also. The shape holds the usual
+full-resolution render targets (RGBA8, RGB10A2, RGBA16F), and a linear render
+target has no macro tiling, no DCC and no fast clear. The experiment
+`private-tiled` (class Feature, off by default) goes back to the refusal as the
+signal: the shell asks for the ordinary allocation first, with a CPU view, and
+makes the linear surface only when the runtime refuses that allocation. A private
+texture then keeps the tiled layout. With the switch on, each such create writes
+one `private-tiled:` line to the debugger channel. The rule, its cost and what is
+not measured are in
+[docs/d3d12-shared-resources.md](../../../docs/d3d12-shared-resources.md).
+
 Every other shape still fails: buffers, mip chains, arrays, 3D textures, MSAA,
 block-compressed and typeless formats, depth-stencil, cross-adapter surfaces,
 CPU-visible shared heaps, a shared heap with no resource and a placed resource on
