@@ -337,6 +337,29 @@ are a contract: the lab kit matches them, so they are not renamed silently.
 | `record format` | no COMPOSED row for the record's DXGI format (reported `E_NOTIMPL`, not malformed) |
 | `allocation format` | the LB7A `Format` is not the row the record's DXGI format names |
 | `allocation geometry` | the pitch does not hold a row of pixels, or the size does not hold the rows |
+| `bare allocation length` | an open with no resource record, whose allocation blob is not 48 bytes (LB7A and GDI1) or 32 bytes (LB7A only) |
+| `bare allocation type` | an open with no resource record, whose 48-byte blob is not a GDI texture. The cause is another GDI1 type, a GDI1 flag, a reserved word, or no GDI1 magic |
+
+### An open with no resource record
+
+The runtime gives an opener no resource record when the creator of the allocation gave none. Then the LB7A blob
+is the only description (BD-408, measured on unit A on 2026-11-25). A D3D9On12 windowed Present opens a standard
+GDI surface in the D3D12 shell: the kernel driver describes it in `GetStandardAllocationDriverData` with 48 bytes,
+LB7A v1 and the GDI1 trailer, and with no resource record. Before BD-408 this open declined at `record length`, and
+the D3D9Ex windowed Present failed. The D3D11 shell opens the same blob since BD-253.
+
+`open_shared_surface` uses `Bc250SharedSurfaceDecodeBareWhy` when the resource record is empty, and the strict
+decode in all other cases. The bare decode admits a GDI texture (GDI1 type 1) and the 32-byte LB7A of the
+compositor's hosted surfaces. The description that it gives is the storage format of the COMPOSED row of the LB7A
+format, one mip, one slice, and shader resource and render target binding. The other checks are those of the
+strict decode, with the same names.
+
+The layout agreement of such an open compares the image with the allocation size, not with the record size. The
+kernel driver writes the record size of a GDI texture as the pitch times the height rounded up to four rows
+(`DcnSharedTextureLayout`). It then creates the allocation with that size rounded up to a page (`CreateAllocation`,
+`ROUND_TO_PAGES`). The engine image needs the page-rounded size, so a comparison with the record size refuses every
+GDI texture whose four-row blocks do not fill a whole page. A record with a resource record keeps the comparison with
+the record size.
 
 The two routes a D3D11 producer may run on are not interchangeable to this opener, and that is measured, not
 assumed. The GPU route's shell (`driver/umd/dxvk/ddi-resource.cpp`) writes the full v3 record for every runtime
@@ -418,7 +441,7 @@ hold is told that the driver cannot do it, in a code the runtime survives.
 
 | Test | What it pins |
 |---|---|
-| `driver/contract/test/shared-surface-test.cpp` | the two records as byte literals. It holds named checks over the encoder, both decoders, the kernel driver's parser and every single-field refusal. The last of these covers all 5 COMPOSED rows and their 7 format round trips. Since round 2 it also pins the name every refusal reports, one check per `BC250_SHARED_SURFACE_WHY_*` constant. That makes a log line a contract and not a courtesy. The runner prints its own total ("67 checks, 0 failures"). Three documents had counted that total by hand, and disagreed |
+| `driver/contract/test/shared-surface-test.cpp` | the two records as byte literals. It holds named checks over the encoder, both decoders, the kernel driver's parser and every single-field refusal. The last of these covers all 5 COMPOSED rows and their 7 format round trips. Since round 2 it also pins the name every refusal reports, one check per `BC250_SHARED_SURFACE_WHY_*` constant. That makes a log line a contract and not a courtesy. Since BD-408 it also holds the bare form, with the measured 48-byte GDI texture blob as a byte literal. The runner prints its own total ("90 checks, 0 failures"). Three documents had counted that total by hand, and disagreed |
 | `driver/umd/d3d12/allocation-request-test.cpp` | what the create publishes, field by field, and that `prepare_surface` still writes the primary's v1 record |
 | `driver/umd/d3d12/heap-import-test.cpp` | the shell half: the shareable envelope, `kShareRequired` only from the runtime's refusal, the shared surface's records and refusals, and the borrowed lifetime of an adopted allocation |
 | `engine-ddi/tests/test-shared-create.cpp` | round trip 8 on the GPU: the retry, and the geometry the engine measured. A texel-exact render and read-back of the created surface, in five formats. Both sRGB views are two of the five. Each retry raises the counter once and writes its line once |

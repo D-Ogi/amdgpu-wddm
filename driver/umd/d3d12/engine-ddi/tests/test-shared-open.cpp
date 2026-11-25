@@ -146,6 +146,7 @@ bool engine_layout(Device& device, const Surface& s, UINT& pitch, UINT64& backin
 
 void unserved_open(Env& env);
 void engine_layout_open(Env& env);
+void gdi_surface_open(Env& env);
 
 } // namespace
 
@@ -535,6 +536,7 @@ void test_shared_open(Env& env) {
 
     unserved_open(env);
     engine_layout_open(env);
+    gdi_surface_open(env);
 
     checkf(m.frees == m.allocations + m.adoptions,
            "shared open: every allocation and every adopted import came back through free_memory (%u frees, %u "
@@ -581,6 +583,174 @@ void unserved_open(Env& env) {
     if (SUCCEEDED(refused_hr)) destroy_opened(env, device, opened);
     uint32_t live = UINT32_MAX;
     (void)engine_ddi::destroy_device_context(device.context, &live);
+}
+
+// BD-408 and BD-409: the open of a surface that has no resource record, measured on unit A (2026-11-25, HLK
+// schbillboard.exe, D3D9On12 windowed Present on 26200). The process creates a shared 624x441 B8G8R8A8_UNORM
+// texture, which the shell retries as a shared linear surface of pitch 2560, and then opens an allocation whose
+// resource record is empty and whose allocation blob is 48 bytes of LB7A v1: the GDI texture that the kernel driver
+// describes in GetStandardAllocationDriverData (LB7A and the GDI1 trailer, driver/kmd/wddm.c). Before the fix the
+// open declined at "record length", because it decoded only the LB7A and E26R pair. The D3D11 shell opens the same
+// blob since BD-253.
+//   The kernel driver's LB7A Size of a GDI texture is the pitch times the height rounded up to four rows
+// (DcnSharedTextureLayout, driver/kmd/dcn_translate.c), not page rounded, and the allocation it creates is that size
+// rounded up to a page (CreateAllocation, ROUND_TO_PAGES). The engine's image needs the page-rounded size, so the
+// open must compare with the size that the kernel driver allocates and not with the record's.
+void gdi_surface_open(Env& env) {
+    StubMemory m;
+    if (!load_stub(env, m) || !m.address) return;
+    Device device;
+    device.shell.memory = &m;
+    HRESULT hr = open_device(env, device, stub_allocate, stub_free, nullptr, stub_adopt);
+    checkf(hr == S_OK && device.context, "gdi open: device context in RuntimeBacked mode (hr %08lx)",
+           static_cast<unsigned long>(hr));
+    if (hr != S_OK) return;
+    Surface s;
+    s.width = 624;
+    s.height = 441;
+    UINT pitch = 0;
+    UINT64 backing = 0;
+    const bool layout = engine_layout(device, s, pitch, backing);
+    checkf(layout && pitch == 2560 && backing == 1138688,
+           "gdi open: the engine's linear image of 624x441 BGRA8 has the lab's pitch 2560 and 1138688 bytes (pitch "
+           "%u, %llu bytes)",
+           pitch, static_cast<unsigned long long>(backing));
+    if (!layout) return;
+    const D3DKMT_HANDLE handle = 0x50000003u;
+    const UINT want_flags = engine_ddi::kMemoryDedicated | engine_ddi::kMemoryShareable |
+                            engine_ddi::kMemoryLinearSurface;
+
+    // The control: the records that the create of the same surface publishes open, as they did before the fix.
+    {
+        s.pitch = pitch;
+        s.size = backing;
+        BC250_WDDM_ALLOCATION_PRIVATE allocation{};
+        BC250_SURFACE_RESOURCE_PRIVATE resource{};
+        Opened opened;
+        const uint32_t adoptions = m.adoptions;
+        hr = records(s, allocation, resource)
+                 ? open_surface(env, device, handle, allocation, resource, sizeof(resource), sizeof(allocation), opened)
+                 : E_FAIL;
+        checkf(hr == S_OK && m.adoptions == adoptions + 1 && m.last_adopt_byte_size == backing,
+               "gdi open: the records of the shared create of 624x441 BGRA8 open (hr %08lx, %u adopts, %llu bytes)",
+               static_cast<unsigned long>(hr), m.adoptions - adoptions,
+               static_cast<unsigned long long>(m.last_adopt_byte_size));
+        if (hr == S_OK) destroy_opened(env, device, opened);
+    }
+
+    // The kernel driver's blob of the same surface: Width 624, Height 441, Pitch 2560 (the width rounded up to 64
+    // pixels, DcnPrimaryPitch), D3DDDIFMT_A8R8G8B8 (21), Size 2560 * 444 = 1136640, GDI1 Type 1, Flags 0.
+    BC250_GDI_PRIVATE gdi{};
+    gdi.Surface.Magic = BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
+    gdi.Surface.Version = 1;
+    gdi.Surface.Width = 624;
+    gdi.Surface.Height = 441;
+    gdi.Surface.Pitch = 2560;
+    gdi.Surface.Format = 21;
+    gdi.Surface.Size = 1136640;
+    gdi.Magic = BC250_GDI_PRIVATE_MAGIC;
+    gdi.Type = BC250_SHARED_GDI_TEXTURE;
+    static_assert(sizeof(gdi) == 48, "the measured blob is 48 bytes");
+    // The empty resource record in both forms: the lab's runtime gave a pointer with 0 bytes (the open declined at
+    // "record length", not at "record arguments"), and nothing in the DDI says that a runtime cannot give none.
+    const BC250_SURFACE_RESOURCE_PRIVATE empty{};
+    for (const void* record : {static_cast<const void*>(&empty), static_cast<const void*>(nullptr)}) {
+        Opened opened;
+        const uint32_t adoptions = m.adoptions, allocations = m.allocations;
+        hr = open_blobs(env, device, handle, &gdi, sizeof(gdi), record, 0, opened);
+        checkf(hr == S_OK && m.adoptions == adoptions + 1 && m.allocations == allocations &&
+                   m.last_adopt_handle == handle && m.last_adopt_flags == want_flags &&
+                   m.last_adopt_byte_size == backing,
+               "gdi open: a 48-byte GDI texture blob with no resource record (%s) opens with one adopt of 1138688 "
+               "bytes (hr %08lx, %u adopts, %u allocations, flags %x, %llu bytes)",
+               record ? "a pointer to 0 bytes" : "no pointer", static_cast<unsigned long>(hr),
+               m.adoptions - adoptions, m.allocations - allocations, m.last_adopt_flags,
+               static_cast<unsigned long long>(m.last_adopt_byte_size));
+        if (hr == S_OK) {
+            D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 existing{};
+            env.core.pfnCheckExistingResourceAllocationInfo(device.h(), opened.hres(), &existing);
+            checkf(existing.ResourceDataSize == backing,
+                   "gdi open: the opened GDI texture answers %llu bytes (%llu)", static_cast<unsigned long long>(backing),
+                   static_cast<unsigned long long>(existing.ResourceDataSize));
+            D3DKMT_HANDLE destination = 0;
+            const HRESULT named = engine_ddi::present_destination_allocation(device.context, opened.hres(), &destination);
+            checkf(named == S_OK && destination,
+                   "gdi open: the opened GDI texture is a Present destination (hr %08lx, handle %08x)",
+                   static_cast<unsigned long>(named), destination);
+            destroy_opened(env, device, opened);
+        }
+    }
+
+    // The 32-byte form of the compositor's hosted surfaces, with the size that a creator of ours publishes.
+    {
+        BC250_WDDM_ALLOCATION_PRIVATE lb7a = gdi.Surface;
+        lb7a.Size = backing;
+        Opened opened;
+        const uint32_t adoptions = m.adoptions;
+        hr = open_blobs(env, device, handle, &lb7a, sizeof(lb7a), &empty, 0, opened);
+        checkf(hr == S_OK && m.adoptions == adoptions + 1,
+               "gdi open: a 32-byte LB7A blob with no resource record opens (hr %08lx, %u adopts)",
+               static_cast<unsigned long>(hr), m.adoptions - adoptions);
+        if (hr == S_OK) destroy_opened(env, device, opened);
+    }
+
+    // The refusals, each with nothing adopted and its own name on the refusal line.
+    struct Refusal {
+        const char* what;
+        BC250_GDI_PRIVATE blob;
+        UINT bytes;
+        const char* why;
+    };
+    auto changed = [&](void (*edit)(BC250_GDI_PRIVATE&)) {
+        BC250_GDI_PRIVATE b = gdi;
+        edit(b);
+        return b;
+    };
+    const Refusal refusals[] = {
+        {"a GDI staging surface (type 3)", changed([](BC250_GDI_PRIVATE& b) { b.Type = 3; }), 48,
+         BC250_SHARED_SURFACE_WHY_BARE_TYPE},
+        {"a GDI blob with flags", changed([](BC250_GDI_PRIVATE& b) { b.Flags = 1; }), 48,
+         BC250_SHARED_SURFACE_WHY_BARE_TYPE},
+        {"a GDI blob without the GDI1 magic", changed([](BC250_GDI_PRIVATE& b) { b.Magic = 0; }), 48,
+         BC250_SHARED_SURFACE_WHY_BARE_TYPE},
+        {"a blob of 47 bytes", gdi, 47, BC250_SHARED_SURFACE_WHY_BARE_LENGTH},
+        {"an LB7A v2 blob", changed([](BC250_GDI_PRIVATE& b) { b.Surface.Version = 2; }), 48,
+         BC250_SHARED_SURFACE_WHY_ALLOCATION_RECORD},
+        {"a pitch that does not hold the row", changed([](BC250_GDI_PRIVATE& b) { b.Surface.Pitch = 2048; }), 48,
+         BC250_SHARED_SURFACE_WHY_ALLOCATION_GEOMETRY},
+        {"a size below the rows", changed([](BC250_GDI_PRIVATE& b) { b.Surface.Size = 2560ull * 440; }), 48,
+         BC250_SHARED_SURFACE_WHY_ALLOCATION_GEOMETRY},
+        {"an edge above 16384", changed([](BC250_GDI_PRIVATE& b) { b.Surface.Height = 16385; }), 48,
+         BC250_SHARED_SURFACE_WHY_EXTENT},
+        // The rows of the record but not the four-row blocks of the engine's image: the geometry rule admits it,
+        // the comparison with the engine's image refuses it.
+        {"a size below the engine's image", changed([](BC250_GDI_PRIVATE& b) { b.Surface.Size = 2560ull * 441; }),
+         48, "layout agreement"},
+    };
+    const char* const prefix = "OpenHeapAndResource:";
+    for (const Refusal& r : refusals) {
+        Opened opened;
+        const uint32_t adoptions = m.adoptions, allocations = m.allocations;
+        const size_t lines = refusal_lines(prefix).size();
+        hr = open_blobs(env, device, handle, &r.blob, r.bytes, &empty, 0, opened);
+        const std::vector<std::string> after = refusal_lines(prefix);
+        const std::string want = std::string("declined at ") + r.why + ";";
+        const bool named = after.size() == lines + 1 && after.back().find(want) != std::string::npos;
+        checkf(hr == E_OUTOFMEMORY && m.adoptions == adoptions && m.allocations == allocations && named,
+               "gdi open: %s is refused at \"%s\" with nothing adopted (hr %08lx, %u adopts, line %s)", r.what, r.why,
+               static_cast<unsigned long>(hr), m.adoptions - adoptions,
+               after.size() > lines ? after.back().c_str() : "none");
+        if (SUCCEEDED(hr)) destroy_opened(env, device, opened);
+    }
+
+    checkf(m.frees == m.allocations + m.adoptions,
+           "gdi open: every adopted import came back through free_memory (%u frees, %u adopts)", m.frees,
+           m.adoptions);
+    uint32_t live = UINT32_MAX;
+    hr = engine_ddi::destroy_device_context(device.context, &live);
+    checkf(hr == S_OK && live == 0 && !device.shell.device_errors,
+           "gdi open: destroy_device_context S_OK with no live object and no error (hr %08lx, %u live)",
+           static_cast<unsigned long>(hr), live);
 }
 
 // BD-373: a buffer of the ENGINE LAYOUT form (S26R + BC2A), as the D3D11 shell creates it. The open adopts the whole

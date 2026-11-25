@@ -983,10 +983,17 @@ HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* a
     // the three cross-API failures of round 1 all declined here. The refusal line below already printed the record's
     // own length and version, so the name puts the reason first rather than adding information (BD-075 round 2,
     // 2026-10-06). The strings are the header's literals, so the pointer outlives this call.
+    // BD-408: an empty resource record means that the creator of the allocation gave the runtime none, and then the
+    // LB7A blob is the whole description. A D3D9On12 windowed Present opens such a surface: a standard GDI texture
+    // that the kernel driver described (48 bytes, LB7A and GDI1). The strict decode declined it at "record length".
     *why = BC250_SHARED_SURFACE_WHY_ARGUMENTS;
     BC250_SHARED_SURFACE shared{};
-    switch (Bc250SharedSurfaceDecodeWhy(args->pPrivateDriverData, args->PrivateDriverDataSize,
-                                        first.pPrivateDriverData, first.PrivateDriverDataSize, &shared, why)) {
+    const bool bare = args->PrivateDriverDataSize == 0;
+    const int decoded =
+        bare ? Bc250SharedSurfaceDecodeBareWhy(first.pPrivateDriverData, first.PrivateDriverDataSize, &shared, why)
+             : Bc250SharedSurfaceDecodeWhy(args->pPrivateDriverData, args->PrivateDriverDataSize,
+                                           first.pPrivateDriverData, first.PrivateDriverDataSize, &shared, why);
+    switch (decoded) {
     case BC250_SHARED_SURFACE_OK:
         break;
     case BC250_SHARED_SURFACE_FORMAT:
@@ -1013,8 +1020,14 @@ HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* a
     // that, STATE.md), and a shared surface outlives the build that made it. So this is a cross-build check, not
     // an assertion about our own code, and a divergence names both numbers on one line instead of showing wrong
     // pixels (BD-075 review, 2026-10-06).
+    // The bytes that the allocation has. A creator of ours publishes a page-rounded size. The kernel driver
+    // publishes a GDI texture's size as the pitch times the height rounded up to four rows (DcnSharedTextureLayout)
+    // and creates the allocation with that size rounded up to a page (wddm.c, CreateAllocation, ROUND_TO_PAGES), so a
+    // bare record is compared with the page-rounded size. A record with a resource record keeps its own size.
     *why = "layout agreement";
-    if (surface.info.RowPitch != shared.Pitch || surface.backing_size > shared.Size) {
+    const uint64_t allocated = bare ? (uint64_t{shared.Size} + kLinearPage - 1) & ~uint64_t{kLinearPage - 1}
+                                    : uint64_t{shared.Size};
+    if (surface.info.RowPitch != shared.Pitch || surface.backing_size > allocated) {
         log_line("shared open: the engine's linear image of this description has pitch %llu and needs %llu bytes; the "
                  "record says pitch %lu and %llu bytes",
                  static_cast<unsigned long long>(surface.info.RowPitch),
