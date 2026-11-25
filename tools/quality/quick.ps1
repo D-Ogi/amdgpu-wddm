@@ -819,6 +819,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='vram-geometry';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace)}
   # BD-341: the top-of-VRAM check before the fix (FramebufferLength, 0 without a firmware display) must fail it.
   @{n='vram-geometry-framebuffer-length';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace,'-RangeMutation','framebuffer-length');Fails=$true}
+  # The 2 MiB layout of a small carve-out (LargePagesSmallCarveout): a segment base rounded to 64 KiB only, and a
+  # translation context that keeps level 2 on that base, must each fail it.
+  @{n='vram-geometry-huge-no-round';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace,'-LayoutMutation','huge-no-round');Fails=$true}
+  @{n='vram-geometry-huge-both-levels';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace,'-LayoutMutation','huge-both-levels');Fails=$true}
   @{n='guard-start';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace)}
   # BD-122: the start record, and the four pre-fix behaviours as its controls, one per requirement.
   @{n='start-record';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace)}
