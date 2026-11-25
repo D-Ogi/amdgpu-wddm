@@ -829,6 +829,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   # The bound of a native virtual fill is the size VidMm has. The control is the bound of the first 64 KiB build.
   @{n='native-bound';s='driver\kmd\test\run_native_bound.ps1';a=@('-Root',$Workspace)}
   @{n='native-bound-blob-size';s='driver\kmd\test\run_native_bound.ps1';a=@('-Root',$Workspace,'-Mutation','blob-size');Fails=$true}
+  # Both on one start: the 2 MiB layout with 64 KiB host pages, and the three other arms. The control is the 64 KiB
+  # sizes giving an allocation the 64 KiB alignment whatever it had, which takes a VRAM allocation off its 2 MiB offset.
+  @{n='large-pages-combined';s='driver\kmd\test\run_large_pages_combined.ps1';a=@('-Root',$Workspace)}
+  @{n='large-pages-combined-sizes-drop-2mib';s='driver\kmd\test\run_large_pages_combined.ps1';a=@('-Root',$Workspace,'-Mutation','sizes-drop-2mib');Fails=$true}
   @{n='guard-start';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace)}
   # BD-122: the start record, and the four pre-fix behaviours as its controls, one per requirement.
   @{n='start-record';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace)}

@@ -1099,6 +1099,18 @@
         "host"
       ]
     },
+    "large-pages-combined": {
+      "inputs": [
+        "host",
+        "blob-reader"
+      ]
+    },
+    "large-pages-combined-sizes-drop-2mib": {
+      "inputs": [
+        "host",
+        "blob-reader"
+      ]
+    },
     "guard-start": {
       "inputs": [
         "host"
