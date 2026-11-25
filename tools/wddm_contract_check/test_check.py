@@ -196,6 +196,7 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiRecommendMonitorModes = Bc250RecommendMonitorModes;
     Data->DxgkDdiQueryVidPnHWCapability = Bc250QueryVidPnHWCapability;
     Data->DxgkDdiStopDeviceAndReleasePostDisplayOwnership = Bc250StopDeviceAndReleasePostDisplayOwnership;
+    Data->DxgkDdiQueryInterface = Bc250QueryInterface;
 }
 """
 
@@ -690,6 +691,17 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
             self.assertIn(old, wddm)
             result, _ = statuses(wddm=wddm.replace(old, new))
             self.assertOnlyViolation(result, "R48-MPO3-FLIP-RETIRED-BY-PRESENTID")
+
+    def test_display_table_without_query_interface(self):
+        """BD-410: a display+render table with no DxgkDdiQueryInterface has no OPM interface for dxgkrnl."""
+        result, _ = statuses(wddm=drop(GOOD_WDDM, "Data->DxgkDdiQueryInterface"))
+        self.assertOnlyViolation(result, "R52-QUERYINTERFACE-FOR-OPM")
+
+    def test_render_only_table_needs_no_query_interface(self):
+        """Without DxgkDdiPresent there is no video output, so the OPM rule does not arise."""
+        wddm = drop(drop(GOOD_WDDM, "Data->DxgkDdiQueryInterface"), "Data->DxgkDdiPresent")
+        result, _ = statuses(wddm=wddm)
+        self.assertEqual(check.NA, result["R52-QUERYINTERFACE-FOR-OPM"])
 
     def test_wddm29_without_type16(self):
         """At 2.2 or later a refused type 16 makes dxgkrnl set VirtualModeSupport by itself."""

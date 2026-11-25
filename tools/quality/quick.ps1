@@ -919,6 +919,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
 @{n='start-health-no-output-releases-requests';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoOutputReleasesRequests');Fails=$true}
   @{n='gfx-pipeline';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly')}
   @{n='vmid-pool';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace)}
+  # BD-410: the OPM answers and the DxgkDdiQueryInterface log rule; each control must fail by a FAIL line.
+  @{n='opm-policy';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace)}
   @{n='keep-prune';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace)}
   @{n='keep-prune-ignore-order';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace,'-IgnoreOrder');Fails=$true}
   @{n='log-rate';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace)}
@@ -1005,6 +1007,12 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='submit-watchdog-rearm-outside-lock';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-RearmOutsideLock');Fails=$true;Step='source checks'}
   @{n='vmid-pool-ignore-retirement';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreRetirement');Fails=$true}
   @{n='vmid-pool-ignore-compute-ring';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreComputeRing');Fails=$true}
+  @{n='opm-policy-any-guid';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','any-guid');Fails=$true}
+  @{n='opm-policy-any-version';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','any-version');Fails=$true}
+  @{n='opm-policy-any-size';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','any-size');Fails=$true}
+  @{n='opm-policy-stale-handle';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','stale-handle');Fails=$true}
+  @{n='opm-policy-refuse-success';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','refuse-success');Fails=$true}
+  @{n='opm-policy-log-every';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','log-every');Fails=$true}
   # The gfx-pipeline controls check their own pinned CHECK failure counts (run_gfx_pipeline.ps1) and exit 0 when the
   # control failed as required; a crash, a deadline or a build error fails them.
   @{n='gfx-pipeline-idle-only';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-IdleOnlyPresent')}

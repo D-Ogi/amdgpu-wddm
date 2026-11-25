@@ -38,6 +38,8 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     DpAudioInitialize(device);
     ModesetInitialize(device);
     ConnectorInitialize(device);
+    OpmInitialize(device);                // BD-410: the OPM interface's lock
+    QueryInterfaceInitialize(device);     // and the DxgkDdiQueryInterface log's
     ExInitializeFastMutex(&device->GartLock);
     KeInitializeMutex(&device->PspSessionLock,0);
     KeInitializeMutex(&device->DcnScanoutLock,0);      // BD-289: the flip target mapping of the CPU present blit
