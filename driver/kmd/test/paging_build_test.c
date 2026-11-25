@@ -75,6 +75,7 @@ typedef struct {
     volatile LONG PagingDmaVaObserved, PagingDmaVaMatched;
     ULONGLONG PagingDmaLastVa, PagingDmaLastRoot, PagingDmaLastPa, PagingDmaLastCpu;
     volatile LONG AdapterResetWindow, WindowDdiCalls, PagingEvictionNotices;   /* TDR recovery S1 */
+    volatile LONG64 PagingPerPageFillCalls, PagingPerPageTransferCalls, PagingPerPageBytes;
 } BC250_WDDM;
 #define BC250_WDDM_WINDOW_LOG_CALLS 64
 typedef struct { int Unused; } BC250_DEVICE;
@@ -99,7 +100,11 @@ static struct {
     ULONGLONG moved;            /* fill/transfer: the bytes built */
     UINT progress;              /* fill/transfer: the pages it advanced MultipassOffset by */
     NTSTATUS vidmm, publish;    /* VidMmUpdatePageTable, WddmPublishPagingRecord */
+    int native;                 /* virtual fill/transfer: WddmNativeAllocation admits it, and the native builder */
+    NTSTATUS native_status;     /* answers this, with native_moved bytes. 0 (every older case): not admitted */
+    ULONGLONG native_moved;
 } mock;
+static unsigned native_calls;
 static unsigned builder_calls, vidmm_calls, publishes, published_words, journal_updates, journal_notes;
 static ULONG journal_start, journal_count, journal_kind, journal_failure; static BOOLEAN journal_cpu;
 static ULONGLONG journal_bytes;
@@ -128,10 +133,14 @@ static void WddmNoteKind(BC250_WDDM_KIND* Table, ULONG Value, volatile LONG* Ove
 static BOOLEAN WddmFirstCalls(BC250_WDDM* Wddm, int Ddi) { (void)Wddm; (void)Ddi; return FALSE; }
 static BC250_WDDM_OBJECT* WddmObject(HANDLE h, unsigned Magic) { (void)Magic; return h ? &context_state : NULL; }
 static BOOLEAN WddmNativeAllocation(BC250_DEVICE* d, BC250_WDDM_OBJECT* c, DXGKARG_BUILDPAGINGBUFFER* b, BOOLEAN f)
-{ (void)d; (void)c; (void)b; (void)f; return FALSE; }
+{ (void)d; (void)c; (void)b; (void)f; return (BOOLEAN)(mock.native != 0); }
 static NTSTATUS WddmBuildNativeVirtual(BC250_DEVICE* d, ULONGLONG r, BOOLEAN f, DXGKARG_BUILDPAGINGBUFFER* b,
                                        ULONGLONG* m)
-{ (void)d; (void)r; (void)f; (void)b; *m = 0; return STATUS_NOT_SUPPORTED; }
+{
+    (void)d; (void)r; (void)f; (void)b;
+    if (!mock.native) { *m = 0; return STATUS_NOT_SUPPORTED; }
+    ++native_calls; *m = mock.native_moved; return mock.native_status;
+}
 /* Every fill and transfer builder: the bytes and pages of the programmed slice, then its status. */
 static NTSTATUS MockSlices(DXGKARG_BUILDPAGINGBUFFER* b, ULONGLONG* Moved)
 {
@@ -202,6 +211,7 @@ static void Fresh(DXGK_BUILDPAGINGBUFFER_OPERATION Operation, DXGK_PAGETABLEUPDA
     memset(&mock, 0, sizeof(mock));
     memset(&build, 0, sizeof(build));
     builder_calls = vidmm_calls = publishes = published_words = journal_updates = journal_notes = 0;
+    native_calls = 0;
     journal_start = journal_count = journal_kind = journal_failure = 0; journal_cpu = FALSE; journal_bytes = 0;
     logs = 0;
     build.Operation = Operation;
@@ -365,6 +375,32 @@ int main(void)
             mock.moved = 3000 * page; mock.progress = 3000;
             CHECK(Ddi() == STATUS_SUCCESS && build.MultipassOffset == 5528 && wddm_state.PagingContractRefusals == 0);
             CHECK(journal_notes == 1 && journal_failure == 0);
+        }
+    }
+    /* Which path a virtual fill or transfer took is counted (hardware result 2026-11-25: fills that the native
+     * path did not admit went page by page, and no counter said so). Admitted and built natively: the page by page
+     * builder is not called and its counters stay 0. Not admitted (a range outside the bound of the allocation),
+     * or admitted and declined by the native builder: one call and its bytes are counted. */
+    {
+        static const DXGK_BUILDPAGINGBUFFER_OPERATION ops[] = { DXGK_OPERATION_VIRTUAL_FILL, DXGK_OPERATION_VIRTUAL_TRANSFER };
+        unsigned i;
+        for (i = 0; i < RTL_NUMBER_OF(ops); ++i) {
+            const volatile LONG64* calls = i ? &wddm_state.PagingPerPageTransferCalls : &wddm_state.PagingPerPageFillCalls;
+            const volatile LONG64* other = i ? &wddm_state.PagingPerPageFillCalls : &wddm_state.PagingPerPageTransferCalls;
+            Fresh(ops[i], DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 0);
+            mock.native = 1; mock.native_status = STATUS_SUCCESS; mock.native_moved = 32 * page;
+            mock.status = STATUS_INVALID_PARAMETER;     /* a page by page builder call would fail the DDI */
+            CHECK(Ddi() == STATUS_SUCCESS && native_calls == 1 && builder_calls == 0);
+            CHECK(*calls == 0 && *other == 0 && wddm_state.PagingPerPageBytes == 0 && wddm_state.PagingBytesMoved == 32 * page);
+            Fresh(ops[i], DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 0);
+            mock.moved = 12 * page; mock.progress = 12;                 /* not admitted: the control */
+            CHECK(Ddi() == STATUS_SUCCESS && native_calls == 0 && builder_calls == 1);
+            CHECK(*calls == 1 && *other == 0 && wddm_state.PagingPerPageBytes == 12 * page);
+            Fresh(ops[i], DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 0);
+            mock.native = 1; mock.native_status = STATUS_NOT_SUPPORTED;  /* admitted, declined by the native builder */
+            mock.moved = 12 * page; mock.progress = 12; mock.status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+            CHECK(Ddi() == STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER && native_calls == 1 && builder_calls == 1);
+            CHECK(*calls == 1 && wddm_state.PagingPerPageBytes == 12 * page && wddm_state.PagingInsufficientBuffer == 1);
         }
     }
     /* TDR recovery S1: after a successful ResetFromTimeout VidMm reports each eviction as a TRANSFER of size 0

@@ -41,7 +41,7 @@ typedef struct {
     struct bc250_pte_context Pte;
     ULONGLONG SegmentPhysical, SegmentLength;
     volatile LONG64 Updates64K, Pages64KFragment, Pages64KPlain, Pages64KZero, Pages64KInvalid;
-    volatile LONG64 Tables64K, Tables64KSplit, Tables64KReused, Refused64K;
+    volatile LONG64 Tables64K, Tables64KSplit, Tables64KReused, Refused64K, Asked64K;
     TEST_BITMAP Table64K;
     PULONG Table64KBits;
 } BC250_VIDMM;
@@ -171,6 +171,11 @@ int main(void)
     u = Update(0, 5, 3, ptes, 1);
     CHECK(VidMmPageTableEntrySlots(&u) == 1);
     CHECK(!VidMmEncodePageTable(&u, 0, 3, &physical, entries) && g_VidMm.Refused64K == 1 && g_Counted == 0);
+    // Every encode call with the flag is counted before any check, so a refused or repeated one shows too.
+    CHECK(g_VidMm.Asked64K == 1);
+    CHECK(!VidMmEncodePageTable(&u, 0, 3, &physical, entries) && g_VidMm.Asked64K == 2);
+    u.Flags.Use64KBPages = 0;
+    CHECK(VidMmEncodePageTable(&u, 0, 3, &physical, entries) && g_VidMm.Asked64K == 2);    // a 4 KB update is not one
 
     // 3. A 4 KB table is what it was, with the switch on or off: 512 entries, one slot each.
     for (i = 0; i < 2; i++) {

@@ -97,10 +97,13 @@ typedef struct _BC250_VIDMM {
     //   Tables64KReused   marked table pages that were filled or took the first update of a new 4 KB table
     //   Level1Tables64K   level 1 entries with PageTablePageSize = 64 KB (an observation, as EncodedLarge)
     //   Refused64K        refused entries and calls with Use64KBPages, on any start
+    //   Asked64K          encode calls with Use64KBPages, on any start and before any check: each pass of a
+    //                     multipass GPU update is one. Far above Updates64K: updates that are built again and
+    //                     again and never published
     //   Copies64KRefused  CopyPageTableEntries ranges refused because a table page is marked
     volatile LONG64 Updates64K, Pages64KFragment, Pages64KPlain, Pages64KZero, Pages64KInvalid;
     volatile LONG64 Tables64K, Tables64KSplit, Tables64KReused;
-    volatile LONG64 Level1Tables64K, Refused64K, Copies64KRefused;
+    volatile LONG64 Level1Tables64K, Refused64K, Copies64KRefused, Asked64K;
     // One bit for each page of the table segment: the page holds entries of a 64 KiB update. Set and cleared
     // under the exclusive CpuUpdateLock. NULL unless Pte.system_64k and Write. It feeds the counters above and
     // the one refusal of VidMmCommitPagingCopy; no translation depends on it.
@@ -447,6 +450,7 @@ static BOOLEAN VidMmRefuse64K(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upda
 {
     BC250_VIDMM* vm=&g_VidMm;
     if (!Update->Flags.Use64KBPages) return FALSE;
+    InterlockedIncrement64(&vm->Asked64K);
     if (vm->Pte.system_64k && Update->PageTableLevel == 0 && Update->pPageTableEntries64KB == NULL) return FALSE;
     if (InterlockedIncrement64(&vm->Refused64K) <= BC250_VIDMM_LOG_REFUSALS && KeGetCurrentIrql()<=DISPATCH_LEVEL)
         GuardLog("vidmm: %s 64 KiB update refused: level %u start %u count %u second array %c reported %c",
@@ -1111,6 +1115,7 @@ void VidMmSummary(void)
                      vm->Updates64K,vm->Tables64K,vm->Tables64KSplit,vm->Tables64KReused);
             GuardLog("vidmm summary: 64 KiB tables: %lld level 1 entries, %lld copies refused",
                      vm->Level1Tables64K,vm->Copies64KRefused);
+            GuardLog("vidmm summary: 64 KiB updates: %lld encode calls (all passes, before any check)",vm->Asked64K);
         } else if (refused64k)
             GuardLog("vidmm summary: 64 KiB updates refused %lld", refused64k);
     }

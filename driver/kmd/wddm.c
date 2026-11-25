@@ -779,8 +779,19 @@ typedef struct _BC250_WDDM {
     volatile LONG UmdAllocsLocalOnly;
     volatile LONG UmdAllocsShared;
     volatile LONG UmdAllocsAperture;
-    // The UMD allocations that were sized and aligned to 64 KiB for host pages of that size (Device->SystemPages64K).
-    volatile LONG UmdAllocs64K;
+    // 64 KiB sizes (Device->SystemSizes64K): the UMD allocations of 64 KiB or more that may live in the aperture,
+    // how many of them grew and by how many bytes in all, and how many had their alignment raised. Only a grown
+    // one has a VidMm size that is not the size its creator asked for.
+    volatile LONG UmdAllocs64K, UmdAllocs64KGrown, UmdAllocs64KAligned;
+    volatile LONG64 UmdAllocs64KGrownBytes;
+    // VIRTUAL_FILL and VIRTUAL_TRANSFER calls that the native SDMA path did not take and that went to the page by
+    // page path (WddmBuildVirtualFill, WddmBuildCapturedVirtualTransfer), the bytes those calls moved, and the
+    // calls whose range was outside the bound of their allocation (WddmNativeAllocation), which is one reason for
+    // the first two. The page by page path maps each host page through the two-page GART window, with a window
+    // update and a packet for each page (gfx.c PagingEmit), where the native path moves up to 4 MiB in one packet.
+    // A run in which every fill and transfer is native has 0 in all four; its speed against the native path is
+    // not measured.
+    volatile LONG64 PagingPerPageFillCalls, PagingPerPageTransferCalls, PagingPerPageBytes, PagingOutsideBound;
     // BD-210: the UMD allocations created without a CPU view (UmdBlobAllocCpuVisible 0), and the bytes
     // created on each side. Created, not live: the summary says how much a session asked for of each.
     volatile LONG UmdAllocsGpuOnly;
@@ -3646,7 +3657,8 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->UmdAllocsAperture);
     // A line of its own again, and only on a start with 64 KiB host pages: the lines above keep their text.
     if (Wddm->UmdAllocs64K != 0)
-        GuardLog("wddm summary: umd allocations sized and aligned to 64 KiB: %ld", Wddm->UmdAllocs64K);
+        GuardLog("wddm summary: 64 KiB sizes: %ld umd allocations eligible, %ld grown by %lld bytes, %ld alignment raised",
+                 Wddm->UmdAllocs64K, Wddm->UmdAllocs64KGrown, Wddm->UmdAllocs64KGrownBytes, Wddm->UmdAllocs64KAligned);
     // BD-210, a line of its own for the same reason.
     GuardLog("wddm summary: umd cpu view: gpu-only %ld (%lld MiB), cpu-visible %ld (%lld MiB)",
              Wddm->UmdAllocsGpuOnly, (long long)(Wddm->UmdGpuOnlyBytes >> 20),
@@ -3791,6 +3803,10 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->PagingDmaVaBuilds,Wddm->PagingDmaZeroVaBuilds,Wddm->PagingDmaVaObserved);
     GuardLog("wddm summary: native DMA transfers %lld fills %lld bytes %lld",
              Wddm->PagingNativeTransfers,Wddm->PagingNativeFills,Wddm->PagingNativeBytes);
+    // The other path of the same two operations. A line of its own: the line above keeps its text.
+    GuardLog("wddm summary: per-page path: fill calls %lld, transfer calls %lld, bytes %lld, off bound %lld",
+             Wddm->PagingPerPageFillCalls,Wddm->PagingPerPageTransferCalls,Wddm->PagingPerPageBytes,
+             Wddm->PagingOutsideBound);
     GuardLog("wddm: native PTE copies gate%u ranges%lld",Wddm->NativePteCopies,Wddm->PagingNativePtes);
     GuardLog("wddm summary: native DMA exact disjoint checks %lld",Wddm->PagingDmaGapProofs);
     GuardLog("wddm summary: DMA mapping matches %ld/%ld last VA0x%llX root0x%llX PA0x%llX CPU_PA0x%llX",
@@ -6681,11 +6697,20 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
             (placement.supported & (1ul << (BC250_WDDM_SEGMENT_APERTURE - 1))) != 0) {
             unsigned long long size = info->Size;
             unsigned long alignment = info->Alignment;
-            (void)PagingHostPage64KSize(&size, &alignment);
+            const int changed = PagingHostPage64KSize(&size, &alignment);
+            if (wddm != NULL) {
+                InterlockedIncrement(&wddm->UmdAllocs64K);
+                if (changed & PAGING_HOST_64K_ALIGNED) InterlockedIncrement(&wddm->UmdAllocs64KAligned);
+                if (changed & PAGING_HOST_64K_GREW) {
+                    InterlockedAdd64(&wddm->UmdAllocs64KGrownBytes, (LONG64)(size - info->Size));
+                    if (InterlockedIncrement(&wddm->UmdAllocs64KGrown) <= 4)
+                        GuardLog("wddm: 64 KiB sizes: umd alloc %llu bytes heap 0x%lX grown to %llu, align %lu",
+                                 view.bytes, view.heap, size, alignment);
+                }
+            }
             info->Size = (SIZE_T)size;
             info->Alignment = (UINT)alignment;
             object->UmdVidMmBytes = info->Size;
-            if (wddm != NULL) InterlockedIncrement(&wddm->UmdAllocs64K);
         }
         info->EvictionSegmentSet = 0;
         info->PhysicalAdapterIndex = 0;
@@ -7180,7 +7205,14 @@ static BOOLEAN WddmNativeAllocation(BC250_DEVICE* Device, BC250_WDDM_OBJECT* Con
     // here, every allocation that WddmCreateAdmit had grown to a multiple of 64 KiB left the native path for the
     // page by page one (hardware result 2026-11-25: the first 64 KiB build).
     size=allocation->UmdAlloc ? allocation->UmdVidMmBytes : allocation->Allocation.Size;
-    return (BOOLEAN)(PagingRangeInAllocation(size,offset,bytes)!=0);
+    if(!PagingRangeInAllocation(size,offset,bytes)) {
+        BC250_WDDM* wddm=(BC250_WDDM*)Device->Wddm;
+        if(wddm && InterlockedIncrement64(&wddm->PagingOutsideBound)<=4 && KeGetCurrentIrql()<=DISPATCH_LEVEL)
+            GuardLog("wddm: virtual %s outside its bound: at %llu bytes %llu bound %llu, per-page path",
+                     Fill?"fill":"transfer",offset,bytes,size);
+        return FALSE;
+    }
+    return TRUE;
 }
 
 static NTSTATUS WddmPublishPagingRecordCore(_Inout_ DXGKARG_BUILDPAGINGBUFFER* Build,
@@ -8027,8 +8059,11 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         NTSTATUS status=STATUS_NOT_SUPPORTED;
         if(WddmNativeAllocation((BC250_DEVICE*)hAdapter,context,pBuildPagingBuffer,TRUE))
             status=WddmBuildNativeVirtual((BC250_DEVICE*)hAdapter,context->RootPhysical,TRUE,pBuildPagingBuffer,&moved);
-        if(status==STATUS_NOT_SUPPORTED)
+        if(status==STATUS_NOT_SUPPORTED) {
+            InterlockedIncrement64(&wddm->PagingPerPageFillCalls);
             status=WddmBuildVirtualFill((BC250_DEVICE*)hAdapter,context?context->RootPhysical:0,pBuildPagingBuffer,&moved);
+            InterlockedAdd64(&wddm->PagingPerPageBytes,(LONG64)moved);
+        }
         if (moved) {
             InterlockedIncrement(&wddm->PagingFillsBuilt);
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
@@ -8047,9 +8082,12 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         NTSTATUS status=STATUS_NOT_SUPPORTED;
         if(WddmNativeAllocation((BC250_DEVICE*)hAdapter,context,pBuildPagingBuffer,FALSE))
             status=WddmBuildNativeVirtual((BC250_DEVICE*)hAdapter,context->RootPhysical,FALSE,pBuildPagingBuffer,&moved);
-        if(status==STATUS_NOT_SUPPORTED)
+        if(status==STATUS_NOT_SUPPORTED) {
+            InterlockedIncrement64(&wddm->PagingPerPageTransferCalls);
             status=WddmBuildCapturedVirtualTransfer((BC250_DEVICE*)hAdapter,context?context->RootPhysical:0,
                 context?&context->Captures:NULL,pBuildPagingBuffer,&moved);
+            InterlockedAdd64(&wddm->PagingPerPageBytes,(LONG64)moved);
+        }
         if (moved) {
             DXGK_MEMORY_TRANSFER_DIRECTION direction=pBuildPagingBuffer->TransferVirtual.TransferDirection;
             WddmCountTransfer(wddm,direction==DXGK_MEMORY_TRANSFER_LOCAL_TO_SYSTEM ? BC250WddmXferVirtualToSystem :
