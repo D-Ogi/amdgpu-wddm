@@ -276,6 +276,69 @@ int main() {
         check(is(why, BC250_SHARED_SURFACE_WHY_EXTENT), "why: an edge past 16384 in both records is \"record extent\"");
     }
 
+    // BD-408: the bare form, a surface with no resource record. The blob is the one measured on unit A (2026-11-25,
+    // a D3D9On12 windowed Present): the kernel driver's GDI texture of 624x441, LB7A v1 and the GDI1 trailer, 48
+    // bytes. Pitch 2560 is the width rounded up to 64 pixels, Size 1136640 is 2560 times 444 rows (the height rounded
+    // up to four rows, DcnSharedTextureLayout), Format D3DDDIFMT_A8R8G8B8 (21), GDI1 Type 1 (a GDI texture), Flags 0.
+    {
+        const unsigned char kGdi[48] = {
+            0x4C, 0x42, 0x37, 0x41, 0x01, 0x00, 0x00, 0x00, 0x70, 0x02, 0x00, 0x00, 0xB9, 0x01, 0x00, 0x00,
+            0x00, 0x0A, 0x00, 0x00, 0x15, 0x00, 0x00, 0x00, 0x00, 0x58, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x47, 0x44, 0x49, 0x31, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        };
+        BC250_SHARED_SURFACE out;
+        const char* why = 0;
+        std::memset(&out, 0, sizeof(out));
+        check(Bc250SharedSurfaceDecodeBareWhy(kGdi, sizeof(kGdi), &out, &why) == BC250_SHARED_SURFACE_OK &&
+                  is(why, BC250_SHARED_SURFACE_WHY_OK) && out.Width == 624 && out.Height == 441 &&
+                  out.Pitch == 2560 && out.DxgiFormat == kDxgi && out.D3dDdiFormat == kD3dDdi &&
+                  out.BindFlags == kBind && out.BytesPerPixel == 4 && out.Size == 1136640ull && !out.MiscFlags &&
+                  out.Shared == 1 && !out.Access,
+              "bare: the measured 48-byte GDI texture blob decodes to a shared 624x441 B8G8R8A8_UNORM texture");
+        // The same LB7A alone: the 32-byte form of the compositor's hosted surfaces.
+        check(Bc250SharedSurfaceDecodeBareWhy(kGdi, 32, &out, &why) == BC250_SHARED_SURFACE_OK && out.Width == 624,
+              "bare: the 32-byte LB7A prefix alone decodes");
+        unsigned char gdi[48];
+        const auto bare_why = [&](unsigned offset, unsigned long value, unsigned bytes, BC250_SHARED_SURFACE* o) {
+            std::memcpy(gdi, kGdi, sizeof(gdi));
+            for (unsigned i = 0; i < 4; ++i) gdi[offset + i] = static_cast<unsigned char>((value >> (8 * i)) & 0xFF);
+            const char* w = 0;
+            const int status = Bc250SharedSurfaceDecodeBareWhy(gdi, bytes, o, &w);
+            return status == BC250_SHARED_SURFACE_OK ? "" : w;
+        };
+        check(is(bare_why(36, 3, 48, &out), BC250_SHARED_SURFACE_WHY_BARE_TYPE),
+              "bare: a GDI staging surface (type 3) is \"bare allocation type\"");
+        check(is(bare_why(40, 1, 48, &out), BC250_SHARED_SURFACE_WHY_BARE_TYPE),
+              "bare: GDI1 flags are \"bare allocation type\"");
+        check(is(bare_why(44, 1, 48, &out), BC250_SHARED_SURFACE_WHY_BARE_TYPE),
+              "bare: a GDI1 reserved word is \"bare allocation type\"");
+        check(is(bare_why(32, 0, 48, &out), BC250_SHARED_SURFACE_WHY_BARE_TYPE),
+              "bare: 48 bytes without the GDI1 magic are \"bare allocation type\"");
+        check(is(bare_why(32, 0x31494447ul, 47, &out), BC250_SHARED_SURFACE_WHY_BARE_LENGTH),
+              "bare: a blob of 47 bytes is \"bare allocation length\"");
+        check(is(bare_why(32, 0x31494447ul, 64, &out), BC250_SHARED_SURFACE_WHY_BARE_LENGTH),
+              "bare: a blob of 64 bytes is \"bare allocation length\"");
+        check(is(bare_why(4, 2, 48, &out), BC250_SHARED_SURFACE_WHY_ALLOCATION_RECORD),
+              "bare: an LB7A v2 is \"allocation record\"");
+        check(is(bare_why(20, 42, 48, &out), BC250_SHARED_SURFACE_WHY_ALLOCATION_FORMAT),
+              "bare: a D3DDDI format with no COMPOSED row is \"allocation format\"");
+        check(is(bare_why(12, 16385, 48, &out), BC250_SHARED_SURFACE_WHY_EXTENT),
+              "bare: an edge past 16384 is \"record extent\"");
+        check(is(bare_why(16, 2048, 48, &out), BC250_SHARED_SURFACE_WHY_ALLOCATION_GEOMETRY),
+              "bare: a pitch below one row is \"allocation geometry\"");
+        check(is(bare_why(24, 2560ul * 440, 48, &out), BC250_SHARED_SURFACE_WHY_ALLOCATION_GEOMETRY),
+              "bare: a size below the rows is \"allocation geometry\"");
+        why = 0;
+        check(Bc250SharedSurfaceDecodeBareWhy(0, 48, &out, &why) == BC250_SHARED_SURFACE_MALFORMED &&
+                  is(why, BC250_SHARED_SURFACE_WHY_ARGUMENTS),
+              "bare: a null blob is \"record arguments\"");
+        // The format refusal is "not implemented", as in the pair's decode.
+        std::memcpy(gdi, kGdi, sizeof(gdi));
+        gdi[20] = 42;
+        check(Bc250SharedSurfaceDecodeBareWhy(gdi, sizeof(gdi), &out, 0) == BC250_SHARED_SURFACE_FORMAT,
+              "bare: a format with no COMPOSED row reports the format status");
+    }
+
     // The allocation record's geometry, against the row the resource record names: 4 bytes a pixel here.
     {
         BC250_SHARED_SURFACE out;

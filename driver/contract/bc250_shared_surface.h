@@ -86,6 +86,12 @@ extern "C" {
 #define BC250_SHARED_SURFACE_WHY_FORMAT               "record format"
 #define BC250_SHARED_SURFACE_WHY_ALLOCATION_FORMAT    "allocation format"
 #define BC250_SHARED_SURFACE_WHY_ALLOCATION_GEOMETRY  "allocation geometry"
+/* The two refusals only the bare form below has. */
+#define BC250_SHARED_SURFACE_WHY_BARE_LENGTH          "bare allocation length"
+#define BC250_SHARED_SURFACE_WHY_BARE_TYPE            "bare allocation type"
+
+/* D3DKMDT_GDISURFACE_TEXTURE (d3dkmdt.h): the one GDI surface type that is a GPU texture. */
+#define BC250_SHARED_GDI_TEXTURE 1ul
 
 /* One shared surface, in neither API's terms. The first eight fields are the surface itself; the
  * last three are the record's own policy and the one D3D11 field a D3D11 opener still passes on
@@ -347,6 +353,87 @@ static __inline int Bc250SharedSurfaceDecode(const void *ResourceData, unsigned 
                                              BC250_SHARED_SURFACE *Out)
 {
     return Bc250SharedSurfaceDecodeWhy(ResourceData, ResourceBytes, AllocationData, AllocationBytes, Out, 0);
+}
+
+/* BD-253, BD-408: a surface with no resource record. The runtime gives an opener no E26R blob when the
+ * allocation's creator gave it none, and then the LB7A blob is the whole description. Two producers
+ * write such a surface: the kernel driver for a standard GDI surface (GetStandardAllocationDriverData,
+ * 48 bytes: LB7A and the GDI1 trailer), and the compositor's hosted driver for its own surfaces
+ * (32 bytes, LB7A only). A D3D9On12 windowed Present opens the first kind in the D3D12 shell, and a Qt
+ * backing store opens it in the D3D11 shell.
+ *   The description that follows from the blob: the storage format of the LB7A format's COMPOSED row,
+ * one mip, one array slice, one sample, shader resource and render target binding, no misc flags, and
+ * the policy of a shared plain texture (Shared 1, Access 0). Of the GDI types only a GDI texture
+ * (BC250_SHARED_GDI_TEXTURE) is a GPU texture, and the GDI1 Flags and Reserved fields are 0, as the
+ * kernel driver's own parser requires (WddmGdiPrivate). The geometry rule is the one of every other
+ * opened surface. Out is written only on success; Why, when it is given, names the check that decided. */
+static __inline int Bc250SharedSurfaceDecodeBareWhy(const void *AllocationData, unsigned int AllocationBytes,
+                                                    BC250_SHARED_SURFACE *Out, const char **Why)
+{
+    BC250_GDI_PRIVATE blob;
+    const AMDGPU_WDDM_SURFACE_FORMAT *row = 0;
+    BC250_SHARED_SURFACE out;
+    const char *why = BC250_SHARED_SURFACE_WHY_ARGUMENTS;
+    int status = BC250_SHARED_SURFACE_MALFORMED;
+    unsigned int i;
+    const unsigned char *src;
+    unsigned char *dst = (unsigned char *)&blob;
+    for (i = 0; i < (unsigned int)sizeof(blob); ++i)
+        dst[i] = 0;
+    for (;;) {
+        if (!Out || !AllocationData)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_BARE_LENGTH;
+        if (AllocationBytes != (unsigned int)sizeof(BC250_GDI_PRIVATE) &&
+            AllocationBytes != (unsigned int)sizeof(BC250_WDDM_ALLOCATION_PRIVATE))
+            break;
+        /* Byte copies: the blob is the runtime's memory and needs no alignment of ours. */
+        src = (const unsigned char *)AllocationData;
+        for (i = 0; i < AllocationBytes; ++i)
+            dst[i] = src[i];
+        why = BC250_SHARED_SURFACE_WHY_BARE_TYPE;
+        if (AllocationBytes == (unsigned int)sizeof(BC250_GDI_PRIVATE) &&
+            (blob.Magic != BC250_GDI_PRIVATE_MAGIC || blob.Type != BC250_SHARED_GDI_TEXTURE || blob.Flags ||
+             blob.Reserved))
+            break;
+        why = BC250_SHARED_SURFACE_WHY_ALLOCATION_RECORD;
+        if (blob.Surface.Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || blob.Surface.Version != 1)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_ALLOCATION_FORMAT;
+        row = amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi((unsigned int)blob.Surface.Format),
+                                        AMDGPU_WDDM_SURFACE_COMPOSED);
+        if (!row || !row->dxgi) {
+            status = BC250_SHARED_SURFACE_FORMAT;
+            break;
+        }
+        why = BC250_SHARED_SURFACE_WHY_EXTENT;
+        if (!blob.Surface.Width || !blob.Surface.Height || blob.Surface.Width > BC250_SHARED_MAX_EDGE ||
+            blob.Surface.Height > BC250_SHARED_MAX_EDGE)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_ALLOCATION_GEOMETRY;
+        if (!Bc250SharedSurfaceGeometry(&blob.Surface, row->bytes_per_pixel))
+            break;
+        status = BC250_SHARED_SURFACE_OK;
+        why = BC250_SHARED_SURFACE_WHY_OK;
+        break;
+    }
+    if (Why)
+        *Why = why;
+    if (status != BC250_SHARED_SURFACE_OK)
+        return status;
+    out.Width = blob.Surface.Width;
+    out.Height = blob.Surface.Height;
+    out.Pitch = blob.Surface.Pitch;
+    out.DxgiFormat = row->dxgi;
+    out.D3dDdiFormat = blob.Surface.Format;
+    out.BindFlags = BC250_SHARED_BIND_SHADER_RESOURCE | BC250_SHARED_BIND_RENDER_TARGET;
+    out.BytesPerPixel = row->bytes_per_pixel;
+    out.Size = blob.Surface.Size;
+    out.MiscFlags = 0;
+    out.Shared = 1;
+    out.Access = 0;
+    *Out = out;
+    return BC250_SHARED_SURFACE_OK;
 }
 
 #if defined(__cplusplus)
