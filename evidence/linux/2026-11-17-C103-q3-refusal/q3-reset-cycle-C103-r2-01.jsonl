@@ -1,0 +1,6 @@
+{"step": "standby-check", "sample": 0, "data": {"queried_utc": "2026-11-17T16:09:19.021418+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 106, "19": 132, "20": 2392}, "current_a": 0.106, "power_w": 13.2, "voltage_v": 239.2, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}, "utc": "2026-11-17T16:09:19.021446+00:00"}
+{"step": "standby-check", "sample": 1, "data": {"queried_utc": "2026-11-17T16:09:27.379085+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 105, "19": 132, "20": 2401}, "current_a": 0.105, "power_w": 13.2, "voltage_v": 240.1, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}, "utc": "2026-11-17T16:09:27.379103+00:00"}
+{"step": "off-intent", "approval": "C-103-r2", "shutdown_proof": "q3-reset-shutdown-C103-r2-01.json", "utc": "2026-11-17T16:09:27.379433+00:00"}
+{"step": "off-readback", "relay_on": false, "utc": "2026-11-17T16:09:28.519736+00:00"}
+{"step": "on-intent", "utc": "2026-11-17T16:09:38.519913+00:00"}
+{"step": "on-readback", "relay_on": true, "utc": "2026-11-17T16:09:40.723040+00:00"}

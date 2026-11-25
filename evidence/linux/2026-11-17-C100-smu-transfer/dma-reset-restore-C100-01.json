@@ -1,0 +1,9 @@
+{
+  "utc": "2026-11-17T15:42:53.456429+00:00",
+  "approval": "C-100",
+  "action": "restore",
+  "source_sha256": "48db4111283948241dc8411b0909c63b830489ef25124488d4a78e1bffa62c11",
+  "exit": 0,
+  "stdout": "{\"stage_ivrs\": false, \"stage_iommu_log\": false, \"network_boot\": true, \"cfg_sha256\": \"97a5906372446889b7af9ace4047fa80220b90c2fd27fc11e775b87a32852455\", \"env_sha256\": \"d824be8cf1612cac8cab3f7d4a166e72d02740a0ddba55eefc4bf533e2cb59a9\", \"loader_sha256\": \"2b707cc62b030bb3c6dfe375763da6d4ba4342c02bb953ea0ab3236ef067bf48\", \"restore\": true, \"restored\": true, \"efi_active\": true}\n",
+  "stderr": ""
+}

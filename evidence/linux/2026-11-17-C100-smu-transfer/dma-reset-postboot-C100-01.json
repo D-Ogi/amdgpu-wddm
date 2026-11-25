@@ -1,0 +1,7 @@
+{
+  "utc": "2026-11-17T15:43:18.058344+00:00",
+  "exit": 0,
+  "source_sha256": "02e59b0cb52674ed0b798231e0a46f64c30079a85b05c88ab45388249c0e760d",
+  "stdout": "{\"kernel\": \"6.18.52-0-lts\", \"network_boot\": true, \"amdgpu_blacklisted\": true, \"provider_present\": false, \"provider_device\": false, \"amdgpu_present\": false, \"ivrs_present\": false, \"old_ram_trial_present\": false, \"tctl_mC\": [71875], \"uptime_s\": 109.75}\n",
+  "stderr": ""
+}
