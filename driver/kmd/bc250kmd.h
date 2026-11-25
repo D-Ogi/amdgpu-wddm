@@ -608,6 +608,9 @@ NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 // BD-343: the curve half of a confirmation by the rule without output; clears only a curve a display start confirmed.
 NTSTATUS DpmConfirmKnownCurve(BC250_DEVICE* Device, _In_z_ const char* Why);
 void DpmLogSummary(BC250_DEVICE* Device);
+// A copy of the governor's published snapshot, as the last tick left it (zero before the first). Software state only,
+// no SMU traffic. Any IRQL up to DISPATCH_LEVEL.
+void DpmReadSnapshot(BC250_DEVICE* Device, BC250_DPM_SNAP* Snapshot);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 void DpmTuneRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_TUNE* Data, ULONG Size, BOOLEAN Admin,
                     ULONG EscapeFlags);
@@ -659,6 +662,9 @@ void HwmonStop(BC250_HWMON_OWNER* Owner);
 void HwmonSample(BC250_DEVICE* Device);                 // the governor thread, PASSIVE_LEVEL, once a second
 void HwmonLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 void HwmonRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_HWMON* Data, ULONG EscapeFlags);
+// A copy of the published sample. TRUE only when it is a reading: VALID and at most BC250_HWMON_FRESH_MS old, the
+// rule of HwmonRequest's FRESH flag. No port access. Any IRQL up to DISPATCH_LEVEL.
+BOOLEAN HwmonReadFresh(BC250_DEVICE* Device, BC250_HWMON_SNAP* Snapshot);
 
 // fan.c
 struct _BC250_ESCAPE_FAN;
