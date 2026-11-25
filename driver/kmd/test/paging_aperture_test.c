@@ -92,6 +92,21 @@ int main(void)
     CHECK(PagingApertureBytesForSetting(0, &clamped) == 256 * MIB && clamped == 1);
     CHECK(PagingApertureBytesForSetting(0xFFFFFFFFul, &clamped) == 447 * MIB && clamped == 1);
     CHECK(PagingApertureBytesForSetting(300, NULL) == 300 * MIB);
+    // Bit 31 of the stored value is the 64 KiB page switch, the rest is the size. Without the bit every value is
+    // the size it always was (0 and 0x7FFFFFFF included), so a stored value of an earlier driver reads the same.
+    {
+        int pages = -1;
+        CHECK(PagingApertureSettingMegabytes(384, &pages) == 384 && pages == 0);
+        CHECK(PagingApertureSettingMegabytes(0, &pages) == 0 && pages == 0);
+        CHECK(PagingApertureSettingMegabytes(0x7FFFFFFFul, &pages) == 0x7FFFFFFFul && pages == 0);
+        CHECK(PagingApertureSettingMegabytes(0x80000180ul, &pages) == 384 && pages == 1);
+        CHECK(PagingApertureSettingMegabytes(0x80000100ul, &pages) == 256 && pages == 1);
+        CHECK(PagingApertureSettingMegabytes(0x80000000ul, &pages) == 384 && pages == 1);    // the bit alone: default size
+        CHECK(PagingApertureSettingMegabytes(0xFFFFFFFFul, &pages) == 0x7FFFFFFFul && pages == 1);
+        CHECK(PagingApertureSettingMegabytes(0x80000180ul, NULL) == 384);
+        CHECK(PagingApertureBytesForSetting(PagingApertureSettingMegabytes(0xFFFFFFFFul, NULL), &clamped) == 447 * MIB &&
+              clamped == 1);
+    }
     CHECK(PagingApertureBytesValid(256 * MIB) && PagingApertureBytesValid(447 * MIB) && PagingApertureBytesValid(384 * MIB));
     CHECK(!PagingApertureBytesValid(0) && !PagingApertureBytesValid(255 * MIB) && !PagingApertureBytesValid(448 * MIB));
     CHECK(!PagingApertureBytesValid(384 * MIB + 4096));                // whole MiB only

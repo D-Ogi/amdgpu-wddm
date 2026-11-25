@@ -4402,6 +4402,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     Device->Wddm = NULL;
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
     Device->WddmApertureRequest = 0;
+    Device->SystemPages64K = FALSE;
     Device->ComposedSourceModes = FALSE;
     Device->CommittedSourceFormat = 0;
     Device->LargePageLayout = FALSE;
@@ -4756,12 +4757,25 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // The aperture's Size and CommitLimit follow the size (WddmQuerySegment4); the shared pool does not, because
     // dxgkrnl's implicit system-memory segment already has no commit limit (calculating-graphics-memory.md).
     {
-        int clamped=0;
-        const ULONG asked=GuardReadSetting(L"ApertureSegmentMegabytes",
-                                           (ULONG)(PAGING_APERTURE_DEFAULT_BYTES/PAGING_APERTURE_MIB));
+        int clamped=0,pages64k=0;
+        const ULONG stored=GuardReadSetting(L"ApertureSegmentMegabytes",
+                                            (ULONG)(PAGING_APERTURE_DEFAULT_BYTES/PAGING_APERTURE_MIB));
+        // Bit 31 of the stored value is the 64 KiB host page switch (paging_window.h says why it lives here).
+        // Without the bit, asked is the stored value and everything below is as it was.
+        const ULONG asked=PagingApertureSettingMegabytes(stored,&pages64k);
         Device->WddmApertureRequest=PagingApertureBytesForSetting(asked,&clamped);
         GuardLog("wddm: OS aperture asked %lu MiB, using %llu MiB%s (only MAP_APERTURE_SEGMENT uses it)",asked,
                  Device->WddmApertureRequest/PAGING_APERTURE_MIB,clamped?" (clamped to 256..447)":"");
+        // 64 KiB pages in host memory, as amdgpu maps them (16 leaf entries with fragment 4, evidence E17 k64).
+        // VidMm owns the contiguity: it backs an allocation with 64 KiB pages and says so in each page table
+        // update (Use64KBPages). Read here, before VidMmStartLayout and before dxgkrnl asks for the GpuMmu caps,
+        // because the caps, the allocation sizes and the translation must agree for the whole start. It does not
+        // depend on LargePages or on the large page layout: a host page arrives as its own physical address.
+        // dxgmms2 uses the cap only with its own switch on: Use64KPages (REG_DWORD 1) under
+        // HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\MemoryManager, read when dxgmms2 loads.
+        Device->SystemPages64K=(BOOLEAN)(pages64k!=0);
+        if (pages64k)
+            GuardLog("wddm: ApertureSegmentMegabytes 0x%08lX: bit 31, 64 KiB host pages asked (needs Use64KPages)",stored);
     }
     GuardStartSubStep(L"os-aperture");
     status=GartCaptureAperture(Device,&Device->WddmAperture);
@@ -4808,6 +4822,7 @@ Failed:
     if (vidmmPrepared) VidMmStop();
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
     Device->WddmApertureRequest = 0;
+    Device->SystemPages64K = FALSE;
     ExFreePoolWithTag(startup,BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm->ObjectIndex.Buckets,BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm,BC250_WDDM_TAG);

@@ -31,6 +31,15 @@ unsigned long long PagingApertureBytesForSetting(unsigned long megabytes, int* c
     return bytes;
 }
 
+unsigned long PagingApertureSettingMegabytes(unsigned long stored, int* pages64k)
+{
+    const int flag=(stored&PAGING_APERTURE_SETTING_PAGES_64K)!=0;
+    unsigned long megabytes=stored&~PAGING_APERTURE_SETTING_PAGES_64K;
+    if (flag && megabytes==0) megabytes=(unsigned long)(PAGING_APERTURE_DEFAULT_BYTES/PAGING_APERTURE_MIB);
+    if (pages64k) *pages64k=flag;
+    return megabytes;
+}
+
 // Reserve OS aperture entries after both private GART consumers. Validate the
 // complete range once; callers never obtain a partially usable advertised extent.
 // Bytes is the size this start asked for (PagingApertureBytesForSetting): the

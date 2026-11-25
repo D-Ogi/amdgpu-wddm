@@ -32,6 +32,16 @@ int PagingApertureBytesValid(unsigned long long bytes);
 // The setting in MiB to a size. A value outside [MIN, MAX] in MiB is clamped to the nearer bound and *clamped
 // says so (it may be NULL); 0 is not "off", it is below MIN and becomes MIN.
 unsigned long long PagingApertureBytesForSetting(unsigned long megabytes, int* clamped);
+// Bit 31 of the stored ApertureSegmentMegabytes value asks for 64 KiB pages in host memory (vidmm.c, wddm.c
+// WddmGpuMmuCaps). It is a bit of this setting, and not a setting of its own, because a new name changes the
+// state catalog, and a KMD starts only on the catalog it compiles (state_kernel.c): an experiment build must stay
+// a plain image swap on an installed release. The setting already describes the host-memory segment, takes any
+// 32-bit value, and no size reaches bit 31 (447 is the largest). Stored 0x80000180 = 384 MiB with 64 KiB pages.
+#define PAGING_APERTURE_SETTING_PAGES_64K 0x80000000ul
+// The stored value as its two parts. Returns the size part in MiB for PagingApertureBytesForSetting, and
+// *pages64k is 1 when bit 31 is set (it may be NULL). A value with the bit and no size, 0x80000000, keeps the
+// default size, so that the bit alone does not also move the aperture to its minimum.
+unsigned long PagingApertureSettingMegabytes(unsigned long stored, int* pages64k);
 int PagingApertureInit(unsigned long long start, unsigned long long size,
                        unsigned long long table, unsigned long long tableBytes,
                        unsigned long long bytes, PAGING_APERTURE* out);

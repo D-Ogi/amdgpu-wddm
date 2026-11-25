@@ -490,6 +490,11 @@ typedef struct _BC250_DEVICE {
     // pages and vidmm.c maps them, 2 MiB at level 1 and 1 GiB at level 2 (value 1 only, which needs the layout).
     BOOLEAN LargePageLayout;
     BOOLEAN LargePages;
+    // Bit 31 of ApertureSegmentMegabytes (paging_window.h), latched by WddmStart with the aperture size and not
+    // changed until stop. The GpuMmu caps report SysMem64KBPageSupported and a 64 KiB leaf table size, an
+    // allocation that may live in the aperture segment is sized and aligned to 64 KiB, and vidmm.c maps an entry
+    // of a 64 KiB page table as 16 leaf entries with fragment 4. It does not use the large page layout.
+    BOOLEAN SystemPages64K;
     PVOID Wddm;                         // wddm.c, NULL unless FullWddm
     BOOLEAN MmioIhEnabled;
     BOOLEAN GfxStopPrepared;            // hardware retirement attempted in this device generation
