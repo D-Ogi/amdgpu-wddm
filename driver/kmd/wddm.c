@@ -246,6 +246,7 @@ typedef struct _BC250_WDDM_KIND {
 #include "present_range.h"
 #include "present_snapshot.h"        // BD-065: the refusal reasons of the GPU Present allocation snapshot
 #include "present_contextless.h"     // BD-403: SupportContextlessPresent and a Present without a context
+#include "cross_adapter.h"           // CrossAdapterResource (tier 1) and the DescribeAllocation answer of a buffer
 #include "scanout_admit.h"           // M15.14: which allocation SetVidPnSourceAddress may scan out
 #include "display_rotation.h"        // BD-247: no DirectFlip while the path is rotated
 #include "dcn_plane.h"               // BD-223: the multiplane-overlay plane 0 and its verdicts
@@ -772,6 +773,12 @@ typedef struct _BC250_WDDM {
     volatile LONG UmdAllocs;
     volatile LONG UmdAllocRefused;
     volatile LONG UmdOpenRefused;          // BD-205: OpenAllocation of a BC2A blob that does not parse (call failed)
+    // Cross-adapter tier 1 (cross_adapter.h): the DescribeAllocation answers by route. dxgkrnl describes a BC2A
+    // allocation only when it is cross-adapter, so buffer is the count of cross-adapter allocations of this start
+    // (0 on a desktop and in games), and refused the ones of more than 4 GiB - 1 bytes.
+    volatile LONG DescribeSurface;
+    volatile LONG DescribeBuffer;
+    volatile LONG DescribeRefused;
     // Memory manager stage 1c (0.7.216.8): EnableSharedResidency, latched at WddmStart, and the UMD
     // allocations by the segment sets they got (umd_blob.c UmdBlobPlacement): local or aperture alone, or
     // local first with the aperture as VidMm's demotion target.
@@ -3638,6 +3645,9 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         for (slot = 0; slot < BC250_GDI_SLOTS; slot++) lb7a += Wddm->StdAlloc.GdiOpened[slot][1];
         GuardLog("wddm summary: OpenAllocation refused (invalid parameter): umd %ld, lb7a %ld", Wddm->UmdOpenRefused, lb7a);
     }
+    // Cross-adapter tier 1 (cross_adapter.h): buffer counts the cross-adapter allocations of this start.
+    GuardLog("wddm summary: describe allocation: surface %ld, cross-adapter buffer %ld, refused %ld",
+             Wddm->DescribeSurface, Wddm->DescribeBuffer, Wddm->DescribeRefused);
     // A line of its own, so that the line above keeps the text its readers parse.
     GuardLog("wddm summary: umd placement (shared residency %s): local %ld, local+aperture %ld, aperture %ld",
              Wddm->SharedResidency ? "on" : "off", Wddm->UmdAllocsLocalOnly, Wddm->UmdAllocsShared,
@@ -5647,6 +5657,11 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // part has 8 GB of local memory to reach (facts M31). Unit A has no IOMMU either (facts M47).
     caps->MemoryManagementCaps.VirtualAddressingSupported = 1;
     caps->MemoryManagementCaps.GpuMmuSupported = 1;
+    // Tier 1 of the cross-adapter resources, copy to and from (cross_adapter.h has the contract and its sources). The
+    // HLK job "WDDM2.4 Mandatory Caps" requires it from 2.4. dxgkrnl then admits D3DKMT_CREATEALLOCATION.Flags.
+    // CrossAdapter and describes each such allocation (Bc250WddmDescribeAllocation). Tiers 2 and 3 (texture, scan-out)
+    // stay clear: they need row-major textures and cross-adapter scan-out, which this driver does not have.
+    caps->MemoryManagementCaps.CrossAdapterResource = Bc250CrossAdapterCap(Device->WddmLevel);
     // ADR 0008 stage D (docs/design/paging-node.md section 6): with EnablePagingNode open, node 1 (SDMA0) is the
     // paging node, exactly what ADR 0013 point 2 asks for; closed, paging still rides on node 0, byte-for-byte
     // as before.
@@ -6946,6 +6961,42 @@ static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
     return STATUS_SUCCESS;
 }
 
+// A BC2A allocation without scan-out is described only when it is a cross-adapter one (cross_adapter.h): a buffer,
+// width = byte count, height 1, format 0. Returns TRUE with *Status set when that answer (or its refusal) is complete;
+// FALSE leaves the allocation to the surface answer of Bc250WddmDescribeAllocation.
+static BOOLEAN WddmDescribeCrossAdapter(_In_ const HANDLE hAdapter, _In_ const BC250_WDDM_OBJECT* object,
+                                        _Inout_ DXGKARG_DESCRIBEALLOCATION* pDescribeAllocation, _Out_ NTSTATUS* Status)
+{
+    switch (Bc250DescribeRoute(object->UmdAlloc ? 1 : 0, object->ScanoutRequested ? 1 : 0, object->UmdBytes)) {
+    case BC250_DESCRIBE_BUFFER:
+        pDescribeAllocation->Width = (UINT)object->UmdBytes;
+        pDescribeAllocation->Height = 1;
+        pDescribeAllocation->Format = D3DDDIFMT_UNKNOWN;
+        pDescribeAllocation->MultisampleMethod.NumSamples = 0;
+        pDescribeAllocation->MultisampleMethod.NumQualityLevels = 0;
+        pDescribeAllocation->RefreshRate.Numerator = 0;
+        pDescribeAllocation->RefreshRate.Denominator = 0;
+        pDescribeAllocation->PrivateDriverFormatAttribute = 0;
+        pDescribeAllocation->Rotation = D3DDDI_ROTATION_IDENTITY;
+        if (WddmOf(hAdapter) != NULL &&
+            InterlockedIncrement(&WddmOf(hAdapter)->DescribeBuffer) <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: DescribeAllocation cross-adapter buffer %u bytes", pDescribeAllocation->Width);
+        *Status = STATUS_SUCCESS;
+        return TRUE;
+    case BC250_DESCRIBE_REFUSED:
+        if (WddmOf(hAdapter) != NULL &&
+            InterlockedIncrement(&WddmOf(hAdapter)->DescribeRefused) <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: DescribeAllocation refused, a buffer of %llu bytes has no 32-bit width", object->UmdBytes);
+        *Status = STATUS_INVALID_PARAMETER;
+        return TRUE;
+    case BC250_DESCRIBE_SURFACE:
+    default:
+        if (WddmOf(hAdapter) != NULL) InterlockedIncrement(&WddmOf(hAdapter)->DescribeSurface);
+        *Status = STATUS_SUCCESS;
+        return FALSE;
+    }
+}
+
 static DXGKDDI_DESCRIBEALLOCATION Bc250WddmDescribeAllocation;
 static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
                                             _Inout_ DXGKARG_DESCRIBEALLOCATION* pDescribeAllocation)
@@ -6956,6 +7007,8 @@ static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
     NTSTATUS status;
 
     if (object == NULL) return STATUS_INVALID_PARAMETER;
+    // A cross-adapter buffer has no display signal behind it; every other allocation gets the answer of the primary.
+    if (WddmDescribeCrossAdapter(hAdapter, object, pDescribeAllocation, &status)) return status;
     if (ConnectorIsEnabled(device)) {
         status=ConnectorLinkCurrentSignal(device,&signal);
         if (!NT_SUCCESS(status)) return status;

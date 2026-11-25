@@ -835,6 +835,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='display-timing';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace)}
   @{n='display-timing-old-describe';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldDescribe60');Fails=$true}
   @{n='display-timing-old-describe-rotation';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldDescribeIdentity');Fails=$true}
+  @{n='display-timing-old-describe-surface-only';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldDescribeSurfaceOnly');Fails=$true}
   @{n='display-timing-phase-hz';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-AssumePhaseHz');Fails=$true}
   @{n='display-timing-old-power-return';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldPowerReturn');Fails=$true}
   @{n='gart-retained';s='driver\kmd\test\run_gart_retained.ps1';a=@('-Root',$Workspace)}
@@ -941,6 +942,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='present-contextless';s='driver\kmd\test\run_present_contextless.ps1';a=@('-Root',$Workspace)}
   @{n='present-contextless-every-level';s='driver\kmd\test\run_present_contextless.ps1';a=@('-Root',$Workspace,'-EveryLevel');Fails=$true}
   @{n='present-contextless-serve';s='driver\kmd\test\run_present_contextless.ps1';a=@('-Root',$Workspace,'-ServeWithoutContext');Fails=$true}
+  # Cross-adapter tier 1: CrossAdapterResource from 2.4, and the DescribeAllocation answer of a buffer (cross_adapter.h).
+  @{n='cross-adapter';s='driver\kmd\test\run_cross_adapter.ps1';a=@('-Root',$Workspace)}
+  @{n='cross-adapter-every-level';s='driver\kmd\test\run_cross_adapter.ps1';a=@('-Root',$Workspace,'-EveryLevel');Fails=$true}
+  @{n='cross-adapter-truncate';s='driver\kmd\test\run_cross_adapter.ps1';a=@('-Root',$Workspace,'-Truncate');Fails=$true}
   @{n='hang-recovery';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace)}
   @{n='hang-recovery-no-fence-guard';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreFenceGuard');Fails=$true}
   @{n='hang-recovery-any-vmid';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreVmidGuard');Fails=$true}
