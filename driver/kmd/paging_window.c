@@ -40,6 +40,11 @@ unsigned long PagingApertureSettingMegabytes(unsigned long stored, int* pages64k
     return megabytes;
 }
 
+int PagingRangeInAllocation(unsigned long long size, unsigned long long offset, unsigned long long bytes)
+{
+    return bytes!=0 && offset<size && bytes<=size-offset;
+}
+
 // Reserve OS aperture entries after both private GART consumers. Validate the
 // complete range once; callers never obtain a partially usable advertised extent.
 // Bytes is the size this start asked for (PagingApertureBytesForSetting): the

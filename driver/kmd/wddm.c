@@ -361,6 +361,13 @@ typedef struct _BC250_WDDM_OBJECT {
     unsigned long UmdIpType;
     unsigned long UmdHeap;
     ULONGLONG UmdBytes;
+    // The bound of a fill or a transfer of a UMD allocation (WddmNativeAllocation). For an allocation that
+    // WddmCreateAdmit sized for 64 KiB host pages it is the size VidMm was given (DXGK_ALLOCATIONINFO::Size),
+    // because VidMm fills and transfers in its own size. For every other allocation it is UmdBytes, as before:
+    // a start without the 64 KiB sizes is unchanged. (A request that is not a multiple of a page has the same
+    // difference to VidMm's size. Both producers ask for whole pages; noted, not changed here.)
+    // UmdBytes stays what the user-mode driver asked for: the journal and the scan-out checks use that.
+    ULONGLONG UmdVidMmBytes;
     ULONGLONG UmdRequestedVa;
     // KMD193 (bsod-245 items 3 and 4): identity the journal records of this object's destroy and of every job
     // submitted on it would otherwise not have. Values only, taken at CreateAllocation/CreateContext; a dump
@@ -6594,6 +6601,7 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         if (object == NULL) return BC250_CREATE_STEP_NO_MEMORY;
         object->UmdAlloc = TRUE;
         object->UmdBytes = view.bytes;
+        object->UmdVidMmBytes = view.bytes;
         object->UmdHeap = view.heap;
         object->UmdRequestedVa = view.requested_va;
         // KMD193: kept for the DESTROY journal record. 245's four freed objects carried UmdAlloc, UmdHeap
@@ -6663,6 +6671,7 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
             (placement.supported & (1ul << (BC250_WDDM_SEGMENT_APERTURE - 1))) != 0) {
             info->Size = (info->Size + (BC250_VIDMM_PAGE_64K_BYTES - 1)) & ~(SIZE_T)(BC250_VIDMM_PAGE_64K_BYTES - 1);
             if (info->Alignment < BC250_VIDMM_PAGE_64K_BYTES) info->Alignment = (UINT)BC250_VIDMM_PAGE_64K_BYTES;
+            object->UmdVidMmBytes = info->Size;
             if (wddm != NULL) InterlockedIncrement(&wddm->UmdAllocs64K);
         }
         info->EvictionSegmentSet = 0;
@@ -7154,8 +7163,11 @@ static BOOLEAN WddmNativeAllocation(BC250_DEVICE* Device, BC250_WDDM_OBJECT* Con
     if(!Context || !Context->SystemContext || !Context->RootPhysical || Context->Device!=Device ||
        !Build->DmaBufferGpuVirtualAddress || Build->MultipassOffset>=0x40000000u ||
        !allocation || allocation->Device!=Device)return FALSE;
-    size=allocation->UmdAlloc ? allocation->UmdBytes : allocation->Allocation.Size;
-    return bytes && offset<size && bytes<=size-offset;
+    // UmdVidMmBytes, not UmdBytes: VidMm fills a new allocation in one operation of its own size. With UmdBytes
+    // here, every allocation that WddmCreateAdmit had grown to a multiple of 64 KiB left the native path for the
+    // page by page one (hardware result 2026-11-25: the first 64 KiB build).
+    size=allocation->UmdAlloc ? allocation->UmdVidMmBytes : allocation->Allocation.Size;
+    return (BOOLEAN)(PagingRangeInAllocation(size,offset,bytes)!=0);
 }
 
 static NTSTATUS WddmPublishPagingRecordCore(_Inout_ DXGKARG_BUILDPAGINGBUFFER* Build,

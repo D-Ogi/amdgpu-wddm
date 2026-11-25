@@ -42,6 +42,11 @@ unsigned long long PagingApertureBytesForSetting(unsigned long megabytes, int* c
 // *pages64k is 1 when bit 31 is set (it may be NULL). A value with the bit and no size, 0x80000000, keeps the
 // default size, so that the bit alone does not also move the aperture to its minimum.
 unsigned long PagingApertureSettingMegabytes(unsigned long stored, int* pages64k);
+// 1 when the byte range [offset, offset + bytes) of a fill or a transfer lies inside an allocation of size bytes
+// and is not empty. Size is the size VidMm was given for the allocation (DXGK_ALLOCATIONINFO::Size): VidMm fills
+// and transfers in that size, which is the size the user-mode driver asked for rounded up to pages, and to
+// 64 KiB when the allocation was sized for 64 KiB host pages.
+int PagingRangeInAllocation(unsigned long long size, unsigned long long offset, unsigned long long bytes);
 int PagingApertureInit(unsigned long long start, unsigned long long size,
                        unsigned long long table, unsigned long long tableBytes,
                        unsigned long long bytes, PAGING_APERTURE* out);

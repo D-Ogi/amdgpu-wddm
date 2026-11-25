@@ -107,6 +107,17 @@ int main(void)
         CHECK(PagingApertureBytesForSetting(PagingApertureSettingMegabytes(0xFFFFFFFFul, NULL), &clamped) == 447 * MIB &&
               clamped == 1);
     }
+    // The bound of a native fill or transfer is the size VidMm was given. A 68 KiB request that was sized for
+    // 64 KiB host pages is a 128 KiB allocation to VidMm, which fills all of it in one operation. Measured against
+    // the requested 68 KiB that fill is outside the allocation: the bound the first 64 KiB build used, which sent
+    // every such fill to the page by page path (hardware result 2026-11-25).
+    CHECK(PagingRangeInAllocation(0x20000, 0, 0x20000));
+    CHECK(!PagingRangeInAllocation(0x11000, 0, 0x20000));              // the old bound: the control
+    CHECK(PagingRangeInAllocation(0x20000, 0x1F000, 0x1000) && !PagingRangeInAllocation(0x20000, 0x1F000, 0x1001));
+    CHECK(PagingRangeInAllocation(0x20000, 0x10000, 0x10000) && !PagingRangeInAllocation(0x20000, 0x20000, 1));
+    CHECK(!PagingRangeInAllocation(0x20000, 0, 0) && !PagingRangeInAllocation(0, 0, 1));
+    CHECK(!PagingRangeInAllocation(0x20000, 0xFFFFFFFFFFFFF000ull, 0x2000));   // no wrap
+    CHECK(PagingRangeInAllocation(0xFFFFFFFFFFFFFFFFull, 0xFFFFFFFFFFFFFFFEull, 1));
     CHECK(PagingApertureBytesValid(256 * MIB) && PagingApertureBytesValid(447 * MIB) && PagingApertureBytesValid(384 * MIB));
     CHECK(!PagingApertureBytesValid(0) && !PagingApertureBytesValid(255 * MIB) && !PagingApertureBytesValid(448 * MIB));
     CHECK(!PagingApertureBytesValid(384 * MIB + 4096));                // whole MiB only
