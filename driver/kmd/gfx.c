@@ -4684,7 +4684,7 @@ NTSTATUS GfxPagingBuildUpdate(_Inout_ BC250_DEVICE* Device,
 {
     BC250_GFX* gfx;
     ULONGLONG entries[480], physical, mc; // keep fixed kernel frame below4096bytes
-    unsigned budget, count, written = 0;
+    unsigned budget, count, slots, written = 0;
     u64 scratch;
     int result;
     NTSTATUS status = STATUS_SUCCESS;
@@ -4712,18 +4712,22 @@ NTSTATUS GfxPagingBuildUpdate(_Inout_ BC250_DEVICE* Device,
                                   gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
                                   bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
     budget &= ~gfx->PagingRing->funcs->align_mask;
-    if (budget < 16) { status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER; goto Done; }
+    // One entry of the update is `slots` hardware entries: 1, or 16 for a 64 KiB page table (vidmm.c). count and
+    // the multipass position stay in entries of the update, so a slice never ends inside a 64 KiB entry.
+    slots = VidMmPageTableEntrySlots(Update);
+    if (budget < 14u + 2u * slots) { status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER; goto Done; }
     count = (budget - 14u) / 2u;
     if (count > RTL_NUMBER_OF(entries)) count = RTL_NUMBER_OF(entries);
+    count /= slots;
     if (count > Update->NumPageTableEntries - StartEntry) count = Update->NumPageTableEntries - StartEntry;
     if (!VidMmEncodePageTable(Update,StartEntry,count,&physical,entries) ||
-        !PagingPhysicalToMc(physical,count*8u,(ULONGLONG)Device->VramPhysical.QuadPart,
+        !PagingPhysicalToMc(physical,count*slots*8u,(ULONGLONG)Device->VramPhysical.QuadPart,
                             Device->VramMcBase,Device->VramLength,&mc)) {
         status = STATUS_INVALID_PARAMETER; goto Done;
     }
     scratch = bc250_sdma_fence_addr(gfx->PagingDevicePtr,BC250_PAGING_MARKER_SLOT);
     result = bc250_sdma_paging_update_ptes(gfx->PagingDevicePtr,(u32*)DmaBuffer,budget,mc,
-                                          entries,count,scratch,1u+3u*(DmaBufferOffset/4u),&written);
+                                          entries,count*slots,scratch,1u+3u*(DmaBufferOffset/4u),&written);
     if (result == BC250_SDMA_PAGING_OK) {
         *DwordsWritten = written; *NextEntry = StartEntry + count;
         if (*NextEntry != Update->NumPageTableEntries) status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;

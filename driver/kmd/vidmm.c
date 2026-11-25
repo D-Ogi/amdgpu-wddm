@@ -35,6 +35,10 @@
 // wddm.c rounds the segment base and the placement with these; the translation accepts exactly these pages.
 C_ASSERT(BC250_VIDMM_HUGE_PAGE_BYTES == BC250_PTE_HUGE_PAGE_BYTES);
 C_ASSERT(BC250_VIDMM_GIANT_PAGE_BYTES == BC250_PTE_GIANT_PAGE_BYTES);
+// A 64 KiB page table: 32 entries, each 16 slots of the 512-entry table page (bc250_pte.h).
+C_ASSERT(BC250_VIDMM_PAGE_64K_SLOTS == BC250_PTE_64K_SLOTS);
+C_ASSERT(BC250_VIDMM_PAGE_64K_BYTES == (1ull << BC250_PTE_LARGE_PAGE_SHIFT));
+C_ASSERT(BC250_PTE_64K_TABLE_ENTRIES * BC250_PTE_64K_SLOTS == BC250_VIDMM_PTES);
 
 typedef struct _BC250_VIDMM {
     PAGING_APERTURE_STATE Aperture;
@@ -80,6 +84,28 @@ typedef struct _BC250_VIDMM {
     volatile LONG64 RefusedLarge[BC250_VIDMM_LEVELS];
     volatile LONG GpuRefused;
     volatile LONG Roots;
+    // 64 KiB page tables (Pte.system_64k, a start with Device->SystemPages64K). All but the last three are counted
+    // at publication (VidMmNotePublished, under the exclusive CpuUpdateLock): once for each published slice and
+    // in VidMm's order, so they are not the repeated observations of the Encoded counters above.
+    //   Updates64K        published level 0 slices with Use64KBPages
+    //   Pages64KFragment  valid entries written as 16 leaves with fragment 4 (a 64 KiB host page)
+    //   Pages64KPlain     valid entries written as 16 leaves without a fragment (not host memory, or not aligned)
+    //   Pages64KZero      Zero entries: 16 PRT leaves (a reserved range)
+    //   Pages64KInvalid   invalid entries: an unmap, or the fill of a new table
+    //   Tables64K         table pages that took a 64 KiB update while not marked (see Table64K)
+    //   Tables64KSplit    marked table pages that took a 4 KB update: VidMm's conversion to a 4 KB table
+    //   Tables64KReused   marked table pages that were filled or took the first update of a new 4 KB table
+    //   Level1Tables64K   level 1 entries with PageTablePageSize = 64 KB (an observation, as EncodedLarge)
+    //   Refused64K        refused entries and calls with Use64KBPages, on any start
+    //   Copies64KRefused  CopyPageTableEntries ranges refused because a table page is marked
+    volatile LONG64 Updates64K, Pages64KFragment, Pages64KPlain, Pages64KZero, Pages64KInvalid;
+    volatile LONG64 Tables64K, Tables64KSplit, Tables64KReused;
+    volatile LONG64 Level1Tables64K, Refused64K, Copies64KRefused;
+    // One bit for each page of the table segment: the page holds entries of a 64 KiB update. Set and cleared
+    // under the exclusive CpuUpdateLock. NULL unless Pte.system_64k and Write. It feeds the counters above and
+    // the one refusal of VidMmCommitPagingCopy; no translation depends on it.
+    RTL_BITMAP Table64K;
+    PULONG Table64KBits;
 } BC250_VIDMM;
 
 static BC250_VIDMM g_VidMm;
@@ -158,6 +184,8 @@ NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffs
         g_VidMm.Pte.large_pages = 1;
     }
     g_VidMm.Pte.system_limit = VidMmSystemLimit();
+    // 64 KiB host pages need no layout: a host page arrives as its own physical address (bc250_pte.h).
+    if (Device->SystemPages64K) g_VidMm.Pte.system_64k = 1;
     g_VidMm.Write = (GuardReadSetting(L"EnableGpuVa", 0) == 1) && Device->VramWriteEnabled;
     // Page-table update/walk paths must not allocate a mapping while building
     // DMA. Establish the bounded table extent once at start.
@@ -181,6 +209,18 @@ NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffs
             g_VidMm.Write = FALSE;
             return STATUS_INSUFFICIENT_RESOURCES;
         }
+        if (g_VidMm.Pte.system_64k) {
+            // One bit for each table page: 2 KiB for the largest table segment (64 MiB). Without it the start
+            // has no 64 KiB pages rather than 64 KiB pages it cannot account for.
+            const ULONG pages=(ULONG)(TableLength/PAGE_SIZE);
+            const SIZE_T bytes=(((SIZE_T)pages+63)/64)*sizeof(ULONGLONG);   // RtlCheckBit reads 64-bit words
+            g_VidMm.Table64KBits=(PULONG)ExAllocatePool2(POOL_FLAG_PAGED,bytes,BC250_VIDMM_SHADOW_TAG);
+            if (g_VidMm.Table64KBits==NULL) {
+                VidMmStop();
+                return STATUS_INSUFFICIENT_RESOURCES;
+            }
+            RtlInitializeBitMap(&g_VidMm.Table64K,g_VidMm.Table64KBits,pages);
+        }
     }
     if (g_VidMm.Write && Device->WddmAperture.bytes) {
         // One shadow entry per page of this start's aperture (ApertureSegmentMegabytes): 768 KiB of paged
@@ -198,6 +238,10 @@ NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffs
              g_VidMm.SegmentPhysical, TableLength, g_VidMm.Pte.system_limit, g_VidMm.Write ? "WRITTEN" : "planned only (EnableGpuVa closed)");
     GuardLog("vidmm: VRAM segment %u at physical 0x%llX + 0x%llX, large pages %s", VramSegmentId, g_VidMm.Pte.vram_base,
              g_VidMm.Pte.vram_size, g_VidMm.Pte.large_pages ? "2 MiB at level 1 and 1 GiB at level 2" : "off");
+    // Only on a start that asked for them: the two lines above are those of every earlier driver.
+    if (g_VidMm.Pte.system_64k)
+        GuardLog("vidmm: 64 KiB host pages on: a 64 KiB table entry is 16 leaf entries, fragment 4 (%s)",
+                 g_VidMm.Table64KBits ? "tables tracked" : "plan only");
     return STATUS_SUCCESS;
 }
 
@@ -224,6 +268,11 @@ void VidMmStop(void)
     if (g_VidMm.Shadow.Slots!=NULL) {
         ExFreePoolWithTag(g_VidMm.Shadow.Slots,BC250_VIDMM_SHADOW_TAG);
         RtlZeroMemory(&g_VidMm.Shadow,sizeof(g_VidMm.Shadow));
+    }
+    if (g_VidMm.Table64KBits!=NULL) {
+        ExFreePoolWithTag(g_VidMm.Table64KBits,BC250_VIDMM_SHADOW_TAG);
+        g_VidMm.Table64KBits=NULL;
+        RtlZeroMemory(&g_VidMm.Table64K,sizeof(g_VidMm.Table64K));
     }
     ExReleasePushLockExclusive(&g_VidMm.CpuUpdateLock);
     KeLeaveCriticalRegion();
@@ -318,13 +367,15 @@ Done:
 // output entries; GPU slices count only their emitted subset. Re-encoding at
 // logical publication can count again, so these are observations, not residency.
 // Keep interlocked work per nonempty bucket, not per PTE. No cache policy changes.
+// Slots: the hardware entries of one DXGK_PTE in Entries, 16 for an update of a 64 KiB table and else 1. The
+// first slot of an entry has the flags of all of them.
 static void VidMmCountEncoding(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update,
-                               ULONG Start, ULONG Count, const ULONGLONG* Entries)
+                               ULONG Start, ULONG Count, const ULONGLONG* Entries, ULONG Slots)
 {
     BC250_VIDMM* vm=&g_VidMm;
     LONG64 coherent[3]={0},noncoherent[3]={0},mismatch[3]={0};
     LONG64 seen[BC250_VIDMM_SEGMENT_IDS]={0}; // 256 bytes, one interlocked add per named segment
-    LONG64 large=0;
+    LONG64 large=0,tables64k=0;
     ULONG i,kind,level=Update->PageTableLevel,firstLarge=0;
     for(i=0;i<Count;i++) {
         const DXGK_PTE* pte=Update->pPageTableEntries+(Update->Flags.Repeat?0:Start+i);
@@ -334,18 +385,21 @@ static void VidMmCountEncoding(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upd
             ULONG valid=(pte->Flags&BC250_DXGK_PTE_VALID)?1u:0u;
             if(InterlockedIncrement64(&vm->EncodedZero[level][valid])==1)
                 GuardLog("vidmm: first Zero level %u Valid %u flags 0x%llX encoded 0x%llX",
-                         level,valid,pte->Flags,Entries[i]);
+                         level,valid,pte->Flags,Entries[(SIZE_T)i*Slots]);
             continue; // PRT SNOOP is a terminal flag, not a physical cache policy.
         }
         if(!(pte->Flags&BC250_DXGK_PTE_VALID)) continue;
         if(level!=0 && (pte->Flags&BC250_DXGK_PTE_LARGEPAGE) && large++==0) firstLarge=i;
+        if(level==1 && (pte->Flags&BC250_DXGK_PTE_PAGESIZE_MASK)!=0) tables64k++; // accepted: it is 64 KB
         seen[segment&(BC250_VIDMM_SEGMENT_IDS-1)]++; // the mask is the five-bit field width: no-op
         kind=segment==vm->Pte.system_segment?0u:
              (vm->Pte.table_size && segment==vm->Pte.table_segment?2u:1u);
         requested=(BOOLEAN)((pte->Flags&BC250_DXGK_PTE_CACHECOHERENT)!=0);
         if(requested)coherent[kind]++;else noncoherent[kind]++;
-        if(requested!=((Entries[i]&AMDGPU_PTE_SNOOPED)!=0))mismatch[kind]++;
+        if(requested!=((Entries[(SIZE_T)i*Slots]&AMDGPU_PTE_SNOOPED)!=0))mismatch[kind]++;
     }
+    if(tables64k && InterlockedAdd64(&vm->Level1Tables64K,tables64k)==tables64k)
+        GuardLog("vidmm: first level 1 entry of a 64 KiB page table (PageTablePageSize 1)");
     for(kind=0;kind<3;kind++) {
         if(coherent[kind])InterlockedAdd64(&vm->EncodedCoherent[level][kind],coherent[kind]);
         if(noncoherent[kind])InterlockedAdd64(&vm->EncodedNoncoherent[level][kind],noncoherent[kind]);
@@ -372,9 +426,91 @@ static void VidMmNoteRefusal(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Updat
     if (Gpu) InterlockedIncrement(&vm->GpuRefused);
     if (Update->PageTableLevel!=0 && Update->PageTableLevel<BC250_VIDMM_LEVELS && (Pte->Flags&BC250_DXGK_PTE_LARGEPAGE))
         InterlockedIncrement64(&vm->RefusedLarge[Update->PageTableLevel]);
+    if (Update->Flags.Use64KBPages) InterlockedIncrement64(&vm->Refused64K);
     if (n<=BC250_VIDMM_LOG_REFUSALS && KeGetCurrentIrql()<=DISPATCH_LEVEL)
         GuardLog("vidmm: %s encoding refused level %u segment %u flags 0x%llX address 0x%llX",
                  Gpu?"GPU":"CPU",Update->PageTableLevel,segment,Pte->Flags,Pte->PageAddress);
+}
+
+// The hardware entries of one DXGK_PTE of this update: 16 for a 64 KiB page table on a start that reported
+// them, else 1. An update with Use64KBPages that this returns 1 for is refused by the callers' checks.
+ULONG VidMmPageTableEntrySlots(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update)
+{
+    return (Update != NULL && Update->Flags.Use64KBPages && Update->PageTableLevel == 0 &&
+            g_VidMm.Pte.system_64k != 0) ? BC250_VIDMM_PAGE_64K_SLOTS : 1u;
+}
+
+// An update with Use64KBPages that cannot be a 64 KiB table of this start: 64 KiB tables not reported (every
+// start without the switch), a level above the leaf, or the second array of dual PTE mode, which this driver
+// does not report. Counted and logged, then refused by the caller. FALSE: nothing to object to.
+static BOOLEAN VidMmRefuse64K(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update, BOOLEAN Gpu)
+{
+    BC250_VIDMM* vm=&g_VidMm;
+    if (!Update->Flags.Use64KBPages) return FALSE;
+    if (vm->Pte.system_64k && Update->PageTableLevel == 0 && Update->pPageTableEntries64KB == NULL) return FALSE;
+    if (InterlockedIncrement64(&vm->Refused64K) <= BC250_VIDMM_LOG_REFUSALS && KeGetCurrentIrql()<=DISPATCH_LEVEL)
+        GuardLog("vidmm: %s 64 KiB update refused: level %u start %u count %u second array %c reported %c",
+                 Gpu?"GPU":"CPU",Update->PageTableLevel,Update->StartIndex,Update->NumPageTableEntries,
+                 Update->pPageTableEntries64KB!=NULL?'1':'0',vm->Pte.system_64k?'1':'0');
+    return TRUE;
+}
+
+// One DXGK_PTE of an update as its hardware entries: Slots is 1, or 16 for a 64 KiB table. 0 on success.
+static int VidMmEncodeEntry(const BC250_VIDMM* Vm, UINT Level, ULONG Slots, const DXGK_PTE* Pte, _Out_writes_(Slots) u64* Out)
+{
+    u32 fragment;
+    if (Slots == BC250_VIDMM_PAGE_64K_SLOTS)
+        return bc250_pte_from_dxgk_64k(&Vm->Pte,Pte->Flags,Pte->PageAddress,Out,&fragment);
+    return bc250_pte_from_dxgk_level(&Vm->Pte,Level,Pte->Flags,Pte->PageAddress,Out);
+}
+
+// The table page of a published level 0 slice and what it now holds. Exclusive CpuUpdateLock. Entries are the
+// hardware entries of the slice (Count * Slots), Table the physical address of the table page.
+static void VidMmNotePublished(BC250_VIDMM* vm, const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update,
+                               ULONG Start, ULONG Count, ULONGLONG Table, const ULONGLONG* Entries, ULONG Slots)
+{
+    ULONG bit=MAXULONG,i;
+    if (!vm->Pte.system_64k || Update->PageTableLevel != 0) return;
+    if (vm->Table64KBits != NULL && Table >= vm->SegmentPhysical &&
+        (Table-vm->SegmentPhysical)/PAGE_SIZE < vm->Table64K.SizeOfBitMap)
+        bit=(ULONG)((Table-vm->SegmentPhysical)/PAGE_SIZE);
+    if (Slots != BC250_VIDMM_PAGE_64K_SLOTS) {
+        // A 4 KB update of a page that holds 64 KiB entries: VidMm converts the table (it rewrites all 512
+        // entries in runs, then the level 1 entry), or the page is the storage of a new table.
+        if (bit != MAXULONG && RtlCheckBit(&vm->Table64K,bit)) {
+            RtlClearBit(&vm->Table64K,bit);
+            if (Update->Flags.InitialUpdate) InterlockedIncrement64(&vm->Tables64KReused);
+            else if (InterlockedIncrement64(&vm->Tables64KSplit) <= BC250_VIDMM_LOG_CALLS)
+                GuardLog("vidmm: 64 KiB table 0x%llX converted to 4 KB entries (start %u count %u)",
+                         Table,Update->StartIndex+Start,Count);
+        }
+        return;
+    }
+    {
+        LONG64 fragment=0,plain=0,zero=0,invalid=0;
+        for (i=0;i<Count;i++) {
+            const DXGK_PTE* pte=Update->pPageTableEntries+(Update->Flags.Repeat?0:Start+i);
+            const ULONGLONG first=Entries[(SIZE_T)i*Slots];
+            if (pte->Flags&BC250_DXGK_PTE_ZERO) zero++;
+            else if (!(pte->Flags&BC250_DXGK_PTE_VALID)) invalid++;
+            else if (((first>>7)&0x1f)==BC250_PTE_LARGE_PAGE_FRAG) {
+                if (fragment++==0 && InterlockedCompareExchange64(&vm->Pages64KFragment,0,0)==0)
+                    GuardLog("vidmm: first 64 KiB host page flags 0x%llX address 0x%llX entries 0x%llX .. 0x%llX",
+                             pte->Flags,pte->PageAddress,first,Entries[(SIZE_T)i*Slots+Slots-1]);
+            } else if (plain++==0 && InterlockedCompareExchange64(&vm->Pages64KPlain,0,0)==0)
+                GuardLog("vidmm: first 64 KiB entry without a fragment flags 0x%llX address 0x%llX entry 0x%llX",
+                         pte->Flags,pte->PageAddress,first);
+        }
+        InterlockedIncrement64(&vm->Updates64K);
+        if (fragment) InterlockedAdd64(&vm->Pages64KFragment,fragment);
+        if (plain) InterlockedAdd64(&vm->Pages64KPlain,plain);
+        if (zero) InterlockedAdd64(&vm->Pages64KZero,zero);
+        if (invalid) InterlockedAdd64(&vm->Pages64KInvalid,invalid);
+    }
+    if (bit != MAXULONG && !RtlCheckBit(&vm->Table64K,bit)) {
+        RtlSetBit(&vm->Table64K,bit);
+        InterlockedIncrement64(&vm->Tables64K);
+    }
 }
 
 // PASSIVE_LEVEL. Immediate CPU_VIRTUAL initialization, or the serialized
@@ -385,6 +521,7 @@ static NTSTATUS VidMmUpdatePageTableLocked(_In_ const DXGK_BUILDPAGINGBUFFER_UPD
 {
     BC250_VIDMM* vm = &g_VidMm;
     UINT level, i;
+    ULONG slots, tableEntries;
     BOOLEAN cpu, logCall;
     ULONGLONG tableOffset,tablePhysical=0;
     int shadowStatus=PAGING_PT_MISSING;
@@ -397,10 +534,13 @@ static NTSTATUS VidMmUpdatePageTableLocked(_In_ const DXGK_BUILDPAGINGBUFFER_UPD
     level = Update->PageTableLevel;
     cpu = Update->UpdateMode == DXGK_PAGETABLEUPDATE_CPU_VIRTUAL;
     tableOffset = cpu ? 0 : Update->PageTableAddress.GpuPhysical.SegmentOffset;
-    if (level >= BC250_VIDMM_LEVELS || Update->Flags.Use64KBPages ||
+    // A 64 KiB table has 32 entries of 16 slots each; every other table 512 entries of one slot.
+    slots = VidMmPageTableEntrySlots(Update);
+    tableEntries = BC250_VIDMM_PTES / slots;
+    if (level >= BC250_VIDMM_LEVELS || VidMmRefuse64K(Update,FALSE) ||
         Update->pPageTableEntries == NULL || Update->NumPageTableEntries == 0 ||
-        Update->StartIndex >= BC250_VIDMM_PTES ||
-        Update->NumPageTableEntries > BC250_VIDMM_PTES - Update->StartIndex ||
+        Update->StartIndex >= tableEntries ||
+        Update->NumPageTableEntries > tableEntries - Update->StartIndex ||
         (cpu ? (Update->PageTableAddress.CpuVirtual == NULL ||
                 ((ULONG_PTR)Update->PageTableAddress.CpuVirtual & (PAGE_SIZE-1)) != 0) :
                (Update->UpdateMode != DXGK_PAGETABLEUPDATE_GPU_PHYSICAL ||
@@ -414,7 +554,7 @@ static NTSTATUS VidMmUpdatePageTableLocked(_In_ const DXGK_BUILDPAGINGBUFFER_UPD
     __try {
         for (i=0; i<Update->NumPageTableEntries; i++) {
             const DXGK_PTE* pte = Update->pPageTableEntries + (Update->Flags.Repeat ? 0 : i);
-            if (bc250_pte_from_dxgk_level(&vm->Pte,level,pte->Flags,pte->PageAddress,&entries[i]) != 0) {
+            if (VidMmEncodeEntry(vm,level,slots,pte,&entries[(SIZE_T)i*slots]) != 0) {
                 InterlockedIncrement(&vm->Refused);
                 VidMmNoteRefusal(Update,pte,FALSE);
                 status = STATUS_INVALID_PARAMETER;
@@ -424,7 +564,7 @@ static NTSTATUS VidMmUpdatePageTableLocked(_In_ const DXGK_BUILDPAGINGBUFFER_UPD
             if (pte->Flags & BC250_DXGK_PTE_VALID) InterlockedIncrement64(&vm->Valid[level]);
         }
         if (NT_SUCCESS(status)) {
-            VidMmCountEncoding(Update,0,Update->NumPageTableEntries,entries);
+            VidMmCountEncoding(Update,0,Update->NumPageTableEntries,entries,slots);
             if (cpu) table = (volatile ULONGLONG*)Update->PageTableAddress.CpuVirtual;
             else {
                 if (vm->SegmentMapping == NULL) status = STATUS_DEVICE_NOT_READY;
@@ -440,8 +580,8 @@ static NTSTATUS VidMmUpdatePageTableLocked(_In_ const DXGK_BUILDPAGINGBUFFER_UPD
                 if ((tablePhysical & (PAGE_SIZE-1))!=0 || tablePhysical<vm->SegmentPhysical ||
                     tablePhysical-vm->SegmentPhysical>vm->SegmentLength-PAGE_SIZE)
                     shadowStatus=PAGING_PT_INVALID;
-                else shadowStatus=PagingPtShadowCanApply(&vm->Shadow,tablePhysical,Update->StartIndex,
-                                                        Update->NumPageTableEntries,cpu);
+                else shadowStatus=PagingPtShadowCanApply(&vm->Shadow,tablePhysical,Update->StartIndex*slots,
+                                                        Update->NumPageTableEntries*slots,cpu);
                 // CPU_VIRTUAL is paging-process initialization. An unregistered
                 // GPU_PHYSICAL bootstrap table belongs to another process.
                 if (shadowStatus!=PAGING_PT_OK && !(shadowStatus==PAGING_PT_MISSING && !cpu)) {
@@ -462,14 +602,15 @@ static NTSTATUS VidMmUpdatePageTableLocked(_In_ const DXGK_BUILDPAGINGBUFFER_UPD
                     GuardLog("vidmm: table physical cache query pa 0x%llX status 0x%08X type %u; retained map requests NC; borrowed VA attributes unproven",
                              tablePhysical,cacheStatus,(UINT)cacheType);
                 }
-                for (i=0; i<Update->NumPageTableEntries; i++) {
-                    table[Update->StartIndex+i] = entries[i];
+                for (i=0; i<Update->NumPageTableEntries*slots; i++) {
+                    table[Update->StartIndex*slots+i] = entries[i];
                     InterlockedIncrement64(&vm->Written);
                 }
                 KeMemoryBarrier();
                 if (shadowStatus==PAGING_PT_OK)
-                    (void)PagingPtShadowApply(&vm->Shadow,tablePhysical,Update->StartIndex,
-                                             Update->NumPageTableEntries,entries,cpu);
+                    (void)PagingPtShadowApply(&vm->Shadow,tablePhysical,Update->StartIndex*slots,
+                                             Update->NumPageTableEntries*slots,entries,cpu);
+                VidMmNotePublished(vm,Update,0,Update->NumPageTableEntries,tablePhysical,entries,slots);
             }
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -514,33 +655,38 @@ void VidMmSetRootPageTable(_In_ const DXGKARG_SETROOTPAGETABLE* Root)
 // No CPU table writes: the caller queues the returned values on SDMA. Validating
 // the whole source before emitting avoids accepting a malformed later entry after
 // an earlier chunk has already been submitted. The OS owns source lifetime here.
+// Entries gets Count * VidMmPageTableEntrySlots(Update) values: 16 for each entry of a 64 KiB table (32 entries,
+// indexed in 64 KiB units), one for each entry of any other table. Physical is where the first of them goes.
 BOOLEAN VidMmEncodePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update,
                             ULONG Start, ULONG Count, _Out_ ULONGLONG* Physical,
-                            _Out_writes_(Count) ULONGLONG* Entries)
+                            _Out_ ULONGLONG* Entries)
 {
     BC250_VIDMM* vm = &g_VidMm;
     UINT i;
+    ULONG slots, tableEntries, j;
     ULONGLONG table;
-    if (Update == NULL || Entries == NULL || Physical == NULL ||
-        Update->UpdateMode != DXGK_PAGETABLEUPDATE_GPU_PHYSICAL ||
-        Update->PageTableLevel >= BC250_VIDMM_LEVELS || Update->Flags.Use64KBPages ||
+    if (Update == NULL || Entries == NULL || Physical == NULL) return FALSE;
+    slots = VidMmPageTableEntrySlots(Update);
+    tableEntries = BC250_VIDMM_PTES / slots;
+    if (Update->UpdateMode != DXGK_PAGETABLEUPDATE_GPU_PHYSICAL ||
+        Update->PageTableLevel >= BC250_VIDMM_LEVELS || VidMmRefuse64K(Update,TRUE) ||
         Update->pPageTableEntries == NULL || Update->NumPageTableEntries == 0 ||
-        Update->StartIndex >= BC250_VIDMM_PTES ||
-        Update->NumPageTableEntries > BC250_VIDMM_PTES - Update->StartIndex ||
+        Update->StartIndex >= tableEntries ||
+        Update->NumPageTableEntries > tableEntries - Update->StartIndex ||
         Start > Update->NumPageTableEntries || Count == 0 || Count > Update->NumPageTableEntries - Start ||
         !VidMmRootPhysical(&Update->PageTableAddress.GpuPhysical,&table)) return FALSE;
     for (i = 0; i < Update->NumPageTableEntries; i++) {
         const DXGK_PTE* pte = Update->pPageTableEntries + (Update->Flags.Repeat ? 0 : i);
-        u64 entry;
-        if (bc250_pte_from_dxgk_level(&vm->Pte,Update->PageTableLevel,
-                                     pte->Flags,pte->PageAddress,&entry) != 0) {
+        u64 entry[BC250_VIDMM_PAGE_64K_SLOTS];
+        if (VidMmEncodeEntry(vm,Update->PageTableLevel,slots,pte,entry) != 0) {
             VidMmNoteRefusal(Update,pte,TRUE);
             return FALSE;
         }
-        if (i >= Start && i - Start < Count) Entries[i - Start] = entry;
+        if (i >= Start && i - Start < Count)
+            for (j = 0; j < slots; j++) Entries[(SIZE_T)(i - Start) * slots + j] = entry[j];
     }
-    VidMmCountEncoding(Update,Start,Count,Entries);
-    *Physical = table + ((ULONGLONG)Update->StartIndex + Start) * sizeof(ULONGLONG);
+    VidMmCountEncoding(Update,Start,Count,Entries,slots);
+    *Physical = table + ((ULONGLONG)Update->StartIndex + Start) * slots * sizeof(ULONGLONG);
     return TRUE;
 }
 
@@ -558,15 +704,26 @@ NTSTATUS VidMmCommitPagingUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETAB
     if (!vm->Ready || !vm->Write || vm->Shadow.Slots==NULL) status=STATUS_DEVICE_NOT_READY;
     else if (!VidMmEncodePageTable(Update,Start,Count,&physical,vm->CpuEntries)) status=STATUS_INVALID_PARAMETER;
     else {
+        // CpuEntries holds the hardware entries of the slice: at most 32 entries of 16 slots, or 512 of one.
+        const ULONG slots=VidMmPageTableEntrySlots(Update);
         result=PagingPtShadowApply(&vm->Shadow,physical & ~(ULONGLONG)(PAGE_SIZE-1),
-            (unsigned)((physical & (PAGE_SIZE-1))/sizeof(ULONGLONG)),Count,vm->CpuEntries,0);
+            (unsigned)((physical & (PAGE_SIZE-1))/sizeof(ULONGLONG)),Count*slots,vm->CpuEntries,0);
         // Only pinned paging-process tables were registered during CPU initialization.
         // Ordinary process updates intentionally have no entry in this logical view.
         if (result!=PAGING_PT_OK && result!=PAGING_PT_MISSING) status=STATUS_INVALID_PARAMETER;
+        else VidMmNotePublished(vm,Update,Start,Count,physical & ~(ULONGLONG)(PAGE_SIZE-1),vm->CpuEntries,slots);
     }
     ExReleasePushLockExclusive(&vm->CpuUpdateLock);
     KeLeaveCriticalRegion();
     return status;
+}
+
+// TRUE when the table page that holds Physical is marked as holding 64 KiB entries. CpuUpdateLock held.
+static BOOLEAN VidMmTable64KMarked(BC250_VIDMM* Vm, ULONGLONG Physical)
+{
+    if (Vm->Table64KBits == NULL || Physical < Vm->SegmentPhysical ||
+        (Physical-Vm->SegmentPhysical)/PAGE_SIZE >= Vm->Table64K.SizeOfBitMap) return FALSE;
+    return (BOOLEAN)(RtlCheckBit(&Vm->Table64K,(ULONG)((Physical-Vm->SegmentPhysical)/PAGE_SIZE)) != 0);
 }
 
 // Physical entry identities come from a capacity-accepted copy range. Only
@@ -580,6 +737,15 @@ NTSTATUS VidMmCommitPagingCopy(ULONGLONG Source, ULONGLONG Destination, ULONG Co
     KeEnterCriticalRegion();
     ExAcquirePushLockExclusive(&vm->CpuUpdateLock);
     if (!vm->Ready || !vm->Write || vm->Shadow.Slots==NULL) status=STATUS_DEVICE_NOT_READY;
+    else if (VidMmTable64KMarked(vm,Source) || VidMmTable64KMarked(vm,Destination)) {
+        // The indexes of a copy count entries of the table, and a 64 KiB table has 32 of 16 slots. How VidMm
+        // counts a copy that involves one was not read, so it is refused and not copied on a guess. The caller
+        // clears its record and gives the failure to the OS.
+        if (InterlockedIncrement64(&vm->Copies64KRefused) <= BC250_VIDMM_LOG_REFUSALS)
+            GuardLog("vidmm: copy of %lu entries refused: 0x%llX or 0x%llX is in a 64 KiB page table",
+                     Count,Source,Destination);
+        status=STATUS_INVALID_PARAMETER;
+    }
     else {
         result=PagingPtShadowCopy(&vm->Shadow,Source & ~(ULONGLONG)(PAGE_SIZE-1),
             (unsigned)((Source & (PAGE_SIZE-1))/8u),Destination & ~(ULONGLONG)(PAGE_SIZE-1),
@@ -605,6 +771,16 @@ NTSTATUS VidMmCommitPagingFill(ULONGLONG Physical, ULONGLONG Bytes, ULONG Patter
     else if (Physical<vm->SegmentPhysical || Physical-vm->SegmentPhysical>=vm->SegmentLength ||
         Bytes>vm->SegmentLength-(Physical-vm->SegmentPhysical) ||
         PagingPtShadowFill(&vm->Shadow,Physical,Bytes,Pattern)!=PAGING_PT_OK) status=STATUS_INVALID_PARAMETER;
+    else if (vm->Table64KBits != NULL && Bytes != 0) {
+        // A filled table page holds the pattern and no 64 KiB entry any more.
+        ULONG bit=(ULONG)((Physical-vm->SegmentPhysical)/PAGE_SIZE);
+        const ULONG last=(ULONG)((Physical-vm->SegmentPhysical+Bytes-1)/PAGE_SIZE);
+        for (;bit<=last && bit<vm->Table64K.SizeOfBitMap;bit++)
+            if (RtlCheckBit(&vm->Table64K,bit)) {
+                RtlClearBit(&vm->Table64K,bit);
+                InterlockedIncrement64(&vm->Tables64KReused);
+            }
+    }
     ExReleasePushLockExclusive(&vm->CpuUpdateLock);
     KeLeaveCriticalRegion();
     return status;
@@ -921,6 +1097,22 @@ void VidMmSummary(void)
         LONG64 refused=InterlockedCompareExchange64(&vm->RefusedLarge[level],0,0);
         if (encoded || refused)
             GuardLog("vidmm summary: level %u large pages encoded %lld, refused %lld", level, encoded, refused);
+    }
+    // 64 KiB page tables. One line on every start, so that "off" is a statement and not a missing line; the
+    // counters only on a start that reported them, or when something with Use64KBPages was refused.
+    GuardLog("vidmm summary: 64 KiB host pages %s", vm->Pte.system_64k ? "reported" : "not reported");
+    {
+        const LONG64 refused64k=InterlockedCompareExchange64(&vm->Refused64K,0,0);
+        if (vm->Pte.system_64k) {
+            GuardLog("vidmm summary: 64 KiB entries: fragment 4 %lld, no fragment %lld, refused %lld",
+                     vm->Pages64KFragment,vm->Pages64KPlain,refused64k);
+            GuardLog("vidmm summary: 64 KiB entries: zero %lld, invalid %lld",vm->Pages64KZero,vm->Pages64KInvalid);
+            GuardLog("vidmm summary: 64 KiB tables: %lld updates, %lld tables, %lld converted to 4 KB, %lld reused",
+                     vm->Updates64K,vm->Tables64K,vm->Tables64KSplit,vm->Tables64KReused);
+            GuardLog("vidmm summary: 64 KiB tables: %lld level 1 entries, %lld copies refused",
+                     vm->Level1Tables64K,vm->Copies64KRefused);
+        } else if (refused64k)
+            GuardLog("vidmm summary: 64 KiB updates refused %lld", refused64k);
     }
     GuardLog("vidmm summary: %ld cpu-virtual calls, %ld gpu-physical calls, %ld gpu-physical refusals",
              vm->CpuCalls, vm->GpuCalls, vm->GpuRefused);

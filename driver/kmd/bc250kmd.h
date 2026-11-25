@@ -1672,13 +1672,19 @@ void WddmGpuFenceCompute(_Inout_ BC250_DEVICE* Device);  // node 2's WddmGpuFenc
 // vidmm.c checks both against bc250_pte.h, which wddm.c does not include.
 #define BC250_VIDMM_HUGE_PAGE_BYTES (2ull*1024*1024)
 #define BC250_VIDMM_GIANT_PAGE_BYTES (1024ull*1024*1024)
+// The host page of a start with Device->SystemPages64K, and what one entry of a 64 KiB page table becomes:
+// VidMmPageTableEntrySlots is 16 for an update of such a table (Use64KBPages, level 0) on that start, else 1.
+// VidMmEncodePageTable writes Count * slots hardware entries, and its Physical is the first of them.
+#define BC250_VIDMM_PAGE_64K_BYTES (64ull*1024)
+#define BC250_VIDMM_PAGE_64K_SLOTS 16u
+ULONG VidMmPageTableEntrySlots(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update);
 NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId,
                           ULONGLONG TableOffset, ULONGLONG TableLength, ULONG TableSegmentId);
 NTSTATUS VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId);
 void VidMmStop(void);
 BOOLEAN VidMmEncodePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update,
                             ULONG Start, ULONG Count, _Out_ ULONGLONG* Physical,
-                            _Out_writes_(Count) ULONGLONG* Entries);
+                            _Out_ ULONGLONG* Entries);   // Count * VidMmPageTableEntrySlots(Update) values
 NTSTATUS VidMmCommitPagingFill(ULONGLONG Physical, ULONGLONG Bytes, ULONG Pattern);
 NTSTATUS VidMmCommitPagingCopy(ULONGLONG Source, ULONGLONG Destination, ULONG Count);
 NTSTATUS VidMmCommitPagingUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update, ULONG Start, ULONG Count);

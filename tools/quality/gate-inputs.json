@@ -1079,6 +1079,16 @@
         "host"
       ]
     },
+    "vidmm-64k": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "vidmm-64k-one-slot": {
+      "inputs": [
+        "host"
+      ]
+    },
     "guard-start": {
       "inputs": [
         "host"

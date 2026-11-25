@@ -819,6 +819,9 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='vram-geometry';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace)}
   # BD-341: the top-of-VRAM check before the fix (FramebufferLength, 0 without a firmware display) must fail it.
   @{n='vram-geometry-framebuffer-length';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace,'-RangeMutation','framebuffer-length');Fails=$true}
+  # 64 KiB page tables of vidmm.c: 32 entries of 16 slots. The control is the encoder with one slot for each entry.
+  @{n='vidmm-64k';s='driver\kmd\test\run_vidmm_64k.ps1';a=@('-Root',$Workspace)}
+  @{n='vidmm-64k-one-slot';s='driver\kmd\test\run_vidmm_64k.ps1';a=@('-Root',$Workspace,'-Mutation','one-slot');Fails=$true}
   @{n='guard-start';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace)}
   # BD-122: the start record, and the four pre-fix behaviours as its controls, one per requirement.
   @{n='start-record';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace)}
