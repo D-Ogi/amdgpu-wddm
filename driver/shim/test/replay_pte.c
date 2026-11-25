@@ -880,6 +880,186 @@ static void check_huge(void)
 	       (unsigned int)(sizeof(g_huge) / sizeof(g_huge[0])));
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * 8. Large pages on a segment base that is 2 MiB aligned only (huge_pages_only)
+ * ------------------------------------------------------------------------------------------- */
+
+/* The unit with the 512 MiB carve-out at 0x450000000 (its tester.38 log: "vram: 0x450000000 +
+ * 0x20000000", "vidmm: VRAM segment 1 at physical 0x453050000 + 0x1A240000", "vidmm: table segment
+ * 3 at physical 0x46D290000 + 0xD70000"). The 2 MiB layout moves the segment base up to the next
+ * 2 MiB address and keeps the table segment; driver/kmd/test/vram_geometry_test.c computes these
+ * numbers from the production layout code. */
+#define SMALL_PLAIN_BASE	0x0000000453050000ull   /* tester.38: not a 2 MiB address */
+#define SMALL_VRAM_BASE		0x0000000453200000ull
+#define SMALL_VRAM_SIZE		0x000000001A090000ull   /* 208 pages of 2 MiB and 576 KiB */
+#define SMALL_TABLE_BASE	0x000000046D290000ull
+#define SMALL_TABLE_SIZE	0x0000000000D70000ull
+#define SMALL_HUGE_PAGES	208u
+
+/* The context vidmm.c builds for that start: page frame numbers, host memory in segment 0. */
+static struct bc250_pte_context small_ctx(void)
+{
+	struct bc250_pte_context ctx;
+
+	memset(&ctx, 0, sizeof(ctx));
+	ctx.units = BC250_PTE_ADDR_PAGES;
+	ctx.aperture = BC250_PTE_VM;
+	ctx.system_segment = 0;
+	ctx.vram_segment = VRAM_SEGMENT;
+	ctx.vram_base = SMALL_VRAM_BASE;
+	ctx.vram_size = SMALL_VRAM_SIZE;
+	ctx.table_segment = 3;
+	ctx.table_base = SMALL_TABLE_BASE;
+	ctx.table_size = SMALL_TABLE_SIZE;
+	ctx.large_pages = 1;
+	ctx.huge_pages_only = 1;
+	return ctx;
+}
+
+/* DXGK_PTE flags of a valid large page in `segment`: writable, executable, not coherent. */
+static u64 small_flags(u32 segment)
+{
+	return BC250_DXGK_PTE_VALID | BC250_DXGK_PTE_LARGEPAGE | ((u64)segment << BC250_DXGK_PTE_SEGMENT_SHIFT);
+}
+
+static void check_huge_only(void)
+{
+	struct bc250_pte_context ctx = small_ctx();
+	struct bc250_pte_fields f;
+	u64 got = 0, offset;
+	unsigned int pages = 0, i;
+
+	printf("\n== large pages on a 2 MiB aligned base (level 1 only)\n");
+
+	/* Every 2 MiB page of the segment: accepted at level 1, the address is base plus offset, the
+	 * entry is amdgpu's huge page (PDE_PTE, fragment 9, not SYSTEM), and the observer reads it
+	 * back as 2 MiB. Expected value written out: address | VALID 0x01 | EXECUTABLE 0x10 |
+	 * READABLE 0x20 | WRITEABLE 0x40 | FRAG 9 (0x480) | PDE_PTE (bit 54), MTYPE_NC. */
+	for (offset = 0; offset + BC250_PTE_HUGE_PAGE_BYTES <= SMALL_VRAM_SIZE; offset += BC250_PTE_HUGE_PAGE_BYTES) {
+		got = 0;
+		if (bc250_pte_from_dxgk_level(&ctx, 1, small_flags(VRAM_SEGMENT), offset >> 12, &got) != 0 ||
+		    got != ((SMALL_VRAM_BASE + offset) | 0x00400000000004F1ull)) {
+			printf("  offset %llX entry %016llX\n", (unsigned long long)offset, (unsigned long long)got);
+			fail("a 2 MiB page of the small segment is not encoded as base plus offset");
+			break;
+		}
+		bc250_pte_decode(got, BC250_PTE_DIRECTORY, &f);
+		if (bc250_pte_large_page_bytes(&ctx, 1, &f) != BC250_PTE_HUGE_PAGE_BYTES ||
+		    f.address != SMALL_VRAM_BASE + offset || (f.address & (BC250_PTE_HUGE_PAGE_BYTES - 1)) != 0)
+			fail("the observer does not read back a 2 MiB page of the small segment");
+		pages++;
+	}
+	printf("  %u pages of 2 MiB accepted, first %016llX, last %016llX\n", pages,
+	       (unsigned long long)(SMALL_VRAM_BASE | 0x00400000000004F1ull), (unsigned long long)got);
+	if (pages != SMALL_HUGE_PAGES || got != 0x004000046D0004F1ull)
+		fail("the small segment does not hold exactly 208 pages of 2 MiB, the last at 0x46D000000");
+
+	/* The same context without LargePage still names a table of the table segment: the level 1
+	 * path of 4 KB mappings is as it was. */
+	got = 0;
+	if (bc250_pte_from_dxgk_level(&ctx, 1, BC250_DXGK_PTE_VALID | (3ull << BC250_DXGK_PTE_SEGMENT_SHIFT),
+				      0x10, &got) != 0 || got != (SMALL_TABLE_BASE + 0x10000ull + 1ull))
+		fail("a level 1 pointer to a table is not what it was");
+
+	/* Refusals at level 1, each with nothing written. */
+	{
+		static const struct { const char *name; u32 level; u32 segment; u64 offset; } bad[] = {
+			{ "the 576 KiB tail: the range runs past the segment end", 1, VRAM_SEGMENT, 0x1A000000ull },
+			{ "past the end of the segment",                           1, VRAM_SEGMENT, 0x1A200000ull },
+			{ "an offset 4 KB above a 2 MiB offset",                   1, VRAM_SEGMENT, 0x00201000ull },
+			{ "an offset 64 KB above a 2 MiB offset",                  1, VRAM_SEGMENT, 0x00210000ull },
+			{ "an offset 1 MiB above a 2 MiB offset",                  1, VRAM_SEGMENT, 0x00300000ull },
+			{ "the table segment",                                     1, 3,            0x00000000ull },
+			{ "the aperture segment",                                  1, 2,            0x00200000ull },
+			{ "host memory, a 2 MiB aligned address",                  1, 0,            0x109200000ull },
+			{ "level 2, offset 0",                                     2, VRAM_SEGMENT, 0x00000000ull },
+			{ "level 2, the offset of the first 1 GiB boundary above", 2, VRAM_SEGMENT, 0x2CE00000ull },
+			{ "level 3",                                               3, VRAM_SEGMENT, 0x00000000ull },
+		};
+
+		for (i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+			got = 0xDEADBEEFDEADBEEFull;
+			if (bc250_pte_from_dxgk_level(&ctx, bad[i].level, small_flags(bad[i].segment),
+						      bad[i].offset >> 12, &got) != BC250_EINVAL || got != 0) {
+				printf("  %s: entry %016llX\n", bad[i].name, (unsigned long long)got);
+				fail("a large page that must be refused on the 2 MiB base was accepted");
+			} else {
+				printf("  refused: %s\n", bad[i].name);
+			}
+		}
+	}
+
+	/* Every 4 KB offset of the first 4 MiB that is not a 2 MiB offset is refused: an unaligned
+	 * large page would map another range than VidMm meant. */
+	for (offset = 0x1000; offset < 0x400000ull; offset += 0x1000) {
+		if ((offset & (BC250_PTE_HUGE_PAGE_BYTES - 1)) == 0)
+			continue;
+		got = 1;
+		if (bc250_pte_from_dxgk_level(&ctx, 1, small_flags(VRAM_SEGMENT), offset >> 12, &got) != BC250_EINVAL ||
+		    got != 0) {
+			fail("an unaligned large page offset was accepted on the 2 MiB base");
+			break;
+		}
+	}
+
+	/* The control of the layout: on the base tester.38 had (0x453050000) every 2 MiB offset is an
+	 * unaligned address, so every large page is refused. The base alignment is what the pages
+	 * need, and the encoder fails closed if the layout ever does not give it. */
+	{
+		struct bc250_pte_context plain = small_ctx();
+
+		plain.vram_base = SMALL_PLAIN_BASE;
+		plain.vram_size = 0x1A240000ull;
+		for (offset = 0; offset + BC250_PTE_HUGE_PAGE_BYTES <= plain.vram_size; offset += BC250_PTE_HUGE_PAGE_BYTES) {
+			got = 1;
+			if (bc250_pte_from_dxgk_level(&plain, 1, small_flags(VRAM_SEGMENT), offset >> 12, &got) !=
+			    BC250_EINVAL || got != 0) {
+				fail("a large page was accepted on a base that is not a 2 MiB address");
+				break;
+			}
+		}
+	}
+
+	/* The control of huge_pages_only itself: unit A's segment holds 1 GiB pages, and the flag is
+	 * what refuses them, not the size of the segment. Level 1 stays. */
+	{
+		struct bc250_pte_context big = small_ctx();
+
+		big.vram_base = UNITA_VRAM_BASE;
+		big.vram_size = UNITA_VRAM_SIZE;
+		big.table_size = 0;
+		big.huge_pages_only = 0;
+		got = 0;
+		if (bc250_pte_from_dxgk_level(&big, 2, small_flags(VRAM_SEGMENT), 0x10000000ull >> 12, &got) != 0 ||
+		    got != 0x0040000280000971ull)       /* FRAG 18 is 0x900 */
+			fail("the 1 GiB control page is not accepted without huge_pages_only");
+		bc250_pte_decode(got, BC250_PTE_DIRECTORY, &f);
+		if (bc250_pte_large_page_bytes(&big, 2, &f) != BC250_PTE_GIANT_PAGE_BYTES)
+			fail("the observer does not read the 1 GiB control page without huge_pages_only");
+		big.huge_pages_only = 1;
+		if (bc250_pte_large_page_bytes(&big, 2, &f) != 0)
+			fail("the observer reads a 1 GiB page with huge_pages_only");
+		got = 1;
+		if (bc250_pte_from_dxgk_level(&big, 2, small_flags(VRAM_SEGMENT), 0x10000000ull >> 12, &got) !=
+		    BC250_EINVAL || got != 0)
+			fail("huge_pages_only does not refuse a 1 GiB page that the segment could hold");
+		got = 0;
+		if (bc250_pte_from_dxgk_level(&big, 1, small_flags(VRAM_SEGMENT), 0, &got) != 0 ||
+		    got != 0x00400002700004F1ull)
+			fail("huge_pages_only refuses a 2 MiB page");
+		bc250_pte_decode(got, BC250_PTE_DIRECTORY, &f);
+		if (bc250_pte_large_page_bytes(&big, 1, &f) != BC250_PTE_HUGE_PAGE_BYTES)
+			fail("the observer does not read a 2 MiB page with huge_pages_only");
+		/* The flag alone reports nothing: without large_pages every level is refused. */
+		big.large_pages = 0;
+		got = 1;
+		if (bc250_pte_from_dxgk_level(&big, 1, small_flags(VRAM_SEGMENT), 0, &got) != BC250_EINVAL || got != 0 ||
+		    bc250_pte_large_page_bytes(&big, 1, &f) != 0)
+			fail("huge_pages_only without large_pages accepts a large page");
+	}
+	printf("  208 pages, 11 refusals, the unaligned sweep, and the plain-base and 1 GiB controls\n");
+}
+
 static void check_table_segment(void)
 {
 	struct bc250_pte_context ctx=vm_ctx();
@@ -923,6 +1103,317 @@ static void check_table_segment(void)
 	printf("  dedicated table segment:2048 address/unit/kind combinations plus boundary controls\n");
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * 9. 64 KB page tables: one entry of an update with Use64KBPages, through bc250_pte_from_dxgk_64k()
+ * ------------------------------------------------------------------------------------------- */
+
+/* Evidence E17 (evidence/linux/2026-10-06-E17-pte-l25-l38), buffer k64 on unit A under amdgpu: a
+ * 64 KB buffer in host memory. The trace has amdgpu_vm_set_ptes addr=010f1e0000 incr=4096 flags=267
+ * count=16, and these are the 16 entries read back from the table (out/e17/hold/pt/
+ * vram-00046ffdb000.hex, offsets 0x80 to 0xF8), copied here and not computed. */
+static const u64 g_k64[BC250_PTE_64K_SLOTS] = {
+	0x000000010f1e0267ull, 0x000000010f1e1267ull, 0x000000010f1e2267ull, 0x000000010f1e3267ull,
+	0x000000010f1e4267ull, 0x000000010f1e5267ull, 0x000000010f1e6267ull, 0x000000010f1e7267ull,
+	0x000000010f1e8267ull, 0x000000010f1e9267ull, 0x000000010f1ea267ull, 0x000000010f1eb267ull,
+	0x000000010f1ec267ull, 0x000000010f1ed267ull, 0x000000010f1ee267ull, 0x000000010f1ef267ull,
+};
+#define K64_ADDRESS	0x000000010f1e0000ull
+
+/* The context of the miniport for these cases: page frame numbers, host memory as segment 0 (E18
+ * run 001), the test's VRAM segment, 64 KB tables reported. */
+static struct bc250_pte_context ctx_64k(void)
+{
+	struct bc250_pte_context ctx = vm_ctx();
+
+	ctx.units = BC250_PTE_ADDR_PAGES;
+	ctx.system_segment = 0;
+	ctx.system_limit = 0x0000000480000000ull;
+	ctx.system_64k = 1;
+	return ctx;
+}
+
+struct page64_case {
+	const char *name;
+	u64 flags;              /* DXGK_PTE.Flags */
+	u64 pfn;                /* DXGK_PTE.PageAddress, a page frame number */
+	int refused;            /* 1: BC250_EINVAL and 16 zero slots */
+	u32 fragment;           /* expected *fragment */
+	u64 first;              /* expected slot 0 */
+	u64 step;               /* expected slot n - slot n-1 */
+};
+
+#define P64_VALID	BC250_DXGK_PTE_VALID
+#define P64_COH		BC250_DXGK_PTE_CACHECOHERENT
+#define P64_RO		BC250_DXGK_PTE_READONLY
+#define P64_NX		BC250_DXGK_PTE_NOEXECUTE
+#define P64_SEG(n)	((u64)(n) << BC250_DXGK_PTE_SEGMENT_SHIFT)
+
+/* Expected slots written out in full: VALID 0x01, SYSTEM 0x02, SNOOPED 0x04, EXECUTABLE 0x10,
+ * READABLE 0x20, WRITEABLE 0x40, FRAG 4 = 0x200. */
+static const struct page64_case g_page64[] = {
+	{ "host, rw, no execute, coherent: evidence E17 k64", P64_VALID | P64_COH | P64_NX,
+	  K64_ADDRESS >> 12, 0, 4, 0x000000010f1e0267ull, 0x1000 },
+	{ "host, rwx, coherent", P64_VALID | P64_COH, K64_ADDRESS >> 12, 0, 4,
+	  0x000000010f1e0277ull, 0x1000 },
+	{ "host, read only, no execute, not coherent", P64_VALID | P64_RO | P64_NX, 0x200000ull >> 12,
+	  0, 4, 0x0000000000200223ull, 0x1000 },
+	{ "host, the last 64 KB below the end of host memory", P64_VALID | P64_COH | P64_NX,
+	  (0x0000000480000000ull - 0x10000ull) >> 12, 0, 4, 0x000000047fff0267ull, 0x1000 },
+	{ "not valid: 16 empty slots", P64_COH | P64_NX, K64_ADDRESS >> 12, 0, 0, 0, 0 },
+	{ "Zero: 16 PRT leaves, no fragment", P64_VALID | BC250_DXGK_PTE_ZERO, 0, 0, 0,
+	  0x0088000000000006ull, 0 },
+	{ "host page not 64 KB aligned: mapped, no fragment", P64_VALID | P64_COH | P64_NX,
+	  (K64_ADDRESS >> 12) + 1, 0, 0, 0x000000010f1e1067ull, 0x1000 },
+	{ "VRAM segment: mapped, no fragment", P64_VALID | P64_NX | P64_SEG(VRAM_SEGMENT),
+	  0x10000ull >> 12, 0, 0, 0x0000000400010061ull, 0x1000 },
+	{ "refused: LargePage on a 64 KB leaf entry", P64_VALID | P64_COH | BC250_DXGK_PTE_LARGEPAGE,
+	  K64_ADDRESS >> 12, 1, 0, 0, 0 },
+	{ "refused: PageTablePageSize on a leaf entry", P64_VALID | P64_COH |
+	  ((u64)BC250_DXGK_PAGE_TABLE_PAGE_64KB << BC250_DXGK_PTE_PAGESIZE_SHIFT),
+	  K64_ADDRESS >> 12, 1, 0, 0, 0 },
+	{ "refused: a reserved bit", P64_VALID | P64_COH | (1ull << 20), K64_ADDRESS >> 12, 1, 0, 0, 0 },
+	{ "refused: another physical adapter", P64_VALID | P64_COH |
+	  (1ull << BC250_DXGK_PTE_ADAPTER_SHIFT), K64_ADDRESS >> 12, 1, 0, 0, 0 },
+	{ "refused: a segment this driver does not report", P64_VALID | P64_COH | P64_SEG(5),
+	  K64_ADDRESS >> 12, 1, 0, 0, 0 },
+	{ "refused: page 15 is past the end of host memory", P64_VALID | P64_COH | P64_NX,
+	  (0x0000000480000000ull - 0xF000ull) >> 12, 1, 0, 0, 0 },
+	{ "refused: the first page is past the end of host memory", P64_VALID | P64_COH | P64_NX,
+	  0x0000000480000000ull >> 12, 1, 0, 0, 0 },
+	{ "refused: a VRAM page whose 64 KB runs past the segment", P64_VALID | P64_SEG(VRAM_SEGMENT),
+	  (VRAM_SIZE - 0x8000ull) >> 12, 1, 0, 0, 0 },
+	{ "refused: a page frame number that does not fit an address", P64_VALID | P64_COH,
+	  0xFFFFFFFFFFFFFFF8ull, 1, 0, 0, 0 },
+};
+
+static void check_page64(void)
+{
+	u64 out[BC250_PTE_64K_SLOTS], leaf;
+	struct bc250_pte_fields f;
+	u32 fragment, n;
+	unsigned int i;
+
+	printf("\n== 64 KB page tables (one entry of an update with Use64KBPages)\n");
+	for (i = 0; i < sizeof(g_page64) / sizeof(g_page64[0]); i++) {
+		const struct page64_case *c = &g_page64[i];
+		struct bc250_pte_context ctx = ctx_64k();
+		int rc, bad = 0;
+
+		memset(out, 0xA5, sizeof(out));
+		fragment = 99;
+		rc = bc250_pte_from_dxgk_64k(&ctx, c->flags, c->pfn, out, &fragment);
+		printf("  %-58s rc %d frag %u slot0 %016llX slot15 %016llX\n", c->name, rc, fragment,
+		       (unsigned long long)out[0], (unsigned long long)out[15]);
+		if ((rc != 0) != (c->refused != 0) || fragment != c->fragment)
+			bad = 1;
+		for (n = 0; n < BC250_PTE_64K_SLOTS; n++) {
+			if (out[n] != (c->refused ? 0 : c->first + n * c->step))
+				bad = 1;
+			/* The mapping does not depend on the fragment: without the fragment field, slot n is
+			 * the 4 KB leaf of page n from the entry point every other leaf uses. */
+			if (!c->refused && (c->flags & BC250_DXGK_PTE_VALID) != 0 &&
+			    (c->flags & BC250_DXGK_PTE_ZERO) == 0 &&
+			    (bc250_pte_from_dxgk(&ctx, BC250_PTE_LEAF, c->flags, c->pfn + n, &leaf) != 0 ||
+			     leaf != (out[n] & ~(u64)AMDGPU_PTE_FRAG(0x1f))))
+				bad = 1;
+		}
+		if (bad) {
+			printf("        expected rc %s frag %u slot0 %016llX step 0x%llX\n",
+			       c->refused ? "EINVAL" : "0", c->fragment, (unsigned long long)c->first,
+			       (unsigned long long)c->step);
+			g_failures++;
+		}
+	}
+
+	/* The positive control, slot by slot against the table amdgpu wrote on unit A. */
+	{
+		struct bc250_pte_context ctx = ctx_64k();
+
+		if (bc250_pte_from_dxgk_64k(&ctx, P64_VALID | P64_COH | P64_NX, K64_ADDRESS >> 12, out,
+					    &fragment) != 0 || fragment != BC250_PTE_LARGE_PAGE_FRAG ||
+		    memcmp(out, g_k64, sizeof(g_k64)) != 0)
+			fail("the 16 entries are not the ones amdgpu wrote for a 64 KB host buffer (E17 k64)");
+		/* The same page as a byte address gives the same entries. */
+		ctx.units = BC250_PTE_ADDR_BYTES;
+		if (bc250_pte_from_dxgk_64k(&ctx, P64_VALID | P64_COH | P64_NX, K64_ADDRESS, out,
+					    &fragment) != 0 || memcmp(out, g_k64, sizeof(g_k64)) != 0)
+			fail("the 64 KB entries differ when the address is a byte address");
+		bc250_pte_decode(out[0], BC250_PTE_LEAF, &f);
+		if (!f.valid || !f.system || !f.snooped || !f.readable || !f.writeable || f.executable ||
+		    f.pde_pte || f.fragment != BC250_PTE_LARGE_PAGE_FRAG || f.address != K64_ADDRESS ||
+		    f.mtype != MTYPE_NC)
+			fail("decode does not read slot 0 as the k64 leaf");
+	}
+
+	/* The setting off: the context of a start that did not report 64 KB tables refuses the entry
+	 * that the control above accepts, and writes nothing. */
+	{
+		struct bc250_pte_context ctx = ctx_64k();
+
+		ctx.system_64k = 0;
+		memset(out, 0xA5, sizeof(out));
+		fragment = 99;
+		if (bc250_pte_from_dxgk_64k(&ctx, P64_VALID | P64_COH | P64_NX, K64_ADDRESS >> 12, out,
+					    &fragment) != BC250_EINVAL || fragment != 0)
+			fail("a 64 KB entry was accepted by a context that does not report 64 KB tables");
+		for (n = 0; n < BC250_PTE_64K_SLOTS; n++)
+			if (out[n] != 0)
+				fail("a refused 64 KB entry left something in its slots");
+		ctx.system_64k = 1;
+		ctx.aperture = BC250_PTE_GART;
+		if (bc250_pte_from_dxgk_64k(&ctx, P64_VALID | P64_COH, K64_ADDRESS >> 12, out, &fragment) == 0)
+			fail("a 64 KB entry was accepted for the GART aperture");
+		ctx.aperture = BC250_PTE_VM;
+		if (bc250_pte_from_dxgk_64k(NULL, P64_VALID, 0, out, &fragment) == 0 ||
+		    bc250_pte_from_dxgk_64k(&ctx, P64_VALID, 0, NULL, &fragment) == 0 ||
+		    bc250_pte_from_dxgk_64k(&ctx, P64_VALID, 0, out, NULL) == 0)
+			fail("a null argument was not refused");
+	}
+
+	/* PageTablePageSize on the level 1 entry that points at a 64 KB table: the same directory entry
+	 * as for a 4 KB table when 64 KB tables are reported, refused in every other place. */
+	{
+		struct bc250_pte_context ctx = ctx_64k();
+		const u64 table = P64_VALID | P64_SEG(VRAM_SEGMENT);
+		const u64 size64 = (u64)BC250_DXGK_PAGE_TABLE_PAGE_64KB << BC250_DXGK_PTE_PAGESIZE_SHIFT;
+		u64 plain = 0, typed = 1;
+
+		if (bc250_pte_from_dxgk_level(&ctx, 1, table, 0x3000ull >> 12, &plain) != 0 ||
+		    bc250_pte_from_dxgk_level(&ctx, 1, table | size64, 0x3000ull >> 12, &typed) != 0 ||
+		    plain != typed || plain != 0x0000000400003001ull)
+			fail("a level 1 entry of a 64 KB table is not the directory entry of a 4 KB table");
+		if (bc250_pte_from_dxgk_level(&ctx, 2, table | size64, 0x3000ull >> 12, &typed) == 0 ||
+		    bc250_pte_from_dxgk_level(&ctx, 3, table | size64, 0x3000ull >> 12, &typed) == 0 ||
+		    bc250_pte_from_dxgk_level(&ctx, 0, table | size64, 0x3000ull >> 12, &typed) == 0)
+			fail("PageTablePageSize = 64 KB was accepted at a level other than 1");
+		ctx.large_pages = 1;
+		if (bc250_pte_from_dxgk_level(&ctx, 1, table | size64 | BC250_DXGK_PTE_LARGEPAGE,
+					      0x200000ull >> 12, &typed) == 0)
+			fail("PageTablePageSize = 64 KB was accepted on a large page");
+		ctx.large_pages = 0;
+		ctx.system_64k = 0;
+		if (bc250_pte_from_dxgk_level(&ctx, 1, table | size64, 0x3000ull >> 12, &typed) == 0 || typed != 0)
+			fail("PageTablePageSize = 64 KB was accepted without 64 KB tables reported");
+	}
+	printf("  %u cases, the E17 k64 control in both address units, the setting off, null arguments\n"
+	       "  and PageTablePageSize at every level\n",
+	       (unsigned int)(sizeof(g_page64) / sizeof(g_page64[0])));
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * 10. Both on one start: a 2 MiB aligned base (huge_pages_only) with 64 KB page tables (system_64k)
+ * ------------------------------------------------------------------------------------------- */
+
+/* The context of the unit of section 8 on a start that also reports 64 KB tables. A level 1 entry
+ * is then a 2 MiB page, a pointer to a 64 KB leaf table or a pointer to a 4 KB leaf table. Each
+ * answer must be the one of the feature alone, and what was refused by one stays refused. */
+static void check_huge_and_page64(void)
+{
+	struct bc250_pte_context both = small_ctx(), huge = small_ctx(), page64 = small_ctx();
+	const u64 table = P64_VALID | P64_SEG(3);
+	const u64 size64 = (u64)BC250_DXGK_PAGE_TABLE_PAGE_64KB << BC250_DXGK_PTE_PAGESIZE_SHIFT;
+	const u64 host = P64_VALID | P64_COH | P64_NX;
+	const u64 last64 = SMALL_VRAM_SIZE - 0x10000ull;	/* the last 64 KB of the segment, in its 576 KiB tail */
+	u64 out[BC250_PTE_64K_SLOTS], other[BC250_PTE_64K_SLOTS], got, want;
+	struct bc250_pte_fields f;
+	u32 fragment, n;
+
+	printf("\n== a 2 MiB aligned base and 64 KB page tables on one start\n");
+	both.system_limit = huge.system_limit = page64.system_limit = 0x0000000450000000ull;
+	both.system_64k = 1;				/* huge: the 2 MiB base alone */
+	page64.system_64k = 1;				/* page64: 64 KB tables alone, on the plain base */
+	page64.large_pages = page64.huge_pages_only = 0;
+	page64.vram_base = SMALL_PLAIN_BASE;
+	page64.vram_size = 0x1A240000ull;
+
+	/* The 2 MiB page: the entry of section 8, with and without 64 KB tables. */
+	got = want = 0;
+	if (bc250_pte_from_dxgk_level(&both, 1, small_flags(VRAM_SEGMENT), 0x400000ull >> 12, &got) != 0 ||
+	    bc250_pte_from_dxgk_level(&huge, 1, small_flags(VRAM_SEGMENT), 0x400000ull >> 12, &want) != 0 ||
+	    got != want || got != 0x00400004536004F1ull)
+		fail("the 2 MiB page changes when 64 KB tables are reported");
+	bc250_pte_decode(got, BC250_PTE_DIRECTORY, &f);
+	if (bc250_pte_large_page_bytes(&both, 1, &f) != BC250_PTE_HUGE_PAGE_BYTES)
+		fail("the observer does not read the 2 MiB page when 64 KB tables are reported");
+
+	/* The pointer to a leaf table: one directory entry for both table types, and not a page. */
+	got = want = 0;
+	if (bc250_pte_from_dxgk_level(&both, 1, table | size64, 0x3000ull >> 12, &got) != 0 ||
+	    bc250_pte_from_dxgk_level(&both, 1, table, 0x3000ull >> 12, &want) != 0 ||
+	    got != want || got != (SMALL_TABLE_BASE + 0x3000ull + 1ull))
+		fail("a level 1 pointer to a 64 KB table is not the pointer to a 4 KB table on the 2 MiB base");
+	bc250_pte_decode(got, BC250_PTE_DIRECTORY, &f);
+	if (f.pde_pte || bc250_pte_large_page_bytes(&both, 1, &f) != 0)
+		fail("the observer reads a pointer to a leaf table as a page");
+	got = 1;
+	if (bc250_pte_from_dxgk_level(&huge, 1, table | size64, 0x3000ull >> 12, &got) != BC250_EINVAL || got != 0)
+		fail("PageTablePageSize = 64 KB was accepted on the 2 MiB base without 64 KB tables");
+
+	/* A 64 KB entry of host memory: evidence E17 k64, the same 16 entries on either base. */
+	if (bc250_pte_from_dxgk_64k(&both, host, K64_ADDRESS >> 12, out, &fragment) != 0 ||
+	    fragment != BC250_PTE_LARGE_PAGE_FRAG || memcmp(out, g_k64, sizeof(g_k64)) != 0 ||
+	    bc250_pte_from_dxgk_64k(&page64, host, K64_ADDRESS >> 12, other, &fragment) != 0 ||
+	    memcmp(out, other, sizeof(out)) != 0)
+		fail("the 64 KB host page changes with the base of the VRAM segment");
+	bc250_pte_decode(out[0], BC250_PTE_LEAF, &f);
+	if (f.pde_pte || f.fragment != BC250_PTE_LARGE_PAGE_FRAG)
+		fail("a leaf of a 64 KB host page does not decode as a leaf with fragment 4");
+	/* A 64 KB entry of VRAM: 16 plain leaves from the base of the layout in force, the last one the
+	 * last page of the segment. Expected: address | VALID 0x01 | READABLE 0x20 | WRITEABLE 0x40. */
+	if (bc250_pte_from_dxgk_64k(&both, P64_VALID | P64_NX | P64_SEG(VRAM_SEGMENT), last64 >> 12, out,
+				    &fragment) != 0 || fragment != 0)
+		fail("a 64 KB entry in the tail of the 2 MiB aligned segment was not mapped without a fragment");
+	for (n = 0; n < BC250_PTE_64K_SLOTS; n++)
+		if (out[n] != ((SMALL_VRAM_BASE + last64 + n * 0x1000ull) | 0x61ull))
+			fail("a 64 KB entry of VRAM does not start at the 2 MiB aligned base");
+	if (out[15] != 0x000000046D28F061ull)
+		fail("the last leaf of the segment is not the page below the table segment");
+	if (bc250_pte_from_dxgk_64k(&huge, host, K64_ADDRESS >> 12, out, &fragment) != BC250_EINVAL || out[0] != 0)
+		fail("a 64 KB entry was accepted on the 2 MiB base without 64 KB tables");
+
+	/* Refusals with both on, each with nothing written. */
+	{
+		static const struct { const char *name; u32 level; u64 flags; u64 offset; } bad[] = {
+			{ "a 2 MiB page with PageTablePageSize = 64 KB", 1,
+			  BC250_DXGK_PTE_VALID | BC250_DXGK_PTE_LARGEPAGE | P64_SEG(VRAM_SEGMENT) |
+			  ((u64)BC250_DXGK_PAGE_TABLE_PAGE_64KB << BC250_DXGK_PTE_PAGESIZE_SHIFT), 0x400000ull },
+			{ "level 2, a 1 GiB page", 2,
+			  BC250_DXGK_PTE_VALID | BC250_DXGK_PTE_LARGEPAGE | P64_SEG(VRAM_SEGMENT), 0 },
+			{ "level 2, a pointer with PageTablePageSize = 64 KB", 2,
+			  BC250_DXGK_PTE_VALID | P64_SEG(3) |
+			  ((u64)BC250_DXGK_PAGE_TABLE_PAGE_64KB << BC250_DXGK_PTE_PAGESIZE_SHIFT), 0x3000ull },
+			{ "level 1, a 2 MiB page 64 KB above a 2 MiB offset", 1,
+			  BC250_DXGK_PTE_VALID | BC250_DXGK_PTE_LARGEPAGE | P64_SEG(VRAM_SEGMENT), 0x00210000ull },
+			{ "level 1, a 2 MiB page of host memory", 1,
+			  BC250_DXGK_PTE_VALID | BC250_DXGK_PTE_LARGEPAGE, 0x109200000ull },
+			{ "level 0, PageTablePageSize = 64 KB on a 4 KB leaf", 0,
+			  BC250_DXGK_PTE_VALID | P64_SEG(VRAM_SEGMENT) |
+			  ((u64)BC250_DXGK_PAGE_TABLE_PAGE_64KB << BC250_DXGK_PTE_PAGESIZE_SHIFT), 0x1000ull },
+		};
+		unsigned int i;
+
+		for (i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+			got = 0xDEADBEEFDEADBEEFull;
+			if (bc250_pte_from_dxgk_level(&both, bad[i].level, bad[i].flags, bad[i].offset >> 12,
+						      &got) != BC250_EINVAL || got != 0) {
+				printf("  %s: entry %016llX\n", bad[i].name, (unsigned long long)got);
+				fail("an entry that must be refused with both features on was accepted");
+			} else {
+				printf("  refused: %s\n", bad[i].name);
+			}
+		}
+		memset(out, 0xA5, sizeof(out));
+		if (bc250_pte_from_dxgk_64k(&both, host | BC250_DXGK_PTE_LARGEPAGE, K64_ADDRESS >> 12, out,
+					    &fragment) != BC250_EINVAL || out[0] != 0 || out[15] != 0)
+			fail("LargePage on a 64 KB entry was accepted with large pages reported");
+		memset(out, 0xA5, sizeof(out));
+		if (bc250_pte_from_dxgk_64k(&both, P64_VALID | P64_SEG(VRAM_SEGMENT), (last64 + 0x8000ull) >> 12,
+					    out, &fragment) != BC250_EINVAL || out[0] != 0 || out[7] != 0)
+			fail("a 64 KB entry that runs past the 2 MiB aligned segment was accepted");
+	}
+	printf("  the 2 MiB page, both table pointers, 64 KB host and VRAM entries, 8 refusals\n");
+}
+
 int main(int argc, char **argv)
 {
 	g_verbose = argc > 1 && strcmp(argv[1], "-v") == 0;
@@ -940,7 +1431,10 @@ int main(int argc, char **argv)
 	check_decode();
 	check_controls();
 	check_huge();
+	check_huge_only();
 	check_table_segment();
+	check_page64();
+	check_huge_and_page64();
 
 	printf("\n%s (%d failures)\n", g_failures == 0 ? "PASS" : "FAIL", g_failures);
 	return g_failures == 0 ? 0 : 1;

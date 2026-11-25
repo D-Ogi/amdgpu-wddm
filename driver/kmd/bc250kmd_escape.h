@@ -1769,7 +1769,7 @@ typedef char BC250_ESCAPE_FBDUMP_SIZE_CHECK[(sizeof(BC250_ESCAPE_FBDUMP) == 5244
 #define BC250_PJ_FLAG_REPEAT 1u                 // UPDATE: DXGK_UPDATEPAGETABLEFLAGS.Repeat (one entry for the whole range)
 #define BC250_PJ_FLAG_INITIAL 2u                // UPDATE: .InitialUpdate
 #define BC250_PJ_FLAG_EVICTION 4u               // UPDATE: .NotifyEviction, VidMm evicts the allocation
-#define BC250_PJ_FLAG_64KB 8u                   // UPDATE: .Use64KBPages (this driver refuses it)
+#define BC250_PJ_FLAG_64KB 8u                   // UPDATE: .Use64KBPages (a 64 KiB page table: vidmm.c)
 #define BC250_PJ_FLAG_TO_SYSTEM 16u             // VIRTUAL_TRANSFER: local to system (paging out); else system to local
 #define BC250_PJ_FLAG_UMD_ALLOCATION 32u        // DESTROY: a UMD allocation (Offset is its UmdBytes)
 // KMD193 (0.7.193.1 and later), no layout change: the fields a kind left unused now carry the identity the

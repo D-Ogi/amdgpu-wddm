@@ -485,12 +485,23 @@ typedef struct _BC250_DEVICE {
     PAGING_APERTURE WddmAperture;        // immutable geometry for this device start; no owned pointer
     ULONGLONG WddmApertureRequest;       // the aperture size GartCaptureAperture asks for (wddm.c WddmStart,
                                          // ApertureSegmentMegabytes); 0 until WddmStart sets it
-    // Both from the LargePages setting (wddm.c WddmStart), set before the first WddmMemoryLayout of the start and
-    // not changed until stop. LargePageLayout: the VRAM segment starts on a 1 GiB physical boundary and a VRAM
-    // allocation of 2 MiB or more is placed on 2 MiB (values 1 and 2). LargePages: the GpuMmu caps report large
-    // pages and vidmm.c maps them, 2 MiB at level 1 and 1 GiB at level 2 (value 1 only, which needs the layout).
-    BOOLEAN LargePageLayout;
+    // Both from the LargePages setting (wddm.c WddmStart), settled by WddmSettleLargePageLayout before any DDI of
+    // the start reads the memory layout and not changed until stop. LargePageLayout is a BC250_LARGE_PAGE_LAYOUT_*
+    // value. Nonzero: the VRAM segment starts on an aligned physical address and a VRAM allocation of 2 MiB or
+    // more is placed on 2 MiB (LargePages 1 and 2). GIANT is the base on a 1 GiB boundary. HUGE is the base on a
+    // 2 MiB boundary, for a carve-out that holds no 1 GiB boundary, and only with LargePagesSmallCarveout 1.
+    // LargePages: the GpuMmu caps report large pages and vidmm.c maps them, 2 MiB at level 1 and, on the GIANT
+    // layout only, 1 GiB at level 2 (LargePages 1 only, which needs a layout).
+    UCHAR LargePageLayout;
     BOOLEAN LargePages;
+    // Bit 31 of ApertureSegmentMegabytes (paging_window.h), latched by WddmStart with the aperture size and not
+    // changed until stop. The GpuMmu caps report SysMem64KBPageSupported and a 64 KiB leaf table size, and
+    // vidmm.c maps an entry of a 64 KiB page table as 16 leaf entries with fragment 4. It does not use the
+    // large page layout, and alone it changes no allocation.
+    BOOLEAN SystemPages64K;
+    // Bit 30 next to bit 31: an allocation that may live in the aperture segment is also sized and aligned to
+    // 64 KiB (wddm.c WddmCreateAdmit). Never TRUE without SystemPages64K.
+    BOOLEAN SystemSizes64K;
     PVOID Wddm;                         // wddm.c, NULL unless FullWddm
     BOOLEAN MmioIhEnabled;
     BOOLEAN GfxStopPrepared;            // hardware retirement attempted in this device generation
@@ -742,6 +753,11 @@ ULONG GuardHardwarePointerSetting(void);
 // both flavours, absent = off): nonzero when this start is on the CPU desktop route by the kill switch.
 void GuardReadDesktopKillSwitch(_In_ PDRIVER_OBJECT DriverObject);
 int GuardDesktopKillSwitch(void);
+// LargePagesSmallCarveout (REG_DWORD under Parameters, read only in DriverEntry, both flavours, absent = 0): 1 lets
+// a start with LargePages 1 or 2 use the 2 MiB layout when the carve-out holds no 1 GiB boundary (wddm.c
+// WddmSettleLargePageLayout). Every other value is 0. Not a catalog setting (guard.c says why).
+void GuardReadLargePagesSmallCarveout(_In_ PDRIVER_OBJECT DriverObject);
+ULONG GuardLargePagesSmallCarveout(void);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-235 lab experiment, lab flavour only: PagingRingStartBytes and PagingRingStartNonce (REG_QWORDs under the
 // driver's Parameters key) and PagingBoundaryMode (REG_DWORD), read only in DriverEntry (PASSIVE_LEVEL); the seed is
@@ -1669,13 +1685,26 @@ void WddmGpuFenceCompute(_Inout_ BC250_DEVICE* Device);  // node 2's WddmGpuFenc
 // vidmm.c checks both against bc250_pte.h, which wddm.c does not include.
 #define BC250_VIDMM_HUGE_PAGE_BYTES (2ull*1024*1024)
 #define BC250_VIDMM_GIANT_PAGE_BYTES (1024ull*1024*1024)
+// Device->LargePageLayout: what the physical address of the VRAM segment base is aligned to. The alignment decides
+// which large pages a start can map: an aligned segment offset is an aligned physical address only for a page size
+// that divides the alignment of the base.
+#define BC250_LARGE_PAGE_LAYOUT_NONE 0u     // the base follows the display reservation: 4 KB mappings only
+#define BC250_LARGE_PAGE_LAYOUT_GIANT 1u    // the base is on 1 GiB: 2 MiB pages at level 1, 1 GiB pages at level 2
+#define BC250_LARGE_PAGE_LAYOUT_HUGE 2u     // the base is on 2 MiB, the segment below 1 GiB: 2 MiB pages at level 1,
+                                            // level 2 refused
+// The host page of a start with Device->SystemPages64K, and what one entry of a 64 KiB page table becomes:
+// VidMmPageTableEntrySlots is 16 for an update of such a table (Use64KBPages, level 0) on that start, else 1.
+// VidMmEncodePageTable writes Count * slots hardware entries, and its Physical is the first of them.
+#define BC250_VIDMM_PAGE_64K_BYTES (64ull*1024)
+#define BC250_VIDMM_PAGE_64K_SLOTS 16u
+ULONG VidMmPageTableEntrySlots(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update);
 NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId,
                           ULONGLONG TableOffset, ULONGLONG TableLength, ULONG TableSegmentId);
 NTSTATUS VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId);
 void VidMmStop(void);
 BOOLEAN VidMmEncodePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update,
                             ULONG Start, ULONG Count, _Out_ ULONGLONG* Physical,
-                            _Out_writes_(Count) ULONGLONG* Entries);
+                            _Out_ ULONGLONG* Entries);   // Count * VidMmPageTableEntrySlots(Update) values
 NTSTATUS VidMmCommitPagingFill(ULONGLONG Physical, ULONGLONG Bytes, ULONG Pattern);
 NTSTATUS VidMmCommitPagingCopy(ULONGLONG Source, ULONGLONG Destination, ULONG Count);
 NTSTATUS VidMmCommitPagingUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update, ULONG Start, ULONG Count);
