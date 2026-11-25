@@ -114,6 +114,23 @@ int main() {
         CHECK(UmdBlobAllocCpuCached(&view)==(access==AllocationAccess::CpuCached));
         CHECK(view.heap==(access==AllocationAccess::GpuOnly?UMD_BLOB_HEAP_VRAM:UMD_BLOB_HEAP_GTT));
     }
+    // private-tiled (heap-import.h, EnvelopeCreate::Probe): the GPU-only request with a CPU view. To the kernel
+    // driver's own parser the two forms differ in CpuVisible alone: the same heap, the same size, no cached view.
+    for(const bool cpuView:{false,true}) {
+        CHECK(r.prepare(65537,65536,AllocationAccess::GpuOnly,owner,cpuView)==S_OK);
+        CHECK(r.args.hResource==owner && !r.args.pPrivateDriverData && !r.args.PrivateDriverDataSize);
+        umd_alloc_view view{};
+        CHECK(UmdBlobParseAlloc(r.info.pPrivateDriverData,r.info.PrivateDriverDataSize,&view)==UMD_BLOB_OK);
+        CHECK(view.heap==UMD_BLOB_HEAP_VRAM && view.bytes==131072 && view.cache_policy_valid && !view.scanout);
+        CHECK(view.gem_flags==(cpuView?0ull:uint64_t(AMDGPU_GEM_CREATE_NO_CPU_ACCESS)));
+        CHECK(UmdBlobAllocCpuVisible(&view)==(cpuView?1:0) && !UmdBlobAllocCpuCached(&view));
+        umd_placement placement{};
+        CHECK(UmdBlobPlacement(&view,1,2,1,&placement)==1 && placement.preferred[0]==1 && placement.preferred[1]==2);
+        // The view of a VRAM-first allocation is made at the create: the set has the local segment.
+        CHECK(!UmdBlobAllocCpuVisibleOnDemand(&view,placement.supported,2));
+    }
+    for(auto access:{AllocationAccess::CpuWriteCombined,AllocationAccess::CpuCached})
+        CHECK(r.prepare(65536,65536,access,owner,true)==E_INVALIDARG && !r.args.pAllocationInfo && !r.blob.magic);
     for(auto alignment:{uint64_t(0),uint64_t(2048),uint64_t(6144)})
         CHECK(r.prepare(1,alignment,AllocationAccess::GpuOnly)==E_INVALIDARG && !r.args.pAllocationInfo);
     CHECK(r.prepare(0,4096,AllocationAccess::GpuOnly)==E_INVALIDARG);

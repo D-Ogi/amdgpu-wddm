@@ -109,10 +109,16 @@ struct AllocationRequest final {
     AllocationRequest()=default;
     AllocationRequest(const AllocationRequest&)=delete;
     AllocationRequest& operator=(const AllocationRequest&)=delete;
+    // cpuView (heap-import.h, EnvelopeCreate::Probe): a GpuOnly request that does not say NO_CPU_ACCESS, so the
+    // kernel driver keeps the allocation CpuVisible (driver/kmd/umd_blob.c, UmdBlobAllocCpuVisible) with the same
+    // VRAM-first placement. That is the BC2A allocation of the time before BD-210, which the runtime refuses for
+    // a resource created shared. Nothing in this driver maps the view: the Vulkan import stays device-local.
     HRESULT prepare(uint64_t bytes,uint64_t alignment,AllocationAccess access,
-                    HANDLE runtimeOwner=nullptr) noexcept {
+                    HANDLE runtimeOwner=nullptr,bool cpuView=false) noexcept {
         blob={};surface={};resource={};texture={};info={};args={};held=0;
         constexpr uint64_t page=4096;
+        // The other two kinds of access have a CPU view by their own request.
+        if(cpuView && access!=AllocationAccess::GpuOnly) return E_INVALIDARG;
         // Do not silently shrink an engine requirement or overflow rounding.
         if(!bytes || alignment<page || (alignment&(alignment-1)) ||
            bytes>std::numeric_limits<uint64_t>::max()-(alignment-1)) return E_INVALIDARG;
@@ -121,7 +127,7 @@ struct AllocationRequest final {
         uint32_t heap=0;uint64_t flags=0;
         switch(access){
         case AllocationAccess::GpuOnly:
-            heap=AMDGPU_GEM_DOMAIN_VRAM;flags=AMDGPU_GEM_CREATE_NO_CPU_ACCESS;break;
+            heap=AMDGPU_GEM_DOMAIN_VRAM;flags=cpuView?0:AMDGPU_GEM_CREATE_NO_CPU_ACCESS;break;
         case AllocationAccess::CpuWriteCombined:
             heap=AMDGPU_GEM_DOMAIN_GTT;
             flags=AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED|AMDGPU_GEM_CREATE_CPU_GTT_USWC;break;
