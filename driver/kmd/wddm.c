@@ -13427,6 +13427,9 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiUpdateMonitorLinkInfo = Bc250WddmTracedUpdateMonitorLinkInfo;
     Data->DxgkDdiSystemDisplayEnable = Bc250SystemDisplayEnable;
     Data->DxgkDdiSystemDisplayWrite = Bc250SystemDisplayWrite;
+    // BD-410: the OPM interface (opm.c) for the HLK's OPM jobs and for players; every other interface is refused
+    // with STATUS_NOT_SUPPORTED, as with no member at all. query_interface.c logs each kind of request once.
+    Data->DxgkDdiQueryInterface = Bc250QueryInterface;
 
     // QueryAdapterInfo is the one carried-over DDI with a body of its own here: the full table has six more types
     // to answer and a different DRIVERCAPS, and routing it through this file keeps display.c untouched.
@@ -13525,7 +13528,7 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     // reading did not find, because dxgkrnl tests it at monitor arrival and not at load: UpdateMonitorLinkInfo,
     // which the table fills above (lab arm 1 of 352c4210 failed StartDevice without it). The WHCP requirements are a
     // separate list (BD-307).
-    // QueryInterface, ControlEtwLogging,
+    // ControlEtwLogging,
     // NotifyAcpiEvent, SetPalette, NotifySurpriseRemoval, SetPowerComponentFState,
     // PowerRuntimeControlRequest and PowerRuntimeSetDeviceHandle stay NULL exactly as they are in the
     // display-only table today. ControlInterrupt, GetScanLine and GetChildContainerId are **not** in this list

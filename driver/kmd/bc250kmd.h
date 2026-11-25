@@ -86,6 +86,7 @@
 #include "board_memory_service.h"
 #include "gpu_capabilities.h"
 #include "blit_map_cache.h"     // BD-289: the CPU present blit's kept source and destination mappings
+#include "opm.h"                // BD-410: the OPM interface and the DxgkDdiQueryInterface log
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
 
@@ -527,6 +528,10 @@ typedef struct _BC250_DEVICE {
     volatile LONG DesktopCompositorChanges;  // accepted changes of that word in this start
     volatile LONG DesktopCompositorRefused;  // refused escapes of this kind in this start
     volatile LONG GdiCpuCompositorPlaced;    // standard GDI textures placed with a CPU view in this start
+    // BD-410: the OPM protected outputs (opm.c) and the log of DxgkDdiQueryInterface (query_interface.c). In the
+    // device, not in a start: dxgkrnl may query and hold an interface across a stop and a start.
+    BC250_OPM Opm;
+    BC250_QUERY_LOG QueryLog;
 } BC250_DEVICE;
 
 // The committed source size (modeset.c): the size of the surface the plane reads. Post's until a commit changes it;
@@ -1559,6 +1564,14 @@ DXGKDDI_GET_CHILD_CONTAINER_ID Bc250GetChildContainerId;
 DXGKDDI_SET_POWER_STATE Bc250SetPowerState;
 DXGKDDI_UNLOAD Bc250Unload;
 DXGKDDI_STOP_DEVICE_AND_RELEASE_POST_DISPLAY_OWNERSHIP Bc250StopDeviceAndReleasePostDisplayOwnership;
+
+// query_interface.c (BD-410): DxgkDdiQueryInterface of the full table, and its log. opm.c: the OPM interface.
+DXGKDDI_QUERY_INTERFACE Bc250QueryInterface;
+void QueryInterfaceInitialize(BC250_DEVICE* Device);                     // AddDevice
+void OpmInitialize(BC250_DEVICE* Device);                                // AddDevice
+// STATUS_SUCCESS with the DXGK_OPM_INTERFACE filled for GUID_DEVINTERFACE_OPM version 1, else STATUS_NOT_SUPPORTED
+// and nothing written. PASSIVE_LEVEL.
+NTSTATUS OpmQueryInterface(BC250_DEVICE* Device, PQUERY_INTERFACE QueryInterface);
 
 // paging_journal.c: the ring of VidMm's paging operations (paging_journal.h, record kinds in bc250kmd_escape.h)
 struct _BC250_PAGING_JOURNAL_RECORD;
