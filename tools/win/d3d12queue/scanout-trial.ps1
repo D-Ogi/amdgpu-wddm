@@ -144,6 +144,13 @@ $patterns = [ordered]@{
         names  = @('flip_mode_change', 'flip_immediate', 'flip_shared_transition', 'flip_independent',
                    'redirected_presents')
     }
+    contextless = @{
+        # BD-403: from WDDM 2.4 the driver reports SupportContextlessPresent, and dxgkrnl then sends every
+        # independent-flip token to DxgkDdiPresent without a context. Those presents name no adapter, so the
+        # driver counts them for the whole driver on a line of their own, not in "redirected presents" above.
+        regex  = 'contextless presents \(driver-wide\) (\d+), redirected (\d+), refused (\d+)'
+        names  = @('contextless_presents', 'contextless_redirected', 'contextless_refused')
+    }
     handshake = @{
         # 0.7.209.1: the published DirectFlip answer of this adapter start, which is the operator's
         # EnableDirectFlipHandshake ANDed with every start-latched fact the flip path needs. It is a state and
@@ -257,6 +264,10 @@ function Write-Verdict {
         if (Has-Counter $Before $After 'flip_independent') {
             Write-Output ("  the OS asked for: {0} mode changes, {1} immediate, {2} shared-primary transitions, {3} independent-flip exclusive; {4} presents went through the desktop" -f
                 $Delta.flip_mode_change, $Delta.flip_immediate, $Delta.flip_shared_transition, $Delta.flip_independent, $Delta.redirected_presents)
+            if (Has-Counter $Before $After 'contextless_redirected') {
+                Write-Output ("  and {0} more went through the desktop without a context (a count of the whole driver, BD-403)" -f
+                    $Delta.contextless_redirected)
+            }
         }
         Write-Output '  For a borderless chain that layer is the compositor: DWM decides DirectFlip through its own UMD. Its answer is in the router front log (front-dwm.exe-<pid>.log, the check_direct_flip lines and summaries; see docs/design/direct-flip-handshake.md).'
         Write-Output '  A D3D12 chain in the fullscreen state is no exception: DXGI keeps it under the compositor. On unit A (2026-10-05) DWM consumed 599 of its 600 presents as windowed flips and scanned out its own three buffers throughout, with GetFullscreenState exclusive (etw-present-mode.py on a -PresentMode capture).'
@@ -358,6 +369,13 @@ vidpn flip on: 4600 hardware flips, 0 refused
     Expect 'not reached, buffer created' (Judge $w1 $wCreated 'scanout-flip-1920x1200') 'the compositor kept the source'
     Expect 'not reached, handshake on' (Judge $w1 $wCreated 'scanout-flip-1920x1200') 'its refusal is its own'
     Expect 'not reached names the flip flags' (Judge $w1 $wCreated 'scanout-flip-1920x1200') 'independent-flip exclusive'
+    # BD-403: the presents without a context are on their own line, and the verdict adds them only when both reads
+    # carry it. A driver without the line (all samples above) gets no such sentence.
+    $line = "`nwddm summary: contextless presents (driver-wide) {0}, redirected {1}, refused 0"
+    Expect 'contextless presents added' (Judge ($w1 + ($line -f 10, 10)) ($wCreated + ($line -f 310, 310)) 'scanout-flip-1920x1200') 'and 300 more went through the desktop without a context'
+    if ((Judge $w1 $wCreated 'scanout-flip-1920x1200') -match 'without a context') {
+        $failures++; Write-Host 'FAIL driver without the contextless line: the verdict claimed a contextless count'
+    }
     # An older driver carries none of the three: the verdict stands and says nothing it cannot know.
     Expect 'older driver, no witness lines' (Judge $v1 $v1 'scanout-flip-1920x1200') 'VERDICT not reached'
     if ((Judge $v1 $v1 'scanout-flip-1920x1200') -match 'DirectFlip handshake|created for scan-out|independent-flip') {

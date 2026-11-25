@@ -533,6 +533,14 @@
       "when": [{"wddm_version_at_least": "0x2200"}],
       "require": [{"ddi_set": "DxgkDdiGetMultiPlaneOverlayCaps"},
                   {"ddi_set": "DxgkDdiGetPostCompositionCaps"}]
+    },
+    {
+      "id": "R50-CONTEXTLESS-PRESENT-FROM-2-4",
+      "declaration": "DXGK_DRIVERCAPS.WDDMVersion >= 2.4",
+      "requires_text": "DXGK_DRIVERCAPS.MiscCaps.SupportContextlessPresent is set, and DxgkDdiPresent accepts hContext NULL. The HLK job 'WDDM2.4 Mandatory Caps' (FeatureCheck::VerifyWddm24Caps) fails a 2.4 or later driver without it ('SupportContextlessPresent required on WDDM2.4+', BD-403). With the bit set, dxgkrnl passes hContext NULL to DxgkDdiPresent for every independent-flip token",
+      "source": "DXGKRNL static reading of 22621.6197 (fact M971, evidence/windows/2026-11-25-bd403-contextless-present/dxgkrnl-static-reading.txt): DXGADAPTER at VA 0x1c01fdafe 'cmp dword ptr [rsi+0xb04], 0x960; jl' reads MiscCaps only from 2.4, then 'and al, 0x1; mov byte ptr [rsi+0xb3a], al' at 0x1c01fdb54; PrepareIndependentFlipToken at 0x1c01c0b27 'cmp byte ptr [rax+0xb3a], r14b; mov rdx, r14; jne' passes hContext 0 to ADAPTER_RENDER::DdiPresent (0x1c0169f80) when the byte is set; LEARN ns-d3dkmddi-_dxgk_drivercaps.md:263 'When this value is set, the OS will pass NULL context in present related DDIs. Supported starting in WDDM 2.4'; WDK shared/d3dkmddi.h 10.0.26100 line 2467, inside the WDDM2_4 guard that opens at line 2462",
+      "when": [{"wddm_version_at_least": "0x2400"}],
+      "require": [{"cap_true": "MiscCaps.SupportContextlessPresent"}]
     }
   ]
 }

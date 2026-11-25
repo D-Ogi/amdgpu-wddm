@@ -220,6 +220,12 @@ C_ASSERT(RTL_NUMBER_OF(g_DdiNames) == WddmDdiCount);
 // CollectDbgInfo is a Level Zero DDI and may not touch BC250_WDDM (see the function): its counter lives here.
 static volatile LONG g_CollectDbgInfoCalls;
 
+// BD-403: a DxgkDdiPresent call without a context names no adapter (DXGKARG_PRESENT has no adapter handle), and
+// the allocation handles in it are not read before the adapter's index admits them (review 16). So these counts
+// are of the driver, not of one adapter, and the summary says so. [0] every call, [1] those with
+// Flags.RedirectedFlip, [2] the refused ones (a copy, a fill or a DMA buffer without a context).
+static volatile LONG g_ContextlessPresents[3];
+
 // A counter is only half the evidence: "QueryAdapterInfo was called 31 times" does not say which 31 things
 // dxgkrnl wanted. These tables hold the distinct argument values a DDI was called with - QueryAdapterInfo's
 // information type, BuildPagingBuffer's operation - with the count and the log sequence number of the first
@@ -239,6 +245,7 @@ typedef struct _BC250_WDDM_KIND {
 #include "cpu_view_policy.h"         // BD-352: the one CpuVisibleOnDemand rule of the UMD and the type-0 allocations
 #include "present_range.h"
 #include "present_snapshot.h"        // BD-065: the refusal reasons of the GPU Present allocation snapshot
+#include "present_contextless.h"     // BD-403: SupportContextlessPresent and a Present without a context
 #include "scanout_admit.h"           // M15.14: which allocation SetVidPnSourceAddress may scan out
 #include "display_rotation.h"        // BD-247: no DirectFlip while the path is rotated
 #include "dcn_plane.h"               // BD-223: the multiplane-overlay plane 0 and its verdicts
@@ -3810,6 +3817,9 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: presents %ld, flips %ld of %ld address calls (%ld arrived above DISPATCH_LEVEL)",
              Wddm->Calls[WddmDdiPresent], Wddm->Flips, Wddm->Calls[WddmDdiSetVidPnSourceAddress],
              Wddm->FlipsAboveDispatch);
+    // BD-403: the presents without a context are not in the count above (no adapter is named in them).
+    GuardLog("wddm summary: contextless presents (driver-wide) %ld, redirected %ld, refused %ld",
+             g_ContextlessPresents[0], g_ContextlessPresents[1], g_ContextlessPresents[2]);
     // Two lines since 0.7.208, because one line did not fit: on the lab the single line ended in
     // "format/geometry/pitch/size/segment/alignment/gated 0/0/" and every refusal count was gone
     // (BD-070). The first line keeps the text the scan-out trial parses, word for word. The second
@@ -5522,6 +5532,10 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     caps->SupportPerEngineTDR = TRUE;
     caps->SupportDirectFlip = TRUE;
     caps->SupportSurpriseRemoval = FALSE;
+    // BD-403: from 2.4 dxgkrnl passes hContext NULL to DxgkDdiPresent for an independent-flip token, and the HLK
+    // job "WDDM2.4 Mandatory Caps" requires the bit at 2.4 or later. Bc250WddmPresent answers such a call without a
+    // context (present_contextless.h has the contract and its sources). Below 2.4 dxgkrnl does not read MiscCaps.
+    caps->MiscCaps.SupportContextlessPresent = Bc250ContextlessPresentCap(Device->WddmLevel);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     // BD-223: MaxOverlayPlanes counts the primary, so 1 is plane 0 alone (LabScaledPlane bit 2 asks 2 below level 2.2, a
     // lab question; Check still refuses a second plane). The count is the trailer's (WddmMpoFlags), which the front
@@ -5731,8 +5745,8 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
              caps->MemoryManagementCaps.Value, caps->FlipCaps.Value,
              caps->MaxAllocationListSlotId, caps->SupportPerEngineTDR ? '1' : '0', caps->SupportDirectFlip ? '1' : '0',
              caps->SupportSmoothRotation ? '1' : '0');
-        GuardLog("wddm: DRIVERCAPS mpo %u planes %lu", caps->SupportMultiPlaneOverlay ? 1u : 0u,
-                 (ULONG)caps->MaxOverlayPlanes);
+        GuardLog("wddm: DRIVERCAPS mpo %u planes %lu misc 0x%X", caps->SupportMultiPlaneOverlay ? 1u : 0u,
+                 (ULONG)caps->MaxOverlayPlanes, caps->MiscCaps.Value);
     }
     return STATUS_SUCCESS;
 }
@@ -11136,6 +11150,20 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
     // producer entry, including early-return/non-Blt paths. Do not clear during
     // submission: a legal scheduler resubmission must retain the same record.
     Bc250GfxPresentInvalidate(pPresent->pDmaBufferPrivateData,pPresent->DmaBufferPrivateDataSize);
+    // BD-403: hContext NULL is the contextless present of SupportContextlessPresent (WddmDriverCaps). Only NULL is:
+    // a handle that is not one of our contexts keeps the path below, where every producer tests the context.
+    if (hContext == NULL) {
+        const enum bc250_present_route route = Bc250PresentRoute(FALSE,
+            pPresent->Flags.Blt || pPresent->Flags.ColorFill, pPresent->pDmaBuffer != NULL);
+        const LONG call = InterlockedIncrement(&g_ContextlessPresents[0]);
+        if (pPresent->Flags.RedirectedFlip) InterlockedIncrement(&g_ContextlessPresents[1]);
+        if (route == BC250_PRESENT_CONTEXTLESS_REFUSED) InterlockedIncrement(&g_ContextlessPresents[2]);
+        if (call <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: Present%ld without context: flags 0x%08X, %u sources, %u DMA bytes, %s", call,
+                     pPresent->Flags.Value, pPresent->NumSrcAllocations, pPresent->DmaSize,
+                     route == BC250_PRESENT_CONTEXTLESS_REFUSED ? "refused" : "nothing to build");
+        return route == BC250_PRESENT_CONTEXTLESS_REFUSED ? STATUS_ILLEGAL_INSTRUCTION : STATUS_SUCCESS;
+    }
     if (context) WddmObservePresent(context,pPresent);
     if (context) WddmInteropUse(context,pPresent);
     // M15.14 increment 2: DXGK_PRESENTFLAGS.RedirectedFlip is the OS saying this present belongs to a
