@@ -742,6 +742,11 @@
         "host"
       ]
     },
+    "perf-data": {
+      "inputs": [
+        "host"
+      ]
+    },
     "driver-version": {
       "inputs": [
         "host"

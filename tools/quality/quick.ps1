@@ -617,6 +617,8 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # an independent pixel oracle, plus the shipped asset's own self-check and its size budget.
  Check 'boot-logo' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_boot_logo.ps1" -Root $Workspace -Out "$Out\boot-logo" -Kits "$Kits" }
  Check 'gpu-clock' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gpu_clock.ps1" -Root $Workspace -Out "$Out\gpu-clock" -Kits "$Kits" }
+ # BD-404: the performance data of QueryAdapterInfo (perf_data.h): the input words, the units, the main fan, the names.
+ Check 'perf-data' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_perf_data.ps1" -Root $Workspace -Out "$Out\perf-data" -Kits "$Kits" }
  # The installer owns version mapping; KMD must not rewrite OS device properties.
  Check 'driver-version' { & powershell -NoProfile -File "$repo\tools\release\test-version-identity.ps1" }
  Check 'umd-app-settings' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-app-settings.ps1" -OutputDir "$Out\umd-app-settings" }
