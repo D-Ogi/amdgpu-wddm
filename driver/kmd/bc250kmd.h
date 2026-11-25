@@ -236,6 +236,10 @@ typedef struct _BC250_DEVICE {
     ULONG PciId;
     ULONG PowerWitness;                 // BC250_POWER_WITNESS_*, from the per-IP data of PciId
     BOOLEAN PowerWitnessArmed;          // the last way down wrote the pattern and read it back
+    // BD-404: the VBIOS part number of this start (hwinfo.c), terminated, empty when the image has none. Written once
+    // in StartDevice before dxgkrnl's DXGKQAITYPE_GPUVERSION query, which reads it (perf_data.c). 32 is
+    // DXGK_MAX_GPUVERSION_NAME_LENGTH (perf_data.c asserts it).
+    WCHAR VbiosPartNumber[32];
     PDEVICE_OBJECT PhysicalDeviceObject;
     DXGKRNL_INTERFACE Dxgk;
     DXGK_START_INFO StartInfo;

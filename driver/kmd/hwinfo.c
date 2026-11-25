@@ -49,6 +49,15 @@ void HardwareInfoWrite(BC250_DEVICE* Device, const UCHAR* VbiosBytes, ULONG Vbio
     UCHAR pci[4] = {0};
     ULONG pciBytes = 0;
     USHORT deviceId = 0;
+    SIZE_T i;
+
+    // BD-404: the part number is also the BIOS version of DXGKQAITYPE_GPUVERSION (perf_data.c), which dxgkrnl asks
+    // for once after the start. Kept whatever happens to the registry below; empty when the image has none, never
+    // the registry's placeholder.
+    bios = VbiosPartNumber(VbiosBytes, VbiosLength, biosStr, RTL_NUMBER_OF(biosStr));
+    for (i = 0; i < RTL_NUMBER_OF(Device->VbiosPartNumber); i++) Device->VbiosPartNumber[i] = L'\0';
+    for (i = 0; bios && bios[i] && i < RTL_NUMBER_OF(Device->VbiosPartNumber) - 1; i++)
+        Device->VbiosPartNumber[i] = bios[i];
 
     if (!Device->PhysicalDeviceObject) return;
     status = IoOpenDeviceRegistryKey(Device->PhysicalDeviceObject,
@@ -72,8 +81,6 @@ void HardwareInfoWrite(BC250_DEVICE* Device, const UCHAR* VbiosBytes, ULONG Vbio
         RtlStringCchPrintfW(adapter, RTL_NUMBER_OF(adapter), L"AMD Radeon (%04X)", (ULONG)deviceId);
     else
         RtlStringCchPrintfW(adapter, RTL_NUMBER_OF(adapter), L"AMD Radeon");
-
-    bios = VbiosPartNumber(VbiosBytes, VbiosLength, biosStr, RTL_NUMBER_OF(biosStr));
 
     (void)WriteString(key, L"HardwareInformation.AdapterString", adapter);
     (void)WriteString(key, L"HardwareInformation.ChipType", chip ? chip : L"AMD ASIC");
