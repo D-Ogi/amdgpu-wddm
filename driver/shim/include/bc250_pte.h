@@ -223,11 +223,19 @@ struct bc250_pte_context {
 
 	/* Nonzero when the driver reported DXGK_GPUMMUCAPS::LargePageSupported for this start. Only then
 	 * does bc250_pte_from_dxgk_level accept LargePage on a level 1 or level 2 entry. The caller sets
-	 * it only when vram_base is 1 GiB aligned. VidMm knows only segment offsets, and without
+	 * it only when vram_base is 1 GiB aligned, or 2 MiB aligned together with huge_pages_only below.
+	 * VidMm knows only segment offsets, and without
 	 * AllowNonAlignedLargePageAddress it sets LargePage only on an offset aligned to the leaf table
 	 * coverage. The walker reads the physical address, base plus offset. With the base aligned, an
 	 * aligned offset is an aligned address for both page sizes, and an unaligned one is refused. */
 	u32 large_pages;
+
+	/* Nonzero when vram_base is aligned to 2 MiB only (the layout of a carve-out that holds no 1 GiB
+	 * boundary). Then only a level 1 entry (2 MiB) may carry LargePage: a level 2 entry (1 GiB) is
+	 * refused, and the observer does not read one as a page. An aligned 1 GiB offset is not an
+	 * aligned 1 GiB address on such a base, and a segment below 1 GiB cannot hold the page. Zero
+	 * keeps both levels, for a base on 1 GiB. Read only when large_pages is nonzero. */
+	u32 huge_pages_only;
 };
 
 /* Every field of an AMD entry, for the inverse direction. */
@@ -300,10 +308,11 @@ int bc250_pte_from_dxgk(const struct bc250_pte_context *ctx, enum bc250_pte_kind
  *     address | bc250_pte_vm_flags(...) | AMDGPU_PDE_PTE | AMDGPU_PTE_FRAG(9 or 18)
  *
  * with the same read, write, execute and snoop bits as a 4 KB leaf of the same DXGK_PTE. Refused
- * as well as everything bc250_pte_from_dxgk refuses: LargePage at level 3, in host memory
- * (SysMemLargePageSupported is not reported), in the page table segment, or with large_pages 0; an
- * address that is not aligned to the page size (AllowNonAlignedLargePageAddress is not reported);
- * and a range that does not lie inside the VRAM segment.
+ * as well as everything bc250_pte_from_dxgk refuses: LargePage at level 3, at level 2 when the
+ * context has huge_pages_only, in host memory (SysMemLargePageSupported is not reported), in the
+ * page table segment, or with large_pages 0; an address that is not aligned to the page size
+ * (AllowNonAlignedLargePageAddress is not reported); and a range that does not lie inside the VRAM
+ * segment.
  */
 int bc250_pte_from_dxgk_level(const struct bc250_pte_context *ctx, u32 level,
 			      u64 dxgk_flags, u64 dxgk_address, u64 *out);
@@ -312,10 +321,11 @@ int bc250_pte_from_dxgk_level(const struct bc250_pte_context *ctx, u32 level,
  * The observer's half of the contract above: the size in bytes of the large page a decoded level 1
  * or level 2 entry maps, or 0 when bc250_pte_from_dxgk_level cannot have written that entry. A walker
  * that meets PDE_PTE on a directory entry ends at the page only when this is non-zero, so that a
- * malformed entry is refused and not misread. Checked: large_pages set in the context, the level, a
- * valid non-system entry with PDE_PTE, the fragment of the level's whole range, an address aligned
- * to that range, and the whole range inside the VRAM segment (the page table segment holds tables,
- * not allocations, so a page there is never a large page).
+ * malformed entry is refused and not misread. Checked: large_pages set in the context, the level
+ * (level 1 only when the context has huge_pages_only), a valid non-system entry with PDE_PTE, the
+ * fragment of the level's whole range, an address aligned to that range, and the whole range inside
+ * the VRAM segment (the page table segment holds tables, not allocations, so a page there is never
+ * a large page).
  */
 u64 bc250_pte_large_page_bytes(const struct bc250_pte_context *ctx, u32 level,
 			       const struct bc250_pte_fields *fields);

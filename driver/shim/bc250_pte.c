@@ -317,13 +317,24 @@ int bc250_pte_from_dxgk(const struct bc250_pte_context *ctx, enum bc250_pte_kind
 	return bc250_pte_translate(ctx, kind, 0, dxgk_flags, dxgk_address, out);
 }
 
+/* Whether a LargePage entry of this level can be a page in this context: level 1 (2 MiB) whenever
+ * large pages are reported, level 2 (1 GiB) only when the segment base is on 1 GiB as well. The
+ * encoder and the observer ask the same question here, so that they cannot disagree. */
+static int bc250_pte_large_level(const struct bc250_pte_context *ctx, u32 level)
+{
+	if (ctx == NULL || ctx->large_pages == 0)
+		return 0;
+	if (level == BC250_PTE_HUGE_PAGE_LEVEL)
+		return 1;
+	return level == BC250_PTE_GIANT_PAGE_LEVEL && ctx->huge_pages_only == 0;
+}
+
 int bc250_pte_from_dxgk_level(const struct bc250_pte_context *ctx, u32 level,
 			      u64 dxgk_flags, u64 dxgk_address, u64 *out)
 {
 	u32 huge_shift = 0;
 
-	if (ctx != NULL && ctx->large_pages != 0 &&
-	    (level == BC250_PTE_HUGE_PAGE_LEVEL || level == BC250_PTE_GIANT_PAGE_LEVEL))
+	if (bc250_pte_large_level(ctx, level))
 		huge_shift = BC250_PTE_LEVEL_SHIFT(level);
 	return bc250_pte_translate(ctx, level == 0 ? BC250_PTE_LEAF : BC250_PTE_DIRECTORY, huge_shift,
 				   dxgk_flags, dxgk_address, out);
@@ -334,8 +345,7 @@ u64 bc250_pte_large_page_bytes(const struct bc250_pte_context *ctx, u32 level,
 {
 	u64 bytes;
 
-	if (ctx == NULL || fields == NULL || ctx->large_pages == 0 ||
-	    (level != BC250_PTE_HUGE_PAGE_LEVEL && level != BC250_PTE_GIANT_PAGE_LEVEL))
+	if (fields == NULL || !bc250_pte_large_level(ctx, level))
 		return 0;
 	if (!fields->valid || !fields->pde_pte || fields->system)
 		return 0;
