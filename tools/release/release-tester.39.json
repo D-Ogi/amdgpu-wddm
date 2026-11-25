@@ -797,6 +797,28 @@
         "control-exe-lab"
       ],
       "note": "Every experiment switch of the D3D12 and D3D11 shells has a class: a release build drops a Lab switch, and the control app offers Feature switches only"
+    },
+    {
+      "defect": "BD-389",
+      "repo": "amdgpu-wddm",
+      "commit": "472904a4e48b786311723328b90d81a0f9ba4f1e",
+      "rows": [
+        "router-x64-rel",
+        "router-x64-lab"
+      ],
+      "note": "The x64 router links the static C runtime (/MT) and its recipe refuses an image that imports a C or C++ runtime DLL: a clean Windows has no VCRUNTIME140.dll, and dwm.exe loads the router"
+    },
+    {
+      "defect": "BD-389",
+      "repo": "amdgpu-wddm",
+      "commit": "e4bf8e3ca9fe164f333228d3406ceef4cf638c85",
+      "rows": [
+        "@recipe:zink-x64-rel",
+        "@recipe:zink-x64-lab",
+        "@recipe:desktop-x64-rel",
+        "@recipe:desktop-x64-lab"
+      ],
+      "note": "The radv and zink-umd option sets link the static C runtime (-Db_vscrt=mt) and build-mesa.ps1 refuses a target that imports a C or C++ runtime DLL: dwm.exe loads the desktop RADV and the Zink UMD"
     }
   ],
   "rows": [
@@ -887,7 +909,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -953,7 +975,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -1019,7 +1041,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -1085,7 +1107,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -2184,7 +2206,8 @@
           "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
           "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
         }
-      ]
+      ],
+      "recipe_commit": "472904a4e48b786311723328b90d81a0f9ba4f1e"
     },
     {
       "id": "hosted-x64-lab",
@@ -2682,7 +2705,8 @@
           "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
           "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
         }
-      ]
+      ],
+      "recipe_commit": "472904a4e48b786311723328b90d81a0f9ba4f1e"
     },
     {
       "id": "zink-x64-rel",
@@ -2728,7 +2752,8 @@
           "path": "payload/desktop/bc250d3d_zink.dll"
         }
       ],
-      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (210100d8) and its flag is set under the lock (2aea6f7e), and with BD-211: a memstream leaves no temporary file on Windows (fe84531a), merged in 64c082d3."
+      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (210100d8) and its flag is set under the lock (2aea6f7e), and with BD-211: a memstream leaves no temporary file on Windows (fe84531a), merged in 64c082d3.",
+      "recipe_commit": "472904a4e48b786311723328b90d81a0f9ba4f1e"
     },
     {
       "id": "cpu-x64-rel",
@@ -2927,7 +2952,8 @@
           "path": "payload/desktop/bc250d3d_zink.dll"
         }
       ],
-      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (210100d8) and its flag is set under the lock (2aea6f7e), and with BD-211: a memstream leaves no temporary file on Windows (fe84531a), merged in 64c082d3."
+      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f), with BD-315: the global u_queue exit_mutex is deleted when the library unloads (210100d8) and its flag is set under the lock (2aea6f7e), and with BD-211: a memstream leaves no temporary file on Windows (fe84531a), merged in 64c082d3.",
+      "recipe_commit": "472904a4e48b786311723328b90d81a0f9ba4f1e"
     },
     {
       "id": "cpu-x64-lab",
@@ -3090,7 +3116,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "472904a4e48b786311723328b90d81a0f9ba4f1e",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -3123,7 +3149,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "472904a4e48b786311723328b90d81a0f9ba4f1e",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -3156,7 +3182,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3202,7 +3228,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3236,7 +3262,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "472904a4e48b786311723328b90d81a0f9ba4f1e",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -3269,7 +3295,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "0b80967d2a384962d2b6eccef1a0f13cfa3cdf6a",
+      "commit": "472904a4e48b786311723328b90d81a0f9ba4f1e",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -3302,7 +3328,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -3348,7 +3374,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "7f1ec412f9cd18b5f7659e762a0c8f4877ed69a8",
+      "commit": "747c1aa06666bea0f4f63f20eb42774fa4ec6fbd",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [

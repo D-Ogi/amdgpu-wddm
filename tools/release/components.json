@@ -28,7 +28,11 @@
     "runtime (amdhip64 E754A950), not the release runtime of this package, with diagnostic names that the release",
     "flavour forbids, and its consumer was built without the gfx1013 patch. The pin is empty, so the installer refuses",
     "the component and downloads nothing. Ollama comes back with a rebuilt asset that carries no runtime of its own",
-    "and loads the release runtime of the package, as the llama asset does."
+    "and loads the release runtime of the package, as the llama asset does.",
+    "requires names the programs of Windows that a component needs and the driver does not; the prerequisite table",
+    "of installer/components.ps1 knows each name, and the installer installs one only for a chosen component that",
+    "requires it (BD-389). llama requires vcruntime-x64: all 15 programs and libraries of the tester.35 zip import",
+    "VCRUNTIME140.dll, 11 of them also MSVCP140.dll and 3 of them VCRUNTIME140_1.dll."
   ],
   "components": [
     {
@@ -51,10 +55,15 @@
       },
       "zip_root": "*",
       "path_entry": true,
+      "requires": ["vcruntime-x64"],
       "models": ["gemma12b", "qwen3-1.7b", "qwen3.6-35b"]
     },
     {
       "id": "ollama",
+      "comment": [
+        "No requires yet: the asset of this component is not pinned, and the imports of its programs are not read.",
+        "Read them when the rebuilt asset is pinned, and name what they need in requires."
+      ],
       "title": "Ollama for this board",
       "summary": "Keeps a model server running for you and gets models by name. Our build uses the GPU through this driver.",
       "question": "Install Ollama for this board, set up for this GPU?",

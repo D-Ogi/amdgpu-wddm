@@ -33,6 +33,22 @@ extra, and tells you so. The installer never installs an extra that it did not c
 A refused, a skipped and a failed extra do not stop the driver installation. The driver is installed first. The
 extras come last.
 
+## What an extra needs from Windows
+
+llama.cpp needs the Microsoft Visual C++ 2015-2022 runtime (x64): its programs import `vcruntime140.dll` and
+`msvcp140.dll`. The driver does not need this runtime. The package carries Microsoft's own installer for it,
+`payload\redist\vc_redist.x64.exe`. When you select llama.cpp and this PC has no runtime, or an older one than
+14.44, the installer runs that file before it copies the files of llama.cpp. It checks the SHA-256 and the
+Microsoft signature of the file first.
+
+If the package does not hold that file, or holds a changed copy, the installer does not offer llama.cpp, and it
+names the file. If the runtime cannot be installed, the installer skips llama.cpp with a warning. The driver
+installation completes all the same.
+
+In `components.json`, the entry `requires` of an extra names what it needs (`vcruntime-x64` for llama.cpp). The
+table of `installer\components.ps1` knows each name, and a release with a name that it does not know does not
+build. Ollama has no `requires` yet: its download is not pinned, and the imports of its programs are not read.
+
 ## Where the files go
 
 | What | Where |

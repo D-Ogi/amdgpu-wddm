@@ -41,8 +41,6 @@ namespace AmdgpuWddmSetup
         // never a question.
         //   testModeOff: the plan found Windows test mode off, so the install turns it on (check testsigning.inactive)
         //   bitLockerState: the state the engine's decision reports
-        //   vcRuntimeMissing: the plan found the Microsoft Visual C++ runtime missing or too old, so the install
-        //                     installs it from the file the package carries (check vcruntime.missing)
         //   smartAppControlOff: the plan found Smart App Control on or in evaluation mode, so the install turns it
         //                       off before its first program runs (checks smartappcontrol.on and .evaluation;
         //                       install.ps1, Invoke-SmartAppControlOff). It is the first change of the run, so its
@@ -50,8 +48,9 @@ namespace AmdgpuWddmSetup
         //   kernelSigners: Secure Boot is on and a signed Code Integrity policy is active (check KernelSignersCheck;
         //                  install.ps1, Read-KernelTrustRoute). The install does not touch test mode or the start
         //                  options, so one line replaces the test mode and BitLocker lines.
-        public static string[] PlanChangeIds(bool testModeOff, string bitLockerState, bool vcRuntimeMissing = false, bool smartAppControlOff = false,
-            bool kernelSigners = false)
+        // No line names the Microsoft Visual C++ runtime: the driver does not need it (BD-389). The llama.cpp extra
+        // needs it, and the window never chooses an extra.
+        public static string[] PlanChangeIds(bool testModeOff, string bitLockerState, bool smartAppControlOff = false, bool kernelSigners = false)
         {
             var ids = new List<string>();
             if (smartAppControlOff) ids.Add("plan.change.smartappcontrol");
@@ -63,7 +62,6 @@ namespace AmdgpuWddmSetup
                 if (bitLockerState == BitLockerOn) ids.Add("plan.change.bitlocker");
                 else if (bitLockerState == BitLockerUnknown) ids.Add("plan.change.bitlocker.unknown");
             }
-            if (vcRuntimeMissing) ids.Add("plan.change.vcruntime");
             return ids.ToArray();
         }
 

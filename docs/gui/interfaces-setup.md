@@ -41,18 +41,20 @@ render gate G-CONSENT refuses a screen that grows a permission control or a disa
 happens by itself after a visible 15-second countdown, in the window and on the console. "Restart now" and "Later"
 are offered, and neither is required. Every preflight refusal that protects the machine is unchanged.
 
-**The Microsoft Visual C++ runtime comes with the package**.
-The driver's programs are built against the Microsoft Visual C++ 2015-2022 runtime (x64). The package carries
-Microsoft's own installer as `payload\redist\vc_redist.x64.exe`. The preflight check `vcruntime` reads the file
-versions of `vcruntime140.dll`, `vcruntime140_1.dll` and `msvcp140.dll` in `System32` and asks for the install when
-one is missing or older than 14.44 (`Get-VcRuntimeDecision` / `Get-VcRuntimeState` in `installer\common.ps1`). That
-check is `warn`, not `fail`: the plan screen states the step as information (`plan.change.vcruntime`), and the first
-step of phase 2 runs the file after checking its SHA-256 and a Valid Authenticode signature by Microsoft Corporation
-(`Test-VcRuntimeInstaller`). Exit 0 and 1638 are a success, 3010 and 1641 are a success whose restart this install
-makes anyway, and any other code stops the install with the code in the message (`Get-VcRuntimeOutcome`). A dry run
-prints the step and runs nothing. The one refusal left is `vcruntime.no-installer`: the runtime has to be installed
-and the package does not carry Microsoft's installer, or carries a changed copy of it. The window treats that id
-like a damaged package - a new try in the same session cannot repair it.
+**The Microsoft Visual C++ runtime is not a step of the driver**.
+The driver set does not need the Microsoft Visual C++ 2015-2022 runtime (x64): no file of the package imports it
+(BD-389). The llama.cpp extra needs it, and the window never chooses an extra. The engine therefore reports no
+runtime check, the plan screen has no runtime line, and no string table carries `check.vcruntime.*` or
+`plan.change.vcruntime`. The component manifest states the need (`"requires": ["vcruntime-x64"]` at llama.cpp).
+The prerequisite table of `installer\components.ps1` is the one place that knows the runtime. A run that chooses
+llama.cpp reads the file versions of `vcruntime140.dll`, `vcruntime140_1.dll` and `msvcp140.dll` in `System32` in
+the extras stage (`Get-VcRuntimeState` in `installer\common.ps1`, minimum 14.44). When the PC needs the runtime and
+the package does not carry `payload\redist\vc_redist.x64.exe`, or carries a changed copy, llama.cpp is refused, and
+the line names the file. The components stage installs the runtime after the files of the driver and before the
+files of llama.cpp (`Install-VcRuntime`). It checks the SHA-256 and a Valid Authenticode signature by Microsoft
+Corporation again first. Exit 0 and 1638 are a success, and 3010 and 1641 are a success whose restart this install
+makes anyway. Code 1638 with a file still missing starts one repair run. A failure skips llama.cpp with a warning, and
+the driver installation completes. A dry run prints the step and runs nothing.
 
 **Which Windows the driver is made for.** The policy is n-2: Windows 11 23H2 (22631),
 24H2 (26100), 25H2 (26200) and the general builds after them. `Get-WindowsSupportFindings` in

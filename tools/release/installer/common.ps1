@@ -1935,12 +1935,15 @@ function Invoke-LegacyParametersArchive {
     } finally { $key.Dispose() }
 }
 
-# ---- the Microsoft Visual C++ runtime our programs need ---------------------------------------------------------
-# Our control application, the CLI and the user-mode drivers are built against the Microsoft Visual C++ 2015-2022
-# runtime. Until now a PC without it was refused at the preflight and the tester had to fetch the runtime from
-# Microsoft. Now the package carries
-# Microsoft's own installer (payload\redist\vc_redist.x64.exe, release-sources.json) and the install runs it.
-# Running the installer is the consent for it, like every other change this engine makes.
+# ---- the Microsoft Visual C++ runtime of the llama.cpp extra ----------------------------------------------------
+# The driver set, the control application and the CLI do not need the Microsoft Visual C++ 2015-2022 runtime: no file
+# of the package imports one of its DLLs, and tools\quality\runtime_import_gate.py refuses a package that does
+# (BD-389). The llama.cpp extra, which the user can select, needs it: its programs and libraries import
+# vcruntime140.dll and msvcp140.dll (compute\hip\patches\pack-llama-asset.ps1 reads the minimum version below).
+# The package carries Microsoft's own installer (payload\redist\vc_redist.x64.exe, release-sources.json). The entry
+# 'vcruntime-x64' of the prerequisite table in components.ps1 is the one place that connects the runtime to an extra:
+# the install runs Microsoft's installer only for a chosen extra that requires it, after the files of the driver
+# (Install-VcRuntime below). Running the installer is the consent for it, like every other change this engine makes.
 $script:VcRuntimeFiles = @('vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll')
 $script:VcRuntimePackagePath = 'payload\redist\vc_redist.x64.exe'
 # The version the package carries, and the lowest version we accept in System32. A runtime older than this is
@@ -1955,7 +1958,7 @@ $script:VcRuntimeSigner = 'Microsoft Corporation'
 #   0     installed, or this version is already there
 #   1638  a newer version of the runtime is installed: nothing to do
 #   3010, 1641  installed, and Windows wants a restart; this install restarts anyway
-#   anything else is a failure, and the install stops with the code in the message
+#   anything else is a failure: the extras that need the runtime are skipped, with the code in the message
 $script:VcRuntimeArguments = @('/install', '/quiet', '/norestart')
 # 1638 means "a same or newer runtime is registered", and Microsoft's bootstrapper then installs nothing. A PC whose
 # System32 lost one of the three files keeps that answer for ever, so the install runs the same file once more with
@@ -2079,6 +2082,54 @@ function Invoke-VcRuntimeInstall {
     }
     $out = Get-VcRuntimeOutcome $code
     return [pscustomobject]@{ ok = $out.ok; restart = $out.restart; message = $out.message; code = $code; text = $text }
+}
+
+# The install step of the runtime. The prerequisite table of components.ps1 ('vcruntime-x64') calls it before the
+# files of the first chosen extra that needs the runtime; the driver installation never calls it. It reads System32,
+# and when the runtime is missing or too old it checks the file of the package again (a changed copy never runs),
+# runs it, and reads System32 again. Code 1638 says that a same or newer runtime is registered, so Microsoft's
+# installer installed nothing; when a file of it is missing from System32 all the same, the registration is there and
+# its files are not, and the same program runs once more with /repair. A code that asks for a restart is folded into
+# the restart this installation makes at its end. A dry run checks the file, prints the step and runs nothing.
+# A failure is not thrown: it is the result, with a plain message, and the caller skips the extras that need the
+# runtime. -Runner, -SignatureReader and -StateReader are for the tests.
+# Returns { ok, ran, restart, message }.
+function Install-VcRuntime {
+    param([Parameter(Mandatory)][string]$PackageRoot, [scriptblock]$Runner, [scriptblock]$SignatureReader,
+          [scriptblock]$StateReader = { Get-VcRuntimeState }, [string]$ExpectedSha256 = $script:VcRuntimeSha256)
+    $fail = { param($Message) [pscustomobject]@{ ok = $false; ran = $false; restart = $false; message = $Message } }
+    $now = & $StateReader
+    Write-Info "Microsoft Visual C++ runtime: $($now.detail)"
+    if (-not $now.install) { return [pscustomobject]@{ ok = $true; ran = $false; restart = $false; message = 'the Microsoft Visual C++ runtime is in place' } }
+    $exe = Join-Path $PackageRoot $script:VcRuntimePackagePath
+    $file = Test-VcRuntimeInstaller -Path $exe -ExpectedSha256 $ExpectedSha256 -SignatureReader $SignatureReader
+    if (-not $file.ok) { return (& $fail "$($file.problem). Download the release again") }
+    $run = Invoke-Change "install the Microsoft Visual C++ 2015-2022 Redistributable (x64) $($script:VcRuntimeVersion) from $($script:VcRuntimePackagePath) ($($script:VcRuntimeArguments -join ' '); SHA256 $($file.sha256.Substring(0, 16)) and the Microsoft signature checked)" {
+        Invoke-VcRuntimeInstall -Path $exe -Runner $Runner
+    }
+    if ($null -eq $run) { return [pscustomobject]@{ ok = $true; ran = $false; restart = $false; message = 'a dry run installs nothing' } }
+    if ($run.text) { Write-Log ($run.text) }
+    if (-not $run.ok) { return (& $fail $run.message) }
+    Write-Info $run.message
+    $restart = [bool]$run.restart
+    $after = & $StateReader
+    if ($after.install -and $run.code -eq 1638) {
+        Write-Info "the Microsoft Visual C++ runtime is registered on this PC and $($after.detail): the installer repairs it"
+        $repair = Invoke-Change "repair the Microsoft Visual C++ 2015-2022 Redistributable (x64) from $($script:VcRuntimePackagePath) ($($script:VcRuntimeRepairArguments -join ' '))" {
+            Invoke-VcRuntimeInstall -Path $exe -Runner $Runner -Arguments $script:VcRuntimeRepairArguments
+        }
+        if ($null -ne $repair) {
+            if ($repair.text) { Write-Log ($repair.text) }
+            if (-not $repair.ok) { return (& $fail $repair.message) }
+            $restart = $restart -or [bool]$repair.restart
+            $after = & $StateReader
+        }
+    }
+    if ($after.install -and -not $restart) {
+        return (& $fail "Microsoft's installer reported success (code $($run.code)), but the runtime is still not in place: $($after.detail). Repair the Microsoft Visual C++ 2015-2022 Redistributable (x64) in Windows Settings, Apps, Installed apps (or install it again from Microsoft), then run this installer again")
+    }
+    Write-Info "Microsoft Visual C++ runtime after the step: $($after.detail)"
+    return [pscustomobject]@{ ok = $true; ran = $true; restart = $restart; message = $run.message }
 }
 
 # ---- the Vulkan loader ------------------------------------------------------------------------------------------

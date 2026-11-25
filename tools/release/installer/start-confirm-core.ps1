@@ -177,6 +177,22 @@ function Get-StartConfirmStep {
  return [ordered]@{action='wait'; reason="waiting: flags $($Reading.flags) completed $($Reading.completed) age_ms $($Reading.age_ms) ready_ms $($Reading.ready_ms)"}
 }
 
+# BD-389: the cause line of a run that confirmed nothing, from the cause of compositor-cause.ps1
+# (Read-CompositorStartCause). A run that confirmed (exit 0) writes none. The line is for the log only: a cause never
+# confirms a start, never resets the boot-loop guard and never changes the exit code.
+function Get-StartConfirmCauseLine {
+ param([AllowNull()]$Cause, [int]$ExitCode)
+ if ($ExitCode -eq 0 -or $null -eq $Cause) { return $null }
+ $reasons = @(@($Cause.reasons) | Where-Object { $_ })
+ if ($reasons.Count) {
+  $text = 'cause: ' + ($reasons -join '; ')
+  if ($Cause.advice) { $text = "$text; what to do: $($Cause.advice)" }
+  return $text
+ }
+ $notes = @(@($Cause.notes) | Where-Object { $_ })
+ return 'cause: none found' + $(if ($notes.Count) { '; notes: ' + ($notes -join '; ') } else { '' })
+}
+
 # ---- BD-122: why the KMD's last start failed (the state store's StartRecord) ------------------------------------
 # The KMD writes the reason of every start that did not reach a started device into the registry, with no gate
 # (guard.c, the section above GuardRecordStartAttempt). These are the pure functions that turn that record into

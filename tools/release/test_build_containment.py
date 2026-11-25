@@ -14,13 +14,18 @@ import build_release_set  # noqa: E402
 
 OUT = os.environ.get("BC250_TEST_OUT") or None
 A, B, C, D = ("a" * 40), ("b" * 40), ("c" * 40), ("d" * 40)
+F, FIX = ("f" * 40), ("9" * 40)
 
+# A is the manifest's recipe_commit. desktop-rel is a row of another repository with a recipe_commit of its own (F);
+# desktop-old has none, so the manifest's recipe builds it.
 ROWS = [
     {"id": "kmd-rel", "component": "kmd", "repo": "wddm", "commit": B, "inputs": {}},
     {"id": "kmd-lab", "component": "kmd", "repo": "wddm", "commit": B, "inputs": {}},
     {"id": "d3d11-dxvk", "component": "d3d11-umd", "repo": "dxvk", "commit": C, "inputs": {}},
     {"id": "d3d11-shell", "component": "d3d11-umd", "repo": "wddm", "commit": D,
      "inputs": {"mesa": {"repo": "mesa", "commit": C}}},
+    {"id": "desktop-rel", "component": "desktop-umd", "repo": "mesa", "commit": C, "recipe_commit": F, "inputs": {}},
+    {"id": "desktop-old", "component": "desktop-umd", "repo": "mesa", "commit": C, "inputs": {}},
 ]
 
 
@@ -88,6 +93,63 @@ class Decision(unittest.TestCase):
         self.assertEqual(run([entry], set())[0], "FAIL")
         entry = {"defect": "BD-317", "repo": "mesa", "commit": B, "rows": ["@recipe"]}
         self.assertEqual(run([entry], {(B, A)})[0], "FAIL")
+
+    def test_row_recipe_was_not_a_target(self):
+        # The hole of BD-389: a recipe fix of a row with its own recipe_commit had no form. The row name gives no
+        # target of the recipe repository, and '@recipe' is the manifest's recipe_commit only.
+        entry = {"defect": "BD-389", "repo": "wddm", "commit": FIX, "rows": ["desktop-rel"]}
+        status, lines = run([entry], {(FIX, F)})
+        self.assertEqual(status, "FAIL")
+        self.assertIn("names no row that builds from wddm", lines[0])
+        entry = dict(entry, rows=["@recipe"])
+        self.assertEqual(run([entry], {(FIX, F)})[0], "FAIL")
+
+    def test_row_recipe_is_a_target(self):
+        entry = {"defect": "BD-389", "repo": "wddm", "commit": FIX, "rows": ["@recipe:desktop-rel"]}
+        status, lines = run([entry], {(FIX, F)})
+        self.assertEqual(status, "PASS", lines)
+        self.assertTrue(any(l.startswith(f"PASS BD-389 wddm {FIX[:9]} in desktop-rel recipe {F[:9]}") for l in lines),
+                        lines)
+        status, lines = run([entry], {(FIX, A)})
+        self.assertEqual(status, "FAIL")
+        self.assertTrue(any("is not in desktop-rel recipe" in l for l in lines), lines)
+
+    def test_row_recipe_is_the_recipe_that_builds_the_row(self):
+        # The planner's rule: the row's own recipe_commit, else the row commit for a row of the recipe repository,
+        # else the manifest's recipe_commit.
+        self.assertEqual(containment.recipe_commit_of(ROWS[4], "wddm", A), F)
+        self.assertEqual(containment.recipe_commit_of(ROWS[5], "wddm", A), A)
+        self.assertEqual(containment.recipe_commit_of(ROWS[0], "wddm", A), B)
+        entry = {"defect": "BD-389", "repo": "wddm", "commit": FIX, "rows": ["@recipe:desktop-old", "@recipe:kmd-rel"]}
+        self.assertEqual(run([entry], {(FIX, A), (FIX, B)})[0], "PASS")
+        self.assertEqual(run([entry], {(FIX, A)})[0], "FAIL")
+
+    def test_row_recipe_of_a_component(self):
+        entry = {"defect": "BD-389", "repo": "wddm", "commit": FIX, "rows": ["@recipe:desktop-umd"]}
+        status, lines = run([entry], {(FIX, F), (FIX, A)})
+        self.assertEqual(status, "PASS", lines)
+        self.assertEqual(sum(1 for l in lines if l.startswith("PASS BD-389")), 2, lines)
+        self.assertEqual(run([entry], {(FIX, F)})[0], "FAIL")
+
+    def test_row_recipe_needs_the_recipe_repository_and_a_row(self):
+        entry = {"defect": "BD-389", "repo": "mesa", "commit": FIX, "rows": ["@recipe:desktop-rel"]}
+        status, lines = run([entry], {(FIX, F)})
+        self.assertEqual(status, "FAIL")
+        self.assertIn("'@recipe:desktop-rel' names a recipe, and the recipes are commits of wddm, not of mesa", lines[0])
+        entry = {"defect": "BD-389", "repo": "wddm", "commit": FIX, "rows": ["@recipe:no-such-row"]}
+        status, lines = run([entry], {(FIX, F)})
+        self.assertEqual(status, "FAIL")
+        self.assertIn("'@recipe:no-such-row' names no row", lines[0])
+
+    def test_plan_rows_carry_the_row_recipe(self):
+        # build_release_set.py puts plan_rows(manifest rows) into the plan, and check_plan reads them back.
+        rows = containment.plan_rows(ROWS)
+        self.assertEqual(rows[4]["recipe_commit"], F)
+        self.assertNotIn("recipe_commit", rows[5])
+        entry = {"defect": "BD-389", "repo": "wddm", "commit": FIX, "rows": ["@recipe:desktop-rel"]}
+        status, _ = containment.check("tester.39", [entry], rows, "wddm", A, lambda repo, commit: "co",
+                                      lambda checkout, fix, commit: (fix, commit) == (FIX, F))
+        self.assertEqual(status, "PASS")
 
     def test_row_commit_in_no_checkout_fails(self):
         entry = {"defect": "BD-306", "repo": "wddm", "commit": A, "rows": ["kmd-rel"]}
@@ -157,6 +219,22 @@ class Git(unittest.TestCase):
                                           containment.git_is_ancestor)
         self.assertEqual(status, "FAIL")
         self.assertTrue(any("is not in old" in l for l in lines), lines)
+
+    def test_row_recipe_on_real_history(self):
+        # A row of another repository whose own recipe_commit has the fix, and the mutant: one pinned before it.
+        rows = [{"id": "desktop-rel", "component": "desktop-umd", "repo": "mesa", "commit": C,
+                 "recipe_commit": self.after, "inputs": {}},
+                {"id": "desktop-old", "component": "desktop-umd", "repo": "mesa", "commit": C,
+                 "recipe_commit": self.base, "inputs": {}}]
+        find = lambda repo, commit: self.repo  # noqa: E731
+        entry = {"defect": "BD-389", "repo": "wddm", "commit": self.fix, "rows": ["@recipe:desktop-rel"]}
+        self.assertEqual(containment.check("tester.39", [entry], rows, "wddm", self.base, find,
+                                           containment.git_is_ancestor)[0], "PASS")
+        entry = dict(entry, rows=["@recipe:desktop-umd"])
+        status, lines = containment.check("tester.39", [entry], rows, "wddm", self.after, find,
+                                          containment.git_is_ancestor)
+        self.assertEqual(status, "FAIL")
+        self.assertTrue(any("is not in desktop-old recipe" in l for l in lines), lines)
 
 
 if __name__ == "__main__":

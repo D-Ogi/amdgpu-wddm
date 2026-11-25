@@ -38,33 +38,58 @@ def git(tree, *args):
     return r.stdout.strip()
 
 
+def commit(tree, message):
+    git(tree, "add", "-A")
+    git(tree, "commit", "-q", "--allow-empty", "-m", message)
+
+
+def remove_tree(path):
+    """Remove a test repository. Git makes its object files read-only, which stops a plain removal on Windows."""
+    def writable(func, name, _exc):
+        os.chmod(name, 0o700)
+        func(name)
+    shutil.rmtree(path, onerror=writable)
+
+
 class StateHistoryGate(unittest.TestCase):
-    def setUp(self):
-        self.dir = Path(tempfile.mkdtemp(prefix="state-history-", dir=OUT))
-        self.state = self.dir / "driver" / "state"
-        (self.state / "history").mkdir(parents=True)
-        git(self.dir, "init", "-q")
+    # BD-382: the repository of the releases is made one time for the class, and each test gets a copy of its files.
+    # Each test made it again before (seven git processes), and in the full quality suite a git process start on the
+    # development PC took more than a second: 12 tests went past the 180 s of the gate (package run of 2026-11-24).
+    @classmethod
+    def setUpClass(cls):
+        cls.template = Path(tempfile.mkdtemp(prefix="state-history-template-", dir=OUT))
+        state = cls.template / "driver" / "state"
+        (state / "history").mkdir(parents=True)
+        git(cls.template, "init", "-q")
         # A release before the state store: no catalog.json.
-        (self.dir / "README.txt").write_text("a release before the state store\n", encoding="utf-8")
-        self.commit("tester.20")
-        git(self.dir, "tag", "v0.7.216.90-tester.20")
+        (cls.template / "README.txt").write_text("a release before the state store\n", encoding="utf-8")
+        commit(cls.template, "tester.20")
+        git(cls.template, "tag", "v0.7.216.90-tester.20")
         # tester.32, then tester.33: catalog.json as each release tag holds it, no history yet.
         for identity, tag in ((T32, "v0.7.216.104-tester.32"), (T33, "v0.7.216.105-tester.33")):
-            shutil.copyfile(HISTORY / f"{identity}.json", self.state / "catalog.json")
-            self.commit(tag)
-            git(self.dir, "tag", tag)
+            shutil.copyfile(HISTORY / f"{identity}.json", state / "catalog.json")
+            commit(cls.template, tag)
+            git(cls.template, "tag", tag)
         # This release: the current catalog and the history of this tree.
-        shutil.copyfile(ROOT / "driver" / "state" / "catalog.json", self.state / "catalog.json")
+        shutil.copyfile(ROOT / "driver" / "state" / "catalog.json", state / "catalog.json")
         for f in HISTORY.glob("*.json"):
-            shutil.copyfile(f, self.state / "history" / f.name)
-        self.commit("tester.34")
+            shutil.copyfile(f, state / "history" / f.name)
+        commit(cls.template, "tester.34")
+
+    @classmethod
+    def tearDownClass(cls):
+        remove_tree(cls.template)
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp(prefix="state-history-", dir=OUT)) / "repo"
+        shutil.copytree(self.template, self.dir)
+        self.state = self.dir / "driver" / "state"
 
     def tearDown(self):
-        shutil.rmtree(self.dir, ignore_errors=True)
+        remove_tree(self.dir.parent)
 
     def commit(self, message):
-        git(self.dir, "add", "-A")
-        git(self.dir, "commit", "-q", "--allow-empty", "-m", message)
+        commit(self.dir, message)
 
     def run_check(self, version="0.7.216.106-tester.34"):
         failures, lines = g.check(self.dir, "HEAD", version)

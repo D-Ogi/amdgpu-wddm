@@ -99,9 +99,6 @@ check.smartappcontrol.on|mt|e942bb33|Inteligentna kontrola aplikacji jest włąc
 check.smartappcontrol.evaluation|mt|6d2a3b91|Inteligentna kontrola aplikacji jest w trybie oceny. Instalator wyłączy ją przed instalacją sterownika, więc Windows nie włączy jej później.
 check.smartappcontrol.unknown|mt|4ce54139|Instalator nie mógł odczytać, czy inteligentna kontrola aplikacji jest włączona.
 check.smartappcontrol.not-off|mt|0e4a27ff|Instalator nie mógł wyłączyć inteligentnej kontroli aplikacji. Gdy jest włączona, Windows blokuje ten instalator i programy sterownika graficznego. Nic ze sterownika nie zostało zainstalowane.
-check.vcruntime.ok|rev|da7b7ffe|Środowisko uruchomieniowe Microsoft Visual C++ jest zainstalowane.
-check.vcruntime.missing|rev|e96604a7|Brakuje środowiska uruchomieniowego Microsoft Visual C++ 2015-2022 (x64) albo jest ono za stare. Instalator zainstaluje je z pliku, który ma przy sobie.
-check.vcruntime.no-installer|rev|a1670c32|Trzeba zainstalować środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), a ten zestaw plików nie ma programu firmy Microsoft, który to robi. Pobierz wydanie ponownie.
 check.space.ok|rev|fc218428|Jest wystarczająco dużo wolnego miejsca na dysku.
 check.space.low|rev|e473eee3|Na dysku C: jest za mało wolnego miejsca. Instalator potrzebuje 2 GB.
 check.firmware.download-ok|rev|11f01474|Firmware GPU można pobrać.
@@ -145,7 +142,6 @@ plan.change.test-mode.on|rev|cf315297|Windows już działa w trybie testowym, wi
 plan.change.kernel-signers|mt|ad5b4221|Tryb testowy Windows pozostaje wyłączony: podpisana zasada integralności kodu na tym komputerze pozwala Windows załadować sterownik.
 plan.change.bitlocker|rev|f43553fa|Ochrona BitLocker zostaje wstrzymana na czas ponownych uruchomień tej instalacji i potem włącza się sama, więc Windows nie poprosi o klucz odzyskiwania.
 plan.change.bitlocker.unknown|rev|67f2277e|Instalator nie mógł odczytać stanu funkcji BitLocker na tym komputerze. Mimo to kontynuuje pracę: miej klucz odzyskiwania pod ręką, jeśli Windows poprosi o niego po ponownym uruchomieniu.
-plan.change.vcruntime|rev|65d68876|Najpierw instalowane jest środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), którego potrzebują programy sterownika.
 plan.change.smartappcontrol|mt|90e7f550|Inteligentna kontrola aplikacji zostanie wyłączona. Windows może ją ponownie włączyć tylko przez zresetowanie systemu.
 shortcuts.title|mt|19544092|Skróty i Nagi
 shortcuts.start-menu|rev|f7bdc16b|W menu Start

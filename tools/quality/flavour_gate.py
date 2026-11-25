@@ -110,6 +110,9 @@ import re
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import pe_image  # noqa: E402
+sys.path.pop(0)
 DECLARATION = HERE / 'flavour_gate.json'
 PE_SUFFIXES = ('.dll', '.sys', '.exe')
 NAME = re.compile(r'[A-Z][A-Z0-9_]{2,}')
@@ -410,70 +413,21 @@ def release_recipe_findings(rows, read):
 
 
 def read_pe(path):
-    p = pathlib.Path(path)
+    """The bytes of a PE image (pe_image.read): a file that the reader cannot judge raises GateError."""
     try:
-        data = p.read_bytes()
-    except OSError as e:
-        raise GateError('%s: unreadable: %s' % (p, e))
-    if len(data) < 0x40 or data[:2] != b'MZ':
-        raise GateError('%s: not a PE image (no MZ header)' % p)
-    pe = int.from_bytes(data[0x3c:0x40], 'little')
-    if pe + 4 > len(data) or data[pe:pe + 4] != b'PE\0\0':
-        raise GateError('%s: not a PE image (no PE signature)' % p)
-    return data
+        return pe_image.read(path)
+    except pe_image.PeError as e:
+        raise GateError(str(e))
 
 
 def pe_imports(data):
-    """[(dll, function)] of the import directory of a PE image (read_pe), a function by name or '#<ordinal>'. An
-    image without an optional header imports nothing. A directory that points outside the image cannot be judged."""
-    def u(at, size):
-        if at < 0 or at + size > len(data):
-            raise GateError('the import directory points outside the image (offset 0x%x)' % at)
-        return int.from_bytes(data[at:at + size], 'little')
-
-    def text(at):
-        end = data.find(b'\0', at)
-        if at >= len(data) or end < 0:
-            raise GateError('an import name outside the image (offset 0x%x)' % at)
-        return data[at:end].decode('latin-1')
-
-    coff = u(0x3c, 4) + 4
-    count, optsize = u(coff + 2, 2), u(coff + 16, 2)
-    opt = coff + 20
-    if optsize == 0:
-        return []
-    magic = u(opt, 2)
-    if magic not in (0x10b, 0x20b):
-        raise GateError('optional header magic 0x%x is neither PE32 nor PE32+' % magic)
-    wide = magic == 0x20b
-    if u(opt + (108 if wide else 92), 4) < 2:
-        return []
-    rva = u(opt + (112 if wide else 96) + 8, 4)
-    if not rva:
-        return []
-    sections = [(u(s + 12, 4), max(u(s + 8, 4), u(s + 16, 4)), u(s + 20, 4))
-                for s in range(opt + optsize, opt + optsize + 40 * count, 40)]
-
-    def at(r):
-        for va, size, raw in sections:
-            if va <= r < va + size:
-                return raw + r - va
-        raise GateError('import RVA 0x%x is in no section' % r)
-
-    found, d, step = [], at(rva), 8 if wide else 4
-    for _ in range(len(data) // 20):
-        thunks, name, first = u(d, 4), u(d + 12, 4), u(d + 16, 4)
-        if not (thunks or name or first):
-            return found
-        dll, t = text(at(name)), at(thunks or first)
-        for _ in range(len(data) // step):
-            v = u(t, step)
-            if not v:
-                break
-            found.append((dll, '#%d' % (v & 0xffff) if v >> (8 * step - 1) else text(at(v & 0x7fffffff) + 2)))
-            t += step
-        d += 20
-    raise GateError('the import directory has no terminating entry')
+    """[(dll, function)] of the import directory of a PE image (read_pe), a function by name or '#<ordinal>'
+    (pe_image.imports). An image without an optional header imports nothing. An image that the reader cannot judge
+    raises GateError."""
+    try:
+        return pe_image.imports(data)
+    except pe_image.PeError as e:
+        raise GateError('the import directory cannot be read: %s' % e)
 
 
 def live_asserts(data):

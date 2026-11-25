@@ -97,9 +97,6 @@ check.smartappcontrol.on|mt|e942bb33|スマート アプリ コントロール�
 check.smartappcontrol.evaluation|mt|6d2a3b91|スマート アプリ コントロールは評価モードです。セットアップはドライバーをインストールする前にオフにするので、後で Windows がオンにすることはありません。
 check.smartappcontrol.unknown|mt|4ce54139|スマート アプリ コントロールがオンかどうかを読み取れませんでした。
 check.smartappcontrol.not-off|mt|0e4a27ff|セットアップはスマート アプリ コントロールをオフにできませんでした。オンの間は、Windows がこのセットアップ プログラムとグラフィックス ドライバーのプログラムをブロックします。ドライバーは何もインストールされていません。
-check.vcruntime.ok|mt|da7b7ffe|Microsoft Visual C++ ランタイムはインストールされています。
-check.vcruntime.missing|mt|e96604a7|Microsoft Visual C++ 2015-2022 ランタイム (x64) がないか、古すぎます。セットアップが同梱のファイルからインストールします。
-check.vcruntime.no-installer|mt|a1670c32|Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールする必要がありますが、この一式には Microsoft の該当プログラムが含まれていません。リリースをもう一度ダウンロードしてください。
 check.space.ok|mt|fc218428|ディスクの空き容量は十分です。
 check.space.low|mt|e473eee3|ドライブ C: の空き容量が不足しています。2 GB 必要です。
 check.firmware.download-ok|mt|11f01474|GPU ファームウェアをダウンロードできます。
@@ -143,7 +140,6 @@ plan.change.test-mode.on|mt|cf315297|Windows はすでにテスト モードで�
 plan.change.kernel-signers|mt|ad5b4221|Windows のテスト モードはオフのままです。この PC の署名済みコード整合性ポリシーにより、Windows はドライバーを読み込めます。
 plan.change.bitlocker|mt|f43553fa|BitLocker の保護はこのインストールの再起動の間だけ一時停止し、その後は自動的に再開するので、Windows が回復キーを求めることはありません。
 plan.change.bitlocker.unknown|mt|67f2277e|この PC の BitLocker の状態を読み取れませんでした。処理は続行します。再起動後に Windows が求めた場合に備えて、回復キーを用意しておいてください。
-plan.change.vcruntime|mt|65d68876|ドライバーのプログラムが必要とするため、最初に Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールします。
 plan.change.smartappcontrol|mt|90e7f550|スマート アプリ コントロールをオフにします。Windows でこれを再びオンにするには、システムのリセットが必要です。
 shortcuts.title|mt-safe|19544092|ショートカットと Nagi
 shortcuts.start-menu|mt-safe|f7bdc16b|スタート メニュー

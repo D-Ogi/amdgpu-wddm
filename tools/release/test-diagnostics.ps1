@@ -163,6 +163,9 @@ try {
             $script:bd147Collected++
             return @{ written = $true; bytes = 1; seconds = 0; sections = @(); problems = @(); path = 'fixture.txt'; cut = $false }
         }
+        # BD-389: the compositor cause reads the host's event logs and the driver's files; test-compositor-cause.ps1
+        # tests it. Here it finds nothing.
+        function Read-CompositorStartCause { return [ordered]@{ reasons = @(); notes = @(); advice = $null; lines = @() } }
         $info = { param($Name, $Text) $script:bd147Info += ($Name + ': ' + $Text) }
         foreach ($problem in @('CM_PROB_NONE', [DiagnosticsTest.Problem]::CM_PROB_NONE)) {
             Invoke-VerifyDiagnostics -DeviceState @{ present = $true; problem_code = $problem; status = 'OK'; health_flags = 15; last_stage = 50 } `
@@ -172,6 +175,14 @@ try {
         Invoke-VerifyDiagnostics -DeviceState @{ present = $true; problem_code = 'CM_PROB_FAILED_POST_START'; status = 'Error'; health_flags = $null; last_stage = 79 } `
             -StartRecord $fieldRecord -BootUtc $fieldBoot -BootId 11 -BootIdSource 'fixture' -Info $info
         Check ($script:bd147Collected -eq 1 -and $script:bd147Events -eq 1 -and ($script:bd147Info -join ' ') -match 'the driver did not start') 'a genuine failed start still collects and announces the details'
+        # BD-389: the wrapper gives the compositor cause to the decision: its reason collects, its advice is announced.
+        $script:bd147Info = @()
+        function Read-CompositorStartCause { param($BootUtc, $Record, $ProblemCode, $InstanceId, $DeviceName)
+            $script:bd389Device = $DeviceName
+            return [ordered]@{ reasons = @('fixture: the desktop compositor ended on this device'); notes = @(); advice = 'fixture advice'; lines = @() } }
+        Invoke-VerifyDiagnostics -DeviceState @{ present = $true; name = 'fixture GPU'; problem_code = 0; status = 'OK'; health_flags = 15; last_stage = 50 } `
+            -StartRecord $okRecord -BootUtc ([datetime]::UtcNow.AddMinutes(-5)) -BootId 11 -BootIdSource 'fixture' -Info $info
+        Check ($script:bd147Collected -eq 2 -and $script:bd389Device -eq 'fixture GPU' -and ($script:bd147Info -join ' ') -match 'what to do: fixture advice') 'BD-389: the wrapper reads the compositor cause, collects on its reason and announces its advice'
     }
     '3. every hard signal on its own'
     $cases = @(

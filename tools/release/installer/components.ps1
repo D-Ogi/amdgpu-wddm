@@ -10,6 +10,10 @@
 # failed component never fails the driver installation, and the uninstaller removes a component's files and every
 # registration it made. The downloaded models are the user's data: they stay unless uninstall runs -RemoveModels.
 #
+# A component can need a program of Windows that the driver does not need (BD-389: the llama.cpp extra imports the
+# Microsoft Visual C++ runtime, the driver set imports nothing of it). It names it in "requires", and the prerequisite
+# table below is the one place that knows such a program. Its failure skips only the components that need it.
+#
 # One block here has no component behind it yet: 'backend_setting' (the validation below and the write in
 # Install-ComponentFiles) writes one line into a component's own folder for a component that reads its backend from
 # a file. Neither component of this release declares it - our Ollama build keeps that choice in its own per-user
@@ -32,6 +36,27 @@ $script:ComponentTries      = 3
 $script:ComponentTimeoutSec = 900                   # one asset; the models get their own, longer, route (curl.exe)
 $script:StartupDir          = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\StartUp'
 $script:StartMenuDir        = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
+
+# ---------------------------------------------------------------------------------------------------------------
+# The prerequisites of the extras: by name, what each one is and how the install handles it.
+#   title    the words of the lines and messages that name it
+#   state    reads this PC: { install, detail }; install is true when the PC does not have it
+#   check    checks the file of the package that installs it (-PackageRoot): { ok, problem }
+#   install  installs it (-PackageRoot): { ok, ran, restart, message }; a failure is the result, not an exception
+# The functions behind an entry live in common.ps1. A block calls them only when it runs, so the order in which the two
+# files are loaded does not matter, and build-release.ps1 can validate a manifest with this file alone.
+# A component whose prerequisite this package cannot install (its file is missing or changed) is refused like a
+# component without a pin. A prerequisite runs one time per run, before the files of the first chosen component that
+# needs it. When it fails, the components that need it are skipped with a warning, and the driver installation
+# completes.
+$script:ComponentPrerequisites = [ordered]@{
+    'vcruntime-x64' = [pscustomobject]@{
+        title   = 'the Microsoft Visual C++ 2015-2022 runtime (x64)'
+        state   = { Get-VcRuntimeState }
+        check   = { param([string]$PackageRoot) Test-VcRuntimeInstaller -Path (Join-Path $PackageRoot $script:VcRuntimePackagePath) }
+        install = { param([string]$PackageRoot) Install-VcRuntime -PackageRoot $PackageRoot }
+    }
+}
 
 # ---------------------------------------------------------------------------------------------------------------
 # The manifest. Pure reading and pure checks: every problem is a line of text, nothing throws on bad input.
@@ -72,6 +97,9 @@ function Test-ComponentsManifest($Manifest) {
             if (([string]$t) -notmatch '^https://') { $bad.Add("component $id url template '$t' is not https") }
         }
         foreach ($m in @($c.models)) { if ($modelIds -notcontains [string]$m) { $bad.Add("component $id names model '$m', which the manifest does not offer") } }
+        foreach ($rq in @(Get-ComponentRequires $c)) {
+            if (-not $script:ComponentPrerequisites.Contains($rq)) { $bad.Add("component $id requires '$rq', which the installer does not know (it knows: $(@($script:ComponentPrerequisites.Keys) -join ', '))") }
+        }
         $hk = $c.hooks
         if ($null -ne $hk) {
             if (-not [string]$hk.script -or ([string]$hk.script) -match '^[\\/]|\.\.|:') { $bad.Add("component $id hooks script '$([string]$hk.script)' must be a relative path inside the component folder") }
@@ -129,6 +157,12 @@ function Get-ComponentAssetUrls($Manifest, $Component) {
     foreach ($t in @($Component.asset.url_templates)) {
         ([string]$t).Replace('{release}', [string]$Manifest.release).Replace('{name}', [string]$Component.asset.name)
     }
+}
+
+# Pure: the names of the prerequisites a component requires, in manifest order. "requires" is optional.
+function Get-ComponentRequires($Component) {
+    if ($null -eq $Component -or $null -eq $Component.requires) { return @() }
+    return @(@($Component.requires) | ForEach-Object { [string]$_ } | Where-Object { $_ })
 }
 
 function Get-ComponentById($Manifest, [string]$Id) { foreach ($c in @($Manifest.components)) { if ([string]$c.id -eq $Id) { return $c } } return $null }
@@ -327,13 +361,100 @@ function Read-ModelChoice {
 }
 
 # The rows the questions and the install work from: one per component of the manifest, with the reason a component
-# cannot be installed from this package. Pure.
-function Get-ComponentRows($Manifest) {
+# cannot be installed from this package: no usable pin, or a prerequisite that this package cannot install
+# (-Prerequisites, the reading of Read-ComponentPrerequisites; without it only the pins are read). Pure.
+function Get-ComponentRows($Manifest, $Prerequisites) {
     $out = @()
     foreach ($c in @($Manifest.components)) {
-        $out += [pscustomobject]@{ id = [string]$c.id; component = $c; refused = (Get-ComponentPinProblem $c) }
+        $refused = Get-ComponentPinProblem $c
+        if (-not $refused -and $null -ne $Prerequisites) {
+            foreach ($name in @(Get-ComponentRequires $c)) {
+                if ($Prerequisites.Contains($name) -and $Prerequisites[$name].problem) { $refused = $Prerequisites[$name].problem; break }
+            }
+        }
+        $out += [pscustomobject]@{ id = [string]$c.id; component = $c; refused = $refused }
     }
     return $out
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# The prerequisites of the chosen extras: read before any change, installed in the components stage.
+
+# The prerequisites that the components of the manifest require, each read one time, by name:
+# { name, title, install, detail, problem }. 'problem' is the reason why a component that requires it cannot be
+# installed from this package, or $null. The file of the package is checked only when this PC does not have the
+# prerequisite: a PC that has the runtime installs llama.cpp without Microsoft's installer. A reader that throws is a
+# problem too. -ComponentIds reads only the prerequisites of those components. -Table is for the tests.
+function Read-ComponentPrerequisites {
+    param([Parameter(Mandatory)]$Manifest, [Parameter(Mandatory)][string]$PackageRoot, [string[]]$ComponentIds,
+          $Table = $script:ComponentPrerequisites)
+    $out = [ordered]@{}
+    foreach ($c in @($Manifest.components)) {
+        if ($PSBoundParameters.ContainsKey('ComponentIds') -and @($ComponentIds) -notcontains [string]$c.id) { continue }
+        foreach ($name in @(Get-ComponentRequires $c)) {
+            if ($out.Contains($name)) { continue }
+            if (-not $Table.Contains($name)) {
+                $out[$name] = [pscustomobject]@{ name = $name; title = "'$name'"; install = $true; detail = ''; problem = "it requires '$name', which this installer does not know" }
+                continue
+            }
+            $entry = $Table[$name]
+            $state = $null; $problem = $null
+            try {
+                $state = & $entry.state
+                if ($state.install) {
+                    $file = & $entry.check $PackageRoot
+                    if (-not $file.ok) { $problem = "it needs $($entry.title), which this PC does not have ($($state.detail)), and $($file.problem)" }
+                }
+            } catch { $problem = "it needs $($entry.title), which cannot be read on this PC: $($_.Exception.Message)" }
+            $out[$name] = [pscustomobject]@{ name = $name; title = [string]$entry.title; install = [bool]($null -ne $state -and $state.install)
+                detail = $(if ($null -ne $state) { [string]$state.detail } else { '' }); problem = $problem }
+        }
+    }
+    return $out
+}
+
+# Pure: the lines of the extras stage about the prerequisites of the chosen components, one per prerequisite: what it
+# is, which chosen extras need it, what this PC has, and if it is installed before the files of those extras.
+function Get-ComponentPrerequisiteLines {
+    param([Parameter(Mandatory)]$Manifest, [string[]]$ComponentIds, $Prerequisites)
+    if ($null -eq $Prerequisites) { return @() }
+    $lines = @()
+    foreach ($name in @($Prerequisites.Keys)) {
+        $p = $Prerequisites[$name]
+        $users = @(foreach ($id in @($ComponentIds)) {
+            $c = Get-ComponentById $Manifest $id
+            if ($null -ne $c -and @(Get-ComponentRequires $c) -contains $name) { [string]$c.title }
+        })
+        if (-not $users.Count) { continue }
+        $line = "$($p.title), needed by $($users -join ' and ')`: $($p.detail)"
+        if ($p.install) { $line += '; it is installed first' }
+        $lines += $line
+    }
+    return $lines
+}
+
+# Installs the prerequisites of one component that this run has not installed yet, in the order of "requires", and
+# throws when one of them is not in place, so that the try/catch of the caller skips that component. -Done holds the
+# outcome of each prerequisite in this run: a second component that needs the same one does not run it again, and
+# after a failure it is skipped with the same reason. An install step that throws is a failure like any other.
+# -Table is for the tests.
+function Invoke-ComponentPrerequisites {
+    param([Parameter(Mandatory)]$Component, [Parameter(Mandatory)][string]$PackageRoot, [Parameter(Mandatory)][hashtable]$Done,
+          $Table = $script:ComponentPrerequisites)
+    foreach ($name in @(Get-ComponentRequires $Component)) {
+        if (-not $Done.ContainsKey($name)) {
+            if (-not $Table.Contains($name)) { $Done[$name] = [pscustomobject]@{ ok = $false; title = "'$name'"; message = 'this installer does not know it' } }
+            else {
+                $entry = $Table[$name]
+                $r = $null
+                try { $r = & $entry.install $PackageRoot } catch { $r = [pscustomobject]@{ ok = $false; message = $_.Exception.Message } }
+                $Done[$name] = [pscustomobject]@{ ok = [bool]($null -ne $r -and $r.ok); title = [string]$entry.title
+                    message = $(if ($null -ne $r) { [string]$r.message } else { 'the step gave no result' }) }
+            }
+        }
+        $o = $Done[$name]
+        if (-not $o.ok) { throw "it needs $($o.title), which was not installed: $(([string]$o.message).TrimEnd('.'))" }
+    }
 }
 
 # ---------------------------------------------------------------------------------------------------------------

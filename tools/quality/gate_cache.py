@@ -119,6 +119,13 @@ class WindowsJob:
         api.CreateJobObjectW.restype = wintypes.HANDLE
         api.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
         api.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+        api.QueryInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
+                                                  ctypes.c_void_p]
+        api.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
+        api.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        api.OpenProcess.restype = wintypes.HANDLE
+        api.IsProcessInJob.argtypes = [wintypes.HANDLE, wintypes.HANDLE, ctypes.POINTER(wintypes.BOOL)]
+        api.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
         api.CloseHandle.argtypes = [wintypes.HANDLE]
         self.api = api
         handle = api.CreateJobObjectW(None, None)
@@ -133,6 +140,39 @@ class WindowsJob:
             api.CloseHandle(handle)
             raise ctypes.WinError(ctypes.get_last_error())
         self.handle = handle
+
+    def stop(self, seconds=30):
+        """End every process of the job and return when each one is gone.
+
+        A process that was told to end still holds its open files until its last thread has left. The caller
+        reads or removes those files next: the log of the check, its work directory. So this waits on each
+        process (BD-382: in a package suite of 2026-11-24 a child still held the log of its check after the
+        worker was gone). The processes are opened before the job is told to end: after that the job no longer
+        lists them, while they still run down.
+        """
+        if not self.handle:
+            return
+
+        class Ids(ctypes.Structure):
+            _fields_ = [('assigned', wintypes.DWORD), ('listed', wintypes.DWORD), ('ids', ctypes.c_size_t * 4096)]
+        api, end, ids, opened = self.api, time.monotonic() + seconds, Ids(), []
+        # JobObjectBasicProcessIdList, winnt.h: the processes of the job that have not ended.
+        if api.QueryInformationJobObject(self.handle, 3, ctypes.byref(ids), ctypes.sizeof(ids), None):
+            for pid in ids.ids[:ids.listed]:
+                # SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, winnt.h
+                process = api.OpenProcess(0x00101000, False, pid)
+                if not process:
+                    continue
+                member = wintypes.BOOL(False)
+                # The process of this number can have ended, and the number can belong to another program now.
+                if api.IsProcessInJob(process, self.handle, ctypes.byref(member)) and member.value:
+                    opened.append(process)
+                else:
+                    api.CloseHandle(process)
+        api.TerminateJobObject(self.handle, 1)
+        for process in opened:
+            api.WaitForSingleObject(process, max(0, int((end - time.monotonic()) * 1000)))
+            api.CloseHandle(process)
 
     def close(self):
         if self.handle:
@@ -149,6 +189,7 @@ def run_process(command, cwd, env, log, timeout):
             return process.wait(timeout=timeout), False
         except subprocess.TimeoutExpired:
             if job:
+                job.stop()
                 job.close()
             process.kill()
             process.wait()
@@ -192,6 +233,69 @@ def control_failure(code, log, step=None):
     if not any('FAIL' in line for line in lines[starts[-1] + 1:end]):
         return f'no FAIL line inside the test step {name}: the control failed for another reason'
     return None
+
+
+def deadline(manifest, declaration, profile):
+    """The seconds after which a check is stopped with its process tree.
+
+    A declared deadline fits a check that runs alone or beside a few others. The Full profile is the release suite:
+    every check runs, many at once, beside the other work of the host, and the time of a check there is not a
+    property of the check (driver-state-history: 9 s alone, 326 s in a package suite of 2026-11-24; BD-357). So in
+    that profile the deadline has one task, to end a check that hangs, and no check has less than 'full_timeout'.
+    """
+    seconds = declaration.get('timeout', manifest['timeout'])
+    if profile == 'Full':
+        seconds = max(seconds, manifest.get('full_timeout', seconds))
+    return seconds
+
+
+def run_failed_again(out, specs, manifest, results, completed, work):
+    """The Full profile: each check that failed runs one more time, alone, after the other checks.
+
+    The Full profile is the release suite. It runs every check, many at once, beside the other work of the host,
+    and a package attempt has no other way to repeat one check: the next attempt repeats them all (about an
+    hour). Six attempts of tester.39 on 2026-11-24 each lost one check to that load: a deadline, a timing rule,
+    a file that a process still held (BD-382, BD-357). A check that passes alone was a victim of the load. A
+    check with a defect fails again, and the suite fails as before.
+
+    The row of a check that ran two times says so ('attempts', and 'first' with the result of the first run),
+    its first log and output directory stay beside the new ones (<name>.first.log, <name>.first), and the report
+    names it in 'run_again': a check in that list is a flaky check, and that is a defect to record and repair.
+    Then the checks that waited for a check that now passed run too.
+    """
+    names = []
+    for first in [row for row in results if row['status'] == 'FAIL' and 'seconds' in row and row['name'] in specs]:
+        name = first['name']
+        print(f'{name} runs again, alone: it failed beside the other checks', flush=True)
+        for old, kept in ((out / (name + '.log'), out / (name + '.first.log')), (out / name, out / (name + '.first'))):
+            try:
+                if kept.is_dir():
+                    shutil.rmtree(kept)
+                elif kept.exists():
+                    kept.unlink()
+                if old.exists():
+                    old.rename(kept)
+            except OSError:
+                pass                        # a file that is still held stays where it is; the second run tells
+        row = work(specs[name], again=True)
+        row['attempts'] = 2
+        row['first'] = {key: first[key] for key in ('status', 'exit_code', 'timeout', 'seconds', 'error') if key in first}
+        results[results.index(first)] = row
+        completed[name] = row
+        names.append(name)
+    waiting = True
+    while waiting:
+        waiting = False
+        for row in [row for row in results if row.get('error') == 'prerequisite failed' and row['name'] in specs]:
+            name = row['name']
+            if all(completed[d]['status'] == 'PASS' for d in manifest['checks'].get(name, {}).get('depends', [])):
+                new = work(specs[name])
+                results[results.index(row)] = new
+                completed[name] = new
+                waiting = True
+    if names:
+        print('run again: ' + ', '.join(f'{name} {completed[name]["status"]}' for name in names), flush=True)
+    return names
 
 
 def cache_key(job, declaration, input_hash, tool_hash, env_hash, context):
@@ -353,7 +457,7 @@ def execute(plan, manifest, plan_path, no_cache=False, jobs=None):
                and (variables['Profile'] != 'KmdPackage' or r['name'] not in release_only)]
     completed, pending, running = {}, dict(specs), {}
 
-    def work(spec):
+    def work(spec, again=False):
         name = spec['name']
         watch = time.monotonic()
         key = prepared[name]
@@ -363,7 +467,7 @@ def execute(plan, manifest, plan_path, no_cache=False, jobs=None):
             row.update(status='PASS', cached=True, seconds=time.monotonic() - watch)
             print(f'{name} cached PASS {key[:12]}', flush=True)
             return row
-        scratch = out / '_work' / name
+        scratch = out / '_work' / (name + '.again' if again else name)
         scratch.mkdir(parents=True, exist_ok=True)
         env = environment | {'TEMP': str(scratch), 'TMP': str(scratch),
                               'BC250_GATE_NOCACHE': '1' if no_cache else '0'}
@@ -375,7 +479,7 @@ def execute(plan, manifest, plan_path, no_cache=False, jobs=None):
         else:
             command = ['pwsh', '-NoProfile', '-File', str(repo / 'tools/quality/gate-worker.ps1'),
                        '-Plan', str(plan_path), '-Name', name]
-        timeout = declaration.get('timeout', manifest['timeout'])
+        timeout = deadline(manifest, declaration, variables['Profile'])
         code, timed_out = run_process(command, scratch, env, out / (name + '.log'), timeout)
         log = (out / (name + '.log')).read_bytes()
         why = control_failure(code, log, spec.get('step')) if spec.get('fails') and not timed_out else None
@@ -421,6 +525,7 @@ def execute(plan, manifest, plan_path, no_cache=False, jobs=None):
                     print(f'{name} FAIL: {exc}', flush=True)
                 results.append(row)
                 completed[name] = row
+    run_again = run_failed_again(out, specs, manifest, results, completed, work) if variables['Profile'] == 'Full' else []
     # Rehash the declaration groups before publishing. Never bless a run over
     # moving sources (nor reuse such a run as a later cache hit).
     stable = True
@@ -445,7 +550,7 @@ def execute(plan, manifest, plan_path, no_cache=False, jobs=None):
               'cache_hits': sum(bool(r.get('cached')) for r in results), 'uncacheable': uncacheable,
               'preparation_seconds': preparation_seconds,
               'moved_to_full': sorted(release_only) if variables['Profile'] == 'KmdPackage' else [],
-              'workers': count}
+              'workers': count, 'run_again': run_again}
     atomic_json(out / 'result.json', report)
     print(f'{report["status"]}: {report["seconds"]:.2f}s, {report["cache_hits"]} cache hits', flush=True)
     return report

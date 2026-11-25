@@ -20,12 +20,15 @@ Use this package only on a BC-250. The installer stops on every other computer a
   "Smart App Control and SmartScreen" below).
 - If BitLocker is on: your BitLocker recovery key, in case something goes wrong. The installer pauses BitLocker
   by itself for the restarts it needs and tells you that it did.
-- Nothing to install first. The driver's programs need the Microsoft Visual C++ 2015-2022 Redistributable (x64),
-  and the package carries Microsoft's own installer for it. The installer runs it when this PC has no
-  `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll` in `System32`, or when one of them is older than
-  14.44. It checks the SHA-256 and the Microsoft signature of that file first, and it needs no internet for this
-  step. Nothing happens when the runtime is already there. If Windows answers that the runtime is registered but a
-  file of it is missing, the installer repairs it with the same file. In the same way, the package carries LunarG's
+- Nothing to install first. The driver does not need the Microsoft Visual C++ 2015-2022 Redistributable (x64).
+  Only the llama.cpp extra needs it, and the package carries Microsoft's own installer for it. When you select
+  llama.cpp, the installer runs that file if this PC has no
+  `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll` in `System32`, or if one of them is older than
+  14.44. It runs it after the files of the driver and before the files of llama.cpp. It checks the SHA-256 and the
+  Microsoft signature of that file first, and it needs no internet for this step. Nothing happens when the runtime
+  is already there. If Windows answers that the runtime is registered but a file of it is missing, the installer
+  repairs it with the same file. If the runtime cannot be installed, the installer skips llama.cpp and tells you
+  why. The driver installation completes all the same. In the same way, the package carries LunarG's
   installer for the Vulkan loader, which Vulkan and OpenGL programs need. The installer runs it when this PC has no
   `vulkan-1.dll` in `System32` or `SysWOW64`, or an older one than 1.4.363.0.
 - 2 GB of free space on the system drive.
@@ -397,7 +400,7 @@ longer have to run the release installer again for this.
 |---|---|
 | Test signing | `bcdedit /set '{current}' testsigning on` |
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
-| Microsoft Visual C++ 2015-2022 Redistributable (x64) | installed by Microsoft's own installer from `payload\redist\vc_redist.x64.exe`, only when `System32` has no `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll`, or one of them is older than 14.44. Microsoft's files go where Microsoft puts them. `uninstall.cmd` leaves this runtime in place, because other programs use it |
+| Microsoft Visual C++ 2015-2022 Redistributable (x64) | installed only for the llama.cpp extra, by Microsoft's own installer from `payload\redist\vc_redist.x64.exe`. It runs only when `System32` has no `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll`, or one of them is older than 14.44. Microsoft's files go where Microsoft puts them. `uninstall.cmd` leaves this runtime in place, because other programs use it |
 | Vulkan loader (Vulkan Runtime 1.4.363.0 of LunarG) | `C:\Windows\System32\vulkan-1.dll` (64-bit programs) and `C:\Windows\SysWOW64\vulkan-1.dll` (32-bit programs). LunarG's own signed installer puts them there from `payload\redist\VulkanRT-X64-1.4.363.0-Installer.exe` (`/S`). It runs only when one of the two files is missing or older than 1.4.363.0. A loader of the same or a newer version, also from another vendor, stays as it is. The installer checks the SHA-256 and the LunarG signature of the file before it runs it. If the loader cannot be installed, the installation continues with a warning, and `verify.cmd` shows the line `Vulkan loader`. `uninstall.cmd` leaves the loader in place, because other programs use it |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
 | Driver settings | The shared service state returned by Windows. Nagi Control App and `bc250kmd_cli state` use the same reader. Installation defaults remain separate from user choices and driver records. See `docs/design/driver-state.md` |

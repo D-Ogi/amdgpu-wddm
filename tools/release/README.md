@@ -19,12 +19,14 @@ The release signs the single file as a whole after it is written (BD-160). Up to
 the signature of `setup.exe` in its middle, so Windows read it as not signed.
 
 The package also carries Microsoft's own installer for the Visual C++ 2015-2022 runtime (x64) as
-`payload\redist\vc_redist.x64.exe`. It is a `third_party` row
+`payload\redist\vc_redist.x64.exe`. The llama.cpp extra, which the user can select, needs that runtime. The driver
+set does not need it (BD-389). It is a `third_party` row
 of `release-sources.json` with its SHA-256 and its size. The release never signs that file again, so its row carries
 no `authenticode_sha256`. The packaged copy is then compared with the source byte for byte, which is the stricter
 check. It is the one payload folder
-that the install never copies anywhere: `install.ps1` runs the file when the runtime is missing or older than 14.44,
-and Microsoft installs its own files in `System32`. The rule "every payload image is x64" does not cover it, because
+that the install never copies anywhere. The install runs the file only for a chosen llama.cpp extra, when the
+runtime is missing or older than 14.44 (the prerequisite table of `installer\components.ps1`), and Microsoft
+installs its own files in `System32`. The rule "every payload image is x64" does not cover it, because
 Microsoft builds that bootstrapper as a 32-bit program even in the x64 package (`test-wow64.ps1`).
 
 The same folder carries LunarG's signed Vulkan Runtime installer, `payload\redist\VulkanRT-X64-<version>-Installer.exe`,

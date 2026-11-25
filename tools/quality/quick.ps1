@@ -164,9 +164,15 @@ try {
  Check 'lab-emerg' { & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\lab-emerg\parse-check.ps1" }
 # The lab's sshd watch (BD-051) under Windows PowerShell 5.1 against a stand-in sshd on 127.0.0.1: log-only heals, a
 # stub for the forensics, no service restarted.
+# Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest (BD-357). In the full uncached suite of
+# the tester.39 package run of 2026-11-24 09:15Z, beside other work on the development PC, it took 151.09 s, 84 per cent of 180 s.
+# 600 s is 4.0 times that run.
 Check 'lab-emerg-watch' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Out\lab-emerg-watch").FullName; & python -B -m unittest discover -s "$repo\tools\win\lab-emerg" -p 'test_*.py' }
 # The development file swap: its lab script under Windows PowerShell 5.1 on a fake DriverStore tree (swap, double
 # swap, restore, records, refusals) and its parse check.
+# Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest (BD-357). In the full uncached suite of
+# the tester.39 package run of 2026-11-24 09:15Z, beside other work on the development PC, it took 98.76 s, 55 per cent of 180 s.
+# 600 s is 6.1 times that run.
 Check 'dev-swap' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Out\dev-swap").FullName; & python -B -m unittest discover -s "$repo\tools\win\dev-swap" -p 'test_*.py' }
  # BD-051: no new polling loop that starts a process each round (spawn_loop_baseline.txt is the ratchet; 600 s in
  # gate-inputs.json: it parses about 1600 scripts, 43 s alone on six PowerShell processes). The in-process KMD reader
@@ -183,6 +189,9 @@ Check 'dev-swap' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Ou
  # message: those two multipliers are wrong, the measurements beside them are right, and 600 s is more room
  # than the message claimed rather than less.)
  Check 'kmd-deploy' { $env:BC250_ROOT=$Workspace; $env:BC250_KMD_DEPLOY_WORK=(New-Item -ItemType Directory -Force "$Out\kmd-deploy").FullName; & python "$repo\tools\win\kmd-deploy\check-offline.py" --quick }
+ # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest (BD-357). In the full uncached suite of
+ # the tester.39 package run of 2026-11-24 09:15Z, beside other work on the development PC, it took 99.54 s, 55 per cent of 180 s.
+ # 600 s is 6.0 times that run.
  Check 'lab-runner' { & python -m unittest discover -s "$repo\tools\win\lab-runner" }
  # BD-376: the one definition of the lab temperature levels, and the gate against a level held by a tool itself.
  Check 'lab-thermal' { & python -B -m unittest discover -s "$repo\tools\win\lab-thermal" }
@@ -224,6 +233,9 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # disk budget hold, -Plan builds nothing, an unpushed commit, an AI trailer and an implicit compiler are refused, and a
  # failed build fails the release set and keeps its log. Its end-to-end runs start pwsh processes, hence 600 s.
  # The removal of shared and stale build trees of BuildTree.psm1 (BD-264), on a fixture repository in $Out.
+ # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest (BD-357). In the full uncached suite of
+ # the tester.39 package run of 2026-11-24 09:15Z, beside other work on the development PC, it took 175.92 s, 98 per cent of 180 s.
+ # 600 s is 3.4 times that run.
  Check 'shared-build-tree' { & pwsh -NoProfile -File "$repo\tools\release\test-shared-build-tree.ps1" -FixtureRoot (New-Item -ItemType Directory -Force "$Out\shared-build-tree").FullName }
  # The outputs of an earlier package round, all named before the first step, and -SetAside (BD-272).
  Check 'package-round' { & pwsh -NoProfile -File "$repo\tools\release\test-package-round.ps1" -Out (New-Item -ItemType Directory -Force "$Out\package-round").FullName }
@@ -235,16 +247,28 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # Its deadline is 1200 s in gate-inputs.json (BD-316). 42 tests: 494 s in a quick Full of 2026-11-05 19:07Z, and two
  # stops at the old 600 s in the full uncached gates of build-release.ps1 the same evening (19:50Z and 20:46Z),
  # with the suite not finished. 1200 s is 2.4x the quick Full run.
+ # 2026-11-24 (BD-357): 1800 s. In the full uncached suite of the tester.39 package runs of this day it took 807.91 s
+ # and 985.03 s (82 per cent of the 1200 s limit) beside other work on the development PC. 1800 s is 1.8 times the
+ # slower run.
+ # The same day, fourth run: stopped at 1800 s with 94 of 111 tests done, beside another build on the PC. 3600 s now.
+ # This is the longest check of the suite and the deadline is not its repair: its tests start the set tool and git
+ # for each case, and the check must become several smaller checks (BD-382).
  Check 'release-build-set' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-build-set").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_build*.py' }
  # BD-204: a fix marker on one RADV WDDM line and not on the other (marker_guard.py lines, winsys-lines.json). The
  # controls run on throwaway repositories; the gate reads the Mesa lines that release-sources.json pins, in the
  # workspace's Mesa checkout, and build-release.ps1 runs it again on the package's own sources.
+ # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest (BD-357). In the full uncached suite of
+ # the tester.39 package run of 2026-11-24 09:15Z, beside other work on the development PC, the suite stopped it at 180 s (180.30 s).
+ # 600 s is 3.3 times the old limit.
  Check 'winsys-lines-controls' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\winsys-lines-controls").FullName; & python -B -m unittest discover -s "$repo\tools\release" -p 'test_winsys_lines.py' }
  CheckIf 'winsys-lines' (Join-Path $Workspace 'mesa-wddm') { & python -B "$repo\tools\release\marker_guard.py" lines --config "$repo\tools\release\winsys-lines.json" --sources "$repo\tools\release\release-sources.json" --root $Workspace --json "$Out\winsys-lines.json" }
  Check 'release-driver-package' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-driver-package").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_driver_package.py' }
  Check 'release-source-versions' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-source-versions").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_source_versions.py' }
  # docs/testing/THIRD-PARTY.md names the commit of each payload file and the submodules of its build: the same commits
  # as release-sources.json and the gitlinks of those commits in the workspace checkouts, and no branch.
+ # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest (BD-357). In the full uncached suite of
+ # the tester.39 package run of 2026-11-24 09:15Z, beside other work on the development PC, the suite stopped it at 180 s (180.75 s).
+ # 600 s is 3.3 times the old limit.
  Check 'third-party-doc' { & python -B "$repo\tools\release\third_party_doc.py" --repo $repo --workspace $Workspace; if($LASTEXITCODE -eq 0){ $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\third-party-doc").FullName; & python -B -m unittest discover -s "$repo\tools\release" -p 'test_third_party_doc.py' } }
  Check 'sdk-compiler-arguments' { & pwsh -NoProfile -File "$repo\tools\build\test-sdk-compiler.ps1" }
 # One image from two trees and two output directories with the reproducible flags of umd-compiler.ps1 (BD-268).
@@ -278,6 +302,10 @@ Check 'pdb-repro' { & pwsh -NoProfile -File "$repo\tools\build\test-pdb-repro.ps
  Check 'driver-state-settings' { & python "$repo\tools\state\check_settings.py" --root "$repo"; if($LASTEXITCODE -eq 0){ & python -I -m unittest discover -s "$repo\tools\state" -p 'test_check_settings.py' } }
  # BD-262: the catalog of every earlier published tester tag is in driver/state/history, so the state worker reads the
  # removal record of each of those releases by setting name. The release-set build runs the same check on each state worker row.
+ # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest (BD-382): the unit tests start about 100
+ # git processes on small repositories. 15 s on the idle development PC; in the full suite of the tester.39 package
+ # run of 2026-11-24 each of the 12 tests took 14 s to 24 s and the gate stopped at 180 s in the tenth test. The tests
+ # now share one repository template (9 s idle). 600 s is 3 times the full-suite time of the old tests.
  Check 'driver-state-history' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\driver-state-history").FullName; & python "$repo\tools\state\check_history.py" --repo "$repo"; if($LASTEXITCODE -eq 0){ & python -I -m unittest discover -s "$repo\tools\state" -p 'test_check_history.py' } }
  # The swap check of a KMD image: the host half reads the state catalog of an image, the lab half refuses a swap across
  # a catalog change before any change on the lab (A1 s3 of BD-223, tools/win/kmd-swap/README.md).
@@ -339,6 +367,9 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # The installer's own diagnostics of a start that did not pass (the decision, the readers and
  # the bounds), with the field case as a fixture. Windows PowerShell 5.1, the shell a tester runs.
  Check 'installer-diagnostics' { & powershell -NoProfile -File "$repo\tools\release\test-diagnostics.ps1" }
+ # BD-389: the cause of a started driver whose desktop compositor did not start (the DWM events of this boot and
+ # the imports of the driver's files), with the lab unit's readings as the fixture. Windows PowerShell 5.1.
+ Check 'compositor-cause' { & powershell -NoProfile -File "$repo\tools\release\test-compositor-cause.ps1" }
  # BD-060 and BD-080: the INF restart directive, the resumed install's inputs, the DWM baseline, and the plan of the
  # two logon tasks (who confirms a driver start, and at whose logon). It writes files under Out and registers no
  # task. Until now it ran only inside test-dryrun.ps1, which needs a built package.
@@ -570,6 +601,9 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # a stop at 180 s in the release flavour of the rc2 package, which ran beside the lab flavour (BD-382).
  Check 'overlay-group-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group-controls" -Mutation all }
  Check 'dc-types' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dc_types.ps1" -Root $Workspace -Out "$Out\dc-types" }
+ # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest (BD-357). In the full uncached suite of
+ # the tester.39 package run of 2026-11-24 09:15Z, beside other work on the development PC, it took 94.41 s, 52 per cent of 180 s.
+ # 600 s is 6.4 times that run.
  Check 'latch-probe' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_latch_probe.ps1" -Root $Workspace -Out "$Out\latch-probe" -Mutations }
  Check 'atom-display' {
   $atomArgs=@('-Root',$Workspace,'-Out',"$Out\atom-display",'-Kits',$Kits)

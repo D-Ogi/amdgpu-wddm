@@ -98,9 +98,6 @@ check.smartappcontrol.on|mt|e942bb33|O Controle Inteligente de Aplicativos está
 check.smartappcontrol.evaluation|mt|6d2a3b91|O Controle Inteligente de Aplicativos está em modo de avaliação. O Setup o desliga antes de instalar o driver, para que o Windows não possa ligá-lo depois.
 check.smartappcontrol.unknown|mt|4ce54139|O Setup não conseguiu ler se o Controle Inteligente de Aplicativos está ligado.
 check.smartappcontrol.not-off|mt|0e4a27ff|O Setup não conseguiu desligar o Controle Inteligente de Aplicativos. Enquanto ele estiver ligado, o Windows bloqueia este Setup e os programas do driver de vídeo. Nada do driver foi instalado.
-check.vcruntime.ok|mt|da7b7ffe|O runtime do Microsoft Visual C++ está instalado.
-check.vcruntime.missing|mt|e96604a7|O runtime do Microsoft Visual C++ 2015-2022 (x64) está faltando ou é antigo demais. O Setup o instala com o arquivo que traz junto.
-check.vcruntime.no-installer|mt|a1670c32|É preciso instalar o runtime do Microsoft Visual C++ 2015-2022 (x64), e este conjunto de arquivos não traz o programa da Microsoft que faz isso. Baixe a versão de novo.
 check.space.ok|mt|fc218428|Há espaço livre suficiente em disco.
 check.space.low|mt|e473eee3|Não há espaço livre suficiente na unidade C:. O Setup precisa de 2 GB.
 check.firmware.download-ok|mt|11f01474|O firmware da GPU pode ser baixado.
@@ -144,7 +141,6 @@ plan.change.test-mode.on|mt|cf315297|O Windows já roda em modo de teste, então
 plan.change.kernel-signers|mt|ad5b4221|O modo de teste do Windows continua desligado: a política assinada de Integridade de Código deste PC permite que o Windows carregue o driver.
 plan.change.bitlocker|mt|f43553fa|A proteção do BitLocker é pausada durante as reinicializações desta instalação e volta a ligar sozinha, para que o Windows não peça a chave de recuperação.
 plan.change.bitlocker.unknown|mt|67f2277e|O Setup não conseguiu ler o estado do BitLocker deste PC. Ele continua mesmo assim: tenha sua chave de recuperação à mão caso o Windows a peça após uma reinicialização.
-plan.change.vcruntime|mt|65d68876|Primeiro é instalado o runtime do Microsoft Visual C++ 2015-2022 (x64), porque os programas do driver precisam dele.
 plan.change.smartappcontrol|mt|90e7f550|O Controle Inteligente de Aplicativos será desligado. O Windows só pode ligá-lo de novo com uma redefinição do sistema.
 shortcuts.title|mt|19544092|Atalhos e Nagi
 shortcuts.start-menu|mt|f7bdc16b|No menu Iniciar

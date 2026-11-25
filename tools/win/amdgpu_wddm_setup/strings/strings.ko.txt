@@ -97,9 +97,6 @@ check.smartappcontrol.on|mt|e942bb33|스마트 앱 컨트롤이 켜져 있습니
 check.smartappcontrol.evaluation|mt|6d2a3b91|스마트 앱 컨트롤이 평가 모드입니다. 설치 프로그램이 드라이버를 설치하기 전에 끄므로 나중에 Windows가 켤 수 없습니다.
 check.smartappcontrol.unknown|mt|4ce54139|스마트 앱 컨트롤이 켜져 있는지 읽을 수 없었습니다.
 check.smartappcontrol.not-off|mt|0e4a27ff|설치 프로그램이 스마트 앱 컨트롤을 끄지 못했습니다. 켜져 있는 동안 Windows가 이 설치 프로그램과 그래픽 드라이버의 프로그램을 차단합니다. 드라이버는 아무것도 설치되지 않았습니다.
-check.vcruntime.ok|mt|da7b7ffe|Microsoft Visual C++ 런타임이 설치되어 있습니다.
-check.vcruntime.missing|mt|e96604a7|Microsoft Visual C++ 2015-2022 런타임(x64)이 없거나 너무 오래되었습니다. 설치 프로그램이 함께 가져온 파일로 설치합니다.
-check.vcruntime.no-installer|mt|a1670c32|Microsoft Visual C++ 2015-2022 런타임(x64)을 설치해야 하지만 이 파일 모음에는 해당 Microsoft 프로그램이 없습니다. 릴리스를 다시 다운로드하세요.
 check.space.ok|mt|fc218428|디스크 여유 공간이 충분합니다.
 check.space.low|mt|e473eee3|드라이브 C:의 여유 공간이 부족합니다. 2GB가 필요합니다.
 check.firmware.download-ok|mt|11f01474|GPU 펌웨어를 다운로드할 수 있습니다.
@@ -143,7 +140,6 @@ plan.change.test-mode.on|mt|cf315297|Windows가 이미 테스트 모드로 실�
 plan.change.kernel-signers|mt|ad5b4221|Windows 테스트 모드는 꺼진 상태로 유지됩니다. 이 PC의 서명된 코드 무결성 정책이 Windows가 드라이버를 로드하도록 허용합니다.
 plan.change.bitlocker|mt|f43553fa|BitLocker 보호는 이 설치의 다시 시작 동안만 일시 중지되고 이후 자동으로 다시 켜지므로 Windows가 복구 키를 묻지 않습니다.
 plan.change.bitlocker.unknown|mt|67f2277e|이 PC의 BitLocker 상태를 읽을 수 없었습니다. 설치는 계속합니다. 다시 시작한 후 Windows가 요청할 경우를 대비해 복구 키를 준비해 두세요.
-plan.change.vcruntime|mt|65d68876|드라이버 프로그램에 필요하므로 Microsoft Visual C++ 2015-2022 런타임(x64)을 먼저 설치합니다.
 plan.change.smartappcontrol|mt|90e7f550|스마트 앱 컨트롤이 꺼집니다. Windows에서 다시 켜려면 시스템을 초기화해야 합니다.
 shortcuts.title|mt-safe|19544092|바로 가기와 Nagi
 shortcuts.start-menu|mt-safe|f7bdc16b|시작 메뉴

@@ -1082,9 +1082,6 @@ $seenRepair = $null
 $runRepair = Invoke-VcRuntimeInstall -Path $vcFake -Arguments $script:VcRuntimeRepairArguments -Runner { param($p, $a) $script:seenRepair = @($a); 0 }
 Check ($runRepair.ok -and (($seenRepair -join ' ') -eq '/repair /quiet /norestart')) "the repair run uses Microsoft's /repair /quiet /norestart"
 Check ((Invoke-VcRuntimeInstall -Path $vcFake -Arguments $script:VcRuntimeRepairArguments -Runner { param($p, $a) 1603 }).ok -eq $false) 'negative control: a repair that fails is a failure too'
-Check ($installText -match "(?s)vcRun\.code -eq 1638.{0,600}VcRuntimeRepairArguments") 'phase 2 repairs the registered runtime when 1638 left System32 without it'
-Check ($installText -match 'Repair the Microsoft Visual C\+\+ 2015-2022 Redistributable \(x64\) in Windows Settings') 'the message of a runtime that is still not there asks for a repair, not for the install that just refused'
-Check ($installText -notmatch "but the runtime is still not in place[^\r\n]*Install the Microsoft Visual C\+\+ 2015-2022 Redistributable \(x64\) yourself") 'the self-contradicting remedy is gone from that message'
 # The host-test reading of System32, so a dry run can walk the step on a PC that already has the runtime. It is a
 # dry run only: a real install always reads System32.
 $script:DryRunMode = $true
@@ -1109,19 +1106,70 @@ try {
 $realRun = Invoke-NativeBounded -File $env:ComSpec -Arguments @('/c', 'exit', '1603') -TimeoutSeconds 60
 Check (-not $realRun.timed_out -and (Get-VcRuntimeOutcome $realRun.code).message -match 'code 1603') 'a program that ends with 1603 reaches the same outcome through Invoke-NativeBounded'
 
-# The engine's own side: the preflight no longer refuses a PC without the runtime, and phase 2 installs it before
-# any file of ours is copied.
+# The step of the llama.cpp extra (Install-VcRuntime, BD-389). The prerequisite table of components.ps1 calls it
+# before the files of that extra. It checks the file of the package again, runs it only when System32 needs it,
+# repairs a registered runtime whose files are missing, and gives every failure back in its result, so the caller
+# skips the extras that need the runtime and the driver installation completes. The states of System32, the
+# signature and the exit codes are handed in.
+$vcHave = Get-VcRuntimeDecision -Readings (New-VcReadings '14.44.35211.0' '14.44.35211.0' '14.44.35211.0')
+$vcLack = Get-VcRuntimeDecision -Readings (New-VcReadings $null $null $null)
+$vcPkg = Join-Path $vcWork 'package'
+[void][IO.Directory]::CreateDirectory((Join-Path $vcPkg 'payload\redist'))
+Copy-Item -LiteralPath $vcFake -Destination (Join-Path $vcPkg 'payload\redist\vc_redist.x64.exe') -Force
+$vcEmptyPkg = Join-Path $vcWork 'package-without-redist'
+[void][IO.Directory]::CreateDirectory($vcEmptyPkg)
+$script:vcRuns = New-Object System.Collections.Generic.List[string]
+$vcRunner = { param($p, $a) $script:vcRuns.Add((@($a) -join ' ')); $script:vcCodes.Dequeue() }
+function Invoke-VcStep([object[]]$States, [int[]]$Codes = @(), [string]$Root = $vcPkg, [string]$Sha = $vcFakeSha) {
+    $script:vcStates = New-Object System.Collections.Queue
+    foreach ($s in $States) { $script:vcStates.Enqueue($s) }
+    $script:vcCodes = New-Object System.Collections.Queue
+    foreach ($c in $Codes) { $script:vcCodes.Enqueue($c) }
+    $script:vcRuns.Clear()
+    try { return (Install-VcRuntime -PackageRoot $Root -Runner $vcRunner -SignatureReader $valid -StateReader { $script:vcStates.Dequeue() } -ExpectedSha256 $Sha) }
+    catch { Write-Host "  -> $($_.Exception.Message)"; return $null }
+}
+$savedHooks = @($script:OnFirstChange, $script:OnMutation, $script:OnChange)
+$script:OnFirstChange = $null; $script:OnMutation = $null; $script:OnChange = $null
+$vst = Invoke-VcStep @($vcHave)
+Check ($null -ne $vst -and $vst.ok -and -not $vst.ran -and $script:vcRuns.Count -eq 0) 'the extra step: a PC that has the runtime runs nothing'
+$vst = Invoke-VcStep @($vcLack, $vcHave) @(0)
+Check ($null -ne $vst -and $vst.ok -and $vst.ran -and -not $vst.restart -and (($script:vcRuns -join ';') -eq '/install /quiet /norestart')) "the extra step: a PC without it runs Microsoft's installer with /install /quiet /norestart, and System32 is read again"
+$vst = Invoke-VcStep @($vcLack) @(0) -Root $vcEmptyPkg
+Check ($null -ne $vst -and -not $vst.ok -and $vst.message -match 'does not carry .*vc_redist\.x64\.exe' -and $script:vcRuns.Count -eq 0) 'the extra step: a package without the file runs nothing, and the message names the file'
+$vst = Invoke-VcStep @($vcLack) @(0) -Sha ('0' * 64)
+Check ($null -ne $vst -and -not $vst.ok -and $vst.message -match 'SHA256 of ' -and $script:vcRuns.Count -eq 0) 'the extra step: a changed copy of the file never runs'
+# 1638 with a file still missing from System32: the runtime is registered and its files are not, so the same program
+# runs once more with /repair before the step gives up.
+$vst = Invoke-VcStep @($vcLack, $vcLack, $vcHave) @(1638, 0)
+Check ($null -ne $vst -and $vst.ok -and (($script:vcRuns -join ';') -eq '/install /quiet /norestart;/repair /quiet /norestart')) 'the extra step repairs the registered runtime when 1638 left System32 without it'
+$vst = Invoke-VcStep @($vcLack, $vcLack) @(1638, 1603)
+Check ($null -ne $vst -and -not $vst.ok -and $vst.message -match 'code 1603') 'the extra step: a repair that fails is a failure, with the code'
+$vst = Invoke-VcStep @($vcLack, $vcLack) @(0)
+Check ($null -ne $vst -and -not $vst.ok -and $vst.message -match 'Repair the Microsoft Visual C\+\+ 2015-2022 Redistributable \(x64\) in Windows Settings' -and $vst.message -notmatch 'yourself') 'the extra step: a runtime that is still not there after a success asks for a repair, not for the install that just ran'
+$vst = Invoke-VcStep @($vcLack, $vcLack) @(3010)
+Check ($null -ne $vst -and $vst.ok -and $vst.restart) 'the extra step folds 3010 into the restart the installation makes anyway'
+$vst = Invoke-VcStep @($vcLack) @(1603)
+Check ($null -ne $vst -and -not $vst.ok -and $vst.message -match 'code 1603' -and $script:vcStates.Count -eq 0) 'negative control: exit 1603 fails the extra step with a plain message'
+$script:DryRunMode = $true
+try { $vst = Invoke-VcStep @($vcLack) @(0) } finally { $script:DryRunMode = $false }
+Check ($null -ne $vst -and $vst.ok -and -not $vst.ran -and $script:vcRuns.Count -eq 0) 'the extra step in a dry run checks the file, prints the step and runs nothing'
+$script:OnFirstChange, $script:OnMutation, $script:OnChange = $savedHooks
+
+# The engine's own side (BD-389): the driver path has no runtime rule. The preflight has no runtime check, phase 2
+# has no runtime step, and install.ps1 holds no copy of the rule: the prerequisite table of components.ps1 is the one
+# place that knows it. The extras stage refuses an extra whose prerequisite the package cannot install, and the
+# components stage installs the prerequisite inside the try/catch of the extra, after the files of the driver.
 $installText = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
-Check ($installText -notmatch "Add-Check 'Visual C\+\+ runtime' 'fail'[^\r\n]*'vcruntime\.missing'") 'the preflight does not refuse a PC whose runtime is missing'
-Check ($installText -match "Add-Check 'Visual C\+\+ runtime' 'warn'[^\r\n]*'vcruntime\.missing'") 'a missing runtime is a line that needs attention, not a refusal'
-Check ($installText -match "'vcruntime\.no-installer'") 'the one refusal left is a package that does not carry the Microsoft installer'
-Check ($installText -match 'Invoke-VcRuntimeInstall -Path \$vcExe') 'phase 2 runs the Microsoft installer'
-$vcStep = [regex]::Match($installText, "(?s)Enter-Stage 'install' 'Phase 2: install'.{0,2400}")
-Check ($vcStep.Success -and $vcStep.Value -match 'Invoke-VcRuntimeInstall' -and $vcStep.Value -match 'Test-VcRuntimeInstaller') 'the runtime step is the first of phase 2 and checks the file again before it runs it'
-Check ($installText.IndexOf('Invoke-VcRuntimeInstall') -lt $installText.IndexOf("Enter-Stage 'files' 'Files'")) 'the runtime is installed before our own files are copied'
-# What the old refusal left behind is gone: one reader of the three files, and no value that nothing reads.
+Check ($installText -notmatch "Add-Check 'Visual C\+\+ runtime'" -and $installText -notmatch "'vcruntime\.") 'the preflight has no check of the Visual C++ runtime: the driver does not need it'
+Check ($installText -notmatch 'VcRuntime') 'install.ps1 holds no copy of the runtime rule (no VcRuntime function or value)'
+$extrasStage = [regex]::Match($installText, "(?s)Enter-Stage 'extras'.{0,8000}?Set-CancelAvailable \`$true 'before-changes'")
+Check ($extrasStage.Success -and $extrasStage.Value -match 'Read-ComponentPrerequisites' -and $extrasStage.Value -match 'Get-ComponentRows \$script:ComponentsManifest \$') 'the extras stage reads the prerequisites and refuses an extra whose prerequisite the package cannot install'
+$componentStage = [regex]::Match($installText, "(?s)Enter-Stage 'components'.{0,6000}?Set-StateValue \`$state 'parameters_before_install'")
+Check ($componentStage.Success -and $componentStage.Value -match '(?s)try \{.{0,1500}Invoke-ComponentPrerequisites.{0,1500}Install-ComponentFiles.{0,2500}\} catch \{') 'the components stage runs the prerequisites of an extra inside its try/catch, before its files'
+Check ($installText.IndexOf('Invoke-ComponentPrerequisites') -gt $installText.IndexOf("Enter-Stage 'files' 'Files'")) 'the prerequisites run after the files of the driver'
+# What the old refusal left behind is gone: one reader of the three files.
 Check (-not (Get-Command Get-VcRuntimeMissing -ErrorAction SilentlyContinue)) 'the reader of the old refusal is gone from common.ps1'
-Check ($installText -notmatch 'VcRuntimeNeeded') 'the preflight keeps no value about the runtime that nothing reads'
 
 'the Vulkan loader: the installer brings LunarG''s Vulkan Runtime'
 # The decision, over readings of System32\vulkan-1.dll (x64) and SysWOW64\vulkan-1.dll (x86). $null = no file.
@@ -1226,7 +1274,7 @@ try {
 $vkStep = [regex]::Match($installText, '(?s)\$vkRecord = Invoke-VulkanLoaderStep -PackageRoot \$package.{0,400}?Enter-Stage ''firmware''')
 Check ($vkStep.Success) 'phase 2 has the loader step before the firmware stage'
 Check ($vkStep.Value -match "Set-StateValue \`$state 'vulkan_loader' \`$vkRecord" -and $vkStep.Value -notmatch '\bthrow\b') 'phase 2 keeps the record in the state object and never stops the installation for the loader'
-Check ($installText.IndexOf('Invoke-VulkanLoaderStep') -gt $installText.IndexOf('Invoke-VcRuntimeInstall -Path $vcExe') -and $installText.IndexOf('Invoke-VulkanLoaderStep') -lt $installText.IndexOf("Enter-Stage 'files' 'Files'")) 'the loader comes after the Visual C++ runtime and before our own files'
+Check ($installText.IndexOf('Invoke-VulkanLoaderStep') -gt $installText.IndexOf("Enter-Stage 'install' 'Phase 2: install'") -and $installText.IndexOf('Invoke-VulkanLoaderStep') -lt $installText.IndexOf("Enter-Stage 'files' 'Files'")) 'the loader is a step of phase 2 before our own files'
 # state.json is not written between the loader step and the mark of phase 2: the state object holds the new
 # package_version with the phase of phase 1 there, and a stop in that window must not leave it on disk as installed.
 $vkWindowStart = $installText.IndexOf('$vkRecord = Invoke-VulkanLoaderStep')

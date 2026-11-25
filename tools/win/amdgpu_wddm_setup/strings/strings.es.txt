@@ -98,9 +98,6 @@ check.smartappcontrol.on|mt|e942bb33|Control inteligente de aplicaciones está a
 check.smartappcontrol.evaluation|mt|6d2a3b91|Control inteligente de aplicaciones está en modo de evaluación. La instalación lo desactiva antes de instalar el controlador, así Windows no puede activarlo más tarde.
 check.smartappcontrol.unknown|mt|4ce54139|La instalación no pudo leer si Control inteligente de aplicaciones está activado.
 check.smartappcontrol.not-off|mt|0e4a27ff|La instalación no pudo desactivar Control inteligente de aplicaciones. Mientras esté activado, Windows bloquea este programa de instalación y los programas del controlador de gráficos. No se instaló nada del controlador.
-check.vcruntime.ok|mt|da7b7ffe|El runtime de Microsoft Visual C++ está instalado.
-check.vcruntime.missing|mt|e96604a7|El runtime de Microsoft Visual C++ 2015-2022 (x64) falta o es demasiado antiguo. La instalación lo instala desde el archivo que trae consigo.
-check.vcruntime.no-installer|mt|a1670c32|Hay que instalar el runtime de Microsoft Visual C++ 2015-2022 (x64), y este conjunto de archivos no incluye el programa de Microsoft que lo hace. Descargue la versión de nuevo.
 check.space.ok|mt|fc218428|Hay suficiente espacio libre en el disco.
 check.space.low|mt|e473eee3|No hay suficiente espacio libre en la unidad C:. La instalación necesita 2 GB.
 check.firmware.download-ok|mt|11f01474|El firmware de la GPU se puede descargar.
@@ -144,7 +141,6 @@ plan.change.test-mode.on|mt|cf315297|Windows ya se ejecuta en modo de prueba, as
 plan.change.kernel-signers|mt|ad5b4221|El modo de prueba de Windows sigue desactivado: la directiva firmada de integridad de código de esta PC permite que Windows cargue el controlador.
 plan.change.bitlocker|mt|f43553fa|La protección de BitLocker se pausa durante los reinicios de esta instalación y se vuelve a activar sola, así Windows no pide la clave de recuperación.
 plan.change.bitlocker.unknown|mt|67f2277e|La instalación no pudo leer el estado de BitLocker de esta PC. Continúa de todos modos: tenga a mano su clave de recuperación por si Windows la pide después de un reinicio.
-plan.change.vcruntime|mt|65d68876|Primero se instala el runtime de Microsoft Visual C++ 2015-2022 (x64), porque los programas del controlador lo necesitan.
 plan.change.smartappcontrol|mt|90e7f550|Control inteligente de aplicaciones se desactivará. Windows solo puede volver a activarlo con un restablecimiento del sistema.
 shortcuts.title|mt|19544092|Accesos directos y Nagi
 shortcuts.start-menu|mt|f7bdc16b|En el menú Inicio

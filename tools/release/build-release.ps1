@@ -299,7 +299,8 @@ Write-Host 'installer and documents'
 # The logon tasks' scripts: the confirmation also writes the running-release witness (release-witness.ps1), and
 # start-window.ps1 is the window task's own script (BD-080), which the logged-on user runs with their own rights.
 # nagi-update.ps1 is the update step at the end of each confirmation run (docs/design/self-update.md).
-$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1', 'version-identity.ps1', 'state-reader.ps1', 'nagi-update.ps1')
+# compositor-cause.ps1 gives the cause line of a run that confirmed nothing (BD-389).
+$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'compositor-cause.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1', 'version-identity.ps1', 'state-reader.ps1', 'nagi-update.ps1')
 $inst = Join-Path $pkg 'installer'
 [void][IO.Directory]::CreateDirectory($inst)
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') -File) {
@@ -617,6 +618,17 @@ function Invoke-FlavourGate([string]$Receipt, [string[]]$Arguments) {
     '  ' + @($r.text -split "`r?`n" | Where-Object { $_ -like 'flavour gate: *' })[-1]
 }
 Invoke-FlavourGate 'flavour-gate-payload' @()
+# BD-389: no PE file of the package imports a C or C++ runtime DLL that Windows does not ship (the Visual C++
+# runtime libraries and the debug runtimes). The Universal CRT is a part of Windows and passes. The gate reads the
+# import and delay-import tables of every PE under the package top, the driver package and its wow64 tree included.
+# Signing adds a certificate table and changes no import table, so this one run covers the bytes that ship. The
+# negative control rewrites one import of the CPU UMD to MSVCP140.dll in memory, and the gate must refuse it. The
+# receipt is runtime-import-gate\runtime-import-gate.json under -Out.
+$runtimeGate = Invoke-Headless -File $pythonExe -Arguments @('-I', (Join-Path $repo 'tools\quality\runtime_import_gate.py'),
+    '--scan', $pkgRoot, '--negative-control', 'files/payload/kmd/desktop/bc250d3d.dll',
+    '--out', (Join-Path $Out 'runtime-import-gate')) -TimeoutSeconds 600
+if ($runtimeGate.code -ne 0) { throw "runtime import gate: $($runtimeGate.text)" }
+'  ' + @($runtimeGate.text -split "`r?`n" | Where-Object { $_ -like 'runtime import gate: *' })[-1]
 if ($SubmissionCab) {
     # The submission contains the original images and exact symbols. The local
     # test-signing simulation below produces the separately installed package.
@@ -797,7 +809,12 @@ $mustRun = @('umd-contract', 'umd-analysis', 'surface-control', 'kmd-contract', 
              'hang-witness', 'object-index')
 $qualityReceipt = Join-Path $qualityOut 'result.json'
 if (-not (Test-Path -LiteralPath $qualityReceipt)) { throw "the quality suite left no receipt at $qualityReceipt" }
-$qualityChecks = (Get-Content -LiteralPath $qualityReceipt -Raw | ConvertFrom-Json).checks
+$qualityResult = Get-Content -LiteralPath $qualityReceipt -Raw | ConvertFrom-Json
+$qualityChecks = $qualityResult.checks
+# A check that failed beside the other checks and passed alone (gate_cache.py, run_failed_again) does not stop the
+# package. It is named here, in the log that the operator reads: each one is a flaky check, to record as a defect.
+$ranAgain = @($qualityResult.run_again | Where-Object { $_ })
+if ($ranAgain.Count) { Write-Host ("quality gates: $($ranAgain.Count) check(s) failed in the suite and passed on a second run, alone: " + ($ranAgain -join ', ')) }
 $notRun = @()
 # $gate, not $name: $name is the package's own name, and the check below reads it back against the package folder.
 foreach ($gate in $mustRun) {

@@ -115,6 +115,13 @@ Check ($r.code -eq 0) "plan with Smart App Control on exit $($r.code)"
 Check ($r.text -match ('\[ok\s*\]\s+Smart App Control\s+on \(source: CI\\Policy VerifiedAndReputablePolicyState = 1\): the installer turns it off before its first program runs\. ' + $sacText)) 'the preflight line of on is information that names the change'
 Check ($r.text -match ('(?m)^\s+' + $sacText + '\s*$')) 'the plan states the change in the owner''s sentence'
 Check ($r.text -notmatch 'would: turn Smart App Control off') 'a plan does not reach the turn-off'
+# BD-389: the driver does not need the Microsoft Visual C++ runtime. A plan of the driver has no runtime line, also
+# on a PC that has no runtime (AMDGPU_WDDM_TEST_VCRUNTIME, read in a dry run only; a plan reads System32).
+'install -Plan with the Visual C++ runtime missing: a plan of the driver has no runtime line'
+$env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
+try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-Plan', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME }
+Check ($r.code -eq 0) "plan with the runtime missing exit $($r.code)"
+Check ($r.text -notmatch 'Visual C\+\+|vcruntime|vc_redist') 'the plan of the driver has no line about the Visual C++ runtime'
 foreach ($sacCase in @('on', 'evaluation')) {
     "install -DryRun -DryRunIgnoreBoard with Smart App Control $sacCase (AMDGPU_WDDM_TEST_SAC, a dry run only)"
     $env:AMDGPU_WDDM_TEST_SAC = $sacCase
@@ -197,7 +204,15 @@ Check ($r.text -match 'Dry run complete') 'walk-through completes'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'walk-through: no change, no elevation'
 Check ($r.text -match 'shortcuts: Start menu entry, Start menu repair entry, desktop icon') 'the summary names the three shortcuts as a person reads them'
 Check ($r.text -notmatch 'desktop desktop') 'no line says "desktop desktop"'
-Check ($r.text -match 'Microsoft Visual C\+\+ runtime: present: vcruntime140\.dll') 'this PC has the runtime, and phase 2 says so'
+Check ($r.text -notmatch '\]\s+Visual C\+\+ runtime') 'the preflight has no line about the Visual C++ runtime: the driver does not need it'
+# The walk-through takes the default extras. When llama.cpp is one of them, the extras stage names its runtime, and
+# the components stage reads it again and finds it on this PC.
+if ($r.text -match 'extras to install: [^\r\n]*\bllama\b') {
+    Check ($r.text -match 'the Microsoft Visual C\+\+ 2015-2022 runtime \(x64\), needed by llama\.cpp for this board: present: vcruntime140\.dll') 'the extras stage names the runtime of llama.cpp, and this PC has it'
+    $iComp = $r.text.IndexOf('== Extras: llama.cpp, Ollama, models', [Math]::Max(0, $r.text.IndexOf('would: copy payload\')))
+    $iVcHere = $r.text.IndexOf('Microsoft Visual C++ runtime: present: vcruntime140.dll')
+    Check ($iComp -ge 0 -and $iVcHere -gt $iComp) "the components stage reads the runtime again, after the files of the driver (stage at $iComp, line at $iVcHere)"
+} else { Check ($r.text -notmatch 'Visual C\+\+ runtime') 'no extra that needs the runtime was chosen, and no line names it' }
 Check ($r.text -match 'Vulkan loader: System32\\vulkan-1\.dll [^\r\n]*; SysWOW64\\vulkan-1\.dll ') 'phase 2 reads both Vulkan loaders of this PC and says what it found'
 
 # The two paths of the new steps that this PC would otherwise never walk: a PC without the Microsoft Visual C++
@@ -212,19 +227,24 @@ finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME; Remove-Item Env:\AMDGPU_W
 $r2.text
 Check ($r2.code -eq 0) "walk-through without the runtime exit $($r2.code)"
 Check ($r2.text -match '\[ok\s*\]\s+Smart App Control\s+evaluation \(source: CI\\Policy VerifiedAndReputablePolicyState = 2\): the installer turns it off before its first program runs, so Windows cannot turn it on later\.') 'Smart App Control in evaluation is information that the run turns it off, not a refusal'
-Check ($r2.text -match '\[warn\]\s+Visual C\+\+ runtime\s+missing in System32: vcruntime140\.dll, vcruntime140_1\.dll, msvcp140\.dll') 'the preflight states the missing runtime as a line, not a refusal'
-Check ($r2.text -match 'the installer installs 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(SHA256 CC0FF0EB1DC3F518, signature Valid, CN=Microsoft Corporation') 'the line names the file, its hash and its signature'
-Check ($r2.text -match 'would: install the Microsoft Visual C\+\+ 2015-2022 Redistributable \(x64\) 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(/install /quiet /norestart; SHA256 CC0FF0EB1DC3F518 and the Microsoft signature checked\)') 'phase 2 shows the runtime step before anything of ours is copied'
-$iVc = $r2.text.IndexOf('would: install the Microsoft Visual C++')
+Check ($r2.text -notmatch '\]\s+Visual C\+\+ runtime') 'the preflight has no line about the missing runtime: the driver does not need it'
+# The walk-through takes the default extras, llama.cpp among them when this package pins it: the extras stage names
+# its runtime, and the components stage installs it after the files of the driver and before the files of llama.cpp.
 $iCopy = $r2.text.IndexOf('would: copy payload\')
-Check ($iVc -ge 0 -and $iCopy -gt $iVc) "the runtime step comes before the first file of ours (runtime at $iVc, first copy at $iCopy)"
+$iVc = $r2.text.IndexOf('would: install the Microsoft Visual C++')
+if ($r2.text -match 'extras to install: [^\r\n]*\bllama\b') {
+    Check ($r2.text -match 'the Microsoft Visual C\+\+ 2015-2022 runtime \(x64\), needed by llama\.cpp for this board: missing in System32: vcruntime140\.dll, vcruntime140_1\.dll, msvcp140\.dll; it is installed first') 'the extras stage states that the runtime of llama.cpp is installed first'
+    Check ($r2.text -match 'would: install the Microsoft Visual C\+\+ 2015-2022 Redistributable \(x64\) 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(/install /quiet /norestart; SHA256 CC0FF0EB1DC3F518 and the Microsoft signature checked\)') 'the components stage shows the runtime step with the file, its switch, its hash and its signature'
+    $iUnpack = $r2.text.IndexOf('would: unpack llama')
+    Check ($iCopy -ge 0 -and $iVc -gt $iCopy -and ($iUnpack -lt 0 -or $iUnpack -gt $iVc)) "the runtime step comes after the files of the driver and before the files of llama.cpp (first copy at $iCopy, runtime at $iVc, llama.cpp at $iUnpack)"
+} else { Check ($iVc -lt 0) 'no extra that needs the runtime was chosen, and the run does not install it' }
 # The same run reads the Vulkan loaders as missing (AMDGPU_WDDM_TEST_VULKANLOADER): phase 2 names LunarG's installer,
-# its switch, its hash and its signature, after the Visual C++ runtime and before our own files.
+# its switch, its hash and its signature, before our own files.
 Check ($r2.text -match 'Vulkan loader: System32\\vulkan-1\.dll missing; SysWOW64\\vulkan-1\.dll missing') 'phase 2 states the two missing loaders'
 Check ($r2.text -match 'would: install the Vulkan loader 1\.4\.363\.0 \(x64 in System32, x86 in SysWOW64\) from payload\\redist\\VulkanRT-X64-1\.4\.363\.0-Installer\.exe \(/S; SHA256 3F03BDA2522D1D10 and the LunarG signature checked\)') 'phase 2 shows the loader step with the file, its switch, its hash and its signature'
 Check ($r2.text -notmatch 'WARNING: the Vulkan loader is not installed') 'the package carries the Vulkan Runtime installer unchanged'
 $iVk = $r2.text.IndexOf('would: install the Vulkan loader')
-Check ($iVk -gt $iVc -and $iCopy -gt $iVk) "the loader step comes after the runtime and before the first file of ours (loader at $iVk)"
+Check ($iVk -ge 0 -and $iCopy -gt $iVk) "the loader step comes before the first file of ours (loader at $iVk)"
 Check ($r.text -notmatch 'would: install the Vulkan loader' -or $r.text -match 'Vulkan loader: [^\r\n]*(missing|older than)') 'negative control: the first walk-through installs no loader unless this PC lacks one'
 Check ($r2.text -match 'shortcuts: Start menu entry, Start menu repair entry; left out: desktop icon') 'the run asked for no desktop icon leaves it out and says so'
 Check ($r2.text -notmatch 'would: desktop shortcut') 'no desktop icon is written in that run'
@@ -678,13 +698,19 @@ if (-not (Test-Path -LiteralPath $cmPath -PathType Leaf)) {
     Check ($r.text -match '\[dry run\] would ask which models to download') 'the model question comes after the components'
     Check ($r.text -match 'models: none') 'no model is chosen by itself'
     Check ($r.text -notmatch 'doing: get .+\.zip') 'a dry run downloads no component'
-    'install -DryRun -NoComponents: no question at all'
-    $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoComponents')
+    # BD-389: a driver-only run on a PC without the Microsoft Visual C++ runtime (AMDGPU_WDDM_TEST_VCRUNTIME, a dry
+    # run only) does not install it: only the llama.cpp extra needs it.
+    'install -DryRun -NoComponents with the runtime missing: no question, and no runtime step'
+    $env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
+    try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoComponents') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME }
     Check ($r.code -eq 0) "-NoComponents exit $($r.code)"
     Check ($r.text -notmatch 'would ask: Install llama') '-NoComponents asks nothing'
     Check ($r.text -match 'extras: none') '-NoComponents installs nothing'
-    'install -DryRun -Components llama -Models gemma12b: the chosen ones, no question'
-    $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-Components', 'llama', '-Models', 'gemma12b')
+    Check ($r.text -notmatch 'Visual C\+\+|vc_redist') 'a driver-only run on a PC without the runtime has no runtime line and no runtime step'
+    Check ($r.text -match 'Dry run complete') 'the driver-only walk-through completes'
+    'install -DryRun -Components llama -Models gemma12b with the runtime missing: the chosen ones, no question, and the runtime step of llama.cpp'
+    $env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
+    try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-Components', 'llama', '-Models', 'gemma12b') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME }
     # Only the extras' questions: the test-signing and BitLocker questions of the computer that runs this test are
     # not the components' business.
     Check ($r.text -notmatch 'would ask: Install |would ask which models') 'with both switches nothing is asked'
@@ -694,6 +720,13 @@ if (-not (Test-Path -LiteralPath $cmPath -PathType Leaf)) {
     } else {
         Check ($r.text -match 'extras to install: llama') 'the component named on the command line is the one installed'
         Check ($r.text -match 'models to download into .+gemma') 'the model named on the command line is the one downloaded'
+        Check ($r.text -match 'the Microsoft Visual C\+\+ 2015-2022 runtime \(x64\), needed by llama\.cpp for this board: missing in System32: [^\r\n]*; it is installed first') 'the extras stage states the runtime of llama.cpp'
+        $iFiles = $r.text.IndexOf('would: copy payload\')
+        $iStage = $r.text.IndexOf('== Extras: llama.cpp, Ollama, models', [Math]::Max(0, $iFiles))
+        $iRun = $r.text.IndexOf('would: install the Microsoft Visual C++ 2015-2022 Redistributable (x64)')
+        $iLlama = $r.text.IndexOf('would: unpack llama')
+        Check ($iFiles -ge 0 -and $iStage -gt $iFiles -and $iRun -gt $iStage -and $iLlama -gt $iRun) "-Components llama: the runtime step is in the components stage, after the files of the driver and before the files of llama.cpp (files $iFiles, stage $iStage, runtime $iRun, llama.cpp $iLlama)"
+        Check ($r.text -match 'Dry run complete' -and $r.text -notmatch 'doing:') '-Components llama: the walk-through completes and changes nothing'
     }
 }
 
