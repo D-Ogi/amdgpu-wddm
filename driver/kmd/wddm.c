@@ -946,7 +946,12 @@ typedef struct _BC250_WDDM {
     volatile LONG WriterRecovery;       // queued section failure; consumed only inside L
     BOOLEAN DesiredOwed;                // Desired is a next-VSync success that no CRTC_VSYNC report carried yet
     ULONG DepositSequence;              // advances at every deposit, so that a programmed deposit is the newest one
-    volatile LONG Faulting;             // E5 was entered on this start (F0); this block is freed at the stop
+    // BD-407: an owed flip that End could not program. The next vblank reports RetireAddress in software, and the
+    // report that carries it clears RetireOwed. OwedRetired counts the owed flips that a software report retired.
+    BOOLEAN RetireOwed;
+    PHYSICAL_ADDRESS RetireAddress;
+    volatile LONG OwedRetired;
+    volatile LONG Faulting;            // E5 was entered on this start (F0); this block is freed at the stop
     ULONG FaultCode;                    // the first fault's BC250_FLIP_FAULT_* code
     UINT FaultNode;                     // and its node ordinal
     NTSTATUS FaultBlank;                // DcnFaultBlank's status
@@ -959,7 +964,7 @@ typedef struct _BC250_WDDM {
     // FAULTING. WriterHigh: a writer section refused above DISPATCH_LEVEL.
     // WriterSyncFailed and LowSyncFailed: DxgkCbSynchronizeExecution failed for a writer section or for the flip
     // DDI's low entry. Deposits by Resume, End's programs, End's refusals (OwedInvalidated), the reports that carried
-    // an owed Desired, the D3 flushes and the destroy restores whose Begin was refused.
+    // an owed Desired or an owed RetireAddress, the D3 flushes and the destroy restores whose Begin was refused.
     volatile LONG FlipEdges[BC250_FLIP_EDGES];
     volatile LONG FlipResults[BC250_FLIP_RESULTS];
     volatile LONG FlipFaults;
@@ -1590,6 +1595,13 @@ static BOOLEAN WddmNotifyRoutine(_In_ PVOID Context)
             notify->Data.CrtcVsync.PhysicalAddress.QuadPart == wddm->PrimaryAddress.QuadPart)
         {
             wddm->DesiredOwed = FALSE;
+            InterlockedIncrement(&wddm->OwedReported);
+        }
+        // BD-407: the same for an owed flip that End could not program (WddmWriterEndLocked, WddmDcnVsync).
+        if (wddm != NULL && wddm->RetireOwed &&
+            notify->Data.CrtcVsync.PhysicalAddress.QuadPart == wddm->RetireAddress.QuadPart)
+        {
+            wddm->RetireOwed = FALSE;
             InterlockedIncrement(&wddm->OwedReported);
         }
     }
@@ -3385,11 +3397,31 @@ void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
 // Called from pnp.c's Bc250DpcRoutine on every DPC, the same unconditional shape as WddmGpuFence/
 // WddmGpuFencePaging above: a no-op unless Device->DcnVsyncAcked says the ISR (dcn.c's DcnVsyncInterrupt) found
 // at least one real VUPDATE_NO_LOCK event since the last time this ran. <= DISPATCH_LEVEL.
+// BD-407, the vblank DPC's read, outside L and lock-free like WddmReadCompletedPrimary: the address of an owed flip
+// that the plane cannot show, which this vblank must report in software. That is End's unprogrammed debt
+// (RetireOwed), or an owed Desired that a blanked plane holds (HUBP_BLANK_EN: the physical detach writer blanks it,
+// and a blanked plane latches no flip). FALSE in FAULTING, where E5 recovers, and across a section that writes the
+// block (an odd or changed generation).
+static BOOLEAN WddmOwedUnshown(_In_ BC250_DEVICE* Device, _In_ BC250_WDDM* Wddm, _Out_ PHYSICAL_ADDRESS* Address)
+{
+    const LONG generation = InterlockedCompareExchange(&Wddm->PrimarySequence, 0, 0);
+    LONGLONG address;
+    if ((generation & 1) || InterlockedCompareExchange(&Wddm->Faulting, 0, 0) != 0) return FALSE;
+    if (Wddm->RetireOwed) address = Wddm->RetireAddress.QuadPart;
+    else if (Wddm->DesiredOwed && DcnPlaneBlanked(Device) == 1)
+        address = InterlockedCompareExchange64(&Wddm->PrimaryAddress.QuadPart, 0, 0);
+    else return FALSE;
+    if (InterlockedCompareExchange(&Wddm->PrimarySequence, 0, 0) != generation) return FALSE;
+    Address->QuadPart = address;
+    return TRUE;
+}
+
 void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
 {
     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
     DXGKARGCB_NOTIFY_INTERRUPT_DATA data;
     ULONG completedSequence;
+    BOOLEAN software = FALSE;
 
     if (wddm == NULL || !Device->VidPnFlipEnabled) return;
     if (InterlockedExchange(&Device->DcnVsyncAcked, 0) == 0) return;
@@ -3400,9 +3432,14 @@ void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
     RtlZeroMemory(&data, sizeof(data));
     data.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC;
     data.CrtcVsync.VidPnTargetId = wddm->VSyncTargetId;
-    // A stable completed request may be retired. Otherwise preserve this vblank
-    // by reporting the buffer hardware is still reading, never the queued one.
-    if (!WddmReadCompletedPrimary(Device, wddm, &data.CrtcVsync.PhysicalAddress, &completedSequence))
+    // BD-407: an owed flip that the plane cannot show is retired first, in software. Otherwise a stable completed
+    // request may be retired. Otherwise preserve this vblank by reporting the buffer hardware is still reading,
+    // never the queued one.
+    if (WddmOwedUnshown(Device, wddm, &data.CrtcVsync.PhysicalAddress))
+    {
+        software = TRUE;
+    }
+    else if (!WddmReadCompletedPrimary(Device, wddm, &data.CrtcVsync.PhysicalAddress, &completedSequence))
     {
         ULONGLONG scanned;
         LONG generation;
@@ -3445,7 +3482,11 @@ void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
     // C50: counted like any other report. Bc250DpcRoutine calls WddmDpc right after this, so in practice the
     // pairing happens in this very pass; PairInThisPass stays FALSE because that ordering belongs to pnp.c, not
     // here, and one extra dxgkrnl DPC a vblank is 62 a second.
-    if (WddmReport(Device, &data, FALSE)) WddmPairingReport(wddm, TRUE);
+    if (WddmReport(Device, &data, FALSE))
+    {
+        WddmPairingReport(wddm, TRUE);
+        if (software) InterlockedIncrement(&wddm->OwedRetired);
+    }
 }
 
 // ---- the summary -------------------------------------------------------------------------------------------------
@@ -4153,7 +4194,8 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         GuardLog("wddm summary: flip end-programs %ld owed-invalidated %ld owed-reported %ld flushes %ld destroy-unsync %ld",
                  Wddm->EndPrograms, Wddm->OwedInvalidated, Wddm->OwedReported, Wddm->FlipFlushes,
                  Wddm->DestroyUnsynchronized);
-        GuardLog("wddm summary: flip writer-busy %ld recovery-pending %ld", Wddm->WriterBusy, Wddm->WriterRecovery);
+        GuardLog("wddm summary: flip writer-busy %ld recovery-pending %ld owed-retired %ld retire-owed %u",
+                 Wddm->WriterBusy, Wddm->WriterRecovery, Wddm->OwedRetired, (unsigned)Wddm->RetireOwed);
         {
             ULONG kind;
             for (kind = 0; kind < BC250_WRITER_KINDS; kind++)
@@ -11304,6 +11346,13 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
 // only from callers at or below DISPATCH_LEVEL (dispmprt.h, _IRQL_requires_max_(DISPATCH_LEVEL)). Code inside L never
 // calls DxgkCbSynchronizeExecution (WddmSection refuses above DISPATCH_LEVEL), never logs and never waits for the other
 // side. Every field of the state machine's block in BC250_WDDM is written inside L only.
+//
+// The retirement rule (BD-407): an accepted flip is always retired by exactly one CRTC_VSYNC report that carries its
+// address. A next-VSync success is owed (DesiredOwed) until the report that carries Desired, which WddmNotifyRoutine
+// sees inside L. When the plane cannot show an owed flip, the debt is not dropped: End's refused program moves it to
+// RetireOwed, and an owed Desired on a blanked plane stays owed. The next vblank reports that address in software
+// (WddmOwedUnshown), once, before any later address. dxgmms2's flip queue drain waits for that report; without it the
+// drain times out (TDR 0x117). Only a D3 flush (WddmFlipFlushedLocked) ends a debt without a report.
 
 // One DxgkCbSynchronizeExecution section on message 0, from a caller at or below DISPATCH_LEVEL. Above it, or with
 // the callback missing, nothing runs and the caller decides (counted by the caller).
@@ -11834,7 +11883,13 @@ static BOOLEAN WddmWriterEndLocked(_In_ PVOID Context)
             InterlockedExchange(&wddm->PrimaryProgrammedSequence, (LONG)(w->Generation + 2u));
             InterlockedIncrement(&wddm->EndPrograms);
         } else if (result == BC250_FLIP_RESULT_REFUSED) {
+            // BD-407: nothing was written, so the plane cannot show the owed flip. The OS still waits for its
+            // report: the debt moves to RetireOwed, and the next vblank reports the address in software.
             InterlockedIncrement(&wddm->OwedInvalidated);
+            if (wddm->DesiredOwed) {
+                wddm->RetireOwed = TRUE;
+                wddm->RetireAddress = wddm->PrimaryAddress;
+            }
             wddm->DesiredOwed = FALSE;
             wddm->PrimaryNeedsRestore = TRUE;
             w->Status = status;
@@ -11881,6 +11936,7 @@ static BOOLEAN WddmFlipFlushedLocked(_In_ PVOID Context)
 {
     BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
     w->Wddm->DesiredOwed = FALSE;
+    w->Wddm->RetireOwed = FALSE;
     InterlockedIncrement(&w->Wddm->FlipFlushes);
     return TRUE;
 }

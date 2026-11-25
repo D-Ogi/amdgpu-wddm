@@ -304,7 +304,8 @@ completion. `DmaFlipsRefused` counts it.
 4. The promotion test reads the hardware before the write. If the vsync flip latches between the two, the
    driver programs the same address again, which does no harm.
 5. An independent-flip refusal can still reach the OS queue assertion described above. Writer contention returns BUSY without an unsafe success or E5.
-6. Whether dxgkrnl cancels a pending flip at a modeset commit is not read (`OwedInvalidated`, section 7.2).
+6. dxgkrnl does not cancel a pending flip at a link detach: in the BD-407 dump, the drain of its flip queue waits
+   for the report. The software report of section 7.2 (the retirement rule) is the answer. A modeset commit is not read.
 7. The dxgmms2 reading is static. F1 (section 7.2) counts the case in which a call above DISPATCH_LEVEL does not
    hold L.
 8. A flip that the OS queues behind an `IndependentFlipExclusive` entry while E5 runs can still reach the 0x119
@@ -401,6 +402,14 @@ No writer can later replay a saved application address.
 If the current Desired does not fit the final mode, the plane stays on the reserved bridge and the refusal is recorded.
 A successful programming does not imply a later VSync report. The hardware report still controls completion of a next-VSync entry.
 A detach, suspend or invalidating End retains the safe reserved or drained state when no valid primary must be resumed.
+
+**The retirement rule (BD-407).** An accepted flip is always retired by exactly one CRTC_VSYNC report that carries its address.
+dxgmms2 waits for that report when it drains the flip queue, and a drain that times out is TDR 0x117.
+If End cannot program an owed next-VSync flip, End keeps the debt in `RetireOwed` and `RetireAddress`.
+If the plane is blanked (`HUBP_BLANK_EN`), an owed Desired stays owed, because a blanked plane latches no flip.
+In both cases, the next vblank reports that address in software (`WddmOwedUnshown`) before any later address, and the report clears the debt.
+Only the D3 flush ends a debt without a report. `OwedRetired` counts the software reports.
+
 With the flip gate closed, the existing software-report route remains separate from hardware ownership.
 
 **Every long writer follows the same protocol.** The references below identify the entry and final status handling.

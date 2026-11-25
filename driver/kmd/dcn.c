@@ -1712,6 +1712,15 @@ int DcnHubpDrained(_In_ const BC250_DEVICE* Device)
                             (value & HUBP0_DCHUBP_CNTL__HUBP_NO_OUTSTANDING_REQ_MASK) != 0) ? 1 : 0;
 }
 
+// BD-407: the plane's blank, HUBP0_DCHUBP_CNTL.HUBP_BLANK_EN. 1 blanked, 0 not, -1 the read failed. Only this driver
+// sets the bit (Bc250Dcn201PlaneBlank, DcnFaultBlank), and a blanked plane latches no flip.
+int DcnPlaneBlanked(_In_ const BC250_DEVICE* Device)
+{
+    ULONG value = 0;
+    if (Device->Mmio == NULL || !NT_SUCCESS(MmioDcnRead(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &value))) return -1;
+    return (value & HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK) ? 1 : 0;
+}
+
 // OTG running: OTG0_OTG_CONTROL.OTG_MASTER_EN. 1 running, 0 stopped, -1 the read failed (Bc250WriterEnd).
 int DcnOtgRunning(_In_ const BC250_DEVICE* Device)
 {
