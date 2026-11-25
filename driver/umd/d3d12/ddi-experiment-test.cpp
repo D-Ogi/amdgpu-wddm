@@ -208,6 +208,15 @@ int main() {
         assert(row && row->cls == native12::SwitchClass::Lab);
         assert(admit(name, false).kept.empty());
     }
+    // private-tiled changes which textures of the shareable envelope are linear, and the driver obeys its
+    // contracts with it set: a Feature name, so a release build honours it from the application profile.
+    {
+        const native12::SwitchRow* row = native12::switch_row(native12::kD3D12Switches, "private-tiled");
+        assert(row && row->cls == native12::SwitchClass::Feature && !row->parameter);
+        assert(admit("private-tiled", false).kept == "private-tiled" && admit("private-tiled", true).kept == "private-tiled");
+        v = detail::combine_experiment(1, "private-tiled", 0, "");
+        assert(v.source == DdiExperimentSource::Profile && native12::ddi_experiment_listed(v.text, "private-tiled"));
+    }
     // A mixed list keeps its order. A name with no row is dropped in each flavour, and so is a name that only
     // starts as a row does.
     Admitted mixed = admit("present-cached,import-quarantine-off,x-future,deferred-replay-off,scanout-flip-1280x720", false);

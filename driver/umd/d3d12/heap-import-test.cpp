@@ -75,6 +75,9 @@ static uint32_t surface_width=256;            // LB7A.Width the next primary mus
 // BD-075, what the next shared create must publish: the LB7A geometry and the E26R v3 texture beside it.
 static unsigned shared_created=0;
 static bool refuse_shareable_create=false;    // the runtime's E_INVALIDARG for a shared resource's first attempt
+static HRESULT refuse_shareable_status=E_INVALIDARG;
+// private-tiled (EnvelopeCreate::Probe): the next GPU-only BC2A allocation is the probe, which keeps its CPU view.
+static bool expect_cpu_view=false;
 static uint32_t shared_width=256,shared_height=64,shared_pitch=1024,shared_dxgi=0,shared_bind=0;
 static uint64_t shared_size=65536;
 static unsigned creates=0,makes_resident=0,evictions=0,waits=0,probes=0;
@@ -175,13 +178,13 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
  auto blob=static_cast<const bc250_umd_alloc_private*>(a->pAllocationInfo->pPrivateDriverData);
  assert(blob->alloc_size==held_bytes() && blob->phys_alignment==held_bytes());
  assert(blob->preferred_heap==uint32_t(expected_type?AMDGPU_GEM_DOMAIN_GTT:AMDGPU_GEM_DOMAIN_VRAM));
- assert(blob->gem_flags==(expected_type==0?uint64_t(AMDGPU_GEM_CREATE_NO_CPU_ACCESS):
+ assert(blob->gem_flags==(expected_type==0?uint64_t(expect_cpu_view?0:AMDGPU_GEM_CREATE_NO_CPU_ACCESS):
      expected_type==1?uint64_t(AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED|AMDGPU_GEM_CREATE_CPU_GTT_USWC):
      uint64_t(AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED)));
  events+='A';
  // BD-075: the runtime's measured answer to the allocate callback of a shared resource whose allocation
  // carries no resource-level private data (lab-20261005T172552Z, ddi.log line 50860).
- if(refuse_shareable_create)return E_INVALIDARG;
+ if(refuse_shareable_create)return refuse_shareable_status;
  a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
 }
 // D: by handle list, with the resident object's two flags. R: by the runtime resource, which has no other
@@ -602,6 +605,10 @@ int main(){
   heap.Flags=D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
   heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;expected_type=0;
   engine_ddi::MemoryRequest s=req;s.resource=&target;s.flags=shareable_flags;
+  // The policy of the envelope comes from the experiment list of the process. The checks of BD-217 below are
+  // those of the default, whatever list the machine that runs this test has.
+  assert(owner.envelope()==envelope_create(ddi_experiment_name()));
+  owner.create_envelope_with(EnvelopeCreate::Linear);
   // BD-217: a runtime which accepts the ordinary allocation must not let BC2A
   // escape as a shared texture. Ask for LB7A before any allocation or import.
   events.clear();
@@ -653,6 +660,75 @@ int main(){
   }
   target.Flags=static_cast<D3D12DDI_RESOURCE_FLAGS_0003>(unsigned(D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET)|
       unsigned(D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE));shared_bind=0x28;
+  // The three policies of the envelope and the lists that select them. shared-create-retry-off wins, and a name
+  // is matched whole.
+  assert(envelope_create(nullptr)==EnvelopeCreate::Linear && envelope_create("")==EnvelopeCreate::Linear);
+  assert(envelope_create("deferred-replay-off,scanout-flip-off")==EnvelopeCreate::Linear);
+  assert(envelope_create("private-tiled")==EnvelopeCreate::Probe);
+  assert(envelope_create("deferred-replay-off,private-tiled")==EnvelopeCreate::Probe);
+  assert(envelope_create("private-tiled-off")==EnvelopeCreate::Linear &&
+         envelope_create("private-tile")==EnvelopeCreate::Linear);
+  assert(envelope_create("shared-create-retry-off")==EnvelopeCreate::Ordinary);
+  assert(envelope_create("private-tiled,shared-create-retry-off")==EnvelopeCreate::Ordinary);
+  // private-tiled, EnvelopeCreate::Probe. The first request of a create inside the envelope is the ordinary
+  // BC2A allocation with a CPU view, and the runtime's answer to it decides.
+  {
+   engine_ddi::MemoryRequest p=req;p.resource=&target;p.flags=shareable_flags;
+   owner.create_envelope_with(EnvelopeCreate::Probe);expect_cpu_view=true;
+   const auto tiled=owner.envelope_tiled(),shared=owner.envelope_shared();
+   // A private texture: the runtime accepts the probe, so the texture is an ordinary allocation of this
+   // driver. No surface record, no kShareRequired, and the release is the ordinary one by handle.
+   {
+    const auto old_shared=shared_created,old_surfaces=surfaces,old_probes=probes;
+    events.clear();
+    assert(owner.allocate(&p,&memory)==S_OK && events=="AMZIE" && memory.memory && memory.memory_type_index==0);
+    assert(!owner.last_report().refusal && owner.last_report().stage==ImportStage::Done);
+    assert(owner.envelope_tiled()==tiled+1 && owner.envelope_shared()==shared);
+    assert(shared_created==old_shared && surfaces==old_surfaces && probes==old_probes+1);
+    assert(owner.owns_allocation(memory.allocation));
+    assert(owner.free(&memory)==S_OK && events=="AMZIEVUD" && !owner.last_free_report().surface);
+   }
+   // A shared create: the runtime refuses the probe with E_INVALIDARG. Nothing is kept, and the answer asks
+   // engine-ddi for the linear surface.
+   {
+    const auto before=next_allocation;refuse_shareable_create=true;events.clear();
+    assert(owner.allocate(&p,&memory)==engine_ddi::kShareRequired && !memory.memory && events=="A" &&
+           next_allocation==before);
+    const auto& report=owner.last_report();
+    assert(report.stage==ImportStage::AllocateCallback && report.refusal &&
+           !std::strcmp(report.refusal,"shared resource needs a surface record"));
+    assert(owner.envelope_tiled()==tiled+1 && owner.envelope_shared()==shared+1);
+    // Only E_INVALIDARG is that answer. Any other failure of the callback is the create's own failure.
+    refuse_shareable_status=E_OUTOFMEMORY;events.clear();
+    assert(owner.allocate(&p,&memory)==E_OUTOFMEMORY && !memory.memory && events=="A");
+    assert(owner.envelope_shared()==shared+1);
+    refuse_shareable_status=E_INVALIDARG;
+    // A request without sharing permission is no probe: no CPU view, and the callback's status as it is.
+    expect_cpu_view=false;p.flags=engine_ddi::kMemoryDedicated;events.clear();
+    assert(owner.allocate(&p,&memory)==E_INVALIDARG && !memory.memory && events=="A");
+    assert(owner.envelope_shared()==shared+1);
+    p.flags=shareable_flags;refuse_shareable_create=false;
+   }
+   // The second request of that shared create is the surface of BD-075, unchanged by the policy.
+   {
+    const auto old_shared=shared_created;
+    events.clear();
+    {OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZIE");}
+    assert(shared_created==old_shared+1 && owner.envelope_tiled()==tiled+1);
+    {OwnerScope destroy(&owner,memory.allocation);assert(owner.free(&memory)==S_OK && events=="AMZIEVUR");}
+   }
+   // shared-create-retry-off, EnvelopeCreate::Ordinary: the GPU-only allocation without a CPU view, and never
+   // kShareRequired, also when the runtime refuses.
+   owner.create_envelope_with(EnvelopeCreate::Ordinary);
+   events.clear();
+   assert(owner.allocate(&p,&memory)==S_OK && events=="AMZIE" && owner.envelope_tiled()==tiled+1);
+   assert(owner.free(&memory)==S_OK && events=="AMZIEVUD");
+   refuse_shareable_create=true;events.clear();
+   assert(owner.allocate(&p,&memory)==E_INVALIDARG && !memory.memory && events=="A");
+   assert(owner.envelope_shared()==shared+1);
+   refuse_shareable_create=false;
+   owner.create_envelope_with(EnvelopeCreate::Linear);
+  }
   // Every refusal of the shared surface names its own check, before any callback, and allocates nothing.
   auto refused=[&](HRESULT expected,const char* why){
    const auto before=next_allocation;events.clear();
@@ -1691,7 +1767,8 @@ int main(){
  std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, a CPU lock the ICD left unlocked by the release (retried at close after a failure), ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
   "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation, "
   "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress whose unproved teardown release goes through the OS: no evict, no VA free, deallocate flags 0, an ordinary mapping's range left to the destroy and a reservation kept and counted; after its deallocate fails, the teardown walk releases it with flags 0 again), "
-  "BD-075/BD-217 shared resources (the shareable envelope unchanged, positive LB7A selection before an ordinary allocation, the shared surface's "
+  "BD-075/BD-217 shared resources (the shareable envelope unchanged, positive LB7A selection before an ordinary allocation, "
+  "private-tiled: the probe with a CPU view, a tiled texture when the runtime accepts it and kShareRequired for E_INVALIDARG alone, the shared surface's "
   "LB7A and E26R v3 records with the three view flags and every refusal by name, and an adopted allocation that is borrowed: no allocate or deallocate "
   "callback, no quarantine, no backing to lend, one record per allocation handle), "
   "BD-101 (the 4 MiB MSAA placement alignment: one reservation of held+alignment, the map at its aligned offset, "

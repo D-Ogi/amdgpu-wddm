@@ -33,6 +33,11 @@ class RuntimeAllocation final {
     // callback created it and no deallocate callback may destroy it. The runtime destroys it itself when the
     // open's resource goes.
     bool borrowed_{};
+    // What the allocate callback left in the two fields that this driver sends as zero: the information flags of
+    // the allocation and the reserved hKMResource. Kept as numbers for a diagnostic line (heap-import.cpp,
+    // envelope_note) and never interpreted: no document says that the runtime writes either of them.
+    unsigned returned_flags_{};
+    D3DKMT_HANDLE returned_resource_{};
 public:
     RuntimeAllocation(D3D12DDI_HRTDEVICE runtime,
                       const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& callbacks) noexcept
@@ -69,6 +74,7 @@ public:
         if(FAILED(hr)) return hr;
         if(!info.hAllocation) return E_UNEXPECTED;
         allocation_=info.hAllocation;address_=info.GpuVirtualAddress;resource_=request.hResource;
+        returned_flags_=static_cast<unsigned>(info.Flags);returned_resource_=args.hKMResource;
         return S_OK;
     }
     // BD-075: adopts an allocation the runtime opened for this device. There is no callback and nothing to
@@ -128,5 +134,7 @@ public:
     bool owner_known() const noexcept {return resource_!=nullptr;}
     D3DKMT_HANDLE handle() const noexcept {return allocation_;}
     D3DGPU_VIRTUAL_ADDRESS address() const noexcept {return address_;}
+    unsigned returned_flags() const noexcept {return returned_flags_;}
+    D3DKMT_HANDLE returned_resource() const noexcept {return returned_resource_;}
 };
 }
