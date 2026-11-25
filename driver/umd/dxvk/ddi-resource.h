@@ -21,6 +21,10 @@ struct DdiResource {
     // BD-065: a present buffer that is not shared, not a primary and not displayable. Flip-model buffers are
     // shared with the compositor or are primaries; only a blt-model swap chain presents a buffer like this.
     bool blt_model_buffer=false;
+    // BD-407: a multisampled blt-model buffer (multisampled_present_buffer). It is an engine texture without a kernel
+    // allocation, because a linear LB7A allocation holds one sample a pixel. present_allocation stays 0, and each
+    // Present of it resolves into a present shadow (present_resolve_format).
+    bool resolve_on_present=false;
     RuntimeSurface *runtime_surface=nullptr; // DeviceOwner owns; COM object is borrowed.
     // BD-309: the kernel allocations of an engine-private resource from its offer until its reclaim. The engine
     // names at most kEngineOfferCapacity memory objects; a resource with more stays an offer hint.
@@ -56,6 +60,21 @@ HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &input,ResourceDescrip
 // The status that CreateResource reports when it does not complete `desc` after the failure `hr`
 // (ddi_create_resource_status): DXGI_DDI_ERR_UNSUPPORTED only for a primary, never device removal for a refusal.
 HRESULT create_refusal(const D3D11DDIARG_CREATERESOURCE &desc,HRESULT hr);
+// BD-407: a multisampled back buffer of a blt-model swap chain (DXGI_SWAP_EFFECT_DISCARD or SEQUENTIAL with
+// SampleDesc.Count above 1): a TEXTURE2D with BIND_PRESENT that is not shared and not displayable, with no primary
+// descriptor (windowed) or an optional one (DXGI_DDI_PRIMARY_OPTIONAL, a full-screen back buffer). DXGI moves its
+// content with BltDXGI and the Resolve flag, or presents it with the Blt flag (dxgi-presentation-path.md), so it
+// does not need a kernel allocation. A front buffer or a proxy (a primary that is not optional) is not one.
+bool multisampled_present_buffer(const D3D11DDIARG_CREATERESOURCE &);
+// The engine description of such a buffer: the same texture without the present flags. A format without a
+// composed row (or A8) is refused, because present_resolve_format has no shadow for it.
+HRESULT convert_multisampled_present_buffer(const D3D11DDIARG_CREATERESOURCE &,ResourceDescription &);
+// BD-407: the scan-out opt-out of a multisampled primary. The shell cannot scan out a multisampled surface, so it
+// sets DXGI_DDI_PRIMARY_DRIVER_FLAG_NO_SCANOUT in the descriptor's DriverFlags. For an optional back buffer, DXGI
+// then presents with Blt instead of Flip; with the DXGI_DDI_ERR_UNSUPPORTED refusal of a front buffer or a proxy,
+// DXGI puts a single-sample proxy between the buffers and the primary (passing-dxgi-information-at-resource-
+// creation-time.md). Returns true when it set the flag. A single-sample primary is not changed.
+bool opt_out_multisampled_scanout(const D3D11DDIARG_CREATERESOURCE &);
 // scanout is the device's scan-out source (scanout-primary.h); nullptr asks for no scan-out primary.
 HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &,HANDLE,RuntimeSurfaceRequest &,D3D11_TEXTURE2D_DESC1 &,
     const ScanoutSource *scanout=nullptr);
