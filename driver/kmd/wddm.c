@@ -772,6 +772,8 @@ typedef struct _BC250_WDDM {
     volatile LONG UmdAllocsLocalOnly;
     volatile LONG UmdAllocsShared;
     volatile LONG UmdAllocsAperture;
+    // The UMD allocations that were sized and aligned to 64 KiB for host pages of that size (Device->SystemPages64K).
+    volatile LONG UmdAllocs64K;
     // BD-210: the UMD allocations created without a CPU view (UmdBlobAllocCpuVisible 0), and the bytes
     // created on each side. Created, not live: the summary says how much a session asked for of each.
     volatile LONG UmdAllocsGpuOnly;
@@ -3635,6 +3637,9 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: umd placement (shared residency %s): local %ld, local+aperture %ld, aperture %ld",
              Wddm->SharedResidency ? "on" : "off", Wddm->UmdAllocsLocalOnly, Wddm->UmdAllocsShared,
              Wddm->UmdAllocsAperture);
+    // A line of its own again, and only on a start with 64 KiB host pages: the lines above keep their text.
+    if (Wddm->UmdAllocs64K != 0)
+        GuardLog("wddm summary: umd allocations sized and aligned to 64 KiB: %ld", Wddm->UmdAllocs64K);
     // BD-210, a line of its own for the same reason.
     GuardLog("wddm summary: umd cpu view: gpu-only %ld (%lld MiB), cpu-visible %ld (%lld MiB)",
              Wddm->UmdAllocsGpuOnly, (long long)(Wddm->UmdGpuOnlyBytes >> 20),
@@ -5772,6 +5777,15 @@ static NTSTATUS WddmGpuMmuCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // level 2 (1 GiB). Level 3 would need a 512 GiB allocation, which no segment here can hold. Large pages in
     // host memory (SysMemLargePageSupported) and on unaligned addresses (AllowNonAlignedLargePageAddress) stay off.
     caps->LargePageSupported = Device->LargePages ? 1 : 0;
+    // 64 KiB pages in host memory (bit 31 of ApertureSegmentMegabytes, WddmStart). Single PTE mode: DualPteSupported
+    // stays 0, so a level 1 entry points at one leaf table whose type is its PageTablePageSize, and an update of a
+    // 64 KiB table has Use64KBPages and counts its 32 entries (vidmm.c). dxgmms2 treats any non-zero leaf size as
+    // "64 KiB tables exist". The size is that of a 4 KB table: on gfx10 both types are the same table page, and
+    // VidMm converts a 64 KiB table to a 4 KB one in place. No segment reports Use64KBPages.
+    if (Device->SystemPages64K) {
+        caps->SysMem64KBPageSupported = 1;
+        caps->LeafPageTableSizeFor64KPagesInBytes = BC250_WDDM_PAGE_TABLE_BYTES;
+    }
     return STATUS_SUCCESS;
 }
 
@@ -6638,6 +6652,18 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
                 InterlockedIncrement(shared ? &wddm->UmdAllocsShared :
                                      segment == BC250_WDDM_SEGMENT_APERTURE ? &wddm->UmdAllocsAperture :
                                      &wddm->UmdAllocsLocalOnly);
+        }
+        // 64 KiB host pages (Device->SystemPages64K). VidMm backs an allocation with 64 KiB pages when its
+        // supported set has an aperture segment and its size is a multiple of 64 KiB (above 4 MiB it rounds
+        // the backing itself), and it maps with 64 KiB entries only an allocation whose "alignment and the size
+        // are a multiple of 64 KB" (Microsoft, Support for 64KB Pages). So an allocation of 64 KiB or more that
+        // may live in the aperture gets both. The size grows by less than 64 KiB; the user-mode driver maps its
+        // own size, which is a prefix. An allocation below 64 KiB keeps 4 KB pages, and so does a VRAM-only one.
+        if (device->SystemPages64K && info->Size >= BC250_VIDMM_PAGE_64K_BYTES &&
+            (placement.supported & (1ul << (BC250_WDDM_SEGMENT_APERTURE - 1))) != 0) {
+            info->Size = (info->Size + (BC250_VIDMM_PAGE_64K_BYTES - 1)) & ~(SIZE_T)(BC250_VIDMM_PAGE_64K_BYTES - 1);
+            if (info->Alignment < BC250_VIDMM_PAGE_64K_BYTES) info->Alignment = (UINT)BC250_VIDMM_PAGE_64K_BYTES;
+            if (wddm != NULL) InterlockedIncrement(&wddm->UmdAllocs64K);
         }
         info->EvictionSegmentSet = 0;
         info->PhysicalAdapterIndex = 0;
