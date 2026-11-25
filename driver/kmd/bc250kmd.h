@@ -236,6 +236,10 @@ typedef struct _BC250_DEVICE {
     ULONG PciId;
     ULONG PowerWitness;                 // BC250_POWER_WITNESS_*, from the per-IP data of PciId
     BOOLEAN PowerWitnessArmed;          // the last way down wrote the pattern and read it back
+    // BD-404: the VBIOS part number of this start (hwinfo.c), terminated, empty when the image has none. Written once
+    // in StartDevice before dxgkrnl's DXGKQAITYPE_GPUVERSION query, which reads it (perf_data.c). 32 is
+    // DXGK_MAX_GPUVERSION_NAME_LENGTH (perf_data.c asserts it).
+    WCHAR VbiosPartNumber[32];
     PDEVICE_OBJECT PhysicalDeviceObject;
     DXGKRNL_INTERFACE Dxgk;
     DXGK_START_INFO StartInfo;
@@ -604,6 +608,9 @@ NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 // BD-343: the curve half of a confirmation by the rule without output; clears only a curve a display start confirmed.
 NTSTATUS DpmConfirmKnownCurve(BC250_DEVICE* Device, _In_z_ const char* Why);
 void DpmLogSummary(BC250_DEVICE* Device);
+// A copy of the governor's published snapshot, as the last tick left it (zero before the first). Software state only,
+// no SMU traffic. Any IRQL up to DISPATCH_LEVEL.
+void DpmReadSnapshot(BC250_DEVICE* Device, BC250_DPM_SNAP* Snapshot);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 void DpmTuneRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_TUNE* Data, ULONG Size, BOOLEAN Admin,
                     ULONG EscapeFlags);
@@ -655,6 +662,9 @@ void HwmonStop(BC250_HWMON_OWNER* Owner);
 void HwmonSample(BC250_DEVICE* Device);                 // the governor thread, PASSIVE_LEVEL, once a second
 void HwmonLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 void HwmonRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_HWMON* Data, ULONG EscapeFlags);
+// A copy of the published sample. TRUE only when it is a reading: VALID and at most BC250_HWMON_FRESH_MS old, the
+// rule of HwmonRequest's FRESH flag. No port access. Any IRQL up to DISPATCH_LEVEL.
+BOOLEAN HwmonReadFresh(BC250_DEVICE* Device, BC250_HWMON_SNAP* Snapshot);
 
 // fan.c
 struct _BC250_ESCAPE_FAN;
@@ -669,6 +679,11 @@ void FanDriverUnload(void);
 void FanStep(BC250_DEVICE* Device, LONG TctlMc, BOOLEAN TctlValid, const BC250_FAN_LOAD* Load);
 void FanLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 void FanRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_FAN* Data, BOOLEAN Admin, ULONG EscapeFlags);
+
+// perf_data.c (BD-404): DXGKQAITYPE_NODEPERFDATA, ADAPTERPERFDATA, ADAPTERPERFDATA_CAPS and GPUVERSION. NodeCount is
+// this start's node count, GfxNodeMask the nodes on the GFX clock (bit n: node ordinal n). Copies published snapshots
+// only: no SMU message, no port access. PASSIVE_LEVEL.
+NTSTATUS PerfDataQuery(BC250_DEVICE* Device, const DXGKARG_QUERYADAPTERINFO* Query, ULONG NodeCount, ULONG GfxNodeMask);
 
 // smu_metrics.c: the SMU metrics table (0.7.215, docs/design/dpm.md "Power reading")
 void SmuMetricsInitialize(BC250_DEVICE* Device);        // AddDevice

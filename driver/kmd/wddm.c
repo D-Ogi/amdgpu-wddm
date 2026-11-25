@@ -5859,6 +5859,15 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         *(UINT*)QueryAdapterInfo->pOutputData = 0;
         status = STATUS_SUCCESS;
         break;
+    case DXGKQAITYPE_NODEPERFDATA:
+    case DXGKQAITYPE_ADAPTERPERFDATA:
+    case DXGKQAITYPE_ADAPTERPERFDATA_CAPS:
+    case DXGKQAITYPE_GPUVERSION:
+        // BD-404: the performance data of Task Manager and of the HLK test "WDDM2.7 Query Adapter Perf Data"
+        // (perf_data.c). The 3D and compute nodes run on the GFX clock; the copy node does not.
+        status = PerfDataQuery(device, QueryAdapterInfo, (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT,
+                               (1u << BC250_WDDM_NODE_3D) | (1u << BC250_WDDM_NODE_COMPUTE));
+        break;
     case DXGKQAITYPE_HISTORYBUFFERPRECISION:
         // ASSUMPTION: zero bits is how a driver without a GPU timestamp counter says it has none. Nothing in the
         // documentation names a floor, and FormatHistoryBuffer logs it if dxgkrnl asks anyway.
