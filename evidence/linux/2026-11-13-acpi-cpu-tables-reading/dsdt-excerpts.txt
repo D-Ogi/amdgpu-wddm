@@ -1,0 +1,110 @@
+Lines of the iasl disassembly of DSDT.aml (file line numbers at the left).
+
+   23:     /*
+   24:      * iASL Warning: There were 3 external control methods found during
+   25:      * disassembly, but only 0 were resolved (3 unresolved). Additional
+   26:      * ACPI tables may be required to properly disassemble the code. This
+   27:      * resulting disassembler output file may not compile because the
+   28:      * disassembler did not know how many arguments to assign to the
+   29:      * unresolved methods. Note: SSDTs can be dynamically loaded at
+   30:      * runtime and may or may not be available via the host OS.
+   31:      *
+   32:      * In addition, the -fe option can be used to specify a file containing
+   33:      * control method external declarations with the associated method
+   34:      * argument counts. Each line of the file must be of the form:
+   35:      *     External (<method pathname>, MethodObj, <argument count>)
+   36:      * Invocation:
+   37:      *     iasl -fe refs.txt -d dsdt.aml
+   38:      *
+   39:      * The following methods were unresolved and many not compile properly
+   40:      * because the disassembler had to guess at the number of arguments
+   41:      * required for each:
+   42:      */
+   43:     External (AFN7, MethodObj)    // Warning: Unknown method, guessing 1 arguments
+   44:     External (APTS, MethodObj)    // Warning: Unknown method, guessing 1 arguments
+   45:     External (AWAK, MethodObj)    // Warning: Unknown method, guessing 1 arguments
+  ...
+ 2079:             Method (NPTS, 1, NotSerialized)
+ 2080:             {
+ 2081:                 APTS (Arg0)
+ 2082:             }
+ 2083: 
+ 2084:             Method (NWAK, 1, NotSerialized)
+ 2085:             {
+ 2086:                 AWAK (Arg0)
+ 2087:             }
+  ...
+ 2915: 
+ 2916:                         Method (_BCM, 1, NotSerialized)  // _BCM: Brightness Control Method
+ 2917:                         {
+ 2918:                             Divide ((Arg0 * 0xFF), 0x64, Local1, Local0)
+ 2919:                             AFN7 (Local0)
+ 2920:                         }
+  ...
+ 3045: 
+ 3046:                         Method (_BCM, 1, NotSerialized)  // _BCM: Brightness Control Method
+ 3047:                         {
+ 3048:                             Divide ((Arg0 * 0xFF), 0x64, Local1, Local0)
+ 3049:                             AFN7 (Local0)
+ 3050:                         }
+  ...
+ 5737:                         {
+ 5738:                             If ((AF7E == 0x80000001))
+ 5739:                             {
+ 5740:                                 Divide ((Arg0 * 0xFF), 0x64, Local1, Local0)
+ 5741:                                 AFN7 (Local0)
+ 5742:                             }
+  ...
+ 5909: 
+ 5910:     Scope (_PR)
+ 5911:     {
+ 5912:         OperationRegion (SSDT, SystemMemory, 0xFFFF0000, 0xFFFF)
+ 5913:         Name (DCOR, 0x02)
+ 5914:         Name (TBLD, 0x04)
+ 5915:         Name (NPSS, 0x05)
+ 5916:         Name (HNDL, 0x80000000)
+ 5917:         Name (APSS, Package (0x0A)
+ 5918:         {
+ 5919:             Package (0x06)
+ 5920:             {
+ 5921:                 0xFFFF, 
+ 5922:                 0xFFFF, 
+ 5923:                 0xFFFF, 
+ 5924:                 0xFFFF, 
+ 5925:                 0xFFFF, 
+ 5926:                 0xFFFF
+  ...
+ 6019:         Processor (P000, 0x01, 0x00000810, 0x06)
+ 6020:         {
+ 6021:             Name (TYPE, 0x80000000)
+ 6022:             Method (_PDC, 1, NotSerialized)  // _PDC: Processor Driver Capabilities
+ 6023:             {
+ 6024:                 CreateDWordField (Arg0, 0x08, DAT0)
+ 6025:                 TYPE = DAT0 /* \_PR_.P000._PDC.DAT0 */
+ 6026:                 If (((TBLD == Zero) && (NPSS != Zero)))
+ 6027:                 {
+ 6028:                     If ((((TYPE & 0x1B) == 0x1B) || (DCOR == Zero)))
+ 6029:                     {
+ 6030:                         TBLD = One
+ 6031:                         Load (SSDT, HNDL) /* \_PR_.HNDL */
+ 6032:                     }
+ 6033:                 }
+ 6034:             }
+ 6035:         }
+ 6036: 
+ 6037:         Processor (P001, 0x02, 0x00000810, 0x06)
+  ...
+ 6055:         Processor (P002, 0x03, 0x00000810, 0x06)
+ 6073:         Processor (P003, 0x04, 0x00000810, 0x06)
+ 6091:         Processor (P004, 0x05, 0x00000810, 0x06)
+ 6109:         Processor (P005, 0x06, 0x00000810, 0x06)
+ 6127:         Processor (P006, 0x07, 0x00000810, 0x06)
+ 6145:         Processor (P007, 0x08, 0x00000810, 0x06)
+ 6163:         Processor (P008, 0x09, 0x00000810, 0x06)
+ 6181:         Processor (P009, 0x0A, 0x00000810, 0x06)
+ 6199:         Processor (P00A, 0x0B, 0x00000810, 0x06)
+ 6217:         Processor (P00B, 0x0C, 0x00000810, 0x06)
+ 6235:         Processor (P00C, 0x0D, 0x00000810, 0x06)
+ 6253:         Processor (P00D, 0x0E, 0x00000810, 0x06)
+ 6271:         Processor (P00E, 0x0F, 0x00000810, 0x06)
+ 6289:         Processor (P00F, 0x10, 0x00000810, 0x06)

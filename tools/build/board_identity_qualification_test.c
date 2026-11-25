@@ -1,7 +1,7 @@
 /* Synthetic SMBIOS only; no firmware or OS queries. */
 #include <stdio.h>
 #include <string.h>
-#include "../../driver/kmd/board_identity.h"
+#include "../../driver/common/board/board_identity.h"
 static unsigned checks, failures;
 #define CHECK(x) do { ++checks; if (!(x)) { ++failures; printf("FAIL line %u\n", (unsigned)__LINE__); } } while (0)
 static unsigned char table[512];

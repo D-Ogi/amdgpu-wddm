@@ -103,7 +103,7 @@ struct bc250_oc_decision {
 void bc250_oc_decide(const struct bc250_oc_request *r, struct bc250_oc_decision *d);
 
 /* The board a tier belongs to: FNV-1a over the SMBIOS system UUID and the qualified firmware release
- * (driver/kmd/board_identity.c). Never 0, so 0 can mean "no board". A firmware update is a change of the board for
+ * (driver/common/board/board_identity.c). Never 0, so 0 can mean "no board". A firmware update is a change of the board for
  * this purpose: the person answers the questions again. Two boards that carry the same vendor UUID are not told
  * apart; the tier is a promise about one machine's cooling, not a hardware lock. */
 unsigned int bc250_oc_board_fingerprint(const unsigned char machine_id[16], unsigned int bios_id);
