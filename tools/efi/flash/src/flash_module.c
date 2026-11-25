@@ -7,6 +7,12 @@
  * the image and a result file beside the stage image. It writes nothing to the flash. With flash.reset=1 the module
  * restarts the board after the job.
  *
+ * Job test (flash=test flash.sector=<image offset>): the write test of one free sector of the outer volume, for the
+ * measurement of the write functions of the protocol (flash_writetest.h). The sector is erased at the end. The
+ * module reads the image before the test and after it: the result file says which bytes changed, and the image
+ * after the test goes into the image file. The module writes no other sector, and no sector at all when the one
+ * that the option names is not free.
+ *
  * The module is the first in the order of the modules. A job must not depend on the work of another module, and the
  * read comes before the reset of the core unlock.
  *
@@ -16,10 +22,12 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <string.h>
+#include <cpuid.h>
 #include "efi.h"
 #include "efl_text.h"
 #include "stage.h"
 #include "flash.h"
+#include "flash_writetest.h"
 
 #define FLASH_NAME		"flash"
 #define FLASH_CHUNK_BYTES	(64u * 1024u)
@@ -27,18 +35,24 @@
 #define FLASH_DUMP_NAME		"bc250-flash.dump"
 #define FLASH_RESULT_NAME	"bc250-flash.result"
 #define FLASH_LINE_BYTES	160u
-#define FLASH_RESULT_BYTES	1024u
+#define FLASH_RESULT_BYTES	2048u
 #define FLASH_RESET_PAUSE_US	(2u * 1000u * 1000u)
 #define FLASH_TEXT_BYTES	(FLASH_DIGEST_BYTES * 2u + 1u)
+#define FLASH_MS_UNKNOWN	(~0ull)
 
 /* The flash protocol of the firmware: the FlashDriver of the stock image. Its functions take the address of the
- * flash in the ROM window of the processor (docs/design/p6-flash.md). The write functions have no type here: no job
- * of this module calls them. */
+ * flash in the ROM window of the processor (docs/design/p6-flash.md). */
 static const EFI_GUID flash_protocol_guid = { 0x755B6596, 0x6896, 0x4BA3, { 0xB3, 0xDD, 0x1C, 0x62, 0x9F, 0xD1, 0xEA, 0x88 } };
 typedef EFI_STATUS (EFIAPI *FLASH_READ)(UINTN address, UINTN bytes, VOID *data);
+typedef EFI_STATUS (EFIAPI *FLASH_ERASE)(UINTN address, UINTN bytes);
+typedef EFI_STATUS (EFIAPI *FLASH_WRITE)(UINTN address, UINTN bytes, VOID *data);
+typedef EFI_STATUS (EFIAPI *FLASH_SESSION)(VOID);
 struct firmware_flash {
 	FLASH_READ Read;
-	VOID *Erase, *Write, *EraseWrite, *Open, *Close;
+	FLASH_ERASE Erase;
+	FLASH_WRITE Write;		/* programs without an erase */
+	FLASH_WRITE EraseWrite;
+	FLASH_SESSION Open, Close;
 };
 
 /* The text of the result file of the last job. */
@@ -121,6 +135,44 @@ static int remove_sibling(struct stage *stage, const char *name)
 	return !EFI_ERROR(status);
 }
 
+/* ---- reading the image ---------------------------------------------------------------------------- */
+
+/* Memory for the image of the board, or NULL. The caller frees it with the count of FLASH_IMAGE_BYTES /
+ * FLASH_PAGE_BYTES pages. */
+static unsigned char *alloc_image(struct stage *stage)
+{
+	EFI_PHYSICAL_ADDRESS memory = 0;
+	EFI_STATUS status = ((EFI_ALLOCATE_PAGES)stage->bs->AllocatePages)(AllocateAnyPages, EfiLoaderData,
+									    FLASH_IMAGE_BYTES / FLASH_PAGE_BYTES, &memory);
+	if (EFI_ERROR(status)) {
+		stage_sayf(stage, FLASH_NAME, "no memory for the image, status 0x%llx", (unsigned long long)status);
+		return NULL;
+	}
+	return (unsigned char *)(UINTN)memory;
+}
+
+static void free_image(struct stage *stage, unsigned char *image)
+{
+	((EFI_FREE_PAGES)stage->bs->FreePages)((EFI_PHYSICAL_ADDRESS)(UINTN)image, FLASH_IMAGE_BYTES / FLASH_PAGE_BYTES);
+}
+
+/* Reads the whole image in pieces of FLASH_CHUNK_BYTES. The count of the bytes that were read: less than the image
+ * when a read failed, which the console line then names. */
+static unsigned long read_image(struct stage *stage, struct firmware_flash *flash, unsigned char *image)
+{
+	unsigned long done = 0;
+	while (done < FLASH_IMAGE_BYTES) {
+		EFI_STATUS status = flash->Read((UINTN)(FLASH_ROM_BASE + done), FLASH_CHUNK_BYTES, image + done);
+		if (EFI_ERROR(status)) {
+			stage_sayf(stage, FLASH_NAME, "the read failed at 0x%llx, status 0x%llx", (unsigned long long)done,
+				   (unsigned long long)status);
+			break;
+		}
+		done += FLASH_CHUNK_BYTES;
+	}
+	return done;
+}
+
 /* One volume on the console and in the result file. */
 static void say_volume(struct stage *stage, const char *name, const struct flash_volume *volume)
 {
@@ -141,6 +193,21 @@ static void say_volume(struct stage *stage, const char *name, const struct flash
 		    (unsigned long long)volume->stream.compressed, volume->stream.plain);
 }
 
+/* The three digests of an image, on the console and in the result file. suffix is empty or names a second image. */
+static void say_identity(struct stage *stage, const struct flash_image *info, const char *suffix)
+{
+	char sha[FLASH_TEXT_BYTES], base[FLASH_TEXT_BYTES], store[FLASH_TEXT_BYTES];
+	flash_digest_text(info->sha256, sha);
+	flash_digest_text(info->base, base);
+	flash_digest_text(info->store, store);
+	stage_sayf(stage, FLASH_NAME, "sha256%s %s", suffix, sha);
+	stage_sayf(stage, FLASH_NAME, "base%s %s", suffix, base);
+	stage_sayf(stage, FLASH_NAME, "store%s %s", suffix, store);
+	result_line("sha256%s %s", suffix, sha);
+	result_line("base%s %s", suffix, base);
+	result_line("store%s %s", suffix, store);
+}
+
 /* The flash protocol of the firmware, or NULL when the firmware does not have it. */
 static struct firmware_flash *find_flash(struct stage *stage)
 {
@@ -151,53 +218,38 @@ static struct firmware_flash *find_flash(struct stage *stage)
 	return flash;
 }
 
+/* 1 when the protocol has each function that a write needs. */
+static int can_write(const struct firmware_flash *flash)
+{
+	return flash->Erase != NULL && flash->Write != NULL && flash->EraseWrite != NULL && flash->Open != NULL &&
+	       flash->Close != NULL;
+}
+
 /* Job read: the whole image through the flash protocol, then the two files. */
 static void job_read(struct stage *stage, struct firmware_flash *flash)
 {
-	EFI_PHYSICAL_ADDRESS memory = 0;
 	struct flash_image info;
 	unsigned char *image;
-	char sha[FLASH_TEXT_BYTES], base[FLASH_TEXT_BYTES], store[FLASH_TEXT_BYTES];
-	EFI_STATUS status;
-	unsigned long done = 0;		/* the bytes that are read */
+	unsigned long done;
 	int kept;
 
 	/* An image of an earlier job must not stay beside a result that says that this job did not read the image. */
 	if (!remove_sibling(stage, FLASH_DUMP_NAME))
 		stage_say(stage, FLASH_NAME, "the image file of an earlier job did not remove");
-	status = ((EFI_ALLOCATE_PAGES)stage->bs->AllocatePages)(AllocateAnyPages, EfiLoaderData, FLASH_IMAGE_BYTES / FLASH_PAGE_BYTES,
-								 &memory);
-	if (EFI_ERROR(status)) {
-		stage_sayf(stage, FLASH_NAME, "no memory for the image, status 0x%llx", (unsigned long long)status);
+	image = alloc_image(stage);
+	if (image == NULL) {
 		result_line("error no memory");
 		result_line("status failed");
 		result_write(stage);
 		return;
 	}
-	image = (unsigned char *)(UINTN)memory;
-	while (done < FLASH_IMAGE_BYTES) {
-		UINTN count = FLASH_CHUNK_BYTES;
-		status = flash->Read((UINTN)(FLASH_ROM_BASE + done), count, image + done);
-		if (EFI_ERROR(status)) {
-			stage_sayf(stage, FLASH_NAME, "the read failed at 0x%llx, status 0x%llx", (unsigned long long)done, (unsigned long long)status);
-			break;
-		}
-		done += FLASH_CHUNK_BYTES;
-	}
+	done = read_image(stage, flash, image);
 	flash_image_describe(image, done, &info);
-	flash_digest_text(info.sha256, sha);
-	flash_digest_text(info.base, base);
-	flash_digest_text(info.store, store);
 	stage_sayf(stage, FLASH_NAME, "read %llu of %llu bytes", (unsigned long long)done, (unsigned long long)FLASH_IMAGE_BYTES);
-	stage_sayf(stage, FLASH_NAME, "sha256 %s", sha);
-	stage_sayf(stage, FLASH_NAME, "base %s", base);
-	stage_sayf(stage, FLASH_NAME, "store %s", store);
+	say_identity(stage, &info, "");
 	say_volume(stage, "store", &info.store_volume);
 	say_volume(stage, "outer", &info.outer_volume);
 	say_volume(stage, "pei", &info.pei_volume);
-	result_line("sha256 %s", sha);
-	result_line("base %s", base);
-	result_line("store %s", store);
 	result_line("image-bytes %llu", (unsigned long long)done);
 	if (done == FLASH_IMAGE_BYTES) {
 		kept = write_sibling(stage, FLASH_DUMP_NAME, image, FLASH_IMAGE_BYTES);
@@ -211,7 +263,226 @@ static void job_read(struct stage *stage, struct firmware_flash *flash)
 		result_line("status failed");
 	}
 	result_write(stage);
-	((EFI_FREE_PAGES)stage->bs->FreePages)(memory, FLASH_IMAGE_BYTES / FLASH_PAGE_BYTES);
+	free_image(stage, image);
+}
+
+/* ---- the write test ------------------------------------------------------------------------------- */
+
+/* The time of each call of the write test, in milliseconds. The time stamp counter of the processor is the clock:
+ * the module has no other one, and the order of the calls is the order of the steps. */
+static unsigned long long test_ms[FWT_STEPS];
+static unsigned test_calls;
+static unsigned long long ticks_per_ms;
+
+static unsigned long long rdtsc(void)
+{
+	unsigned lo, hi;
+	__asm__ volatile("rdtsc" : "=a"(lo), "=d"(hi));
+	return ((unsigned long long)hi << 32) | lo;
+}
+
+/* The time stamp counter counts at a constant rate (CPUID 80000007H EDX bit 8): its ticks in a stall of 10 ms give
+ * the ticks of a millisecond. 0 when the processor has no such counter: the times are then not known. */
+static int calibrate(struct stage *stage)
+{
+	unsigned a, b, c, d;
+	unsigned long long start;
+	if (!__get_cpuid(0x80000007u, &a, &b, &c, &d) || !(d & (1u << 8))) return 0;
+	start = rdtsc();
+	stage->bs->Stall(10000);
+	ticks_per_ms = (rdtsc() - start) / 10u;
+	return ticks_per_ms != 0;
+}
+
+/* The start of a timed call. */
+static unsigned long long tick(void)
+{
+	return ticks_per_ms ? rdtsc() : 0;
+}
+
+/* The end of a timed call: keeps its time and gives its status back. */
+static unsigned long long tock(unsigned long long start, EFI_STATUS status)
+{
+	test_ms[test_calls < FWT_STEPS ? test_calls : FWT_STEPS - 1u] = ticks_per_ms ? (rdtsc() - start) / ticks_per_ms :
+									      FLASH_MS_UNKNOWN;
+	test_calls++;
+	return (unsigned long long)status;
+}
+
+/* The functions of the protocol behind the table of the write test. The arguments are evaluated one after the other,
+ * so that the clock starts before the call. */
+static unsigned long long op_open(void *context)
+{
+	unsigned long long start = tick();
+	return tock(start, ((struct firmware_flash *)context)->Open());
+}
+
+static unsigned long long op_close(void *context)
+{
+	unsigned long long start = tick();
+	return tock(start, ((struct firmware_flash *)context)->Close());
+}
+
+static unsigned long long op_read(void *context, unsigned long sector, unsigned char *block)
+{
+	unsigned long long start = tick();
+	return tock(start, ((struct firmware_flash *)context)->Read((UINTN)(FLASH_ROM_BASE + sector), FLASH_SECTOR_BYTES, block));
+}
+
+static unsigned long long op_erase(void *context, unsigned long sector)
+{
+	unsigned long long start = tick();
+	return tock(start, ((struct firmware_flash *)context)->Erase((UINTN)(FLASH_ROM_BASE + sector), FLASH_SECTOR_BYTES));
+}
+
+static unsigned long long op_write(void *context, unsigned long sector, const unsigned char *block)
+{
+	unsigned long long start = tick();
+	return tock(start, ((struct firmware_flash *)context)->Write((UINTN)(FLASH_ROM_BASE + sector), FLASH_SECTOR_BYTES,
+								      (VOID *)block));
+}
+
+static unsigned long long op_erase_write(void *context, unsigned long sector, const unsigned char *block)
+{
+	unsigned long long start = tick();
+	return tock(start, ((struct firmware_flash *)context)->EraseWrite((UINTN)(FLASH_ROM_BASE + sector), FLASH_SECTOR_BYTES,
+									   (VOID *)block));
+}
+
+/* A time in milliseconds as text. "?" when the clock is not there. out takes 24 characters. */
+static const char *ms_text(unsigned long long ms, char *out)
+{
+	if (ms == FLASH_MS_UNKNOWN) return "?";
+	(void)efl_format(out, 24, "%llu", ms);
+	return out;
+}
+
+/* The steps of the write test on the console and in the result file. */
+static void say_test(struct stage *stage, const struct flash_write_test_report *report)
+{
+	char text[24];
+	const char *ms;
+	unsigned i, calls = 0;
+	for (i = 0; i < FWT_STEPS; i++) {
+		const char *name = flash_write_test_step_text((enum flash_write_test_step)i);
+		if (!report->ran[i]) continue;
+		ms = ms_text(test_ms[calls++], text);
+		stage_sayf(stage, FLASH_NAME, "test %u %s: status 0x%llx, %s ms, %s", i + 1u, name, report->status[i], ms,
+			   report->as_expected[i] ? "as expected" : "NOT as expected");
+		result_line("test %u %s status 0x%llx ms %s %s", i + 1u, name, report->status[i], ms,
+			    report->as_expected[i] ? "as-expected" : "not-as-expected");
+	}
+}
+
+/* Job test: the write test on one free sector, with the image before it and after it. */
+static void job_test(struct stage *stage, struct firmware_flash *flash)
+{
+	const char *text = stage_option_text(&stage->options, "flash.sector");
+	struct flash_image info, after;
+	struct flash_write_test_report report;
+	struct flash_write_test_ops ops;
+	unsigned char *before = NULL, *image_after = NULL;
+	unsigned long sector = 0, read, read_after, in_sector = 0, in_store = 0, elsewhere = 0, i;
+	enum flash_sector_place place;
+	int ok;
+
+	if (text == NULL || !flash_parse_hex(text, &sector)) {
+		stage_say(stage, FLASH_NAME, "the job test needs the image offset of one sector in flash.sector=<hex>: nothing done");
+		result_line("error no sector");
+		result_line("status failed");
+		result_write(stage);
+		return;
+	}
+	result_line("sector 0x%llx", (unsigned long long)sector);
+	if (!can_write(flash)) {
+		stage_say(stage, FLASH_NAME, "the flash protocol of the firmware has not all the functions of a write: nothing done");
+		result_line("error no write functions");
+		result_line("status failed");
+		result_write(stage);
+		return;
+	}
+	/* An image of an earlier job must not stay beside a result that says that this job did not read the image. */
+	if (!remove_sibling(stage, FLASH_DUMP_NAME))
+		stage_say(stage, FLASH_NAME, "the image file of an earlier job did not remove");
+	before = alloc_image(stage);
+	if (before == NULL) {
+		result_line("error no memory");
+		result_line("status failed");
+		result_write(stage);
+		return;
+	}
+	read = read_image(stage, flash, before);
+	flash_image_describe(before, read, &info);
+	say_identity(stage, &info, "");
+	say_volume(stage, "store", &info.store_volume);
+	say_volume(stage, "outer", &info.outer_volume);
+	say_volume(stage, "pei", &info.pei_volume);
+	place = read == FLASH_IMAGE_BYTES ? flash_sector_place(&info, sector) : FLASH_SECTOR_NO_VOLUME;
+	stage_sayf(stage, FLASH_NAME, "sector 0x%llx: %s", (unsigned long long)sector, flash_sector_place_text(place));
+	result_line("sector-place %s", flash_sector_place_text(place));
+	if (place != FLASH_SECTOR_FREE) {
+		/* No byte of the flash is written. */
+		stage_say(stage, FLASH_NAME, "the sector is not free: no write");
+		result_line("error the sector is not free");
+		result_line("status failed");
+		result_write(stage);
+		free_image(stage, before);
+		return;
+	}
+	if (calibrate(stage)) stage_sayf(stage, FLASH_NAME, "time stamp counter: %llu ticks per millisecond", ticks_per_ms);
+	else stage_say(stage, FLASH_NAME, "no constant time stamp counter: the times are not known");
+
+	ops.context = flash;
+	ops.open = op_open;
+	ops.close = op_close;
+	ops.read = op_read;
+	ops.erase = op_erase;
+	ops.write = op_write;
+	ops.erase_write = op_erase_write;
+	test_calls = 0;
+	ok = flash_run_write_test(&ops, sector, &report);
+	say_test(stage, &report);
+	if (!ok) result_line("error test step %u not as expected", (unsigned)report.failed + 1u);
+
+	/* The image after the test: what changed, and where. */
+	image_after = alloc_image(stage);
+	if (image_after == NULL) {
+		result_line("error no memory for the image after the test");
+		ok = 0;
+	} else {
+		read_after = read_image(stage, flash, image_after);
+		flash_image_describe(image_after, read_after, &after);
+		say_identity(stage, &after, "-after");
+		if (read_after == FLASH_IMAGE_BYTES) {
+			for (i = 0; i < FLASH_IMAGE_BYTES; i++) {
+				if (before[i] == image_after[i]) continue;
+				if (i >= sector && i < sector + FLASH_SECTOR_BYTES) in_sector++;
+				else if (i < FLASH_STORE_BYTES) in_store++;
+				else elsewhere++;
+			}
+			stage_sayf(stage, FLASH_NAME, "bytes that changed: %llu in the sector, %llu in the variable store, %llu elsewhere",
+				   (unsigned long long)in_sector, (unsigned long long)in_store, (unsigned long long)elsewhere);
+			ok = ok && elsewhere == 0 && memcmp(info.base, after.base, FLASH_DIGEST_BYTES) == 0;
+			result_line("diff-in-sector %llu", (unsigned long long)in_sector);
+			result_line("diff-in-store %llu", (unsigned long long)in_store);
+			result_line("diff-elsewhere %llu", (unsigned long long)elsewhere);
+			if (write_sibling(stage, FLASH_DUMP_NAME, image_after, FLASH_IMAGE_BYTES)) {
+				stage_say(stage, FLASH_NAME, "the image after the test is in the file " FLASH_DUMP_NAME " beside this application");
+				result_line("dump yes");
+			} else {
+				stage_say(stage, FLASH_NAME, "the image file did not write: the image is not kept");
+				result_line("dump no");
+			}
+		} else {
+			result_line("error the read after the test failed");
+			result_line("dump no");
+			ok = 0;
+		}
+		free_image(stage, image_after);
+	}
+	result_line("status %s", ok ? "ok" : "failed");
+	result_write(stage);
+	free_image(stage, before);
 }
 
 /* Restarts the board when the load option flash.reset=1 is set. The option is for a start that must not go on to
@@ -254,15 +525,18 @@ static void flash_run(struct stage *stage)
 		return;
 	}
 	stage_sayf(stage, FLASH_NAME, "job %s, flash protocol at 0x%llx", job, (unsigned long long)(UINTN)flash);
-	if (!strcmp(job, "read")) {
+	if (!strcmp(job, "read"))
 		job_read(stage, flash);
-		restart_if_asked(stage);
-	} else {
+	else if (!strcmp(job, "test"))
+		job_test(stage, flash);
+	else {
 		stage_sayf(stage, FLASH_NAME, "unknown job '%s': nothing done", job);
 		result_line("error unknown job");
 		result_line("status failed");
 		result_write(stage);
+		return;
 	}
+	restart_if_asked(stage);
 }
 
 static void flash_probe(struct stage *stage)

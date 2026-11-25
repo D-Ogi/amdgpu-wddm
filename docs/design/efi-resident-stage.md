@@ -13,9 +13,10 @@ jobs in sequence, and then it starts the Windows Boot Manager.
 2. The ACPI module installs corrected ACPI tables in RAM.
 3. The Secure Boot module verifies the images that the stage starts.
 
-The stage writes no NVRAM variable, no CMOS byte and no flash. Its UEFI header has no typed `SetVariable`. Every
-change that it makes is in RAM and is gone at the next restart. The flash job of the stage reads the flash today and
-writes no byte of it ([the flash page](p6-flash.md)).
+The stage writes no NVRAM variable and no CMOS byte. Its UEFI header has no typed `SetVariable`. Every change that
+it makes is in RAM and is gone at the next restart, with one exception: a flash job. The job `read` reads the flash
+and writes no byte of it. The job `test` writes one sector behind the last file of the outer volume, and sets that
+sector back to `FF` at the end ([the flash page](p6-flash.md)).
 
 ## The sources
 
@@ -50,7 +51,7 @@ The stage has a core, three modules and a shared library. Each directory is one 
 | `core-unlock/` | module `core-unlock` | the two CPU cores, with the warm reset |
 | `acpi-repair/` | module `acpi` | the corrected ACPI tables |
 | `secure-boot/` | module `secure-boot` | the image check |
-| `flash/` | module `flash` | the flash job. Today it reads the firmware image of the board ([the flash page](p6-flash.md)) |
+| `flash/` | module `flash` | the flash job: the read of the firmware image of the board, and the write test of one free sector ([the flash page](p6-flash.md)) |
 | `lib/` | shared library | the UEFI header, the small C library, text and device paths, SMBIOS, SHA-256 |
 | `lib/acpi/` | shared ACPI table library | the root table walk, the AML name scan, the AML writer |
 
@@ -121,6 +122,7 @@ An option is `name=value`. An option that no module understands is counted on th
 | `sb.windows=1`, `sb.windows=off` | 0 | the operating system reads a Secure Boot state from this stage (see "The reported mode: sb.windows"). `1` needs `sb.mode=enforce`, and the stage ignores it in every other mode. `off` is the state "Secure Boot is off" on a firmware that has Secure Boot on |
 | `acpi.apply=0` | 1 | the ACPI module builds and checks its tables, and installs and removes none |
 | `flash=read` | no job | the flash module reads the firmware image of the board and writes it beside the stage image ([the flash page](p6-flash.md)) |
+| `flash=test` | no job | the flash module runs the write test on the free sector that `flash.sector=<hex>` names ([the flash page](p6-flash.md)) |
 | `flash.reset=1` | 0 | with a flash job: the stage restarts the board after the job, and Windows does not start in this boot |
 | `probe=1` | 0 | a module that is off says which protocols the firmware has for it. The core unlock also gives its register BAR lines |
 | `log=0`, `log=1`, `log=line` | `1` | the log file: none, written before the next image starts, or written after each line |

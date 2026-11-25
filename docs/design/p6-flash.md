@@ -15,6 +15,7 @@ measurements of this page it writes it.
 | Part | State |
 |---|---|
 | Job `read`: the image through the firmware, and two files beside the stage image | built. The host tests pass. MEASURED on unit A on 2026-11-25: [M973](../facts/hardware.md#m973) |
+| Job `test`: each function of the protocol on one free sector, for the measurement M2 | built. The host tests pass. Not measured on a unit |
 | Job `apply`: a package writes the image | the design in this page. Not built |
 
 ## The sources
@@ -135,6 +136,47 @@ status line.
 | `error` | the reason of a failure |
 | `status` | `ok` or `failed`. This line is the last |
 
+### Job test
+
+The job is for the measurement M2. It calls each function of the protocol on one sector that the load option
+`flash.sector=<hex>` names. The module reads the image first. The sector must be behind the last file of the outer
+volume, and it must not be the first sector of the volume: for any other sector the job writes nothing.
+
+| Step | Call | The read after it must show |
+|---|---|---|
+| 1 | `Open` | |
+| 2 | `Read` | each byte `FF`: the sector was erased before the test |
+| 3 | `Erase` | each byte `FF` |
+| 4 | `Read` | |
+| 5 | `Write` | the first pattern |
+| 6 | `Read` | |
+| 7 | `EraseWrite` | the second pattern, the complement of the first |
+| 8 | `Read` | |
+| 9 | `Erase` | each byte `FF` |
+| 10 | `Read` | |
+| 11 | `Close` | |
+| 12 | `Read` | each byte `FF`, outside the session |
+
+When a call fails, or a read shows other bytes, the job goes on only with the steps that erase the sector again and
+end the session: from step 5 on, these are the steps 9 to 12. Before step 5, these are the steps 11 and 12. A failed
+`Open` ends the job.
+
+After the test the module reads the image again. The result file has the keys of the job `read` for the image
+before the test, then these keys:
+
+| Key | Value |
+|---|---|
+| `sector` | the image offset of the sector |
+| `sector-place` | `free`, or why the sector is not free |
+| `test <number> <call>` | `status`, the status of the call. `ms`, its time in milliseconds, or `?` when the processor has no constant time stamp counter. Then `as-expected` or `not-as-expected` |
+| `error` | `test step <number> not as expected` |
+| `sha256-after`, `base-after`, `store-after` | the three digests of the image after the test |
+| `diff-in-sector`, `diff-in-store`, `diff-elsewhere` | the bytes that changed between the two reads, in the sector, in the variable store and in the rest of the image |
+
+The job ends with `status ok` when each step was as expected, no byte outside the sector and the variable store
+changed, and the name of the base is the same before and after the test. The image after the test goes into the
+image file.
+
 ### Job apply (the design)
 
 The job does not exist in the code. These are the steps that the measurements must make safe.
@@ -167,6 +209,7 @@ volume. Which volumes the protocol knows on unit A is not read.
 - A unit whose image is not a base that the package names.
 - A package without a sound signature.
 - A byte that the package does not name.
+- In the job `test`: any sector that is not behind the last file of the outer volume.
 
 ### The second way: a USB stick
 
@@ -178,7 +221,7 @@ whose EFI system partition has no room or takes no write.
 | Step | What | State | Writes to the flash |
 |---|---|---|---|
 | M1 | the job `read`. The dump is compared with a read through the programmer | MEASURED 2026-11-25: 0 bytes differ outside the variable store ([M973](../facts/hardware.md#m973)) | none |
-| M2 | one sector of the free space of the outer volume: erase, program, read, erase | not measured | one sector |
+| M2 | the job `test` on one sector of the free space of the outer volume | the job is built. Not measured | one sector |
 | M3 | the P6 image through the job `apply` on a unit with the stock firmware. The result is compared with the image | not measured | the blocks of P6 L1 |
 
 Each step needs a written plan, a backup through the programmer and one operator.

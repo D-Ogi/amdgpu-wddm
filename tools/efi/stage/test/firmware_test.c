@@ -2153,8 +2153,9 @@ static void test_probe_bar(const char *acpi_dir, const char *fixtures)
 
 /* ---- the flash module ----------------------------------------------------------------------------- */
 
-/* The flash protocol of the firmware over an image of 16 MiB. The write functions count their calls and refuse:
- * the read job of the module must not call them. */
+/* The flash protocol of the firmware over an image of 16 MiB. The write functions work as a flash chip does (an erase
+ * sets 0xFF, and a write can only clear bits) and count their calls: the read job of the module must not call them.
+ * One call of them can be made to answer an error. That call changes nothing. */
 static const EFI_GUID guid_flash = { 0x755B6596, 0x6896, 0x4BA3, { 0xB3, 0xDD, 0x1C, 0x62, 0x9F, 0xD1, 0xEA, 0x88 } };
 static struct {
 	EFI_STATUS (EFIAPI *Read)(UINTN address, UINTN bytes, VOID *data);
@@ -2167,6 +2168,17 @@ static struct {
 static unsigned char fw_flash_image[FLASH_IMAGE_BYTES];
 static unsigned fw_flash_reads, fw_flash_writes;
 static unsigned long fw_flash_fail_at = FLASH_IMAGE_BYTES;	/* a read from this offset on fails */
+static unsigned fw_flash_fail_call;				/* this write call, counted from 1, answers an error */
+
+/* The range of a write call: inside the image, and both ends on a boundary of the erase block. */
+static int flash_range(UINTN address, UINTN bytes)
+{
+	UINTN offset;
+	if (address < FLASH_ROM_BASE || bytes == 0 || bytes > FLASH_IMAGE_BYTES) return 0;
+	offset = address - FLASH_ROM_BASE;
+	if (offset > FLASH_IMAGE_BYTES - bytes) return 0;
+	return offset % FLASH_SECTOR_BYTES == 0 && bytes % FLASH_SECTOR_BYTES == 0;
+}
 
 static EFI_STATUS EFIAPI flash_read(UINTN address, UINTN bytes, VOID *data)
 {
@@ -2178,23 +2190,48 @@ static EFI_STATUS EFIAPI flash_read(UINTN address, UINTN bytes, VOID *data)
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS EFIAPI flash_refuse(UINTN address, UINTN bytes)
+static EFI_STATUS EFIAPI flash_erase(UINTN address, UINTN bytes)
 {
-	(void)address; (void)bytes;
+	if (!flash_range(address, bytes)) return EFI_INVALID_PARAMETER;
 	fw_flash_writes++;
-	return EFI_ACCESS_DENIED;
+	if (fw_flash_writes == fw_flash_fail_call) return EFI_DEVICE_ERROR;
+	memset(fw_flash_image + (size_t)(address - FLASH_ROM_BASE), 0xFF, (size_t)bytes);
+	return EFI_SUCCESS;
 }
 
-static EFI_STATUS EFIAPI flash_refuse_data(UINTN address, UINTN bytes, VOID *data)
+/* A program, after an erase when erase is set. */
+static EFI_STATUS flash_program(UINTN address, UINTN bytes, const VOID *data, int erase)
 {
-	(void)data;
-	return flash_refuse(address, bytes);
+	const unsigned char *from = data;
+	UINTN at = address - FLASH_ROM_BASE, i;
+	if (!flash_range(address, bytes)) return EFI_INVALID_PARAMETER;
+	fw_flash_writes++;
+	if (fw_flash_writes == fw_flash_fail_call) return EFI_DEVICE_ERROR;
+	if (erase) memset(fw_flash_image + (size_t)at, 0xFF, (size_t)bytes);
+	for (i = 0; i < bytes; i++) fw_flash_image[at + i] &= from[i];
+	return EFI_SUCCESS;
 }
 
-static EFI_STATUS EFIAPI flash_refuse_none(VOID)
+static EFI_STATUS EFIAPI flash_write(UINTN address, UINTN bytes, VOID *data)
+{
+	return flash_program(address, bytes, data, 0);
+}
+
+static EFI_STATUS EFIAPI flash_erase_write(UINTN address, UINTN bytes, VOID *data)
+{
+	return flash_program(address, bytes, data, 1);
+}
+
+static EFI_STATUS EFIAPI flash_open(VOID)
 {
 	fw_flash_writes++;
-	return EFI_ACCESS_DENIED;
+	return fw_flash_writes == fw_flash_fail_call ? EFI_DEVICE_ERROR : EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI flash_close(VOID)
+{
+	fw_flash_writes++;
+	return fw_flash_writes == fw_flash_fail_call ? EFI_DEVICE_ERROR : EFI_SUCCESS;
 }
 
 /* The firmware has the flash protocol, over an image of bytes of their own. */
@@ -2202,15 +2239,41 @@ static void add_flash(void)
 {
 	size_t i;
 	fw_flash.Read = flash_read;
-	fw_flash.Erase = flash_refuse;
-	fw_flash.Write = flash_refuse_data;
-	fw_flash.EraseWrite = flash_refuse_data;
-	fw_flash.Open = flash_refuse_none;
-	fw_flash.Close = flash_refuse_none;
+	fw_flash.Erase = flash_erase;
+	fw_flash.Write = flash_write;
+	fw_flash.EraseWrite = flash_erase_write;
+	fw_flash.Open = flash_open;
+	fw_flash.Close = flash_close;
 	for (i = 0; i < FLASH_IMAGE_BYTES; i++) fw_flash_image[i] = (unsigned char)(i * 2654435761u >> 24);
 	fw_flash_fail_at = FLASH_IMAGE_BYTES;
+	fw_flash_fail_call = 0;
 	add_protocol(&fw_handle_security, &guid_flash, &fw_flash);
 }
+
+/* An outer firmware volume in the image of the flash model, with the header of the stock image (the erase polarity
+ * is 1): the pad file of the extended header, then one file. The rest of the volume is erased. */
+static void flash_outer_volume(unsigned long file_bytes)
+{
+	unsigned char *v = fw_flash_image + FLASH_OUTER_OFFSET;
+	unsigned long long bytes = 0x320000;
+	unsigned i;
+	memset(v, 0xFF, (size_t)bytes);
+	memset(v, 0, 0x78);
+	for (i = 0; i < 8; i++) v[0x20 + i] = (unsigned char)(bytes >> (8u * i));
+	memcpy(v + 0x28, "_FVH", 4);
+	v[0x2C] = (unsigned char)0x4FEFFu;
+	v[0x2D] = (unsigned char)(0x4FEFFu >> 8);
+	v[0x2E] = (unsigned char)(0x4FEFFu >> 16);
+	v[0x30] = 0x48;
+	v[0x48 + 16] = v[0x78 + 16] = 0x5A;	/* a name that is not erased space */
+	v[0x48 + 18] = 0xF0;
+	v[0x48 + 20] = 0x2C;
+	v[0x48 + 23] = v[0x78 + 23] = (unsigned char)~0x07u;
+	v[0x78 + 18] = 0x0B;
+	for (i = 0; i < 3; i++) v[0x78 + 20 + i] = (unsigned char)(file_bytes >> (8u * i));
+}
+
+#define TEST_SECTOR	0xAE3000u	/* free in the model: the file of the outer volume ends at 0xAE2078 */
 
 static void test_flash(const char *acpi_dir, const char *fixtures)
 {
@@ -2323,6 +2386,111 @@ static void test_flash(const char *acpi_dir, const char *fixtures)
 	starts = fw.starts;
 	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == starts + 1);
 	CHECK(said("flash: probe: flash protocol absent"));
+
+	/* ---- the job test ---- */
+
+	/* Without a sector, or with a value that is not a number: nothing is read and nothing is written. */
+	if (!new_firmware(acpi_dir)) goto out;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_flash();
+	flash_outer_volume(0x2000);
+	fw_flash_reads = fw_flash_writes = 0;
+	starts = fw.starts;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=test", &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(said("the job test needs the image offset of one sector") && fw_flash_reads == 0 && fw_flash_writes == 0);
+	CHECK(file_has(FLASH_RESULT, "error no sector\n") && file_ends_with(FLASH_RESULT, "status failed"));
+	fw_flash_reads = fw_flash_writes = 0;
+	starts = fw.starts;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=test flash.sector=0xZZ00", &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(said("the job test needs the image offset of one sector") && fw_flash_reads == 0 && fw_flash_writes == 0);
+	CHECK(!said("not understood"));
+
+	/* Sectors that are not free: the first of the volume, one inside a file, one that is not on a boundary of the
+	 * erase block, and one in another volume. The image is read, and no byte is written. */
+	{
+		static const struct { const char *sector, *place, *line; } not_free[] = {
+			{ "0xAE0000", "the first sector of the outer volume", "sector-place the first sector of the outer volume\n" },
+			{ "0xAE1000", "inside a file of the outer volume", "sector-place inside a file of the outer volume\n" },
+			{ "0xAE0800", "not a multiple of 4096", "sector-place not a multiple of 4096\n" },
+			{ "0xE00000", "outside the outer volume", "sector-place outside the outer volume\n" },
+			{ "0x1000", "outside the outer volume", "sector-place outside the outer volume\n" }
+		};
+		size_t k;
+		for (k = 0; k < sizeof(not_free) / sizeof(not_free[0]); k++) {
+			snprintf(line, sizeof(line), "unlock=0 acpi=0 sb=0 flash=test flash.sector=%s", not_free[k].sector);
+			fw_flash_writes = 0;
+			starts = fw.starts;
+			CHECK(run_stage(line, &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+			CHECK(said("the sector is not free: no write") && said(not_free[k].place) && fw_flash_writes == 0);
+			CHECK(file_has(FLASH_RESULT, not_free[k].line) && file_has(FLASH_RESULT, "error the sector is not free\n"));
+			CHECK(file_ends_with(FLASH_RESULT, "status failed") && find_file(FLASH_DUMP) == NULL);
+		}
+	}
+
+	/* A free sector: each function of the protocol runs, the sector is erased at the end, and the image after the
+	 * test is the image before it. */
+	fw_flash_reads = fw_flash_writes = 0;
+	starts = fw.starts;
+	memcpy(copy, fw_flash_image, FLASH_IMAGE_BYTES);
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=test flash.sector=0xAE3000", &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(said("sector 0xAE3000: free") && said("test 1 open: status 0x0") && said("test 12 read: status 0x0") && !said("NOT as expected"));
+	CHECK(file_ends_with(FLASH_RESULT, "status ok") && file_has(FLASH_RESULT, "test 6 read status 0x0 ms "));
+	/* open, erase, write, erase-write, erase, close; six reads of the sector, and the image twice. */
+	CHECK(fw_flash_writes == 6 && fw_flash_reads == 6u + 2u * FLASH_IMAGE_BYTES / (64u * 1024u));
+	CHECK(!memcmp(copy, fw_flash_image, FLASH_IMAGE_BYTES));
+	file = find_file(FLASH_DUMP);
+	CHECK(file != NULL && file->bytes == FLASH_IMAGE_BYTES && file->data != NULL && !memcmp(file->data, copy, FLASH_IMAGE_BYTES));
+	CHECK(file_has(FLASH_RESULT, "diff-in-sector 0\n") && file_has(FLASH_RESULT, "diff-in-store 0\n") && file_has(FLASH_RESULT, "diff-elsewhere 0\n"));
+	CHECK(file_has(FLASH_RESULT, "dump yes\n") && file_at(FLASH_RESULT, "base-after ") > file_at(FLASH_RESULT, "test 12 read"));
+	/* The name of the base is the same before and after the test. */
+	memset(copy, 0, FLASH_STORE_BYTES);
+	efl_sha256(copy, FLASH_IMAGE_BYTES, digest);
+	flash_digest_text(digest, hex);
+	snprintf(line, sizeof(line), "base %s\n", hex);
+	CHECK(file_has(FLASH_RESULT, line));
+	snprintf(line, sizeof(line), "base-after %s\n", hex);
+	CHECK(file_has(FLASH_RESULT, line));
+	CHECK(fw.page_blocks == 0 && fw.pool_live == 0 && !said("not understood"));
+
+	/* A call that fails: the erase-write. The last erase follows, and the result names the step. */
+	fw_flash_fail_call = 4;		/* open, erase, write, erase-write */
+	fw_flash_reads = fw_flash_writes = 0;
+	starts = fw.starts;
+	memcpy(copy, fw_flash_image, FLASH_IMAGE_BYTES);
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=test flash.sector=0xAE3000", &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(said("test 7 erase-write: status 0x8000000000000007") && said("NOT as expected") && !said("test 8 read:"));
+	CHECK(said("test 9 erase: status 0x0") && said("test 12 read: status 0x0"));
+	CHECK(fw_flash_writes == 6 && !memcmp(copy, fw_flash_image, FLASH_IMAGE_BYTES));
+	CHECK(file_has(FLASH_RESULT, "test 7 erase-write status 0x8000000000000007 ms ") && file_has(FLASH_RESULT, "error test step 7 not as expected\n"));
+	CHECK(file_ends_with(FLASH_RESULT, "status failed") && file_has(FLASH_RESULT, "diff-elsewhere 0\n") && file_has(FLASH_RESULT, "dump yes\n"));
+	fw_flash_fail_call = 0;
+
+	/* A free sector that is not erased: the session ends before the first erase, and the byte stays. */
+	fw_flash_image[TEST_SECTOR + 5] = 0x00;
+	fw_flash_reads = fw_flash_writes = 0;
+	starts = fw.starts;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=test flash.sector=0xAE3000", &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(said("test 2 read: status 0x0") && said("NOT as expected") && fw_flash_writes == 2 && fw_flash_image[TEST_SECTOR + 5] == 0x00);
+	CHECK(!said("test 3 erase:") && file_has(FLASH_RESULT, "error test step 2 not as expected\n"));
+	CHECK(file_ends_with(FLASH_RESULT, "status failed") && file_has(FLASH_RESULT, "diff-in-sector 0\n"));
+
+	/* flash.reset=1: the board restarts after the test, with the result and the log on the volume. */
+	flash_outer_volume(0x2000);
+	fw_flash_reads = fw_flash_writes = 0;
+	starts = fw.starts;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=test flash.sector=0xAE3000 flash.reset=1 log=line", &reset) == EFI_ABORTED && reset == 1);
+	CHECK(fw.starts == starts && fw.resets == 1 && said("flash: restarting the board"));
+	CHECK(file_ends_with(FLASH_RESULT, "status ok") && file_ends_with(LOG_FILE, "bc250-stage: flash: restarting the board"));
+
+	/* A protocol with the read function only: no read, no write, and the result says why. */
+	fw_flash.Erase = NULL;
+	fw_flash.Write = NULL;
+	fw_flash.EraseWrite = NULL;
+	fw_flash_reads = fw_flash_writes = 0;
+	starts = fw.starts;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=test flash.sector=0xAE3000", &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(said("has not all the functions of a write") && fw_flash_reads == 0 && fw_flash_writes == 0);
+	CHECK(file_has(FLASH_RESULT, "error no write functions\n") && file_ends_with(FLASH_RESULT, "status failed"));
 out:
 	free(copy);
 }

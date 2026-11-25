@@ -16,7 +16,7 @@
  * image file of the vendor (fact M965; one unit). So the name of a base is the SHA-256 of the image in which the
  * variable store reads as zeros.
  *
- * flash_image.c is pure code. It builds for the stage and for the host tests.
+ * flash_image.c and flash_test.c are pure code. They build for the stage and for the host tests.
  */
 #ifndef FLASH_H
 #define FLASH_H
@@ -66,5 +66,27 @@ int flash_volume_at(const unsigned char *image, size_t bytes, unsigned long offs
 
 /* The lower-case hex text of a digest. out takes FLASH_DIGEST_BYTES * 2 + 1 characters. */
 void flash_digest_text(const unsigned char digest[FLASH_DIGEST_BYTES], char *out);
+
+/* 1 when every byte is 0xFF: the state of a sector after an erase. */
+int flash_block_is_erased(const unsigned char *block, size_t bytes);
+
+/* ---- where a sector may be written ------------------------------------------------------------------ */
+
+/* Where a sector of FLASH_SECTOR bytes stands in the image. Only a free sector is a place for a write that is not
+ * the update of the image: a byte behind the last file of the outer volume. The first sector of a volume holds the
+ * header of the volume, and the flash protocol has its own bookkeeping for it. */
+enum flash_sector_place {
+	FLASH_SECTOR_FREE = 0,
+	FLASH_SECTOR_UNALIGNED,		/* not a multiple of FLASH_SECTOR_BYTES */
+	FLASH_SECTOR_NO_VOLUME,		/* the outer volume has no sound header */
+	FLASH_SECTOR_VOLUME_START,	/* the first sector of the outer volume */
+	FLASH_SECTOR_IN_USE,		/* inside a file of the outer volume, or behind the end of the volume */
+	FLASH_SECTOR_OUTSIDE		/* in the variable store or in the PSP area */
+};
+enum flash_sector_place flash_sector_place(const struct flash_image *info, unsigned long offset);
+const char *flash_sector_place_text(enum flash_sector_place place);
+
+/* Parses a hexadecimal number with an optional 0x: an image offset in a load option. 1 when the whole text is one. */
+int flash_parse_hex(const char *text, unsigned long *out);
 
 #endif

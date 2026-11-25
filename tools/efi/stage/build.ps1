@@ -66,7 +66,7 @@ $securePure = Sources 'secure-boot\src' @('sb_der.c', 'sb_rsa.c', 'sb_x509.c', '
     'sb_verify.c', 'sb_policy.c', 'sb_crc32.c')
 $tpmPure = @(Sources 'tpm\src' @('tl_log.c', 'tl_tpm2.c', 'tl_measure.c', 'tl_tcg2.c')) +
     @((Join-Path $repo 'driver\tpm\handoff.c'), (Join-Path $repo 'driver\tpm\statefile.c'))
-$flashPure = @(Sources 'flash\src' @('flash_image.c'))
+$flashPure = @(Sources 'flash\src' @('flash_image.c', 'flash_writetest.c'))
 $pure = @($libPure) + @($corePure) + @($unlockPure) + @($repairPure) + @($securePure) + @($tpmPure) + @($flashPure)
 # The UEFI bindings: the core and one file for each module.
 $bindings = @(Sources 'stage\src' @('main.c', 'stage_reg.c')) + @(Sources 'core-unlock\src' @('cu_module.c', 'report_uefi.c')) +

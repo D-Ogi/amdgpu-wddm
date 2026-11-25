@@ -150,3 +150,56 @@ void flash_digest_text(const unsigned char digest[FLASH_DIGEST_BYTES], char *out
 	}
 	out[2u * FLASH_DIGEST_BYTES] = 0;
 }
+
+int flash_block_is_erased(const unsigned char *block, size_t bytes)
+{
+	return one_value(block, bytes, 0xFF);
+}
+
+enum flash_sector_place flash_sector_place(const struct flash_image *info, unsigned long offset)
+{
+	const struct flash_volume *outer = &info->outer_volume;
+	unsigned long long end, used;
+	if (offset % FLASH_SECTOR_BYTES != 0) return FLASH_SECTOR_UNALIGNED;
+	if (!outer->present) return FLASH_SECTOR_NO_VOLUME;
+	end = (unsigned long long)FLASH_OUTER_OFFSET + outer->bytes;
+	/* The store and the PSP area are before the outer volume: no job of this module writes there. */
+	if (offset < FLASH_OUTER_OFFSET || offset + FLASH_SECTOR_BYTES > end) return FLASH_SECTOR_OUTSIDE;
+	if (offset == FLASH_OUTER_OFFSET) return FLASH_SECTOR_VOLUME_START;
+	/* The file ends inside a sector: that sector is in use up to its last byte. */
+	used = (outer->used_end + FLASH_SECTOR_BYTES - 1u) & ~(unsigned long)(FLASH_SECTOR_BYTES - 1u);
+	if (offset < used) return FLASH_SECTOR_IN_USE;
+	return FLASH_SECTOR_FREE;
+}
+
+const char *flash_sector_place_text(enum flash_sector_place place)
+{
+	switch (place) {
+	case FLASH_SECTOR_FREE: return "free";
+	case FLASH_SECTOR_UNALIGNED: return "not a multiple of 4096";
+	case FLASH_SECTOR_NO_VOLUME: return "the outer volume has no sound header";
+	case FLASH_SECTOR_VOLUME_START: return "the first sector of the outer volume";
+	case FLASH_SECTOR_IN_USE: return "inside a file of the outer volume";
+	default: return "outside the outer volume";
+	}
+}
+
+int flash_parse_hex(const char *text, unsigned long *out)
+{
+	unsigned long value = 0;
+	unsigned digits = 0;
+	if (text[0] == '0' && (text[1] == 'x' || text[1] == 'X')) text += 2;
+	for (; *text; text++) {
+		unsigned char c = (unsigned char)*text, digit;
+		if (c >= '0' && c <= '9') digit = (unsigned char)(c - '0');
+		else if (c >= 'a' && c <= 'f') digit = (unsigned char)(c - 'a' + 10);
+		else if (c >= 'A' && c <= 'F') digit = (unsigned char)(c - 'A' + 10);
+		else return 0;
+		/* An image offset has at most eight hexadecimal digits. A longer number is not one. */
+		if (++digits > 8u) return 0;
+		value = value * 16u + digit;
+	}
+	if (digits == 0) return 0;
+	*out = value;
+	return 1;
+}
