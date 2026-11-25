@@ -43,8 +43,18 @@ extern "C" {
 #define BC250_SHARED_BIND_SHADER_RESOURCE  0x8ul   /* D3D11_BIND_SHADER_RESOURCE */
 #define BC250_SHARED_BIND_RENDER_TARGET    0x20ul  /* D3D11_BIND_RENDER_TARGET */
 #define BC250_SHARED_BIND_UNORDERED_ACCESS 0x80ul  /* D3D11_BIND_UNORDERED_ACCESS */
+/* The video bind flags: a decoder's output and an encoder's input. They do not change a linear layout, so the
+ * record carries them and every reader admits them. The D3D11 engine gives them no Vulkan usage
+ * (driver/umd/dxvk/ddi-resource.cpp, the video bind flags), so its linear image and row pitch stay those of the
+ * other bind flags; the D3D12 open maps them to no resource flag (engine-ddi/shared-resource.h,
+ * opened_resource_flags); the kernel driver reads no bind flag. The ENGINE LAYOUT form admits the same two
+ * (bc250_shared_resource.h, BC250_SR_TEXTURE_BIND_MASK). If an engine gives one of them a usage that changes
+ * the layout, the record pair test fails at its row pitch check (driver/contract/test/record-pair-test.cpp). */
+#define BC250_SHARED_BIND_DECODER          0x200ul /* D3D11_BIND_DECODER */
+#define BC250_SHARED_BIND_VIDEO_ENCODER    0x400ul /* D3D11_BIND_VIDEO_ENCODER */
 #define BC250_SHARED_BIND_MASK (BC250_SHARED_BIND_SHADER_RESOURCE | BC250_SHARED_BIND_RENDER_TARGET | \
-                                BC250_SHARED_BIND_UNORDERED_ACCESS)
+                                BC250_SHARED_BIND_UNORDERED_ACCESS | BC250_SHARED_BIND_DECODER | \
+                                BC250_SHARED_BIND_VIDEO_ENCODER)
 #define BC250_SHARED_MISC_GENERATE_MIPS  0x1ul     /* D3D11_RESOURCE_MISC_GENERATE_MIPS */
 #define BC250_SHARED_MISC_RESOURCE_CLAMP 0x80ul    /* D3D11_RESOURCE_MISC_RESOURCE_CLAMP */
 #define BC250_SHARED_MISC_MASK (BC250_SHARED_MISC_GENERATE_MIPS | BC250_SHARED_MISC_RESOURCE_CLAMP)

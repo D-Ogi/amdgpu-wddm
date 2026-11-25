@@ -157,6 +157,11 @@ positively, so the three the record can carry are mapped one to one and nothing 
 `UNORDERED_ACCESS` to `D3D11_BIND_UNORDERED_ACCESS`. A flag outside those three (`SIMULTANEOUS_ACCESS`, for
 instance) is published as no view at all.
 
+A record from the D3D11 shell can also carry `D3D11_BIND_DECODER` (0x200) and `D3D11_BIND_VIDEO_ENCODER` (0x400),
+for the output of a decoder and the input of an encoder. These two flags do not change a linear layout, so every
+reader admits them. The D3D12 open maps them to no resource flag (`opened_resource_flags`), and the kernel driver
+reads no bind flag. `BC250_SHARED_BIND_MASK` in `bc250_shared_surface.h` is the one statement of this rule.
+
 The kernel driver needs no change. `Bc250SurfaceResourcePolicy` already admits v3, and `WddmCreateAdmit`
 already places a shared type-0 surface in the aperture segment.
 

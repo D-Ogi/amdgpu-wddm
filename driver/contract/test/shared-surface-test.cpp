@@ -199,6 +199,25 @@ int main() {
               "decode: GENERATE_MIPS is carried through");
         check(decode_with(48, 0, &out) == BC250_SHARED_SURFACE_OK && out.BindFlags == 0,
               "decode: a surface with no bind flag is admitted");
+        // DECODER (0x200) and VIDEO_ENCODER (0x400): the D3D11 shell writes them for a decoder's output and an
+        // encoder's input, and they do not change a linear layout, so the wire carries them (F1).
+        check(decode_with(48, 0x208, &out) == BC250_SHARED_SURFACE_OK && out.BindFlags == 0x208,
+              "decode: DECODER is carried through");
+        check(decode_with(48, 0x408, &out) == BC250_SHARED_SURFACE_OK && out.BindFlags == 0x408,
+              "decode: VIDEO_ENCODER is carried through");
+        check(decode_with(48, 0x800, &out) == BC250_SHARED_SURFACE_MALFORMED,
+              "decode: a bind flag above VIDEO_ENCODER is outside the mask");
+    }
+    {
+        BC250_SHARED_SURFACE s = lab_surface(), out;
+        BC250_WDDM_ALLOCATION_PRIVATE allocation;
+        BC250_SURFACE_RESOURCE_PRIVATE resource;
+        s.BindFlags = 0x628;  // SHADER_RESOURCE | RENDER_TARGET | DECODER | VIDEO_ENCODER
+        check(Bc250SharedSurfaceEncode(&s, &allocation, &resource) == BC250_SHARED_SURFACE_OK &&
+                  Bc250SharedSurfaceDecode(&resource, sizeof(resource), &allocation, sizeof(allocation), &out) ==
+                      BC250_SHARED_SURFACE_OK &&
+                  out.BindFlags == 0x628,
+              "encode and decode: the video bind flags round-trip");
     }
 
     // Which check decided, by name. One status for seventeen checks puts the reason behind one word: a cross-API
