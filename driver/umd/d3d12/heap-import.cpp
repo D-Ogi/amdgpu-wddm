@@ -51,6 +51,33 @@ void scanout_note(const ScanoutDecision& decision,const bc250_scanout_caps& caps
         desktop,desktop_pid,scanout_mode_list_text(modes),left==1?" budget-spent":"");
     OutputDebugStringA(text);
 }
+// private-tiled (heap-import.h, EnvelopeCreate::Probe): one line for each texture of the shareable envelope, on
+// the debugger channel and the log sink, so that a trial reads which textures stayed tiled and which ones the
+// runtime's refusal made shared surfaces. The switch reads a measurement of the runtime, so the result of each
+// create must be visible without a trace build. The line also carries the two fields of the allocate callback
+// that this driver sends as zero and that no document describes as outputs: the allocation's information flags
+// (DDI 0114 names a bit 0x8 SHARED there) and the reserved hKMResource, as 0 or 1. If the runtime writes one of
+// them for a shared resource only, that is a signal a later change can read. The budget bounds a game that
+// creates textures without end; the last line of the budget says so.
+void envelope_note(bool shared,const D3D12DDIARG_CREATERESOURCE_0088& r,uint64_t bytes,unsigned returned_flags,
+                   bool returned_resource) noexcept {
+    static std::atomic_int budget{64};
+    const int left=budget.fetch_sub(1,std::memory_order_relaxed);
+    if(left<=0)return;
+    char text[320];
+    std::snprintf(text,sizeof(text),
+        "private-tiled: %s (format %u, %llux%u, flags 0x%x, %llu bytes; after the allocate callback: "
+        "allocation flags 0x%x, kernel resource %u)%s",
+        shared?"the runtime refused the ordinary allocation, shared linear surface"
+              :"the runtime accepted the ordinary allocation, the texture stays tiled",
+        unsigned(r.Format),static_cast<unsigned long long>(r.Width),r.Height,unsigned(r.Flags),
+        static_cast<unsigned long long>(bytes),returned_flags,returned_resource?1u:0u,
+        left==1?" budget-spent":"");
+    amdgpu_wddm_log::print("amdgpu_wddm_d3d12: %s\n",text);
+    char line[352];
+    std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 %s\n",text);
+    OutputDebugStringA(line);
+}
 }
 // The creating thread owns allocation, mapping and imported until the record is handed to the engine
 // (retired false); after that only the releasing thread touches them. The flags below next are read and
@@ -141,6 +168,7 @@ RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& doma
     force_cpu_=scanout_force_cpu();
     desktop_route_reader_=&scanout_desktop_route_read;
     mode_list_reader_=&scanout_mode_list_read;
+    envelope_=envelope_create(ddi_experiment_name());
 }
 ScanoutModeList RuntimeHeapImports::mode_list_now(unsigned width,unsigned height) const noexcept {
     return mode_list_reader_(adapter_?adapter_->contract.luid:0,width,height);
@@ -808,11 +836,17 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     // positive permission is the narrow shared_surface_shape envelope. Private
     // textures in that envelope also use LB7A; other allocations retain BC2A and
     // its no-CPU-view intent. No allocation or Vulkan import occurs on this answer.
-    if(shareable && !surface && !ddi_experiment("shared-create-retry-off")){
+    // That is EnvelopeCreate::Linear, the default of the three policies of heap-import.h.
+    const bool envelope=shareable && !surface;
+    if(envelope && envelope_==EnvelopeCreate::Linear){
         report_.stage=ImportStage::Surface;
         report_.refusal="shared resource needs a surface record";
         return engine_ddi::kShareRequired;
     }
+    // private-tiled (EnvelopeCreate::Probe): the ordinary allocation is asked for first, in the form that the
+    // runtime refuses for a resource created shared, and only that refusal gives the answer above. The Vulkan
+    // side of the request does not change: the heap is GPU-only and the import is device-local.
+    const bool share_probe=envelope && envelope_==EnvelopeCreate::Probe && texture;
     AllocationAccess access{};VkMemoryPropertyFlags want{};
     switch(heap.CPUPageProperty){
     case D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE:access=AllocationAccess::GpuOnly;want=VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;break;
@@ -878,7 +912,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
             engine_record={};
     }
     hr=engine_record.Magic?allocation.prepare_engine_layout_buffer(engine_record,bytes,alignment,request->rt_owner.handle)
-                          :allocation.prepare(bytes,alignment,access,request->rt_owner.handle);
+                          :allocation.prepare(bytes,alignment,access,request->rt_owner.handle,share_probe);
     if(FAILED(hr))return hr;
     }
     report_.stage=ImportStage::MemoryType;report_.bytes=allocation.held;report_.alignment=alignment;
@@ -907,6 +941,11 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     {Exclusive held(lock_);record->next=records_;records_=record;}
     report_.stage=ImportStage::AllocateCallback;
     hr=record->allocation.open(allocation.args);
+    // The probe's answer (BD-075, lab-20261005T172552Z, ddi.log line 50860): the runtime answers E_INVALIDARG to
+    // the allocate callback of a shared resource whose ordinary allocation has a CPU view. It is read only here,
+    // for the first request of a create inside the shareable envelope, which has not yet asked the engine for
+    // anything. Every other status and every other allocation keeps the runtime's answer unchanged.
+    const bool share_required=share_probe && hr==E_INVALIDARG;
     {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->handle=record->allocation.handle();}
     // BD-101: the mapping carries the request's alignment, so a heap that asks for more than the address the
     // runtime picks by itself (the 4 MiB MSAA placement alignment) is mapped inside a reservation at an
@@ -957,10 +996,24 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
             // Unconditional: no gate and no policy may leave it resident here.
             hr=release_import_residency(*record);
             if(hr==S_OK){
-                Exclusive held(lock_);
-                record->imported={sizeof(engine_ddi::ImportedMemory),type,imported,host.size,host.allocation,0,address,record};
-                record->retired=false;*out=record->imported;
-                report_.stage=ImportStage::Done;return S_OK;
+                // Read before the record is published: after that the engine's release may run on any thread.
+                const unsigned returned_flags=record->allocation.returned_flags();
+                const bool returned_resource=record->allocation.returned_resource()!=0;
+                {
+                    Exclusive held(lock_);
+                    record->imported={sizeof(engine_ddi::ImportedMemory),type,imported,host.size,host.allocation,0,address,record};
+                    record->retired=false;*out=record->imported;
+                }
+                report_.stage=ImportStage::Done;
+                // private-tiled: a texture of the envelope that stayed tiled, or the linear surface that the
+                // refused probe of the same create asked for (a request with a runtime resource: never the
+                // driver's own Present copy surface).
+                if(share_probe){
+                    envelope_tiled_.fetch_add(1,std::memory_order_relaxed);
+                    envelope_note(false,*request->resource,host.size,returned_flags,returned_resource);
+                } else if(envelope_==EnvelopeCreate::Probe && shared_surface && !driver_surface)
+                    envelope_note(true,*request->resource,host.size,returned_flags,returned_resource);
+                return S_OK;
             }
             // The residency increment did not go back. Publish no heap and keep
             // the original callback failure; cleanup owns the allocation until
@@ -972,6 +1025,12 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     // Failed construction transfers nothing to engine-ddi. Pending mapping and
     // cleanup failures remain owned for an explicit later close, never forgotten.
     if(release(*record)==S_OK)erase(record);
+    if(share_required){
+        // Nothing of the probe is left: the callback made no allocation, and the record is released above.
+        envelope_shared_.fetch_add(1,std::memory_order_relaxed);
+        report_.refusal="shared resource needs a surface record";
+        return engine_ddi::kShareRequired;
+    }
     return hr;
 }
 // BD-075, the open half. No allocate callback runs here: the allocation exists, the runtime opened it for this
