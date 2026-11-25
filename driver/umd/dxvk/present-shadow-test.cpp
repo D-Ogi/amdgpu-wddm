@@ -68,8 +68,37 @@ int main() {
     // An odd size: pitch rounded up to 256 bytes, rows to 4, size to a page.
     check(present_shadow_request(33,7,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,request,desc)==S_OK);
     check(request.surface.Pitch==256 && request.surface.Size==4096 && request.surface.Format==D3DDDIFMT_A8R8G8B8);
-    for (auto bad:{DXGI_FORMAT_R16G16B16A16_FLOAT,DXGI_FORMAT_A8_UNORM,DXGI_FORMAT_R32G32B32A32_FLOAT})
+    for (auto bad:{DXGI_FORMAT_A8_UNORM,DXGI_FORMAT_R32G32B32A32_FLOAT,DXGI_FORMAT_UNKNOWN})
         check(present_shadow_request(64,64,bad,request,desc)==E_INVALIDARG);
+    // BD-407: the resolve shadow of a multisampled FP16 buffer, 8 bytes a pixel, and of an RGB10A2 buffer.
+    check(present_shadow_request(1280,720,DXGI_FORMAT_R16G16B16A16_FLOAT,request,desc)==S_OK);
+    check(request.surface.Format==D3DDDIFMT_A16B16G16R16F && request.surface.Pitch==10240 &&
+          request.surface.Size==7372800 && desc.Format==DXGI_FORMAT_R16G16B16A16_FLOAT && desc.SampleDesc.Count==1);
+    check(present_shadow_request(1920,1200,DXGI_FORMAT_R10G10B10A2_UNORM,request,desc)==S_OK);
+    check(request.surface.Format==D3DDDIFMT_A2B10G10R10 && request.surface.Pitch==7680);
+
+    // BD-407 (HLK DXGI FSPresentMS): a multisampled blt-model buffer has no allocation, so each Present resolves.
+    // Without a destination: the 8-bit red-first rows go to their B8G8R8A8 row, the other rows keep their format.
+    check(present_resolve_format(blt,false,unnamed,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_B8G8R8A8_UNORM);
+    check(present_resolve_format(blt,false,unnamed,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)==DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
+    for (DXGI_FORMAT f:{DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,DXGI_FORMAT_R10G10B10A2_UNORM,
+                        DXGI_FORMAT_R16G16B16A16_FLOAT})
+        check(present_resolve_format(blt,false,unnamed,f)==f);
+    // A named destination of a known format gives its format (a full-screen Blt present to the primary).
+    check(present_resolve_format(blt,true,DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_R16G16B16A16_FLOAT)==DXGI_FORMAT_B8G8R8A8_UNORM);
+    check(present_resolve_format(blt,true,DXGI_FORMAT_R10G10B10A2_UNORM,DXGI_FORMAT_R10G10B10A2_UNORM)==DXGI_FORMAT_R10G10B10A2_UNORM);
+    check(present_resolve_format(blt,true,unnamed,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_B8G8R8A8_UNORM);
+    // Refused: a flip, no Blt flag, a format without a composed row, A8.
+    for (auto f:{flip,both,none})
+        check(present_resolve_format(f,false,unnamed,DXGI_FORMAT_B8G8R8A8_UNORM)==DXGI_FORMAT_UNKNOWN);
+    for (DXGI_FORMAT f:{DXGI_FORMAT_A8_UNORM,DXGI_FORMAT_R32G32B32A32_FLOAT,DXGI_FORMAT_UNKNOWN}) {
+        check(present_resolve_format(blt,false,unnamed,f)==DXGI_FORMAT_UNKNOWN);
+        check(present_resolve_format(blt,true,f,DXGI_FORMAT_B8G8R8A8_UNORM)==DXGI_FORMAT_B8G8R8A8_UNORM);
+    }
+    // Every resolve format has a shadow request.
+    for (DXGI_FORMAT f:{DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,DXGI_FORMAT_R10G10B10A2_UNORM,
+                        DXGI_FORMAT_R16G16B16A16_FLOAT,DXGI_FORMAT_B8G8R8A8_UNORM})
+        check(present_shadow_request(1920,1200,present_resolve_format(blt,false,unnamed,f),request,desc)==S_OK);
     check(present_shadow_request(0,64,DXGI_FORMAT_B8G8R8A8_UNORM,request,desc)==E_INVALIDARG);
     check(present_shadow_request(16385,64,DXGI_FORMAT_B8G8R8A8_UNORM,request,desc)==E_INVALIDARG);
 
@@ -99,6 +128,6 @@ int main() {
         check(allocate_runtime_surface(device,bad,allocation)==E_INVALIDARG && allocates==1);
     }
     std::cout << "PASS present shadow: blt-model RGBA buffers only, a named destination of the shadow's format, "
-        "BGRA LB7A request admitted\n";
+        "BGRA LB7A request admitted, multisampled blt-model buffers resolve (BD-407)\n";
     return 0;
 }

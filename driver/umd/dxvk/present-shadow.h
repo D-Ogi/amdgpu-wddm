@@ -34,6 +34,25 @@ inline DXGI_FORMAT present_shadow_format(DXGI_DDI_PRESENT_FLAGS flags,bool named
     return target && row && target->d3dddi==row->d3dddi ? shadow : DXGI_FORMAT_UNKNOWN;
 }
 
+// BD-407: the format that a Present of a multisampled blt-model buffer resolves to. Such a buffer has no kernel
+// allocation (DdiResource::resolve_on_present), so each of its Presents goes through a shadow. A named destination
+// with a known format gives its format, so that the kernel copy sees one D3DDDI format on both sides. Without one,
+// the shadow is the one that present_shadow_format gives for a single-sample buffer of the same format, or the
+// buffer's own format. DXGI_FORMAT_UNKNOWN refuses the Present: a flip (the shell sets NO_SCANOUT on these buffers,
+// so DXGI does not flip them), a Present without Blt, or a format without a composed row other than A8.
+inline DXGI_FORMAT present_resolve_format(DXGI_DDI_PRESENT_FLAGS flags,bool named,DXGI_FORMAT destination,
+    DXGI_FORMAT buffer) {
+    if (!flags.Blt || flags.Flip) return DXGI_FORMAT_UNKNOWN;
+    auto presentable=[](DXGI_FORMAT f) {
+        const auto *row=runtime_surface_format(f);
+        return row && row->dxgi!=AMDGPU_WDDM_DXGI_A8_UNORM;
+    };
+    if (named && presentable(destination)) return destination;
+    if (!presentable(buffer)) return DXGI_FORMAT_UNKNOWN;
+    const DXGI_FORMAT converted=present_shadow_format(flags,false,DXGI_FORMAT_UNKNOWN,true,buffer);
+    return converted!=DXGI_FORMAT_UNKNOWN ? converted : buffer;
+}
+
 struct PresentShadowSlot {
     RuntimeSurface *surface=nullptr; // owned by DeviceOwner's surface list, closed with the device
     UINT64 retire=0;                 // the Present fence value of the last Present that read it
@@ -44,10 +63,13 @@ struct PresentShadows { PresentShadowSlot slots[2]{}; UINT next=0; };
 // The LB7A request and texture of a shadow: a device allocation the shell owns (no runtime resource), not shared,
 // not a primary, a render target and shader resource so that the engine's Blt can blit or draw into it. The
 // geometry is that of convert_runtime_resource: the engine's linear pitch, rows rounded up to 4, whole pages.
+// Every composed row but A8 can be a shadow: the 4-byte rows, and RGBA16F at 8 bytes for the resolve of a
+// multisampled FP16 buffer (BD-407), which a swap-chain buffer of that format already is as a runtime surface.
 inline HRESULT present_shadow_request(UINT width,UINT height,DXGI_FORMAT format,
     RuntimeSurfaceRequest &request,D3D11_TEXTURE2D_DESC1 &desc) {
     const auto *row=runtime_surface_format(format);
-    if (!row || row->bytes_per_pixel!=4 || !width || !height || width>16384 || height>16384) return E_INVALIDARG;
+    if (!row || row->dxgi==AMDGPU_WDDM_DXGI_A8_UNORM || !width || !height || width>16384 || height>16384)
+        return E_INVALIDARG;
     const UINT pitch=runtime_surface_pitch(width,row->bytes_per_pixel);
     const UINT64 bytes=(UINT64(pitch)*((height+3)&~3u)+4095)&~UINT64(4095);
     D3D11_TEXTURE2D_DESC1 d{width,height,1,1,format,{1,0},D3D11_USAGE_DEFAULT,
