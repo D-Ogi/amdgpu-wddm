@@ -656,6 +656,23 @@
         "host"
       ]
     },
+    "record-pairs": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "record-pairs-x64": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "record-pairs-x86": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
     "open-allocation": {
       "inputs": [
         "host"

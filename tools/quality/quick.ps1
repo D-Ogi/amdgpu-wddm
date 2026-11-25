@@ -691,6 +691,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
  Check 'ddi-error-policy' { & python "$repo\tools\quality\ddi_error_policy.py" --sources "$repo\driver\umd\dxvk" --reference "$Workspace\ref\ddi-display\d3d10umddi.md" }
  Check 'ddi-error-policy-mutants' { & python "$repo\tools\quality\ddi_error_policy_mutants.py" --sources "$repo\driver\umd\dxvk" --reference "$Workspace\ref\ddi-display\d3d10umddi.md" }
  Check 'ddi-table-versions' { & python "$repo\tools\quality\ddi_table_versions.py" --sources "$repo\driver\umd\dxvk" --kits "$Kits" }
+ # The record pair registry (driver/contract/record-pairs.json): every RULE text of the record pair test is still in
+ # its file, every function that writes a record magic is a listed producer site, every producer and consumer pair
+ # has its rows, its test or its reason. The self-test plants each defect and must see it fail.
+ Check 'record-pairs' { & python -B "$repo\tools\quality\record_pairs.py" --self-test; if($LASTEXITCODE){throw 'record_pairs self-test failed'}; & python -B "$repo\tools\quality\record_pairs.py" --root $repo }
  Check 'flip-rule-names' { & python "$repo\tools\quality\flip_rule_names.py" --router "$repo\driver\umd\router\front-direct-flip.h" --log "$repo\driver\umd\router\front-flip-log.h" --document "$repo\docs\design\direct-flip-handshake.md" }
  Check 'gfx-copy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gfx_copy.ps1" -Root $Workspace -Out "$Out\gfx-copy" -Kits "$Kits" }
  Check 'gfx-blt' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gfx_blt.ps1" -Root $Workspace -Out "$Out\gfx-blt" -Kits "$Kits" }
@@ -1072,6 +1076,9 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='hwmon-debt-settle-gated';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','debt-settle-gated');Fails=$true}
   @{n='smu-metrics';s='driver\shim\test\run_smu_metrics.ps1';a=@('-Kits',$Kits)}
   @{n='contract-caps';s='driver\contract\test\run.ps1';a=@('-Kits',$Kits,'-Mesa',"$Workspace\ref\mesa")}
+  # The record pair test: every producer of a shared-surface record against every consumer, both architectures.
+  @{n='record-pairs-x64';s='driver\contract\test\run_record_pairs.ps1';a=@('-Root',$Workspace,'-Arch','x64')}
+  @{n='record-pairs-x86';s='driver\contract\test\run_record_pairs.ps1';a=@('-Root',$Workspace,'-Arch','x86')}
  )
  # Every runner is in this file, and every runner tests the tree it lives in: one that took its sources from
  # -Root\bc250-win tested the main checkout from any worktree, which is how three suites rotted unseen (BD-053).

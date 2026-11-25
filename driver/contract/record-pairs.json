@@ -1,0 +1,837 @@
+{
+  "about": "The producers and consumers of the shared-surface records (LB7A, GDI1, E26R, BC2A, S26R), and for every pair the rows of driver/contract/test/record-pair-test.cpp that cover it, the test that covers it elsewhere, or the reason why no caller reaches it. tools/quality/record_pairs.py checks this file against the tree and against the output of the test. A site is a function that writes a record magic; a producer with wire false makes a record that never leaves its process (a decoded copy, the opener's own record of a match).",
+  "producers": [
+    {
+      "id": "P1",
+      "what": "kernel driver standard allocations: primary, shadow, staging, GDI types 1..4",
+      "sites": [
+        {
+          "file": "driver/kmd/gdi_admission.h",
+          "function": "Bc250StdAllocDecide"
+        },
+        {
+          "file": "driver/kmd/wddm.c",
+          "function": "Bc250WddmGetStandardAllocationDriverData"
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "what": "D3D11 shell runtime surface: LB7A v1 or v2 (NV12) with E26R v3, E26R v2 for the resource group, or E26R v4 for a GPU-only surface",
+      "sites": [
+        {
+          "file": "driver/umd/dxvk/ddi-resource.cpp",
+          "function": "convert_runtime_resource"
+        },
+        {
+          "file": "driver/umd/dxvk/runtime-surface.cpp",
+          "function": "planar_record"
+        },
+        {
+          "file": "driver/umd/dxvk/runtime-surface-allocation.cpp",
+          "function": "allocate_runtime_surface"
+        },
+        {
+          "file": "driver/kmd/surface_resource_private.h",
+          "function": "Bc250SurfaceGpuOnlyRecordInit"
+        }
+      ]
+    },
+    {
+      "id": "P2S",
+      "what": "D3D11 shell Present shadow: a device allocation that no other process opens",
+      "sites": [
+        {
+          "file": "driver/umd/dxvk/present-shadow.h",
+          "function": "present_shadow_request"
+        }
+      ]
+    },
+    {
+      "id": "P3",
+      "what": "D3D11 shell ENGINE LAYOUT form: BC2A v2 SHARED with S26R",
+      "sites": [
+        {
+          "file": "driver/umd/dxvk/runtime-engine-resource.cpp",
+          "function": "engine_resource_desc_why"
+        },
+        {
+          "file": "driver/contract/bc250_shared_resource_alloc.h",
+          "function": "Bc250SharedResourceAllocInit"
+        }
+      ]
+    },
+    {
+      "id": "P4",
+      "what": "D3D12 shell linear surface: the primary, with E26R v1, v2, v3 (scan-out) or v4",
+      "sites": [
+        {
+          "file": "driver/umd/d3d12/allocation-request.h",
+          "function": "prepare_surface"
+        },
+        {
+          "file": "driver/contract/bc250_scanout_record.h",
+          "function": "Bc250ScanoutRecordInit"
+        },
+        {
+          "file": "driver/kmd/surface_resource_private.h",
+          "function": "Bc250SurfaceGpuOnlyRecordInit"
+        }
+      ]
+    },
+    {
+      "id": "P5",
+      "what": "D3D12 shell shared surface: LB7A v1 with E26R v3 through the contract writer (allocation-request.h prepare_shared_surface)",
+      "sites": [
+        {
+          "file": "driver/contract/bc250_shared_surface.h",
+          "function": "Bc250SharedSurfaceEncode"
+        }
+      ]
+    },
+    {
+      "id": "P6",
+      "what": "D3D12 shell ENGINE LAYOUT buffer: BC2A v2 SHARED with S26R",
+      "sites": [
+        {
+          "file": "driver/umd/d3d12/shared-buffer-record.h",
+          "function": "engine_layout_buffer_record"
+        },
+        {
+          "file": "driver/contract/bc250_shared_resource_alloc.h",
+          "function": "Bc250SharedResourceAllocInit"
+        }
+      ]
+    },
+    {
+      "id": "P7",
+      "what": "D3D12 shell raw allocation: BC2A v2, no resource record (every create outside the shareable envelope)",
+      "sites": [
+        {
+          "file": "driver/umd/d3d12/allocation-request.h",
+          "function": "prepare"
+        }
+      ]
+    },
+    {
+      "id": "P8",
+      "what": "Vulkan winsys allocation (Mesa patch): BC2A, no resource record",
+      "sites": [
+        {
+          "file": "driver/icd/mesa-wddm2-bc250.patch",
+          "function": "radv_wddm2_bo_create_internal"
+        }
+      ]
+    },
+    {
+      "id": "P9",
+      "what": "application router: E26R v3 of the compositor's own surfaces",
+      "sites": [
+        {
+          "file": "driver/umd/router/front-device.cpp",
+          "function": "FillCreatedResource"
+        }
+      ]
+    },
+    {
+      "id": "X1",
+      "wire": false,
+      "what": "D3D11 open: the LB7A metadata of a decoded record",
+      "sites": [
+        {
+          "file": "driver/umd/dxvk/ddi-resource.cpp",
+          "function": "decode_open_resource"
+        }
+      ]
+    },
+    {
+      "id": "X2",
+      "wire": false,
+      "what": "router: the normalised copy of a received E26R",
+      "sites": [
+        {
+          "file": "driver/umd/router/front-resource.h",
+          "function": "DecodeRecord"
+        }
+      ]
+    },
+    {
+      "id": "X3",
+      "wire": false,
+      "what": "D3D12 open of the ENGINE LAYOUT form: the opener's own S26R for the match",
+      "sites": [
+        {
+          "file": "driver/umd/d3d12/engine-ddi/shared-resource.cpp",
+          "function": "opener_record_head"
+        }
+      ]
+    }
+  ],
+  "consumers": [
+    {
+      "id": "C1",
+      "what": "kernel driver CreateAllocation",
+      "file": "driver/kmd/wddm.c",
+      "function": "WddmCreateAdmit"
+    },
+    {
+      "id": "C2",
+      "what": "kernel driver OpenAllocation",
+      "file": "driver/kmd/wddm.c",
+      "function": "Bc250WddmOpenAllocation"
+    },
+    {
+      "id": "C3",
+      "what": "D3D11 shell OpenResource",
+      "file": "driver/umd/dxvk/ddi-resource.cpp",
+      "function": "decode_open_resource"
+    },
+    {
+      "id": "C4",
+      "what": "D3D12 shell OpenHeapAndResource",
+      "file": "driver/umd/d3d12/engine-ddi/resources.cpp",
+      "function": "open_shared_surface"
+    },
+    {
+      "id": "C5",
+      "what": "application router",
+      "file": "driver/umd/router/front-resource.h",
+      "function": "DecodeRecord"
+    }
+  ],
+  "pairs": [
+    {
+      "producer": "P1",
+      "consumer": "C1",
+      "rows": [
+        "P1 (GDI type \\d|kind \\d) fmt \\d+ -> KMD create"
+      ]
+    },
+    {
+      "producer": "P1",
+      "consumer": "C2",
+      "rows": [
+        "P1 (GDI type \\d|kind \\d) fmt \\d+ -> KMD open"
+      ]
+    },
+    {
+      "producer": "P1",
+      "consumer": "C3",
+      "rows": [
+        "P1 GDI type \\d fmt \\d+ -> D3D11 open"
+      ]
+    },
+    {
+      "producer": "P1",
+      "consumer": "C4",
+      "rows": [
+        "P1 GDI type 1 fmt \\d+ -> D3D12 open"
+      ]
+    },
+    {
+      "producer": "P1",
+      "consumer": "C5",
+      "unreachable": "the router reads the records of resources its own devices create or open; a kernel standard allocation reaches it only through C3 (lab lines BD-253)"
+    },
+    {
+      "producer": "P2",
+      "consumer": "C1",
+      "rows": [
+        "P2 D3D11 shared .* -> KMD create\\+open"
+      ]
+    },
+    {
+      "producer": "P2",
+      "consumer": "C2",
+      "rows": [
+        "P2 D3D11 shared .* -> KMD create\\+open"
+      ]
+    },
+    {
+      "producer": "P2",
+      "consumer": "C3",
+      "rows": [
+        "P2 D3D11 shared .* -> D3D11 open"
+      ]
+    },
+    {
+      "producer": "P2",
+      "consumer": "C4",
+      "rows": [
+        "P2 D3D11 shared .* -> D3D12 open"
+      ]
+    },
+    {
+      "producer": "P2",
+      "consumer": "C5",
+      "covered_by": "driver/umd/router/tests/test-router.cpp (DecodeRecord of E26R v3)"
+    },
+    {
+      "producer": "P2S",
+      "consumer": "C1",
+      "covered_by": "tools/build/test-umd-surface-allocation.ps1 (the GPU-only record of a shadow)"
+    },
+    {
+      "producer": "P2S",
+      "consumer": "C2",
+      "unreachable": "the shadow is a device allocation of the shell; no runtime resource names it, so no process opens it"
+    },
+    {
+      "producer": "P2S",
+      "consumer": "C3",
+      "unreachable": "as P2S -> C2"
+    },
+    {
+      "producer": "P2S",
+      "consumer": "C4",
+      "unreachable": "as P2S -> C2"
+    },
+    {
+      "producer": "P2S",
+      "consumer": "C5",
+      "unreachable": "as P2S -> C2"
+    },
+    {
+      "producer": "P3",
+      "consumer": "C1",
+      "covered_by": "tools/build/test-shared-resource-contract.ps1 (the BC2A blob against driver/kmd/umd_blob.c)"
+    },
+    {
+      "producer": "P3",
+      "consumer": "C2",
+      "covered_by": "tools/build/test-shared-resource-contract.ps1"
+    },
+    {
+      "producer": "P3",
+      "consumer": "C3",
+      "covered_by": "tools/build/test-umd-engine-resource.ps1 (open_engine_layout)"
+    },
+    {
+      "producer": "P3",
+      "consumer": "C4",
+      "covered_by": "driver/umd/d3d12/engine-ddi/tests/shared-resource-test.cpp (plan_engine_layout_open)"
+    },
+    {
+      "producer": "P3",
+      "consumer": "C5",
+      "unreachable": "an S26R record is not a surface the compositor opens; the router passes it through"
+    },
+    {
+      "producer": "P4",
+      "consumer": "C1",
+      "covered_by": "driver/umd/d3d12/allocation-request-test.cpp"
+    },
+    {
+      "producer": "P4",
+      "consumer": "C2",
+      "covered_by": "driver/umd/d3d12/allocation-request-test.cpp"
+    },
+    {
+      "producer": "P4",
+      "consumer": "C3",
+      "unreachable": "a D3D12 primary is opened by the compositor through the router (C5), not by a D3D11 OpenResource of an application"
+    },
+    {
+      "producer": "P4",
+      "consumer": "C4",
+      "unreachable": "as P4 -> C3"
+    },
+    {
+      "producer": "P4",
+      "consumer": "C5",
+      "covered_by": "driver/umd/router/tests/test-router.cpp"
+    },
+    {
+      "producer": "P5",
+      "consumer": "C1",
+      "rows": [
+        "P5 D3D12 shared .* -> KMD create\\+open"
+      ]
+    },
+    {
+      "producer": "P5",
+      "consumer": "C2",
+      "rows": [
+        "P5 D3D12 shared .* -> KMD create\\+open"
+      ]
+    },
+    {
+      "producer": "P5",
+      "consumer": "C3",
+      "rows": [
+        "P5 D3D12 shared .* -> D3D11 open",
+        "S\\d D3D12 shared create .* -> an opener"
+      ]
+    },
+    {
+      "producer": "P5",
+      "consumer": "C4",
+      "rows": [
+        "P5 D3D12 shared .* -> D3D12 open",
+        "S\\d D3D12 shared create .* -> an opener"
+      ]
+    },
+    {
+      "producer": "P5",
+      "consumer": "C5",
+      "covered_by": "driver/umd/router/tests/test-router.cpp (E26R v3)"
+    },
+    {
+      "producer": "P6",
+      "consumer": "C1",
+      "covered_by": "tools/build/test-shared-resource-contract.ps1"
+    },
+    {
+      "producer": "P6",
+      "consumer": "C2",
+      "covered_by": "tools/build/test-shared-resource-contract.ps1"
+    },
+    {
+      "producer": "P6",
+      "consumer": "C3",
+      "covered_by": "tools/build/test-umd-engine-resource.ps1"
+    },
+    {
+      "producer": "P6",
+      "consumer": "C4",
+      "covered_by": "driver/umd/d3d12/engine-ddi/tests/shared-resource-test.cpp"
+    },
+    {
+      "producer": "P6",
+      "consumer": "C5",
+      "unreachable": "as P3 -> C5"
+    },
+    {
+      "producer": "P7",
+      "consumer": "C1",
+      "covered_by": "driver/kmd/test/run_umd_blob.ps1 (BC2A versions 1..3)"
+    },
+    {
+      "producer": "P7",
+      "consumer": "C2",
+      "unreachable": "a raw allocation is not shared: no runtime resource with a shared handle names it, unless the create was shared, which the S rows cover"
+    },
+    {
+      "producer": "P7",
+      "consumer": "C3",
+      "rows": [
+        "P7 D3D12 raw BC2A v2, no record -> D3D11 open"
+      ]
+    },
+    {
+      "producer": "P7",
+      "consumer": "C4",
+      "rows": [
+        "P7 D3D12 raw BC2A v2, no record -> D3D12 open"
+      ]
+    },
+    {
+      "producer": "P7",
+      "consumer": "C5",
+      "unreachable": "as P7 -> C2"
+    },
+    {
+      "producer": "P8",
+      "consumer": "C1",
+      "covered_by": "driver/kmd/test/run_umd_blob.ps1"
+    },
+    {
+      "producer": "P8",
+      "consumer": "C2",
+      "unreachable": "the winsys allocations of the hosted engines are device memory of one process; the shells export shared resources through their own records (P2, P3, P5, P6)"
+    },
+    {
+      "producer": "P8",
+      "consumer": "C3",
+      "unreachable": "as P8 -> C2"
+    },
+    {
+      "producer": "P8",
+      "consumer": "C4",
+      "unreachable": "as P8 -> C2"
+    },
+    {
+      "producer": "P8",
+      "consumer": "C5",
+      "unreachable": "as P8 -> C2"
+    },
+    {
+      "producer": "P9",
+      "consumer": "C1",
+      "covered_by": "driver/umd/router/tests/test-router.cpp"
+    },
+    {
+      "producer": "P9",
+      "consumer": "C2",
+      "covered_by": "driver/umd/router/tests/test-router.cpp"
+    },
+    {
+      "producer": "P9",
+      "consumer": "C3",
+      "unreachable": "the router's own surfaces are the compositor's; no application opens them"
+    },
+    {
+      "producer": "P9",
+      "consumer": "C4",
+      "unreachable": "as P9 -> C3"
+    },
+    {
+      "producer": "P9",
+      "consumer": "C5",
+      "covered_by": "driver/umd/router/tests/test-router.cpp"
+    }
+  ],
+  "expected_red": [
+    {
+      "row": "P1 GDI type 1 fmt 21 -> D3D11 open",
+      "owner": "t39/bd412-host-import-pages (BD-412)",
+      "reason": "the D3D11 import names the record size, which is not whole pages for a GDI texture; the winsys import refuses it",
+      "until": {
+        "file": "driver/umd/dxvk/runtime-surface.cpp",
+        "text": "imported.size=surface.mapping.bytes"
+      }
+    },
+    {
+      "row": "P1 GDI type 1 fmt 21 -> D3D12 open",
+      "owner": "t39/bd408-d3d9-shared-texture (BD-408)",
+      "reason": "the D3D12 open has no form for an allocation with no resource record",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_SURFACE_WHY_BARE_LENGTH"
+      }
+    },
+    {
+      "row": "P1 GDI type 1 fmt 32 -> D3D11 open",
+      "owner": "t39/bd412-host-import-pages (BD-412)",
+      "reason": "the D3D11 import names the record size, which is not whole pages for a GDI texture; the winsys import refuses it",
+      "until": {
+        "file": "driver/umd/dxvk/runtime-surface.cpp",
+        "text": "imported.size=surface.mapping.bytes"
+      }
+    },
+    {
+      "row": "P1 GDI type 1 fmt 32 -> D3D12 open",
+      "owner": "t39/bd408-d3d9-shared-texture (BD-408)",
+      "reason": "the D3D12 open has no form for an allocation with no resource record",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_SURFACE_WHY_BARE_LENGTH"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared A8 +DECODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared A8 +DECODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared A8 +VIDEO_ENCODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared A8 +VIDEO_ENCODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared BGRA8 +DECODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared BGRA8 +DECODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared BGRA8 +VIDEO_ENCODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared BGRA8 +VIDEO_ENCODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared BGRA8 sRGB +DECODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared BGRA8 sRGB +DECODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared BGRA8 sRGB +VIDEO_ENCODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared BGRA8 sRGB +VIDEO_ENCODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared NV12 +DECODER +RT -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared NV12 +DECODER +RT -> D3D12 open",
+      "owner": "unassigned (F4, reported to team-lead 2026-11-25)",
+      "reason": "the D3D12 open knows the 32-byte LB7A v1 only; a D3D11 shared NV12 surface (LB7A v2) has no D3D12 open",
+      "until": {
+        "file": "driver/umd/d3d12/engine-ddi/resources.cpp",
+        "text": "BC250_WDDM_NV12_PRIVATE"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared NV12 +DECODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared NV12 +DECODER -> D3D12 open",
+      "owner": "unassigned (F4, reported to team-lead 2026-11-25)",
+      "reason": "the D3D12 open knows the 32-byte LB7A v1 only; a D3D11 shared NV12 surface (LB7A v2) has no D3D12 open",
+      "until": {
+        "file": "driver/umd/d3d12/engine-ddi/resources.cpp",
+        "text": "BC250_WDDM_NV12_PRIVATE"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared NV12 -> D3D12 open",
+      "owner": "unassigned (F4, reported to team-lead 2026-11-25)",
+      "reason": "the D3D12 open knows the 32-byte LB7A v1 only; a D3D11 shared NV12 surface (LB7A v2) has no D3D12 open",
+      "until": {
+        "file": "driver/umd/d3d12/engine-ddi/resources.cpp",
+        "text": "BC250_WDDM_NV12_PRIVATE"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGB10A2 +DECODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGB10A2 +DECODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGB10A2 +VIDEO_ENCODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGB10A2 +VIDEO_ENCODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGBA16F +DECODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGBA16F +DECODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGBA16F +VIDEO_ENCODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGBA16F +VIDEO_ENCODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGBA8 +DECODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGBA8 +DECODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGBA8 +VIDEO_ENCODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGBA8 +VIDEO_ENCODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGBA8 sRGB +DECODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGBA8 sRGB +DECODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGBA8 sRGB +VIDEO_ENCODER -> D3D11 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "P2 D3D11 shared RGBA8 sRGB +VIDEO_ENCODER -> D3D12 open",
+      "owner": "t39/record-pair-gate (F1)",
+      "reason": "the D3D11 shell writes DECODER (0x200) and VIDEO_ENCODER (0x400) into E26R v3, and the contract bind mask refuses them",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "BC250_SHARED_BIND_DECODER"
+      }
+    },
+    {
+      "row": "S1 D3D12 shared create B8G8R8X8_UNORM (88) -> an opener",
+      "owner": "t39/bd408-d3d9-shared-texture (BD-408)",
+      "reason": "B8G8R8X8 (88) and its sRGB view (93) are tier-1 shareable formats outside the D3D12 envelope: the create takes P7, which no opener reads",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "B8G8R8X8_UNORM"
+      }
+    },
+    {
+      "row": "S1 D3D12 shared create B8G8R8X8_UNORM_SRGB (93) -> an opener",
+      "owner": "t39/bd408-d3d9-shared-texture (BD-408)",
+      "reason": "B8G8R8X8 (88) and its sRGB view (93) are tier-1 shareable formats outside the D3D12 envelope: the create takes P7, which no opener reads",
+      "until": {
+        "file": "driver/contract/bc250_shared_surface.h",
+        "text": "B8G8R8X8_UNORM"
+      }
+    }
+  ]
+}
