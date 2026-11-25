@@ -10,7 +10,7 @@ The code in this directory is project code under the licence in its SPDX lines, 
 - OpenSSL 3.5.9 (Apache-2.0), https://www.openssl.org, built as a static `libcrypto.a`, is a build input of
   `core/build.ps1` and is not in this repository.
 - The CRB register map and bit values in `crb.h` follow edk2 `MdePkg/Include/IndustryStandard/TpmPtp.h`
-  (BSD-2-Clause-Patent, https://github.com/tianocore/edk2, master as fetched 2026-11-13, SHA-256 CF35F84D); no edk2 code
+  (BSD-2-Clause-Patent, https://github.com/tianocore/edk2, master as fetched 2026-11-13, SHA-256 CF35F84D). No edk2 code
   is copied.
 
 ## Recorded deviations
