@@ -680,6 +680,11 @@ void FanStep(BC250_DEVICE* Device, LONG TctlMc, BOOLEAN TctlValid, const BC250_F
 void FanLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 void FanRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_FAN* Data, BOOLEAN Admin, ULONG EscapeFlags);
 
+// perf_data.c (BD-404): DXGKQAITYPE_NODEPERFDATA, ADAPTERPERFDATA, ADAPTERPERFDATA_CAPS and GPUVERSION. NodeCount is
+// this start's node count, GfxNodeMask the nodes on the GFX clock (bit n: node ordinal n). Copies published snapshots
+// only: no SMU message, no port access. PASSIVE_LEVEL.
+NTSTATUS PerfDataQuery(BC250_DEVICE* Device, const DXGKARG_QUERYADAPTERINFO* Query, ULONG NodeCount, ULONG GfxNodeMask);
+
 // smu_metrics.c: the SMU metrics table (0.7.215, docs/design/dpm.md "Power reading")
 void SmuMetricsInitialize(BC250_DEVICE* Device);        // AddDevice
 // StartDevice, after the SMU owner and VRAM are up and before DpmStart: reads EnableSmuMetrics and maps the page.
