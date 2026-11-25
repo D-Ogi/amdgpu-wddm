@@ -530,6 +530,12 @@ negative controls.
 
 After each DRIVERCAPS line comes `wddm: DRIVERCAPS mpo <SupportMultiPlaneOverlay> planes <MaxOverlayPlanes> misc
 <MiscCaps.Value>`. Bit 0 of `misc` is `SupportContextlessPresent`, which the KMD sets from WDDM 2.4 (BD-403).
+From WDDM 2.4 the `mm` field of the DRIVERCAPS line also has bit 4, `CrossAdapterResource` (tier 1 of the
+cross-adapter resources, copy). dxgkrnl then admits a cross-adapter allocation and calls `DxgkDdiDescribeAllocation`
+for it. The KMD answers a BC2A allocation without scan-out as a buffer: `Width` is the byte count, `Height` 1,
+`Format` `D3DDDIFMT_UNKNOWN`. The summary line `wddm summary: describe allocation: surface <n>, cross-adapter buffer
+<n>, refused <n>` counts the answers. The cross-adapter count stays 0 on the desktop and in games, because only an
+application that asks for a cross-adapter heap makes one. `cross_adapter.h` gives the contract and its sources.
 The log ring keeps the first 256 lines of a start, and the first DRIVERCAPS line comes after them, so a busy start
 can lose it (BD-324). The KMD keeps the first reply of the start, and `bc250kmd_cli log summary` prints it:
 `wddm summary: DRIVERCAPS first <size> bytes: wddm <version>/<source> ...` with the fields of the

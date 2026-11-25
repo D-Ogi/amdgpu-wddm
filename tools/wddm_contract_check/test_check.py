@@ -549,10 +549,10 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
 """
 
     @staticmethod
-    def wddm29(answer_type16=True, link_info=True, mpo3=True, contextless=True):
+    def wddm29(answer_type16=True, link_info=True, mpo3=True, contextless=True, cross_adapter=True):
         """The stage B4 shape (BD-307): interface 0xE003, table WDDM2_9, WDDMVersion 2.9, type 16 answered,
         UpdateMonitorLinkInfo and the MPO3 trio in the table, with the MPO3 report and flip, and (BD-403)
-        SupportContextlessPresent reported."""
+        SupportContextlessPresent reported, and tier 1 of the cross-adapter resources with DescribeAllocation."""
         wddm = GOOD_WDDM.replace("Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_0;",
                                  "Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_9;")
         wddm = wddm.replace("#define DXGKDDI_INTERFACE_VERSION 0x5023", "#define DXGKDDI_INTERFACE_VERSION 0xE003")
@@ -562,6 +562,14 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
                                 "    caps->SupportDirectFlip = TRUE;\n"
                                 "    caps->MiscCaps.SupportContextlessPresent = "
                                 "Bc250ContextlessPresentCap(Device->WddmLevel);")
+        if cross_adapter:
+            wddm = wddm.replace("    caps->MemoryManagementCaps.GpuMmuSupported = 1;",
+                                "    caps->MemoryManagementCaps.GpuMmuSupported = 1;\n"
+                                "    caps->MemoryManagementCaps.CrossAdapterResource = "
+                                "Bc250CrossAdapterCap(Device->WddmLevel);")
+            wddm = wddm.replace("Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_9;",
+                                "Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_9;\n"
+                                "    Data->DxgkDdiDescribeAllocation = Bc250WddmDescribeAllocation;")
         if answer_type16:
             wddm = wddm.replace("    case DXGKQAITYPE_NUMPOWERCOMPONENTS:",
                                 "    case DXGKQAITYPE_DISPLAY_DRIVERCAPS_EXTENSION:\n"
@@ -594,7 +602,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
                         "R44-WDDMVERSION-ABOVE-2-5-INTERFACE", "R45-QAI-16-ANSWERED-FROM-2-2",
                         "R46-UPDATEMONITORLINKINFO-FROM-2-4", "R47-MPO3-TRIO-FROM-2-1",
                         "R48-MPO3-FLIP-RETIRED-BY-PRESENTID", "R49-MPO-CAPS-DDIS-FROM-2-2",
-                        "R50-CONTEXTLESS-PRESENT-FROM-2-4"):
+                        "R50-CONTEXTLESS-PRESENT-FROM-2-4", "R53-CROSS-ADAPTER-TIER1-FROM-2-4"):
             self.assertEqual(check.OK, result[rule_id], rule_id)
         self.assertIn(16, facts.qai_handled)
 
@@ -602,6 +610,23 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
         """BD-403: the HLK job 'WDDM2.4 Mandatory Caps' fails a 2.4 or later driver without the bit."""
         result, _ = statuses(wddm=self.wddm29(contextless=False))
         self.assertOnlyViolation(result, "R50-CONTEXTLESS-PRESENT-FROM-2-4")
+
+    def test_wddm29_without_cross_adapter(self):
+        """The HLK job 'WDDM2.4 Mandatory Caps' fails a 2.4 or later driver without CrossAdapterResource."""
+        result, _ = statuses(wddm=self.wddm29(cross_adapter=False))
+        self.assertOnlyViolation(result, "R53-CROSS-ADAPTER-TIER1-FROM-2-4")
+
+    def test_wddm29_cross_adapter_without_describe(self):
+        """dxgkrnl describes every cross-adapter allocation: the cap without DescribeAllocation is a violation."""
+        result, _ = statuses(wddm=drop(self.wddm29(), "Data->DxgkDdiDescribeAllocation"))
+        self.assertOnlyViolation(result, "R53-CROSS-ADAPTER-TIER1-FROM-2-4")
+
+    def test_wddm22_needs_no_cross_adapter(self):
+        """The HLK requires the bit from 2.4 only, so a 2.2 driver without it is not a violation of R53."""
+        wddm = self.wddm29(cross_adapter=False).replace("caps->WDDMVersion = DXGKDDI_WDDMv2_9;",
+                                                        "caps->WDDMVersion = DXGKDDI_WDDMv2_2;")
+        result, _ = statuses(wddm=wddm)
+        self.assertEqual(check.NA, result["R53-CROSS-ADAPTER-TIER1-FROM-2-4"])
 
     def test_wddm22_needs_no_contextless_present(self):
         """Below 2.4 dxgkrnl does not read MiscCaps, so a 2.2 driver without the bit is not a violation."""

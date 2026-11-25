@@ -92,12 +92,18 @@ static BOOLEAN ConnectorLinkNeedsPowerOn(BC250_DEVICE* d,BOOLEAN* active,BOOLEAN
  *connected=testSinkConnected;return testSinkConnected && !testLinkActive;}
 typedef UINT D3DDDIFORMAT;
 typedef UINT D3DDDI_ROTATION;
-typedef struct {struct {UINT Width,Height,Format;} Allocation;} BC250_WDDM_OBJECT;
+/* UmdAlloc, ScanoutRequested and UmdBytes are the fields that the cross-adapter route of wddm.c reads. */
+typedef struct {struct {UINT Width,Height,Format;} Allocation;BOOLEAN UmdAlloc,ScanoutRequested;ULONGLONG UmdBytes;} BC250_WDDM_OBJECT;
 typedef struct {HANDLE hAllocation;UINT Width,Height;D3DDDIFORMAT Format;
     struct {UINT NumSamples,NumQualityLevels;} MultisampleMethod;RATIONAL RefreshRate;
     UINT PrivateDriverFormatAttribute,Rotation;} DXGKARG_DESCRIBEALLOCATION;
 static BC250_WDDM_OBJECT* WddmObject(HANDLE h,UINT magic){(void)magic;return (BC250_WDDM_OBJECT*)h;}
-static void* WddmOf(HANDLE h){return h;}
+/* The describe counters of BC250_WDDM (wddm.c), one adapter. */
+#define D3DDDIFMT_UNKNOWN 0u
+#define BC250_WDDM_LOG_CALLS 8
+typedef struct {volatile long DescribeSurface,DescribeBuffer,DescribeRefused;} TEST_WDDM;
+static TEST_WDDM testWddm;
+static TEST_WDDM* WddmOf(HANDLE h){(void)h;return &testWddm;}
 static int WddmFirstCalls(void* w,UINT call){(void)w;(void)call;return 0;}
 static int irql;
 static int KeGetCurrentIrql(void){return irql;}
@@ -123,6 +129,7 @@ static void DcnCursorRefresh(BC250_DEVICE* d){cursorRefreshes++;cursorRefreshRot
 #include "inherited_commit_fixture.h"
 #include "inherited_actual.inc"
 #include "display_timing_actual.inc"
+#include "../cross_adapter.h"
 #include "describe_timing_actual.inc"
 #include "inherited_vidpn_fixture.h"
 #include "inherited_vidpn_actual.inc"
@@ -287,6 +294,31 @@ int main(int argc,char** argv)
         d.InheritedSignalValid=FALSE; // StopDevice invalidation
         CHECK(FillSignalInfo(&d,&s)==STATUS_DEVICE_NOT_READY);
         CHECK(Bc250WddmDescribeAllocation(&d,&description)==STATUS_DEVICE_NOT_READY);
+    }
+    {
+        // Cross-adapter route (cross_adapter.h): a UMD allocation without scan-out is one row of its byte count,
+        // format 0, with no display signal, so it is described also while the signal is invalid.
+        BC250_WDDM_OBJECT buffer={{0,0,0},TRUE,FALSE,65536u};
+        DXGKARG_DESCRIBEALLOCATION description={0};
+        long surfaces=testWddm.DescribeSurface,buffers=testWddm.DescribeBuffer,refused=testWddm.DescribeRefused;
+        description.hAllocation=&buffer;
+        before=reads;
+        CHECK(!d.InheritedSignalValid);
+        CHECK(Bc250WddmDescribeAllocation(&d,&description)==STATUS_SUCCESS && reads==before);
+        CHECK(description.Width==65536u && description.Height==1u && description.Format==D3DDDIFMT_UNKNOWN);
+        CHECK(description.MultisampleMethod.NumSamples==0u && description.MultisampleMethod.NumQualityLevels==0u);
+        CHECK(description.RefreshRate.Numerator==0u && description.RefreshRate.Denominator==0u);
+        CHECK(description.PrivateDriverFormatAttribute==0u && description.Rotation==D3DDDI_ROTATION_IDENTITY);
+        CHECK(testWddm.DescribeBuffer==buffers+1 && testWddm.DescribeSurface==surfaces);
+        buffer.UmdBytes=0x100000000ull; // no 32-bit width
+        CHECK(Bc250WddmDescribeAllocation(&d,&description)==STATUS_INVALID_PARAMETER);
+        buffer.UmdBytes=0u;
+        CHECK(Bc250WddmDescribeAllocation(&d,&description)==STATUS_INVALID_PARAMETER);
+        CHECK(testWddm.DescribeRefused==refused+2 && testWddm.DescribeBuffer==buffers+1);
+        // Scan-out keeps the answer of the primary: with the signal invalid, that answer is not ready.
+        buffer.UmdBytes=65536u;buffer.ScanoutRequested=TRUE;
+        CHECK(Bc250WddmDescribeAllocation(&d,&description)==STATUS_DEVICE_NOT_READY);
+        CHECK(testWddm.DescribeSurface==surfaces+1 && testWddm.DescribeBuffer==buffers+1);
     }
     Mode(&d,1366,768,1500,800,72000000);
     values[TimingReference]=7000;values[TimingModulo]=350000000;
