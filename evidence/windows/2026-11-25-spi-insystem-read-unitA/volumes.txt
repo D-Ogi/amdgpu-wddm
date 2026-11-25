@@ -1,0 +1,19 @@
+# fv_walk.py <image of the start>
+volume at 0x0: signature b'_FVH' length 0x20000 attributes 0x4FEFF header 0x48
+  0x000048: type 0xF0 state 0x07 size 0x2C 
+  0x000078: type 0x01 state 0x0F size 0x1FF88 
+  -> the walk of the stage stops here
+volume at 0xAE0000: signature b'_FVH' length 0x320000 attributes 0x4FEFF header 0x48
+  0x000048: type 0xF0 state 0x07 size 0x2C 
+  0x000078: type 0x0B state 0x07 size 0x1435CF 98584eee143959429d6edc7bd79403cf
+  0x143648: free (size 0xFFFFFF, header all FF: True)
+volume at 0xE00000: signature b'_FVH' length 0x200000 attributes 0xCFEFF header 0x48
+  0x000048: type 0xF0 state 0x07 size 0x2C 
+  0x000078: type 0xF0 state 0x07 size 0xF70 
+  0x000FE8: type 0x0B state 0x07 size 0x1FF018 
+
+# free_space.py <image of the start>
+file at volume 0x000048 (image 0xAE0048): type 0xF0, 0x2C bytes, ends at image 0xAE0074
+file at volume 0x000078 (image 0xAE0078): type 0x0B, 0x1435CF bytes, ends at image 0xC23647
+behind the last file: 1952185 bytes to the end of the volume (image 0xE00000); all FF: True
+the first whole free sector of 4096 bytes: image 0xC24000; 476 whole free sectors

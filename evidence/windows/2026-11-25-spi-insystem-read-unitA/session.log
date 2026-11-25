@@ -1,0 +1,88 @@
+=== 2026-11-25T20:04:43Z push 
+pushed P:\BC-250\scratch\t39\stick-sb-kit-r8\unit to C:\BC250\tmp\p6-flash-m1
+=== 2026-11-25T20:04:45Z run m1-install.ps1
+utc 2026-11-25T20:05:00Z stick E: disk 2 partition 1 free GB 29.9
+stick boot\grub\bc250diag.id f6e54a7a95301727
+stick boot\grub\bc250diag.id.sig 02df6f26a87103c3
+stick efi\bc250\wcks-bootmgfw.efi 4bb32c300df0815d
+stick efi\wcks\bc250-stage.efi 93e5b3628ad3d894
+menu now: grub.cfg 236ddd84e1877eb642c01f01c32dbb37a3d76b1fc7abf47a703f44df13514288, grub.cfg.sig f268982bf0e0be0feae1a44db13e675183a22a160759e29ff1dec5a615313c92
+menu r7:  grub.cfg 236ddd84e1877eb642c01f01c32dbb37a3d76b1fc7abf47a703f44df13514288, grub.cfg.sig f268982bf0e0be0feae1a44db13e675183a22a160759e29ff1dec5a615313c92
+menu r8:  grub.cfg e44156f886a031f19792c740c2e418266a7d693ea6745e9bff06aa1d31cab9e2, grub.cfg.sig 9f3a227dce2416382eddb73d916266e8f373406a81728d301dfe454f56a222af
+stage copy in \efi\wckfl: absent
+file bc250-stage.log in \efi\wckfl: absent
+file bc250-flash.result in \efi\wckfl: absent
+file bc250-flash.dump in \efi\wckfl: absent
+M1-INSTALL PLAN (menu r7, stage copy absent); nothing written
+exit 0
+=== 2026-11-25T20:04:54Z run m1-install.ps1 -Apply
+utc 2026-11-25T20:05:10Z stick E: disk 2 partition 1 free GB 29.9
+stick boot\grub\bc250diag.id f6e54a7a95301727
+stick boot\grub\bc250diag.id.sig 02df6f26a87103c3
+stick efi\bc250\wcks-bootmgfw.efi 4bb32c300df0815d
+stick efi\wcks\bc250-stage.efi 93e5b3628ad3d894
+menu now: grub.cfg 236ddd84e1877eb642c01f01c32dbb37a3d76b1fc7abf47a703f44df13514288, grub.cfg.sig f268982bf0e0be0feae1a44db13e675183a22a160759e29ff1dec5a615313c92
+menu r7:  grub.cfg 236ddd84e1877eb642c01f01c32dbb37a3d76b1fc7abf47a703f44df13514288, grub.cfg.sig f268982bf0e0be0feae1a44db13e675183a22a160759e29ff1dec5a615313c92
+menu r8:  grub.cfg e44156f886a031f19792c740c2e418266a7d693ea6745e9bff06aa1d31cab9e2, grub.cfg.sig 9f3a227dce2416382eddb73d916266e8f373406a81728d301dfe454f56a222af
+stage copy in \efi\wckfl: absent
+file bc250-stage.log in \efi\wckfl: absent
+file bc250-flash.result in \efi\wckfl: absent
+file bc250-flash.dump in \efi\wckfl: absent
+the r7 pair is kept as grub.cfg.kit-r7 and grub.cfg.sig.kit-r7
+menu now: e44156f886a031f1 9f3a227dce241638; stage copy: 42a2958135a2a45d
+M1-INSTALL PASS
+exit 0
+=== 2026-11-25T20:05:04Z run m1-arm.ps1
+utc 2026-11-25T20:05:19Z grubenv: bc250_stage_left=1 bc250_stage_set=tpmfl bc250_stage_always=tpm bc250_tool_left=1 bc250_tool=wckfl bc250_tool_always=wcks
+M1-ARM PASS
+exit 0
+=== 2026-11-25T20:09:14Z run m1-collect.ps1
+utc 2026-11-25T20:09:30Z computer BC250-CKS
+grubenv: bc250_stage_left=0 bc250_stage_set=tpmfl bc250_stage_always=tpm bc250_tool_left=0 bc250_tool=wckfl bc250_tool_always=wcks
+M1-FILE bc250-stage.efi 2349032 bytes, written 2026-11-25T19:42:08Z, sha256 42a2958135a2a45d00ec1ac0813417806ef33c8a322aeceda23e332b1d8e96fa
+M1-FILE bc250-stage.efi.sig 438 bytes, written 2026-11-25T19:42:24Z, sha256 b07aaea1b9f6acdd67c09b45baa40a9c5e0925ee6f79f61fe02cd7b51aacc292
+M1-FILE bc250-stage.log 918 bytes, written 2026-11-25T20:08:04Z, sha256 5d3844e51deb3e942b7277cd3fe85866d9d3fd1513dafd162e6975bf786a58fa
+M1-FILE bc250-flash.result 490 bytes, written 2026-11-25T20:08:04Z, sha256 a9213adf90aa9fbb64e5185dab0bcee98207c26431d0e550e356bbfe79fea8ce
+M1-FILE bc250-flash.dump 16777216 bytes, written 2026-11-25T20:08:04Z, sha256 f44cabeafe04f86f7159ab02d54bafd59f86e77e64f303c17db5ae7320c1fd08
+--- bc250-flash.result
+  format 1
+  job read
+  volume store bytes 131072 used 0x20000
+  stream store absent
+  volume outer bytes 3276800 used 0xC23647
+  stream outer first 0xAE00B5 compressed 1324434 plain 4354064
+  volume pei bytes 2097152 used 0x1000000
+  stream pei absent
+  sha256 f44cabeafe04f86f7159ab02d54bafd59f86e77e64f303c17db5ae7320c1fd08
+  base 0817b85481ef1aa3e8d1971e1d6a33152bf637867f8619e5a01ae5c5a276a28e
+  store d19472e7e34eaa1a4d3973980278f1045f041e14d9075fc9e5ae536bd5085058
+  image-bytes 16777216
+  dump yes
+  status ok
+--- bc250-stage.log, lines of the last start: 14 (shown: the last 14)
+  bc250-stage: BC-250 stage, version 4
+  bc250-stage: GPU function at 0:1:0.0
+  bc250-stage: board BC-250, BIOS P3.00
+  bc250-stage: flash: job read, flash protocol at 0x7E213C58
+  bc250-stage: flash: read 16777216 of 16777216 bytes
+  bc250-stage: flash: sha256 f44cabeafe04f86f7159ab02d54bafd59f86e77e64f303c17db5ae7320c1fd08
+  bc250-stage: flash: base 0817b85481ef1aa3e8d1971e1d6a33152bf637867f8619e5a01ae5c5a276a28e
+  bc250-stage: flash: store d19472e7e34eaa1a4d3973980278f1045f041e14d9075fc9e5ae536bd5085058
+  bc250-stage: flash: volume store: 131072 bytes, used to 0x20000
+  bc250-stage: flash: volume outer: 3276800 bytes, used to 0xC23647
+  bc250-stage: flash: volume outer: stream at 0xAE00B5, 1324434 compressed bytes, 4354064 plain bytes
+  bc250-stage: flash: volume pei: 2097152 bytes, used to 0x1000000
+  bc250-stage: flash: the image is in the file bc250-flash.dump beside this application
+  bc250-stage: flash: restarting the board
+M1-COLLECT END (copies in C:\BC250\tmp\p6-flash-m1; the image file is E:\efi\wckfl\bc250-flash.dump)
+exit 0
+=== 2026-11-25T20:09:32Z pull C:\BC250\tmp\p6-flash-m1\bc250-flash.result bc250-flash.result
+a9213adf90aa9fbb64e5185dab0bcee98207c26431d0e550e356bbfe79fea8ce 490 P:\BC-250\scratch\t39\p6-flash\lab\m1\bc250-flash.result
+=== 2026-11-25T20:09:33Z pull C:\BC250\tmp\p6-flash-m1\bc250-stage-wckfl.log bc250-stage-wckfl.log
+5d3844e51deb3e942b7277cd3fe85866d9d3fd1513dafd162e6975bf786a58fa 918 P:\BC-250\scratch\t39\p6-flash\lab\m1\bc250-stage-wckfl.log
+=== 2026-11-25T20:09:34Z pull E:\efi\wckfl\bc250-flash.dump bc250-flash.dump
+f44cabeafe04f86f7159ab02d54bafd59f86e77e64f303c17db5ae7320c1fd08 16777216 P:\BC-250\scratch\t39\p6-flash\lab\m1\bc250-flash.dump
+=== 2026-11-25T20:10:08Z run m1-arm.ps1 -Clear
+utc 2026-11-25T20:10:26Z grubenv: bc250_stage_always=tpm bc250_tool_always=wcks
+M1-ARM CLEARED
+exit 0

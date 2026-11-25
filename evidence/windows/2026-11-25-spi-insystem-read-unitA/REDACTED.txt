@@ -1,0 +1,4 @@
+session.log is the log of the driver of the steps on the host. Each run of m1-install.ps1 in it lost two
+lines: `signer of the persistent stage copy: ...` and `signer of the new stage copy (staged): ...`. The lines
+end with the thumbprint of the certificate that signed the stage image. 4 lines were left out. Nothing
+else was changed.

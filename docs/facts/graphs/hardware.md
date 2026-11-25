@@ -47,6 +47,7 @@ flowchart LR
   M924["M924"]
   M936["M936"]
   M965["M965"]
+  M973["M973"]
   S1["S1"]
   S2["S2"]
   S3["S3"]
@@ -75,6 +76,7 @@ flowchart LR
   M924 ==>|supports| M815
   M936 ==>|supports| M35
   M965 ==>|supports| M14
+  M973 ==>|supersedes| M965
   M870 ==>|supports| M13
   M870 ==>|supports| M14
   M5 -.->|refutes| S3
@@ -260,6 +262,8 @@ flowchart LR
   M959["M959<br/>kmd"]
   M967["M967"]
   M968["M968<br/>tooling"]
+  M973["M973"]
+  M974["M974"]
   M2 --> M1
   M35 --> M333
   M43 --> M40
@@ -281,6 +285,7 @@ flowchart LR
   M936 --> M17
   M937 --> M17
   M967 --> M968
+  M974 --> M973
   M894 --> M896
   M959 --> M938
   M106 --> M79

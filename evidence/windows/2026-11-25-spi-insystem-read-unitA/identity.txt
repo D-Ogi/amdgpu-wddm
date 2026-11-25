@@ -1,0 +1,10 @@
+# image_identity.py <image of the start> <programmer read of 2026-11-19>
+scratch\t39\p6-flash\lab\m1\bc250-flash.dump: 16777216 bytes
+  sha256 f44cabeafe04f86f7159ab02d54bafd59f86e77e64f303c17db5ae7320c1fd08
+  base   0817b85481ef1aa3e8d1971e1d6a33152bf637867f8619e5a01ae5c5a276a28e
+  store  d19472e7e34eaa1a4d3973980278f1045f041e14d9075fc9e5ae536bd5085058
+scratch\t39\p6-tpm-native\evidence\spi-write-unitA-20261119T230836041Z-1066dee0c36e42d89a3c2b5eaf00024a\after2.bin: 16777216 bytes
+  sha256 73da918fd868069dcb923af98b64c706806ceb0dd979882e30b13d62b9e596cc
+  base   0817b85481ef1aa3e8d1971e1d6a33152bf637867f8619e5a01ae5c5a276a28e
+  store  f2bf5932491a85365fe0b8d416752b31d6fa7b1cff8810768b3e933148df74a5
+  against the first image: 0 bytes differ outside the store, 35751 inside it, lengths equal
