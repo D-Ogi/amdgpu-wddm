@@ -746,13 +746,18 @@ int main(){
   // The other COMPOSED rows have no sRGB sibling, so there is nothing more to admit.
   for(const auto& row:{std::tuple<DXGI_FORMAT,DXGI_FORMAT,unsigned long>
                       {DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,D3DDDIFMT_A8R8G8B8},
-                      {DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,D3DDDIFMT_A8B8G8R8}}){
+                      {DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,D3DDDIFMT_A8B8G8R8},
+                      // BD-408: the X views of the BGRA8 storage row, for a runtime resource (the HLK FlipQueue
+                      // writer's D3D9 X8R8G8B8 texture): LB7A A8R8G8B8 under a record of the X format itself.
+                      {DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_FORMAT_B8G8R8X8_UNORM,D3DDDIFMT_A8R8G8B8},
+                      {DXGI_FORMAT_B8G8R8X8_UNORM_SRGB,DXGI_FORMAT_B8G8R8X8_UNORM_SRGB,D3DDDIFMT_A8R8G8B8}}){
    target.Format=std::get<0>(row);shared_dxgi=std::get<1>(row);surface_format=std::get<2>(row);
    const auto before=shared_created;events.clear();
    {OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZIE");}
    assert(shared_created==before+1);
    {OwnerScope destroy(&owner,memory.allocation);assert(owner.free(&memory)==S_OK && events=="AMZIEVUR");}
   }
+  target.Format=DXGI_FORMAT_B8G8R8X8_TYPELESS;refused(E_NOTIMPL,"shared surface format");
   target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;shared_dxgi=DXGI_FORMAT_B8G8R8A8_UNORM;
   surface_format=D3DDDIFMT_A8R8G8B8;
   s.surface_layout_size=65537;refused(E_INVALIDARG,"shared surface layout");s.surface_layout_size=65536;

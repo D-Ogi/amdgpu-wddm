@@ -34,7 +34,8 @@ struct Surface {
 
 // The records a creator published for this surface, written exactly as the shell's allocation request writes them.
 bool records(const Surface& s, BC250_WDDM_ALLOCATION_PRIVATE& allocation, BC250_SURFACE_RESOURCE_PRIVATE& resource) {
-    const AMDGPU_WDDM_SURFACE_FORMAT* row = Bc250SharedSurfaceFormat(static_cast<unsigned long>(s.format));
+    // The record row (BD-408): an X view carries the LB7A format of its storage row.
+    const AMDGPU_WDDM_SURFACE_FORMAT* row = Bc250SharedSurfaceRecordFormat(static_cast<unsigned long>(s.format));
     if (!row) return false;
     BC250_SHARED_SURFACE shared{};
     shared.Width = s.width;
@@ -636,6 +637,56 @@ void gdi_surface_open(Env& env) {
                static_cast<unsigned long>(hr), m.adoptions - adoptions,
                static_cast<unsigned long long>(m.last_adopt_byte_size));
         if (hr == S_OK) destroy_opened(env, device, opened);
+    }
+
+    // BD-408, HLK FlipQueue: the shared texture of its writer is a D3D9 X8R8G8B8 texture, B8G8R8X8_UNORM (88) in
+    // D3D12, and D3D9On12 opens it at once in the same process (pfnCreateKMTHandle, OpenSharedHandle). The records
+    // of its create: LB7A A8R8G8B8 under an E26R record of 88. The engine must have a linear image of 88 with the
+    // pitch and size of the BGRA8 one, because the storage is the same.
+    {
+        Surface x = s;
+        x.format = DXGI_FORMAT_B8G8R8X8_UNORM;
+        UINT x_pitch = 0;
+        UINT64 x_backing = 0;
+        const bool x_layout = engine_layout(device, x, x_pitch, x_backing);
+        checkf(x_layout && x_pitch == pitch && x_backing == backing,
+               "x view open: the engine's linear image of 624x441 B8G8R8X8 has the BGRA8 pitch and size (pitch %u, "
+               "%llu bytes)",
+               x_pitch, static_cast<unsigned long long>(x_backing));
+        x.pitch = pitch;
+        x.size = backing;
+        BC250_WDDM_ALLOCATION_PRIVATE allocation{};
+        BC250_SURFACE_RESOURCE_PRIVATE resource{};
+        const bool written = records(x, allocation, resource);
+        checkf(written && allocation.Format == 21 && resource.Format == DXGI_FORMAT_B8G8R8X8_UNORM,
+               "x view open: the create's records are LB7A A8R8G8B8 under E26R B8G8R8X8_UNORM (LB7A format %lu, "
+               "E26R format %lu)",
+               static_cast<unsigned long>(allocation.Format), static_cast<unsigned long>(resource.Format));
+        Opened opened;
+        const uint32_t adoptions = m.adoptions;
+        hr = written ? open_surface(env, device, handle, allocation, resource, sizeof(resource), sizeof(allocation),
+                                    opened)
+                     : E_FAIL;
+        checkf(hr == S_OK && m.adoptions == adoptions + 1 && m.last_adopt_flags == want_flags &&
+                   m.last_adopt_byte_size == backing,
+               "x view open: the records of the shared create of 624x441 B8G8R8X8_UNORM open with one adopt (hr "
+               "%08lx, %u adopts, %llu bytes)",
+               static_cast<unsigned long>(hr), m.adoptions - adoptions,
+               static_cast<unsigned long long>(m.last_adopt_byte_size));
+        if (hr == S_OK) destroy_opened(env, device, opened);
+        // The X8 row's own LB7A format under the same record is not the storage row, so it is refused by name.
+        if (written) {
+            BC250_WDDM_ALLOCATION_PRIVATE x8 = allocation;
+            x8.Format = 22;
+            const size_t lines = refusal_lines("OpenHeapAndResource:").size();
+            refused(env, device, m, handle, x8, resource, sizeof(resource), sizeof(x8),
+                    "an E26R record of 88 over an LB7A X8R8G8B8 blob");
+            const std::vector<std::string> after = refusal_lines("OpenHeapAndResource:");
+            checkf(after.size() == lines + 1 &&
+                       after.back().find("declined at allocation format;") != std::string::npos,
+                   "x view open: that refusal is named \"allocation format\" (line %s)",
+                   after.size() > lines ? after.back().c_str() : "none");
+        }
     }
 
     // The kernel driver's blob of the same surface: Width 624, Height 441, Pitch 2560 (the width rounded up to 64
