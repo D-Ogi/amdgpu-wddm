@@ -933,6 +933,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='wddm-level';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace)}
   @{n='wddm-level-no-clamp';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace,'-NoClamp');Fails=$true}
   @{n='wddm-level-with-2-3';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace,'-WithLevel23');Fails=$true}
+  # BD-403: SupportContextlessPresent from 2.4, and a DxgkDdiPresent call without a context (present_contextless.h).
+  @{n='present-contextless';s='driver\kmd\test\run_present_contextless.ps1';a=@('-Root',$Workspace)}
+  @{n='present-contextless-every-level';s='driver\kmd\test\run_present_contextless.ps1';a=@('-Root',$Workspace,'-EveryLevel');Fails=$true}
+  @{n='present-contextless-serve';s='driver\kmd\test\run_present_contextless.ps1';a=@('-Root',$Workspace,'-ServeWithoutContext');Fails=$true}
   @{n='hang-recovery';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace)}
   @{n='hang-recovery-no-fence-guard';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreFenceGuard');Fails=$true}
   @{n='hang-recovery-any-vmid';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreVmidGuard');Fails=$true}

@@ -594,6 +594,12 @@ alone no longer identifies the process.
   "no candidate reached the driver" from "nobody was ever offered the flip", which is the one distinction
   the handshake is about. `tools\win\d3d12queue\scanout-trial.ps1` reads all four lines and names the state
   in its verdict.
+- `contextless presents (driver-wide) <calls>, redirected <n>, refused <n>`: the `DxgkDdiPresent` calls
+  with `hContext` NULL (BD-403). From WDDM 2.4 the KMD sets `SupportContextlessPresent`, and dxgkrnl then
+  sends every independent-flip token without a context. Thus these presents are not in `presents` or in
+  `redirected presents` above. Such a call names no adapter, so the count is for the whole driver. `refused`
+  counts the calls without a context that ask for a copy, a fill or a DMA buffer. The KMD cannot build them
+  and returns `STATUS_ILLEGAL_INSTRUCTION`. `present_contextless.h` gives the contract and its sources.
 
 ## Memory sizes in the private caps (0.7.216.28)
 

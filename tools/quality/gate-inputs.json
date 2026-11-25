@@ -1279,6 +1279,21 @@
         "host"
       ]
     },
+    "present-contextless": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "present-contextless-every-level": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "present-contextless-serve": {
+      "inputs": [
+        "host"
+      ]
+    },
     "hang-recovery": {
       "inputs": [
         "host"
