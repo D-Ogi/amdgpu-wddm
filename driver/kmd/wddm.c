@@ -4415,6 +4415,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
     Device->WddmApertureRequest = 0;
     Device->SystemPages64K = FALSE;
+    Device->SystemSizes64K = FALSE;
     Device->ComposedSourceModes = FALSE;
     Device->CommittedSourceFormat = 0;
     Device->LargePageLayout = FALSE;
@@ -4769,12 +4770,13 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // The aperture's Size and CommitLimit follow the size (WddmQuerySegment4); the shared pool does not, because
     // dxgkrnl's implicit system-memory segment already has no commit limit (calculating-graphics-memory.md).
     {
-        int clamped=0,pages64k=0;
+        int clamped=0,pages64k=0,sizes64k=0;
         const ULONG stored=GuardReadSetting(L"ApertureSegmentMegabytes",
                                             (ULONG)(PAGING_APERTURE_DEFAULT_BYTES/PAGING_APERTURE_MIB));
-        // Bit 31 of the stored value is the 64 KiB host page switch (paging_window.h says why it lives here).
-        // Without the bit, asked is the stored value and everything below is as it was.
-        const ULONG asked=PagingApertureSettingMegabytes(stored,&pages64k);
+        // Bit 31 of the stored value is the 64 KiB host page switch, bit 30 next to it the 64 KiB sizes
+        // (paging_window.h says why they live here). Without bit 31, asked is the stored value and everything
+        // below is as it was.
+        const ULONG asked=PagingApertureSettingMegabytes(stored,&pages64k,&sizes64k);
         Device->WddmApertureRequest=PagingApertureBytesForSetting(asked,&clamped);
         GuardLog("wddm: OS aperture asked %lu MiB, using %llu MiB%s (only MAP_APERTURE_SEGMENT uses it)",asked,
                  Device->WddmApertureRequest/PAGING_APERTURE_MIB,clamped?" (clamped to 256..447)":"");
@@ -4785,9 +4787,15 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         // depend on LargePages or on the large page layout: a host page arrives as its own physical address.
         // dxgmms2 uses the cap only with its own switch on: Use64KPages (REG_DWORD 1) under
         // HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\MemoryManager, read when dxgmms2 loads.
+        // Two stages. Bit 31 alone: the caps and the translation, no allocation changes. With bit 30: the
+        // allocations that may live in the aperture are also sized and aligned to 64 KiB (WddmCreateAdmit).
         Device->SystemPages64K=(BOOLEAN)(pages64k!=0);
-        if (pages64k)
+        Device->SystemSizes64K=(BOOLEAN)(pages64k!=0 && sizes64k!=0);
+        if (pages64k) {
             GuardLog("wddm: ApertureSegmentMegabytes 0x%08lX: bit 31, 64 KiB host pages asked (needs Use64KPages)",stored);
+            GuardLog("wddm: 64 KiB sizes %s",sizes64k ? "on (bit 30): aperture allocations sized and aligned to 64 KiB" :
+                                                        "off (bit 30 clear): no allocation changes");
+        }
     }
     GuardStartSubStep(L"os-aperture");
     status=GartCaptureAperture(Device,&Device->WddmAperture);
@@ -4835,6 +4843,7 @@ Failed:
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
     Device->WddmApertureRequest = 0;
     Device->SystemPages64K = FALSE;
+    Device->SystemSizes64K = FALSE;
     ExFreePoolWithTag(startup,BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm->ObjectIndex.Buckets,BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm,BC250_WDDM_TAG);
@@ -6661,16 +6670,20 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
                                      segment == BC250_WDDM_SEGMENT_APERTURE ? &wddm->UmdAllocsAperture :
                                      &wddm->UmdAllocsLocalOnly);
         }
-        // 64 KiB host pages (Device->SystemPages64K). VidMm backs an allocation with 64 KiB pages when its
-        // supported set has an aperture segment and its size is a multiple of 64 KiB (above 4 MiB it rounds
-        // the backing itself), and it maps with 64 KiB entries only an allocation whose "alignment and the size
-        // are a multiple of 64 KB" (Microsoft, Support for 64KB Pages). So an allocation of 64 KiB or more that
-        // may live in the aperture gets both. The size grows by less than 64 KiB; the user-mode driver maps its
-        // own size, which is a prefix. An allocation below 64 KiB keeps 4 KB pages, and so does a VRAM-only one.
-        if (device->SystemPages64K && info->Size >= BC250_VIDMM_PAGE_64K_BYTES &&
+        // 64 KiB sizes (Device->SystemSizes64K, bit 30 next to bit 31). VidMm backs an allocation with 64 KiB
+        // pages when its supported set has an aperture segment and its size is a multiple of 64 KiB (above 4 MiB
+        // it rounds the backing itself), and it maps with 64 KiB entries only an allocation whose "alignment and
+        // the size are a multiple of 64 KB" (Microsoft, Support for 64KB Pages). So an allocation of 64 KiB or
+        // more that may live in the aperture gets both (PagingHostPage64KSize). The size grows by less than
+        // 64 KiB; the user-mode driver maps its own size, which is a prefix. An allocation below 64 KiB keeps
+        // 4 KB pages, and so does a VRAM-only one. VidMm fills and transfers the grown size: UmdVidMmBytes.
+        if (device->SystemSizes64K && info->Size >= BC250_VIDMM_PAGE_64K_BYTES &&
             (placement.supported & (1ul << (BC250_WDDM_SEGMENT_APERTURE - 1))) != 0) {
-            info->Size = (info->Size + (BC250_VIDMM_PAGE_64K_BYTES - 1)) & ~(SIZE_T)(BC250_VIDMM_PAGE_64K_BYTES - 1);
-            if (info->Alignment < BC250_VIDMM_PAGE_64K_BYTES) info->Alignment = (UINT)BC250_VIDMM_PAGE_64K_BYTES;
+            unsigned long long size = info->Size;
+            unsigned long alignment = info->Alignment;
+            (void)PagingHostPage64KSize(&size, &alignment);
+            info->Size = (SIZE_T)size;
+            info->Alignment = (UINT)alignment;
             object->UmdVidMmBytes = info->Size;
             if (wddm != NULL) InterlockedIncrement(&wddm->UmdAllocs64K);
         }

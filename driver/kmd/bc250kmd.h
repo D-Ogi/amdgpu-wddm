@@ -491,10 +491,13 @@ typedef struct _BC250_DEVICE {
     BOOLEAN LargePageLayout;
     BOOLEAN LargePages;
     // Bit 31 of ApertureSegmentMegabytes (paging_window.h), latched by WddmStart with the aperture size and not
-    // changed until stop. The GpuMmu caps report SysMem64KBPageSupported and a 64 KiB leaf table size, an
-    // allocation that may live in the aperture segment is sized and aligned to 64 KiB, and vidmm.c maps an entry
-    // of a 64 KiB page table as 16 leaf entries with fragment 4. It does not use the large page layout.
+    // changed until stop. The GpuMmu caps report SysMem64KBPageSupported and a 64 KiB leaf table size, and
+    // vidmm.c maps an entry of a 64 KiB page table as 16 leaf entries with fragment 4. It does not use the
+    // large page layout, and alone it changes no allocation.
     BOOLEAN SystemPages64K;
+    // Bit 30 next to bit 31: an allocation that may live in the aperture segment is also sized and aligned to
+    // 64 KiB (wddm.c WddmCreateAdmit). Never TRUE without SystemPages64K.
+    BOOLEAN SystemSizes64K;
     PVOID Wddm;                         // wddm.c, NULL unless FullWddm
     BOOLEAN MmioIhEnabled;
     BOOLEAN GfxStopPrepared;            // hardware retirement attempted in this device generation

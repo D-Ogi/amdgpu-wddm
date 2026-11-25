@@ -31,13 +31,28 @@ unsigned long long PagingApertureBytesForSetting(unsigned long megabytes, int* c
     return bytes;
 }
 
-unsigned long PagingApertureSettingMegabytes(unsigned long stored, int* pages64k)
+unsigned long PagingApertureSettingMegabytes(unsigned long stored, int* pages64k, int* sizes64k)
 {
     const int flag=(stored&PAGING_APERTURE_SETTING_PAGES_64K)!=0;
-    unsigned long megabytes=stored&~PAGING_APERTURE_SETTING_PAGES_64K;
+    // Bit 30 is a flag only next to bit 31: without it the value is the size it always was.
+    const int sizes=flag && (stored&PAGING_APERTURE_SETTING_SIZES_64K)!=0;
+    unsigned long megabytes=stored;
+    if (flag) megabytes&=~(PAGING_APERTURE_SETTING_PAGES_64K|PAGING_APERTURE_SETTING_SIZES_64K);
     if (flag && megabytes==0) megabytes=(unsigned long)(PAGING_APERTURE_DEFAULT_BYTES/PAGING_APERTURE_MIB);
     if (pages64k) *pages64k=flag;
+    if (sizes64k) *sizes64k=sizes;
     return megabytes;
+}
+
+int PagingHostPage64KSize(unsigned long long* size, unsigned long* alignment)
+{
+    int changed=0;
+    unsigned long long rounded;
+    if (!size || !alignment || *size<PAGING_HOST_PAGE_64K || *size>~0ull-(PAGING_HOST_PAGE_64K-1)) return 0;
+    rounded=(*size+(PAGING_HOST_PAGE_64K-1))&~(PAGING_HOST_PAGE_64K-1);
+    if (rounded!=*size) { *size=rounded; changed|=PAGING_HOST_64K_GREW; }
+    if (*alignment<PAGING_HOST_PAGE_64K) { *alignment=(unsigned long)PAGING_HOST_PAGE_64K; changed|=PAGING_HOST_64K_ALIGNED; }
+    return changed;
 }
 
 int PagingRangeInAllocation(unsigned long long size, unsigned long long offset, unsigned long long bytes)
