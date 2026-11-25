@@ -213,7 +213,7 @@ Check 'dev-swap' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Ou
 # build writes from the quad the release builder maps; this compiles the resource with the kit's own rc.exe, reads
 # the numbers back out of the compiled bytes and holds the refusal of a resource built without them. Two seconds.
 Check 'kmd-version-rc' { & python "$repo\tools\build\test_kmd_version_rc.py" --kits "$Kits" --out "$Out\kmd-version-rc" }
-Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|shim)/' --out "$Out\kmd-contract" }
+Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|common/board|shim)/' --out "$Out\kmd-contract" }
  Check 'guardlog-width' { & python "$repo\tools\quality\guardlog_width.py" --kmd "$repo\driver\kmd" --baseline "$repo\tools\quality\guardlog_width_baseline.txt" --out "$Out\guardlog-width" }
  # The failure statuses a KMD DDI can return, against its return table: SubmitCommandVirtual may fail with
  # STATUS_INVALID_PARAMETER only, any other failure is a bugcheck. --self-test also holds two mutants to a failure.
