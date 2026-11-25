@@ -2,7 +2,10 @@
 #include "runtime-image-memory.h"
 #include "runtime-texture.h"
 #include "runtime-surface.h"
+#include "runtime-surface-allocation.h"
+#include "runtime-surface-format.h"
 #include "../../contract/bc250_nv12_layout.h"
+#include "../../kmd/dcn_translate.h"
 #include <cstdlib>
 #include <iostream>
 using namespace bc250::umd;
@@ -21,6 +24,9 @@ VkResult VKAPI_CALL allocate(VkDevice,const VkMemoryAllocateInfo *a,const VkAllo
     ++allocations;
     auto *i=static_cast<const bc250_host_import *>(a->pNext);
     auto *d=static_cast<const VkMemoryDedicatedAllocateInfo *>(i->pNext);
+    // BD-412: the hosted winsys (radv_wddm2_bo_from_hosted, mesa-wddm2-runtime-queues 0007) refuses an import
+    // whose VA or size is not whole pages.
+    if ((i->va&4095) || (i->size&4095)) return VK_ERROR_INVALID_EXTERNAL_HANDLE;
     check(i->identity==hostIdentity && i->allocation==31 && i->va==65536 && i->size==8192 && d->image);
     check(d->sType==VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO && a->allocationSize==(nv12Prepare ? nv12Memory.size : 4096) && a->memoryTypeIndex==1);
     if (allocationResult==VK_SUCCESS) *m=memory; return allocationResult;
@@ -345,6 +351,34 @@ int main() {
     check(finish_runtime_surface(device,imageDispatch,textureDispatch,properties,adopted)==S_OK);
     check(close_runtime_surface(bridge,device,imageDispatch,textureDispatch,adopted)==S_OK);
     check(surfaceAllocates==allocationsBeforeAdopt && !opened.runtime_resource);
+    // BD-412: a record whose size is not whole pages, as the KMD writes for a window's GDI surface
+    // (DcnSharedTextureLayout: pitch * rows rounded up to 4, 2816 * 520 = 357.5 pages at 656x519). The
+    // contract lets the producer do that (Bc250SharedSurfaceGeometry) and the mapping covers whole pages, so the
+    // import names the mapped range. Before the fix the import carried the record's 4100 bytes, the winsys
+    // refused it, and the open failed (the windowed blt-model Present of every such window).
+    {
+        BC250_WDDM_ALLOCATION_PRIVATE ragged=request.surface; ragged.Size=4100;
+        RuntimeSurface partial; closingSurface=&partial;
+        opened={&identity,31,77};
+        check(adopt_runtime_surface(runtime,queue,opened,ragged,textureDesc,partial)==S_FALSE);
+        check(partial.bytes==4100 && partial.mapping.bytes==8192);
+        check(finish_runtime_surface(device,imageDispatch,textureDispatch,properties,partial)==S_OK &&
+              partial.phase==SurfacePhase::ready && partial.texture.texture);
+        check(close_runtime_surface(bridge,device,imageDispatch,textureDispatch,partial)==S_OK);
+        closingSurface=&adopted;
+    }
+    // BD-412: the KMD's GDI type-1 layout against the import rule, for every width the shell can open: the import
+    // range (the mapping, whole pages) is at least the record's size, and the record passes the shared geometry rule.
+    for (unsigned long w=1;w<=4096;++w) {
+        for (unsigned long h:{1ul,2ul,3ul,4ul,5ul,7ul,16ul,63ul,64ul,480ul,519ul,843ul,1080ul,2160ul}) {
+            unsigned long pitch=0; unsigned long long bytes=0;
+            check(DcnSharedTextureLayout(w,h,&pitch,&bytes)!=0);
+            BC250_WDDM_ALLOCATION_PRIVATE kmd{BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,w,h,pitch,D3DDDIFMT_A8R8G8B8,bytes};
+            check(runtime_surface_geometry(kmd,4));
+            const UINT64 mapped=runtime_surface_mapped_bytes(bytes);
+            if ((mapped&4095) || mapped<bytes || mapped-bytes>4095) check(false);
+        }
+    }
     auto realDispatch=texture_import_dispatch(importEngine);
     ID3D11Texture2D *wrapped=nullptr;
     info.tiling=VK_IMAGE_TILING_LINEAR;
