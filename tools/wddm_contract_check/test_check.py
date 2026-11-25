@@ -548,13 +548,19 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
 """
 
     @staticmethod
-    def wddm29(answer_type16=True, link_info=True, mpo3=True):
+    def wddm29(answer_type16=True, link_info=True, mpo3=True, contextless=True):
         """The stage B4 shape (BD-307): interface 0xE003, table WDDM2_9, WDDMVersion 2.9, type 16 answered,
-        UpdateMonitorLinkInfo and the MPO3 trio in the table, with the MPO3 report and flip."""
+        UpdateMonitorLinkInfo and the MPO3 trio in the table, with the MPO3 report and flip, and (BD-403)
+        SupportContextlessPresent reported."""
         wddm = GOOD_WDDM.replace("Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_0;",
                                  "Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_9;")
         wddm = wddm.replace("#define DXGKDDI_INTERFACE_VERSION 0x5023", "#define DXGKDDI_INTERFACE_VERSION 0xE003")
         wddm = wddm.replace("caps->WDDMVersion = DXGKDDI_WDDMv2;", "caps->WDDMVersion = DXGKDDI_WDDMv2_9;")
+        if contextless:
+            wddm = wddm.replace("    caps->SupportDirectFlip = TRUE;",
+                                "    caps->SupportDirectFlip = TRUE;\n"
+                                "    caps->MiscCaps.SupportContextlessPresent = "
+                                "Bc250ContextlessPresentCap(Device->WddmLevel);")
         if answer_type16:
             wddm = wddm.replace("    case DXGKQAITYPE_NUMPOWERCOMPONENTS:",
                                 "    case DXGKQAITYPE_DISPLAY_DRIVERCAPS_EXTENSION:\n"
@@ -586,9 +592,22 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay3(_In_ const 
         for rule_id in ("R20-WDDMVERSION-VS-INTERFACE", "R43-WDDMVERSION-ACCEPTED",
                         "R44-WDDMVERSION-ABOVE-2-5-INTERFACE", "R45-QAI-16-ANSWERED-FROM-2-2",
                         "R46-UPDATEMONITORLINKINFO-FROM-2-4", "R47-MPO3-TRIO-FROM-2-1",
-                        "R48-MPO3-FLIP-RETIRED-BY-PRESENTID", "R49-MPO-CAPS-DDIS-FROM-2-2"):
+                        "R48-MPO3-FLIP-RETIRED-BY-PRESENTID", "R49-MPO-CAPS-DDIS-FROM-2-2",
+                        "R50-CONTEXTLESS-PRESENT-FROM-2-4"):
             self.assertEqual(check.OK, result[rule_id], rule_id)
         self.assertIn(16, facts.qai_handled)
+
+    def test_wddm29_without_contextless_present(self):
+        """BD-403: the HLK job 'WDDM2.4 Mandatory Caps' fails a 2.4 or later driver without the bit."""
+        result, _ = statuses(wddm=self.wddm29(contextless=False))
+        self.assertOnlyViolation(result, "R50-CONTEXTLESS-PRESENT-FROM-2-4")
+
+    def test_wddm22_needs_no_contextless_present(self):
+        """Below 2.4 dxgkrnl does not read MiscCaps, so a 2.2 driver without the bit is not a violation."""
+        wddm = self.wddm29(contextless=False).replace("caps->WDDMVersion = DXGKDDI_WDDMv2_9;",
+                                                      "caps->WDDMVersion = DXGKDDI_WDDMv2_2;")
+        result, _ = statuses(wddm=wddm)
+        self.assertEqual(check.NA, result["R50-CONTEXTLESS-PRESENT-FROM-2-4"])
 
     def test_wddm20_needs_no_mpo3(self):
         """At WDDMVersion 2.0 dxgkrnl reads no 2.1 member: the good fixture has none and both rules are n/a."""

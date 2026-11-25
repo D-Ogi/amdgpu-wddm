@@ -528,7 +528,8 @@ part of the `cpu-visible` count of the line `wddm summary: lb7a cpu view`. `cpu_
 `driver/kmd/test/check_cpu_view_on_demand.py` (quick gate `cpu-view-on-demand`) checks the KMD side and its
 negative controls.
 
-After each DRIVERCAPS line comes `wddm: DRIVERCAPS mpo <SupportMultiPlaneOverlay> planes <MaxOverlayPlanes>`.
+After each DRIVERCAPS line comes `wddm: DRIVERCAPS mpo <SupportMultiPlaneOverlay> planes <MaxOverlayPlanes> misc
+<MiscCaps.Value>`. Bit 0 of `misc` is `SupportContextlessPresent`, which the KMD sets from WDDM 2.4 (BD-403).
 The log ring keeps the first 256 lines of a start, and the first DRIVERCAPS line comes after them, so a busy start
 can lose it (BD-324). The KMD keeps the first reply of the start, and `bc250kmd_cli log summary` prints it:
 `wddm summary: DRIVERCAPS first <size> bytes: wddm <version>/<source> ...` with the fields of the

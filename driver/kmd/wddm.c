@@ -5532,6 +5532,10 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     caps->SupportPerEngineTDR = TRUE;
     caps->SupportDirectFlip = TRUE;
     caps->SupportSurpriseRemoval = FALSE;
+    // BD-403: from 2.4 dxgkrnl passes hContext NULL to DxgkDdiPresent for an independent-flip token, and the HLK
+    // job "WDDM2.4 Mandatory Caps" requires the bit at 2.4 or later. Bc250WddmPresent answers such a call without a
+    // context (present_contextless.h has the contract and its sources). Below 2.4 dxgkrnl does not read MiscCaps.
+    caps->MiscCaps.SupportContextlessPresent = Bc250ContextlessPresentCap(Device->WddmLevel);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     // BD-223: MaxOverlayPlanes counts the primary, so 1 is plane 0 alone (LabScaledPlane bit 2 asks 2 below level 2.2, a
     // lab question; Check still refuses a second plane). The count is the trailer's (WddmMpoFlags), which the front
@@ -5741,8 +5745,8 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
              caps->MemoryManagementCaps.Value, caps->FlipCaps.Value,
              caps->MaxAllocationListSlotId, caps->SupportPerEngineTDR ? '1' : '0', caps->SupportDirectFlip ? '1' : '0',
              caps->SupportSmoothRotation ? '1' : '0');
-        GuardLog("wddm: DRIVERCAPS mpo %u planes %lu", caps->SupportMultiPlaneOverlay ? 1u : 0u,
-                 (ULONG)caps->MaxOverlayPlanes);
+        GuardLog("wddm: DRIVERCAPS mpo %u planes %lu misc 0x%X", caps->SupportMultiPlaneOverlay ? 1u : 0u,
+                 (ULONG)caps->MaxOverlayPlanes, caps->MiscCaps.Value);
     }
     return STATUS_SUCCESS;
 }
