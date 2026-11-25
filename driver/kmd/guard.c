@@ -303,6 +303,38 @@ int GuardDesktopKillSwitch(void)
     return g_DesktopKillSwitch;
 }
 
+// The second half of the LargePages gate, both flavours: LargePagesSmallCarveout (REG_DWORD under Parameters, read
+// only in DriverEntry). The catalog setting LargePages stays the master gate with its values 0, 1 and 2. This value
+// says what a start with LargePages 1 or 2 does when the carve-out holds no 1 GiB physical boundary: 0, absent,
+// unreadable, another type or any other number keeps the answer of every earlier driver (large pages off, the plain
+// layout); 1 lets the start use the layout with the segment base on 2 MiB (wddm.c WddmSettleLargePageLayout). Not a
+// catalog setting: the allowed set of LargePages is {0, 1, 2} in driver/state/catalog.json, so a new value of it is
+// refused at the write and at the read, and a change of the set is a new CatalogId, on which an image that replaces
+// the installed one does not start (tools/state/kmd_swap_catalog.py). A later catalog entry can replace this value.
+// An administrator sets it with reg.exe; it takes effect at the next load of the driver.
+static ULONG g_LargePagesSmallCarveout;
+
+void GuardReadLargePagesSmallCarveout(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status;
+    ULONG value = 0;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (NT_SUCCESS(status)) {
+        status = ParameterDword(key, L"LargePagesSmallCarveout", &value);
+        ZwClose(key);
+    }
+    g_LargePagesSmallCarveout = (NT_SUCCESS(status) && value == 1) ? 1 : 0;
+    GuardLog("wddm: setting LargePagesSmallCarveout %lu (Parameters, read only, value %lu, 0x%08X)",
+             g_LargePagesSmallCarveout, value, status);
+}
+
+ULONG GuardLargePagesSmallCarveout(void)
+{
+    return g_LargePagesSmallCarveout;
+}
+
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-235 lab experiment, lab flavour only, not a catalog setting: the paging ring's start pointer.
 // The seed is PagingRingStartBytes (REG_QWORD) with PagingRingStartNonce (REG_QWORD, nonzero), both in the driver's

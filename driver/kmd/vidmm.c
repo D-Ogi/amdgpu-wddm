@@ -106,6 +106,36 @@ static ULONGLONG VidMmSystemLimit(void)
     return limit;
 }
 
+// The large-page half of the translation context, from the layout of this start. Pte->vram_base is already the
+// physical address of the segment base. With Device->LargePageLayout, WddmMemoryLayout starts the segment on a 1 GiB
+// physical boundary (GIANT) or on a 2 MiB one (HUGE), and with Device->LargePages the GpuMmu caps report
+// LargePageSupported (wddm.c). If the base is not aligned, VidMm's aligned segment offsets are not aligned addresses:
+// fail the start, instead of refusing every large page later. A layout value that is none of the three fails the
+// start as well, and so do large pages without a layout.
+//   On the HUGE layout only level 1 is a large page (huge_pages_only): the base promises 2 MiB and no more, and the
+// cap has no bit that says so to VidMm. The GPU address of the base is checked with the physical one, as
+// WddmMemoryLayout checked it: the two must be on 2 MiB together. The host test extracts this function
+// (driver/kmd/test/generate_vram_geometry_test.py).
+static NTSTATUS VidMmLargePageContext(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset,
+                                      _Inout_ struct bc250_pte_context* Pte)
+{
+    Pte->large_pages = 0;
+    Pte->huge_pages_only = 0;
+    if (Device->LargePageLayout == BC250_LARGE_PAGE_LAYOUT_GIANT) {
+        if ((Pte->vram_base & (BC250_VIDMM_GIANT_PAGE_BYTES-1)) != 0) return STATUS_INVALID_PARAMETER;
+    } else if (Device->LargePageLayout == BC250_LARGE_PAGE_LAYOUT_HUGE) {
+        if ((Pte->vram_base & (BC250_VIDMM_HUGE_PAGE_BYTES-1)) != 0 ||
+            ((Device->VramMcBase + SegmentOffset) & (BC250_VIDMM_HUGE_PAGE_BYTES-1)) != 0)
+            return STATUS_INVALID_PARAMETER;
+    } else if (Device->LargePageLayout != BC250_LARGE_PAGE_LAYOUT_NONE) return STATUS_INVALID_PARAMETER;
+    if (Device->LargePages) {
+        if (Device->LargePageLayout == BC250_LARGE_PAGE_LAYOUT_NONE) return STATUS_INVALID_PARAMETER;
+        Pte->large_pages = 1;
+        Pte->huge_pages_only = (Device->LargePageLayout == BC250_LARGE_PAGE_LAYOUT_HUGE) ? 1u : 0u;
+    }
+    return STATUS_SUCCESS;
+}
+
 NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId,
                           ULONGLONG TableOffset, ULONGLONG TableLength, ULONG TableSegmentId)
 {
@@ -148,14 +178,9 @@ NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffs
         g_VidMm.Pte.table_base=g_VidMm.SegmentPhysical;
         g_VidMm.Pte.table_size=TableLength;
     }
-    // With Device->LargePageLayout, WddmMemoryLayout starts the segment on a 1 GiB physical boundary, and with
-    // Device->LargePages the GpuMmu caps report LargePageSupported (wddm.c). If the base is not aligned, VidMm's
-    // aligned segment offsets are not aligned addresses: fail the start, instead of refusing every large page later.
-    if (Device->LargePageLayout && (g_VidMm.Pte.vram_base & (BC250_VIDMM_GIANT_PAGE_BYTES-1)) != 0)
-        return STATUS_INVALID_PARAMETER;
-    if (Device->LargePages) {
-        if (!Device->LargePageLayout) return STATUS_INVALID_PARAMETER;
-        g_VidMm.Pte.large_pages = 1;
+    {
+        NTSTATUS large = VidMmLargePageContext(Device, SegmentOffset, &g_VidMm.Pte);
+        if (!NT_SUCCESS(large)) return large;
     }
     g_VidMm.Pte.system_limit = VidMmSystemLimit();
     g_VidMm.Write = (GuardReadSetting(L"EnableGpuVa", 0) == 1) && Device->VramWriteEnabled;
@@ -197,7 +222,8 @@ NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffs
     GuardLog("vidmm: table segment %u at physical 0x%llX + 0x%llX, host memory below 0x%llX, updates are %s", TableSegmentId,
              g_VidMm.SegmentPhysical, TableLength, g_VidMm.Pte.system_limit, g_VidMm.Write ? "WRITTEN" : "planned only (EnableGpuVa closed)");
     GuardLog("vidmm: VRAM segment %u at physical 0x%llX + 0x%llX, large pages %s", VramSegmentId, g_VidMm.Pte.vram_base,
-             g_VidMm.Pte.vram_size, g_VidMm.Pte.large_pages ? "2 MiB at level 1 and 1 GiB at level 2" : "off");
+             g_VidMm.Pte.vram_size, !g_VidMm.Pte.large_pages ? "off" :
+             g_VidMm.Pte.huge_pages_only ? "2 MiB at level 1 only (base on 2 MiB)" : "2 MiB at level 1 and 1 GiB at level 2");
     return STATUS_SUCCESS;
 }
 
@@ -915,11 +941,14 @@ void VidMmSummary(void)
                      level,segment,coherent,noncoherent);
         }
     }
-    GuardLog("vidmm summary: large pages %s", vm->Pte.large_pages ? "reported" : "not reported");
+    GuardLog("vidmm summary: large pages %s", !vm->Pte.large_pages ? "not reported" :
+             vm->Pte.huge_pages_only ? "reported, level 1 only (base on 2 MiB)" : "reported");
     for (level = 1; level < BC250_VIDMM_LEVELS; level++) {
         LONG64 encoded=InterlockedCompareExchange64(&vm->EncodedLarge[level],0,0);
         LONG64 refused=InterlockedCompareExchange64(&vm->RefusedLarge[level],0,0);
-        if (encoded || refused)
+        // On the 2 MiB layout the level 1 line is printed with zeros too: "VidMm sent no 2 MiB page" is the result
+        // of that start, and no line would not say it. A refusal at level 2 there is the fail-closed path.
+        if (encoded || refused || (level == 1 && vm->Pte.large_pages && vm->Pte.huge_pages_only))
             GuardLog("vidmm summary: level %u large pages encoded %lld, refused %lld", level, encoded, refused);
     }
     GuardLog("vidmm summary: %ld cpu-virtual calls, %ld gpu-physical calls, %ld gpu-physical refusals",
