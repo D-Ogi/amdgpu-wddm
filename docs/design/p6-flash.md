@@ -15,7 +15,7 @@ measurements of this page it writes it.
 | Part | State |
 |---|---|
 | Job `read`: the image through the firmware, and two files beside the stage image | built. The host tests pass. MEASURED on unit A on 2026-11-25: [M973](../facts/hardware.md#m973) |
-| Job `test`: each function of the protocol on one free sector, for the measurement M2 | built. The host tests pass. Not measured on a unit |
+| Job `test`: each function of the protocol on one free sector and on the next sector, for the measurement M2 | built. The host tests pass. Not measured on a unit |
 | Job `apply`: a package writes the image | the design in this page. Not built |
 
 ## The sources
@@ -138,44 +138,58 @@ status line.
 
 ### Job test
 
-The job is for the measurement M2. It calls each function of the protocol on one sector that the load option
-`flash.sector=<hex>` names. The module reads the image first. The sector must be behind the last file of the outer
-volume, and it must not be the first sector of the volume: for any other sector the job writes nothing.
+The job is for the measurement M2. It calls each function of the protocol on one sector S that the load option
+`flash.sector=<hex>` names, and on the next sector N. The module reads the image first. Both sectors must be behind
+the last file of the outer volume: for any other sector the job writes nothing.
 
 | Step | Call | The read after it must show |
 |---|---|---|
 | 1 | `Open` | |
-| 2 | `Read` | each byte `FF`: the sector was erased before the test |
-| 3 | `Erase` | each byte `FF` |
-| 4 | `Read` | |
-| 5 | `Write` | the first pattern |
-| 6 | `Read` | |
-| 7 | `EraseWrite` | the second pattern, the complement of the first |
-| 8 | `Read` | |
-| 9 | `Erase` | each byte `FF` |
-| 10 | `Read` | |
-| 11 | `Close` | |
-| 12 | `Read` | each byte `FF`, outside the session |
+| 2 | `Read` S | each byte `FF`: S was erased before the test |
+| 3 | `Erase` S | |
+| 4 | `Read` S | each byte `FF` |
+| 5 | `Write` S | |
+| 6 | `Read` S | the first pattern |
+| 7 | `EraseWrite` S | |
+| 8 | `Read` S | the second pattern, the complement of the first |
+| 9 | `Write` N | |
+| 10 | `Read` N | the third pattern |
+| 11 | `Erase` S | |
+| 12 | `Read` S | each byte `FF` |
+| 13 | `Read` N | the third pattern: the erase of S left N |
+| 14 | `Write` 4 bytes of S at `0x28` | |
+| 15 | `Read` S | each byte `FF`, but for the four bytes `_FVH` |
+| 16 | `Erase` S | |
+| 17 | `Read` S | each byte `FF` |
+| 18 | `Erase` N | |
+| 19 | `Read` N | each byte `FF` |
+| 20 | `Close` | |
+| 21 | `Read` S | each byte `FF`, outside the session |
+| 22 | `Read` N | each byte `FF`, outside the session |
 
-When a call fails, or a read shows other bytes, the job goes on only with the steps that erase the sector again and
-end the session: from step 5 on, these are the steps 9 to 12. Before step 5, these are the steps 11 and 12. A failed
-`Open` ends the job.
+Step 13 measures that an erase of one sector leaves the next sector. Step 14 is the write of the signature of a
+volume header into an erased first sector. The job apply needs that write after the first sector of the outer
+volume ("The signature of a volume").
+
+When a call fails, or a read shows other bytes, the job goes on only with the steps that erase both sectors again
+and end the session: from step 5 on, these are the steps 16 to 22. Before step 5, these are the steps 20 to 22. A
+failed `Open` ends the job.
 
 After the test the module reads the image again. The result file has the keys of the job `read` for the image
 before the test, then these keys:
 
 | Key | Value |
 |---|---|
-| `sector` | the image offset of the sector |
-| `sector-place` | `free`, or why the sector is not free |
+| `sector` | the image offset of S |
+| `sector-place`, `next-sector-place` | `free`, or why S or N is not free |
 | `test <number> <call>` | `status`, the status of the call. `ms`, its time in milliseconds, or `?` when the processor has no constant time stamp counter. Then `as-expected` or `not-as-expected` |
 | `error` | `test step <number> not as expected` |
 | `sha256-after`, `base-after`, `store-after` | the three digests of the image after the test |
-| `diff-in-sector`, `diff-in-store`, `diff-elsewhere` | the bytes that changed between the two reads, in the sector, in the variable store and in the rest of the image |
+| `diff-in-sectors`, `diff-in-store`, `diff-elsewhere` | the bytes that changed between the two reads, in the two sectors, in the variable store and in the rest of the image |
 
-The job ends with `status ok` when each step was as expected, no byte outside the sector and the variable store
-changed, and the name of the base is the same before and after the test. The image after the test goes into the
-image file.
+The job ends with `status ok` when each step was as expected, no byte outside the two sectors and the variable
+store changed, and the name of the base is the same before and after the test. The image after the test goes into
+the image file.
 
 ### Job apply (the design)
 

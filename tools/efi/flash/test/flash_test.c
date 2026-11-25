@@ -128,19 +128,25 @@ static void expected_base(const unsigned char *image, size_t bytes, unsigned cha
 
 /* ---- the write test on a model of a flash chip ------------------------------------------------------------------ */
 
-/* The chip of one sector. An erase sets 0xFF, and a write can only clear bits. One call can be made to answer an
- * error. That call changes nothing. */
+/* The chip of two sectors, S and N. An erase sets one sector to 0xFF, and a write can only clear bits. One call can
+ * be made to answer an error. That call changes nothing. Two defects can be put in: an erase of S that also erases
+ * N, and a small write that lands one byte too far. */
 struct chip {
-	unsigned char bytes[FLASH_SECTOR_BYTES];
+	unsigned char bytes[2u * FLASH_SECTOR_BYTES];
 	unsigned calls;			/* the calls so far, from 1 */
 	unsigned fail_call;		/* this call answers an error; 0: none */
 	int no_erase, no_write;		/* the erase and the write change nothing, and answer success */
+	int coarse_erase;		/* an erase of S erases N too */
+	int shifted_small_write;	/* a write of less than a sector lands one byte too far */
 };
 #define TEST_SECTOR		0xC24000ul
+#define NEXT_SECTOR		(TEST_SECTOR + FLASH_SECTOR_BYTES)
 #define CHIP_ERROR		0x800000000000000Eull
 #define BIT(step)		(1u << (step))
 #define RAN_ALL			((1u << FWT_STEPS) - 1u)
-#define RAN_SESSION		(BIT(FWT_OPEN) | BIT(FWT_READ_FIRST) | BIT(FWT_CLOSE) | BIT(FWT_READ_OUTSIDE))
+#define RAN_OPEN_SESSION	(BIT(FWT_OPEN) | BIT(FWT_READ_S0) | BIT(FWT_CLOSE) | BIT(FWT_READ_S7) | BIT(FWT_READ_N3))
+#define RAN_ERASE_TAIL		(BIT(FWT_ERASE_S_FINAL) | BIT(FWT_READ_S6) | BIT(FWT_ERASE_N) | BIT(FWT_READ_N2) | BIT(FWT_CLOSE) | \
+			 BIT(FWT_READ_S7) | BIT(FWT_READ_N3))
 
 static struct chip chip;
 
@@ -160,50 +166,60 @@ static unsigned long long chip_close(void *context)
 	return chip_call(context);
 }
 
-static unsigned long long chip_read(void *context, unsigned long sector, unsigned char *block)
+/* The index of the first byte of S in the bytes of the chip. */
+#define CHIP_S		0u
+#define CHIP_N		FLASH_SECTOR_BYTES
+
+static unsigned long long chip_read(void *context, unsigned long offset, unsigned char *block, size_t bytes)
 {
 	struct chip *c = context;
 	unsigned long long status = chip_call(c);
-	CHECK(sector == TEST_SECTOR);
-	memcpy(block, c->bytes, FLASH_SECTOR_BYTES);
+	size_t at = offset == TEST_SECTOR ? CHIP_S : CHIP_N;
+	CHECK(bytes == FLASH_SECTOR_BYTES && (offset == TEST_SECTOR || offset == NEXT_SECTOR));
+	memcpy(block, c->bytes + at, bytes);
 	return status;
 }
 
-static unsigned long long chip_erase(void *context, unsigned long sector)
+static unsigned long long chip_erase(void *context, unsigned long offset)
 {
 	struct chip *c = context;
 	unsigned long long status = chip_call(c);
-	CHECK(sector == TEST_SECTOR);
-	if (status == 0 && !c->no_erase) memset(c->bytes, 0xFF, FLASH_SECTOR_BYTES);
+	CHECK(offset == TEST_SECTOR || offset == NEXT_SECTOR);
+	if (status != 0 || c->no_erase) return status;
+	if (offset == TEST_SECTOR && c->coarse_erase) memset(c->bytes, 0xFF, sizeof(c->bytes));
+	else memset(c->bytes + (offset == TEST_SECTOR ? CHIP_S : CHIP_N), 0xFF, FLASH_SECTOR_BYTES);
 	return status;
 }
 
 /* A program without an erase: a bit that is clear stays clear. */
-static void chip_program(struct chip *c, const unsigned char *block)
+static void chip_program(struct chip *c, size_t at, const unsigned char *block, size_t bytes)
 {
-	unsigned i;
+	size_t i;
 	if (c->no_write) return;
-	for (i = 0; i < FLASH_SECTOR_BYTES; i++) c->bytes[i] &= block[i];
+	for (i = 0; i < bytes; i++) c->bytes[at + i] &= block[i];
 }
 
-static unsigned long long chip_write(void *context, unsigned long sector, const unsigned char *block)
+static unsigned long long chip_write(void *context, unsigned long offset, const unsigned char *block, size_t bytes)
 {
 	struct chip *c = context;
 	unsigned long long status = chip_call(c);
-	CHECK(sector == TEST_SECTOR);
-	if (status == 0) chip_program(c, block);
+	size_t at = offset == TEST_SECTOR ? CHIP_S : offset == NEXT_SECTOR ? CHIP_N : CHIP_S + FLASH_TEST_HEADER_OFFSET;
+	CHECK((bytes == FLASH_SECTOR_BYTES && (offset == TEST_SECTOR || offset == NEXT_SECTOR)) ||
+	      (bytes == FLASH_TEST_HEADER_BYTES && offset == TEST_SECTOR + FLASH_TEST_HEADER_OFFSET));
+	if (status != 0) return status;
+	if (bytes != FLASH_SECTOR_BYTES && c->shifted_small_write) at++;
+	chip_program(c, at, block, bytes);
 	return status;
 }
 
-static unsigned long long chip_erase_write(void *context, unsigned long sector, const unsigned char *block)
+static unsigned long long chip_erase_write(void *context, unsigned long offset, const unsigned char *block)
 {
 	struct chip *c = context;
 	unsigned long long status = chip_call(c);
-	CHECK(sector == TEST_SECTOR);
-	if (status == 0) {
-		if (!c->no_erase) memset(c->bytes, 0xFF, FLASH_SECTOR_BYTES);
-		chip_program(c, block);
-	}
+	CHECK(offset == TEST_SECTOR);
+	if (status != 0) return status;
+	if (!c->no_erase) memset(c->bytes + CHIP_S, 0xFF, FLASH_SECTOR_BYTES);
+	chip_program(c, CHIP_S, block, FLASH_SECTOR_BYTES);
 	return status;
 }
 
@@ -213,7 +229,7 @@ static struct flash_write_test_ops ops = { NULL, chip_open, chip_close, chip_rea
 static void chip_start(unsigned fail_call)
 {
 	memset(&chip, 0, sizeof(chip));
-	memset(chip.bytes, 0xFF, FLASH_SECTOR_BYTES);
+	memset(chip.bytes, 0xFF, sizeof(chip.bytes));
 	chip.fail_call = fail_call;
 }
 
@@ -234,120 +250,178 @@ static int all_as_expected(const struct flash_write_test_report *report)
 	return 1;
 }
 
+/* The first steps, from the open up to and including the step. */
+static unsigned ran_upto(enum flash_write_test_step step)
+{
+	return BIT(step + 1u) - 1u;
+}
+
+/* The image of the chip: S then N. */
+static int chip_is(const unsigned char *s, const unsigned char *n)
+{
+	return !memcmp(chip.bytes, s, FLASH_SECTOR_BYTES) && !memcmp(chip.bytes + FLASH_SECTOR_BYTES, n, FLASH_SECTOR_BYTES);
+}
+
 static void test_write_test(void)
 {
 	static const struct flash_write_test_ops empty = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 	struct flash_write_test_report report;
-	unsigned char a[FLASH_SECTOR_BYTES], b[FLASH_SECTOR_BYTES];
+	unsigned char a[FLASH_SECTOR_BYTES], b[FLASH_SECTOR_BYTES], c[FLASH_SECTOR_BYTES], erased[FLASH_SECTOR_BYTES];
 	unsigned i, holds;
+	int pass;
 
 	ops.context = &chip;
+	memset(erased, 0xFF, sizeof(erased));
 
 	/* Each step has a name. The number after the last step has none. */
 	holds = 1;
 	for (i = 0; i < FWT_STEPS; i++) holds = holds && flash_write_test_step_text((enum flash_write_test_step)i)[0] != 0;
-	CHECK(holds && flash_write_test_step_text(FWT_STEPS)[0] == 0);
+	CHECK(holds && flash_write_test_step_text(FWT_STEPS)[0] == 0 && FWT_STEPS == 22u);
 
-	/* The two patterns: each byte of the second is the other way round, and a pattern is the same at each call. */
-	flash_write_test_pattern(FWT_WRITE, a);
-	flash_write_test_pattern(FWT_ERASE_WRITE, b);
+	/* The patterns: the second is the complement of the first, the third has the two halves of each byte of the first
+	 * exchanged, and a pattern is the same at each call. The header is the signature of a volume. */
+	flash_write_test_pattern(FWT_WRITE_S, a);
+	flash_write_test_pattern(FWT_ERASE_WRITE_S, b);
+	flash_write_test_pattern(FWT_WRITE_N, c);
 	holds = 1;
-	for (i = 0; i < FLASH_SECTOR_BYTES; i++) holds = holds && (a[i] ^ b[i]) == 0xFF;
+	for (i = 0; i < FLASH_SECTOR_BYTES; i++)
+		holds = holds && (a[i] ^ b[i]) == 0xFF && (c[i] >> 4) == (a[i] & 15u) && (c[i] & 15u) == (a[i] >> 4);
 	CHECK(holds);
-	flash_write_test_pattern(FWT_ERASE_WRITE, a);
-	CHECK(!memcmp(a, b, FLASH_SECTOR_BYTES));
+	flash_write_test_pattern(FWT_ERASE_WRITE_S, c);
+	CHECK(!memcmp(b, c, FLASH_SECTOR_BYTES));
+	flash_write_test_pattern(FWT_WRITE_HEADER, a);
+	CHECK(!memcmp(a, "_FVH", 4));
+
+	/* What each read step must show. */
+	CHECK(flash_write_test_expected(FWT_READ_S0, erased) && flash_write_test_expected(FWT_READ_S1, erased));
+	CHECK(flash_write_test_expected(FWT_READ_S4, erased) && flash_write_test_expected(FWT_READ_S6, erased));
+	CHECK(flash_write_test_expected(FWT_READ_S7, erased) && flash_write_test_expected(FWT_READ_N2, erased));
+	CHECK(flash_write_test_expected(FWT_READ_N3, erased) && flash_write_test_expected(FWT_OPEN, erased));
+	flash_write_test_pattern(FWT_WRITE_S, a);
+	flash_write_test_pattern(FWT_ERASE_WRITE_S, b);
+	flash_write_test_pattern(FWT_WRITE_N, c);
+	CHECK(flash_write_test_expected(FWT_READ_S2, a) && !flash_write_test_expected(FWT_READ_S2, erased));
+	CHECK(flash_write_test_expected(FWT_READ_S3, b) && !flash_write_test_expected(FWT_READ_S3, a));
+	CHECK(flash_write_test_expected(FWT_READ_N0, c) && flash_write_test_expected(FWT_READ_N1, c) && !flash_write_test_expected(FWT_READ_N1, b));
+	CHECK(!flash_write_test_expected(FWT_READ_S5, erased));
+	memcpy(erased + FLASH_TEST_HEADER_OFFSET, "_FVH", 4);
+	CHECK(flash_write_test_expected(FWT_READ_S5, erased) && !flash_write_test_expected(FWT_READ_S4, erased));
+	memcpy(erased + FLASH_TEST_HEADER_OFFSET, "\xFF\xFF\xFF\xFF", 4);
 
 	/* No table of functions: the test does not run. */
 	chip_start(0);
 	CHECK(!flash_run_write_test(&empty, TEST_SECTOR, &report) && !flash_run_write_test(NULL, TEST_SECTOR, &report));
-	CHECK(report.failed == FWT_STEPS && chip.calls == 0);
+	CHECK(report.failed == FWT_STEPS && chip.calls == 0 && ran_bits(&report) == 0);
 
-	/* A chip that answers as it must: each step runs, each is as expected, and the sector is erased at the end. */
+	/* A chip that answers as it must: each step runs, each is as expected, and both sectors are erased at the end. */
 	chip_start(0);
-	CHECK(flash_run_write_test(&ops, TEST_SECTOR, &report));
-	CHECK(report.failed == FWT_STEPS && chip.calls == FWT_STEPS && ran_bits(&report) == RAN_ALL && all_as_expected(&report));
-	CHECK(flash_block_is_erased(chip.bytes, FLASH_SECTOR_BYTES));
+	pass = flash_run_write_test(&ops, TEST_SECTOR, &report);
+	CHECK(pass && report.failed == FWT_STEPS && chip.calls == FWT_STEPS);
+	CHECK(ran_bits(&report) == RAN_ALL && all_as_expected(&report) && flash_block_is_erased(chip.bytes, sizeof(chip.bytes)));
 
-	/* A failed open: there is no session to end, and no other call. The bytes of the sector do not change. */
+	/* A failed open: there is no session to end, and no other call. The bytes of the sectors do not change. */
 	chip_start(1);
 	chip.bytes[10] = 0;
 	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
 	CHECK(report.failed == FWT_OPEN && chip.calls == 1 && ran_bits(&report) == BIT(FWT_OPEN));
 	CHECK(report.status[FWT_OPEN] == CHIP_ERROR && chip.bytes[10] == 0);
 
-	/* The sector is not erased at the first read: the session ends, and nothing is written. */
+	/* S is not erased at the first read: the session ends, and nothing is written. */
 	chip_start(0);
 	chip.bytes[10] = 0;
 	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
-	CHECK(report.failed == FWT_READ_FIRST && chip.calls == 4 && ran_bits(&report) == RAN_SESSION);
-	CHECK(chip.bytes[10] == 0 && report.as_expected[FWT_CLOSE] == 1 && report.as_expected[FWT_READ_OUTSIDE] == 0);
+	CHECK(report.failed == FWT_READ_S0 && chip.calls == 5 && ran_bits(&report) == RAN_OPEN_SESSION);
+	CHECK(chip.bytes[10] == 0 && report.as_expected[FWT_CLOSE] == 1 && report.as_expected[FWT_READ_S7] == 0);
+	CHECK(report.as_expected[FWT_READ_N3] == 1);
 
-	/* A first read that fails: the same steps. */
+	/* A first read that fails, and a failed erase: the same steps, and S is still erased. */
 	chip_start(2);
 	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
-	CHECK(report.failed == FWT_READ_FIRST && chip.calls == 4 && ran_bits(&report) == RAN_SESSION);
-	CHECK(report.status[FWT_READ_FIRST] == CHIP_ERROR && flash_block_is_erased(chip.bytes, FLASH_SECTOR_BYTES));
-
-	/* A failed erase: the session ends before the write. */
+	CHECK(report.failed == FWT_READ_S0 && chip.calls == 5 && ran_bits(&report) == RAN_OPEN_SESSION && report.status[FWT_READ_S0] == CHIP_ERROR);
 	chip_start(3);
 	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
-	CHECK(report.failed == FWT_ERASE && chip.calls == 5 && ran_bits(&report) == (RAN_SESSION | BIT(FWT_ERASE)));
-	CHECK(flash_block_is_erased(chip.bytes, FLASH_SECTOR_BYTES));
+	CHECK(report.failed == FWT_ERASE_S && chip.calls == 6 && ran_bits(&report) == (RAN_OPEN_SESSION | BIT(FWT_ERASE_S)));
+	CHECK(flash_block_is_erased(chip.bytes, sizeof(chip.bytes)));
 
-	/* An erase that changes nothing. The first steps pass on an erased sector. The erase-write then programs its
-	 * pattern over the first one, and the two last reads do not find an erased sector. */
+	/* An erase that changes nothing. The erase-write then programs its pattern over the first one, and the two last
+	 * reads of S do not find an erased sector. */
 	chip_start(0);
 	chip.no_erase = 1;
 	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
-	CHECK(report.failed == FWT_READ_ERASED_WRITTEN && chip.calls == FWT_STEPS && ran_bits(&report) == RAN_ALL);
-	CHECK(report.as_expected[FWT_ERASE_WRITE] == 1 && report.as_expected[FWT_READ_FINAL] == 0);
-	CHECK(report.as_expected[FWT_READ_OUTSIDE] == 0 && !flash_block_is_erased(chip.bytes, FLASH_SECTOR_BYTES));
+	CHECK(report.failed == FWT_READ_S3 && chip.calls == 15 && ran_bits(&report) == (ran_upto(FWT_READ_S3) | RAN_ERASE_TAIL));
+	CHECK(report.as_expected[FWT_ERASE_WRITE_S] == 1 && report.as_expected[FWT_READ_S6] == 0 && report.as_expected[FWT_READ_S7] == 0);
 
-	/* A failed write: the last erase follows, and the sector is erased at the end. */
+	/* A failed write, and a write that changes nothing: both sectors are erased again at the end. */
 	chip_start(5);
 	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
-	CHECK(report.failed == FWT_WRITE && chip.calls == 9 && report.status[FWT_WRITE] == CHIP_ERROR);
-	CHECK(ran_bits(&report) == (RAN_ALL & ~(BIT(FWT_READ_WRITTEN) | BIT(FWT_ERASE_WRITE) | BIT(FWT_READ_ERASED_WRITTEN))));
-	CHECK(flash_block_is_erased(chip.bytes, FLASH_SECTOR_BYTES));
-
-	/* A write that changes nothing: the read after it is not as expected. */
+	CHECK(report.failed == FWT_WRITE_S && chip.calls == 12 && report.status[FWT_WRITE_S] == CHIP_ERROR);
+	CHECK(ran_bits(&report) == (ran_upto(FWT_WRITE_S) | RAN_ERASE_TAIL) && flash_block_is_erased(chip.bytes, sizeof(chip.bytes)));
 	chip_start(0);
 	chip.no_write = 1;
 	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
-	CHECK(report.failed == FWT_READ_WRITTEN && chip.calls == 10);
-	CHECK(ran_bits(&report) == (RAN_ALL & ~(BIT(FWT_ERASE_WRITE) | BIT(FWT_READ_ERASED_WRITTEN))));
-	CHECK(flash_block_is_erased(chip.bytes, FLASH_SECTOR_BYTES));
+	CHECK(report.failed == FWT_READ_S2 && chip.calls == 13);
+	CHECK(ran_bits(&report) == (ran_upto(FWT_READ_S2) | RAN_ERASE_TAIL) && flash_block_is_erased(chip.bytes, sizeof(chip.bytes)));
 
-	/* A failed erase-write: the last erase follows. */
+	/* A failed erase-write, and a failed read after it. */
 	chip_start(7);
 	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
-	CHECK(report.failed == FWT_ERASE_WRITE && chip.calls == 11 && report.status[FWT_ERASE_WRITE] == CHIP_ERROR);
-	CHECK(ran_bits(&report) == (RAN_ALL & ~BIT(FWT_READ_ERASED_WRITTEN)));
-	CHECK(flash_block_is_erased(chip.bytes, FLASH_SECTOR_BYTES));
-
-	/* A failed read after the erase-write: the last erase follows. */
+	CHECK(report.failed == FWT_ERASE_WRITE_S && chip.calls == 14 && report.status[FWT_ERASE_WRITE_S] == CHIP_ERROR);
+	CHECK(ran_bits(&report) == (ran_upto(FWT_ERASE_WRITE_S) | RAN_ERASE_TAIL) && flash_block_is_erased(chip.bytes, sizeof(chip.bytes)));
 	chip_start(8);
 	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
-	CHECK(report.failed == FWT_READ_ERASED_WRITTEN && chip.calls == FWT_STEPS && ran_bits(&report) == RAN_ALL);
-	CHECK(report.status[FWT_READ_ERASED_WRITTEN] == CHIP_ERROR && flash_block_is_erased(chip.bytes, FLASH_SECTOR_BYTES));
+	CHECK(report.failed == FWT_READ_S3 && chip.calls == 15 && report.status[FWT_READ_S3] == CHIP_ERROR);
+	CHECK(ran_bits(&report) == (ran_upto(FWT_READ_S3) | RAN_ERASE_TAIL));
 
-	/* The last erase fails: the sector keeps the second pattern, and the two reads that follow say so. */
+	/* A failed write of N. */
 	chip_start(9);
 	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
-	CHECK(report.failed == FWT_ERASE_LAST && chip.calls == FWT_STEPS && ran_bits(&report) == RAN_ALL);
-	CHECK(report.status[FWT_ERASE_LAST] == CHIP_ERROR && !memcmp(chip.bytes, b, FLASH_SECTOR_BYTES));
-	CHECK(report.as_expected[FWT_READ_FINAL] == 0 && report.as_expected[FWT_CLOSE] == 1 && report.as_expected[FWT_READ_OUTSIDE] == 0);
+	CHECK(report.failed == FWT_WRITE_N && chip.calls == 16 && report.status[FWT_WRITE_N] == CHIP_ERROR);
+	CHECK(ran_bits(&report) == (ran_upto(FWT_WRITE_N) | RAN_ERASE_TAIL) && flash_block_is_erased(chip.bytes, sizeof(chip.bytes)));
 
-	/* A failed close: each step ran, and the last read still finds the erased sector. */
-	chip_start(11);
+	/* An erase of S that also erases N: the read of N after that erase is not as expected. Both sectors are erased
+	 * again at the end. */
+	chip_start(0);
+	chip.coarse_erase = 1;
+	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
+	CHECK(report.failed == FWT_READ_N1 && chip.calls == 20 && report.status[FWT_READ_N1] == 0);
+	CHECK(ran_bits(&report) == (ran_upto(FWT_READ_N1) | RAN_ERASE_TAIL) && flash_block_is_erased(chip.bytes, sizeof(chip.bytes)));
+
+	/* A failed write of the header, and a small write that lands one byte too far. */
+	chip_start(14);
+	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
+	CHECK(report.failed == FWT_WRITE_HEADER && chip.calls == 21 && report.status[FWT_WRITE_HEADER] == CHIP_ERROR);
+	CHECK(ran_bits(&report) == (ran_upto(FWT_WRITE_HEADER) | RAN_ERASE_TAIL) && flash_block_is_erased(chip.bytes, sizeof(chip.bytes)));
+	chip_start(0);
+	chip.shifted_small_write = 1;
+	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
+	CHECK(report.failed == FWT_READ_S5 && chip.calls == 22 && ran_bits(&report) == RAN_ALL);
+	CHECK(flash_block_is_erased(chip.bytes, sizeof(chip.bytes)));
+
+	/* The last erase of S fails: S keeps the signature at its place, and the two reads of S that follow say so. N is
+	 * erased. */
+	chip_start(16);
+	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
+	CHECK(report.failed == FWT_ERASE_S_FINAL && chip.calls == FWT_STEPS && ran_bits(&report) == RAN_ALL);
+	CHECK(report.status[FWT_ERASE_S_FINAL] == CHIP_ERROR && chip.bytes[FLASH_TEST_HEADER_OFFSET] == '_');
+	CHECK(!flash_block_is_erased(chip.bytes, FLASH_SECTOR_BYTES) && flash_block_is_erased(chip.bytes + FLASH_SECTOR_BYTES, FLASH_SECTOR_BYTES));
+	CHECK(report.as_expected[FWT_READ_S6] == 0 && report.as_expected[FWT_READ_S7] == 0 && report.as_expected[FWT_CLOSE] == 1);
+	CHECK(report.as_expected[FWT_READ_N2] == 1 && report.as_expected[FWT_READ_N3] == 1);
+
+	/* The erase of N fails: N keeps the third pattern, and the two reads of N that follow say so. S is erased. */
+	chip_start(18);
+	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
+	CHECK(report.failed == FWT_ERASE_N && chip.calls == FWT_STEPS && ran_bits(&report) == RAN_ALL);
+	CHECK(report.status[FWT_ERASE_N] == CHIP_ERROR && chip_is(erased, c));
+	CHECK(report.as_expected[FWT_READ_N2] == 0 && report.as_expected[FWT_READ_N3] == 0 && report.as_expected[FWT_READ_S7] == 1);
+
+	/* A failed close, and a failed last read: each step ran. */
+	chip_start(20);
 	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
 	CHECK(report.failed == FWT_CLOSE && chip.calls == FWT_STEPS && ran_bits(&report) == RAN_ALL);
-	CHECK(report.as_expected[FWT_READ_OUTSIDE] == 1 && flash_block_is_erased(chip.bytes, FLASH_SECTOR_BYTES));
-
-	/* A failed last read. */
-	chip_start(12);
+	CHECK(report.as_expected[FWT_READ_N3] == 1 && flash_block_is_erased(chip.bytes, sizeof(chip.bytes)));
+	chip_start(22);
 	CHECK(!flash_run_write_test(&ops, TEST_SECTOR, &report));
-	CHECK(report.failed == FWT_READ_OUTSIDE && chip.calls == FWT_STEPS && report.status[FWT_READ_OUTSIDE] == CHIP_ERROR);
+	CHECK(report.failed == FWT_READ_N3 && chip.calls == FWT_STEPS && report.status[FWT_READ_N3] == CHIP_ERROR);
 }
 
 unsigned flash_tests(const char *stock_image, unsigned *check_count)

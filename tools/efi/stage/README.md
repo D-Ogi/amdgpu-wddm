@@ -41,7 +41,7 @@ image alone. The Secure Boot tests read two signed images of the Windows install
 | `sb.windows=1` | no | with `sb.mode=enforce`: Windows reads Secure Boot as on, with the four databases of the kit |
 | `sb.windows=off` | no | on a firmware that has Secure Boot on: Windows reads Secure Boot as off for this start. The module does not check in that start |
 | `flash=read` | no job | the flash module reads the firmware image of the board and writes it beside the stage image ([the flash page](../../docs/design/p6-flash.md)) |
-| `flash=test` | no job | the flash module runs the write test on the sector of `flash.sector=`. It calls `Open`, `Read`, `Erase`, `Write`, `EraseWrite` and `Close`, with a read after each call that can change the sector. The sector must be free, and it is `FF` again at the end |
+| `flash=test` | no job | the flash module runs the write test on the sector of `flash.sector=` and on the next sector. It calls `Open`, `Read`, `Erase`, `Write`, `EraseWrite` and `Close`, with a read after each call that can change a sector. Both sectors must be free, and they are `FF` again at the end |
 | `flash.sector=<hex>` | none | with `flash=test`: the image offset of one sector of 4096 bytes. Without it, and for a sector that is not free, the job writes nothing |
 | `flash.reset=1` | 0 | with a flash job: the stage restarts the board after the job, and Windows does not start in this boot |
 

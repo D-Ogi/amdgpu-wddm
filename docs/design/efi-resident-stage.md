@@ -15,8 +15,8 @@ jobs in sequence, and then it starts the Windows Boot Manager.
 
 The stage writes no NVRAM variable and no CMOS byte. Its UEFI header has no typed `SetVariable`. Every change that
 it makes is in RAM and is gone at the next restart, with one exception: a flash job. The job `read` reads the flash
-and writes no byte of it. The job `test` writes one sector behind the last file of the outer volume, and sets that
-sector back to `FF` at the end ([the flash page](p6-flash.md)).
+and writes no byte of it. The job `test` writes one sector behind the last file of the outer volume and the next
+sector, and sets both back to `FF` at the end ([the flash page](p6-flash.md)).
 
 ## The sources
 
@@ -51,7 +51,7 @@ The stage has a core, three modules and a shared library. Each directory is one 
 | `core-unlock/` | module `core-unlock` | the two CPU cores, with the warm reset |
 | `acpi-repair/` | module `acpi` | the corrected ACPI tables |
 | `secure-boot/` | module `secure-boot` | the image check |
-| `flash/` | module `flash` | the flash job: the read of the firmware image of the board, and the write test of one free sector ([the flash page](p6-flash.md)) |
+| `flash/` | module `flash` | the flash job: the read of the firmware image of the board, and the write test of two free sectors ([the flash page](p6-flash.md)) |
 | `lib/` | shared library | the UEFI header, the small C library, text and device paths, SMBIOS, SHA-256 |
 | `lib/acpi/` | shared ACPI table library | the root table walk, the AML name scan, the AML writer |
 

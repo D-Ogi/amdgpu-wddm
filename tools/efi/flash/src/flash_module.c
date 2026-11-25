@@ -7,11 +7,11 @@
  * the image and a result file beside the stage image. It writes nothing to the flash. With flash.reset=1 the module
  * restarts the board after the job.
  *
- * Job test (flash=test flash.sector=<image offset>): the write test of one free sector of the outer volume, for the
- * measurement of the write functions of the protocol (flash_writetest.h). The sector is erased at the end. The
- * module reads the image before the test and after it: the result file says which bytes changed, and the image
- * after the test goes into the image file. The module writes no other sector, and no sector at all when the one
- * that the option names is not free.
+ * Job test (flash=test flash.sector=<image offset>): the write test of one free sector of the outer volume and of the
+ * next sector, for the measurement of the write functions of the protocol (flash_writetest.h). Both sectors are
+ * erased at the end. The module reads the image before the test and after it: the result file says which bytes
+ * changed, and the image after the test goes into the image file. The module writes no other sector, and no sector
+ * at all when one of the two that the option names is not free.
  *
  * The module is the first in the order of the modules. A job must not depend on the work of another module, and the
  * read comes before the reset of the core unlock.
@@ -323,30 +323,29 @@ static unsigned long long op_close(void *context)
 	return tock(start, ((struct firmware_flash *)context)->Close());
 }
 
-static unsigned long long op_read(void *context, unsigned long sector, unsigned char *block)
+static unsigned long long op_read(void *context, unsigned long offset, unsigned char *block, size_t bytes)
 {
 	unsigned long long start = tick();
-	return tock(start, ((struct firmware_flash *)context)->Read((UINTN)(FLASH_ROM_BASE + sector), FLASH_SECTOR_BYTES, block));
+	return tock(start, ((struct firmware_flash *)context)->Read((UINTN)(FLASH_ROM_BASE + offset), bytes, block));
 }
 
-static unsigned long long op_erase(void *context, unsigned long sector)
+static unsigned long long op_erase(void *context, unsigned long offset)
 {
 	unsigned long long start = tick();
-	return tock(start, ((struct firmware_flash *)context)->Erase((UINTN)(FLASH_ROM_BASE + sector), FLASH_SECTOR_BYTES));
+	return tock(start, ((struct firmware_flash *)context)->Erase((UINTN)(FLASH_ROM_BASE + offset), FLASH_SECTOR_BYTES));
 }
 
-static unsigned long long op_write(void *context, unsigned long sector, const unsigned char *block)
+static unsigned long long op_write(void *context, unsigned long offset, const unsigned char *block, size_t bytes)
 {
 	unsigned long long start = tick();
-	return tock(start, ((struct firmware_flash *)context)->Write((UINTN)(FLASH_ROM_BASE + sector), FLASH_SECTOR_BYTES,
-								      (VOID *)block));
+	return tock(start, ((struct firmware_flash *)context)->Write((UINTN)(FLASH_ROM_BASE + offset), bytes, (VOID *)block));
 }
 
-static unsigned long long op_erase_write(void *context, unsigned long sector, const unsigned char *block)
+static unsigned long long op_erase_write(void *context, unsigned long offset, const unsigned char *block)
 {
 	unsigned long long start = tick();
-	return tock(start, ((struct firmware_flash *)context)->EraseWrite((UINTN)(FLASH_ROM_BASE + sector), FLASH_SECTOR_BYTES,
-									   (VOID *)block));
+	return tock(start, ((struct firmware_flash *)context)->EraseWrite((UINTN)(FLASH_ROM_BASE + offset), FLASH_SECTOR_BYTES,
+										   (VOID *)block));
 }
 
 /* A time in milliseconds as text. "?" when the clock is not there. out takes 24 characters. */
@@ -374,7 +373,7 @@ static void say_test(struct stage *stage, const struct flash_write_test_report *
 	}
 }
 
-/* Job test: the write test on one free sector, with the image before it and after it. */
+/* Job test: the write test on one free sector and the next sector, with the image before it and after it. */
 static void job_test(struct stage *stage, struct firmware_flash *flash)
 {
 	const char *text = stage_option_text(&stage->options, "flash.sector");
@@ -382,8 +381,8 @@ static void job_test(struct stage *stage, struct firmware_flash *flash)
 	struct flash_write_test_report report;
 	struct flash_write_test_ops ops;
 	unsigned char *before = NULL, *image_after = NULL;
-	unsigned long sector = 0, read, read_after, in_sector = 0, in_store = 0, elsewhere = 0, i;
-	enum flash_sector_place place;
+	unsigned long sector = 0, read, read_after, in_sectors = 0, in_store = 0, elsewhere = 0, i;
+	enum flash_sector_place place, place_next;
 	int ok;
 
 	if (text == NULL || !flash_parse_hex(text, &sector)) {
@@ -418,11 +417,15 @@ static void job_test(struct stage *stage, struct firmware_flash *flash)
 	say_volume(stage, "outer", &info.outer_volume);
 	say_volume(stage, "pei", &info.pei_volume);
 	place = read == FLASH_IMAGE_BYTES ? flash_sector_place(&info, sector) : FLASH_SECTOR_NO_VOLUME;
+	place_next = read == FLASH_IMAGE_BYTES ? flash_sector_place(&info, sector + FLASH_SECTOR_BYTES) : FLASH_SECTOR_NO_VOLUME;
 	stage_sayf(stage, FLASH_NAME, "sector 0x%llx: %s", (unsigned long long)sector, flash_sector_place_text(place));
+	stage_sayf(stage, FLASH_NAME, "next sector 0x%llx: %s", (unsigned long long)(sector + FLASH_SECTOR_BYTES),
+		   flash_sector_place_text(place_next));
 	result_line("sector-place %s", flash_sector_place_text(place));
-	if (place != FLASH_SECTOR_FREE) {
+	result_line("next-sector-place %s", flash_sector_place_text(place_next));
+	if (place != FLASH_SECTOR_FREE || place_next != FLASH_SECTOR_FREE) {
 		/* No byte of the flash is written. */
-		stage_say(stage, FLASH_NAME, "the sector is not free: no write");
+		stage_say(stage, FLASH_NAME, "the sector or the next sector is not free: no write");
 		result_line("error the sector is not free");
 		result_line("status failed");
 		result_write(stage);
@@ -456,14 +459,14 @@ static void job_test(struct stage *stage, struct firmware_flash *flash)
 		if (read_after == FLASH_IMAGE_BYTES) {
 			for (i = 0; i < FLASH_IMAGE_BYTES; i++) {
 				if (before[i] == image_after[i]) continue;
-				if (i >= sector && i < sector + FLASH_SECTOR_BYTES) in_sector++;
+				if (i >= sector && i < sector + 2u * FLASH_SECTOR_BYTES) in_sectors++;
 				else if (i < FLASH_STORE_BYTES) in_store++;
 				else elsewhere++;
 			}
-			stage_sayf(stage, FLASH_NAME, "bytes that changed: %llu in the sector, %llu in the variable store, %llu elsewhere",
-				   (unsigned long long)in_sector, (unsigned long long)in_store, (unsigned long long)elsewhere);
+			stage_sayf(stage, FLASH_NAME, "bytes that changed: %llu in the two sectors, %llu in the variable store, %llu elsewhere",
+				   (unsigned long long)in_sectors, (unsigned long long)in_store, (unsigned long long)elsewhere);
 			ok = ok && elsewhere == 0 && memcmp(info.base, after.base, FLASH_DIGEST_BYTES) == 0;
-			result_line("diff-in-sector %llu", (unsigned long long)in_sector);
+			result_line("diff-in-sectors %llu", (unsigned long long)in_sectors);
 			result_line("diff-in-store %llu", (unsigned long long)in_store);
 			result_line("diff-elsewhere %llu", (unsigned long long)elsewhere);
 			if (write_sibling(stage, FLASH_DUMP_NAME, image_after, FLASH_IMAGE_BYTES)) {
