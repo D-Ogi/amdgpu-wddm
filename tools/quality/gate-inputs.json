@@ -1219,6 +1219,48 @@
         "host"
       ]
     },
+    "opm-policy": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-any-guid": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-any-version": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-any-size": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-stale-handle": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-refuse-success": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-log-every": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
     "keep-prune": {
       "inputs": [
         "host"
