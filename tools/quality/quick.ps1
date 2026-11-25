@@ -622,6 +622,11 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # The installer owns version mapping; KMD must not rewrite OS device properties.
  Check 'driver-version' { & powershell -NoProfile -File "$repo\tools\release\test-version-identity.ps1" }
  Check 'umd-app-settings' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-app-settings.ps1" -OutputDir "$Out\umd-app-settings" }
+ # G1 (2026-11-25): host runners of tools\build that nothing ran. They need no DXVK source and take 5-22 s each.
+ Check 'shared-resource-contract-x64' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-shared-resource-contract.ps1" -OutputDir "$Out\shared-resource-contract-x64" -Arch x64; if($LASTEXITCODE){throw "exit $LASTEXITCODE"} }
+ Check 'shared-resource-contract-x86' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-shared-resource-contract.ps1" -OutputDir "$Out\shared-resource-contract-x86" -Arch x86; if($LASTEXITCODE){throw "exit $LASTEXITCODE"} }
+ Check 'umd-domain' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-domain.ps1" -OutputDir "$Out\umd-domain"; if($LASTEXITCODE){throw "exit $LASTEXITCODE"} }
+ Check 'umd-runtime-bridge' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-runtime-bridge.ps1" -OutputDir "$Out\umd-runtime-bridge"; if($LASTEXITCODE){throw "exit $LASTEXITCODE"} }
  # The encoder MFT's source-against-sweep checks: every deblocking schedule the source admits still has a case
  # in tests\sweep.ps1 that holds it to the inbox decoder. The sweep itself needs a GPU and is not in this list;
  # this gate needs nothing but the files, and it is what catches a shape that loses its case when the default moves.
@@ -1090,7 +1095,25 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   $foreign=@($runners | Where-Object { (Get-Content -LiteralPath (Join-Path $tree $_) -Raw) -match 'bc250-win' })
   if($missing){throw "not in tools\quality\quick.ps1: $($missing -join ', ')"}
   if($foreign){throw "take their sources from -Root\bc250-win instead of their own tree: $($foreign -join ', ')"}
-  "$($runners.Count) runners, all gated, all self-located"
+  # The host test runners of tools\build (G1, 2026-11-25: twelve of them were referenced by nothing). Each one is named
+  # by this file, by another tools\build script or by a release manifest, or it is in tools\quality\host-runner-allow.json
+  # with an owner and a reason. An entry for a runner that is referenced, or that is gone, is stale and fails too.
+  $builds=@(Get-ChildItem "$tree\tools\build\*.ps1")
+  $buildText=@{}; foreach($b in $builds){ $buildText[$b.Name]=Get-Content -LiteralPath $b.FullName -Raw }
+  $manifests=(@(Get-ChildItem "$tree\tools\release\*.json") | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
+  $allow=@((Get-Content -LiteralPath "$tree\tools\quality\host-runner-allow.json" -Raw | ConvertFrom-Json).runners)
+  $bad=@($allow | Where-Object { !$_.runner -or !$_.owner -or !$_.reason -or !(Test-Path -LiteralPath "$tree\tools\build\$($_.runner)") } | ForEach-Object { "$($_.runner)" })
+  $orphans=@(); $stale=@()
+  foreach($r in @($builds | Where-Object { $_.Name -like 'test-*.ps1' })) {
+   $used=$self.Contains($r.Name) -or $manifests.Contains($r.BaseName) -or
+     [bool]@($builds | Where-Object { $_.Name -ne $r.Name -and $buildText[$_.Name].Contains($r.BaseName) }).Count
+   $listed=[bool]@($allow | Where-Object { $_.runner -eq $r.Name }).Count
+   if(!$used -and !$listed){$orphans+=$r.Name}
+   if($used -and $listed){$stale+=$r.Name}
+  }
+  if($orphans){throw "tools\build runners that nothing runs (gate them, or list them in host-runner-allow.json with an owner): $($orphans -join ', ')"}
+  if($stale -or $bad){throw "host-runner-allow.json entries that are referenced, gone or without an owner and a reason: $(($stale+$bad) -join ', ')"}
+  "$($runners.Count) runners, all gated, all self-located; $(@($builds | Where-Object { $_.Name -like 'test-*.ps1' }).Count) tools\build runners, $($allow.Count) allowed unreferenced"
  }
  foreach($suite in $suites) {
   $gateJobs+=@{name=$suite.n;runner=$suite.s;arguments=@($suite.a);fails=[bool]$suite.Fails;step=$suite.Step}
