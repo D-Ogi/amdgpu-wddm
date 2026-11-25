@@ -14,7 +14,7 @@ measurements of this page it writes it.
 
 | Part | State |
 |---|---|
-| Job `read`: the image through the firmware, and two files beside the stage image | built. The host tests pass. Not measured on unit A |
+| Job `read`: the image through the firmware, and two files beside the stage image | built. The host tests pass. MEASURED on unit A on 2026-11-25: [M973](../facts/hardware.md#m973) |
 | Job `apply`: a package writes the image | the design in this page. Not built |
 
 ## The sources
@@ -25,6 +25,7 @@ measurements of this page it writes it.
 | The code of the stock firmware P3.00: the module `FlashDriver` and the module list of the image | read 2026-11-25, one reader | the flash protocol of the firmware |
 | edk2, `MdePkg/Include/Pi/PiFirmwareVolume.h` and `MdePkg/Include/Pi/PiFirmwareFile.h` | commit `556dcfb466e9f05affeaff881d738807f8156d3c` | the firmware volume header, the file header, the file states and the guided section, as the headers state the PI Specification |
 | Fact M965 | 2026-11-16 | the chip and the bytes that are the unit's own |
+| The read of the image of unit A through the job `read`, `evidence/windows/2026-11-25-spi-insystem-read-unitA/` | 2026-11-25 | what `Read` gives, and the image of unit A |
 
 The edk2 code is a reference only. The stage copies no line of it.
 
@@ -63,7 +64,9 @@ The stock image P3.00 has these modules for the flash. In DXE: `FlashDriver`, `S
 `Address` is the address of the flash in the ROM window of the processor. The first byte of the image is at
 `0xFF000000`. The functions mask the two legacy interrupt controllers for the time of each call.
 
-These facts come from the code of the stock module, read by one reader. No unit has run the job yet.
+The six functions come from the code of the stock module, read by one reader. On unit A, the protocol was there
+when the stage ran, and `Read` gave the whole image: outside the variable store, each byte equals the programmer
+read of the same unit ([M973](../facts/hardware.md#m973)). `Erase`, `Write` and `EraseWrite` are not measured.
 
 ### The image
 
@@ -78,11 +81,15 @@ Each volume starts with a pad file for the extended header of the volume. In the
 is 0x20000 bytes and full. The outer volume is 0x320000 bytes: its image file ends at `0x141E7A` of the volume, and
 the space behind it is free. The PEI volume is 0x200000 bytes with one image file to its end.
 
+The image of unit A is not the stock image: on 2026-11-25 its image file of the outer volume ends at `0xC23647`,
+and the 1952185 bytes behind it read FF to the end of the volume. The first whole free sector is at `0xC24000`.
+
 The erase block is 0x1000 bytes. P6 L1 changes 324 blocks in the outer volume of a stock P3.00 image and nothing
 else.
 
 The name of a base is the SHA-256 of the image in which the variable store reads as zeros. A unit and the image
-file of its firmware have the same name when the variable store is their only difference.
+file of its firmware have the same name when the variable store is their only difference. The stock image P3.00
+has the name `62411d52...`. The image of unit A on 2026-11-25 has the name `0817b854...`.
 
 ## The job in the stage
 
@@ -107,6 +114,10 @@ The job writes nothing to the flash. An image file of an earlier job does not st
 
 `flash.reset=1` is for a start that must not go on to Windows: a measurement with the other modules off, and each
 job that writes. Use `log=line` with it, so that the log is on the volume before the restart.
+
+Measured on unit A (2026-11-25, one start, Secure Boot on in the Windows before and after): the job read
+16777216 bytes and wrote the three files. The reset restarted the board, and Windows started on the persistent
+route of the stick about 24 s after the time of the files ([M974](../facts/hardware.md#m974)).
 
 The result file has one `key value` line for each item and a line feed at the end of each line. Its last line is the
 status line.
@@ -164,20 +175,21 @@ whose EFI system partition has no room or takes no write.
 
 ## The measurements on unit A
 
-| Step | What | Writes to the flash |
-|---|---|---|
-| M1 | the job `read`. The dump is compared with a read through the programmer | none |
-| M2 | one sector of the free space of the outer volume: erase, program, read, erase | one sector |
-| M3 | the P6 image through the job `apply` on a unit with the stock firmware. The result is compared with the image | the blocks of P6 L1 |
+| Step | What | State | Writes to the flash |
+|---|---|---|---|
+| M1 | the job `read`. The dump is compared with a read through the programmer | MEASURED 2026-11-25: 0 bytes differ outside the variable store ([M973](../facts/hardware.md#m973)) | none |
+| M2 | one sector of the free space of the outer volume: erase, program, read, erase | not measured | one sector |
+| M3 | the P6 image through the job `apply` on a unit with the stock firmware. The result is compared with the image | not measured | the blocks of P6 L1 |
 
 Each step needs a written plan, a backup through the programmer and one operator.
 
 ## Open questions
 
-1. Does `Read` give the bytes of the chip, the PSP area included? Step M1 answers.
-2. Does the protocol write when Secure Boot is on?
-3. Does the recovery path of the stock firmware (`Recovery`) restore an image from a USB stick? A unit with a
+1. Does the protocol write when Secure Boot is on? `Read` works with Secure Boot on in the starts before and after.
+2. Does the recovery path of the stock firmware (`Recovery`) restore an image from a USB stick? A unit with a
    half-written outer volume would then need no programmer.
-4. Has another unit bytes of its own outside the variable store? Measured on one unit only.
-5. How does the Installer start the job? A boot entry can carry no load option that the Installer writes.
-6. The time of the write. The estimate is one minute for the 324 blocks of P6 L1.
+3. Has another unit bytes of its own outside the variable store? Measured on one unit only.
+4. How does the Installer start the job? A boot entry can carry no load option that the Installer writes.
+5. The time of the write. The estimate is one minute for the 324 blocks of P6 L1.
+6. Which volumes does the protocol know on a unit? The `_FVH` bookkeeping of "The signature of a volume" comes
+   from the code. Step M3 measures it on the outer volume.
