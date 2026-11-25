@@ -40,6 +40,7 @@ image alone. The Secure Boot tests read two signed images of the Windows install
 | `sb.mode=enforce` | no | do not start an image that the databases do not allow. A defect in `db.esl` or `dbx.esl` refuses each image |
 | `sb.windows=1` | no | with `sb.mode=enforce`: Windows reads Secure Boot as on, with the four databases of the kit |
 | `sb.windows=off` | no | on a firmware that has Secure Boot on: Windows reads Secure Boot as off for this start. The module does not check in that start |
+| `flash=read` | no job | the flash module reads the firmware image of the board and writes it beside the stage image ([the flash page](../../docs/design/p6-flash.md)) |
 
 The stage counts each option that no module understands and prints the count.
 
@@ -53,6 +54,8 @@ Put these files in the directory of `bc250-stage.efi`. Only the stage itself is 
 | `dbx.esl` | Secure Boot module | the forbidden certificates and image digests |
 | `core-unlock.mark` | core unlock | the loop guard. The stage writes it |
 | `bc250-stage.log` | core | the console lines of each start. The stage writes it. `log=0` stops that |
+| `bc250-flash.dump` | flash job `read` | the 16 MiB firmware image of the board. The stage writes it |
+| `bc250-flash.result` | flash job | the digests, the volumes and the status of the job. The stage writes it |
 
 ## Make the databases
 

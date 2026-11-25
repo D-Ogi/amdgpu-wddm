@@ -44,11 +44,13 @@ static const EFI_GUID smbios_guid = EFI_SMBIOS_TABLE_GUID;
 static const char default_next[] = "\\EFI\\Microsoft\\Boot\\bootmgfw.efi";
 static unsigned short next_image[STAGE_OPTION_CHARS];
 
-/* The modules, in the order of their work. The core unlock goes first: when it resets the board, the work of the
- * others would be lost, and they must see the processor count that Windows gets. The TPM goes before the ACPI
- * repair, which describes the handoff range of the TPM, and before the Secure Boot check, so that the TPM measures
- * the image that the check then sees. */
-static const struct stage_module *const modules[] = { &cu_module, &tpm_module, &ar_module, &iommu_module, &sb_module };
+/* The modules, in the order of their work. The flash job goes first: it does nothing unless a load option names a
+ * job, and its read must come before the reset of the core unlock. The core unlock goes before the others: when it
+ * resets the board, the work of those others would be lost, and they must see the processor count that Windows
+ * gets. The TPM goes before the ACPI repair, which describes the handoff range of the TPM, and before the Secure
+ * Boot check, so that the TPM measures the image that the check then sees. */
+static const struct stage_module *const modules[] = { &flash_module, &cu_module, &tpm_module, &ar_module, &iommu_module,
+						       &sb_module };
 #define MODULES (sizeof(modules) / sizeof(modules[0]))
 static int module_on[MODULES];
 

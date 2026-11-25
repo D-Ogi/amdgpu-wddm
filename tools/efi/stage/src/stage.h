@@ -115,5 +115,6 @@ extern const struct stage_module ar_module;	/* acpi-repair/src/ar_module.c */
 extern const struct stage_module sb_module;	/* secure-boot/src/sb_module.c */
 extern const struct stage_module tpm_module;	/* tpm/src/tpm_module.c */
 extern const struct stage_module iommu_module;	/* iommu/src/iommu_module.c */
+extern const struct stage_module flash_module;	/* flash/src/flash_module.c */
 
 #endif

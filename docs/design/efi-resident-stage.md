@@ -14,7 +14,8 @@ jobs in sequence, and then it starts the Windows Boot Manager.
 3. The Secure Boot module verifies the images that the stage starts.
 
 The stage writes no NVRAM variable, no CMOS byte and no flash. Its UEFI header has no typed `SetVariable`. Every
-change that it makes is in RAM and is gone at the next restart.
+change that it makes is in RAM and is gone at the next restart. The flash job of the stage reads the flash today and
+writes no byte of it ([the flash page](p6-flash.md)).
 
 ## The sources
 
@@ -49,6 +50,7 @@ The stage has a core, three modules and a shared library. Each directory is one 
 | `core-unlock/` | module `core-unlock` | the two CPU cores, with the warm reset |
 | `acpi-repair/` | module `acpi` | the corrected ACPI tables |
 | `secure-boot/` | module `secure-boot` | the image check |
+| `flash/` | module `flash` | the flash job. Today it reads the firmware image of the board ([the flash page](p6-flash.md)) |
 | `lib/` | shared library | the UEFI header, the small C library, text and device paths, SMBIOS, SHA-256 |
 | `lib/acpi/` | shared ACPI table library | the root table walk, the AML name scan, the AML writer |
 
@@ -75,16 +77,17 @@ The host tests build the pure files and run them against models and stored table
 ## The sequence of one start
 
 1. The core reads the load options and opens the volume of the stage.
-2. The core unlock runs. When it sends the unlock message, it resets the board and does not return.
-3. The ACPI module runs.
-4. The Secure Boot module runs: it reads its databases and puts its check into the firmware.
-5. The core reads the next image and asks the gate of each module.
-6. The core loads and starts the next image.
+2. The flash job runs when the load option `flash=` names a job. Without the option it does nothing.
+3. The core unlock runs. When it sends the unlock message, it resets the board and does not return.
+4. The ACPI module runs.
+5. The Secure Boot module runs: it reads its databases and puts its check into the firmware.
+6. The core reads the next image and asks the gate of each module.
+7. The core loads and starts the next image.
 
 The next image is the Windows Boot Manager. The load option `next=` names another image on the same volume. The
 lab uses it to start the boot loader of the stick, so that Linux can read the result of the stage.
 
-The core unlock is first for two reasons. A reset discards every table that the ACPI module installed, so work
+The core unlock comes before the ACPI module and the Secure Boot module for two reasons. A reset discards every table that the ACPI module installed, so work
 before the reset is lost. The ACPI module must also see the processor count that Windows gets. After the reset,
 the firmware starts the stage again, the core unlock finds all cores, and the other two modules run.
 
@@ -117,6 +120,7 @@ An option is `name=value`. An option that no module understands is counted on th
 | `sb.mode=audit`, `sb.mode=enforce` | `audit` | report each verdict, or refuse an image that is not allowed |
 | `sb.windows=1`, `sb.windows=off` | 0 | the operating system reads a Secure Boot state from this stage (see "The reported mode: sb.windows"). `1` needs `sb.mode=enforce`, and the stage ignores it in every other mode. `off` is the state "Secure Boot is off" on a firmware that has Secure Boot on |
 | `acpi.apply=0` | 1 | the ACPI module builds and checks its tables, and installs and removes none |
+| `flash=read` | no job | the flash module reads the firmware image of the board and writes it beside the stage image ([the flash page](p6-flash.md)) |
 | `probe=1` | 0 | a module that is off says which protocols the firmware has for it. The core unlock also gives its register BAR lines |
 | `log=0`, `log=1`, `log=line` | `1` | the log file: none, written before the next image starts, or written after each line |
 

@@ -4,7 +4,7 @@
  * the Secure Boot module binding. They run the real efi_main against a model of the firmware in this file: a
  * console, pool memory, a volume with files, the handle database with ReinstallProtocolInterface, LoadImage with
  * its call of the Security2 protocol, the ACPI table and SDT protocols over real root tables, a PCI function and
- * an SMBIOS table. The volume takes one written file, the log of the stage.
+ * an SMBIOS table. The volume takes the log of the stage and the two files of the flash job.
  *
  * The model follows the edk2 behaviour that the bindings rely on (commit 8628578dacd3): LoadImage asks the
  * Security2 protocol that is installed at that moment, EFI_ACCESS_DENIED gives no image handle, and
@@ -32,6 +32,7 @@
 #include "efl_sha256.h"
 #include "tl_log.h"
 #include "tl_tpm2.h"
+#include "flash.h"
 
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st);
 
@@ -142,6 +143,9 @@ static const EFI_GUID guid_pci = EFI_PCI_IO_PROTOCOL_GUID, guid_acpi20 = EFI_ACP
 static const EFI_GUID guid_smbios3 = EFI_SMBIOS3_TABLE_GUID;
 
 #define LOG_FILE "\\EFI\\BC250\\bc250-stage.log"
+#define BESIDE "\\EFI\\BC250\\"
+#define FLASH_DUMP BESIDE "bc250-flash.dump"
+#define FLASH_RESULT BESIDE "bc250-flash.result"
 
 static void narrow(const CHAR16 *wide, char *out, size_t capacity)
 {
@@ -489,8 +493,9 @@ static EFI_STATUS EFIAPI file_open(EFI_FILE_PROTOCOL *this, EFI_FILE_PROTOCOL **
 		narrow(name, path, sizeof(path));
 		file = find_file(path);
 		if (mode != EFI_FILE_MODE_READ) {
-			/* The one file that the stage writes in these tests is its log. */
-			if (strcmp(path, LOG_FILE) != 0) failures++;
+			/* The files that the stage writes in these tests are its log and the two files of the flash job. */
+			if (strcmp(path, LOG_FILE) != 0 && strcmp(path, FLASH_DUMP) != 0 && strcmp(path, FLASH_RESULT) != 0)
+				failures++;
 			if (fw.read_only) return EFI_WRITE_PROTECTED;
 			if (file == NULL && (mode & EFI_FILE_MODE_CREATE) && fw.files < FW_FILES) {
 				file = &fw.file[fw.files++];
@@ -1128,7 +1133,6 @@ static VOID *security2_now(void)
 }
 
 #define NEXT "\\EFI\\Microsoft\\Boot\\bootmgfw.efi"
-#define BESIDE "\\EFI\\BC250\\"
 
 /* ---- the tests ----------------------------------------------------------------------------------- */
 
@@ -2147,6 +2151,165 @@ static void test_probe_bar(const char *acpi_dir, const char *fixtures)
 	CHECK(fw.mem_reads == 0 && fw.mem_writes == 0 && fw.pool_live == 0);
 }
 
+/* ---- the flash module ----------------------------------------------------------------------------- */
+
+/* The flash protocol of the firmware over an image of 16 MiB. The write functions count their calls and refuse:
+ * the read job of the module must not call them. */
+static const EFI_GUID guid_flash = { 0x755B6596, 0x6896, 0x4BA3, { 0xB3, 0xDD, 0x1C, 0x62, 0x9F, 0xD1, 0xEA, 0x88 } };
+static struct {
+	EFI_STATUS (EFIAPI *Read)(UINTN address, UINTN bytes, VOID *data);
+	EFI_STATUS (EFIAPI *Erase)(UINTN address, UINTN bytes);
+	EFI_STATUS (EFIAPI *Write)(UINTN address, UINTN bytes, VOID *data);
+	EFI_STATUS (EFIAPI *EraseWrite)(UINTN address, UINTN bytes, VOID *data);
+	EFI_STATUS (EFIAPI *Open)(VOID);
+	EFI_STATUS (EFIAPI *Close)(VOID);
+} fw_flash;
+static unsigned char fw_flash_image[FLASH_IMAGE_BYTES];
+static unsigned fw_flash_reads, fw_flash_writes;
+static unsigned long fw_flash_fail_at = FLASH_IMAGE_BYTES;	/* a read from this offset on fails */
+
+static EFI_STATUS EFIAPI flash_read(UINTN address, UINTN bytes, VOID *data)
+{
+	if (address < FLASH_ROM_BASE || bytes > FLASH_IMAGE_BYTES || address - FLASH_ROM_BASE > FLASH_IMAGE_BYTES - bytes)
+		return EFI_INVALID_PARAMETER;
+	fw_flash_reads++;
+	if (address - FLASH_ROM_BASE >= fw_flash_fail_at) return EFI_DEVICE_ERROR;
+	memcpy(data, fw_flash_image + (size_t)(address - FLASH_ROM_BASE), (size_t)bytes);
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI flash_refuse(UINTN address, UINTN bytes)
+{
+	(void)address; (void)bytes;
+	fw_flash_writes++;
+	return EFI_ACCESS_DENIED;
+}
+
+static EFI_STATUS EFIAPI flash_refuse_data(UINTN address, UINTN bytes, VOID *data)
+{
+	(void)data;
+	return flash_refuse(address, bytes);
+}
+
+static EFI_STATUS EFIAPI flash_refuse_none(VOID)
+{
+	fw_flash_writes++;
+	return EFI_ACCESS_DENIED;
+}
+
+/* The firmware has the flash protocol, over an image of bytes of their own. */
+static void add_flash(void)
+{
+	size_t i;
+	fw_flash.Read = flash_read;
+	fw_flash.Erase = flash_refuse;
+	fw_flash.Write = flash_refuse_data;
+	fw_flash.EraseWrite = flash_refuse_data;
+	fw_flash.Open = flash_refuse_none;
+	fw_flash.Close = flash_refuse_none;
+	for (i = 0; i < FLASH_IMAGE_BYTES; i++) fw_flash_image[i] = (unsigned char)(i * 2654435761u >> 24);
+	fw_flash_fail_at = FLASH_IMAGE_BYTES;
+	add_protocol(&fw_handle_security, &guid_flash, &fw_flash);
+}
+
+static void test_flash(const char *acpi_dir, const char *fixtures)
+{
+	static const char options[] = "unlock=0 acpi=0 sb=0";
+	static const char read_job[] = "unlock=0 acpi=0 sb=0 flash=read";
+	unsigned char *copy = malloc(FLASH_IMAGE_BYTES), digest[FLASH_DIGEST_BYTES];
+	char hex[FLASH_DIGEST_BYTES * 2u + 1u], line[96];
+	struct fw_file *file;
+	unsigned starts;
+	int reset;
+
+	if (copy == NULL) {
+		CHECK(copy != NULL);
+		return;
+	}
+	/* No job: the module says nothing, reads nothing and writes nothing. */
+	if (!new_firmware(acpi_dir)) goto out;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_flash();
+	fw_flash_reads = fw_flash_writes = 0;
+	starts = fw.starts;
+	CHECK(run_stage(options, &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(!said("flash:") && fw_flash_reads == 0 && find_file(FLASH_DUMP) == NULL && find_file(FLASH_RESULT) == NULL);
+
+	/* flash=read: the dump is the image, and the result names the three digests. */
+	fw_flash_reads = fw_flash_writes = 0;
+	starts = fw.starts;
+	CHECK(run_stage(read_job, &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	file = find_file(FLASH_DUMP);
+	CHECK(file != NULL && file->bytes == FLASH_IMAGE_BYTES && !memcmp(file->data, fw_flash_image, FLASH_IMAGE_BYTES));
+	CHECK(said("flash: job read") && said("read 16777216 of 16777216 bytes"));
+	CHECK(said("the image is in the file bc250-flash.dump") && file_ends_with(FLASH_RESULT, "status ok"));
+	efl_sha256(fw_flash_image, FLASH_IMAGE_BYTES, digest);
+	flash_digest_text(digest, hex);
+	snprintf(line, sizeof(line), "sha256 %s\n", hex);
+	CHECK(file_has(FLASH_RESULT, line));
+	memcpy(copy, fw_flash_image, FLASH_IMAGE_BYTES);
+	memset(copy, 0, FLASH_STORE_BYTES);
+	efl_sha256(copy, FLASH_IMAGE_BYTES, digest);
+	flash_digest_text(digest, hex);
+	snprintf(line, sizeof(line), "base %s\n", hex);
+	CHECK(file_has(FLASH_RESULT, line));
+	efl_sha256(fw_flash_image, FLASH_STORE_BYTES, digest);
+	flash_digest_text(digest, hex);
+	snprintf(line, sizeof(line), "store %s\n", hex);
+	CHECK(file_has(FLASH_RESULT, line));
+	CHECK(file_has(FLASH_RESULT, "dump yes\n") && !said("not understood"));
+	CHECK(fw_flash_reads == FLASH_IMAGE_BYTES / (64u * 1024u) && fw_flash_writes == 0);
+	CHECK(fw.page_blocks == 0 && fw.pool_live == 0);
+
+	/* A read that fails: the image of the earlier job does not stay, and the result says where it failed. */
+	fw_flash_fail_at = 0x200000;
+	fw_flash_reads = 0;
+	starts = fw.starts;
+	CHECK(run_stage(read_job, &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(said("the read failed at 0x200000") && find_file(FLASH_DUMP) == NULL);
+	CHECK(file_has(FLASH_RESULT, "read-failed-at 0x200000\n") && file_ends_with(FLASH_RESULT, "status failed"));
+	CHECK(fw.page_blocks == 0 && fw.pool_live == 0 && fw_flash_writes == 0);
+	fw_flash_fail_at = FLASH_IMAGE_BYTES;
+
+	/* An unknown job changes nothing. */
+	fw_flash_reads = 0;
+	starts = fw.starts;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=polish", &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(said("unknown job 'polish': nothing done") && fw_flash_reads == 0 && !said("not understood"));
+	CHECK(file_has(FLASH_RESULT, "error unknown job\n") && find_file(FLASH_DUMP) == NULL);
+
+	/* probe=1 with the module off: the protocol is there, and nothing is read. */
+	starts = fw.starts;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(said("flash: probe: flash protocol present") && fw_flash_reads == 0 && fw_flash_writes == 0);
+
+	/* A volume that takes no write: the read is complete, the image is not kept, and the result says so. */
+	if (!new_firmware(acpi_dir)) goto out;
+	add_file(NEXT, fixtures, "signed.efi");
+	add_flash();
+	fw.read_only = 1;
+	fw_flash_reads = fw_flash_writes = 0;
+	starts = fw.starts;
+	CHECK(run_stage(read_job, &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(said("the image file did not write") && said("the result file did not write"));
+	CHECK(fw_flash_reads == FLASH_IMAGE_BYTES / (64u * 1024u) && fw.page_blocks == 0 && fw.pool_live == 0);
+
+	/* A firmware without the flash protocol: no read, and the result says why. */
+	if (!new_firmware(acpi_dir)) goto out;
+	add_file(NEXT, fixtures, "signed.efi");
+	fw_flash_reads = fw_flash_writes = 0;
+	starts = fw.starts;
+	CHECK(run_stage(read_job, &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(said("the firmware has no flash protocol") && fw_flash_reads == 0 && find_file(FLASH_DUMP) == NULL);
+	CHECK(file_has(FLASH_RESULT, "error no flash protocol\n") && file_ends_with(FLASH_RESULT, "status failed"));
+	starts = fw.starts;
+	CHECK(run_stage("unlock=0 acpi=0 sb=0 flash=0 probe=1", &reset) == EFI_SUCCESS && fw.starts == starts + 1);
+	CHECK(said("flash: probe: flash protocol absent"));
+out:
+	free(copy);
+}
+
+
 unsigned firmware_tests(const char *acpi_dir, const char *fixture_dir, unsigned *check_count)
 {
 	size_t bytes = 0;
@@ -2164,6 +2327,7 @@ unsigned firmware_tests(const char *acpi_dir, const char *fixture_dir, unsigned 
 		test_sb_windows(acpi_dir, fixture_dir);
 		test_sb_windows_off(acpi_dir, fixture_dir);
 		test_tpm(acpi_dir, fixture_dir);
+		test_flash(acpi_dir, fixture_dir);
 	}
 	free(probe);
 	free_firmware();

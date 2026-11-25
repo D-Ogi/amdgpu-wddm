@@ -29,6 +29,8 @@ param(
     # The TPM engine archive (libtpms, OpenSSL and their C runtime), built by tools\efi\tpm\engine\build.ps1. It is
     # necessary: the TPM module of the stage links against it.
     [string]$TpmEngine = 'P:\BC-250\scratch\build\tpm-engine\tpm_engine.lib',
+    # The stock firmware image of the BC-250, outside the repository. The flash test reads it: not there, it says SKIP.
+    [string]$StockImage = 'P:\BC-250\firmware\bios\P3.00-stock\BC250_3.00.ROM',
     [switch]$SkipTests
 )
 
@@ -64,11 +66,12 @@ $securePure = Sources 'secure-boot\src' @('sb_der.c', 'sb_rsa.c', 'sb_x509.c', '
     'sb_verify.c', 'sb_policy.c', 'sb_crc32.c')
 $tpmPure = @(Sources 'tpm\src' @('tl_log.c', 'tl_tpm2.c', 'tl_measure.c', 'tl_tcg2.c')) +
     @((Join-Path $repo 'driver\tpm\handoff.c'), (Join-Path $repo 'driver\tpm\statefile.c'))
-$pure = @($libPure) + @($corePure) + @($unlockPure) + @($repairPure) + @($securePure) + @($tpmPure)
+$flashPure = @(Sources 'flash\src' @('flash_image.c'))
+$pure = @($libPure) + @($corePure) + @($unlockPure) + @($repairPure) + @($securePure) + @($tpmPure) + @($flashPure)
 # The UEFI bindings: the core and one file for each module.
 $bindings = @(Sources 'stage\src' @('main.c', 'stage_reg.c')) + @(Sources 'core-unlock\src' @('cu_module.c', 'report_uefi.c')) +
     @(Sources 'acpi-repair\src' @('ar_module.c')) + @(Sources 'secure-boot\src' @('sb_module.c', 'sb_windows.c')) +
-    @(Sources 'tpm\src' @('tpm_module.c')) + @(Sources 'iommu\src' @('iommu_module.c'))
+    @(Sources 'tpm\src' @('tpm_module.c')) + @(Sources 'iommu\src' @('iommu_module.c')) + @(Sources 'flash\src' @('flash_module.c'))
 # The small C library of the UEFI image. The host tests use the C library of the host.
 $libc = @(Sources 'lib' @('efl_libc.c'))
 # The repository sources that the stage shares with the driver. They keep their own warning level: they are the
@@ -79,11 +82,12 @@ $tests = @((Join-Path $efiRoot 'stage\test\host_main.c'), (Join-Path $efiRoot 's
     (Join-Path $efiRoot 'lib\test\lib_test.c'), (Join-Path $efiRoot 'core-unlock\test\host_test.c'),
     (Join-Path $efiRoot 'core-unlock\test\report_test.c'), (Join-Path $efiRoot 'acpi-repair\test\ar_test.c'),
     (Join-Path $efiRoot 'secure-boot\test\sb_test.c'), (Join-Path $efiRoot 'stage\test\firmware_test.c'),
-    (Join-Path $efiRoot 'tpm\test\tl_test.c'), (Join-Path $efiRoot 'tpm\test\engine_model.c'))
+    (Join-Path $efiRoot 'tpm\test\tl_test.c'), (Join-Path $efiRoot 'tpm\test\engine_model.c'),
+    (Join-Path $efiRoot 'flash\test\flash_test.c'))
 
 $includes = @("-I$efiRoot\lib", "-I$efiRoot\lib\acpi", "-I$efiRoot\stage\src", "-I$efiRoot\core-unlock\src",
     "-I$efiRoot\acpi-repair\src", "-I$efiRoot\secure-boot\src", "-I$efiRoot\tpm\src", "-I$efiRoot\tpm\engine",
-    "-I$efiRoot\iommu\src", "-I$repo\driver\tpm",
+    "-I$efiRoot\iommu\src", "-I$efiRoot\flash\src", "-I$repo\driver\tpm",
     "-I$shim\include", "-I$shim", "-I$repo\driver\amdgpu-import", "-I$repo\third_party\linux-amdgpu", "-I$repo\driver\kmd", "-I$repo\driver\common\board")
 $strict = @('-Wall', '-Wextra', '-Werror')
 $relaxed = @('-Wall', '-Wno-unknown-pragmas', '-Wno-unused-parameter')
@@ -159,7 +163,7 @@ if ($changed.Status -ne 'HashMismatch') { throw 'Windows does not refuse the cha
 
 Write-Host 'run (host tests)'
 # The first directory is the stock ACPI tables that the repository stores as evidence.
-& $test (Join-Path $repo 'evidence\linux\2026-09-21-E01-recon-binaries\acpi') $AcpiDump $fixtures $tables $SignedImage $SecondSignedImage $TcgLog
+& $test (Join-Path $repo 'evidence\linux\2026-09-21-E01-recon-binaries\acpi') $AcpiDump $fixtures $tables $SignedImage $SecondSignedImage $TcgLog $StockImage
 $code = $LASTEXITCODE
 Write-Host "bc250-stage host tests exit code $code"
 
