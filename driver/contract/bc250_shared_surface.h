@@ -145,6 +145,41 @@ static __inline const AMDGPU_WDDM_SURFACE_FORMAT *Bc250SharedSurfaceFormat(unsig
     return 0;
 }
 
+/* BD-408: the opaque views of a storage row. Each pair is an X format and the A format of the same channel
+ * order and the same encoding: B8G8R8X8_UNORM (88) stores B8G8R8A8_UNORM (87) bytes, and B8G8R8X8_UNORM_SRGB
+ * (93) stores B8G8R8A8_UNORM_SRGB (91) bytes. Returns the A format, or 0 for a format that is not an X view.
+ * The typeless forms (90, 92) are not views of one encoding and stay outside. */
+static __inline unsigned long Bc250SharedSurfaceOpaqueStorage(unsigned long DxgiFormat)
+{
+    if (DxgiFormat == 88ul)
+        return AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM;
+    if (DxgiFormat == 93ul)
+        return AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM_SRGB;
+    return 0;
+}
+
+/* The row of the DXGI format a shared surface record names: the row of Bc250SharedSurfaceFormat, or, for an
+ * X view, the row of the A format that stores its bytes. The encoder, the decoder and the D3D12 shell's create
+ * and open use this lookup. Bc250SharedSurfaceFormat itself is unchanged: composition, the present copy and
+ * scan-out do not see the X views.
+ *   Why an X view of the A8R8G8B8 storage row is sound in another process:
+ *   - The bytes are the same. B8G8R8X8 and B8G8R8A8 have the same channel order and 4 bytes a pixel. Only
+ *     the fourth byte has a different meaning, and its value is undefined in an X format.
+ *   - The allocation record is LB7A A8R8G8B8, a COMPOSED row. The kernel driver reads only that record, so it
+ *     places the surface as it places every A8R8G8B8 type-0 surface. The X8 row (X8R8G8B8, SCANOUT_PRIMARY
+ *     without COMPOSED and without a DXGI number) is not used, so the kernel scan-out rule does not change.
+ *   - The resource record keeps the X format, and the decode returns it. The opener must create its resource
+ *     with that format and never with the A format. Then no view of it can read the undefined fourth byte as
+ *     alpha, in this process or in another one. */
+static __inline const AMDGPU_WDDM_SURFACE_FORMAT *Bc250SharedSurfaceRecordFormat(unsigned long DxgiFormat)
+{
+    const AMDGPU_WDDM_SURFACE_FORMAT *row = Bc250SharedSurfaceFormat(DxgiFormat);
+    const unsigned long storage = Bc250SharedSurfaceOpaqueStorage(DxgiFormat);
+    if (row || !storage)
+        return row;
+    return Bc250SharedSurfaceFormat(storage);
+}
+
 /* Writes the two records of Surface. The surface is validated exactly as a decode validates it, so
  * a record this function writes is a record Bc250SharedSurfaceDecode admits. */
 static __inline int Bc250SharedSurfaceEncode(const BC250_SHARED_SURFACE *Surface,
@@ -157,7 +192,7 @@ static __inline int Bc250SharedSurfaceEncode(const BC250_SHARED_SURFACE *Surface
     int shared = 0, cached = 0;
     if (!Surface || !Allocation || !Resource)
         return BC250_SHARED_SURFACE_MALFORMED;
-    row = Bc250SharedSurfaceFormat(Surface->DxgiFormat);
+    row = Bc250SharedSurfaceRecordFormat(Surface->DxgiFormat);
     if (!row)
         return BC250_SHARED_SURFACE_FORMAT;
     if (row->d3dddi != (unsigned int)Surface->D3dDdiFormat ||
@@ -291,7 +326,7 @@ static __inline int Bc250SharedSurfaceDecodeDetail(const void *ResourceData, uns
         /* The row the creator took the LB7A format and pitch from; its pixel size bounds the geometry.
          * A format with no COMPOSED row is "not implemented", which is what both shells report. */
         why = BC250_SHARED_SURFACE_WHY_FORMAT;
-        row = Bc250SharedSurfaceFormat(r.Format);
+        row = Bc250SharedSurfaceRecordFormat(r.Format);
         if (!row) {
             status = BC250_SHARED_SURFACE_FORMAT;
             break;

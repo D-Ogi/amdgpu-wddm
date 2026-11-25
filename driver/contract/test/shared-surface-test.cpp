@@ -11,8 +11,10 @@
 // four, so the geometry rule and the page rounding are both exercised by one record.
 //
 // No Windows header and no API header: the kernel driver's C, both shells' C++ and the Mesa winsys's C all include
-// the contract header, and this test includes nothing else. The format numbers come from the surface format table.
+// the contract header. This test includes only it and the kernel driver's admission of a format
+// (driver/kmd/surface_format.h, plain integers too). The format numbers come from the surface format table.
 #include "../bc250_shared_surface.h"
+#include "../../kmd/surface_format.h"
 
 #include <cstdio>
 #include <cstring>
@@ -445,6 +447,84 @@ int main() {
         s.Access = BC250_SURFACE_RESOURCE_DISPLAYABLE;
         check(Bc250SharedSurfaceEncode(&s, &allocation, &resource) == BC250_SHARED_SURFACE_MALFORMED,
               "encode: DISPLAYABLE alone is refused, because the kernel driver refuses it");
+    }
+
+    // BD-408: the X views of the BGRA8 storage row. The HLK FlipQueue writer creates a D3D9 X8R8G8B8 texture with a
+    // shared handle; D3D9On12 creates it as B8G8R8X8_UNORM (88), and its shared surface had no record at all. The
+    // shape is the lab's: 624x441, pitch 2560, a backing of 1138688 bytes.
+    {
+        BC250_SHARED_SURFACE s, back;
+        BC250_WDDM_ALLOCATION_PRIVATE allocation;
+        BC250_SURFACE_RESOURCE_PRIVATE resource;
+        std::memset(&s, 0, sizeof(s));
+        s.Width = 624;
+        s.Height = 441;
+        s.Pitch = 2560;
+        s.DxgiFormat = 88;                                      // DXGI_FORMAT_B8G8R8X8_UNORM
+        s.D3dDdiFormat = 21;                                    // D3DDDIFMT_A8R8G8B8, the storage row's LB7A format
+        s.BindFlags = BC250_SHARED_BIND_SHADER_RESOURCE | BC250_SHARED_BIND_RENDER_TARGET;
+        s.BytesPerPixel = 4;
+        s.Size = 1138688;
+        s.Shared = 1;
+        const char* why = 0;
+        check(Bc250SharedSurfaceEncode(&s, &allocation, &resource) == BC250_SHARED_SURFACE_OK &&
+                  allocation.Format == 21 && resource.Format == 88 && allocation.Pitch == 2560 &&
+                  allocation.Size == 1138688,
+              "x view: 88 encodes as LB7A A8R8G8B8 under an E26R record of 88");
+        check(Bc250SharedSurfaceDecodeWhy(&resource, sizeof(resource), &allocation, sizeof(allocation), &back, &why) ==
+                      BC250_SHARED_SURFACE_OK &&
+                  back.DxgiFormat == 88 && back.D3dDdiFormat == 21 && back.BytesPerPixel == 4 &&
+                  back.Width == 624 && back.Height == 441 && back.Pitch == 2560 && back.Size == 1138688,
+              "x view: the strict decode gives back 88, never the A format");
+        s.DxgiFormat = 93;                                      // DXGI_FORMAT_B8G8R8X8_UNORM_SRGB
+        check(Bc250SharedSurfaceEncode(&s, &allocation, &resource) == BC250_SHARED_SURFACE_OK &&
+                  allocation.Format == 21 && resource.Format == 93 &&
+                  decode(&resource, sizeof(resource), &allocation, sizeof(allocation), &back) == BC250_SHARED_SURFACE_OK &&
+                  back.DxgiFormat == 93 && back.D3dDdiFormat == 21,
+              "x view: 93, the sRGB view of the same bytes, by the same rule");
+        s.DxgiFormat = 88;
+        s.D3dDdiFormat = 22;                                    // D3DDDIFMT_X8R8G8B8: the X8 row, not composed
+        check(Bc250SharedSurfaceEncode(&s, &allocation, &resource) == BC250_SHARED_SURFACE_MALFORMED,
+              "x view: an LB7A format of X8R8G8B8 is refused; the record names the composed storage row");
+        s.D3dDdiFormat = 21;
+        check(Bc250SharedSurfaceEncode(&s, &allocation, &resource) == BC250_SHARED_SURFACE_OK, "x view: re-encode");
+        allocation.Format = 22;
+        check(Bc250SharedSurfaceDecodeWhy(&resource, sizeof(resource), &allocation, sizeof(allocation), &back, &why) ==
+                      BC250_SHARED_SURFACE_MALFORMED &&
+                  is(why, BC250_SHARED_SURFACE_WHY_ALLOCATION_FORMAT),
+              "x view: a received LB7A X8R8G8B8 under an 88 record is \"allocation format\"");
+        const unsigned long typeless[2] = {90ul, 92ul};        // B8G8R8A8_TYPELESS, B8G8R8X8_TYPELESS
+        for (unsigned i = 0; i < 2; ++i) {
+            s.DxgiFormat = typeless[i];
+            check(Bc250SharedSurfaceEncode(&s, &allocation, &resource) == BC250_SHARED_SURFACE_FORMAT,
+                  "x view: a typeless form has no record");
+        }
+    }
+
+    // BD-408: the lookups. Only the record lookup knows the X views; the composition lookup, the table and the
+    // kernel driver's admission of these bytes are the ones they were before.
+    {
+        const AMDGPU_WDDM_SURFACE_FORMAT* bgra8 = Bc250SharedSurfaceFormat(87);
+        check(bgra8 && bgra8->d3dddi == 21 && Bc250SharedSurfaceFormat(91) == bgra8,
+              "lookup: 87 and its sRGB view 91 are the BGRA8 row");
+        check(Bc250SharedSurfaceRecordFormat(88) == bgra8 && Bc250SharedSurfaceRecordFormat(93) == bgra8,
+              "lookup: the record rows of 88 and 93 are the BGRA8 storage row");
+        check(Bc250SharedSurfaceRecordFormat(87) == bgra8 && Bc250SharedSurfaceRecordFormat(28) == Bc250SharedSurfaceFormat(28),
+              "lookup: every other format has the row it had");
+        check(!Bc250SharedSurfaceRecordFormat(90) && !Bc250SharedSurfaceRecordFormat(92) &&
+                  !Bc250SharedSurfaceRecordFormat(0),
+              "lookup: typeless and unknown formats have no record row");
+        check(!Bc250SharedSurfaceFormat(88) && !Bc250SharedSurfaceFormat(93),
+              "lookup: composition, the present copy and scan-out still see no row for 88 and 93");
+        check(!amdgpu_wddm_surface_format_by_dxgi(88) && !amdgpu_wddm_surface_format_by_dxgi(93),
+              "table: no row has 88 or 93 as its DXGI number");
+        const AMDGPU_WDDM_SURFACE_FORMAT* x8 = amdgpu_wddm_surface_format_by_d3dddi(22);
+        check(x8 && !x8->dxgi && !(x8->policy & AMDGPU_WDDM_SURFACE_COMPOSED) &&
+                  (x8->policy & AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY),
+              "table: the X8 row is unchanged: no DXGI number, scan-out only");
+        check(WddmSurfaceFormatBpp(21, BC250_SURFACE_COMPOSED) == 4 && WddmSurfaceFormatBpp(21, BC250_SURFACE_SCANOUT) == 4 &&
+                  WddmSurfaceFormatBpp(22, BC250_SURFACE_COMPOSED) == 4 && WddmSurfaceFormatBpp(22, BC250_SURFACE_SCANOUT) == 4,
+              "kmd: the admission of A8R8G8B8 and X8R8G8B8 at the composed and scan-out stages is unchanged");
     }
 
     // Every composed row, encoded and decoded: the pitch and size rules are the same at 1, 4 and 8 bytes a pixel.
