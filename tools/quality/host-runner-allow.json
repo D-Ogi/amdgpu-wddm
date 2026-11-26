@@ -1,0 +1,4 @@
+{
+  "note": "Host test runners of tools\\build that no gate, build script or release manifest runs. quick.ps1 (host-suite-coverage) fails for an unreferenced runner that is not listed here, and for a listed runner that is referenced, gone or without an owner and a reason. Each entry has an owner and a reason. The twelve runners of G1 (2026-11-25, scratch\\t39\\record-pair-sweep\\g1) all run now: four in quick.ps1, eight and test-umd-entry in build-umd-dxvk.ps1.",
+  "runners": []
+}

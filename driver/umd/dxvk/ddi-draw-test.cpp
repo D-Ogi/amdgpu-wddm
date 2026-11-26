@@ -290,7 +290,9 @@ void test_wddm2_2_ddi();
 void test_wddm2_6_ddi();
 void test_present_batches();
 void test_video_ddi();
+void test_record_golden();
 int main() {
+    test_record_golden();
     test_video_ddi();
     test_wddm2_0_ddi();
     test_wddm2_2_ddi();

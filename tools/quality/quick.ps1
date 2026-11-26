@@ -633,6 +633,11 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # The installer owns version mapping; KMD must not rewrite OS device properties.
  Check 'driver-version' { & powershell -NoProfile -File "$repo\tools\release\test-version-identity.ps1" }
  Check 'umd-app-settings' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-app-settings.ps1" -OutputDir "$Out\umd-app-settings" }
+ # G1 (2026-11-25): host runners of tools\build that nothing ran. They need no DXVK source and take 5-22 s each.
+ Check 'shared-resource-contract-x64' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-shared-resource-contract.ps1" -OutputDir "$Out\shared-resource-contract-x64" -Arch x64; if($LASTEXITCODE){throw "exit $LASTEXITCODE"} }
+ Check 'shared-resource-contract-x86' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-shared-resource-contract.ps1" -OutputDir "$Out\shared-resource-contract-x86" -Arch x86; if($LASTEXITCODE){throw "exit $LASTEXITCODE"} }
+ Check 'umd-domain' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-domain.ps1" -OutputDir "$Out\umd-domain"; if($LASTEXITCODE){throw "exit $LASTEXITCODE"} }
+ Check 'umd-runtime-bridge' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-runtime-bridge.ps1" -OutputDir "$Out\umd-runtime-bridge"; if($LASTEXITCODE){throw "exit $LASTEXITCODE"} }
  # The encoder MFT's source-against-sweep checks: every deblocking schedule the source admits still has a case
  # in tests\sweep.ps1 that holds it to the inbox decoder. The sweep itself needs a GPU and is not in this list;
  # this gate needs nothing but the files, and it is what catches a shape that loses its case when the default moves.
@@ -702,6 +707,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
  Check 'ddi-error-policy' { & python "$repo\tools\quality\ddi_error_policy.py" --sources "$repo\driver\umd\dxvk" --reference "$Workspace\ref\ddi-display\d3d10umddi.md" }
  Check 'ddi-error-policy-mutants' { & python "$repo\tools\quality\ddi_error_policy_mutants.py" --sources "$repo\driver\umd\dxvk" --reference "$Workspace\ref\ddi-display\d3d10umddi.md" }
  Check 'ddi-table-versions' { & python "$repo\tools\quality\ddi_table_versions.py" --sources "$repo\driver\umd\dxvk" --kits "$Kits" }
+ # The record pair registry (driver/contract/record-pairs.json): every RULE text of the record pair test is still in
+ # its file, every function that writes a record magic is a listed producer site, every producer and consumer pair
+ # has its rows, its test or its reason. The self-test plants each defect and must see it fail.
+ Check 'record-pairs' { & python -B "$repo\tools\quality\record_pairs.py" --self-test; if($LASTEXITCODE){throw 'record_pairs self-test failed'}; & python -B "$repo\tools\quality\record_pairs.py" --root $repo }
  Check 'flip-rule-names' { & python "$repo\tools\quality\flip_rule_names.py" --router "$repo\driver\umd\router\front-direct-flip.h" --log "$repo\driver\umd\router\front-flip-log.h" --document "$repo\docs\design\direct-flip-handshake.md" }
  Check 'gfx-copy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gfx_copy.ps1" -Root $Workspace -Out "$Out\gfx-copy" -Kits "$Kits" }
  Check 'gfx-blt' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gfx_blt.ps1" -Root $Workspace -Out "$Out\gfx-blt" -Kits "$Kits" }
@@ -832,6 +841,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='flip-state';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   # Its deadline is 600 s in gate-inputs.json: 22 s to 92.3 s on 2026-10-28, half of the old 180 s under load.
   @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
+  # The same machine as a command-sequence property (RapidCheck): a model of the facts a caller can observe and
+  # the real decision functions, driven by one sequence of generated events, with the invariants checked after
+  # every command. run_flip_state.ps1 above covers each edge once; this covers the orders between them.
+  @{n='flip-state-properties';s='driver\kmd\test\run_flip_state_property.ps1';a=@('-Root',$Workspace)}
   # BD-307: the PresentId of plane 0 for the MPO3 flip DDI and the plane rule of its Check, with 13 controls.
   @{n='mpo3-track';s='driver\kmd\test\run_mpo3_track.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='mpo3-track-controls';s='driver\kmd\test\run_mpo3_track.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
@@ -1088,6 +1101,14 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='hwmon-debt-settle-gated';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','debt-settle-gated');Fails=$true}
   @{n='smu-metrics';s='driver\shim\test\run_smu_metrics.ps1';a=@('-Kits',$Kits)}
   @{n='contract-caps';s='driver\contract\test\run.ps1';a=@('-Kits',$Kits,'-Mesa',"$Workspace\ref\mesa")}
+  # The record pair test: every producer of a shared-surface record against every consumer, both architectures.
+  @{n='record-pairs-x64';s='driver\contract\test\run_record_pairs.ps1';a=@('-Root',$Workspace,'-Arch','x64')}
+  @{n='record-pairs-x86';s='driver\contract\test\run_record_pairs.ps1';a=@('-Root',$Workspace,'-Arch','x86')}
+  # The generative gate of the same records (RapidCheck): the rules of the record layout as properties over
+  # generated surfaces. The matrix above finds what the author of the matrix listed; a property finds the case
+  # nobody listed, and shrinks it. The seed is fixed in the runner, so a failure in this log is reproducible.
+  @{n='record-properties-x64';s='driver\contract\test\run_record_properties.ps1';a=@('-Root',$Workspace,'-Arch','x64')}
+  @{n='record-properties-x86';s='driver\contract\test\run_record_properties.ps1';a=@('-Root',$Workspace,'-Arch','x86')}
  )
  # Every runner is in this file, and every runner tests the tree it lives in: one that took its sources from
  # -Root\bc250-win tested the main checkout from any worktree, which is how three suites rotted unseen (BD-053).
@@ -1099,7 +1120,25 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   $foreign=@($runners | Where-Object { (Get-Content -LiteralPath (Join-Path $tree $_) -Raw) -match 'bc250-win' })
   if($missing){throw "not in tools\quality\quick.ps1: $($missing -join ', ')"}
   if($foreign){throw "take their sources from -Root\bc250-win instead of their own tree: $($foreign -join ', ')"}
-  "$($runners.Count) runners, all gated, all self-located"
+  # The host test runners of tools\build (G1, 2026-11-25: twelve of them were referenced by nothing). Each one is named
+  # by this file, by another tools\build script or by a release manifest, or it is in tools\quality\host-runner-allow.json
+  # with an owner and a reason. An entry for a runner that is referenced, or that is gone, is stale and fails too.
+  $builds=@(Get-ChildItem "$tree\tools\build\*.ps1")
+  $buildText=@{}; foreach($b in $builds){ $buildText[$b.Name]=Get-Content -LiteralPath $b.FullName -Raw }
+  $manifests=(@(Get-ChildItem "$tree\tools\release\*.json") | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
+  $allow=@((Get-Content -LiteralPath "$tree\tools\quality\host-runner-allow.json" -Raw | ConvertFrom-Json).runners)
+  $bad=@($allow | Where-Object { !$_.runner -or !$_.owner -or !$_.reason -or !(Test-Path -LiteralPath "$tree\tools\build\$($_.runner)") } | ForEach-Object { "$($_.runner)" })
+  $orphans=@(); $stale=@()
+  foreach($r in @($builds | Where-Object { $_.Name -like 'test-*.ps1' })) {
+   $used=$self.Contains($r.Name) -or $manifests.Contains($r.BaseName) -or
+     [bool]@($builds | Where-Object { $_.Name -ne $r.Name -and $buildText[$_.Name].Contains($r.BaseName) }).Count
+   $listed=[bool]@($allow | Where-Object { $_.runner -eq $r.Name }).Count
+   if(!$used -and !$listed){$orphans+=$r.Name}
+   if($used -and $listed){$stale+=$r.Name}
+  }
+  if($orphans){throw "tools\build runners that nothing runs (gate them, or list them in host-runner-allow.json with an owner): $($orphans -join ', ')"}
+  if($stale -or $bad){throw "host-runner-allow.json entries that are referenced, gone or without an owner and a reason: $(($stale+$bad) -join ', ')"}
+  "$($runners.Count) runners, all gated, all self-located; $(@($builds | Where-Object { $_.Name -like 'test-*.ps1' }).Count) tools\build runners, $($allow.Count) allowed unreferenced"
  }
  foreach($suite in $suites) {
   $gateJobs+=@{name=$suite.n;runner=$suite.s;arguments=@($suite.a);fails=[bool]$suite.Fails;step=$suite.Step}

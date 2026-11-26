@@ -48,6 +48,9 @@ struct RuntimeSurfacePreparation {
     const TextureImportDispatch *engine;
     const EngineResourceDispatch *resource=nullptr; // the ENGINE LAYOUT form only
 };
+// The LB7A v2 record of an NV12 surface, from the plane layout of its retained image. E_INVALIDARG for a layout
+// that is not one linear two-plane NV12 image or that the kernel driver's check refuses.
+HRESULT runtime_nv12_record(const RuntimeImageLayout &,BC250_WDDM_NV12_PRIVATE &);
 // S_FALSE: accepted; finish must be polled before publication. No busy wait.
 HRESULT begin_runtime_surface(RuntimeDevice &,const SurfacePagingQueue &,
     const RuntimeSurfaceRequest &,const D3D11_TEXTURE2D_DESC1 &,RuntimeSurface &,

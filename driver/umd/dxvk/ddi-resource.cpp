@@ -232,6 +232,15 @@ bool engine_layout_open(const D3D10DDIARG_OPENRESOURCE &args) {
     std::memcpy(&magic,args.pPrivateDriverData,sizeof(magic));
     return magic==BC250_SHARED_RESOURCE_MAGIC;
 }
+// Which creates hand their E26R record to the contract's writer, and which keep this shell's own write.
+// A shared, primary or displayable create is one an opener can reach: the record leaves this process through
+// the open-resource DDI, to the other shell or to the compositor, so it must satisfy the contract's rules and
+// not only this shell's. Every other create is private, its record never leaves the process, and this shell
+// writes it, because D3D11 admits more here than a shared linear surface may carry: a tiled texture2d is the
+// case that matters, since this driver reports tiled resources tier 3 (BD-419).
+bool record_may_be_opened(const RuntimeSurfaceRequest &request) {
+    return request.shared || request.primary || request.displayable;
+}
 HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE runtimeHandle,
     RuntimeSurfaceRequest &request,D3D11_TEXTURE2D_DESC1 &desc,const ScanoutSource *scanout) {
     if (!runtimeHandle || input.ResourceDimension!=D3D10DDIRESOURCE_TEXTURE2D ||
@@ -277,9 +286,10 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
     // both planes of its retained image before filling the exact LB7A v2 record.
     D3D11_TEXTURE2D_DESC1 result{d.Width,d.Height,d.MipLevels,d.ArraySize,d.Format,d.SampleDesc,
         d.Usage,d.BindFlags,d.CPUAccessFlags,d.MiscFlags,D3D11_TEXTURE_LAYOUT_UNDEFINED};
-    r.texture={BC250_SURFACE_RESOURCE_MAGIC,BC250_SURFACE_RESOURCE_TEXTURE_VERSION,UINT(r.shared),r.primary ? 1u : 0u,
-        result.Width,result.Height,result.MipLevels,result.ArraySize,UINT(result.Format),result.SampleDesc.Count,
-        result.SampleDesc.Quality,UINT(result.Usage),result.BindFlags,result.CPUAccessFlags,result.MiscFlags,UINT(result.TextureLayout)};
+    // The access word is complete before the record is written. The contract's writer checks the record as a
+    // whole, the kernel driver's own parser included, and a bit added to Access after that write would never
+    // be checked by anything.
+    UINT access=r.primary ? 1u : 0u;
     // M15.14 increment 3: a swap-chain buffer asks for scan-out when every clause of scanout-primary.h holds.
     // The LB7A description does not change: its pitch is already the scan-out pitch for a 4-byte row
     // (runtime_surface_pitch rounds a row up to 256 bytes, as bc250_scanout_primary_pitch does), and the
@@ -293,9 +303,19 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
         // admitted one gets SCANOUT | DISPLAYABLE and keeps Access without PRIMARY.
         const ScanoutPrimaryDecision decision=scanout_primary_decide(scanout,r.primary,r.vidpn_source,
             UINT(d.Format),d.Width,d.Height,pitch,mode_width,mode_height,r.displayable);
-        if (decision.admitted) { r.scanout=true; r.texture.Access|=UINT(scanout_primary_record_access(decision)); }
+        if (decision.admitted) { r.scanout=true; access|=UINT(scanout_primary_record_access(decision)); }
         scanout_primary_note(decision,scanout,r.displayable,r.vidpn_source,UINT(d.Format),d.Width,d.Height,pitch,
                              mode_width,mode_height);
+    }
+    if (record_may_be_opened(r)) {
+        if (Bc250SharedSurfaceResourceEncode(UINT(result.Format),result.Width,result.Height,result.BindFlags,
+            result.MiscFlags,r.shared ? 1ul : 0ul,access,&r.texture)!=BC250_SHARED_SURFACE_OK) return E_INVALIDARG;
+    } else {
+        // The same fields the contract fixes, from a description that already holds one subresource, one
+        // sample, the default usage and no CPU access (the create refuses anything else above).
+        r.texture={BC250_SURFACE_RESOURCE_MAGIC,BC250_SURFACE_RESOURCE_TEXTURE_VERSION,UINT(r.shared),access,
+            result.Width,result.Height,result.MipLevels,result.ArraySize,UINT(result.Format),result.SampleDesc.Count,
+            result.SampleDesc.Quality,UINT(result.Usage),result.BindFlags,result.CPUAccessFlags,result.MiscFlags,UINT(result.TextureLayout)};
     }
     request=r; desc=result; return S_OK;
 }

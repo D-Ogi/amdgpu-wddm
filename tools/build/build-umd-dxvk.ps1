@@ -45,6 +45,29 @@ if ($LASTEXITCODE -ne 0) { throw 'DDI table version gate failed' }
 # Device-table ABI and capability behavior are promotion gates, not optional
 # manual checks. Run before producing a deployable shell DLL.
 & "$PSScriptRoot\test-umd-ddi-draw.ps1" -DxvkSource $DxvkSource -OutputDir (Join-Path $OutputDir 'quality\ddi-table') -VsInstall $VsInstall -Arch $Arch
+# The host tests of the shell's parts against the DXVK source of this build (G1, 2026-11-25: no gate ran them). They
+# take the build's own -DxvkSource, the pinned engine row: an older checkout does not have the engine ABI of the
+# shell (test-umd-device-owner needs IBc250DxvkDevice5). Two of them take -Arch and build for both architectures;
+# the other six compile x64 flags only (Get-Bc250HostTestFlags ... 'x64'), so they run once, with the x64 build.
+# A runner reports a failure by a throw, which stops this build; it never exits with a code, so there is no
+# $LASTEXITCODE to read here - the exit code after one of these calls is that of the last compiler or test the
+# runner ran, and the runner already checked it.
+# The arguments go through a hashtable splat, which carries the parameter names. An array splat passes its elements
+# positionally, so @('-Arch',$Arch) bound the string '-Arch' to the first free positional parameter: for the two
+# runners that take -Arch that is -Arch itself, and its ValidateSet refused the call before the test ran.
+# Every row states its arch flag. common.ps1 sets Set-StrictMode -Version 3.0, under which a row that left the flag
+# out threw "the property arch cannot be found" instead of reading as false.
+$dxvkHostTests=@(
+    @{n='test-umd-engine-modules';arch=$true},        @{n='test-umd-engine-resource';arch=$true},
+    @{n='test-umd-adapter-caps';arch=$false},         @{n='test-umd-image-memory';arch=$false},
+    @{n='test-umd-surface-allocation';arch=$false},   @{n='test-umd-device-owner';arch=$false},
+    @{n='test-umd-input-layout';arch=$false},         @{n='test-umd-hosted-instance';arch=$false})
+foreach ($t in $dxvkHostTests) {
+    if (-not $t.arch -and $Arch -ne 'x64') { continue }
+    $arguments=@{DxvkSource=$DxvkSource; OutputDir=(Join-Path $OutputDir "quality\$($t.n)"); VsInstall=$VsInstall}
+    if ($t.arch) { $arguments.Arch=$Arch }
+    & "$PSScriptRoot\$($t.n).ps1" @arguments
+}
 # The recent-launch record that the adapter's CreateDevice notes (gate G-RG).
 & "$PSScriptRoot\test-umd-recent-launch.ps1" -OutputDir (Join-Path $OutputDir 'quality\recent-launch') -VsInstall $VsInstall -Arch $Arch
 # The UMD logging provider: map, unmap and rundown events of the kernel allocation of each resource (BD-373).
@@ -101,6 +124,10 @@ try {
 # BD-166: the shipped file carries its version resource from this build, the step that knows what it produced.
 Set-Bc250VersionStamp -Repo $repo -Files @((Join-Path $OutputDir 'amdgpu_wddm_d3d11.dll')) -Names @('amdgpu_wddm_d3d11.dll') `
     -Version $Version -Flavour $Flavour
+# The entry points of the file this build produced, on its final bytes (G1: no gate ran this runner). It runs after
+# the version stamp, so it reads the bytes this build ships, not an intermediate file.
+& "$PSScriptRoot\test-umd-entry.ps1" -DxvkSource $DxvkSource -UmdPath (Join-Path $OutputDir 'amdgpu_wddm_d3d11.dll') `
+    -OutputDir (Join-Path $OutputDir 'quality\umd-entry') -VsInstall $VsInstall -Arch $Arch
 '{0}  amdgpu_wddm_d3d11.dll' -f (Get-FileHash -LiteralPath (Join-Path $OutputDir 'amdgpu_wddm_d3d11.dll')).Hash
 
 
