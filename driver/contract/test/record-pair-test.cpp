@@ -278,7 +278,10 @@ const char *bind_name(unsigned long bind) {
 // descriptor's bind flags and Access 0 for a plain shared texture. Restated here: the function needs the DDI and
 // engine headers.
 // RULE driver/umd/dxvk/ddi-resource.cpp "const UINT64 bytes=(UINT64(pitch)*((d.Height+3)&~3u)+4095)&~UINT64(4095);"
-// RULE driver/umd/dxvk/ddi-resource.cpp "r.texture={BC250_SURFACE_RESOURCE_MAGIC,BC250_SURFACE_RESOURCE_TEXTURE_VERSION,UINT(r.shared),r.primary ? 1u : 0u,"
+// A shared create is one an opener can reach, so the contract writes its record; a private create keeps the
+// shell's own write. The rows of this sweep are all shared, so they are all the contract's write.
+// RULE driver/umd/dxvk/ddi-resource.cpp "    return request.shared || request.primary || request.displayable;"
+// RULE driver/umd/dxvk/ddi-resource.cpp "    if (record_may_be_opened(r)) {"
 // The D3D11 open admits a plain record or one with access bits (decode_open_resource).
 // RULE driver/umd/dxvk/ddi-resource.cpp "admit.AccessMask=BC250_SURFACE_RESOURCE_ACCESS_MASK;"
 void sweep_shells(const std::vector<Shape> &all) {

@@ -151,7 +151,16 @@ static __inline const AMDGPU_WDDM_SURFACE_FORMAT *Bc250SharedSurfaceFormat(unsig
 
 /* The E26R v3 record of a linear surface of one subresource: the fields a surface record fixes, and the
  * kernel driver's parser as the last check. Both encoders below write their resource record here, so
- * the record has one writer. Out is written only on success. */
+ * the record has one writer. Out is written only on success.
+ *
+ * Which records come through here: every record that an opener can reach. A create is shared, a primary or a
+ * displayable surface, so its record leaves the writer's process through the open-resource DDI, and the rules
+ * below are what both shells and the kernel driver then agree on. A create whose record never leaves its
+ * process does not come through here, and its shell writes the same fields itself, because an API admits more
+ * than a shared linear surface may carry: BindFlags outside BC250_SHARED_BIND_MASK and MiscFlags outside
+ * BC250_SHARED_MISC_MASK are refused here, and a D3D11 tiled texture2d carries one of them (BD-419). The
+ * caller states the whole Access word in one call: this function validates the record as a whole, so a bit
+ * that a caller adds to Access after the write is checked by nothing. */
 static __inline int Bc250SharedSurfaceResourceEncode(unsigned long DxgiFormat, unsigned long Width,
                                                     unsigned long Height, unsigned long BindFlags,
                                                     unsigned long MiscFlags, unsigned long Shared,

@@ -75,6 +75,11 @@ HRESULT convert_multisampled_present_buffer(const D3D11DDIARG_CREATERESOURCE &,R
 // DXGI puts a single-sample proxy between the buffers and the primary (passing-dxgi-information-at-resource-
 // creation-time.md). Returns true when it set the flag. A single-sample primary is not changed.
 bool opt_out_multisampled_scanout(const D3D11DDIARG_CREATERESOURCE &);
+// True for a create whose E26R record an opener can reach, so a record that the contract's own writer must
+// write (driver/contract/bc250_shared_surface.h, Bc250SharedSurfaceResourceEncode). convert_runtime_resource
+// branches on this once: such a create is refused when the contract refuses its record, while a private
+// create keeps this shell's write and D3D11's wider admission (a tiled texture2d, BD-419).
+bool record_may_be_opened(const RuntimeSurfaceRequest &);
 // scanout is the device's scan-out source (scanout-primary.h); nullptr asks for no scan-out primary.
 HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &,HANDLE,RuntimeSurfaceRequest &,D3D11_TEXTURE2D_DESC1 &,
     const ScanoutSource *scanout=nullptr);
