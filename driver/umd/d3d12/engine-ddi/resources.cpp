@@ -6,6 +6,7 @@
 #include "replay.h"
 #include "format-list.h"
 #include "tight-alignment.h"
+#include "cross-adapter.h"
 #include "../../../contract/amdgpu_wddm_surface_format.h"
 #include "../../../contract/bc250_shared_surface.h"
 #include "../present-copy.h"
@@ -281,6 +282,8 @@ HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, D3D12_RESOURCE_DESC
     desc.Alignment = d0.Alignment;
     D3D12_RESOURCE_DESC1 engine_desc = desc;
     if (tight::enabled(desc)) engine_desc.Alignment = 0; // The DDI floor is checked above; engine owns its alignment.
+    // Cross-adapter tier 1: the placed buffer's cross-adapter property is its heap's kernel allocation (cross-adapter.h).
+    engine_desc.Flags = cross_adapter::engine_create_flags(desc.Dimension, desc.Flags);
     const D3D12_CLEAR_VALUE* cv = clear_value(desc, clear);
     D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
     const HRESULT legacy = initial_layout(desc, &layout, &state);
@@ -563,6 +566,13 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
         HRESULT hr = to_api_desc(c, *res_desc, desc);
         if (FAILED(hr)) return hr;
         if (res_desc->NumCastableFormats && !res_desc->pCastableFormats) return E_INVALIDARG;
+        if (cross_adapter::create_refused(desc.Dimension, desc.Flags)) {
+            log_refusal("cross-adapter: a texture with CROSS_ADAPTER (type %u, %llux%u, mips %u, format %u) is tier 2, "
+                        "which this driver does not offer; create refused",
+                        static_cast<unsigned>(res_desc->ResourceType), static_cast<unsigned long long>(res_desc->Width),
+                        res_desc->Height, static_cast<unsigned>(res_desc->MipLevels), static_cast<unsigned>(res_desc->Format));
+            return E_INVALIDARG;
+        }
     }
     // The record's copy of the castable formats, made first: a failed copy fails the create before any engine object
     // or backing reference exists. The guard frees it on every return that does not hand it to construct_resource.

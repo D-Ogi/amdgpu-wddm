@@ -2,6 +2,7 @@
 // Compile gate for engine-ddi.h: self-contained, /W4 /WX clean next to the shell headers, record tags unique,
 // boundary revision and the layouts of the structs the shell fills.
 #include "engine-ddi.h"
+#include "cross-adapter.h"
 #include <cstddef>
 #include <cstdio>
 #include <iterator>
@@ -212,6 +213,23 @@ static_assert(std::is_same_v<PFND3D12DDI_CREATEHEAPANDRESOURCE_0088,
                                                  const D3D12DDI_CLEAR_VALUES*, D3D12DDI_HPROTECTEDRESOURCESESSION_0030,
                                                  D3D12DDI_HRESOURCE)>, "CreateHeapAndResource 0088");
 static_assert(std::is_same_v<decltype(engine_ddi::MemoryRequest::rt_owner), D3D12DDI_HRTRESOURCE>, "rt_owner");
+
+// Cross-adapter tier 1 (cross-adapter.h): the engine's create of a buffer never carries ALLOW_CROSS_ADAPTER, every other
+// flag passes, and every other resource with the flag is a tier 2 texture, refused at the create.
+namespace xa = engine_ddi::cross_adapter;
+constexpr auto kXaBuffer = D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+static_assert(xa::engine_create_flags(D3D12_RESOURCE_DIMENSION_BUFFER, kXaBuffer) ==
+              D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, "cross-adapter buffer: the flag is not the engine's");
+static_assert(xa::engine_create_flags(D3D12_RESOURCE_DIMENSION_BUFFER, D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER) ==
+              D3D12_RESOURCE_FLAG_NONE, "cross-adapter buffer alone");
+static_assert(xa::engine_create_flags(D3D12_RESOURCE_DIMENSION_BUFFER, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) ==
+              D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, "ordinary buffer unchanged");
+static_assert(xa::create_refused(D3D12_RESOURCE_DIMENSION_TEXTURE2D, D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER),
+              "a cross-adapter texture is tier 2: refused");
+static_assert(xa::create_refused(D3D12_RESOURCE_DIMENSION_TEXTURE1D, kXaBuffer), "a 1D texture too");
+static_assert(!xa::create_refused(D3D12_RESOURCE_DIMENSION_BUFFER, kXaBuffer), "a cross-adapter buffer is tier 1");
+static_assert(!xa::create_refused(D3D12_RESOURCE_DIMENSION_TEXTURE2D, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET),
+              "an ordinary texture is not refused");
 } // namespace
 
 int main() {
