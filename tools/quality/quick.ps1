@@ -830,6 +830,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='flip-state';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   # Its deadline is 600 s in gate-inputs.json: 22 s to 92.3 s on 2026-10-28, half of the old 180 s under load.
   @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
+  # The same machine as a command-sequence property (RapidCheck): a model of the facts a caller can observe and
+  # the real decision functions, driven by one sequence of generated events, with the invariants checked after
+  # every command. run_flip_state.ps1 above covers each edge once; this covers the orders between them.
+  @{n='flip-state-properties';s='driver\kmd\test\run_flip_state_property.ps1';a=@('-Root',$Workspace)}
   # BD-307: the PresentId of plane 0 for the MPO3 flip DDI and the plane rule of its Check, with 13 controls.
   @{n='mpo3-track';s='driver\kmd\test\run_mpo3_track.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='mpo3-track-controls';s='driver\kmd\test\run_mpo3_track.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
@@ -1084,6 +1088,11 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   # The record pair test: every producer of a shared-surface record against every consumer, both architectures.
   @{n='record-pairs-x64';s='driver\contract\test\run_record_pairs.ps1';a=@('-Root',$Workspace,'-Arch','x64')}
   @{n='record-pairs-x86';s='driver\contract\test\run_record_pairs.ps1';a=@('-Root',$Workspace,'-Arch','x86')}
+  # The generative gate of the same records (RapidCheck): the rules of the record layout as properties over
+  # generated surfaces. The matrix above finds what the author of the matrix listed; a property finds the case
+  # nobody listed, and shrinks it. The seed is fixed in the runner, so a failure in this log is reproducible.
+  @{n='record-properties-x64';s='driver\contract\test\run_record_properties.ps1';a=@('-Root',$Workspace,'-Arch','x64')}
+  @{n='record-properties-x86';s='driver\contract\test\run_record_properties.ps1';a=@('-Root',$Workspace,'-Arch','x86')}
  )
  # Every runner is in this file, and every runner tests the tree it lives in: one that took its sources from
  # -Root\bc250-win tested the main checkout from any worktree, which is how three suites rotted unseen (BD-053).
