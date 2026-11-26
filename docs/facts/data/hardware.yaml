@@ -1038,6 +1038,15 @@ facts:
     evidence: "[In-system read](../evidence/windows/2026-11-25-spi-insystem-read-unitA/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M973"}
+  - id: M977
+    status: MEASURED
+    date: "2026-11-26"
+    claim: "On unit A, an MMIO read of BAR5 dwords `0x203A` and `0x203B` gives `0xFFFFFFFF`, before amdgpu and after a full amdgpu init, while the unnamed dwords `0x202C`-`0x2039` and `0x203C`-`0x203E` read `0x00000000`"
+    status_text: "MEASURED (two starts, five reads)"
+    detail: "Read through the sysfs `resource5` mmap and through debugfs `amdgpu_regs`, with the positive controls of M4 before and after. regcalc names no register at either offset. The claim of another project that these dwords select a PS4 compatibility mode of the GFX pipe, read through the KIQ, is not measured here. Wishlist row L58 holds the CP and KIQ read"
+    evidence: "[GRBM window read](../evidence/linux/2026-11-26-grbm-window/README.md)"
+    edges:
+      - {"type": "uses", "to": "M4"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

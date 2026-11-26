@@ -1,0 +1,8 @@
+stick /dev/sda1 at /media/usb
+eb80c84cb47c60cf682a4c72004653e3930878101e564c845f5735b03ff1a16c  /media/usb/boot/grub/grubenv
+e9aab6c02ae942a725506dc1369e90d234ee6ce54868baaa13bcc4fded4fbd9b  /media/usb/boot/grub/grubenv.before-grbm
+restored: next start is the persistent Windows route
+default=6
+bc250_stage_always=tpmsboff
+bc250_tool_always=wcksts
+e9aab6c02ae942a725506dc1369e90d234ee6ce54868baaa13bcc4fded4fbd9b  /media/usb/boot/grub/grubenv

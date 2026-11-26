@@ -1,0 +1,60 @@
+# utc 2026-11-26T04:04:15Z uptime 37.86 6.18.52-0-lts Tctl 70 C
+modprobe exit 0
+ls: /sys/kernel/debug/dri/*/amdgpu_regs: No such file or directory
+BusyBox v1.37.0 (2026-01-10 15:38:28 UTC) multi-call binary.
+
+Usage: dirname FILENAME
+
+Strip non-directory suffix from FILENAME
+debugfs 
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import struct;print('gfxoff before', struct.unpack('<I', open('/amdgpu_gfxoff','rb').read(4))[0])
+                                                             ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/amdgpu_gfxoff'
+gfxoff disabled through debugfs
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import struct;print('gfxoff status', struct.unpack('<I', open('/amdgpu_gfxoff_status','rb').read(4))[0])
+                                                             ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/amdgpu_gfxoff_status'
+Traceback (most recent call last):
+  File "/root/grbm/regstream.py", line 62, in <module>
+    main()
+    ~~~~^^
+  File "/root/grbm/regstream.py", line 34, in main
+    path = sorted(glob.glob("/sys/kernel/debug/dri/*/amdgpu_regs"))[0]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "/root/grbm/regstream.py", line 62, in <module>
+    main()
+    ~~~~^^
+  File "/root/grbm/regstream.py", line 34, in main
+    path = sorted(glob.glob("/sys/kernel/debug/dri/*/amdgpu_regs"))[0]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "/root/grbm/regstream.py", line 62, in <module>
+    main()
+    ~~~~^^
+  File "/root/grbm/regstream.py", line 34, in main
+    path = sorted(glob.glob("/sys/kernel/debug/dri/*/amdgpu_regs"))[0]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+IndexError: list index out of range
+[   41.969488]  ? srso_return_thunk+0x5/0x5f
+[   41.969495]  ? srso_return_thunk+0x5/0x5f
+[   41.969504]  entry_SYSCALL_64_after_hwframe+0x76/0x7e
+[   41.969511] RIP: 0033:0x7f99bc696244
+[   41.969518] Code: 8b 7c 24 28 4d 89 c8 4c 89 4c 24 48 4c 8b 4c 24 60 48 89 54 24 18 48 8b 54 24 38 c7 44 24 08 08 00 00 00 48 89 4c 24 10 0f 05 <48> 89 c7 e8 15 be fe ff 48 83 c4 58 c3 41 57 41 56 49 89 d6 41 55
+[   41.969524] RSP: 002b:00007ffe2b7fe360 EFLAGS: 00000206 ORIG_RAX: 0000000000000139
+[   41.969532] RAX: ffffffffffffffda RBX: 0000000000000000 RCX: 00007f99bc696244
+[   41.969537] RDX: 0000000000000000 RSI: 00007f99bc62b850 RDI: 0000000000000003
+[   41.969542] RBP: 00007f99bc62b850 R08: 0000000000000000 R09: 00007f99bc62d150
+[   41.969556] R10: 00007f99bc62d150 R11: 0000000000000206 R12: 00007f99bc62d150
+[   41.969564] R13: 0000000000000003 R14: 0000000000000001 R15: 00007f99bc62b850
+[   41.969577]  </TASK>
+[   41.969580] ---[ end trace 0000000000000000 ]---
+[   41.969911] amdgpu 0000:01:00.0: probe with driver amdgpu failed with error -110
+[   41.970672] amdgpu 0000:01:00.0: amdgpu: amdgpu: ttm finalized
+# end utc 2026-11-26T04:04:25Z Tctl 75 C
