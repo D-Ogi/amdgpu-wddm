@@ -1,14 +1,4 @@
 {
-  "note": "Host test runners of tools\\build that no gate, build script or release manifest runs. quick.ps1 (host-suite-coverage) fails for an unreferenced runner that is not listed here, and for a listed runner that is referenced or gone. Each entry has an owner and a reason. G1 measurement 2026-11-25 on c9a690b60: scratch\\t39\\record-pair-sweep\\g1.",
-  "runners": [
-    {"runner": "test-umd-adapter-caps.ps1", "owner": "team-lead", "reason": "needs -DxvkSource, which quick.ps1 does not have; passes (5.5 s); candidate for the quality step of build-umd-dxvk.ps1, which changes a release-set tool"},
-    {"runner": "test-umd-engine-modules.ps1", "owner": "team-lead", "reason": "needs -DxvkSource; passes (7.4 s); same candidate step"},
-    {"runner": "test-umd-engine-resource.ps1", "owner": "team-lead", "reason": "needs -DxvkSource; passes (10.8 s); same candidate step"},
-    {"runner": "test-umd-image-memory.ps1", "owner": "team-lead", "reason": "needs -DxvkSource; passes (11.6 s); same candidate step"},
-    {"runner": "test-umd-surface-allocation.ps1", "owner": "team-lead", "reason": "needs -DxvkSource; passes (8.0 s); same candidate step"},
-    {"runner": "test-umd-device-owner.ps1", "owner": "team-lead", "reason": "needs -DxvkSource at the release DXVK row (IBc250DxvkDevice5; scratch\\forksync\\dxvk fails to compile it); passes with scratch\\t39\\hlk-umdlogging-dxvk-wt (4a6c0c02c, 10.7 s); same candidate step"},
-    {"runner": "test-umd-input-layout.ps1", "owner": "team-lead", "reason": "needs -DxvkSource; passes (7.7 s); same candidate step"},
-    {"runner": "test-umd-hosted-instance.ps1", "owner": "team-lead", "reason": "needs -DxvkSource; passes (5.2 s); same candidate step"},
-    {"runner": "test-umd-entry.ps1", "owner": "team-lead", "reason": "needs -UmdPath to a built shell DLL; not run in G1"}
-  ]
+  "note": "Host test runners of tools\\build that no gate, build script or release manifest runs. quick.ps1 (host-suite-coverage) fails for an unreferenced runner that is not listed here, and for a listed runner that is referenced, gone or without an owner and a reason. Each entry has an owner and a reason. The twelve runners of G1 (2026-11-25, scratch\\t39\\record-pair-sweep\\g1) all run now: four in quick.ps1, eight and test-umd-entry in build-umd-dxvk.ps1.",
+  "runners": []
 }
