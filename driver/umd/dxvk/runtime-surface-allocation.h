@@ -40,9 +40,13 @@ struct SurfacePagingQueue {
     const volatile UINT64 *cpu=nullptr;
 };
 struct SurfaceGpuMapping {
-    UINT64 address=0,bytes=0,fence=0;
+    UINT64 address=0,bytes=0,fence=0;  // bytes: the mapped range, whole pages (runtime_surface_mapped_bytes)
     bool resident=false;
 };
+// The GPU VA range that map_runtime_surface maps for an allocation of this many bytes: whole 4 KiB pages. A shared
+// record may give a size that is not whole pages (Bc250SharedSurfaceGeometry leaves the rounding to the consumer).
+// The caller keeps bytes <= UINT64_MAX-4095.
+inline UINT64 runtime_surface_mapped_bytes(UINT64 bytes) { return (bytes+4095)&~UINT64(4095); }
 HRESULT create_surface_paging_queue(RuntimeDevice &,SurfacePagingQueue &);
 // All mappings and pending paging work must be retired before queue destruction.
 HRESULT destroy_surface_paging_queue(RuntimeDevice &,SurfacePagingQueue &);

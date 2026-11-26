@@ -146,7 +146,7 @@ HRESULT map_runtime_surface(RuntimeDevice &device,const SurfacePagingQueue &queu
     if (!device.domain.entered() || !queue.queue || !queue.sync || !queue.cpu || !allocation || !bytes || bytes>UINT64_MAX-4095 ||
         !device.KTCallbacks.pfnMapGpuVirtualAddressCb || !device.KTCallbacks.pfnMakeResidentCb) return E_INVALIDARG;
     if (*queue.cpu==UINT64_MAX) return D3DDDIERR_DEVICEREMOVED;
-    const UINT64 rounded=(bytes+4095)&~UINT64(4095);
+    const UINT64 rounded=runtime_surface_mapped_bytes(bytes);
     D3DDDI_MAPGPUVIRTUALADDRESS map{}; map.hPagingQueue=queue.queue; map.hAllocation=allocation;
     map.SizeInPages=rounded/4096; map.Protection.Write=1;
     HRESULT hr=device.KTCallbacks.pfnMapGpuVirtualAddressCb(device.hDevice,&map);
