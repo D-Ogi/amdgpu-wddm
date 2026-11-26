@@ -1,0 +1,20 @@
+{
+  "files": {
+    "q3-control-execute-C103-r2-01.json": "7bbf73827f41932f29f5ac8fe52e7138c06008c2f663d98df816aa58bf734ec6",
+    "q3-control-VALIDATION-C103-r2-01.json": "4f505cc9691582331656a00da1c94ebdab606d71554e08d635e34b499dac9f91",
+    "q3-reset-shutdown-C103-r2-01.json": "1f01dda0792cf80f5abd49b467de57f758819ee082e4acc92da0cdd25a3fad5a",
+    "q3-reset-cycle-C103-r2-01.jsonl": "95198e54f992b4697319a7acd69836251ea8536ff0a7e0219222948e40aea3f4",
+    "q3-reset-boot-C103-r2-01.json": "81fd606ae83a409ff6ab9a037daef6b1c75375969353af71ad619b9c260c8c06",
+    "q3-reset-restore-C103-r2-01.json": "631b0b5cd9c9f390c439517c1b3f832fc8badc327be83f6463707cea761a034c",
+    "q3-reset-postboot-C103-r2-01.json": "dda2902d48ec83c9052db433732192a2138b335320da94c094c4ac559fa440bb",
+    "q3-control-C103-r2.py": "85666af99ac8e8a50c1d7497b6e330cfce57395e62a47f449272f85b3834e2ec",
+    "q3-control-core-C103.py": "b3da1415d44b1810815955001d52c444b6a5174f2197344a633e8f4b7f8fc50c",
+    "q3-controller-C103-r2.py": "820a31529d56ab1210f11656fc3333b67bc882eb0a03cdb7feb0b5febe943a3b",
+    "q3-control-registers-C103.json": "c31d1c41cea1fa875e11a36b090ac3a8b99a432368e2dc8d8c5d4d787066db20",
+    "test-q3-control-C103.py": "86854cd84f6a4c94278ae6622581281a9e2907f73fc2ce0186b930624c83f26d",
+    "ROOT-C103-r2-GUARD-CHECK.json": "c6b3a557cdd3b419102ed92e746ca7b51c01c1d9509187c55ab63446319dcab1"
+  },
+  "runtime_manifest_sha256": "c5d766fb6a5f3e225582503328a22aba74832306fee5e0cc28feba20882c689b",
+  "redactions": "None. Twelve listed files retain their original bytes. One excerpt has a changed kit directory prefix (see RESULT.md).",
+  "scope": "Completed diagnostic trial and source excerpts, not a deployment kit."
+}

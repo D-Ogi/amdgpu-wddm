@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "receipt_sha256": "d24ef09daf04308d86b1550eb03ba6248a81cf83e0825622caef30f00db5fec8",
+  "phases": [
+    "unexposed",
+    "exposed"
+  ],
+  "assertions": 48,
+  "result": {
+    "passed": true,
+    "no_smu": true,
+    "retained": true,
+    "reset_required": true,
+    "min_tctl_mC": 73375,
+    "max_tctl_mC": 73500,
+    "elapsed_s": 0.532682355005818,
+    "module_present": true,
+    "module_refcnt": "1"
+  },
+  "no_smu": true,
+  "no_dma_submission": true,
+  "limits": "Lifecycle only; not SMU translation, device completion or VCN activation"
+}

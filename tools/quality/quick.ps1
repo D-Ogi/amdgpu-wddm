@@ -213,7 +213,7 @@ Check 'dev-swap' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Ou
 # build writes from the quad the release builder maps; this compiles the resource with the kit's own rc.exe, reads
 # the numbers back out of the compiled bytes and holds the refusal of a resource built without them. Two seconds.
 Check 'kmd-version-rc' { & python "$repo\tools\build\test_kmd_version_rc.py" --kits "$Kits" --out "$Out\kmd-version-rc" }
-Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|shim)/' --out "$Out\kmd-contract" }
+Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|common/board|shim)/' --out "$Out\kmd-contract" }
  Check 'guardlog-width' { & python "$repo\tools\quality\guardlog_width.py" --kmd "$repo\driver\kmd" --baseline "$repo\tools\quality\guardlog_width_baseline.txt" --out "$Out\guardlog-width" }
  # The failure statuses a KMD DDI can return, against its return table: SubmitCommandVirtual may fail with
  # STATUS_INVALID_PARAMETER only, any other failure is a bugcheck. --self-test also holds two mutants to a failure.
@@ -509,6 +509,8 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'uma-policy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma.ps1" -Root $Workspace -Out "$Out\uma-policy" }
  Check 'uma-request' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma_request.ps1" -Root $Workspace -Out "$Out\uma-request" }
  Check 'uma-probe' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma_probe.ps1" -Root $Workspace -Out "$Out\uma-probe" }
+ # The CRB state machine of the TPM filter driver, with the address and undefined-behaviour sanitizers of the workspace clang.
+ Check 'tpm-crb' { & pwsh -NoProfile -File "$repo\driver\tpm\test\run.ps1" -Out "$Out\tpm-crb" }
  Check 'board-memory-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_identity.ps1" -Root $Workspace -Out "$Out\board-memory-identity" }
  Check 'board-memory-identity-qualification' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_identity_qualification.ps1" -Root $Workspace -Out "$Out\board-memory-identity-qualification" }
  Check 'board-memory-detect' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_detect.ps1" -Root $Workspace -Out "$Out\board-memory-detect" }

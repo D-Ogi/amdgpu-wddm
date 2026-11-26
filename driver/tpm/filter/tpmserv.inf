@@ -1,0 +1,68 @@
+; SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+; The kernel half of the BC-250 TPM servicer: an extension INF that adds the lower filter tpmserv below the inbox
+; tpm.sys on ACPI\MSFT0101. An extension INF never becomes the function driver, so tpm.sys stays in charge of the
+; device and the signed inbox tpm.inf keeps its rank. The filter identifies the platform itself (tpmserv.c) and
+; attaches nothing on another machine.
+
+[Version]
+Signature          = "$WINDOWS NT$"
+Class              = Extension
+ClassGuid          = {e2f84ce7-8efa-411c-aa69-97454ca4cb57}
+ExtensionId        = {EFA23211-8F26-484A-B7BA-EC53027EBC4B}
+Provider           = %ProviderString%
+CatalogFile        = tpmserv.cat
+PnpLockdown        = 1
+DriverVer          = 11/13/2026,1.0.0.2
+
+[SourceDisksNames]
+1 = %DiskName%
+
+[SourceDisksFiles]
+tpmserv.sys = 1
+
+[DestinationDirs]
+Tpmserv_Files = 13
+
+[Manufacturer]
+%ManufacturerString% = Bc250,NTamd64.10.0...22000
+
+[Bc250.NTamd64.10.0...22000]
+%DeviceString% = Tpmserv_Install, ACPI\MSFT0101
+
+[Tpmserv_Install]
+CopyFiles = Tpmserv_Files
+
+[Tpmserv_Files]
+tpmserv.sys
+
+[Tpmserv_Install.HW]
+AddReg = Tpmserv_Filter_AddReg
+
+; The filter goes into the device key; flag 0x00010008 appends to a REG_MULTI_SZ without a duplicate.
+[Tpmserv_Filter_AddReg]
+HKR,,"LowerFilters",0x00010008,"tpmserv"
+
+[Tpmserv_Install.Services]
+AddService = tpmserv, , Tpmserv_Service
+
+; tpm.sys is a boot-start driver, so its filter must be loadable in the same phase.
+[Tpmserv_Service]
+DisplayName   = %ServiceString%
+ServiceType   = 1
+StartType     = 0
+ErrorControl  = 1
+ServiceBinary = %13%\tpmserv.sys
+LoadOrderGroup = Boot Bus Extender
+
+[Tpmserv_Install.Wdf]
+KmdfService = tpmserv, Tpmserv_WdfSection
+
+[Tpmserv_WdfSection]
+KmdfLibraryVersion = 1.33
+
+[Strings]
+ProviderString     = "BC-250 project"
+ManufacturerString = "BC-250 project"
+DiskName           = "BC-250 TPM servicer"
+DeviceString       = "BC-250 TPM servicer filter"
+ServiceString      = "BC-250 TPM servicer filter"

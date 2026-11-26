@@ -6,7 +6,7 @@ publics). No lab run. Offsets are virtual addresses of the image at its preferre
    2A91C53A07E01D60D9F34F8D756F1B532A9FD5E5745B80831F9C07555F5FE415 (the copy of the HLK set of t39/hlk-fixes-1)
    FUN_1800102b0 is FeatureCheck::VerifyWddm24Caps. Gate: MinimumDriverVersion WDDM_2_4. It makes two checks and
    no other:
-     main.cpp line 0x41  [this+0x1bc] & 0x10   D3DKMT_WDDM_2_0_CAPS.SupportContextlessPresent (BD-403, fact M971)
+     main.cpp line 0x41  [this+0x1bc] & 0x10   D3DKMT_WDDM_2_0_CAPS.SupportContextlessPresent (BD-403, fact M975)
      main.cpp line 0x45  [this+0x1b8] & 0x20   D3DKMT_WDDM_1_3_CAPS.SupportCrossAdapterResource
    The lab output of the hlk-fixes-1 KMD fails at the second check: "SupportCrossAdapterResource required on
    WDDM2.4+", status 0xc0000001.

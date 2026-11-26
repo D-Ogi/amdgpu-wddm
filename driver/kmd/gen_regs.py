@@ -293,7 +293,7 @@ NAMED += [("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
 # and already on the 75-register dump list, so the DCN read allow-list does not change.
 NAMED += [("DMU", "mmOTG1_OTG_CONTROL")]
 
-BAR5_LENGTH = 0x80000     # BC250_BAR5_LENGTH in mmio.c
+BAR5_LENGTH = 0x80000     # BC250_BAR5_LENGTH in driver/shim/include/bc250_mmio_bar.h, which mmio.c maps
 
 # IPs gen_probes.SPEC does not carry a header for, because they are deliberately not part of the diagusb read
 # sweep (third_party/linux-amdgpu/PROVENANCE.md: "the display headers ... are deliberately not part of the

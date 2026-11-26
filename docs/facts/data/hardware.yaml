@@ -973,8 +973,8 @@ facts:
   - id: M965
     status: MEASURED
     date: "2026-11-16"
-    claim: "The BIOS SPI flash of unit A holds stock P3.00 with SMU firmware 0.58.6.0: outside the UEFI variable store region the 16 MiB image is equal to `BC250_3.00.ROM`"
-    status_text: "MEASURED (3 equal programmer reads, n = 1 unit)"
+    claim: "On 2026-11-16, the BIOS SPI flash of unit A held stock P3.00 with SMU firmware 0.58.6.0: outside the UEFI variable store region the 16 MiB image was equal to `BC250_3.00.ROM`. The image of unit A changed after that day (M973)"
+    status_text: "MEASURED (3 equal programmer reads, n = 1 unit; the state of 2026-11-16)"
     detail: "CH341A on J4004 with the unit in S5, image SHA-256 `09fb260f...2693103`. 99450 bytes differ from stock P3.00, all in 0x00044A-0x01FEA0 (variable store). Both SMU entries (type 8 and 18, 0.58.6.0) verify against the stock key `8b8df41e2a6649beb8f232cef3133650`, and 8 single-byte negative controls reject. P5.00 carries SMU 0.58.7.1, so P5 bytes do not describe unit A. The image stays outside the repository"
     evidence: "[SPI flash unit A](../evidence/windows/2026-11-16-spi-flash-unitA/RESULT.md)"
     edges:
@@ -986,6 +986,58 @@ facts:
     status_text: "MEASURED (read-class opcodes only, MISO idle level 00 and FF compared)"
     detail: "RDID `C2 20 18`, status register 0x40 (QE, BP3-BP0 0, SRWD 0), configuration register 0x07, security register 0x00 (WPSEL 0, not factory-locked, LDSO 0); these stay equal with a MISO pull-up, so the chip drives them. Secured OTP: 512 bytes FF including the ESN field. RDLR, RDSPBLK, RDFBR, RDPASS, RDSPB and RDDPB follow the idle level of MISO, so the chip does not answer them. SFDP 1.6 with 3 headers, newer than datasheet rev 1.2 (SFDP 1.0, 2 headers). The status register value before the first flashrom read is not known, because flashrom 1.2 runs its unlock hook before a read"
     evidence: "[SPI flash unit A](../evidence/windows/2026-11-16-spi-flash-unitA/RESULT.md)"
+  - id: M967
+    status: MEASURED
+    date: "2026-11-17"
+    claim: "On unit A with stock P3 firmware, two SMU transfers produced the expected words in distinct kernel-owned buffers."
+    status_text: "MEASURED (one Linux 6.18.52 run, two one-word transfers)"
+    detail: "C100 read 0x00580600 from firmware SRAM offset 0 and 0xAD004136 from offset 0xEBC. Both complete 4096-byte snapshot hashes match the word and unchanged canary tail. Each sub14 request returned a fresh (1,3). Both preceding LOAD requests returned (1,2), which remains a refusal. Queue 0 controls, setup00 and restore04 passed. This does not show VCN activation, arbitrary SRAM access, an accepted LOAD state or a general hardware DMA-drain guarantee."
+    evidence: "[C099 and C100](../evidence/linux/2026-11-17-C100-smu-transfer/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M968"}
+  - id: M969
+    status: MEASURED
+    date: "2026-11-17"
+    claim: "On unit A with stock P3, a q3 register-read request returned a fresh 0xFD before any target data sample."
+    status_text: "MEASURED (one Linux 6.18.52 trial)"
+    detail: "C103 r2 passed q0 version and first increment controls, then cleared and read back the q3 response and argument before issuing message 0x2A. The next q3 response was 0xFD. The only commands were q0/2, q0/1 and q3/0x2A. The worker stopped with exit 2; there was no mapping sample, second challenge, DMA, permission change or VCN access. The dispatcher-permission interpretation comes from static P3 analysis. The permission variable, address translation and VCN state were not measured. Clean shutdown, AC cycle, Linux return and exact boot-configuration restoration completed."
+    evidence: "[C103](../evidence/linux/2026-11-17-C103-q3-refusal/RESULT.md)"
+  - id: M971
+    status: MEASURED
+    date: "2026-11-13"
+    claim: "The stock CPU idle table of unit A (BIOS P3.00, 6 cores) is one SSDT with the OEM ID `AMD` and the OEM table ID `AMD CPU`: 1560 bytes, 12 scopes `\\_PR.C000` to `\\_PR.C00B` of 127 bytes each and nothing else. Each scope holds the same 79-byte `_CST` object (C1 through a `FFixedHW` register, C2 through the `SystemIO` port 0x414 with the latency 0x190) and a `_CSD` object `{ 6, 0, k / 2, 0xFE, 2, 0 }` for scope k. No table of the capture defines `C000` to `C00B`, so the 12 scopes have no target, which is the cause of the 12 failed lookups of M47"
+    status_text: "MEASURED (a reading of the tables stored on 2026-09-21, ACPICA iasl 20260930 and SHA-256)"
+    detail: "SHA-256 of the table `2f0c27555723a8ecda6a968059f66bdf082e63194d31898792ac71cb1f86a4d1`, of the `_CST` object `0a4b37466742ce2c7788010c913e9c46268a920dd93624e92c8d8a2582742e3c`. The FADT of the same capture gives the C2 latency 0x65 and the C3 latency 0x3E9. The capture has 6 cores: the table of a start with 8 cores is not measured. What Windows does with the table is not measured"
+    evidence: "[The reading](../evidence/linux/2026-11-13-acpi-cpu-tables-reading/README.md), [the tables](../evidence/linux/2026-09-21-E01-recon-binaries/README.txt)"
+    edges:
+      - {"type": "uses", "to": "M47"}
+  - id: M972
+    status: MEASURED
+    date: "2026-11-13"
+    claim: "The stock DSDT of unit A (BIOS P3.00, OEM ID `ALASKA`, OEM table ID `A M I `) declares 16 `Processor` objects `\\_PR.P000` to `\\_PR.P00F` with the processor IDs 1 to 16, which are the processor IDs of the 16 Local APIC entries of the MADT (12 enabled with the APIC IDs 0 to 5 and 8 to 13, 4 not enabled). Each object holds only `TYPE` and `_PDC`: no table gives a processor `_PSS`, `_PCT`, `_PPC` or `_PSD`, and the firmware's P-state package `\\_PR.APSS` holds only the value 0xFFFF. The DSDT calls three methods that no table defines: `APTS` from `\\_SB.PCI0.NPTS`, `AWAK` from `\\_SB.PCI0.NWAK`, and `AFN7` from three `_BCM` methods. At each of the five call sites, one operand of one byte follows the name (`Arg0` or `Local0`)"
+    status_text: "MEASURED (a reading of the tables stored on 2026-09-21, ACPICA iasl 20260930)"
+    detail: "`_PDC` would load a table from the operation region `\\_PR.SSDT` (address 0xFFFF0000) when `TBLD` is 0. The stored value of `TBLD` is 4, so the load does not run in this capture. The firmware writes parts of the DSDT at each start, so its digest identifies this capture only. The capture has 6 cores: the MADT of a start with 8 cores is not measured. AML does not encode the argument count of a call, so the count of the three methods is not measured: ACPICA guesses one argument from the operand at each call site, and no table of this firmware states it"
+    evidence: "[The reading](../evidence/linux/2026-11-13-acpi-cpu-tables-reading/README.md), [the tables](../evidence/linux/2026-09-21-E01-recon-binaries/README.txt)"
+    edges:
+      - {"type": "uses", "to": "M971"}
+  - id: M973
+    status: MEASURED
+    date: "2026-11-25"
+    claim: "On unit A, while the EFI stage ran before Windows, the firmware had the flash protocol `755B6596-6896-4BA3-B3DD-1C629FD1EA88`, and its `Read` function gave the whole 16 MiB SPI image: outside the UEFI variable store every byte equals the programmer read of 2026-11-19"
+    status_text: "MEASURED (one start, n = 1 unit, the image of 2026-11-25)"
+    detail: "The stage read in 256 pieces of 64 KiB through the ROM window at `0xFF000000`. The 16646144 bytes outside the store (0x020000 to 0xFFFFFF) are equal, the PSP directories and the PEI volume included; 35751 bytes inside the store differ. With the store read as zeros both images have the SHA-256 `0817b854...a276a28e`; the stock image P3.00 has `62411d52...f10ad` and differs in 1449125 bytes outside the store, so the image of unit A is not the stock image. The 1952185 bytes behind the image file of the outer volume (0xC23647 to 0xDFFFFF) all read FF. `Erase`, `Write` and `EraseWrite` were not called. The image stays outside the repository"
+    evidence: "[In-system read](../evidence/windows/2026-11-25-spi-insystem-read-unitA/RESULT.md)"
+    edges:
+      - {"type": "supersedes", "to": "M965", "scope": "partial"}
+  - id: M974
+    status: MEASURED
+    date: "2026-11-25"
+    claim: "On unit A, `ResetSystem(EfiResetCold)` from the EFI stage restarts the board, and the start after it runs the boot path of the stick again"
+    status_text: "MEASURED (one start)"
+    detail: "The stage called it after its job `read`. Windows started about 24 s later on the persistent route of the stick, with Secure Boot on as in the start before. The stage had written nothing to the flash: a reset after a write to the flash is not measured"
+    evidence: "[In-system read](../evidence/windows/2026-11-25-spi-insystem-read-unitA/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M973"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

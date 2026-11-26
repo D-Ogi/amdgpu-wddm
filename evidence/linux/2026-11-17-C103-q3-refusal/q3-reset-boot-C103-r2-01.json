@@ -1,0 +1,6 @@
+{
+  "source": "Transcribed terminal result from target.py boot tool session9716",
+  "exit": 0,
+  "output": "boot-wait 167s: windows down (other host key; no answer; no answer; no answer; no answer; no answer), linux up, boot 2026-11-17T17:10:00Z\nBOOT UP linux boot 2026-11-17T17:10:00Z after 167s",
+  "clock_note": "Linux reports +1h relative to host UTC. Remote boot time is preserved, not silently corrected."
+}

@@ -455,6 +455,11 @@
         "host"
       ]
     },
+    "tpm-crb": {
+      "inputs": [
+        "host"
+      ]
+    },
     "dpm": {
       "inputs": [
         "host"

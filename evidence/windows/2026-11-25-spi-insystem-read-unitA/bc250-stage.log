@@ -1,0 +1,14 @@
+bc250-stage: BC-250 stage, version 4
+bc250-stage: GPU function at 0:1:0.0
+bc250-stage: board BC-250, BIOS P3.00
+bc250-stage: flash: job read, flash protocol at 0x7E213C58
+bc250-stage: flash: read 16777216 of 16777216 bytes
+bc250-stage: flash: sha256 f44cabeafe04f86f7159ab02d54bafd59f86e77e64f303c17db5ae7320c1fd08
+bc250-stage: flash: base 0817b85481ef1aa3e8d1971e1d6a33152bf637867f8619e5a01ae5c5a276a28e
+bc250-stage: flash: store d19472e7e34eaa1a4d3973980278f1045f041e14d9075fc9e5ae536bd5085058
+bc250-stage: flash: volume store: 131072 bytes, used to 0x20000
+bc250-stage: flash: volume outer: 3276800 bytes, used to 0xC23647
+bc250-stage: flash: volume outer: stream at 0xAE00B5, 1324434 compressed bytes, 4354064 plain bytes
+bc250-stage: flash: volume pei: 2097152 bytes, used to 0x1000000
+bc250-stage: flash: the image is in the file bc250-flash.dump beside this application
+bc250-stage: flash: restarting the board

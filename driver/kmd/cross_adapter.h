@@ -11,7 +11,7 @@
  *   - using-cross-adapter-resources-in-a-hybrid-system.md:32-41: a cross-adapter resource is shared, has one linear
  *     allocation, a pitch aligned to 128 bytes, a height aligned to 4 rows, a page-aligned start, and is paged in to
  *     the aperture segment only.
- *   - dxgkrnl 10.0.26100.9974, static reading (fact M972, evidence/windows/2026-11-25-cross-adapter-tier1/):
+ *   - dxgkrnl 10.0.26100.9974, static reading (fact M976, evidence/windows/2026-11-25-cross-adapter-tier1/):
  *       DXGADAPTER::Initialize checks only the consistency of the bits (the 1.3 bits need WDDMVersion 1.3, tier 2
  *       needs tier 1, tier 3 needs tier 2). It infers IsHybridIntegrated from bit 4 only below interface 0x5011;
  *       this driver declares DXGKDDI_INTERFACE_VERSION_WDDM2_9, so the inference does not run.

@@ -1,0 +1,7 @@
+{
+  "offsets": {
+    "mmPCIE_INDEX2": 56,
+    "mmPCIE_DATA2": 60
+  },
+  "derivation_sha256": "f5a0b72f064fe3a8c82d1adb01fbed9cee0e3dd10d99e344670e35dbab723982"
+}

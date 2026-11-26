@@ -47,6 +47,7 @@ flowchart LR
   M924["M924"]
   M936["M936"]
   M965["M965"]
+  M973["M973"]
   S1["S1"]
   S2["S2"]
   S3["S3"]
@@ -75,6 +76,7 @@ flowchart LR
   M924 ==>|supports| M815
   M936 ==>|supports| M35
   M965 ==>|supports| M14
+  M973 ==>|supersedes| M965
   M870 ==>|supports| M13
   M870 ==>|supports| M14
   M5 -.->|refutes| S3
@@ -148,6 +150,8 @@ flowchart LR
   M962["M962"]
   M963["M963<br/>kmd"]
   M964["M964<br/>kmd"]
+  M971["M971"]
+  M972["M972"]
   M3 --> M4
   M18 --> M4
   M18 --> M5
@@ -187,6 +191,8 @@ flowchart LR
   M957 --> M34
   M961 --> M817
   M962 --> M961
+  M971 --> M47
+  M972 --> M971
   M37 --> M33
   M37 --> M39
   M81 --> M30
@@ -254,6 +260,10 @@ flowchart LR
   M937["M937"]
   M938["M938"]
   M959["M959<br/>kmd"]
+  M967["M967"]
+  M968["M968<br/>tooling"]
+  M973["M973"]
+  M974["M974"]
   M2 --> M1
   M35 --> M333
   M43 --> M40
@@ -274,12 +284,14 @@ flowchart LR
   M910 --> M906
   M936 --> M17
   M937 --> M17
+  M967 --> M968
+  M974 --> M973
   M894 --> M896
   M959 --> M938
   M106 --> M79
   M117 --> M20
   M816 --> M52
   classDef other stroke-dasharray:4 3
-  class M17,M40,M46,M53,M106,M117,M333,M348,M801,M816,M822,M887,M894,M959 other
+  class M17,M40,M46,M53,M106,M117,M333,M348,M801,M816,M822,M887,M894,M959,M968 other
 ```
 
