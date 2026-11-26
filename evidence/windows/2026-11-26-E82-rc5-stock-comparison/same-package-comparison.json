@@ -1,0 +1,310 @@
+{
+  "score_order": [
+    "t39-e79-fixed-off-1",
+    "t39-e79-fixed-on-1",
+    "t39-e79-fixed-on-2",
+    "t39-e79-fixed-on-3",
+    "t39-e79-fixed-off-2",
+    "t39-e79-fixed-off-3"
+  ],
+  "boots": [
+    "2026-11-26T13:47:48.5000000Z",
+    "2026-11-26T18:15:52.5000000Z",
+    "2026-11-26T18:31:48.5000000Z"
+  ],
+  "comparisons": {
+    "gt1": {
+      "off_fps": [
+        35.6696,
+        35.6786,
+        35.6447
+      ],
+      "on_fps": [
+        37.0754,
+        37.0926,
+        37.086
+      ],
+      "off_mean_fps": 35.664300000000004,
+      "on_mean_fps": 37.084666666666664,
+      "change_pct": 3.9826007146268383,
+      "observed_ranges_overlap": false,
+      "samples": 693,
+      "peak_c": 74.875,
+      "max_gap_ms": 530
+    },
+    "gt2": {
+      "off_fps": [
+        29.7681,
+        29.8192,
+        29.8114
+      ],
+      "on_fps": [
+        31.1443,
+        31.1192,
+        31.0972
+      ],
+      "off_mean_fps": 29.799566666666667,
+      "on_mean_fps": 31.120233333333335,
+      "change_pct": 4.4318317827887865,
+      "observed_ranges_overlap": false,
+      "samples": 872,
+      "peak_c": 77.125,
+      "max_gap_ms": 598
+    }
+  },
+  "runs": [
+    {
+      "run": "t39-e79-fixed-off-1",
+      "test": "gt1",
+      "fps": 35.6696,
+      "input_sha256": "d2065466eaa46a5af1a3b17ebf6fd7e3ae32496b7a37c724cb7e8177d7639cd8",
+      "samples": 116,
+      "smu_clock_mhz": [
+        1000
+      ],
+      "governor_clock_mhz": [
+        1000
+      ],
+      "throttle": [
+        "fixed"
+      ],
+      "peak_temperature_c": 73.875,
+      "largest_gap_ms": 524,
+      "valid": true,
+      "problems": [],
+      "normalized_input_sha256": "c1dbcf4ab642dc9a823b549d2fef980f238a60b1c0eba2dfea0909c2a6d6627f"
+    },
+    {
+      "run": "t39-e79-fixed-off-1",
+      "test": "gt2",
+      "fps": 29.7681,
+      "input_sha256": "99dfb2f2dd21deee4d5a10fcf447ac61bf39cef8012342e4a37f7b8943a8f409",
+      "samples": 146,
+      "smu_clock_mhz": [
+        1000
+      ],
+      "governor_clock_mhz": [
+        1000
+      ],
+      "throttle": [
+        "fixed"
+      ],
+      "peak_temperature_c": 75.25,
+      "largest_gap_ms": 534,
+      "valid": true,
+      "problems": [],
+      "normalized_input_sha256": "f2c18f8d2524133fddd60486bdd3b8ae4227073367410ac28cb565f7fe623f36"
+    },
+    {
+      "run": "t39-e79-fixed-on-1",
+      "test": "gt1",
+      "fps": 37.0754,
+      "input_sha256": "1ff1458144212e7250af76d150f3b094bf3516b63b8f5bd01f8a0015f07ed28e",
+      "samples": 115,
+      "smu_clock_mhz": [
+        1000
+      ],
+      "governor_clock_mhz": [
+        1000
+      ],
+      "throttle": [
+        "fixed"
+      ],
+      "peak_temperature_c": 73.625,
+      "largest_gap_ms": 525,
+      "valid": true,
+      "problems": [],
+      "normalized_input_sha256": "c1dbcf4ab642dc9a823b549d2fef980f238a60b1c0eba2dfea0909c2a6d6627f"
+    },
+    {
+      "run": "t39-e79-fixed-on-1",
+      "test": "gt2",
+      "fps": 31.1443,
+      "input_sha256": "41484874a7f2840ce5883f4d7abdfbe6a0a0a311a9968225d4cf586a0332d4d9",
+      "samples": 145,
+      "smu_clock_mhz": [
+        1000
+      ],
+      "governor_clock_mhz": [
+        1000
+      ],
+      "throttle": [
+        "fixed"
+      ],
+      "peak_temperature_c": 73.75,
+      "largest_gap_ms": 531,
+      "valid": true,
+      "problems": [],
+      "normalized_input_sha256": "f2c18f8d2524133fddd60486bdd3b8ae4227073367410ac28cb565f7fe623f36"
+    },
+    {
+      "run": "t39-e79-fixed-on-2",
+      "test": "gt1",
+      "fps": 37.0926,
+      "input_sha256": "1ff1458144212e7250af76d150f3b094bf3516b63b8f5bd01f8a0015f07ed28e",
+      "samples": 115,
+      "smu_clock_mhz": [
+        1000
+      ],
+      "governor_clock_mhz": [
+        1000
+      ],
+      "throttle": [
+        "fixed"
+      ],
+      "peak_temperature_c": 73.0,
+      "largest_gap_ms": 530,
+      "valid": true,
+      "problems": [],
+      "normalized_input_sha256": "c1dbcf4ab642dc9a823b549d2fef980f238a60b1c0eba2dfea0909c2a6d6627f"
+    },
+    {
+      "run": "t39-e79-fixed-on-2",
+      "test": "gt2",
+      "fps": 31.1192,
+      "input_sha256": "41484874a7f2840ce5883f4d7abdfbe6a0a0a311a9968225d4cf586a0332d4d9",
+      "samples": 146,
+      "smu_clock_mhz": [
+        1000
+      ],
+      "governor_clock_mhz": [
+        1000
+      ],
+      "throttle": [
+        "fixed"
+      ],
+      "peak_temperature_c": 77.125,
+      "largest_gap_ms": 598,
+      "valid": true,
+      "problems": [],
+      "normalized_input_sha256": "f2c18f8d2524133fddd60486bdd3b8ae4227073367410ac28cb565f7fe623f36"
+    },
+    {
+      "run": "t39-e79-fixed-on-3",
+      "test": "gt1",
+      "fps": 37.086,
+      "input_sha256": "1ff1458144212e7250af76d150f3b094bf3516b63b8f5bd01f8a0015f07ed28e",
+      "samples": 115,
+      "smu_clock_mhz": [
+        1000
+      ],
+      "governor_clock_mhz": [
+        1000
+      ],
+      "throttle": [
+        "fixed"
+      ],
+      "peak_temperature_c": 74.25,
+      "largest_gap_ms": 525,
+      "valid": true,
+      "problems": [],
+      "normalized_input_sha256": "c1dbcf4ab642dc9a823b549d2fef980f238a60b1c0eba2dfea0909c2a6d6627f"
+    },
+    {
+      "run": "t39-e79-fixed-on-3",
+      "test": "gt2",
+      "fps": 31.0972,
+      "input_sha256": "41484874a7f2840ce5883f4d7abdfbe6a0a0a311a9968225d4cf586a0332d4d9",
+      "samples": 145,
+      "smu_clock_mhz": [
+        1000
+      ],
+      "governor_clock_mhz": [
+        1000
+      ],
+      "throttle": [
+        "fixed"
+      ],
+      "peak_temperature_c": 75.75,
+      "largest_gap_ms": 527,
+      "valid": true,
+      "problems": [],
+      "normalized_input_sha256": "f2c18f8d2524133fddd60486bdd3b8ae4227073367410ac28cb565f7fe623f36"
+    },
+    {
+      "run": "t39-e79-fixed-off-2",
+      "test": "gt1",
+      "fps": 35.6786,
+      "input_sha256": "5255316728d7d2b40e973cc719048a38e7df2c9c0bbfada2d0847e5108677e3e",
+      "samples": 116,
+      "smu_clock_mhz": [
+        1000
+      ],
+      "governor_clock_mhz": [
+        1000
+      ],
+      "throttle": [
+        "fixed"
+      ],
+      "peak_temperature_c": 74.375,
+      "largest_gap_ms": 522,
+      "valid": true,
+      "problems": [],
+      "normalized_input_sha256": "c1dbcf4ab642dc9a823b549d2fef980f238a60b1c0eba2dfea0909c2a6d6627f"
+    },
+    {
+      "run": "t39-e79-fixed-off-2",
+      "test": "gt2",
+      "fps": 29.8192,
+      "input_sha256": "3ef32f562f722136c30046ea9cf2bea750f7c604ae21b668962fc58f18bf89f1",
+      "samples": 145,
+      "smu_clock_mhz": [
+        1000
+      ],
+      "governor_clock_mhz": [
+        1000
+      ],
+      "throttle": [
+        "fixed"
+      ],
+      "peak_temperature_c": 75.625,
+      "largest_gap_ms": 529,
+      "valid": true,
+      "problems": [],
+      "normalized_input_sha256": "f2c18f8d2524133fddd60486bdd3b8ae4227073367410ac28cb565f7fe623f36"
+    },
+    {
+      "run": "t39-e79-fixed-off-3",
+      "test": "gt1",
+      "fps": 35.6447,
+      "input_sha256": "5255316728d7d2b40e973cc719048a38e7df2c9c0bbfada2d0847e5108677e3e",
+      "samples": 116,
+      "smu_clock_mhz": [
+        1000
+      ],
+      "governor_clock_mhz": [
+        1000
+      ],
+      "throttle": [
+        "fixed"
+      ],
+      "peak_temperature_c": 74.875,
+      "largest_gap_ms": 528,
+      "valid": true,
+      "problems": [],
+      "normalized_input_sha256": "c1dbcf4ab642dc9a823b549d2fef980f238a60b1c0eba2dfea0909c2a6d6627f"
+    },
+    {
+      "run": "t39-e79-fixed-off-3",
+      "test": "gt2",
+      "fps": 29.8114,
+      "input_sha256": "3ef32f562f722136c30046ea9cf2bea750f7c604ae21b668962fc58f18bf89f1",
+      "samples": 145,
+      "smu_clock_mhz": [
+        1000
+      ],
+      "governor_clock_mhz": [
+        1000
+      ],
+      "throttle": [
+        "fixed"
+      ],
+      "peak_temperature_c": 75.5,
+      "largest_gap_ms": 526,
+      "valid": true,
+      "problems": [],
+      "normalized_input_sha256": "f2c18f8d2524133fddd60486bdd3b8ae4227073367410ac28cb565f7fe623f36"
+    }
+  ],
+  "active_compute_units": 40
+}

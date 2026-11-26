@@ -217,3 +217,9 @@ facts:
     edges:
       - {"type": "uses", "to": "M875"}
       - {"type": "uses", "to": "M918"}
+  - id: M978
+    status: MEASURED
+    date: "2026-11-26"
+    claim: "The optimized tester.39 RC5 package increased the mean Time Spy frame rate on BC-250 unit A at 1,000 MHz from 35.6496 to 37.1679 FPS in graphics test 1 and from 29.7244 to 31.1574 FPS in graphics test 2"
+    detail: "Three scored passes per package, with 40 active compute units. The stock build used the RC5 manifest at 9767822c. The optimized package included the three graphics optimizations and companion DXVK and Vulkan fixes. The frame rate ranges did not overlap and the GPU did not thermally throttle. Peak GPU temperature was 77.0 C. A separate comparison of the three settings on the same optimized package measured 35.6643 to 37.0847 FPS in graphics test 1 and 29.7996 to 31.1202 FPS in graphics test 2."
+    evidence: "[E82 RC5 Time Spy](../evidence/windows/2026-11-26-E82-rc5-stock-comparison/RESULT.md)"
