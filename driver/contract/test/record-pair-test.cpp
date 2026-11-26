@@ -24,6 +24,16 @@
 #include "driver/kmd/gdi_admission.h"
 #include "driver/contract/bc250_shared_surface.h"
 #include "driver/contract/bc250_umd_submit.h"
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <d3d12.h>
+// t39/cross-adapter-tier1: the answer of the D3D12 shell to a CROSS_ADAPTER create (sweep_cross_adapter).
+#if __has_include("driver/umd/d3d12/engine-ddi/cross-adapter.h")
+#include "driver/umd/d3d12/engine-ddi/cross-adapter.h"
+#define RECORD_PAIR_CROSS_ADAPTER 1
+#endif
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -125,7 +135,11 @@ int d3d11_bare(const void *blob, unsigned bytes, BC250_SHARED_SURFACE *out, cons
 // RULE driver/umd/dxvk/runtime-image-memory.cpp "if (rowBytes>source.size || VkDeviceSize(info.extent.height-1)>(source.size-rowBytes)/pitch) return E_INVALIDARG;"
 // RULE driver/umd/dxvk/runtime-image-memory.cpp "if (!layout.offset && layout.rowPitch==pitch && layout.size && layout.size<=source.size &&"
 // RULE driver/umd/dxvk/runtime-image-memory.cpp "if (!requirements.size || requirements.size>source.size || !requirements.alignment ||"
+// The adoption takes the surface table row of the record's two formats; the D3D11 table has no X view rule.
+// RULE driver/umd/dxvk/runtime-surface.cpp "const auto *row=runtime_surface_format(metadata.Format,desc.Format);"
 std::string d3d11_after_decode(const BC250_SHARED_SURFACE &s) {
+    const AMDGPU_WDDM_SURFACE_FORMAT *format = Bc250SharedSurfaceFormat(s.DxgiFormat);
+    if (!format || format->d3dddi != (unsigned int)s.D3dDdiFormat) return "no D3D11 surface row for the formats";
 #if defined(RECORD_PAIR_IMPORT_MAPPED)
     const uint64_t source = round_page(s.Size);
 #else
@@ -332,6 +346,34 @@ void sweep_shells(const std::vector<Shape> &all) {
     }
 }
 
+// ---- P5 X views: a D3D12 shared B8G8R8X8 surface (BD-408) ----
+// The D3D12 shell writes an X format (88, 93) over the storage row of its A format (87, 91): LB7A A8R8G8B8, E26R the
+// X format. The D3D11 open must take it as well: D3D9On12 creates such a surface for a D3D9 X8R8G8B8 texture.
+void sweep_x_views(const std::vector<Shape> &all) {
+    struct XView { unsigned dxgi, storage; const char *name; };
+    static const XView kViews[] = {{88, 87, "B8G8R8X8_UNORM"}, {93, 91, "B8G8R8X8_UNORM_SRGB"}};
+    char name[160];
+    for (const XView &v : kViews) {
+        const AMDGPU_WDDM_SURFACE_FORMAT *row = Bc250SharedSurfaceFormat(v.storage);
+        std::snprintf(name, sizeof name, "P5 D3D12 shared %s (%u) -> D3D11 open", v.name, v.dxgi);
+        for (const Shape &sh : all) {
+            if (sh.w > 8192 || sh.h > 8192) continue;
+            const uint64_t pitch = radv_pitch(sh.w, row->bytes_per_pixel);
+            BC250_SHARED_SURFACE in{};
+            in.Width = sh.w; in.Height = sh.h; in.Pitch = (unsigned long)pitch; in.DxgiFormat = v.dxgi;
+            in.D3dDdiFormat = row->d3dddi; in.BytesPerPixel = row->bytes_per_pixel; in.Shared = 1;
+            in.BindFlags = BC250_SHARED_BIND_SHADER_RESOURCE | BC250_SHARED_BIND_RENDER_TARGET;
+            in.Size = round_page(std::max<uint64_t>(pitch * align4(sh.h), radv_memory(sh.w, sh.h, row->bytes_per_pixel)));
+            BC250_WDDM_ALLOCATION_PRIVATE a{}; BC250_SURFACE_RESOURCE_PRIVATE r{};
+            if (Bc250SharedSurfaceEncode(&in, &a, &r) != BC250_SHARED_SURFACE_OK) { pair(name).fail(sh.w, sh.h, "encode refused"); continue; }
+            BC250_SHARED_SURFACE_ADMIT admit{0, BC250_SURFACE_RESOURCE_ACCESS_MASK};
+            BC250_SHARED_SURFACE s{};
+            if (Bc250SharedSurfaceDecodeAdmitted(&r, sizeof r, &a, sizeof a, &admit, &s)) pair(name).fail(sh.w, sh.h, "decode");
+            else record(name, sh.w, sh.h, d3d11_after_decode(s));
+        }
+    }
+}
+
 // ---- P2 NV12: the D3D11 shell's shared NV12 surface (a decoder's output) ----
 // The shell writes an LB7A v2 record from the planes of the engine's retained image. The plane layout is stated
 // here, not measured: luma at offset 0 with pitch align256(W), chroma right after it with the same pitch, the size
@@ -404,14 +446,25 @@ void sweep_raw(const std::vector<Shape> &all) {
     const std::string n12 = "P7 D3D12 raw BC2A v2, no record -> D3D12 open";
     const std::string n11 = "P7 D3D12 raw BC2A v2, no record -> D3D11 open";
     note(n12, "by design: no resource record"); note(n11, "by design: no resource record");
+    // The refusal of an open that no record describes is the one loud answer for a shared create outside the
+    // envelope (S2 decision 2026-11-25): it must name its check, never the bare word of a successful decode.
+    const std::string loud = "S1 open of a P7 allocation names its refusal";
+    const auto named = [](const char *why) {
+        return why && *why && std::strcmp(why, BC250_SHARED_SURFACE_WHY_OK) != 0;
+    };
     for (const Shape &sh : all) {
         if (sh.w > 8192 || sh.h > 8192) continue;
         const auto b = raw_blob(radv_memory(sh.w, sh.h, 4));
         BC250_SHARED_SURFACE s{}; const char *why = "";
-        if (Bc250SharedSurfaceDecodeWhy(nullptr, 0, &b, sizeof b, &s, &why)) pair(n12).fail(sh.w, sh.h, std::string("refused: ") + why);
-        else pair(n12).ok();
-        if (d3d11_bare(&b, sizeof b, &s, &why)) pair(n11).fail(sh.w, sh.h, std::string("refused: ") + why);
-        else pair(n11).ok();
+        if (Bc250SharedSurfaceDecodeWhy(nullptr, 0, &b, sizeof b, &s, &why)) {
+            pair(n12).fail(sh.w, sh.h, std::string("refused: ") + why);
+            named(why) ? pair(loud).ok() : pair(loud).fail(sh.w, sh.h, "D3D12 refusal without a name");
+        } else pair(n12).ok();
+        why = "";
+        if (d3d11_bare(&b, sizeof b, &s, &why)) {
+            pair(n11).fail(sh.w, sh.h, std::string("refused: ") + why);
+            named(why) ? pair(loud).ok() : pair(loud).fail(sh.w, sh.h, "D3D11 refusal without a name");
+        } else pair(n11).ok();
     }
 }
 
@@ -445,11 +498,49 @@ const SharedFormat kShared[] = {
     {100, "AYUV", 2}, {107, "YUY2", 2}, {103, "NV12", 2}, {110, "NV11", 2}, {105, "P016", 2}, {104, "P010", 2},
     {109, "Y216", 2}, {108, "Y210", 2}, {102, "Y416", 2}, {101, "Y410", 2}};
 
+// ---- The CROSS_ADAPTER create: the one sign of sharing that the D3D12 DDI gives ----
+// D3D12DDI_RESOURCE_FLAG_0003_CROSS_ADAPTER (0x4) marks a texture as shared across adapters. Such a create that falls
+// outside the envelope must get a record an opener reads (P6) or a loud refusal at the create, never a silent P7.
+// The answer comes from engine-ddi/cross-adapter.h (t39/cross-adapter-tier1): create_refused refuses every
+// CROSS_ADAPTER texture, with a named log line, before any memory request. A tree without that header gives P7.
+// Buffers have no row: a cross-adapter buffer is placed in a shared heap, and the heap is the shared object.
+// The header is included at the top of the file.
+bool cross_adapter_refused(D3D12_RESOURCE_DIMENSION dimension) {
+#if defined(RECORD_PAIR_CROSS_ADAPTER)
+    return engine_ddi::cross_adapter::create_refused(dimension, D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER);
+#else
+    (void)dimension;
+    return false;
+#endif
+}
+void sweep_cross_adapter(const std::vector<Shape> &all) {
+    const std::string formats = "S2 D3D12 CROSS_ADAPTER create outside the envelope -> an opener";
+    const std::string mips = "S2 D3D12 CROSS_ADAPTER create of mips > 1 or array > 1 -> an opener";
+    for (const SharedFormat &f : kShared) {
+        if (Bc250SharedSurfaceFormat(f.dxgi)) continue;  // inside the envelope: P5, the rows above
+        for (const Shape &sh : all) {
+            if (sh.w > 8192 || sh.h > 8192) continue;
+            if (cross_adapter_refused(D3D12_RESOURCE_DIMENSION_TEXTURE2D)) { pair(formats).ok(); continue; }
+            char why[96];
+            std::snprintf(why, sizeof why, "%s (%u): the create takes P7, no opener reads it", f.name, f.dxgi);
+            pair(formats).fail(sh.w, sh.h, why);
+        }
+    }
+    for (D3D12_RESOURCE_DIMENSION d : {D3D12_RESOURCE_DIMENSION_TEXTURE1D, D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+                                       D3D12_RESOURCE_DIMENSION_TEXTURE3D}) {
+        if (cross_adapter_refused(d)) pair(mips).ok();
+        else pair(mips).fail(1, 1, "outside the envelope (linear_surface_shape): the create takes P7");
+    }
+}
+
 void sweep_shared_create_rule(const std::vector<Shape> &all) {
     char name[160];
     for (const SharedFormat &f : kShared) {
         std::snprintf(name, sizeof name, "S%d D3D12 shared create %s (%u) -> an opener", f.tier, f.name, f.dxgi);
-        if (f.tier == 2) note(name, "reachability unknown: extended tier, no lab line of a D3D12 creator");
+        // A plain shared create cannot be told from a private one: the DDI has no sharing bit, and a D3D12 shared
+        // committed texture arrives with the heap flags 0x26 of an ordinary one (docs/d3d12-shared-resources.md,
+        // measured 2026-10-05). The answer for the unflagged create is the named refusal of the open (row above).
+        if (f.tier == 2) note(name, "DDI carries no sharing bit (heap flags 0x26, measured 2026-10-05); the open refusal is named");
         const AMDGPU_WDDM_SURFACE_FORMAT *row = Bc250SharedSurfaceFormat(f.dxgi);
         for (const Shape &sh : all) {
             if (sh.w > 8192 || sh.h > 8192) continue;  // larger: the D3D12 shell refuses the create
@@ -470,8 +561,9 @@ void sweep_shared_create_rule(const std::vector<Shape> &all) {
         }
     }
     const std::string mips = "S2 D3D12 shared create of mips > 1 or array > 1 -> an opener";
-    note(mips, "reachability unknown: extended tier, no lab line of a D3D12 creator");
+    note(mips, "DDI carries no sharing bit (heap flags 0x26, measured 2026-10-05); the open refusal is named");
     pair(mips).fail(1, 1, "outside the envelope (linear_surface_shape): the create takes P7, no opener reads it");
+    sweep_cross_adapter(all);
 }
 }  // namespace
 
@@ -482,6 +574,7 @@ int main() {
     const auto all = shapes();
     sweep_kmd_standard(all);
     sweep_shells(all);
+    sweep_x_views(all);
     sweep_nv12(all);
     sweep_raw(all);
     sweep_shared_create_rule(all);
