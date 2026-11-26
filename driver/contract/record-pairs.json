@@ -25,7 +25,7 @@
         },
         {
           "file": "driver/umd/dxvk/runtime-surface.cpp",
-          "function": "planar_record"
+          "function": "runtime_nv12_record"
         },
         {
           "file": "driver/umd/dxvk/runtime-surface-allocation.cpp",

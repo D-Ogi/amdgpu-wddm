@@ -4,8 +4,7 @@
 #include "diagnostics.h"
 #include <cstring>
 namespace bc250::umd {
-namespace {
-HRESULT planar_record(const RuntimeImageLayout &layout,BC250_WDDM_NV12_PRIVATE &out) {
+HRESULT runtime_nv12_record(const RuntimeImageLayout &layout,BC250_WDDM_NV12_PRIVATE &out) {
     if (layout.planes!=2 || layout.format!=VK_FORMAT_G8_B8R8_2PLANE_420_UNORM ||
         layout.memory.alignment>UINT32_MAX || layout.plane[0].rowPitch>UINT32_MAX ||
         layout.plane[1].rowPitch>UINT32_MAX) return E_INVALIDARG;
@@ -17,6 +16,7 @@ HRESULT planar_record(const RuntimeImageLayout &layout,BC250_WDDM_NV12_PRIVATE &
     if (!Bc250Nv12PrivateValid(&n,sizeof(n))) return E_INVALIDARG;
     out=n; return S_OK;
 }
+namespace {
 bool preparation_valid(const RuntimeSurfacePreparation *p) { return p && p->device && p->vk && p->engine; }
 }
 HRESULT begin_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &queue,
@@ -38,7 +38,7 @@ HRESULT begin_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &q
     if (planar) {
         hr=prepare_runtime_nv12(runtime,prepare->device,*prepare->vk,*prepare->engine,desc,out.texture);
         if (FAILED(hr)) return hr;
-        hr=planar_record(out.texture.preparedLayout,actual.nv12);
+        hr=runtime_nv12_record(out.texture.preparedLayout,actual.nv12);
         if (FAILED(hr)) return hr;
         actual.surface=actual.nv12.Surface; out.nv12=actual.nv12;
     }
@@ -77,7 +77,7 @@ HRESULT adopt_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &q
         RuntimeTexture prepared{}; BC250_WDDM_NV12_PRIVATE measured{};
         HRESULT hr=prepare_runtime_nv12(runtime,prepare->device,*prepare->vk,*prepare->engine,desc,prepared);
         if (FAILED(hr)) return hr;
-        hr=planar_record(prepared.preparedLayout,measured);
+        hr=runtime_nv12_record(prepared.preparedLayout,measured);
         if (FAILED(hr) || std::memcmp(&measured,nv12,sizeof(measured))) {
             destroy_runtime_image(prepare->device,*prepare->vk,prepared.image);
             return E_INVALIDARG;
