@@ -4,17 +4,25 @@
 #include "diagnostics.h"
 #include <cstring>
 namespace bc250::umd {
+// The LB7A v2 record has one writer, and it is in the contract (bc250_shared_surface.h,
+// Bc250SharedNv12Encode). This function is the shell's half of that write: it checks what only the shell can
+// check, which is that the engine returned the one NV12 Vulkan format in two planes and that the pitches and the
+// alignment of that image fit the 32-bit fields of the record, and then it states the plane layout in the
+// contract's own terms. The record's rules, the kernel driver's check of it included, stay in the contract, so
+// this shell and the D3D12 shell cannot drift apart on a field neither side checks (BD-075).
 HRESULT runtime_nv12_record(const RuntimeImageLayout &layout,BC250_WDDM_NV12_PRIVATE &out) {
     if (layout.planes!=2 || layout.format!=VK_FORMAT_G8_B8R8_2PLANE_420_UNORM ||
         layout.memory.alignment>UINT32_MAX || layout.plane[0].rowPitch>UINT32_MAX ||
         layout.plane[1].rowPitch>UINT32_MAX) return E_INVALIDARG;
-    BC250_WDDM_NV12_PRIVATE n{};
-    n.Surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,BC250_WDDM_NV12_VERSION,layout.width,layout.height,
-        ULONG(layout.plane[0].rowPitch),BC250_NV12_D3DDDI_FORMAT,layout.memory.size};
-    n.ChromaPitch=ULONG(layout.plane[1].rowPitch); n.Layout=BC250_WDDM_NV12_LINEAR;
-    n.SurfaceOffset=layout.plane[0].offset; n.ChromaOffset=layout.plane[1].offset; n.Alignment=ULONG(layout.memory.alignment);
-    if (!Bc250Nv12PrivateValid(&n,sizeof(n))) return E_INVALIDARG;
-    out=n; return S_OK;
+    BC250_SHARED_NV12 surface{};
+    surface.Width=layout.width; surface.Height=layout.height;
+    surface.LumaPitch=ULONG(layout.plane[0].rowPitch); surface.ChromaPitch=ULONG(layout.plane[1].rowPitch);
+    surface.Alignment=ULONG(layout.memory.alignment);
+    surface.LumaOffset=layout.plane[0].offset; surface.ChromaOffset=layout.plane[1].offset;
+    surface.Size=layout.memory.size;
+    BC250_WDDM_NV12_PRIVATE record{};
+    if (Bc250SharedNv12Encode(&surface,&record)!=BC250_SHARED_SURFACE_OK) return E_INVALIDARG;
+    out=record; return S_OK;
 }
 namespace {
 bool preparation_valid(const RuntimeSurfacePreparation *p) { return p && p->device && p->vk && p->engine; }

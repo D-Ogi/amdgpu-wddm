@@ -149,6 +149,45 @@ static __inline const AMDGPU_WDDM_SURFACE_FORMAT *Bc250SharedSurfaceFormat(unsig
     return 0;
 }
 
+/* The E26R v3 record of a linear surface of one subresource: the fields a surface record fixes, and the
+ * kernel driver's parser as the last check. Both encoders below write their resource record here, so
+ * the record has one writer. Out is written only on success. */
+static __inline int Bc250SharedSurfaceResourceEncode(unsigned long DxgiFormat, unsigned long Width,
+                                                    unsigned long Height, unsigned long BindFlags,
+                                                    unsigned long MiscFlags, unsigned long Shared,
+                                                    unsigned long Access, BC250_SURFACE_RESOURCE_PRIVATE *Out)
+{
+    BC250_SURFACE_RESOURCE_PRIVATE r;
+    int shared = 0, cached = 0;
+    if (!Out || !Width || !Height || Width > BC250_SHARED_MAX_EDGE || Height > BC250_SHARED_MAX_EDGE)
+        return BC250_SHARED_SURFACE_MALFORMED;
+    if ((BindFlags & ~BC250_SHARED_BIND_MASK) || (MiscFlags & ~BC250_SHARED_MISC_MASK))
+        return BC250_SHARED_SURFACE_MALFORMED;
+    if (Shared > 1 || (Access & ~BC250_SURFACE_RESOURCE_ACCESS_MASK))
+        return BC250_SHARED_SURFACE_MALFORMED;
+    r.Magic = BC250_SURFACE_RESOURCE_MAGIC;
+    r.Version = BC250_SURFACE_RESOURCE_TEXTURE_VERSION;
+    r.Shared = Shared;
+    r.Access = Access;
+    r.Width = Width;
+    r.Height = Height;
+    r.MipLevels = 1;
+    r.ArraySize = 1;
+    r.Format = DxgiFormat;
+    r.SampleCount = 1;
+    r.SampleQuality = 0;
+    r.Usage = BC250_SHARED_USAGE_DEFAULT;
+    r.BindFlags = BindFlags;
+    r.CpuAccessFlags = 0;
+    r.MiscFlags = MiscFlags;
+    r.TextureLayout = BC250_SHARED_LAYOUT_UNDEFINED;
+    /* The kernel driver's own parser must admit what we write: it decides the placement from it. */
+    if (!Bc250SurfaceResourcePolicy(&r, (unsigned int)sizeof(r), &shared, &cached))
+        return BC250_SHARED_SURFACE_MALFORMED;
+    *Out = r;
+    return BC250_SHARED_SURFACE_OK;
+}
+
 /* Writes the two records of Surface. The surface is validated exactly as a decode validates it, so
  * a record this function writes is a record Bc250SharedSurfaceDecode admits. */
 static __inline int Bc250SharedSurfaceEncode(const BC250_SHARED_SURFACE *Surface,
@@ -158,7 +197,7 @@ static __inline int Bc250SharedSurfaceEncode(const BC250_SHARED_SURFACE *Surface
     const AMDGPU_WDDM_SURFACE_FORMAT *row;
     BC250_WDDM_ALLOCATION_PRIVATE a;
     BC250_SURFACE_RESOURCE_PRIVATE r;
-    int shared = 0, cached = 0;
+    int status;
     if (!Surface || !Allocation || !Resource)
         return BC250_SHARED_SURFACE_MALFORMED;
     row = Bc250SharedSurfaceFormat(Surface->DxgiFormat);
@@ -166,14 +205,6 @@ static __inline int Bc250SharedSurfaceEncode(const BC250_SHARED_SURFACE *Surface
         return BC250_SHARED_SURFACE_FORMAT;
     if (row->d3dddi != (unsigned int)Surface->D3dDdiFormat ||
         row->bytes_per_pixel != (unsigned int)Surface->BytesPerPixel)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (Surface->Width > BC250_SHARED_MAX_EDGE || Surface->Height > BC250_SHARED_MAX_EDGE)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (Surface->BindFlags & ~BC250_SHARED_BIND_MASK)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (Surface->MiscFlags & ~BC250_SHARED_MISC_MASK)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (Surface->Shared > 1 || (Surface->Access & ~BC250_SURFACE_RESOURCE_ACCESS_MASK))
         return BC250_SHARED_SURFACE_MALFORMED;
     a.Magic = BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
     a.Version = 1;
@@ -184,27 +215,48 @@ static __inline int Bc250SharedSurfaceEncode(const BC250_SHARED_SURFACE *Surface
     a.Size = Surface->Size;
     if (!Bc250SharedSurfaceGeometry(&a, row->bytes_per_pixel))
         return BC250_SHARED_SURFACE_MALFORMED;
-    r.Magic = BC250_SURFACE_RESOURCE_MAGIC;
-    r.Version = BC250_SURFACE_RESOURCE_TEXTURE_VERSION;
-    r.Shared = Surface->Shared;
-    r.Access = Surface->Access;
-    r.Width = Surface->Width;
-    r.Height = Surface->Height;
-    r.MipLevels = 1;
-    r.ArraySize = 1;
-    r.Format = Surface->DxgiFormat;
-    r.SampleCount = 1;
-    r.SampleQuality = 0;
-    r.Usage = BC250_SHARED_USAGE_DEFAULT;
-    r.BindFlags = Surface->BindFlags;
-    r.CpuAccessFlags = 0;
-    r.MiscFlags = Surface->MiscFlags;
-    r.TextureLayout = BC250_SHARED_LAYOUT_UNDEFINED;
-    /* The kernel driver's own parser must admit what we write: it decides the placement from it. */
-    if (!Bc250SurfaceResourcePolicy(&r, (unsigned int)sizeof(r), &shared, &cached))
-        return BC250_SHARED_SURFACE_MALFORMED;
+    status = Bc250SharedSurfaceResourceEncode(Surface->DxgiFormat, Surface->Width, Surface->Height,
+                                              Surface->BindFlags, Surface->MiscFlags, Surface->Shared,
+                                              Surface->Access, &r);
+    if (status != BC250_SHARED_SURFACE_OK)
+        return status;
     *Allocation = a;
     *Resource = r;
+    return BC250_SHARED_SURFACE_OK;
+}
+
+/* One NV12 surface as the producer's retained image lays it out: two planes in one allocation. */
+typedef struct _BC250_SHARED_NV12 {
+    unsigned long Width, Height, LumaPitch, ChromaPitch, Alignment;
+    unsigned long long LumaOffset, ChromaOffset, Size;
+} BC250_SHARED_NV12;
+
+/* Writes the LB7A v2 record of an NV12 surface. The record is validated by the kernel driver's own check
+ * (Bc250Nv12PrivateValid), so a record this function writes is one the kernel driver admits. The E26R
+ * record of the same surface is Bc250SharedSurfaceResourceEncode with BC250_NV12_DXGI_FORMAT: a producer
+ * knows the description before the image exists, and the plane layout only after. Out is written only on
+ * success. */
+static __inline int Bc250SharedNv12Encode(const BC250_SHARED_NV12 *Surface, BC250_WDDM_NV12_PRIVATE *Out)
+{
+    BC250_WDDM_NV12_PRIVATE n;
+    if (!Surface || !Out)
+        return BC250_SHARED_SURFACE_MALFORMED;
+    n.Reserved = 0;
+    n.Surface.Magic = BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
+    n.Surface.Version = BC250_WDDM_NV12_VERSION;
+    n.Surface.Width = Surface->Width;
+    n.Surface.Height = Surface->Height;
+    n.Surface.Pitch = Surface->LumaPitch;
+    n.Surface.Format = BC250_NV12_D3DDDI_FORMAT;
+    n.Surface.Size = Surface->Size;
+    n.ChromaPitch = Surface->ChromaPitch;
+    n.Layout = BC250_WDDM_NV12_LINEAR;
+    n.SurfaceOffset = Surface->LumaOffset;
+    n.ChromaOffset = Surface->ChromaOffset;
+    n.Alignment = Surface->Alignment;
+    if (!Bc250Nv12PrivateValid(&n, (unsigned int)sizeof(n)))
+        return BC250_SHARED_SURFACE_MALFORMED;
+    *Out = n;
     return BC250_SHARED_SURFACE_OK;
 }
 

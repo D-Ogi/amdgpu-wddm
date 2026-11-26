@@ -17,15 +17,15 @@
     },
     {
       "id": "P2",
-      "what": "D3D11 shell runtime surface: LB7A v1 or v2 (NV12) with E26R v3, E26R v2 for the resource group, or E26R v4 for a GPU-only surface",
+      "what": "D3D11 shell runtime surface: LB7A v1 or v2 (NV12) with E26R v3, E26R v2 for the resource group, or E26R v4 for a GPU-only surface. The NV12 record is written by the contract's own writer; runtime-surface.cpp runtime_nv12_record is the shell's half of that call and writes no magic itself",
       "sites": [
         {
           "file": "driver/umd/dxvk/ddi-resource.cpp",
           "function": "convert_runtime_resource"
         },
         {
-          "file": "driver/umd/dxvk/runtime-surface.cpp",
-          "function": "runtime_nv12_record"
+          "file": "driver/contract/bc250_shared_surface.h",
+          "function": "Bc250SharedNv12Encode"
         },
         {
           "file": "driver/umd/dxvk/runtime-surface-allocation.cpp",
@@ -81,11 +81,15 @@
     },
     {
       "id": "P5",
-      "what": "D3D12 shell shared surface: LB7A v1 with E26R v3 through the contract writer (allocation-request.h prepare_shared_surface)",
+      "what": "D3D12 shell shared surface: LB7A v1 with E26R v3 through the contract writer (allocation-request.h prepare_shared_surface). Bc250SharedSurfaceEncode writes the LB7A record and calls Bc250SharedSurfaceResourceEncode, the one writer of the E26R v3 record of a linear surface",
       "sites": [
         {
           "file": "driver/contract/bc250_shared_surface.h",
           "function": "Bc250SharedSurfaceEncode"
+        },
+        {
+          "file": "driver/contract/bc250_shared_surface.h",
+          "function": "Bc250SharedSurfaceResourceEncode"
         }
       ]
     },

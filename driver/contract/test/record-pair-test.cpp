@@ -378,7 +378,9 @@ void sweep_x_views(const std::vector<Shape> &all) {
 // The shell writes an LB7A v2 record from the planes of the engine's retained image. The plane layout is stated
 // here, not measured: luma at offset 0 with pitch align256(W), chroma right after it with the same pitch, the size
 // page-rounded. Bc250Nv12PrivateValid is the real record check.
-// RULE driver/umd/dxvk/runtime-surface.cpp "n.Surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,BC250_WDDM_NV12_VERSION,"
+// The record has one writer, in the contract, and the shell states the plane layout in the contract's terms.
+// RULE driver/contract/bc250_shared_surface.h "n.Surface.Version = BC250_WDDM_NV12_VERSION;"
+// RULE driver/umd/dxvk/runtime-surface.cpp "if (Bc250SharedNv12Encode(&surface,&record)!=BC250_SHARED_SURFACE_OK) return E_INVALIDARG;"
 // The D3D11 open of it.
 // RULE driver/umd/dxvk/ddi-resource.cpp "if (a.PrivateDriverDataSize==sizeof(BC250_WDDM_NV12_PRIVATE)) {"
 // RULE driver/umd/dxvk/ddi-resource.cpp "(r.BindFlags&~BC250_SHARED_BIND_MASK) || (r.MiscFlags&~BC250_SHARED_MISC_MASK) ||"
