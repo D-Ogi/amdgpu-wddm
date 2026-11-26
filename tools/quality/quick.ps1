@@ -244,6 +244,10 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  Check 'repack-notes' { & pwsh -NoProfile -File "$repo\tools\release\test-repack-notes.ps1" -Out (New-Item -ItemType Directory -Force "$Out\repack-notes").FullName }
  # The release gates read the commit that the package names: a dirty tree, or one that changes during a run, stops build-release.ps1 (BD-263).
  Check 'tree-state' { & pwsh -NoProfile -File "$repo\tools\release\test-tree-state.ps1" -Out (New-Item -ItemType Directory -Force "$Out\tree-state").FullName }
+ # The rules of the function that gives a build of one row the user-mode tree of its release set. With its git
+ # fixtures it takes 2.14 s alone and 15.05 s in the full uncached suite of a kmd-rel build (2026-11-26), which is
+ # 8.4 per cent of the 180 s of the manifest, so it needs no deadline of its own.
+ Check 'umd-gate' { & pwsh -NoProfile -File "$repo\tools\release\test-umd-gate.ps1" -Root $Workspace -Out (New-Item -ItemType Directory -Force "$Out\umd-gate").FullName }
  # Its deadline is 1200 s in gate-inputs.json (BD-316). 42 tests: 494 s in a quick Full of 2026-11-05 19:07Z, and two
  # stops at the old 600 s in the full uncached gates of build-release.ps1 the same evening (19:50Z and 20:46Z),
  # with the suite not finished. 1200 s is 2.4x the quick Full run.
@@ -602,6 +606,11 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # Its deadline is 900 s in gate-inputs.json: 144 s in the tester.39 rc1 package, 80 per cent of the old 180 s, and
  # a stop at 180 s in the release flavour of the rc2 package, which ran beside the lab flavour (BD-382).
  Check 'overlay-group-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group-controls" -Mutation all }
+ # It runs the overlay runner three times in one output directory, so a refusal of a directory that the runner
+ # made itself cannot come back. 8.72 s for the three runs alone and 27.03 s in the full uncached suite of a
+ # kmd-rel build (2026-11-26), which is 15 per cent of the 180 s of the manifest, so it needs no deadline of its
+ # own in gate-inputs.json.
+ Check 'overlay-group-rerun' { & pwsh -NoProfile -File "$repo\driver\kmd\test\test_run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group-rerun" }
  Check 'dc-types' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dc_types.ps1" -Root $Workspace -Out "$Out\dc-types" }
  # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest (BD-357). In the full uncached suite of
  # the tester.39 package run of 2026-11-24 09:15Z, beside other work on the development PC, it took 94.41 s, 52 per cent of 180 s.
