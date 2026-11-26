@@ -14,7 +14,7 @@ import sys
 import tarfile
 import time
 
-sys.path.insert(0, r"P:\BC-250\bc250-win\tools\win")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "win"))
 import target  # noqa: E402
 
 
