@@ -92,6 +92,73 @@ int main(void)
     CHECK(PagingApertureBytesForSetting(0, &clamped) == 256 * MIB && clamped == 1);
     CHECK(PagingApertureBytesForSetting(0xFFFFFFFFul, &clamped) == 447 * MIB && clamped == 1);
     CHECK(PagingApertureBytesForSetting(300, NULL) == 300 * MIB);
+    // Bit 31 of the stored value is the 64 KiB page switch, bit 30 next to it the 64 KiB sizes, the rest is the
+    // size. Without bit 31 every value is the size it always was (0, 0x7FFFFFFF and bit 30 included), so a stored
+    // value of an earlier driver reads the same.
+    {
+        int pages = -1, sizes = -1;
+        CHECK(PagingApertureSettingMegabytes(384, &pages, &sizes) == 384 && pages == 0 && sizes == 0);
+        CHECK(PagingApertureSettingMegabytes(0, &pages, &sizes) == 0 && pages == 0 && sizes == 0);
+        CHECK(PagingApertureSettingMegabytes(0x7FFFFFFFul, &pages, &sizes) == 0x7FFFFFFFul && pages == 0 && sizes == 0);
+        // Stage 1, report only: no size bit, so no allocation changes.
+        CHECK(PagingApertureSettingMegabytes(0x80000180ul, &pages, &sizes) == 384 && pages == 1 && sizes == 0);
+        CHECK(PagingApertureSettingMegabytes(0x80000100ul, &pages, &sizes) == 256 && pages == 1 && sizes == 0);
+        CHECK(PagingApertureSettingMegabytes(0x80000000ul, &pages, &sizes) == 384 && pages == 1 && sizes == 0);   // default size
+        // Stage 2, report and size.
+        CHECK(PagingApertureSettingMegabytes(0xC0000180ul, &pages, &sizes) == 384 && pages == 1 && sizes == 1);
+        CHECK(PagingApertureSettingMegabytes(0xC0000100ul, &pages, &sizes) == 256 && pages == 1 && sizes == 1);
+        CHECK(PagingApertureSettingMegabytes(0xC0000000ul, &pages, &sizes) == 384 && pages == 1 && sizes == 1);   // default size
+        CHECK(PagingApertureSettingMegabytes(0xFFFFFFFFul, &pages, &sizes) == 0x3FFFFFFFul && pages == 1 && sizes == 1);
+        // Bit 30 without bit 31 is no switch: the value is a size, as on every earlier driver, and is clamped.
+        CHECK(PagingApertureSettingMegabytes(0x40000180ul, &pages, &sizes) == 0x40000180ul && pages == 0 && sizes == 0);
+        CHECK(PagingApertureBytesForSetting(PagingApertureSettingMegabytes(0x40000180ul, NULL, NULL), &clamped) == 447 * MIB &&
+              clamped == 1);
+        CHECK(PagingApertureSettingMegabytes(0x80000180ul, NULL, NULL) == 384);
+        CHECK(PagingApertureSettingMegabytes(0xC0000180ul, &pages, NULL) == 384 && pages == 1);
+        CHECK(PagingApertureSettingMegabytes(0xC0000180ul, NULL, &sizes) == 384 && sizes == 1);
+        CHECK(PagingApertureBytesForSetting(PagingApertureSettingMegabytes(0xFFFFFFFFul, NULL, NULL), &clamped) == 447 * MIB &&
+              clamped == 1);
+    }
+    // The sizes of stage 2. Below 64 KiB nothing changes; from 64 KiB the size is a multiple of 64 KiB and the
+    // alignment at least 64 KiB; a larger alignment stays.
+    {
+        unsigned long long size;
+        unsigned long alignment;
+        size = 0x1000; alignment = 0x1000;
+        CHECK(PagingHostPage64KSize(&size, &alignment) == 0 && size == 0x1000 && alignment == 0x1000);
+        size = 0xF000; alignment = 0x1000;
+        CHECK(PagingHostPage64KSize(&size, &alignment) == 0 && size == 0xF000 && alignment == 0x1000);
+        size = 0x10000; alignment = 0x1000;
+        CHECK(PagingHostPage64KSize(&size, &alignment) == PAGING_HOST_64K_ALIGNED && size == 0x10000 && alignment == 0x10000);
+        size = 0x10000; alignment = 0x10000;
+        CHECK(PagingHostPage64KSize(&size, &alignment) == 0 && size == 0x10000 && alignment == 0x10000);
+        size = 0x11000; alignment = 0x1000;
+        CHECK(PagingHostPage64KSize(&size, &alignment) == (PAGING_HOST_64K_GREW | PAGING_HOST_64K_ALIGNED) &&
+              size == 0x20000 && alignment == 0x10000);
+        size = 0x1F000; alignment = 0x200000;
+        CHECK(PagingHostPage64KSize(&size, &alignment) == PAGING_HOST_64K_GREW && size == 0x20000 && alignment == 0x200000);
+        size = 0xE10000; alignment = 0;                                    // 14745600 bytes, the heaps of Time Spy
+        CHECK(PagingHostPage64KSize(&size, &alignment) == PAGING_HOST_64K_ALIGNED && size == 0xE10000 && alignment == 0x10000);
+        size = 0xFFFFFFFFFFFF0001ull; alignment = 0x1000;                  // cannot be rounded: not changed
+        CHECK(PagingHostPage64KSize(&size, &alignment) == 0 && size == 0xFFFFFFFFFFFF0001ull && alignment == 0x1000);
+        size = 0x20000; alignment = 0x1000;
+        CHECK(PagingHostPage64KSize(NULL, &alignment) == 0 && PagingHostPage64KSize(&size, NULL) == 0 && alignment == 0x1000);
+        // The grown size is what the bound of a fill must be (PagingRangeInAllocation below).
+        size = 0x11000; alignment = 0x1000;
+        (void)PagingHostPage64KSize(&size, &alignment);
+        CHECK(PagingRangeInAllocation(size, 0, size) && !PagingRangeInAllocation(0x11000, 0, size));
+    }
+    // The bound of a native fill or transfer is the size VidMm was given. A 68 KiB request that was sized for
+    // 64 KiB host pages is a 128 KiB allocation to VidMm, which fills all of it in one operation. Measured against
+    // the requested 68 KiB that fill is outside the allocation: the bound the first 64 KiB build used, which sent
+    // every such fill to the page by page path (hardware result 2026-11-25).
+    CHECK(PagingRangeInAllocation(0x20000, 0, 0x20000));
+    CHECK(!PagingRangeInAllocation(0x11000, 0, 0x20000));              // the old bound: the control
+    CHECK(PagingRangeInAllocation(0x20000, 0x1F000, 0x1000) && !PagingRangeInAllocation(0x20000, 0x1F000, 0x1001));
+    CHECK(PagingRangeInAllocation(0x20000, 0x10000, 0x10000) && !PagingRangeInAllocation(0x20000, 0x20000, 1));
+    CHECK(!PagingRangeInAllocation(0x20000, 0, 0) && !PagingRangeInAllocation(0, 0, 1));
+    CHECK(!PagingRangeInAllocation(0x20000, 0xFFFFFFFFFFFFF000ull, 0x2000));   // no wrap
+    CHECK(PagingRangeInAllocation(0xFFFFFFFFFFFFFFFFull, 0xFFFFFFFFFFFFFFFEull, 1));
     CHECK(PagingApertureBytesValid(256 * MIB) && PagingApertureBytesValid(447 * MIB) && PagingApertureBytesValid(384 * MIB));
     CHECK(!PagingApertureBytesValid(0) && !PagingApertureBytesValid(255 * MIB) && !PagingApertureBytesValid(448 * MIB));
     CHECK(!PagingApertureBytesValid(384 * MIB + 4096));                // whole MiB only

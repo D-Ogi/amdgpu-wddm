@@ -369,6 +369,13 @@ typedef struct _BC250_WDDM_OBJECT {
     unsigned long UmdIpType;
     unsigned long UmdHeap;
     ULONGLONG UmdBytes;
+    // The bound of a fill or a transfer of a UMD allocation (WddmNativeAllocation). For an allocation that
+    // WddmCreateAdmit sized for 64 KiB host pages it is the size VidMm was given (DXGK_ALLOCATIONINFO::Size),
+    // because VidMm fills and transfers in its own size. For every other allocation it is UmdBytes, as before:
+    // a start without the 64 KiB sizes is unchanged. (A request that is not a multiple of a page has the same
+    // difference to VidMm's size. Both producers ask for whole pages; noted, not changed here.)
+    // UmdBytes stays what the user-mode driver asked for: the journal and the scan-out checks use that.
+    ULONGLONG UmdVidMmBytes;
     ULONGLONG UmdRequestedVa;
     // KMD193 (bsod-245 items 3 and 4): identity the journal records of this object's destroy and of every job
     // submitted on it would otherwise not have. Values only, taken at CreateAllocation/CreateContext; a dump
@@ -786,6 +793,19 @@ typedef struct _BC250_WDDM {
     volatile LONG UmdAllocsLocalOnly;
     volatile LONG UmdAllocsShared;
     volatile LONG UmdAllocsAperture;
+    // 64 KiB sizes (Device->SystemSizes64K): the UMD allocations of 64 KiB or more that may live in the aperture,
+    // how many of them grew and by how many bytes in all, and how many had their alignment raised. Only a grown
+    // one has a VidMm size that is not the size its creator asked for.
+    volatile LONG UmdAllocs64K, UmdAllocs64KGrown, UmdAllocs64KAligned;
+    volatile LONG64 UmdAllocs64KGrownBytes;
+    // VIRTUAL_FILL and VIRTUAL_TRANSFER calls that the native SDMA path did not take and that went to the page by
+    // page path (WddmBuildVirtualFill, WddmBuildCapturedVirtualTransfer), the bytes those calls moved, and the
+    // calls whose range was outside the bound of their allocation (WddmNativeAllocation), which is one reason for
+    // the first two. The page by page path maps each host page through the two-page GART window, with a window
+    // update and a packet for each page (gfx.c PagingEmit), where the native path moves up to 4 MiB in one packet.
+    // A run in which every fill and transfer is native has 0 in all four; its speed against the native path is
+    // not measured.
+    volatile LONG64 PagingPerPageFillCalls, PagingPerPageTransferCalls, PagingPerPageBytes, PagingOutsideBound;
     // BD-210: the UMD allocations created without a CPU view (UmdBlobAllocCpuVisible 0), and the bytes
     // created on each side. Created, not live: the summary says how much a session asked for of each.
     volatile LONG UmdAllocsGpuOnly;
@@ -3693,6 +3713,10 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: umd placement (shared residency %s): local %ld, local+aperture %ld, aperture %ld",
              Wddm->SharedResidency ? "on" : "off", Wddm->UmdAllocsLocalOnly, Wddm->UmdAllocsShared,
              Wddm->UmdAllocsAperture);
+    // A line of its own again, and only on a start with 64 KiB host pages: the lines above keep their text.
+    if (Wddm->UmdAllocs64K != 0)
+        GuardLog("wddm summary: 64 KiB sizes: %ld umd allocations eligible, %ld grown by %lld bytes, %ld alignment raised",
+                 Wddm->UmdAllocs64K, Wddm->UmdAllocs64KGrown, Wddm->UmdAllocs64KGrownBytes, Wddm->UmdAllocs64KAligned);
     // BD-210, a line of its own for the same reason.
     GuardLog("wddm summary: umd cpu view: gpu-only %ld (%lld MiB), cpu-visible %ld (%lld MiB)",
              Wddm->UmdAllocsGpuOnly, (long long)(Wddm->UmdGpuOnlyBytes >> 20),
@@ -3837,6 +3861,10 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->PagingDmaVaBuilds,Wddm->PagingDmaZeroVaBuilds,Wddm->PagingDmaVaObserved);
     GuardLog("wddm summary: native DMA transfers %lld fills %lld bytes %lld",
              Wddm->PagingNativeTransfers,Wddm->PagingNativeFills,Wddm->PagingNativeBytes);
+    // The other path of the same two operations. A line of its own: the line above keeps its text.
+    GuardLog("wddm summary: per-page path: fill calls %lld, transfer calls %lld, bytes %lld, off bound %lld",
+             Wddm->PagingPerPageFillCalls,Wddm->PagingPerPageTransferCalls,Wddm->PagingPerPageBytes,
+             Wddm->PagingOutsideBound);
     GuardLog("wddm: native PTE copies gate%u ranges%lld",Wddm->NativePteCopies,Wddm->PagingNativePtes);
     GuardLog("wddm summary: native DMA exact disjoint checks %lld",Wddm->PagingDmaGapProofs);
     GuardLog("wddm summary: DMA mapping matches %ld/%ld last VA0x%llX root0x%llX PA0x%llX CPU_PA0x%llX",
@@ -4449,6 +4477,7 @@ BOOLEAN WddmPrimaryProgrammed(_In_ const BC250_DEVICE* Device, _Out_ ULONG* Sequ
 
 static BOOLEAN WddmMemoryLayout(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset, _Out_ ULONGLONG* Length,
                                 _Out_ ULONGLONG* TableOffset, _Out_ ULONGLONG* TableLength);
+static void WddmSettleLargePageLayout(_Inout_ BC250_DEVICE* Device, ULONG SmallCarveout);
 
 NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
 {
@@ -4464,6 +4493,8 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     Device->Wddm = NULL;
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
     Device->WddmApertureRequest = 0;
+    Device->SystemPages64K = FALSE;
+    Device->SystemSizes64K = FALSE;
     Device->ComposedSourceModes = FALSE;
     Device->CommittedSourceFormat = 0;
     Device->LargePageLayout = FALSE;
@@ -4489,9 +4520,11 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     //      level 2 encoding below is kept for the contract but has no read-back on unit A.
     //   2: the layout of 1 (segment base on 1 GiB, 2 MiB placement) with 4 KB mappings. The control that tells
     //      the effect of the page size from the effect of the layout.
+    // What is read here is the request. A carve-out that holds no 1 GiB boundary cannot have the layout of 1 and 2:
+    // WddmSettleLargePageLayout decides below, with LargePagesSmallCarveout, what such a start gets.
     {
         const ULONG asked = GuardReadSetting(L"LargePages", 0);
-        Device->LargePageLayout = (asked == 1 || asked == 2);
+        Device->LargePageLayout = (asked == 1 || asked == 2) ? BC250_LARGE_PAGE_LAYOUT_GIANT : BC250_LARGE_PAGE_LAYOUT_NONE;
         Device->LargePages = (asked == 1);
         GuardLog("wddm: LargePages %lu: %s", asked, Device->LargePages ? "large VRAM pages on the aligned layout" :
                  (Device->LargePageLayout ? "aligned layout, 4 KB mappings" : "off"));
@@ -4793,13 +4826,9 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     wddm->VSyncLast = KeQueryPerformanceCounter(&wddm->VSyncFrequency);
     // Production full WDDM requires its GPU VA/paging resources at admission.
     GuardStartSubStep(L"gpu-va-layout");
-    // A carve-out with no room above its first 1 GiB physical boundary gets no large pages, not a failed start.
-    if (Device->LargePageLayout && !WddmMemoryLayout(Device,&segmentOffset,&segmentLength,&tableOffset,&tableLength)) {
-        Device->LargePageLayout = FALSE;
-        Device->LargePages = FALSE;
-        if (WddmMemoryLayout(Device,&segmentOffset,&segmentLength,&tableOffset,&tableLength))
-            GuardLog("wddm: LargePages off: no VRAM segment above the first 1 GiB physical boundary");
-    }
+    // A carve-out with no room above its first 1 GiB physical boundary gets the 2 MiB layout when
+    // LargePagesSmallCarveout asks for it, else no large pages. It does not get a failed start.
+    WddmSettleLargePageLayout(Device, GuardLargePagesSmallCarveout());
     if (GuardReadSetting(L"EnableGpuVa",0)!=1 ||
         !WddmMemoryLayout(Device,&segmentOffset,&segmentLength,&tableOffset,&tableLength)) {
         status=STATUS_DEVICE_NOT_READY;
@@ -4818,12 +4847,32 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // The aperture's Size and CommitLimit follow the size (WddmQuerySegment4); the shared pool does not, because
     // dxgkrnl's implicit system-memory segment already has no commit limit (calculating-graphics-memory.md).
     {
-        int clamped=0;
-        const ULONG asked=GuardReadSetting(L"ApertureSegmentMegabytes",
-                                           (ULONG)(PAGING_APERTURE_DEFAULT_BYTES/PAGING_APERTURE_MIB));
+        int clamped=0,pages64k=0,sizes64k=0;
+        const ULONG stored=GuardReadSetting(L"ApertureSegmentMegabytes",
+                                            (ULONG)(PAGING_APERTURE_DEFAULT_BYTES/PAGING_APERTURE_MIB));
+        // Bit 31 of the stored value is the 64 KiB host page switch, bit 30 next to it the 64 KiB sizes
+        // (paging_window.h says why they live here). Without bit 31, asked is the stored value and everything
+        // below is as it was.
+        const ULONG asked=PagingApertureSettingMegabytes(stored,&pages64k,&sizes64k);
         Device->WddmApertureRequest=PagingApertureBytesForSetting(asked,&clamped);
         GuardLog("wddm: OS aperture asked %lu MiB, using %llu MiB%s (only MAP_APERTURE_SEGMENT uses it)",asked,
                  Device->WddmApertureRequest/PAGING_APERTURE_MIB,clamped?" (clamped to 256..447)":"");
+        // 64 KiB pages in host memory, as amdgpu maps them (16 leaf entries with fragment 4, evidence E17 k64).
+        // VidMm owns the contiguity: it backs an allocation with 64 KiB pages and says so in each page table
+        // update (Use64KBPages). Read here, before VidMmStartLayout and before dxgkrnl asks for the GpuMmu caps,
+        // because the caps, the allocation sizes and the translation must agree for the whole start. It does not
+        // depend on LargePages or on the large page layout: a host page arrives as its own physical address.
+        // dxgmms2 uses the cap only with its own switch on: Use64KPages (REG_DWORD 1) under
+        // HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\MemoryManager, read when dxgmms2 loads.
+        // Two stages. Bit 31 alone: the caps and the translation, no allocation changes. With bit 30: the
+        // allocations that may live in the aperture are also sized and aligned to 64 KiB (WddmCreateAdmit).
+        Device->SystemPages64K=(BOOLEAN)(pages64k!=0);
+        Device->SystemSizes64K=(BOOLEAN)(pages64k!=0 && sizes64k!=0);
+        if (pages64k) {
+            GuardLog("wddm: ApertureSegmentMegabytes 0x%08lX: bit 31, 64 KiB host pages asked (needs Use64KPages)",stored);
+            GuardLog("wddm: 64 KiB sizes %s",sizes64k ? "on (bit 30): aperture allocations sized and aligned to 64 KiB" :
+                                                        "off (bit 30 clear): no allocation changes");
+        }
     }
     GuardStartSubStep(L"os-aperture");
     status=GartCaptureAperture(Device,&Device->WddmAperture);
@@ -4870,6 +4919,8 @@ Failed:
     if (vidmmPrepared) VidMmStop();
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
     Device->WddmApertureRequest = 0;
+    Device->SystemPages64K = FALSE;
+    Device->SystemSizes64K = FALSE;
     ExFreePoolWithTag(startup,BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm->ObjectIndex.Buckets,BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm,BC250_WDDM_TAG);
@@ -5295,10 +5346,22 @@ static BOOLEAN WddmMemoryLayout(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG
     // address is a segment offset. The translation needs a 2 MiB page 2 MiB aligned and a 1 GiB page 1 GiB aligned,
     // in the physical address, which is the base plus the offset. With the base on 1 GiB, an aligned offset is an
     // aligned address for both pages. The VRAM below the boundary is not offered.
-    if (Device->LargePageLayout) {
-        ULONGLONG base=(ULONGLONG)Device->VramPhysical.QuadPart;
-        if (base>MAXULONGLONG-framebufferEnd-(BC250_VIDMM_GIANT_PAGE_BYTES-1)) return FALSE;
-        framebufferEnd=((base+framebufferEnd+BC250_VIDMM_GIANT_PAGE_BYTES-1)&~(BC250_VIDMM_GIANT_PAGE_BYTES-1))-base;
+    //   The HUGE layout puts the base on a 2 MiB boundary instead, for a carve-out that holds no 1 GiB boundary.
+    // An aligned 2 MiB offset is then an aligned 2 MiB address, which is all a level 1 page needs, and less than
+    // 2 MiB is not offered. A 1 GiB page has no such guarantee there, so vidmm.c refuses level 2 on
+    // that layout. The GPU address of the segment (BaseAddress of QUERYSEGMENT, VramMcBase plus the offset) must
+    // be on 2 MiB with the physical one: then "offset aligned" and "address aligned" are one statement whichever
+    // of the two VidMm tests. Both bases are a register value shifted by 24 (vram.c), so this holds on hardware,
+    // and a geometry where it does not gets no HUGE layout. A value that is none of the three is no layout.
+    if (Device->LargePageLayout!=BC250_LARGE_PAGE_LAYOUT_NONE) {
+        const ULONGLONG base=(ULONGLONG)Device->VramPhysical.QuadPart;
+        ULONGLONG align=BC250_VIDMM_GIANT_PAGE_BYTES;
+        if (Device->LargePageLayout==BC250_LARGE_PAGE_LAYOUT_HUGE) {
+            align=BC250_VIDMM_HUGE_PAGE_BYTES;
+            if (((Device->VramMcBase^base)&(align-1))!=0) return FALSE;
+        } else if (Device->LargePageLayout!=BC250_LARGE_PAGE_LAYOUT_GIANT) return FALSE;
+        if (base>MAXULONGLONG-framebufferEnd-(align-1)) return FALSE;
+        framebufferEnd=((base+framebufferEnd+align-1)&~(align-1))-base;
     }
     if (framebufferEnd>=limit) return FALSE;
     available=(limit-framebufferEnd)&~65535ull;
@@ -5309,9 +5372,72 @@ static BOOLEAN WddmMemoryLayout(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG
     if (tableBytes>BC250_TABLE_BUDGET_CAP) tableBytes=BC250_TABLE_BUDGET_CAP;
     if (tableBytes<4ull*1024*1024) tableBytes=4ull*1024*1024;
     if (tableBytes>=available || available-tableBytes<65536ull) return FALSE;
+    // The HUGE layout is for a segment below 1 GiB only. VidMm tests the alignment of the segment offset, and
+    // offset 0 is a 1 GiB offset: in a segment of 1 GiB or more it could ask for a level 2 page, which vidmm.c
+    // refuses on this layout, and a refused entry fails BuildPagingBuffer. Below 1 GiB no allocation can be that
+    // large, so the question cannot come. WddmSettleLargePageLayout takes this layout only when the 1 GiB layout
+    // does not fit, and then the segment is below 1 GiB already (vram_geometry_test.c); this line makes it a rule.
+    if (Device->LargePageLayout==BC250_LARGE_PAGE_LAYOUT_HUGE && available-tableBytes>=BC250_VIDMM_GIANT_PAGE_BYTES)
+        return FALSE;
     *Offset=framebufferEnd;*Length=available-tableBytes;
     *TableOffset=*Offset+*Length;*TableLength=tableBytes;
     return TRUE;
+}
+
+// The layout of this start, from the request that WddmStart read (LargePages: Device->LargePageLayout GIANT or NONE,
+// Device->LargePages) and LargePagesSmallCarveout (guard.c). Called once, before any DDI reads WddmMemoryLayout.
+// Afterwards the two members say what the start has, and every later WddmMemoryLayout gives the same answer.
+//   LargePages 0:                 the plain layout, 4 KB mappings.
+//   LargePages 1 or 2:            the base on 1 GiB when the carve-out has room above a 1 GiB boundary. Else, with
+//                                 LargePagesSmallCarveout 1, the base on 2 MiB. Else the plain layout, large pages off,
+//                                 which is what every driver before this value did.
+// The 2 MiB layout is never taken in place of a 1 GiB layout that fits, so a board with a big carve-out starts as
+// before whatever the new value says. A request that no layout can serve is not a failed start: the caller's own
+// WddmMemoryLayout decides that, with the plain layout.
+static void WddmSettleLargePageLayout(_Inout_ BC250_DEVICE* Device, ULONG SmallCarveout)
+{
+    const UCHAR asked=Device->LargePageLayout;
+    const ULONGLONG base=(ULONGLONG)Device->VramPhysical.QuadPart;
+    ULONGLONG offset,length,tableOffset,tableLength,plainOffset=0,plainLength=0;
+    BOOLEAN plain;
+
+    Device->LargePageLayout=BC250_LARGE_PAGE_LAYOUT_NONE;
+    plain=WddmMemoryLayout(Device,&plainOffset,&plainLength,&tableOffset,&tableLength);
+    if (asked==BC250_LARGE_PAGE_LAYOUT_NONE) {
+        Device->LargePages=FALSE;
+        if (plain) GuardLog("wddm: VRAM layout plain (LargePages 0): segment 0x%llX + 0x%llX",base+plainOffset,plainLength);
+        return;
+    }
+    // An aligned layout that fits starts at or above the plain one, so the plain one fits too, and is not smaller.
+    // The two differences are for the log only, and are 0 instead of a wrapped number if that ever does not hold.
+    Device->LargePageLayout=BC250_LARGE_PAGE_LAYOUT_GIANT;
+    if (WddmMemoryLayout(Device,&offset,&length,&tableOffset,&tableLength)) {
+        GuardLog("wddm: VRAM layout 1 GiB base: segment 0x%llX + 0x%llX, 0x%llX below the boundary not offered",
+                 base+offset,length,(plain && offset>=plainOffset) ? offset-plainOffset : 0);
+        return;
+    }
+    if (SmallCarveout==1) {
+        Device->LargePageLayout=BC250_LARGE_PAGE_LAYOUT_HUGE;
+        if (WddmMemoryLayout(Device,&offset,&length,&tableOffset,&tableLength)) {
+            GuardLog("wddm: VRAM layout 2 MiB base (no 1 GiB boundary, LargePagesSmallCarveout 1): segment 0x%llX + 0x%llX",
+                     base+offset,length);
+            GuardLog("wddm: 2 MiB base: 0x%llX below it not offered, segment 0x%llX smaller, %s",
+                     (plain && offset>=plainOffset) ? offset-plainOffset : 0,
+                     (plain && plainLength>=length) ? plainLength-length : 0,
+                     Device->LargePages ? "2 MiB pages at level 1, level 2 refused" : "4 KB mappings (LargePages 2)");
+            return;
+        }
+    }
+    Device->LargePageLayout=BC250_LARGE_PAGE_LAYOUT_NONE;
+    Device->LargePages=FALSE;
+    if (!plain) return;
+    GuardLog("wddm: LargePages off: no VRAM segment above the first 1 GiB physical boundary");
+    if (SmallCarveout==1)
+        GuardLog("wddm: VRAM layout plain (LargePagesSmallCarveout 1, 2 MiB base does not fit): segment 0x%llX + 0x%llX",
+                 base+plainOffset,plainLength);
+    else
+        GuardLog("wddm: VRAM layout plain (LargePagesSmallCarveout %lu, 2 MiB base not asked for): segment 0x%llX + 0x%llX",
+                 SmallCarveout,base+plainOffset,plainLength);
 }
 
 // The private UMD report must exclude the same POST buffer, private tail and
@@ -5827,7 +5953,19 @@ static NTSTATUS WddmGpuMmuCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // "All levels of page tables, except the leaf one, support large pages": vidmm.c maps level 1 (2 MiB) and
     // level 2 (1 GiB). Level 3 would need a 512 GiB allocation, which no segment here can hold. Large pages in
     // host memory (SysMemLargePageSupported) and on unaligned addresses (AllowNonAlignedLargePageAddress) stay off.
+    // On the 2 MiB layout (BC250_LARGE_PAGE_LAYOUT_HUGE) the cap is the same bit, because the DDI has no bit for
+    // one level. vidmm.c maps level 1 there and refuses level 2. A level 2 page needs an allocation of 1 GiB at a
+    // 1 GiB offset, and WddmMemoryLayout gives that layout only to a segment below 1 GiB.
     caps->LargePageSupported = Device->LargePages ? 1 : 0;
+    // 64 KiB pages in host memory (bit 31 of ApertureSegmentMegabytes, WddmStart). Single PTE mode: DualPteSupported
+    // stays 0, so a level 1 entry points at one leaf table whose type is its PageTablePageSize, and an update of a
+    // 64 KiB table has Use64KBPages and counts its 32 entries (vidmm.c). dxgmms2 treats any non-zero leaf size as
+    // "64 KiB tables exist". The size is that of a 4 KB table: on gfx10 both types are the same table page, and
+    // VidMm converts a 64 KiB table to a 4 KB one in place. No segment reports Use64KBPages.
+    if (Device->SystemPages64K) {
+        caps->SysMem64KBPageSupported = 1;
+        caps->LeafPageTableSizeFor64KPagesInBytes = BC250_WDDM_PAGE_TABLE_BYTES;
+    }
     return STATUS_SUCCESS;
 }
 
@@ -6645,6 +6783,7 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         if (object == NULL) return BC250_CREATE_STEP_NO_MEMORY;
         object->UmdAlloc = TRUE;
         object->UmdBytes = view.bytes;
+        object->UmdVidMmBytes = view.bytes;
         object->UmdHeap = view.heap;
         object->UmdRequestedVa = view.requested_va;
         // KMD193: kept for the DESTROY journal record. 245's four freed objects carried UmdAlloc, UmdHeap
@@ -6673,7 +6812,8 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         // VidMm can map each whole 2 MiB of it with one level 1 entry. The winsys asks for at most 256 KiB for VRAM
         // (radv_wddm2_bo.c), which would leave those ranges to chance. 2 MiB is a multiple of every scan-out
         // alignment, and the size does not change. LargePages 2 places the same way, for a like-for-like control.
-        if (device->LargePageLayout && segment == BC250_WDDM_SEGMENT_VRAM &&
+        // Both layouts place this way: the base is on 1 GiB or on 2 MiB, so a 2 MiB offset is a 2 MiB address.
+        if (device->LargePageLayout != BC250_LARGE_PAGE_LAYOUT_NONE && segment == BC250_WDDM_SEGMENT_VRAM &&
             info->Size >= BC250_VIDMM_HUGE_PAGE_BYTES && align < BC250_VIDMM_HUGE_PAGE_BYTES)
             align = (UINT)BC250_VIDMM_HUGE_PAGE_BYTES;
         info->Alignment = align;
@@ -6703,6 +6843,32 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
                 InterlockedIncrement(shared ? &wddm->UmdAllocsShared :
                                      segment == BC250_WDDM_SEGMENT_APERTURE ? &wddm->UmdAllocsAperture :
                                      &wddm->UmdAllocsLocalOnly);
+        }
+        // 64 KiB sizes (Device->SystemSizes64K, bit 30 next to bit 31). VidMm backs an allocation with 64 KiB
+        // pages when its supported set has an aperture segment and its size is a multiple of 64 KiB (above 4 MiB
+        // it rounds the backing itself), and it maps with 64 KiB entries only an allocation whose "alignment and
+        // the size are a multiple of 64 KB" (Microsoft, Support for 64KB Pages). So an allocation of 64 KiB or
+        // more that may live in the aperture gets both (PagingHostPage64KSize). The size grows by less than
+        // 64 KiB; the user-mode driver maps its own size, which is a prefix. An allocation below 64 KiB keeps
+        // 4 KB pages, and so does a VRAM-only one. VidMm fills and transfers the grown size: UmdVidMmBytes.
+        if (device->SystemSizes64K && info->Size >= BC250_VIDMM_PAGE_64K_BYTES &&
+            (placement.supported & (1ul << (BC250_WDDM_SEGMENT_APERTURE - 1))) != 0) {
+            unsigned long long size = info->Size;
+            unsigned long alignment = info->Alignment;
+            const int changed = PagingHostPage64KSize(&size, &alignment);
+            if (wddm != NULL) {
+                InterlockedIncrement(&wddm->UmdAllocs64K);
+                if (changed & PAGING_HOST_64K_ALIGNED) InterlockedIncrement(&wddm->UmdAllocs64KAligned);
+                if (changed & PAGING_HOST_64K_GREW) {
+                    InterlockedAdd64(&wddm->UmdAllocs64KGrownBytes, (LONG64)(size - info->Size));
+                    if (InterlockedIncrement(&wddm->UmdAllocs64KGrown) <= 4)
+                        GuardLog("wddm: 64 KiB sizes: umd alloc %llu bytes heap 0x%lX grown to %llu, align %lu",
+                                 view.bytes, view.heap, size, alignment);
+                }
+            }
+            info->Size = (SIZE_T)size;
+            info->Alignment = (UINT)alignment;
+            object->UmdVidMmBytes = info->Size;
         }
         info->EvictionSegmentSet = 0;
         info->PhysicalAdapterIndex = 0;
@@ -7231,8 +7397,18 @@ static BOOLEAN WddmNativeAllocation(BC250_DEVICE* Device, BC250_WDDM_OBJECT* Con
     if(!Context || !Context->SystemContext || !Context->RootPhysical || Context->Device!=Device ||
        !Build->DmaBufferGpuVirtualAddress || Build->MultipassOffset>=0x40000000u ||
        !allocation || allocation->Device!=Device)return FALSE;
-    size=allocation->UmdAlloc ? allocation->UmdBytes : allocation->Allocation.Size;
-    return bytes && offset<size && bytes<=size-offset;
+    // UmdVidMmBytes, not UmdBytes: VidMm fills a new allocation in one operation of its own size. With UmdBytes
+    // here, every allocation that WddmCreateAdmit had grown to a multiple of 64 KiB left the native path for the
+    // page by page one (hardware result 2026-11-25: the first 64 KiB build).
+    size=allocation->UmdAlloc ? allocation->UmdVidMmBytes : allocation->Allocation.Size;
+    if(!PagingRangeInAllocation(size,offset,bytes)) {
+        BC250_WDDM* wddm=(BC250_WDDM*)Device->Wddm;
+        if(wddm && InterlockedIncrement64(&wddm->PagingOutsideBound)<=4 && KeGetCurrentIrql()<=DISPATCH_LEVEL)
+            GuardLog("wddm: virtual %s outside its bound: at %llu bytes %llu bound %llu, per-page path",
+                     Fill?"fill":"transfer",offset,bytes,size);
+        return FALSE;
+    }
+    return TRUE;
 }
 
 static NTSTATUS WddmPublishPagingRecordCore(_Inout_ DXGKARG_BUILDPAGINGBUFFER* Build,
@@ -8079,8 +8255,11 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         NTSTATUS status=STATUS_NOT_SUPPORTED;
         if(WddmNativeAllocation((BC250_DEVICE*)hAdapter,context,pBuildPagingBuffer,TRUE))
             status=WddmBuildNativeVirtual((BC250_DEVICE*)hAdapter,context->RootPhysical,TRUE,pBuildPagingBuffer,&moved);
-        if(status==STATUS_NOT_SUPPORTED)
+        if(status==STATUS_NOT_SUPPORTED) {
+            InterlockedIncrement64(&wddm->PagingPerPageFillCalls);
             status=WddmBuildVirtualFill((BC250_DEVICE*)hAdapter,context?context->RootPhysical:0,pBuildPagingBuffer,&moved);
+            InterlockedAdd64(&wddm->PagingPerPageBytes,(LONG64)moved);
+        }
         if (moved) {
             InterlockedIncrement(&wddm->PagingFillsBuilt);
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
@@ -8099,9 +8278,12 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         NTSTATUS status=STATUS_NOT_SUPPORTED;
         if(WddmNativeAllocation((BC250_DEVICE*)hAdapter,context,pBuildPagingBuffer,FALSE))
             status=WddmBuildNativeVirtual((BC250_DEVICE*)hAdapter,context->RootPhysical,FALSE,pBuildPagingBuffer,&moved);
-        if(status==STATUS_NOT_SUPPORTED)
+        if(status==STATUS_NOT_SUPPORTED) {
+            InterlockedIncrement64(&wddm->PagingPerPageTransferCalls);
             status=WddmBuildCapturedVirtualTransfer((BC250_DEVICE*)hAdapter,context?context->RootPhysical:0,
                 context?&context->Captures:NULL,pBuildPagingBuffer,&moved);
+            InterlockedAdd64(&wddm->PagingPerPageBytes,(LONG64)moved);
+        }
         if (moved) {
             DXGK_MEMORY_TRANSFER_DIRECTION direction=pBuildPagingBuffer->TransferVirtual.TransferDirection;
             WddmCountTransfer(wddm,direction==DXGK_MEMORY_TRANSFER_LOCAL_TO_SYSTEM ? BC250WddmXferVirtualToSystem :

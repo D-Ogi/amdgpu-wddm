@@ -131,6 +131,13 @@ inline void ddi_chain_failure(const char* site,HRESULT code,unsigned operation=0
 //     refuses Cached on a PRIMARY allocation (trial 105), so it needs present-noprimary with it.
 //   present-noprimary: the swap-chain buffers are not PRIMARY (heap-import.cpp), which also forfeits the
 //     scanout route. Measured gain of the pair under the CPU compositor, none under the GPU one (K115).
+// One name is opt-in because the signal it reads is a measurement of the runtime, not a DDI contract:
+//   private-tiled: a committed texture inside the shareable envelope (engine-ddi shared_surface_shape: 2D, one
+//     mip, a COMPOSED format, a GPU-only heap) is not made a linear surface before anything is allocated. The
+//     shell asks for the ordinary allocation first, with a CPU view, and answers with the linear surface only
+//     when the runtime refuses that allocation with E_INVALIDARG, which is its answer for a resource that the
+//     application created shared (heap-import.h, EnvelopeCreate). A private texture thus keeps the tiled layout
+//     of every other texture. The default makes every texture of the envelope linear (BD-217).
 // One more name asks for a diagnostic rather than a deviation:
 //   replay-log: with deferred replay on, the replay lines also go to a file of their own (replay-log.h), for a
 //     game whose stderr nobody reads. It changes no behaviour; it costs the writes.
@@ -182,6 +189,7 @@ inline constexpr SwitchRow kD3D12Switches[]={
     {"scanout-flip-off",SwitchClass::Feature},
     {"present-cached",SwitchClass::Feature},
     {"present-noprimary",SwitchClass::Feature},
+    {"private-tiled",SwitchClass::Feature},
     {"replay-log",SwitchClass::Feature},
     {"release-two-phase-off",SwitchClass::Lab},
     {"import-progress-gate-off",SwitchClass::Lab},

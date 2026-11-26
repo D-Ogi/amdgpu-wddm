@@ -6,6 +6,7 @@
 #include "paging.h"
 #include "../../contract/bc250_scanout_caps.h"
 #include "../../contract/bc250_desktop_route.h"
+#include "ddi-trace.h"
 #include <atomic>
 namespace native12 {
 struct Device;
@@ -86,6 +87,37 @@ struct ImportReport {
     const char* refusal{};
     uint32_t unimplemented_heap_flags{};        // the heap-flag bits of the refusal that this shell has no use for
 };
+// What allocate() does with a request inside the shareable envelope: kMemoryShareable without a surface, the
+// first request of every committed texture that engine-ddi's shared_surface_shape admits (2D, one mip, one
+// slice, one sample, a COMPOSED format, a GPU-only L1 heap). The DDI has no field that says whether the
+// application created the resource shared (engine-ddi.h, kMemoryShareable), so each answer is a policy:
+//   Linear    BD-217, the default. kShareRequired before anything is allocated, so engine-ddi makes the linear
+//             LB7A surface for every texture of the envelope. A shared texture is always one that another
+//             process can open. A private texture is linear too: no macro tiling, and RADV gives a linear
+//             image no DCC and no fast clear (radv_image.c, radv_use_dcc_for_image_early). The envelope holds
+//             the usual formats of full-resolution render targets (RGBA8, RGB10A2, RGBA16F).
+//   Probe     the switch private-tiled. The ordinary BC2A allocation first, in the form that keeps a CPU view
+//             (AllocationRequest::prepare, cpuView), and kShareRequired only when the allocate callback
+//             answers E_INVALIDARG. This is the discriminator of BD-075: the runtime refused that allocation
+//             for each shared create and for no other create (lab-20261005T172552Z, 5 of 691 callbacks). The
+//             refusal went away when BD-210 gave a GPU-only BC2A allocation no CPU view, which is why the
+//             probe asks for the view again. A private texture is then an ordinary tiled texture, and the
+//             engine sees a plain placed resource. The cost is the CPU view of each such texture in the
+//             process (address space, BD-210), which no code of this driver maps. The refusal is a measurement
+//             of the runtime and not a DDI contract. If a runtime accepts the probe for a shared create, that
+//             texture is tiled BC2A and its opener refuses it, as before BD-217.
+//   Ordinary  the lab switch shared-create-retry-off, which wins. The ordinary GPU-only allocation and never
+//             kShareRequired: no texture is linear, and no shared texture of the envelope can be opened.
+// A primary (D3D12DDI_HEAP_FLAG_PRIMARY), an opened resource and the driver's own Present copy surface never
+// reach this policy: they are linear by their own request flags.
+enum class EnvelopeCreate : uint8_t {Linear,Probe,Ordinary};
+// The policy that an experiment list selects (ddi-trace.h). A parameter, so that a host test can ask for each
+// list: the process's own list is read once.
+inline EnvelopeCreate envelope_create(const char* experiments) noexcept {
+    if(ddi_experiment_listed(experiments,"shared-create-retry-off"))return EnvelopeCreate::Ordinary;
+    if(ddi_experiment_listed(experiments,"private-tiled"))return EnvelopeCreate::Probe;
+    return EnvelopeCreate::Linear;
+}
 class RuntimeHeapImports final {
     struct Record;
     // Per thread: its caller reads a report right after the call that wrote it, on the same thread.
@@ -142,6 +174,11 @@ class RuntimeHeapImports final {
     unsigned (*desktop_route_reader_)(bc250_desktop_route*) noexcept{};
     ScanoutModeList (*mode_list_reader_)(UINT64 luid,unsigned width,unsigned height) noexcept{};
     ProgressSource progress_{};
+    // What a request inside the shareable envelope gets (EnvelopeCreate), from the experiment list, once per
+    // device. envelope_tiled_: the probes that the runtime accepted, each a private texture that stayed tiled;
+    // envelope_shared_: the probes that it refused, each answered with kShareRequired.
+    EnvelopeCreate envelope_{EnvelopeCreate::Linear};
+    std::atomic<uint64_t> envelope_tiled_{},envelope_shared_{};
     std::atomic<uint64_t> forced_{};             // entries released although their progress was unretired
     // BD-201 R v2: the GPU virtual address reservations of those releases. A reservation is this driver's
     // own range and no allocation destroy frees it, so without the proof it is kept, not freed. Cumulative
@@ -233,6 +270,13 @@ public:
     void read_mode_list_with(ScanoutModeList (*reader)(UINT64,unsigned,unsigned) noexcept) noexcept {
         mode_list_reader_=reader;
     }
+    // The policy of the shareable envelope, and the host tests' seam for it: the process's experiment list is
+    // read once, so a test sets the policy that a list would select (envelope_create).
+    EnvelopeCreate envelope() const noexcept {return envelope_;}
+    void create_envelope_with(EnvelopeCreate policy) noexcept {envelope_=policy;}
+    // EnvelopeCreate::Probe: the textures that stayed tiled, and the creates answered with kShareRequired.
+    uint64_t envelope_tiled() const noexcept {return envelope_tiled_.load(std::memory_order_relaxed);}
+    uint64_t envelope_shared() const noexcept {return envelope_shared_.load(std::memory_order_relaxed);}
     // What the quarantine holds now, for tests and the trace.
     uint32_t held_count() const noexcept;
     uint64_t held_bytes() const noexcept;

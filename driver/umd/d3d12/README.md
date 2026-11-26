@@ -209,6 +209,12 @@ with `D3D12_HEAP_FLAG_SHARED`, `ID3D12CompatibilityDevice::CreateSharedResource`
 (keyed mutex, whose mutex is the runtime's own object) and
 `ID3D12Device::OpenSharedHandle` of a resource all take that path.
 
+The opt-in experiment `private-tiled` lets a private texture in this envelope
+keep its tiled layout. The shell first asks for an ordinary allocation with a
+CPU view. If the runtime refuses it with `E_INVALIDARG`, the shell retries with
+a linear surface. See [D3D12 shared resources](../../../docs/d3d12-shared-resources.md)
+for the evidence and limits of this check.
+
 The open also reads the ENGINE LAYOUT form (`driver/contract/bc250_shared_resource.h`,
 BD-373): a buffer or a 2D texture that the D3D11 shell created and shared opens as a
 D3D12 resource over the same memory. A texture can have mip levels and array layers.

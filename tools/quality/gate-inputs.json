@@ -1130,6 +1130,38 @@
         "host"
       ]
     },
+    "vidmm-64k": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "vidmm-64k-one-slot": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "native-bound": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "native-bound-blob-size": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "large-pages-combined": {
+      "inputs": [
+        "host",
+        "blob-reader"
+      ]
+    },
+    "large-pages-combined-sizes-drop-2mib": {
+      "inputs": [
+        "host",
+        "blob-reader"
+      ]
+    },
     "guard-start": {
       "inputs": [
         "host"

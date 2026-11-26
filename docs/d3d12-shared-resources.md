@@ -193,6 +193,73 @@ reads no bind flag. `BC250_SHARED_BIND_MASK` in `bc250_shared_surface.h` is the 
 The kernel driver needs no change. `Bc250SurfaceResourcePolicy` already admits v3, and `WddmCreateAdmit`
 already places a shared type-0 surface in the aperture segment.
 
+## Private textures of the envelope: BD-217 and `private-tiled`
+
+The section above is the create of BD-075. Two later changes moved it.
+
+BD-210 (2026-10-21) gave a GPU-only BC2A allocation no CPU view (`UmdBlobAllocCpuVisible`, `driver/kmd/umd_blob.c`).
+After it the runtime accepted attempt 1 for a shared create also. The retry did not run, and the shared texture
+was a tiled BC2A allocation that no opener reads. BD-217 (`508730d1`) thus removed the discriminator: the shell
+answers `kShareRequired` for each request inside the envelope before it allocates anything. A shared texture is
+always a linear surface with the two records. A private texture of the envelope is a linear surface too, in the
+aperture segment.
+
+That has a cost on the GPU. The envelope holds the usual formats of full-resolution render targets. A linear
+image has no macro tiling, and RADV gives it no DCC and no fast clear (`radv_use_dcc_for_image_early`,
+`src/amd/vulkan/radv_image.c`). Each such create writes the retry line of engine-ddi (`shared surface: ...
+retrying as a shared linear surface`), so a log shows which textures of an application are linear.
+
+What the shell can read when a resource is created:
+
+| Source | Says "shared" | Reference |
+|---|---|---|
+| `D3D12DDIARG_CREATEHEAP_0001::Flags` | no. `D3D12DDI_HEAP_FLAGS` has no such bit, and a shared create arrives with `0x26` | `d3d12umddi.h` and the trace above |
+| `D3D12DDI_HEAP_FLAG_PRIMARY` | a swap-chain buffer, not a shared resource. It selects the linear primary and is not part of the envelope | `engine-ddi/resources.cpp`, `create_heap_and_resource` |
+| `D3D12DDIARG_CREATERESOURCE_0088::Flags` | no. `CROSS_ADAPTER` is outside the envelope. `SIMULTANEOUS_ACCESS` is not sharing | `linear_surface_shape` |
+| the optimization flags of `pfnCheckResourceAllocationInfo` | no | "Open questions for later work" below |
+| the status of `pfnAllocateCb` for an allocation with a CPU view | `E_INVALIDARG` for a shared create only. Measured, not a contract | "What the measurement said" above |
+| `D3D12DDI_ALLOCATION_INFO_0022::Flags` and `D3D12DDICB_ALLOCATE_0022::hKMResource` after the callback | not known. DDI 0114 names a flag `D3D12DDI_ALLOCATION_INFO_FLAGS_0022_SHARED` (`0x8`), and no document says who sets it | `d3d12umddi.h` of WDK 10.0.28000 |
+| `pfnOpenHeapAndResource` | yes, but in the process that opens, after the create | "The open, as built" below |
+
+An application states sharing when it creates the resource (`D3D12_HEAP_FLAG_SHARED`). The runtime does not
+pass that statement to the driver. A resource that was not created shared cannot get a shared handle later, so
+no private texture becomes shared after its create. The open question is only how the driver learns the
+statement.
+
+The experiment `private-tiled` (`ddi-trace.h`, class Feature, off by default) goes back to the measured signal.
+`RuntimeHeapImports::allocate` has three policies for a request inside the envelope (`EnvelopeCreate`,
+`heap-import.h`):
+
+| Policy | Selected by | First request of the create |
+|---|---|---|
+| `Linear` | default | `kShareRequired` before any allocation (BD-217) |
+| `Probe` | `private-tiled` | the ordinary BC2A allocation without `AMDGPU_GEM_CREATE_NO_CPU_ACCESS`, so the kernel driver keeps it `CpuVisible`. `E_INVALIDARG` from the callback gives `kShareRequired`. Each other status is the result of the create |
+| `Ordinary` | `shared-create-retry-off` (class Lab), which wins | the ordinary GPU-only BC2A allocation, never `kShareRequired` |
+
+With `Probe`, a private texture is an ordinary tiled texture in the VRAM-first placement of each other texture,
+and the engine places it as it places a texture outside the envelope. A shared create gets the refusal and
+then the linear surface, as in BD-075. A linear primary, an opened resource and the driver's own Present copy
+surface do not reach this policy.
+
+What `Probe` costs and what it does not prove:
+
+- Each private texture of the envelope has a CPU view in the process, as each BC2A allocation had before BD-210.
+  No code maps it. In a 32-bit process the views use address space, which is the defect BD-210 removed.
+- The refusal is a measurement of 2026-10-05 and of the releases up to BD-210. It is not measured on the
+  current kernel driver. If a runtime accepts the probe for a shared create, that texture is tiled BC2A. Its
+  opener then refuses it: `OpenHeapAndResource: ... declined at record arguments` (or `record length`, because
+  such an allocation has no resource record) in a D3D12 process, and
+  `radv_wddm2_bo_from_handle` refuses the image of the DXGI present route of the system Vulkan ICD. That is the
+  failure BD-217 fixed, so `private-tiled` is for one application profile, not for the machine-wide value.
+- A blt-model Present whose source is a private texture of the envelope (D3D9On12) no longer has a linear
+  source. It takes the copy of BD-133 (`present_copy_allocation`), with `AddedGpuWork`.
+
+Each create under `Probe` writes one line to the debugger channel and the log sink, 64 lines for each process
+at most: `private-tiled: the runtime accepted the ordinary allocation, the texture stays tiled (...)` or
+`private-tiled: the runtime refused the ordinary allocation, shared linear surface (...)`. The line also
+prints the two fields of the last table row as the callback left them. `RuntimeHeapImports::envelope_tiled()`
+and `envelope_shared()` count the two results.
+
 ## One reader and one writer of the wire format
 
 `driver/contract/bc250_shared_surface.h` is the only code that writes or reads the pair of records. It holds

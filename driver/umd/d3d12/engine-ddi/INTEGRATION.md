@@ -660,7 +660,11 @@ Every description inside the envelope therefore gets the LB7A surface record, sh
 tell the two apart. Every other allocation keeps the BC2A record and its no-CPU-view intent, with one callback and
 no engine query. Every second request is counted and named on the debugger channel. The shell's experiment
 switch `shared-create-retry-off` removes the early `kShareRequired` answer, so the envelope's first request
-allocates as BC2A (an aid for a bisect, not a product path). `admitted_create_failure`
+allocates as BC2A (an aid for a bisect, not a product path). The switch `private-tiled` makes the first request
+a probe: the shell asks the runtime for the BC2A allocation with a CPU view and answers `kShareRequired` only
+for the runtime's `E_INVALIDARG`, so a private texture of the envelope stays tiled (`EnvelopeCreate` in the
+shell's `heap-import.h`). engine-ddi does not change for it: the first request gets memory or `kShareRequired`,
+as before. `admitted_create_failure`
 maps `kShareRequired` to `E_OUTOFMEMORY`, so a path that ever returned it to the runtime would report a refusal
 rather than a strange status, and a header test pins that.
 
