@@ -1745,6 +1745,11 @@
         "host"
       ]
     },
+    "umd-gate": {
+      "inputs": [
+        "host"
+      ]
+    },
     "umd-adl": {
       "timeout": 900
     },
