@@ -600,6 +600,10 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # Its deadline is 900 s in gate-inputs.json: 144 s in the tester.39 rc1 package, 80 per cent of the old 180 s, and
  # a stop at 180 s in the release flavour of the rc2 package, which ran beside the lab flavour (BD-382).
  Check 'overlay-group-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group-controls" -Mutation all }
+ # It runs the overlay runner three times in one output directory, so a refusal of a directory that the runner
+ # made itself cannot come back. 8.72 s for the three runs on the development PC (2026-11-26), 4.8 per cent of the
+ # 180 s of the manifest, so it needs no deadline of its own in gate-inputs.json.
+ Check 'overlay-group-rerun' { & pwsh -NoProfile -File "$repo\driver\kmd\test\test_run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group-rerun" }
  Check 'dc-types' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dc_types.ps1" -Root $Workspace -Out "$Out\dc-types" }
  # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest (BD-357). In the full uncached suite of
  # the tester.39 package run of 2026-11-24 09:15Z, beside other work on the development PC, it took 94.41 s, 52 per cent of 180 s.

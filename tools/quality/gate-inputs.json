@@ -1740,6 +1740,11 @@
     "overlay-group-controls": {
       "timeout": 900
     },
+    "overlay-group-rerun": {
+      "inputs": [
+        "host"
+      ]
+    },
     "umd-adl": {
       "timeout": 900
     },
