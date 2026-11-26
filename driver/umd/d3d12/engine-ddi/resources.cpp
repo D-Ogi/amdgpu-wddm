@@ -336,14 +336,24 @@ const AMDGPU_WDDM_SURFACE_FORMAT* composed_format(DXGI_FORMAT f) noexcept {
     return Bc250SharedSurfaceFormat(static_cast<unsigned long>(f));
 }
 
-// The descriptions a linear surface exists for. The engine's image has the format's own compatibility list, so
-// castable formats beyond the row's storage format and its sRGB view, where the row has one, are not these. The
-// description's own format is one of those two, so both are admitted whichever of them it is.
-bool linear_surface_shape(const D3D12_RESOURCE_DESC1& desc, const D3D12DDIARG_CREATERESOURCE_0088& in) noexcept {
-    const AMDGPU_WDDM_SURFACE_FORMAT* row = composed_format(desc.Format);
+// BD-408: the formats a shared surface record may name. They are the composed formats and the X views of a
+// storage row (B8G8R8X8_UNORM and its sRGB view over the BGRA8 row), Bc250SharedSurfaceRecordFormat in the
+// contract. A D3D9 X8R8G8B8 texture with a shared handle reaches this driver as B8G8R8X8_UNORM. Before this
+// lookup it was outside the envelope: it got an ordinary allocation with no record, and the open that
+// D3D9On12 makes at once in the same process was refused. A linear primary keeps composed_format.
+const AMDGPU_WDDM_SURFACE_FORMAT* shared_record_format(DXGI_FORMAT f) noexcept {
+    return Bc250SharedSurfaceRecordFormat(static_cast<unsigned long>(f));
+}
+
+// The descriptions a linear surface of row exists for. The engine's image has the format's own compatibility
+// list, so a castable format must store the bytes of the same row (its storage format, its sRGB view, or an X
+// view of either). A castable format must also be an X view exactly when the description's format is one. A
+// cast from an X view to an A view would read the undefined fourth byte as alpha, and the reverse cast would
+// give the opener a format that the record does not name.
+bool linear_surface_shape(const D3D12_RESOURCE_DESC1& desc, const D3D12DDIARG_CREATERESOURCE_0088& in,
+                          const AMDGPU_WDDM_SURFACE_FORMAT* row) noexcept {
     if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || !row) return false;
-    const auto stored = static_cast<DXGI_FORMAT>(row->dxgi);
-    const auto sibling = static_cast<DXGI_FORMAT>(row->dxgi_srgb);
+    const bool opaque = Bc250SharedSurfaceOpaqueStorage(static_cast<unsigned long>(desc.Format)) != 0;
     if (!desc.Width || desc.Width > kLinearMaxEdge || !desc.Height || desc.Height > kLinearMaxEdge) return false;
     if (desc.DepthOrArraySize != 1 || desc.MipLevels != 1 || desc.SampleDesc.Count != 1 || desc.SampleDesc.Quality)
         return false;
@@ -353,8 +363,9 @@ bool linear_surface_shape(const D3D12_RESOURCE_DESC1& desc, const D3D12DDIARG_CR
                       D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE))
         return false;
     for (UINT i = 0; i < in.NumCastableFormats; ++i) {
-        const DXGI_FORMAT castable = in.pCastableFormats[i];
-        if (castable != stored && (sibling == DXGI_FORMAT_UNKNOWN || castable != sibling)) return false;
+        const auto castable = static_cast<unsigned long>(in.pCastableFormats[i]);
+        if (Bc250SharedSurfaceRecordFormat(castable) != row || (Bc250SharedSurfaceOpaqueStorage(castable) != 0) != opaque)
+            return false;
     }
     return true;
 }
@@ -377,7 +388,7 @@ bool shared_surface_shape(const D3D12DDIARG_CREATEHEAP_0001& heap, const D3D12_R
     if (heap.Flags & (D3D12DDI_HEAP_FLAG_PRIMARY | D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE)) return false;
     if (heap.CPUPageProperty != D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE) return false;
     if (heap.MemoryPool != D3D12DDI_MEMORY_POOL_L1) return false;
-    return linear_surface_shape(desc, in);
+    return linear_surface_shape(desc, in, shared_record_format(desc.Format));
 }
 
 // The description the engine is asked about and creates: the linear request is the call, not the layout field.
@@ -426,9 +437,10 @@ HRESULT query_linear_surface(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc,
     return S_OK;
 }
 
-// Every linear surface but the Present copy's: the composed row of the description's format.
+// Every linear surface but the Present copy's: the record row of the description's format. For a linear primary
+// that is its composed row, because linear_surface_shape admitted the primary by composed_format.
 HRESULT query_linear_surface(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, LinearSurface* out) noexcept {
-    return query_linear_surface(c, desc, composed_format(desc.Format), out);
+    return query_linear_surface(c, desc, shared_record_format(desc.Format), out);
 }
 
 // The linear image at offset 0 of the backing. The bound image must be the one the query described: the memory was
@@ -637,11 +649,27 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
     bool linear = res_desc && c->mode == MemoryMode::RuntimeBacked &&
                   (sized.Flags & D3D12DDI_HEAP_FLAG_PRIMARY) &&
                   sized.CPUPageProperty == D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE &&
-                  linear_surface_shape(desc, *res_desc);
+                  linear_surface_shape(desc, *res_desc, composed_format(desc.Format));
     // BD-075, BD-217: allow the shell to select shared-capable storage for this
     // envelope. The first request has no linear layout; kShareRequired asks for it.
     const bool shareable = res_desc && !linear && c->mode == MemoryMode::RuntimeBacked &&
                            shared_surface_shape(sized, desc, *res_desc);
+    // BD-408: the DDI does not say that a create is shared, so a shared texture outside the envelope gets an
+    // ordinary allocation with no record, and only its open fails, in this process or in another one. The closest
+    // signal the DDI gives is simultaneous access: the D3D12 translation layer (D3D9On12, D3D11On12) asks for it on
+    // every shared resource it creates (D3D12TranslationLayer Resource.cpp, the compatibility create). Such a
+    // texture outside the envelope gets one line, under the refusal budget, so that the next shape like format 88
+    // is visible at its create. The line is a hint, not a refusal: the create continues unchanged.
+    if (res_desc && !linear && !shareable && c->mode == MemoryMode::RuntimeBacked &&
+        desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D &&
+        (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS))
+        log_refusal("shared surface: a texture with simultaneous access is outside the shared surface envelope; if it "
+                    "is shared, no opener can read it (format %d, %llux%u, %u mips, %u slices, %u samples, %u castable "
+                    "formats, heap pool %u, cpu page %u, heap flags 0x%x)",
+                    static_cast<int>(desc.Format), static_cast<unsigned long long>(desc.Width), desc.Height,
+                    static_cast<unsigned>(desc.MipLevels), static_cast<unsigned>(desc.DepthOrArraySize),
+                    desc.SampleDesc.Count, res_desc->NumCastableFormats, static_cast<unsigned>(sized.MemoryPool),
+                    static_cast<unsigned>(sized.CPUPageProperty), static_cast<unsigned>(sized.Flags));
     if (res_desc) {
         if (!(sized.Flags & category_of(desc))) return E_INVALIDARG;
         if (linear) {
@@ -993,10 +1021,17 @@ HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* a
     // the three cross-API failures of round 1 all declined here. The refusal line below already printed the record's
     // own length and version, so the name puts the reason first rather than adding information (BD-075 round 2,
     // 2026-10-06). The strings are the header's literals, so the pointer outlives this call.
+    // BD-408: an empty resource record means that the creator of the allocation gave the runtime none, and then the
+    // LB7A blob is the whole description. A D3D9On12 windowed Present opens such a surface: a standard GDI texture
+    // that the kernel driver described (48 bytes, LB7A and GDI1). The strict decode declined it at "record length".
     *why = BC250_SHARED_SURFACE_WHY_ARGUMENTS;
     BC250_SHARED_SURFACE shared{};
-    switch (Bc250SharedSurfaceDecodeWhy(args->pPrivateDriverData, args->PrivateDriverDataSize,
-                                        first.pPrivateDriverData, first.PrivateDriverDataSize, &shared, why)) {
+    const bool bare = args->PrivateDriverDataSize == 0;
+    const int decoded =
+        bare ? Bc250SharedSurfaceDecodeBareWhy(first.pPrivateDriverData, first.PrivateDriverDataSize, &shared, why)
+             : Bc250SharedSurfaceDecodeWhy(args->pPrivateDriverData, args->PrivateDriverDataSize,
+                                           first.pPrivateDriverData, first.PrivateDriverDataSize, &shared, why);
+    switch (decoded) {
     case BC250_SHARED_SURFACE_OK:
         break;
     case BC250_SHARED_SURFACE_FORMAT:
@@ -1023,8 +1058,14 @@ HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* a
     // that, STATE.md), and a shared surface outlives the build that made it. So this is a cross-build check, not
     // an assertion about our own code, and a divergence names both numbers on one line instead of showing wrong
     // pixels (BD-075 review, 2026-10-06).
+    // The bytes that the allocation has. A creator of ours publishes a page-rounded size. The kernel driver
+    // publishes a GDI texture's size as the pitch times the height rounded up to four rows (DcnSharedTextureLayout)
+    // and creates the allocation with that size rounded up to a page (wddm.c, CreateAllocation, ROUND_TO_PAGES), so a
+    // bare record is compared with the page-rounded size. A record with a resource record keeps its own size.
     *why = "layout agreement";
-    if (surface.info.RowPitch != shared.Pitch || surface.backing_size > shared.Size) {
+    const uint64_t allocated = bare ? (uint64_t{shared.Size} + kLinearPage - 1) & ~uint64_t{kLinearPage - 1}
+                                    : uint64_t{shared.Size};
+    if (surface.info.RowPitch != shared.Pitch || surface.backing_size > allocated) {
         log_line("shared open: the engine's linear image of this description has pitch %llu and needs %llu bytes; the "
                  "record says pitch %lu and %llu bytes",
                  static_cast<unsigned long long>(surface.info.RowPitch),
@@ -1506,7 +1547,7 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
     HRESULT hr = to_api_desc(c, *in, desc);
     if (SUCCEEDED(hr)) {
         if (c->mode == MemoryMode::RuntimeBacked && (optimization & D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_PRIMARY) &&
-            linear_surface_shape(desc, *in)) {
+            linear_surface_shape(desc, *in, composed_format(desc.Format))) {
             hr = linear_allocation_info(c, desc, out);
         } else {
             desc.Alignment = alignment_restriction;
