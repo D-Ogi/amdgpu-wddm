@@ -8,7 +8,7 @@
  *   - ns-d3dkmddi-_dxgk_drivercaps.md:261-263: "Supports null context in DDI calls. When this value is set, the OS
  *     will pass NULL context in present related DDIs. Supported starting in WDDM 2.4." The page does not name the
  *     DDIs.
- *   - dxgkrnl 10.0.22621.6197, static reading (evidence/windows/2026-11-25-bd403-contextless-present/, fact M971):
+ *   - dxgkrnl 10.0.22621.6197, static reading (evidence/windows/2026-11-25-bd403-contextless-present/, fact M975):
  *     DXGADAPTER reads MiscCaps only when the reported version is 2.4 or higher, and keeps bit 0 as one byte.
  *     PrepareIndependentFlipToken is the one caller of ADAPTER_RENDER::DdiPresent that reads that byte. With the
  *     byte set it passes hContext NULL, also when the token has a context. The DXGKARG_PRESENT it builds has

@@ -159,7 +159,7 @@ std::string d3d11_after_decode(const BC250_SHARED_SURFACE &s) {
 // that has the bare decode), and the adopt refuses a byte size that is not whole pages.
 // RULE driver/umd/d3d12/engine-ddi/resources.cpp "const uint64_t need = std::max<uint64_t>(rows, info.MemorySize);"
 // RULE driver/umd/d3d12/engine-ddi/resources.cpp "out->backing_size = (need + kLinearPage - 1) & ~(kLinearPage - 1);"
-// RULE driver/umd/d3d12/engine-ddi/resources.cpp "if (surface.info.RowPitch != shared.Pitch || surface.backing_size > shared"
+// RULE driver/umd/d3d12/engine-ddi/resources.cpp "if (surface.info.RowPitch != shared.Pitch || surface.backing_size > allocated) {"
 // RULE driver/umd/d3d12/heap-import.cpp "(request->alignment&(request->alignment-1)) || (request->byte_size&4095)"
 std::string d3d12_after_decode(const BC250_SHARED_SURFACE &s, bool bare) {
     const uint64_t pitch = radv_pitch(s.Width, s.BytesPerPixel);
@@ -522,7 +522,9 @@ void sweep_cross_adapter(const std::vector<Shape> &all) {
     const std::string formats = "S2 D3D12 CROSS_ADAPTER create outside the envelope -> an opener";
     const std::string mips = "S2 D3D12 CROSS_ADAPTER create of mips > 1 or array > 1 -> an opener";
     for (const SharedFormat &f : kShared) {
-        if (Bc250SharedSurfaceFormat(f.dxgi)) continue;  // inside the envelope: P5, the rows above
+        // The envelope of the D3D12 create, which is the lookup the create itself uses
+        // (allocation-request.h): with BD-408 the X views of a storage row are inside it.
+        if (Bc250SharedSurfaceRecordFormat(f.dxgi)) continue;  // inside the envelope: P5, the rows above
         for (const Shape &sh : all) {
             if (sh.w > 8192 || sh.h > 8192) continue;
             if (cross_adapter_refused(D3D12_RESOURCE_DIMENSION_TEXTURE2D)) { pair(formats).ok(); continue; }
@@ -546,7 +548,11 @@ void sweep_shared_create_rule(const std::vector<Shape> &all) {
         // committed texture arrives with the heap flags 0x26 of an ordinary one (docs/d3d12-shared-resources.md,
         // measured 2026-10-05). The answer for the unflagged create is the named refusal of the open (row above).
         if (f.tier == 2) note(name, "DDI carries no sharing bit (heap flags 0x26, measured 2026-10-05); the open refusal is named");
-        const AMDGPU_WDDM_SURFACE_FORMAT *row = Bc250SharedSurfaceFormat(f.dxgi);
+        // The row the create takes, from the lookup the create itself uses (allocation-request.h
+        // Bc250SharedSurfaceRecordFormat): for an X view of a storage row that is the row of the A format
+        // whose bytes it stores, so the allocation record names the A format and the resource record keeps
+        // the X one (BD-408). The D3D11 opener still has no X rule, which is what the P5 rows above hold.
+        const AMDGPU_WDDM_SURFACE_FORMAT *row = Bc250SharedSurfaceRecordFormat(f.dxgi);
         for (const Shape &sh : all) {
             if (sh.w > 8192 || sh.h > 8192) continue;  // larger: the D3D12 shell refuses the create
             if (!row) { pair(name).fail(sh.w, sh.h, "outside the envelope: the create takes P7, no opener reads it"); continue; }

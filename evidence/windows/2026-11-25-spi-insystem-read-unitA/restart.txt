@@ -1,0 +1,26 @@
+# The restart of unit A for the start: the console text of the host
+# target.py ps scratch\t39\p6-l1-uefi\unit_shutdown.ps1 -Reason "M1: clean shutdown by the lab operator"
+WINDOWS_BOOT_UTC=2026-11-25T18:57:05Z uptime_s=4129
+CLEAN_SHUTDOWN_REQUEST_UTC=2026-11-25T20:05:54Z
+CLEAN_SHUTDOWN_SCHEDULED
+# python -B scratch\t39\pico-h-serprog\wait_standby.py 150
+2026-11-25T20:05:54Z relay_on=True power_w=81.0
+2026-11-25T20:06:07Z relay_on=True power_w=87.2
+2026-11-25T20:06:19Z relay_on=True power_w=87.9
+2026-11-25T20:06:32Z relay_on=True power_w=87.6
+2026-11-25T20:06:44Z relay_on=True power_w=87.4
+2026-11-25T20:06:57Z relay_on=True power_w=10.3
+2026-11-25T20:07:09Z relay_on=True power_w=10.3
+STANDBY: two samples in a row under 20 W (10.3 W)
+2026-11-25T20:07:09Z
+# python scratch\t35\wt-main\tools\win\target.py boot --os windows --after-now --bound 360   (in the background, started before the plug)
+# python scratch\smartplug\plug.py off
+{"transport": "LAN", "relay_on": false, "readback_verified": true}
+off exit 0 at 2026-11-25T20:07:16Z
+# 5 s, then python scratch\smartplug\plug.py on
+{"transport": "LAN", "relay_on": true, "readback_verified": true}
+on exit 0 at 2026-11-25T20:07:24Z
+# the output of the boot wait
+boot-wait 86s: windows down (no answer; rc 255; no answer; refused; refused; no answer), linux down (no answer; no answer; refused; no answer; refused; no answer; no answer)
+boot-wait 117s: windows up, boot 2026-11-25T20:08:28Z
+BOOT UP windows boot 2026-11-25T20:08:28Z after 117s

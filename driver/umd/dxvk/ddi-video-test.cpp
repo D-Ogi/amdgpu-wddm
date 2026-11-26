@@ -76,6 +76,7 @@ bool format_bits_correct(UINT (*bits)(DXGI_FORMAT,bool)) {
     constexpr UINT in=D3D11_1DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT,out=D3D11_1DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT;
     if (bits(DXGI_FORMAT_NV12,true)!=(in|out) || bits(DXGI_FORMAT_P010,true)!=(in|out) || bits(DXGI_FORMAT_YUY2,true)!=(in|out)) return false;
     if (bits(DXGI_FORMAT_B8G8R8A8_UNORM,true)!=(in|out) || bits(DXGI_FORMAT_R10G10B10A2_UNORM,true)!=(in|out)) return false;
+    if (bits(DXGI_FORMAT_B8G8R8X8_UNORM,true)!=(in|out) || bits(DXGI_FORMAT_B8G8R8X8_UNORM,false)) return false;
     if (bits(DXGI_FORMAT_NV12,false) || bits(DXGI_FORMAT_R16G16B16A16_FLOAT,true) || bits(DXGI_FORMAT_AYUV,true) ||
         bits(DXGI_FORMAT_UNKNOWN,true)) return false;
     for (int f=0;f<=int(DXGI_FORMAT_A4B4G4R4_UNORM);++f)
@@ -230,6 +231,13 @@ void test_video_ddi() {
     CHECK(video_processor_format_support(DXGI_FORMAT_P010)==(D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT|D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT));
     CHECK(video_processor_format_support(DXGI_FORMAT_YUY2)==(D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT|D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT));
     CHECK(video_processor_format_support(DXGI_FORMAT_R16G16B16A16_FLOAT)==0 && video_processor_format_support(DXGI_FORMAT_UNKNOWN)==0);
+    // BD-409: the HLK workload dxvp.exe refuses to start (a message box, no GPU work) unless the enumerator
+    // reports OUTPUT for B8G8R8X8_UNORM. The row is RGB: an RGB colour space converts into it, a YCbCr one does not.
+    CHECK(video_processor_format_support(DXGI_FORMAT_B8G8R8X8_UNORM)==(D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT|D3D11_1DDI_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT));
+    CHECK(video_conversion_supported(DXGI_FORMAT_YUY2,DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709,
+        DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709));
+    CHECK(!video_conversion_supported(DXGI_FORMAT_YUY2,DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709,
+        DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709));
     CHECK(format_bits_correct(real_bits));
     CHECK(!format_bits_correct(bits_with_decoder)); // negative control: a decoder bit
     // The resource bit is separate from the processor bits and codec profiles.
@@ -327,6 +335,7 @@ void test_video_ddi() {
             od.Texture2DArray.FirstArraySlice==1 && od.Texture2DArray.ArraySize==1);
         out.FirstArraySlice=0;
         CHECK(plan_video_output_view(out,DXGI_FORMAT_P010,od) && plan_video_output_view(out,DXGI_FORMAT_YUY2,od));
+        CHECK(plan_video_output_view(out,DXGI_FORMAT_B8G8R8X8_UNORM,od) && od.ViewDimension==D3D11_VPOV_DIMENSION_TEXTURE2D);
         out.ArraySize=2;
         CHECK(!plan_video_output_view(out,DXGI_FORMAT_NV12,od));
     }

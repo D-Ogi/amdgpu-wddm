@@ -1,0 +1,18 @@
+{
+  "queues": {
+    "0": {
+      "parameter": 61934152,
+      "response": 61934184,
+      "command": 61934088
+    },
+    "3": {
+      "parameter": 61934216,
+      "response": 61934208,
+      "command": 61934112
+    }
+  },
+  "target": 61934152,
+  "body_sha256": "5c805026581ace101ba43ef4d0f6b34354f4a61461a1c78d2fa6a335a53d9936",
+  "derivation": "P3[BA0]+12+12*q; host MP1_Public mapping from pinned setup-registers-C092.json",
+  "source_sha256": "ea82a7da832efb9f1de82c4e7fa3a5f41c3f56634a8688f4853afc8b6d5e9896"
+}

@@ -554,24 +554,6 @@
       }
     },
     {
-      "row": "S1 D3D12 shared create B8G8R8X8_UNORM (88) -> an opener",
-      "owner": "t39/bd408-d3d9-shared-texture (BD-408)",
-      "reason": "B8G8R8X8 (88) and its sRGB view (93) are tier-1 shareable formats outside the D3D12 envelope: the create takes P7, which no opener reads",
-      "until": {
-        "file": "driver/contract/bc250_shared_surface.h",
-        "text": "Bc250SharedSurfaceRecordFormat(unsigned long DxgiFormat)"
-      }
-    },
-    {
-      "row": "S1 D3D12 shared create B8G8R8X8_UNORM_SRGB (93) -> an opener",
-      "owner": "t39/bd408-d3d9-shared-texture (BD-408)",
-      "reason": "B8G8R8X8 (88) and its sRGB view (93) are tier-1 shareable formats outside the D3D12 envelope: the create takes P7, which no opener reads",
-      "until": {
-        "file": "driver/contract/bc250_shared_surface.h",
-        "text": "Bc250SharedSurfaceRecordFormat(unsigned long DxgiFormat)"
-      }
-    },
-    {
       "row": "P5 D3D12 shared B8G8R8X8_UNORM (88) -> D3D11 open",
       "owner": "record-pair-sweep (after t39/bd408-d3d9-shared-texture lands)",
       "reason": "the D3D11 adoption takes runtime_surface_format, which has no X view rule: a D3D12 shared 88 surface (LB7A A8R8G8B8, E26R 88) is refused; before BD-408 lands the D3D12 encode refuses 88 too",

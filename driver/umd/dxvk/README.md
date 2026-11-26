@@ -661,10 +661,12 @@ What the device does:
 
 - The video processor: the enumerator, the processor, the input and output
   views and VideoProcessorBlt go to the video device of the engine.
-- The formats come from one table (`ddi-video-caps.h`). Input: NV12, P010,
-  YUY2, B8G8R8A8, R8G8B8A8 and R10G10B10A2. Output: NV12, B8G8R8A8, R8G8B8A8
-  and R10G10B10A2. CheckFormatSupport adds the two video processor bits from
-  the same table, and only when the engine runs.
+- The formats come from one table (`ddi-video-caps.h`). Input and output:
+  NV12, P010, YUY2, B8G8R8A8, B8G8R8X8, R8G8B8A8 and R10G10B10A2. The table
+  is a ceiling: the directional query of the engine decides each direction.
+  CheckFormatSupport adds the two video processor bits from the same table,
+  and only when the engine runs. B8G8R8X8 is in the table because the HLK
+  workload `dxvp.exe` does not start without its output bit (BD-409).
 - ColorSpace1: the shell maps a DXGI colour space to the legacy colour space.
   It admits six spaces: RGB full and studio (G22, P709), and YCbCr studio and
   full with the BT.601 or BT.709 matrix (G22, left siting). A conversion with

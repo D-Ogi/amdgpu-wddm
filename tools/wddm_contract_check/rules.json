@@ -538,7 +538,7 @@
       "id": "R50-CONTEXTLESS-PRESENT-FROM-2-4",
       "declaration": "DXGK_DRIVERCAPS.WDDMVersion >= 2.4",
       "requires_text": "DXGK_DRIVERCAPS.MiscCaps.SupportContextlessPresent is set, and DxgkDdiPresent accepts hContext NULL. The HLK job 'WDDM2.4 Mandatory Caps' (FeatureCheck::VerifyWddm24Caps) fails a 2.4 or later driver without it ('SupportContextlessPresent required on WDDM2.4+', BD-403). With the bit set, dxgkrnl passes hContext NULL to DxgkDdiPresent for every independent-flip token",
-      "source": "DXGKRNL static reading of 22621.6197 (fact M971, evidence/windows/2026-11-25-bd403-contextless-present/dxgkrnl-static-reading.txt): DXGADAPTER at VA 0x1c01fdafe 'cmp dword ptr [rsi+0xb04], 0x960; jl' reads MiscCaps only from 2.4, then 'and al, 0x1; mov byte ptr [rsi+0xb3a], al' at 0x1c01fdb54; PrepareIndependentFlipToken at 0x1c01c0b27 'cmp byte ptr [rax+0xb3a], r14b; mov rdx, r14; jne' passes hContext 0 to ADAPTER_RENDER::DdiPresent (0x1c0169f80) when the byte is set; LEARN ns-d3dkmddi-_dxgk_drivercaps.md:263 'When this value is set, the OS will pass NULL context in present related DDIs. Supported starting in WDDM 2.4'; WDK shared/d3dkmddi.h 10.0.26100 line 2467, inside the WDDM2_4 guard that opens at line 2462",
+      "source": "DXGKRNL static reading of 22621.6197 (fact M975, evidence/windows/2026-11-25-bd403-contextless-present/dxgkrnl-static-reading.txt): DXGADAPTER at VA 0x1c01fdafe 'cmp dword ptr [rsi+0xb04], 0x960; jl' reads MiscCaps only from 2.4, then 'and al, 0x1; mov byte ptr [rsi+0xb3a], al' at 0x1c01fdb54; PrepareIndependentFlipToken at 0x1c01c0b27 'cmp byte ptr [rax+0xb3a], r14b; mov rdx, r14; jne' passes hContext 0 to ADAPTER_RENDER::DdiPresent (0x1c0169f80) when the byte is set; LEARN ns-d3dkmddi-_dxgk_drivercaps.md:263 'When this value is set, the OS will pass NULL context in present related DDIs. Supported starting in WDDM 2.4'; WDK shared/d3dkmddi.h 10.0.26100 line 2467, inside the WDDM2_4 guard that opens at line 2462",
       "when": [{"wddm_version_at_least": "0x2400"}],
       "require": [{"cap_true": "MiscCaps.SupportContextlessPresent"}]
     },
@@ -549,6 +549,15 @@
       "source": "LEARN ref/windows-driver-docs/windows-driver-docs-pr/display/retrieving-the-opm-ddi.md:13-66 (dxgkrnl queries GUID_DEVINTERFACE_OPM with DXGK_OPM_INTERFACE_VERSION_1 through DxgkDdiQueryInterface) and ref/windows-driver-docs-ddi nc-dispmprt-dxgkddi_query_interface.md:59 (STATUS_NOT_SUPPORTED for an unsupported interface); LEARN HCK hh998923 'Full WDDM drivers must support OPM/COPP if they have a capable connector/monitor'; HLK testref 4af26016 (three assertions, 'skip for basic SKUs' when the initialization fails); WDK km/dispmprt.h 10.0.26100 lines 371-374 (GUID_DEVINTERFACE_OPM), 639-655 (DXGK_OPM_INTERFACE)",
       "when": [{"ddi_set": "DxgkDdiPresent"}],
       "require": [{"ddi_set": "DxgkDdiQueryInterface"}]
+    },
+    {
+      "id": "R53-CROSS-ADAPTER-TIER1-FROM-2-4",
+      "declaration": "DXGK_DRIVERCAPS.WDDMVersion >= 2.4",
+      "requires_text": "DXGK_DRIVERCAPS.MemoryManagementCaps.CrossAdapterResource is set, and DxgkDdiDescribeAllocation is in the table and describes a cross-adapter buffer (Width the byte count, Height 1, Format D3DDDIFMT_UNKNOWN). The HLK job 'WDDM2.4 Mandatory Caps' (FeatureCheck::VerifyWddm24Caps) fails a 2.4 or later driver without the bit ('SupportCrossAdapterResource required on WDDM2.4+'). With the bit set, dxgkrnl admits D3DKMT_CREATEALLOCATION.Flags.CrossAdapter and calls DxgkDdiDescribeAllocation for every cross-adapter allocation",
+      "source": "featurecheck.dll 10.0.26100.8328 FUN_1800102b0 (VerifyWddm24Caps): the second and last check, main.cpp line 0x45, tests D3DKMT_WDDM_1_3_CAPS bit 5; DXGKRNL static reading of 26100.9974 (fact M976, evidence/windows/2026-11-25-cross-adapter-tier1/): QueryWDDM1_3Caps 0x1403e1e98 copies MemoryManagementCaps bit 4 to SupportCrossAdapterResource, DXGDEVICE::CreateAllocation 0x1401cbc43 refuses Flags.CrossAdapter without the bit and 0x1401ce5d2 calls ADAPTER_RENDER::DdiDescribeAllocation for each cross-adapter allocation, 0x1401ce65f refuses Format 0 with Height other than 1; LEARN supporting-caso.md 'Tier 1 | Copy support'; WDK shared/d3dkmddi.h 10.0.26100 line 2267",
+      "when": [{"wddm_version_at_least": "0x2400"}],
+      "require": [{"cap_true": "MemoryManagementCaps.CrossAdapterResource"},
+                  {"ddi_set": "DxgkDdiDescribeAllocation"}]
     }
   ]
 }

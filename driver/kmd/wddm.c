@@ -246,6 +246,7 @@ typedef struct _BC250_WDDM_KIND {
 #include "present_range.h"
 #include "present_snapshot.h"        // BD-065: the refusal reasons of the GPU Present allocation snapshot
 #include "present_contextless.h"     // BD-403: SupportContextlessPresent and a Present without a context
+#include "cross_adapter.h"           // CrossAdapterResource (tier 1) and the DescribeAllocation answer of a buffer
 #include "scanout_admit.h"           // M15.14: which allocation SetVidPnSourceAddress may scan out
 #include "display_rotation.h"        // BD-247: no DirectFlip while the path is rotated
 #include "dcn_plane.h"               // BD-223: the multiplane-overlay plane 0 and its verdicts
@@ -772,6 +773,12 @@ typedef struct _BC250_WDDM {
     volatile LONG UmdAllocs;
     volatile LONG UmdAllocRefused;
     volatile LONG UmdOpenRefused;          // BD-205: OpenAllocation of a BC2A blob that does not parse (call failed)
+    // Cross-adapter tier 1 (cross_adapter.h): the DescribeAllocation answers by route. dxgkrnl describes a BC2A
+    // allocation only when it is cross-adapter, so buffer is the count of cross-adapter allocations of this start
+    // (0 on a desktop and in games), and refused the ones of more than 4 GiB - 1 bytes.
+    volatile LONG DescribeSurface;
+    volatile LONG DescribeBuffer;
+    volatile LONG DescribeRefused;
     // Memory manager stage 1c (0.7.216.8): EnableSharedResidency, latched at WddmStart, and the UMD
     // allocations by the segment sets they got (umd_blob.c UmdBlobPlacement): local or aperture alone, or
     // local first with the aperture as VidMm's demotion target.
@@ -946,7 +953,12 @@ typedef struct _BC250_WDDM {
     volatile LONG WriterRecovery;       // queued section failure; consumed only inside L
     BOOLEAN DesiredOwed;                // Desired is a next-VSync success that no CRTC_VSYNC report carried yet
     ULONG DepositSequence;              // advances at every deposit, so that a programmed deposit is the newest one
-    volatile LONG Faulting;             // E5 was entered on this start (F0); this block is freed at the stop
+    // BD-407: an owed flip that End could not program. The next vblank reports RetireAddress in software, and the
+    // report that carries it clears RetireOwed. OwedRetired counts the owed flips that a software report retired.
+    BOOLEAN RetireOwed;
+    PHYSICAL_ADDRESS RetireAddress;
+    volatile LONG OwedRetired;
+    volatile LONG Faulting;            // E5 was entered on this start (F0); this block is freed at the stop
     ULONG FaultCode;                    // the first fault's BC250_FLIP_FAULT_* code
     UINT FaultNode;                     // and its node ordinal
     NTSTATUS FaultBlank;                // DcnFaultBlank's status
@@ -959,7 +971,7 @@ typedef struct _BC250_WDDM {
     // FAULTING. WriterHigh: a writer section refused above DISPATCH_LEVEL.
     // WriterSyncFailed and LowSyncFailed: DxgkCbSynchronizeExecution failed for a writer section or for the flip
     // DDI's low entry. Deposits by Resume, End's programs, End's refusals (OwedInvalidated), the reports that carried
-    // an owed Desired, the D3 flushes and the destroy restores whose Begin was refused.
+    // an owed Desired or an owed RetireAddress, the D3 flushes and the destroy restores whose Begin was refused.
     volatile LONG FlipEdges[BC250_FLIP_EDGES];
     volatile LONG FlipResults[BC250_FLIP_RESULTS];
     volatile LONG FlipFaults;
@@ -1590,6 +1602,13 @@ static BOOLEAN WddmNotifyRoutine(_In_ PVOID Context)
             notify->Data.CrtcVsync.PhysicalAddress.QuadPart == wddm->PrimaryAddress.QuadPart)
         {
             wddm->DesiredOwed = FALSE;
+            InterlockedIncrement(&wddm->OwedReported);
+        }
+        // BD-407: the same for an owed flip that End could not program (WddmWriterEndLocked, WddmDcnVsync).
+        if (wddm != NULL && wddm->RetireOwed &&
+            notify->Data.CrtcVsync.PhysicalAddress.QuadPart == wddm->RetireAddress.QuadPart)
+        {
+            wddm->RetireOwed = FALSE;
             InterlockedIncrement(&wddm->OwedReported);
         }
     }
@@ -3385,11 +3404,31 @@ void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
 // Called from pnp.c's Bc250DpcRoutine on every DPC, the same unconditional shape as WddmGpuFence/
 // WddmGpuFencePaging above: a no-op unless Device->DcnVsyncAcked says the ISR (dcn.c's DcnVsyncInterrupt) found
 // at least one real VUPDATE_NO_LOCK event since the last time this ran. <= DISPATCH_LEVEL.
+// BD-407, the vblank DPC's read, outside L and lock-free like WddmReadCompletedPrimary: the address of an owed flip
+// that the plane cannot show, which this vblank must report in software. That is End's unprogrammed debt
+// (RetireOwed), or an owed Desired that a blanked plane holds (HUBP_BLANK_EN: the physical detach writer blanks it,
+// and a blanked plane latches no flip). FALSE in FAULTING, where E5 recovers, and across a section that writes the
+// block (an odd or changed generation).
+static BOOLEAN WddmOwedUnshown(_In_ BC250_DEVICE* Device, _In_ BC250_WDDM* Wddm, _Out_ PHYSICAL_ADDRESS* Address)
+{
+    const LONG generation = InterlockedCompareExchange(&Wddm->PrimarySequence, 0, 0);
+    LONGLONG address;
+    if ((generation & 1) || InterlockedCompareExchange(&Wddm->Faulting, 0, 0) != 0) return FALSE;
+    if (Wddm->RetireOwed) address = Wddm->RetireAddress.QuadPart;
+    else if (Wddm->DesiredOwed && DcnPlaneBlanked(Device) == 1)
+        address = InterlockedCompareExchange64(&Wddm->PrimaryAddress.QuadPart, 0, 0);
+    else return FALSE;
+    if (InterlockedCompareExchange(&Wddm->PrimarySequence, 0, 0) != generation) return FALSE;
+    Address->QuadPart = address;
+    return TRUE;
+}
+
 void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
 {
     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
     DXGKARGCB_NOTIFY_INTERRUPT_DATA data;
     ULONG completedSequence;
+    BOOLEAN software = FALSE;
 
     if (wddm == NULL || !Device->VidPnFlipEnabled) return;
     if (InterlockedExchange(&Device->DcnVsyncAcked, 0) == 0) return;
@@ -3400,9 +3439,14 @@ void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
     RtlZeroMemory(&data, sizeof(data));
     data.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC;
     data.CrtcVsync.VidPnTargetId = wddm->VSyncTargetId;
-    // A stable completed request may be retired. Otherwise preserve this vblank
-    // by reporting the buffer hardware is still reading, never the queued one.
-    if (!WddmReadCompletedPrimary(Device, wddm, &data.CrtcVsync.PhysicalAddress, &completedSequence))
+    // BD-407: an owed flip that the plane cannot show is retired first, in software. Otherwise a stable completed
+    // request may be retired. Otherwise preserve this vblank by reporting the buffer hardware is still reading,
+    // never the queued one.
+    if (WddmOwedUnshown(Device, wddm, &data.CrtcVsync.PhysicalAddress))
+    {
+        software = TRUE;
+    }
+    else if (!WddmReadCompletedPrimary(Device, wddm, &data.CrtcVsync.PhysicalAddress, &completedSequence))
     {
         ULONGLONG scanned;
         LONG generation;
@@ -3445,7 +3489,11 @@ void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
     // C50: counted like any other report. Bc250DpcRoutine calls WddmDpc right after this, so in practice the
     // pairing happens in this very pass; PairInThisPass stays FALSE because that ordering belongs to pnp.c, not
     // here, and one extra dxgkrnl DPC a vblank is 62 a second.
-    if (WddmReport(Device, &data, FALSE)) WddmPairingReport(wddm, TRUE);
+    if (WddmReport(Device, &data, FALSE))
+    {
+        WddmPairingReport(wddm, TRUE);
+        if (software) InterlockedIncrement(&wddm->OwedRetired);
+    }
 }
 
 // ---- the summary -------------------------------------------------------------------------------------------------
@@ -3638,6 +3686,9 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         for (slot = 0; slot < BC250_GDI_SLOTS; slot++) lb7a += Wddm->StdAlloc.GdiOpened[slot][1];
         GuardLog("wddm summary: OpenAllocation refused (invalid parameter): umd %ld, lb7a %ld", Wddm->UmdOpenRefused, lb7a);
     }
+    // Cross-adapter tier 1 (cross_adapter.h): buffer counts the cross-adapter allocations of this start.
+    GuardLog("wddm summary: describe allocation: surface %ld, cross-adapter buffer %ld, refused %ld",
+             Wddm->DescribeSurface, Wddm->DescribeBuffer, Wddm->DescribeRefused);
     // A line of its own, so that the line above keeps the text its readers parse.
     GuardLog("wddm summary: umd placement (shared residency %s): local %ld, local+aperture %ld, aperture %ld",
              Wddm->SharedResidency ? "on" : "off", Wddm->UmdAllocsLocalOnly, Wddm->UmdAllocsShared,
@@ -4153,7 +4204,8 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         GuardLog("wddm summary: flip end-programs %ld owed-invalidated %ld owed-reported %ld flushes %ld destroy-unsync %ld",
                  Wddm->EndPrograms, Wddm->OwedInvalidated, Wddm->OwedReported, Wddm->FlipFlushes,
                  Wddm->DestroyUnsynchronized);
-        GuardLog("wddm summary: flip writer-busy %ld recovery-pending %ld", Wddm->WriterBusy, Wddm->WriterRecovery);
+        GuardLog("wddm summary: flip writer-busy %ld recovery-pending %ld owed-retired %ld retire-owed %u",
+                 Wddm->WriterBusy, Wddm->WriterRecovery, Wddm->OwedRetired, (unsigned)Wddm->RetireOwed);
         {
             ULONG kind;
             for (kind = 0; kind < BC250_WRITER_KINDS; kind++)
@@ -5647,6 +5699,11 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // part has 8 GB of local memory to reach (facts M31). Unit A has no IOMMU either (facts M47).
     caps->MemoryManagementCaps.VirtualAddressingSupported = 1;
     caps->MemoryManagementCaps.GpuMmuSupported = 1;
+    // Tier 1 of the cross-adapter resources, copy to and from (cross_adapter.h has the contract and its sources). The
+    // HLK job "WDDM2.4 Mandatory Caps" requires it from 2.4. dxgkrnl then admits D3DKMT_CREATEALLOCATION.Flags.
+    // CrossAdapter and describes each such allocation (Bc250WddmDescribeAllocation). Tiers 2 and 3 (texture, scan-out)
+    // stay clear: they need row-major textures and cross-adapter scan-out, which this driver does not have.
+    caps->MemoryManagementCaps.CrossAdapterResource = Bc250CrossAdapterCap(Device->WddmLevel);
     // ADR 0008 stage D (docs/design/paging-node.md section 6): with EnablePagingNode open, node 1 (SDMA0) is the
     // paging node, exactly what ADR 0013 point 2 asks for; closed, paging still rides on node 0, byte-for-byte
     // as before.
@@ -6946,6 +7003,42 @@ static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
     return STATUS_SUCCESS;
 }
 
+// A BC2A allocation without scan-out is described only when it is a cross-adapter one (cross_adapter.h): a buffer,
+// width = byte count, height 1, format 0. Returns TRUE with *Status set when that answer (or its refusal) is complete;
+// FALSE leaves the allocation to the surface answer of Bc250WddmDescribeAllocation.
+static BOOLEAN WddmDescribeCrossAdapter(_In_ const HANDLE hAdapter, _In_ const BC250_WDDM_OBJECT* object,
+                                        _Inout_ DXGKARG_DESCRIBEALLOCATION* pDescribeAllocation, _Out_ NTSTATUS* Status)
+{
+    switch (Bc250DescribeRoute(object->UmdAlloc ? 1 : 0, object->ScanoutRequested ? 1 : 0, object->UmdBytes)) {
+    case BC250_DESCRIBE_BUFFER:
+        pDescribeAllocation->Width = (UINT)object->UmdBytes;
+        pDescribeAllocation->Height = 1;
+        pDescribeAllocation->Format = D3DDDIFMT_UNKNOWN;
+        pDescribeAllocation->MultisampleMethod.NumSamples = 0;
+        pDescribeAllocation->MultisampleMethod.NumQualityLevels = 0;
+        pDescribeAllocation->RefreshRate.Numerator = 0;
+        pDescribeAllocation->RefreshRate.Denominator = 0;
+        pDescribeAllocation->PrivateDriverFormatAttribute = 0;
+        pDescribeAllocation->Rotation = D3DDDI_ROTATION_IDENTITY;
+        if (WddmOf(hAdapter) != NULL &&
+            InterlockedIncrement(&WddmOf(hAdapter)->DescribeBuffer) <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: DescribeAllocation cross-adapter buffer %u bytes", pDescribeAllocation->Width);
+        *Status = STATUS_SUCCESS;
+        return TRUE;
+    case BC250_DESCRIBE_REFUSED:
+        if (WddmOf(hAdapter) != NULL &&
+            InterlockedIncrement(&WddmOf(hAdapter)->DescribeRefused) <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: DescribeAllocation refused, a buffer of %llu bytes has no 32-bit width", object->UmdBytes);
+        *Status = STATUS_INVALID_PARAMETER;
+        return TRUE;
+    case BC250_DESCRIBE_SURFACE:
+    default:
+        if (WddmOf(hAdapter) != NULL) InterlockedIncrement(&WddmOf(hAdapter)->DescribeSurface);
+        *Status = STATUS_SUCCESS;
+        return FALSE;
+    }
+}
+
 static DXGKDDI_DESCRIBEALLOCATION Bc250WddmDescribeAllocation;
 static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
                                             _Inout_ DXGKARG_DESCRIBEALLOCATION* pDescribeAllocation)
@@ -6956,6 +7049,8 @@ static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
     NTSTATUS status;
 
     if (object == NULL) return STATUS_INVALID_PARAMETER;
+    // A cross-adapter buffer has no display signal behind it; every other allocation gets the answer of the primary.
+    if (WddmDescribeCrossAdapter(hAdapter, object, pDescribeAllocation, &status)) return status;
     if (ConnectorIsEnabled(device)) {
         status=ConnectorLinkCurrentSignal(device,&signal);
         if (!NT_SUCCESS(status)) return status;
@@ -11304,6 +11399,13 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
 // only from callers at or below DISPATCH_LEVEL (dispmprt.h, _IRQL_requires_max_(DISPATCH_LEVEL)). Code inside L never
 // calls DxgkCbSynchronizeExecution (WddmSection refuses above DISPATCH_LEVEL), never logs and never waits for the other
 // side. Every field of the state machine's block in BC250_WDDM is written inside L only.
+//
+// The retirement rule (BD-407): an accepted flip is always retired by exactly one CRTC_VSYNC report that carries its
+// address. A next-VSync success is owed (DesiredOwed) until the report that carries Desired, which WddmNotifyRoutine
+// sees inside L. When the plane cannot show an owed flip, the debt is not dropped: End's refused program moves it to
+// RetireOwed, and an owed Desired on a blanked plane stays owed. The next vblank reports that address in software
+// (WddmOwedUnshown), once, before any later address. dxgmms2's flip queue drain waits for that report; without it the
+// drain times out (TDR 0x117). Only a D3 flush (WddmFlipFlushedLocked) ends a debt without a report.
 
 // One DxgkCbSynchronizeExecution section on message 0, from a caller at or below DISPATCH_LEVEL. Above it, or with
 // the callback missing, nothing runs and the caller decides (counted by the caller).
@@ -11834,7 +11936,13 @@ static BOOLEAN WddmWriterEndLocked(_In_ PVOID Context)
             InterlockedExchange(&wddm->PrimaryProgrammedSequence, (LONG)(w->Generation + 2u));
             InterlockedIncrement(&wddm->EndPrograms);
         } else if (result == BC250_FLIP_RESULT_REFUSED) {
+            // BD-407: nothing was written, so the plane cannot show the owed flip. The OS still waits for its
+            // report: the debt moves to RetireOwed, and the next vblank reports the address in software.
             InterlockedIncrement(&wddm->OwedInvalidated);
+            if (wddm->DesiredOwed) {
+                wddm->RetireOwed = TRUE;
+                wddm->RetireAddress = wddm->PrimaryAddress;
+            }
             wddm->DesiredOwed = FALSE;
             wddm->PrimaryNeedsRestore = TRUE;
             w->Status = status;
@@ -11881,6 +11989,7 @@ static BOOLEAN WddmFlipFlushedLocked(_In_ PVOID Context)
 {
     BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
     w->Wddm->DesiredOwed = FALSE;
+    w->Wddm->RetireOwed = FALSE;
     InterlockedIncrement(&w->Wddm->FlipFlushes);
     return TRUE;
 }

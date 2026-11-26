@@ -147,6 +147,7 @@ cluster _BC250_PSP.RingUp _BC250_PSP.TmrUp
 cluster _BC250_SMU_METRICS.LoggedEnd bc250_smu_metrics_reader.state
 cluster _BC250_WDDM.ComputeDeferredValid _BC250_WDDM.DeferredValid
 cluster _BC250_WDDM.DesiredOwed _BC250_WDDM.PrimaryNeedsRestore
+cluster _BC250_WDDM.DesiredOwed _BC250_WDDM.RetireOwed
 cluster _BC250_WDDM.DesiredOwed _BC250_WDDM.WriterDeposit
 cluster _BC250_WDDM.PagingDiagnosticTaken _BC250_WDDM.PagingHwPending
 cluster _BC250_WDDM.PrimaryNeedsRestore _BC250_WDDM.WriterActive

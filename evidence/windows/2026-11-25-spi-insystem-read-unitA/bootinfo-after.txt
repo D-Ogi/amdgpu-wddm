@@ -1,0 +1,22 @@
+# target.py ps scratch\t39\p6-flash\m1-bootinfo.ps1 on unit A, after the start
+utc 2026-11-25T20:10:32Z computer BC250-CKS
+windows_boot_utc=2026-11-25T20:08:28Z uptime_s=124
+--- Kernel-General 12 (the operating system started), the last 4; the time is printed as the event log gives it and as UTC
+  2026-11-25T21:08:28 kind=Local utc=2026-11-25T20:08:28Z record=4651  The operating system started at system time ?2026?-?11?-?25T20:08:28.500000000Z.
+  2026-11-25T19:57:05 kind=Local utc=2026-11-25T18:57:05Z record=4528  The operating system started at system time ?2026?-?11?-?25T18:57:05.500000000Z.
+  2026-11-25T19:00:20 kind=Local utc=2026-11-25T18:00:20Z record=4406  The operating system started at system time ?2026?-?11?-?25T18:00:20.500000000Z.
+  2026-11-25T18:54:12 kind=Local utc=2026-11-25T17:54:12Z record=4288  The operating system started at system time ?2026?-?11?-?25T17:54:12.500000000Z.
+--- Kernel-Boot 27 (the boot type), the last 4
+  utc=2026-11-25T20:08:28Z record=4659  The boot type was 0x0.
+  utc=2026-11-25T18:57:05Z record=4536  The boot type was 0x0.
+  utc=2026-11-25T18:00:20Z record=4414  The boot type was 0x0.
+  utc=2026-11-25T17:54:12Z record=4296  The boot type was 0x0.
+--- services
+  HLKSvc : Running
+  sshd : Running
+  HlkCampaignGuard : Running
+--- Secure Boot
+  secure_boot_confirm=True
+--- the start acknowledgement mark
+  action=clear prior_try=1 utc=2026-11-25T20:09:20.7991368Z
+M1-BOOTINFO END

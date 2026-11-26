@@ -125,12 +125,16 @@ $sources = @(Get-OrdinalBuildFiles (Join-Path $here '*.c'))
 # M4, M5: AMD's imported code and the shim it compiles against (ADR 0002). Same flags; the imports get the warning
 # disables documented in driver\amdgpu-import\PROVENANCE.md, from the build line, never by editing them.
 $repo = Split-Path (Split-Path $here)
+# The board identity is one source for the miniport, the EFI stage and the TPM core, so it lives in
+# driver\common\board. The miniport compiles it from there. Its directory is on the include path of the two groups
+# below, because board_memory_identity.c includes the header by name.
+$sources += Join-Path $repo 'driver\common\board\board_identity.c'
 if ((-not $CompileOnly) -and (-not $ExportCommandsOnly)) {
     $packageContext = Resolve-Bc250PackageContext -Repo $repo -Kits $Kits -QualityWorkspace $QualityWorkspace
     $QualityWorkspace = $packageContext.workspace
     $packageContext | ConvertTo-Json | Set-Content (Join-Path $Out 'package-context.json') -Encoding utf8
 }
-$shimInc = @("/I$repo\driver\shim\include", "/I$repo\driver\amdgpu-import", "/I$repo\third_party\linux-amdgpu", "/I$repo\third_party\libdrm", '/DBC250_SHIM_KERNEL')
+$shimInc = @("/I$repo\driver\shim\include", "/I$repo\driver\common\board", "/I$repo\driver\amdgpu-import", "/I$repo\third_party\linux-amdgpu", "/I$repo\third_party\libdrm", '/DBC250_SHIM_KERNEL')
 $shimSources = @("$repo\driver\shim\shim.c", "$repo\driver\shim\bc250_gmc.c", "$repo\driver\shim\bc250_gart.c", "$repo\driver\shim\bc250_pte.c", "$repo\driver\shim\bc250_psp.c", "$repo\driver\shim\bc250_uma.c")
 $shimSources += @("$repo\driver\shim\bc250_ddc.c", "$repo\driver\shim\bc250_dual_mode.c")
 $shimSources += @("$repo\driver\shim\bc250_hdmi_audio.c")

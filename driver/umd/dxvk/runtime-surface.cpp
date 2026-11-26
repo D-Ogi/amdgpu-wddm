@@ -162,7 +162,10 @@ HRESULT finish_runtime_surface(VkDevice device,const RuntimeImageDispatch &vk,
     bc250_host_import imported{};
     imported.sType=BC250_HOST_IMPORT_STYPE; imported.identity=surface.owner->host_identity();
     imported.allocation=surface.allocation.allocation; imported.va=surface.mapping.address;
-    imported.size=surface.bytes;
+    // BD-412: the import names the range the GPU VA mapping covers, whole pages. The record's own size need not be
+    // whole pages (the KMD's GDI surface of a 656x519 window is 357.5 pages), and the hosted winsys refuses such an
+    // import. Every check of the texture against the record stays on surface.bytes and surface.pitch.
+    imported.size=surface.mapping.bytes;
     if (surface.form==SurfaceForm::engine_layout) {
         hr=bind_engine_resource(*surface.owner,device,*resource,properties,imported,surface.engine);
         if (FAILED(hr)) {

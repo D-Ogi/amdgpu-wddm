@@ -320,6 +320,10 @@ typedef struct {
     volatile LONG FlipFaults, FaultNotified, FaultNotifyFailed;
     volatile LONG WriterFaulting, WriterHigh, WriterSyncFailed, LowSyncFailed;
     volatile LONG DepositsResumed, EndPrograms, OwedInvalidated, OwedReported, FlipFlushes, DestroyUnsynchronized;
+    /* BD-407: an owed flip that End could not program, retired by the next CRTC_VSYNC report with its address. */
+    BOOLEAN RetireOwed;
+    PHYSICAL_ADDRESS RetireAddress;
+    volatile LONG OwedRetired;
     volatile LONG FlipLockedMaxUs;
     ULONG WriterKind;
     volatile LONG WuRecordNext, WuToEndMaxUs;
@@ -434,6 +438,12 @@ static void (*after_section)(BC250_DEVICE*);
  * payload), and DPC requests. */
 static unsigned reports,faults_notified,dpcs;
 static LONGLONG reported;
+/* BD-407: the addresses of the CRTC_VSYNC reports in their order, for the exactly-once rule. */
+#define REPORT_HISTORY 256u
+static LONGLONG history[REPORT_HISTORY];
+static unsigned history_n;
+static unsigned ReportsOf(LONGLONG address)
+{unsigned n=0,i;for(i=0;i<history_n;i++)n+=history[i]==address;return n;}
 /* BD-307: CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2 reports with plane 0 (the last PresentId) and without a plane. */
 static unsigned mpo_reports,mpo_empty,mpo_target;
 static ULONGLONG mpo_id;
@@ -462,7 +472,8 @@ static void TestNotify(HANDLE h,const DXGKARGCB_NOTIFY_INTERRUPT_DATA *data)
 {
     (void)h;
     CHECK(in_lock);
-    if(data->InterruptType==DXGK_INTERRUPT_CRTC_VSYNC){reports++;reported=data->CrtcVsync.PhysicalAddress.QuadPart;}
+    if(data->InterruptType==DXGK_INTERRUPT_CRTC_VSYNC){reports++;reported=data->CrtcVsync.PhysicalAddress.QuadPart;
+        if(history_n<REPORT_HISTORY)history[history_n++]=reported;}
     else if(data->InterruptType==DXGK_INTERRUPT_DMA_PAGE_FAULTED){faults_notified++;fault_data=*data;}
     else if(data->InterruptType==DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY2){
         /* BD-307: at most plane 0, with its layer and a PresentId; no plane means no pointer. */
@@ -496,6 +507,8 @@ static unsigned record_checked;
 /* The state machine's display hardware: the HUBP drained readback (1, 0, or -1 for a failed read; or, with
  * hubp_drain_after, 0 until that read and 1 from it on), the OTG (1, 0, -1), and E5's blank request. */
 static int hubp_state,otg_state;
+/* BD-407: HUBP_BLANK_EN as DcnPlaneBlanked reads it (1, 0, or -1 for a failed read). */
+static int plane_blanked;
 /* begin_kind: the writer that the test's Begin names (a W-u record keeps it). */
 static ULONG begin_kind;
 static unsigned hubp_reads,hubp_drain_after,otg_reads,fault_blanks;
@@ -723,6 +736,8 @@ static int DcnHubpDrained(const BC250_DEVICE *d)
     if(hubp_drain_after) return hubp_reads>=hubp_drain_after?1:0;
     return hubp_state;
 }
+/* BD-407: read outside L by the vblank DPC, only for an owed flip that the plane has not latched. */
+static int DcnPlaneBlanked(const BC250_DEVICE *d){(void)d;CHECK(!in_lock);return plane_blanked;}
 static int DcnOtgRunning(const BC250_DEVICE *d){(void)d;CHECK(in_lock);++otg_reads;return otg_state;}
 static NTSTATUS DcnFaultBlank(BC250_DEVICE *d){(void)d;CHECK(in_lock);++fault_blanks;return fault_blank_status;}
 /* Programming is not retirement. The separate actual-DCN suite measures full-frame EARLIEST lag. This boundary
@@ -800,6 +815,7 @@ static void Setup(BC250_DEVICE *d,BC250_WDDM *w,int level)
     irq=level?TEST_DIRQL:0;in_lock=0;syncs=sync_refusals=sync_refuse_at=0;sync_no_callback=0;
     sync_refuse_routine=after_section_routine=NULL;before_section=after_section=NULL;
     reports=faults_notified=dpcs=0;reported=0;memset(&fault_data,0,sizeof(fault_data));
+    history_n=0;plane_blanked=0;
     mpo_reports=mpo_empty=mpo_target=0;mpo_id=0;
     arms=logs=stalls1=stalls10=0;
     freed=journaled=hardware=healthCompletions=pairedVsyncReports=0;healthSequence=0;
@@ -1736,6 +1752,111 @@ static void Writers(int level)
     CHECK(WuCopy(&d,&copy) && syncs==sections+1 && copy.Next==0);
     sync_refusals=1;
     CHECK(!WuCopy(&d,&copy) && copy.Next==0);
+}
+/* BD-407 (HLK FSPresentMS case 12, WATCHDOG-20261125-2040.dmp): the rule of the flip state machine, "an accepted flip
+ * is always retired by exactly one CRTC_VSYNC report that carries its address". The DP sink dropped the link, and the
+ * physical detach writer (LINK_DISABLE) could not program the owed next-VSync flip at its End: the program was refused
+ * and End dropped the debt (OwedInvalidated 1, EndPrograms 0, DesiredOwed 0, PrimaryAddress 0). No later report carried
+ * the flip's address, and the drain of dxgmms2's flip queue timed out: TDR 0x117. */
+static void OwedAcrossDetach(int level)
+{
+    BC250_WDDM w;BC250_DEVICE d;
+    DXGKARG_SETVIDPNSOURCEADDRESS request={0};
+    ULONG generation;
+    unsigned i;
+    request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
+
+    /* 1. The dump's sequence. The flip is accepted and owed when the detach writer begins. The writer blanks the plane
+     * on the bridge, and End's program of the owed flip is refused, so nothing is written. */
+    Setup(&d,&w,level);begin_kind=BC250_WRITER_LINK_DISABLE;
+    request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x20000;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.DesiredOwed && ReportsOf(0x20000)==0);
+    CHECK(Begin(&d,&generation));
+    CHECK(plane_card==(LONGLONG)BRIDGE_CARD);
+    plane_blanked=1;hardware_result=STATUS_NOT_SUPPORTED;
+    CHECK(End(&d,generation,TRUE)==STATUS_NOT_SUPPORTED);
+    CHECK(w.EndPrograms==0 && w.OwedInvalidated==1 && !w.DesiredOwed && w.PrimaryAddress.QuadPart==0);
+    CHECK(plane_card==(LONGLONG)BRIDGE_CARD && !w.Faulting && faults_notified==0);
+    /* The debt is kept: the next vblank's report carries the flip's address, once. */
+    CHECK(w.RetireOwed && w.RetireAddress.QuadPart==0x20000 && ReportsOf(0x20000)==0);
+    Vblank(&d);
+    CHECK(reports==1 && reported==0x20000 && ReportsOf(0x20000)==1);
+    CHECK(!w.RetireOwed && w.OwedRetired==1 && w.OwedReported==1);
+    /* Later vblanks report what the plane holds, the bridge, and never the retired address again. */
+    for(i=0;i<3;i++)Vblank(&d);
+    CHECK(reports==4 && reported==(LONGLONG)BRIDGE_CARD && ReportsOf(0x20000)==1 && w.OwedRetired==1);
+
+    /* 2. A flip that the hardware refuses while the link is detached is not accepted and owes nothing. */
+    request.PrimaryAddress.QuadPart=0x21000;
+    CHECK(Flip(&d,&request)==STATUS_NOT_SUPPORTED);
+    CHECK(!w.DesiredOwed && !w.RetireOwed && w.PrimaryAddress.QuadPart==0);
+    Vblank(&d);
+    CHECK(reported==(LONGLONG)BRIDGE_CARD && ReportsOf(0x21000)==0 && w.OwedRetired==1 && w.OwedReported==1);
+
+    /* 3. A flip accepted while the link is detached: the write goes to the blanked plane, which does not latch it (the
+     * pending bit stays set). The plane cannot show it, so the next vblank retires it in software, once. */
+    hardware_result=STATUS_SUCCESS;pending=1;
+    request.PrimaryAddress.QuadPart=0x22000;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.DesiredOwed && plane_card==0x22000);
+    CHECK(displayed==(LONGLONG)BRIDGE_CARD && !w.RetireOwed);
+    Vblank(&d);
+    CHECK(reported==0x22000 && ReportsOf(0x22000)==1);
+    CHECK(!w.DesiredOwed && w.OwedReported==2 && w.OwedRetired==2);
+    for(i=0;i<3;i++)Vblank(&d);
+    CHECK(reported==(LONGLONG)BRIDGE_CARD && ReportsOf(0x22000)==1 && w.OwedRetired==2);
+
+    /* 4. Exactly once across the reconnect. The link commit writer unblanks the plane on the bridge, and the hardware
+     * latches it; then a new flip is latched and retired by the hardware readback. Neither address that was retired in
+     * software is reported again, and no debt is counted twice. */
+    begin_kind=BC250_WRITER_LINK_COMMIT;
+    CHECK(Begin(&d,&generation));
+    plane_blanked=0;
+    CHECK(End(&d,generation,TRUE)==STATUS_SUCCESS && !w.RetireOwed && w.EndPrograms==0);
+    pending=0;displayed=(LONGLONG)BRIDGE_CARD;
+    for(i=0;i<2;i++)Vblank(&d);
+    CHECK(reported==(LONGLONG)BRIDGE_CARD);
+    request.PrimaryAddress.QuadPart=0x23000;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.DesiredOwed && plane_card==0x23000);
+    pending=1;Vblank(&d);
+    CHECK(reported==(LONGLONG)BRIDGE_CARD && w.DesiredOwed);   /* not latched yet: no software retirement */
+    pending=0;displayed=0x23000;
+    for(i=0;i<3;i++)Vblank(&d);
+    CHECK(reported==0x23000 && !w.DesiredOwed && w.OwedReported==3 && w.OwedRetired==2);
+    CHECK(ReportsOf(0x20000)==1 && ReportsOf(0x22000)==1 && !w.RetireOwed);
+
+    /* 5. The D3 flush ends the unprogrammed debt with no report: the OS flushed the flip queue. */
+    Setup(&d,&w,level);begin_kind=BC250_WRITER_LINK_DISABLE;
+    request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x26000;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS && Begin(&d,&generation));
+    hardware_result=STATUS_NOT_SUPPORTED;
+    CHECK(End(&d,generation,TRUE)==STATUS_NOT_SUPPORTED && w.RetireOwed);
+    {const int saved=irq;irq=0;WddmFlipFlushed(&d);irq=saved;}
+    CHECK(!w.RetireOwed && w.FlipFlushes==1);
+    Vblank(&d);
+    CHECK(ReportsOf(0x26000)==0 && w.OwedRetired==0 && w.OwedReported==0);
+
+    /* 6. Control: a writer End that programs the owed flip leaves it to the hardware readback, as before. */
+    Setup(&d,&w,level);begin_kind=BC250_WRITER_LINK_COMMIT;
+    request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x24000;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.DesiredOwed);
+    CHECK(Begin(&d,&generation));
+    CHECK(End(&d,generation,TRUE)==STATUS_SUCCESS && plane_card==0x24000 && w.EndPrograms==1);
+    CHECK(w.DesiredOwed && !w.RetireOwed && w.OwedInvalidated==0);
+    pending=1;Vblank(&d);
+    CHECK(ReportsOf(0x24000)==0 && w.DesiredOwed);
+    pending=0;displayed=0x24000;Vblank(&d);
+    CHECK(ReportsOf(0x24000)==1 && !w.DesiredOwed && w.OwedReported==1 && w.OwedRetired==0);
+
+    /* 7. Control: SetVidPnSourceVisibility(FALSE) blanks the OTG data only (dcn.c DcnSetVisibility), so the plane is not
+     * blanked and still latches. A flip that is not latched yet stays owed, and the hardware readback retires it. */
+    Setup(&d,&w,level);
+    request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x25000;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.DesiredOwed && plane_card==0x25000);
+    pending=1;Vblank(&d);Vblank(&d);
+    CHECK(ReportsOf(0x25000)==0 && reported==0x1000 && w.DesiredOwed && w.OwedRetired==0);
+    pending=0;displayed=0x25000;Vblank(&d);
+    CHECK(ReportsOf(0x25000)==1 && !w.DesiredOwed && w.OwedReported==1);
+    CHECK(w.OwedRetired==0 && !w.RetireOwed && w.OwedInvalidated==0);
 }
 /* A flip on another processor that wins L just before a section: interleave_request at PASSIVE_LEVEL. */
 static void FirstFlip(BC250_DEVICE *d)
@@ -3036,6 +3157,7 @@ int main(void)
         FaultProgram(level);
         Overlap(level);
         Writers(level);
+        OwedAcrossDetach(level);
         WriterRetirement(level);
         WriterRecovery(level);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)

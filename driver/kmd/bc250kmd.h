@@ -1092,6 +1092,8 @@ NTSTATUS DcnWriterBridge(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Gener
 NTSTATUS DcnWriterBridgeRetire(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Generation,
     ULONG ExpectedGeneration, _In_ const BC250_DCN_WRITER_BRIDGE* Bridge);
 int DcnOtgRunning(_In_ const BC250_DEVICE* Device);
+// BD-407: HUBP0_DCHUBP_CNTL.HUBP_BLANK_EN, 1 or 0, and -1 when the read failed. No wait, no log line, any IRQL.
+int DcnPlaneBlanked(_In_ const BC250_DEVICE* Device);
 NTSTATUS DcnFaultBlank(_Inout_ BC250_DEVICE* Device);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-170 r6, the lab flavour's witnesses (docs/design/vidpn-flip.md section 7.2), never in the release flavour. For an

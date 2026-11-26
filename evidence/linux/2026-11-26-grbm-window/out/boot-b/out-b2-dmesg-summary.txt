@@ -1,0 +1,12 @@
+[   46.121184] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_ack: called for non-implemented irq source, src_id=0, ext_id=0
+[   46.126459] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_set: called for non-implemented irq source, src_id=0, ext_id=0
+[   46.126462] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=3 on init
+[   46.126477] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_ack: called for non-implemented irq source, src_id=0, ext_id=0
+[   46.126491] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_set: called for non-implemented irq source, src_id=0, ext_id=0
+[   46.126494] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=4 on init
+[   46.126507] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_ack: called for non-implemented irq source, src_id=0, ext_id=0
+[   46.126521] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_set: called for non-implemented irq source, src_id=0, ext_id=0
+[   46.126524] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=5 on init
+[   46.126537] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_ack: called for non-implemented irq source, src_id=0, ext_id=0
+[   46.126552] amdgpu 0000:01:00.0: [drm] *ERROR* dal_irq_service_dummy_set: called for non-implemented irq source, src_id=0, ext_id=0
+[   46.126555] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=6 on init

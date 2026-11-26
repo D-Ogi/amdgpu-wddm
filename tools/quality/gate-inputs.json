@@ -455,6 +455,11 @@
         "host"
       ]
     },
+    "tpm-crb": {
+      "inputs": [
+        "host"
+      ]
+    },
     "dpm": {
       "inputs": [
         "host"
@@ -1045,6 +1050,11 @@
         "host"
       ]
     },
+    "display-timing-old-describe-surface-only": {
+      "inputs": [
+        "host"
+      ]
+    },
     "display-timing-phase-hz": {
       "inputs": [
         "host"
@@ -1354,6 +1364,21 @@
       ]
     },
     "present-contextless-serve": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "cross-adapter": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "cross-adapter-every-level": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "cross-adapter-truncate": {
       "inputs": [
         "host"
       ]
