@@ -1,0 +1,72 @@
+Cross-adapter resources, tier 1: static reading of the system binaries and a positive control on the development PC
+Date: 2026-11-25. Method: Ghidra and llvm-objdump disassembly, function names from the public PDB (llvm-pdbutil
+publics). No lab run. Offsets are virtual addresses of the image at its preferred base.
+
+1. featurecheck.dll 10.0.26100.8328 (the HLK job "WDDM2.4 Mandatory Caps"), sha256
+   2A91C53A07E01D60D9F34F8D756F1B532A9FD5E5745B80831F9C07555F5FE415 (the copy of the HLK set of t39/hlk-fixes-1)
+   FUN_1800102b0 is FeatureCheck::VerifyWddm24Caps. Gate: MinimumDriverVersion WDDM_2_4. It makes two checks and
+   no other:
+     main.cpp line 0x41  [this+0x1bc] & 0x10   D3DKMT_WDDM_2_0_CAPS.SupportContextlessPresent (BD-403, fact M975)
+     main.cpp line 0x45  [this+0x1b8] & 0x20   D3DKMT_WDDM_1_3_CAPS.SupportCrossAdapterResource
+   The lab output of the hlk-fixes-1 KMD fails at the second check: "SupportCrossAdapterResource required on
+   WDDM2.4+", status 0xc0000001.
+
+2. dxgkrnl.sys 10.0.26100.9974, with dxgkrnl.pdb, sha256 1B852557D70F11541A8452C9FD058EB841557B66712DE47BA5A7D0B531D4DDAA
+   The adapter keeps DXGK_DRIVERCAPS.MemoryManagementCaps (DXGK_VIDMMCAPS) at DXGADAPTER+0x9d4. Bit 4 is
+   CrossAdapterResource (WDK 10.0.26100 shared/d3dkmddi.h:2267), bit 15 CrossAdapterResourceTexture, bit 16
+   CrossAdapterResourceScanout. Every one of the 45 accesses of +0x9d4 was read. The readers of bit 4 are:
+   a. DXGADAPTER::Initialize, 0x1401a52c8 to 0x1401a543b: consistency checks only.
+        - the WDDM 1.3 bits need a WDDMVersion (+0xae0) of 0x1300 or more;
+        - bit 16 needs bits 15 and 4, bit 15 needs bit 4.
+        - IsHybridIntegrated (+0xbb4) is inferred from bit 4 only when the DXGKDDI_INTERFACE_VERSION of the
+          table (r13d, stored at +0x918) is below 0x5011. The driver declares DXGKDDI_INTERFACE_VERSION_WDDM2_9
+          (driver/kmd/wddm.c), so this inference does not run.
+   b. QueryWDDM1_3Caps, 0x1403e1e98: SupportCrossAdapterResource (bit 5) = (+0x9d4 & 0x10) * 2.
+      IsHybridIntegrated comes from +0xbb4, IsHybridDiscrete from +0xbaf; neither is bit 4.
+   c. DxgkQueryAdapterInfoImpl, KMTQAITYPE_CROSSADAPTERRESOURCE_SUPPORT (76), 0x1403687ba: tier 3 when bit 16,
+      tier 2 when bit 15, else tier 1 (copy) when bit 4, else none.
+   d. DXGDEVICE::CreateAllocation, start 0x1401cba50:
+        0x1401cbc43  D3DKMT_CREATEALLOCATION.Flags (+0x38) bit 11 CrossAdapter (0x800) without bit 4:
+                     STATUS_INVALID_PARAMETER. With bit 4, Flags.CreateShared (bit 1) is required, else
+                     STATUS_INVALID_PARAMETER.
+        0x1401cc206  on the copy of each D3DDDI_ALLOCATIONINFO2 (stride 0x60, Flags at +0x20): Stereo is
+                     refused, and Primary is cleared when the adapter has no display (+0x768 == 0).
+        0x1401ccbeb  the allocation is marked cross-adapter.
+        0x1401ce5d2  ADAPTER_RENDER::DdiDescribeAllocation (0x1402bc270) is called for every cross-adapter
+                     allocation, after the driver's CreateAllocation.
+        0x1401ce65f  an answer with Format 0 (D3DDDIFMT_UNKNOWN) and a Height other than 1 is refused with
+                     STATUS_INVALID_PARAMETER; then Width, Height and Format are stored.
+   DXGKARG_CREATEALLOCATION carries no cross-adapter flag (DXGK_CREATEALLOCATIONFLAGS has Resource only), so the
+   describe call is the one place where the kernel driver learns that an allocation is cross-adapter.
+   The driver sets neither DXGK_DRIVERCAPS.HybridDiscrete nor HybridIntegrated (d3dkmddi.h:2447, 2451).
+   Not read: dxgmms2.sys (placement and backing store of a cross-adapter allocation in VidMm).
+
+3. dxgi.dll 10.0.26100.9818, sha256 84BC502F36687BB6C4DD9763D109C6ED7339767ED50A8A70707761563DD3E816
+   FUN_180022c60 keeps the WDDM 1.3 caps at +0x194 and the query 76 tier at +0x20c. Nine sites test bit 5 of
+   +0x194. The one decoded, 0x18004e48c, compares two adapters: both must have the bit. The hybrid proxy strings
+   belong to objects that hold two adapters. Not decoded: the other eight sites, and the WARP, IddCx and second-GPU
+   cases.
+
+4. d3d12core.dll 10.0.26100.9818, sha256 E799A277CB9FA96981A647FA6A26DC252DF7F12E750B199272BF9E3398E06AED
+   FUN_18007f9d8 queries the query 76 tier only when the UMD reports CrossAdapterRowMajorTextureSupported. The
+   UMD reports FALSE (driver/umd/d3d12/engine-ddi/caps.cpp), so the runtime does not gate a cross-adapter heap on
+   the kernel cap through that path.
+
+5. Positive control: the cross-adapter probe on the development PC GPU (a tier 1 driver of another vendor,
+   vendor 0x10DE device 0x2684), Windows 11 26300
+   The probe (D3D12 and D3D11 on one adapter, 20 s bound) reports D3DKMT_WDDM_1_3_CAPS 0x34 (SupportCrossAdapter-
+   Resource 1, IsHybridDiscrete 1), query 76 tier 1, CrossAdapterRowMajorTextureSupported 0, and ends with 0 failed
+   steps: SHARED|SHARED_CROSS_ADAPTER heap, placed ALLOW_CROSS_ADAPTER buffer, upload -> buffer -> readback round
+   trip, the heap shared and opened on a second D3D12 device, and a SHARED|SHARED_CROSS_ADAPTER fence opened by
+   D3D11.
+   The D3D12 debug layer on that driver refuses a committed SHARED_CROSS_ADAPTER buffer: "When
+   D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER is set in CreateCommittedResource, the resource dimension must be
+   D3D12_RESOURCE_DIMENSION_TEXTURE2D". A cross-adapter texture needs ROW_MAJOR, which is tier 2. So tier 1 in
+   D3D12 is a buffer placed in a SHARED|SHARED_CROSS_ADAPTER heap.
+   D3D11 has no API that opens a D3D12 heap. D3D11 sees D3DWDDM1_3DDI_RESOURCE_MISC_CROSS_ADAPTER (0x2000,
+   d3d10umddi.h:392) from the DXGI hybrid proxies, which need two adapters.
+
+Conclusion for one adapter: no reader of bit 4 found in dxgkrnl starts a hybrid path or a second-adapter path.
+With bit 4, the single-adapter difference is that a cross-adapter allocation, which only an application asks for,
+is admitted and described. The witness on the lab is the KMD summary line "describe allocation: ... cross-adapter
+buffer N": N must stay 0 on the desktop and in games.

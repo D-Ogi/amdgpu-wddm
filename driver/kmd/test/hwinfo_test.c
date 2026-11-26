@@ -93,6 +93,7 @@ typedef struct {
     PDEVICE_OBJECT PhysicalDeviceObject;
     FAKE_DXGK Dxgk;
     ULONGLONG VramLength;
+    wchar_t VbiosPartNumber[32];
 } BC250_DEVICE;
 
 /* ACTUAL_HWINFO */
@@ -169,6 +170,7 @@ int main(void)
     CHECK(s && !wcscmp(s, L"Internal"));
     s = FindStringValue(L"HardwareInformation.BiosString");
     CHECK(s && !wcscmp(s, L"113-AMDRBN-003"));
+    CHECK(!wcscmp(dev.VbiosPartNumber, L"113-AMDRBN-003"));   // BD-404: kept for DXGKQAITYPE_GPUVERSION
     CHECK(FindDword(L"HardwareInformation.MemorySize", &mem32) && mem32 == MAXULONG);
     CHECK(FindQword(L"HardwareInformation.qwMemorySize", &mem64) && mem64 == (8ull << 30));
 
@@ -183,6 +185,7 @@ int main(void)
     CHECK(s && !wcscmp(s, L"Navi 10"));
     s = FindStringValue(L"HardwareInformation.BiosString");
     CHECK(s && !wcscmp(s, L"AMDGPU-WDDM"));
+    CHECK(dev.VbiosPartNumber[0] == L'\0');     // no part number: no BIOS version, not the registry's placeholder
 
     // Case 3: Renoir (device 0x1638, from pciidlist), with VBIOS
     ResetReg();
@@ -240,12 +243,20 @@ int main(void)
     HardwareInfoWrite(&dev, NULL, 0);
     CHECK(regCount == 0);
 
-    // Case 8: NULL PDO
+    // Case 8: NULL PDO. The registry is not written; the GPU version cache still follows this start.
     ResetReg();
     dev.PhysicalDeviceObject = NULL;
     openKeyStatus = STATUS_SUCCESS;
-    HardwareInfoWrite(&dev, NULL, 0);
+    BuildFakeVbios(fakeVbios, sizeof(fakeVbios), "113-AMDRBN-003");
+    HardwareInfoWrite(&dev, fakeVbios, sizeof(fakeVbios));
     CHECK(regCount == 0);
+    CHECK(!wcscmp(dev.VbiosPartNumber, L"113-AMDRBN-003"));
+
+    // Case 8b: a part number longer than DXGK_MAX_GPUVERSION_NAME_LENGTH - 1 is cut, and always terminated.
+    BuildFakeVbios(fakeVbios, sizeof(fakeVbios), "113-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    HardwareInfoWrite(&dev, fakeVbios, sizeof(fakeVbios));
+    CHECK(wcslen(dev.VbiosPartNumber) == 31u);
+    CHECK(!wcsncmp(dev.VbiosPartNumber, L"113-0123456789ABCDEFGHIJKLMNOPQ", 31));
 
     // Case 9: VBIOS too short for string area
     ResetReg();

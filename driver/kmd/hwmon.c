@@ -566,3 +566,18 @@ void HwmonRequest(BC250_DEVICE* Device, BC250_ESCAPE_HWMON* Data, ULONG EscapeFl
     Data->Status = BC250_ESCAPE_STATUS_DONE;
     Data->NtStatus = (ULONG)STATUS_SUCCESS;
 }
+
+BOOLEAN HwmonReadFresh(BC250_DEVICE* Device, BC250_HWMON_SNAP* Snapshot)
+{
+    BC250_HWMON_OWNER* owner = &Device->Hwmon;
+    ULONGLONG now;
+    KIRQL irql;
+
+    KeAcquireSpinLock(&owner->SnapLock, &irql);
+    *Snapshot = owner->Snap;
+    KeReleaseSpinLock(&owner->SnapLock, irql);
+    now = KeQueryInterruptTime();
+    // The rule of HwmonRequest's FRESH flag, with its ">=" for a reader in the same clock tick as the sample.
+    return (Snapshot->Flags & BC250_HWMON_FLAG_VALID) != 0 && Snapshot->SampleAt != 0 && now >= Snapshot->SampleAt &&
+           (now - Snapshot->SampleAt) / 10000ull <= BC250_HWMON_FRESH_MS;
+}

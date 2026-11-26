@@ -822,13 +822,18 @@ int main(){
   // The other COMPOSED rows have no sRGB sibling, so there is nothing more to admit.
   for(const auto& row:{std::tuple<DXGI_FORMAT,DXGI_FORMAT,unsigned long>
                       {DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,D3DDDIFMT_A8R8G8B8},
-                      {DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,D3DDDIFMT_A8B8G8R8}}){
+                      {DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,D3DDDIFMT_A8B8G8R8},
+                      // BD-408: the X views of the BGRA8 storage row, for a runtime resource (the HLK FlipQueue
+                      // writer's D3D9 X8R8G8B8 texture): LB7A A8R8G8B8 under a record of the X format itself.
+                      {DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_FORMAT_B8G8R8X8_UNORM,D3DDDIFMT_A8R8G8B8},
+                      {DXGI_FORMAT_B8G8R8X8_UNORM_SRGB,DXGI_FORMAT_B8G8R8X8_UNORM_SRGB,D3DDDIFMT_A8R8G8B8}}){
    target.Format=std::get<0>(row);shared_dxgi=std::get<1>(row);surface_format=std::get<2>(row);
    const auto before=shared_created;events.clear();
    {OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZIE");}
    assert(shared_created==before+1);
    {OwnerScope destroy(&owner,memory.allocation);assert(owner.free(&memory)==S_OK && events=="AMZIEVUR");}
   }
+  target.Format=DXGI_FORMAT_B8G8R8X8_TYPELESS;refused(E_NOTIMPL,"shared surface format");
   target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;shared_dxgi=DXGI_FORMAT_B8G8R8A8_UNORM;
   surface_format=D3DDDIFMT_A8R8G8B8;
   s.surface_layout_size=65537;refused(E_INVALIDARG,"shared surface layout");s.surface_layout_size=65536;
@@ -881,8 +886,8 @@ int main(){
   // record for a B8G8R8X8 source (no row has its DXGI number), so the surface goes out as LB7A A8R8G8B8, the A tag
   // of its bytes, under the 12-byte v1 record, without PRIMARY and on video present source 0, and never as a v3
   // record that would name a DXGI format the record's LB7A format does not have. With a runtime resource the same
-  // request is refused by "shared surface format", exactly as before: a shared surface of an application never
-  // has this format.
+  // request is an application's shared surface (BD-408, the HLK FlipQueue writer's D3D9 X8R8G8B8 texture): it gets
+  // the v3 record of the X view over the storage row.
   {
    engine_ddi::MemoryRequest own=s;own.rt_owner={};
    for(const DXGI_FORMAT f:{DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_FORMAT_B8G8R8X8_UNORM_SRGB}){
@@ -897,7 +902,15 @@ int main(){
     assert(owner.last_free_report().driver_surface && owner.last_free_report().surface &&
            owner.last_free_report().stage==FreeStage::Done);
     driver_surface_request=false;
-    refused(E_NOTIMPL,"shared surface format");
+    // BD-408: with a runtime resource the same request is an application's shared surface of an X view. It gets the
+    // v3 record of the X format over LB7A A8R8G8B8 (the record row), not the copy surface's form above.
+    shared_dxgi=f;
+    {
+     const auto app_own=own_shared_surfaces,app_wire=shared_created;events.clear();
+     {OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZIE");}
+     assert(shared_created==app_wire+1 && own_shared_surfaces==app_own);
+     {OwnerScope destroy(&owner,memory.allocation);assert(owner.free(&memory)==S_OK && events=="AMZIEVUR");}
+    }
    }
    // The typeless family of B8G8R8X8 has no surface for the driver's own request either.
    target.Format=DXGI_FORMAT_B8G8R8X8_TYPELESS;driver_surface_request=true;

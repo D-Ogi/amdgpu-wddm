@@ -837,10 +837,48 @@ void scanout_primary() {
     mip.TexelHeight=1200;
     CHECK(trailerWidth==1920 && trailerHeight==1200 && trailerFlags==BC250_SCANOUT_CAPS_DIRECT_FLIP && !trailerFail);
 }
+// The split of convert_runtime_resource (record_may_be_opened): a create whose record an opener can reach is
+// written by the contract, every other create by this shell. One case per side, and the side is the only
+// difference between them: the same 512x512 BGRA8 texture with D3D11_RESOURCE_MISC_TILED, once shared and
+// once private. Tiled is outside BC250_SHARED_MISC_MASK, and this driver reports tiled resources tier 3, so
+// the runtime can send it (BD-419 holds the separate question of a linear record for a tiled resource).
+void opened_record_split() {
+    D3D11DDIARG_CREATERESOURCE desc{};
+    D3D10DDI_MIPINFO mip{}; mip.TexelWidth=512; mip.TexelHeight=512; mip.TexelDepth=1;
+    desc.pMipInfoList=&mip; desc.MipLevels=desc.ArraySize=1; desc.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D;
+    desc.SampleDesc.Count=1; desc.Usage=D3D10_DDI_USAGE_DEFAULT; desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+    desc.BindFlags=D3D10_DDI_BIND_SHADER_RESOURCE;
+    int runtimeResource=0;
+    RuntimeSurfaceRequest request{}; D3D11_TEXTURE2D_DESC1 texture{};
+    const auto convert=[&]{ request={}; texture={};
+        return convert_runtime_resource(desc,&runtimeResource,request,texture,nullptr); };
+
+    // Private and tiled: this shell writes the record, the create succeeds, and the record carries the flag.
+    desc.MiscFlags=D3DWDDM1_3DDI_RESOURCE_MISC_TILED;
+    CHECK(convert()==S_OK && !record_may_be_opened(request) && !request.shared && !request.primary &&
+          !request.displayable && request.texture.Magic==BC250_SURFACE_RESOURCE_MAGIC &&
+          request.texture.MiscFlags==UINT(D3D11_RESOURCE_MISC_TILED) &&
+          (request.texture.MiscFlags&~BC250_SHARED_MISC_MASK)!=0);
+
+    // The same create, shared: the contract refuses a record it would have to hand to an opener, so the
+    // create is refused here and no record with that flag ever reaches another shell.
+    desc.MiscFlags=D3DWDDM1_3DDI_RESOURCE_MISC_TILED|D3D10_DDI_RESOURCE_MISC_SHARED;
+    CHECK(convert()==E_INVALIDARG);
+
+    // Shared without the flag still succeeds, so the refusal above is the flag and not the sharing, and the
+    // contract's writer produces the record this shell used to write itself.
+    desc.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED;
+    CHECK(convert()==S_OK && record_may_be_opened(request) && request.shared && request.texture.Shared==1 &&
+          !request.texture.Access && request.texture.Width==512 && request.texture.Height==512 &&
+          request.texture.MipLevels==1 && request.texture.ArraySize==1 && request.texture.SampleCount==1 &&
+          request.texture.MiscFlags==0 && request.texture.BindFlags==UINT(D3D11_BIND_SHADER_RESOURCE) &&
+          request.texture.Version==BC250_SURFACE_RESOURCE_TEXTURE_VERSION);
+}
 void test_wddm2_0_ddi() {
     negotiation();
     direct_flip_rule();
     scanout_primary();
+    opened_record_split();
     planar_views();
     plane_from_view_format();
     device_table();

@@ -31,7 +31,10 @@ $mutations=@{
 $names=if($Mutation -eq 'all'){@($mutations.Keys)}elseif($Mutation){@($Mutation)}else{@('tree')}
 foreach($name in $names){
  $dir=Join-Path $Out $name
- if(Test-Path -LiteralPath $dir){throw "Retained test directory exists: $dir"}
+ # The directory holds only the object files, the mutated source and the executable of this gate, and the build
+ # playbook keeps one -Out for a work tree. A refusal here therefore failed every second build of a tree
+ # (BD-415 lane, 2026-11-26). The name is one of the validated set above, so the removal cannot leave it.
+ if(Test-Path -LiteralPath $dir){Remove-Item -LiteralPath $dir -Recurse -Force}
  New-Item -ItemType Directory -Path $dir | Out-Null
  $source=Join-Path $repo 'driver\kmd\dcn_overlay.c'
  if($name -ne 'tree'){

@@ -2100,6 +2100,15 @@ void DpmLogSummary(BC250_DEVICE* Device)
     DpmLogTune("summary tune", &tune, serial, snap.TuneApplied, snap.FloorTicks, snap.SoftReleases, &snap);
 }
 
+void DpmReadSnapshot(BC250_DEVICE* Device, BC250_DPM_SNAP* Snapshot)
+{
+    BC250_DPM_STATE* s = &Device->Dpm;
+    KIRQL irql;
+    KeAcquireSpinLock(&s->SnapLock, &irql);
+    *Snapshot = s->Snap;
+    KeReleaseSpinLock(&s->SnapLock, irql);
+}
+
 // BC250_ESCAPE_RUN_DPM. Software state only, so NoAdapterSynchronization=1 for both operations.
 // Size (0.7.207, 0.7.215): display.c admits BC250_DPM_ABI3_SIZE, sizeof(BC250_ESCAPE_DPM) (ABI 2) and
 // BC250_DPM_ABI1_SIZE only. With a shorter size nothing past that prefix is read or written: abi2 guards every ABI 2

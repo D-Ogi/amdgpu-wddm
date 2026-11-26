@@ -187,6 +187,17 @@ int main() {
                                            BC250_SHARED_BIND_RENDER_TARGET,owner)==S_OK);
             CHECK(r.surface.format==row.d3dddi && r.texture.Format==uint32_t(row.dxgi));
         }
+        // BD-408: the X views of the BGRA8 storage row. The LB7A format is the storage row's, A8R8G8B8, and the
+        // resource record keeps the X format, so the opener rebuilds the X format and never exposes the fourth byte.
+        for(const DXGI_FORMAT x:{DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_FORMAT_B8G8R8X8_UNORM_SRGB}) {
+            CHECK(r.prepare_shared_surface(624,441,2560,x,1138688,bind,owner)==S_OK);
+            CHECK(r.surface.format==D3DDDIFMT_A8R8G8B8 && r.texture.Format==uint32_t(x) &&
+                  r.args.PrivateDriverDataSize==64 && r.info.PrivateDriverDataSize==32);
+            BC250_SHARED_SURFACE xb{};
+            CHECK(Bc250SharedSurfaceDecode(&r.texture,sizeof(r.texture),&r.surface,sizeof(r.surface),&xb)==
+                  BC250_SHARED_SURFACE_OK && xb.DxgiFormat==uint32_t(x) && xb.D3dDdiFormat==D3DDDIFMT_A8R8G8B8);
+        }
+        CHECK(r.prepare_shared_surface(624,441,2560,DXGI_FORMAT_B8G8R8X8_TYPELESS,1138688,bind,owner)==E_NOTIMPL);
         // Every refusal, each leaving nothing behind: a pitch that is not a multiple of 16 and one below the row,
         // a size that is not page rounded and one that does not cover four-row blocks, an empty and an oversized
         // edge, bind flags outside the mask, and a format no shared surface has.

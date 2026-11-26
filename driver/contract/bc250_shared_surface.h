@@ -43,8 +43,18 @@ extern "C" {
 #define BC250_SHARED_BIND_SHADER_RESOURCE  0x8ul   /* D3D11_BIND_SHADER_RESOURCE */
 #define BC250_SHARED_BIND_RENDER_TARGET    0x20ul  /* D3D11_BIND_RENDER_TARGET */
 #define BC250_SHARED_BIND_UNORDERED_ACCESS 0x80ul  /* D3D11_BIND_UNORDERED_ACCESS */
+/* The video bind flags: a decoder's output and an encoder's input. They do not change a linear layout, so the
+ * record carries them and every reader admits them. The D3D11 engine gives them no Vulkan usage
+ * (driver/umd/dxvk/ddi-resource.cpp, the video bind flags), so its linear image and row pitch stay those of the
+ * other bind flags; the D3D12 open maps them to no resource flag (engine-ddi/shared-resource.h,
+ * opened_resource_flags); the kernel driver reads no bind flag. The ENGINE LAYOUT form admits the same two
+ * (bc250_shared_resource.h, BC250_SR_TEXTURE_BIND_MASK). If an engine gives one of them a usage that changes
+ * the layout, the record pair test fails at its row pitch check (driver/contract/test/record-pair-test.cpp). */
+#define BC250_SHARED_BIND_DECODER          0x200ul /* D3D11_BIND_DECODER */
+#define BC250_SHARED_BIND_VIDEO_ENCODER    0x400ul /* D3D11_BIND_VIDEO_ENCODER */
 #define BC250_SHARED_BIND_MASK (BC250_SHARED_BIND_SHADER_RESOURCE | BC250_SHARED_BIND_RENDER_TARGET | \
-                                BC250_SHARED_BIND_UNORDERED_ACCESS)
+                                BC250_SHARED_BIND_UNORDERED_ACCESS | BC250_SHARED_BIND_DECODER | \
+                                BC250_SHARED_BIND_VIDEO_ENCODER)
 #define BC250_SHARED_MISC_GENERATE_MIPS  0x1ul     /* D3D11_RESOURCE_MISC_GENERATE_MIPS */
 #define BC250_SHARED_MISC_RESOURCE_CLAMP 0x80ul    /* D3D11_RESOURCE_MISC_RESOURCE_CLAMP */
 #define BC250_SHARED_MISC_MASK (BC250_SHARED_MISC_GENERATE_MIPS | BC250_SHARED_MISC_RESOURCE_CLAMP)
@@ -86,6 +96,12 @@ extern "C" {
 #define BC250_SHARED_SURFACE_WHY_FORMAT               "record format"
 #define BC250_SHARED_SURFACE_WHY_ALLOCATION_FORMAT    "allocation format"
 #define BC250_SHARED_SURFACE_WHY_ALLOCATION_GEOMETRY  "allocation geometry"
+/* The two refusals only the bare form below has. */
+#define BC250_SHARED_SURFACE_WHY_BARE_LENGTH          "bare allocation length"
+#define BC250_SHARED_SURFACE_WHY_BARE_TYPE            "bare allocation type"
+
+/* D3DKMDT_GDISURFACE_TEXTURE (d3dkmdt.h): the one GDI surface type that is a GPU texture. */
+#define BC250_SHARED_GDI_TEXTURE 1ul
 
 /* One shared surface, in neither API's terms. The first eight fields are the surface itself; the
  * last three are the record's own policy and the one D3D11 field a D3D11 opener still passes on
@@ -139,6 +155,89 @@ static __inline const AMDGPU_WDDM_SURFACE_FORMAT *Bc250SharedSurfaceFormat(unsig
     return 0;
 }
 
+/* BD-408: the opaque views of a storage row. Each pair is an X format and the A format of the same channel
+ * order and the same encoding: B8G8R8X8_UNORM (88) stores B8G8R8A8_UNORM (87) bytes, and B8G8R8X8_UNORM_SRGB
+ * (93) stores B8G8R8A8_UNORM_SRGB (91) bytes. Returns the A format, or 0 for a format that is not an X view.
+ * The typeless forms (90, 92) are not views of one encoding and stay outside. */
+static __inline unsigned long Bc250SharedSurfaceOpaqueStorage(unsigned long DxgiFormat)
+{
+    if (DxgiFormat == 88ul)
+        return AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM;
+    if (DxgiFormat == 93ul)
+        return AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM_SRGB;
+    return 0;
+}
+
+/* The row of the DXGI format a shared surface record names: the row of Bc250SharedSurfaceFormat, or, for an
+ * X view, the row of the A format that stores its bytes. The encoder, the decoder and the D3D12 shell's create
+ * and open use this lookup. Bc250SharedSurfaceFormat itself is unchanged: composition, the present copy and
+ * scan-out do not see the X views.
+ *   Why an X view of the A8R8G8B8 storage row is sound in another process:
+ *   - The bytes are the same. B8G8R8X8 and B8G8R8A8 have the same channel order and 4 bytes a pixel. Only
+ *     the fourth byte has a different meaning, and its value is undefined in an X format.
+ *   - The allocation record is LB7A A8R8G8B8, a COMPOSED row. The kernel driver reads only that record, so it
+ *     places the surface as it places every A8R8G8B8 type-0 surface. The X8 row (X8R8G8B8, SCANOUT_PRIMARY
+ *     without COMPOSED and without a DXGI number) is not used, so the kernel scan-out rule does not change.
+ *   - The resource record keeps the X format, and the decode returns it. The opener must create its resource
+ *     with that format and never with the A format. Then no view of it can read the undefined fourth byte as
+ *     alpha, in this process or in another one. */
+static __inline const AMDGPU_WDDM_SURFACE_FORMAT *Bc250SharedSurfaceRecordFormat(unsigned long DxgiFormat)
+{
+    const AMDGPU_WDDM_SURFACE_FORMAT *row = Bc250SharedSurfaceFormat(DxgiFormat);
+    const unsigned long storage = Bc250SharedSurfaceOpaqueStorage(DxgiFormat);
+    if (row || !storage)
+        return row;
+    return Bc250SharedSurfaceFormat(storage);
+}
+
+/* The E26R v3 record of a linear surface of one subresource: the fields a surface record fixes, and the
+ * kernel driver's parser as the last check. Both encoders below write their resource record here, so
+ * the record has one writer. Out is written only on success.
+ *
+ * Which records come through here: every record that an opener can reach. A create is shared, a primary or a
+ * displayable surface, so its record leaves the writer's process through the open-resource DDI, and the rules
+ * below are what both shells and the kernel driver then agree on. A create whose record never leaves its
+ * process does not come through here, and its shell writes the same fields itself, because an API admits more
+ * than a shared linear surface may carry: BindFlags outside BC250_SHARED_BIND_MASK and MiscFlags outside
+ * BC250_SHARED_MISC_MASK are refused here, and a D3D11 tiled texture2d carries one of them (BD-419). The
+ * caller states the whole Access word in one call: this function validates the record as a whole, so a bit
+ * that a caller adds to Access after the write is checked by nothing. */
+static __inline int Bc250SharedSurfaceResourceEncode(unsigned long DxgiFormat, unsigned long Width,
+                                                    unsigned long Height, unsigned long BindFlags,
+                                                    unsigned long MiscFlags, unsigned long Shared,
+                                                    unsigned long Access, BC250_SURFACE_RESOURCE_PRIVATE *Out)
+{
+    BC250_SURFACE_RESOURCE_PRIVATE r;
+    int shared = 0, cached = 0;
+    if (!Out || !Width || !Height || Width > BC250_SHARED_MAX_EDGE || Height > BC250_SHARED_MAX_EDGE)
+        return BC250_SHARED_SURFACE_MALFORMED;
+    if ((BindFlags & ~BC250_SHARED_BIND_MASK) || (MiscFlags & ~BC250_SHARED_MISC_MASK))
+        return BC250_SHARED_SURFACE_MALFORMED;
+    if (Shared > 1 || (Access & ~BC250_SURFACE_RESOURCE_ACCESS_MASK))
+        return BC250_SHARED_SURFACE_MALFORMED;
+    r.Magic = BC250_SURFACE_RESOURCE_MAGIC;
+    r.Version = BC250_SURFACE_RESOURCE_TEXTURE_VERSION;
+    r.Shared = Shared;
+    r.Access = Access;
+    r.Width = Width;
+    r.Height = Height;
+    r.MipLevels = 1;
+    r.ArraySize = 1;
+    r.Format = DxgiFormat;
+    r.SampleCount = 1;
+    r.SampleQuality = 0;
+    r.Usage = BC250_SHARED_USAGE_DEFAULT;
+    r.BindFlags = BindFlags;
+    r.CpuAccessFlags = 0;
+    r.MiscFlags = MiscFlags;
+    r.TextureLayout = BC250_SHARED_LAYOUT_UNDEFINED;
+    /* The kernel driver's own parser must admit what we write: it decides the placement from it. */
+    if (!Bc250SurfaceResourcePolicy(&r, (unsigned int)sizeof(r), &shared, &cached))
+        return BC250_SHARED_SURFACE_MALFORMED;
+    *Out = r;
+    return BC250_SHARED_SURFACE_OK;
+}
+
 /* Writes the two records of Surface. The surface is validated exactly as a decode validates it, so
  * a record this function writes is a record Bc250SharedSurfaceDecode admits. */
 static __inline int Bc250SharedSurfaceEncode(const BC250_SHARED_SURFACE *Surface,
@@ -148,22 +247,14 @@ static __inline int Bc250SharedSurfaceEncode(const BC250_SHARED_SURFACE *Surface
     const AMDGPU_WDDM_SURFACE_FORMAT *row;
     BC250_WDDM_ALLOCATION_PRIVATE a;
     BC250_SURFACE_RESOURCE_PRIVATE r;
-    int shared = 0, cached = 0;
+    int status;
     if (!Surface || !Allocation || !Resource)
         return BC250_SHARED_SURFACE_MALFORMED;
-    row = Bc250SharedSurfaceFormat(Surface->DxgiFormat);
+    row = Bc250SharedSurfaceRecordFormat(Surface->DxgiFormat);
     if (!row)
         return BC250_SHARED_SURFACE_FORMAT;
     if (row->d3dddi != (unsigned int)Surface->D3dDdiFormat ||
         row->bytes_per_pixel != (unsigned int)Surface->BytesPerPixel)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (Surface->Width > BC250_SHARED_MAX_EDGE || Surface->Height > BC250_SHARED_MAX_EDGE)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (Surface->BindFlags & ~BC250_SHARED_BIND_MASK)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (Surface->MiscFlags & ~BC250_SHARED_MISC_MASK)
-        return BC250_SHARED_SURFACE_MALFORMED;
-    if (Surface->Shared > 1 || (Surface->Access & ~BC250_SURFACE_RESOURCE_ACCESS_MASK))
         return BC250_SHARED_SURFACE_MALFORMED;
     a.Magic = BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
     a.Version = 1;
@@ -174,27 +265,48 @@ static __inline int Bc250SharedSurfaceEncode(const BC250_SHARED_SURFACE *Surface
     a.Size = Surface->Size;
     if (!Bc250SharedSurfaceGeometry(&a, row->bytes_per_pixel))
         return BC250_SHARED_SURFACE_MALFORMED;
-    r.Magic = BC250_SURFACE_RESOURCE_MAGIC;
-    r.Version = BC250_SURFACE_RESOURCE_TEXTURE_VERSION;
-    r.Shared = Surface->Shared;
-    r.Access = Surface->Access;
-    r.Width = Surface->Width;
-    r.Height = Surface->Height;
-    r.MipLevels = 1;
-    r.ArraySize = 1;
-    r.Format = Surface->DxgiFormat;
-    r.SampleCount = 1;
-    r.SampleQuality = 0;
-    r.Usage = BC250_SHARED_USAGE_DEFAULT;
-    r.BindFlags = Surface->BindFlags;
-    r.CpuAccessFlags = 0;
-    r.MiscFlags = Surface->MiscFlags;
-    r.TextureLayout = BC250_SHARED_LAYOUT_UNDEFINED;
-    /* The kernel driver's own parser must admit what we write: it decides the placement from it. */
-    if (!Bc250SurfaceResourcePolicy(&r, (unsigned int)sizeof(r), &shared, &cached))
-        return BC250_SHARED_SURFACE_MALFORMED;
+    status = Bc250SharedSurfaceResourceEncode(Surface->DxgiFormat, Surface->Width, Surface->Height,
+                                              Surface->BindFlags, Surface->MiscFlags, Surface->Shared,
+                                              Surface->Access, &r);
+    if (status != BC250_SHARED_SURFACE_OK)
+        return status;
     *Allocation = a;
     *Resource = r;
+    return BC250_SHARED_SURFACE_OK;
+}
+
+/* One NV12 surface as the producer's retained image lays it out: two planes in one allocation. */
+typedef struct _BC250_SHARED_NV12 {
+    unsigned long Width, Height, LumaPitch, ChromaPitch, Alignment;
+    unsigned long long LumaOffset, ChromaOffset, Size;
+} BC250_SHARED_NV12;
+
+/* Writes the LB7A v2 record of an NV12 surface. The record is validated by the kernel driver's own check
+ * (Bc250Nv12PrivateValid), so a record this function writes is one the kernel driver admits. The E26R
+ * record of the same surface is Bc250SharedSurfaceResourceEncode with BC250_NV12_DXGI_FORMAT: a producer
+ * knows the description before the image exists, and the plane layout only after. Out is written only on
+ * success. */
+static __inline int Bc250SharedNv12Encode(const BC250_SHARED_NV12 *Surface, BC250_WDDM_NV12_PRIVATE *Out)
+{
+    BC250_WDDM_NV12_PRIVATE n;
+    if (!Surface || !Out)
+        return BC250_SHARED_SURFACE_MALFORMED;
+    n.Reserved = 0;
+    n.Surface.Magic = BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
+    n.Surface.Version = BC250_WDDM_NV12_VERSION;
+    n.Surface.Width = Surface->Width;
+    n.Surface.Height = Surface->Height;
+    n.Surface.Pitch = Surface->LumaPitch;
+    n.Surface.Format = BC250_NV12_D3DDDI_FORMAT;
+    n.Surface.Size = Surface->Size;
+    n.ChromaPitch = Surface->ChromaPitch;
+    n.Layout = BC250_WDDM_NV12_LINEAR;
+    n.SurfaceOffset = Surface->LumaOffset;
+    n.ChromaOffset = Surface->ChromaOffset;
+    n.Alignment = Surface->Alignment;
+    if (!Bc250Nv12PrivateValid(&n, (unsigned int)sizeof(n)))
+        return BC250_SHARED_SURFACE_MALFORMED;
+    *Out = n;
     return BC250_SHARED_SURFACE_OK;
 }
 
@@ -285,7 +397,7 @@ static __inline int Bc250SharedSurfaceDecodeDetail(const void *ResourceData, uns
         /* The row the creator took the LB7A format and pitch from; its pixel size bounds the geometry.
          * A format with no COMPOSED row is "not implemented", which is what both shells report. */
         why = BC250_SHARED_SURFACE_WHY_FORMAT;
-        row = Bc250SharedSurfaceFormat(r.Format);
+        row = Bc250SharedSurfaceRecordFormat(r.Format);
         if (!row) {
             status = BC250_SHARED_SURFACE_FORMAT;
             break;
@@ -347,6 +459,87 @@ static __inline int Bc250SharedSurfaceDecode(const void *ResourceData, unsigned 
                                              BC250_SHARED_SURFACE *Out)
 {
     return Bc250SharedSurfaceDecodeWhy(ResourceData, ResourceBytes, AllocationData, AllocationBytes, Out, 0);
+}
+
+/* BD-253, BD-408: a surface with no resource record. The runtime gives an opener no E26R blob when the
+ * allocation's creator gave it none, and then the LB7A blob is the whole description. Two producers
+ * write such a surface: the kernel driver for a standard GDI surface (GetStandardAllocationDriverData,
+ * 48 bytes: LB7A and the GDI1 trailer), and the compositor's hosted driver for its own surfaces
+ * (32 bytes, LB7A only). A D3D9On12 windowed Present opens the first kind in the D3D12 shell, and a Qt
+ * backing store opens it in the D3D11 shell.
+ *   The description that follows from the blob: the storage format of the LB7A format's COMPOSED row,
+ * one mip, one array slice, one sample, shader resource and render target binding, no misc flags, and
+ * the policy of a shared plain texture (Shared 1, Access 0). Of the GDI types only a GDI texture
+ * (BC250_SHARED_GDI_TEXTURE) is a GPU texture, and the GDI1 Flags and Reserved fields are 0, as the
+ * kernel driver's own parser requires (WddmGdiPrivate). The geometry rule is the one of every other
+ * opened surface. Out is written only on success; Why, when it is given, names the check that decided. */
+static __inline int Bc250SharedSurfaceDecodeBareWhy(const void *AllocationData, unsigned int AllocationBytes,
+                                                    BC250_SHARED_SURFACE *Out, const char **Why)
+{
+    BC250_GDI_PRIVATE blob;
+    const AMDGPU_WDDM_SURFACE_FORMAT *row = 0;
+    BC250_SHARED_SURFACE out;
+    const char *why = BC250_SHARED_SURFACE_WHY_ARGUMENTS;
+    int status = BC250_SHARED_SURFACE_MALFORMED;
+    unsigned int i;
+    const unsigned char *src;
+    unsigned char *dst = (unsigned char *)&blob;
+    for (i = 0; i < (unsigned int)sizeof(blob); ++i)
+        dst[i] = 0;
+    for (;;) {
+        if (!Out || !AllocationData)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_BARE_LENGTH;
+        if (AllocationBytes != (unsigned int)sizeof(BC250_GDI_PRIVATE) &&
+            AllocationBytes != (unsigned int)sizeof(BC250_WDDM_ALLOCATION_PRIVATE))
+            break;
+        /* Byte copies: the blob is the runtime's memory and needs no alignment of ours. */
+        src = (const unsigned char *)AllocationData;
+        for (i = 0; i < AllocationBytes; ++i)
+            dst[i] = src[i];
+        why = BC250_SHARED_SURFACE_WHY_BARE_TYPE;
+        if (AllocationBytes == (unsigned int)sizeof(BC250_GDI_PRIVATE) &&
+            (blob.Magic != BC250_GDI_PRIVATE_MAGIC || blob.Type != BC250_SHARED_GDI_TEXTURE || blob.Flags ||
+             blob.Reserved))
+            break;
+        why = BC250_SHARED_SURFACE_WHY_ALLOCATION_RECORD;
+        if (blob.Surface.Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || blob.Surface.Version != 1)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_ALLOCATION_FORMAT;
+        row = amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi((unsigned int)blob.Surface.Format),
+                                        AMDGPU_WDDM_SURFACE_COMPOSED);
+        if (!row || !row->dxgi) {
+            status = BC250_SHARED_SURFACE_FORMAT;
+            break;
+        }
+        why = BC250_SHARED_SURFACE_WHY_EXTENT;
+        if (!blob.Surface.Width || !blob.Surface.Height || blob.Surface.Width > BC250_SHARED_MAX_EDGE ||
+            blob.Surface.Height > BC250_SHARED_MAX_EDGE)
+            break;
+        why = BC250_SHARED_SURFACE_WHY_ALLOCATION_GEOMETRY;
+        if (!Bc250SharedSurfaceGeometry(&blob.Surface, row->bytes_per_pixel))
+            break;
+        status = BC250_SHARED_SURFACE_OK;
+        why = BC250_SHARED_SURFACE_WHY_OK;
+        break;
+    }
+    if (Why)
+        *Why = why;
+    if (status != BC250_SHARED_SURFACE_OK)
+        return status;
+    out.Width = blob.Surface.Width;
+    out.Height = blob.Surface.Height;
+    out.Pitch = blob.Surface.Pitch;
+    out.DxgiFormat = row->dxgi;
+    out.D3dDdiFormat = blob.Surface.Format;
+    out.BindFlags = BC250_SHARED_BIND_SHADER_RESOURCE | BC250_SHARED_BIND_RENDER_TARGET;
+    out.BytesPerPixel = row->bytes_per_pixel;
+    out.Size = blob.Surface.Size;
+    out.MiscFlags = 0;
+    out.Shared = 1;
+    out.Access = 0;
+    *Out = out;
+    return BC250_SHARED_SURFACE_OK;
 }
 
 #if defined(__cplusplus)

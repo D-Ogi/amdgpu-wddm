@@ -737,8 +737,13 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // A primary keeps the storage column: a primary's D3DDDIFORMAT cannot express an sRGB view, and the
         // SCANOUT_PRIMARY X8 row has no DXGI format at all (dxgi == 0), so Bc250SharedSurfaceFormat would never
         // return it.
+        // BD-408: a shared surface of a runtime resource is looked up by its record row, which also admits the X
+        // views of a storage row (88 and 93 over BGRA8; bc250_shared_surface.h, Bc250SharedSurfaceRecordFormat
+        // says why that is sound). The driver's own copy surface below keeps the composed lookup, so its form
+        // (BD-133) does not change.
         const auto* composed=shared_surface
-            ?Bc250SharedSurfaceFormat(static_cast<unsigned long>(r->Format))
+            ?(driver_surface?Bc250SharedSurfaceFormat(static_cast<unsigned long>(r->Format))
+                            :Bc250SharedSurfaceRecordFormat(static_cast<unsigned long>(r->Format)))
             :amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
                                        AMDGPU_WDDM_SURFACE_COMPOSED);
         // BD-133, the D3D9 back buffer: the Present copy of a B8G8R8X8 source (88, or its sRGB view 93) takes the

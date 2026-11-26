@@ -167,7 +167,8 @@ typedef enum _BC250_WU_END {
     BC250_WU_OPEN = 0,                  /* the writer has not ended */
     BC250_WU_UNBLANK,                   /* the writer's unblank programmed it */
     BC250_WU_END_PROGRAM,               /* End programmed it */
-    BC250_WU_END_REFUSED,               /* End's programming refused it: dropped, counted (OwedInvalidated) */
+    BC250_WU_END_REFUSED,               /* End's programming refused it: counted (OwedInvalidated); an owed one is
+                                         * retired by a software report (BD-407, RetireOwed) */
     BC250_WU_END_FAULT,                 /* End's programming failed, or the OTG was not running: E5 with End's code */
     BC250_WU_SUPERSEDED,                /* a newer deposit replaced it before End */
     BC250_WU_DROPPED,                   /* nothing owed any more: the destroy restore took Desired away, or FAULTING */

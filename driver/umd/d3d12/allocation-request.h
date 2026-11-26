@@ -299,7 +299,8 @@ struct AllocationRequest final {
                                    uint64_t size,uint32_t bindFlags,HANDLE runtimeOwner=nullptr) noexcept {
         blob={};surface={};resource={};texture={};engine_record={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
-        const auto* row=Bc250SharedSurfaceFormat(dxgiFormat);
+        // BD-408: the record row, so an X view (88, 93) gets the LB7A format of its storage row.
+        const auto* row=Bc250SharedSurfaceRecordFormat(dxgiFormat);
         if(!row)return E_NOTIMPL;
         if(!width || width>edge || !height || height>edge || !pitch || (pitch&15))return E_INVALIDARG;
         const uint64_t width4=(uint64_t(width)+3)&~3ull,height4=(uint64_t(height)+3)&~3ull;

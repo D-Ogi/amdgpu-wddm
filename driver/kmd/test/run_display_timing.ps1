@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\bd018",[switch]$AssumePhaseHz,[switch]$OldDescribe60,[switch]$OldDescribeIdentity,[switch]$OldPixelRateFixed,[switch]$OldPowerReturn)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\bd018",[switch]$AssumePhaseHz,[switch]$OldDescribe60,[switch]$OldDescribeIdentity,[switch]$OldDescribeSurfaceOnly,[switch]$OldPixelRateFixed,[switch]$OldPowerReturn)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -77,6 +77,11 @@ $end=[regex]::Match($wddm.Substring($first),'\r?\n}\r?\n')
 if($first -lt 0 -or !$end.Success){throw 'Bc250WddmDescribeAllocation not found in wddm.c'}
 $last=$first+$end.Index+$end.Length
 $describe=$wddm.Substring($first,$last-$first)
+# The cross-adapter route that the function calls first (cross_adapter.h), to its closing brace, compiled before it.
+$routeFirst=$wddm.IndexOf('static BOOLEAN WddmDescribeCrossAdapter(')
+$routeEnd=if($routeFirst -ge 0){[regex]::Match($wddm.Substring($routeFirst),'\r?\n}\r?\n')}
+if($routeFirst -lt 0 -or !$routeEnd.Success){throw 'WddmDescribeCrossAdapter not found in wddm.c'}
+$describe=$wddm.Substring($routeFirst,$routeEnd.Index+$routeEnd.Length)+$describe
 if($OldDescribe60){
     $anchor='pDescribeAllocation->RefreshRate = signal.VSyncFreq;'
     if (!$describe.Contains($anchor)) { throw 'Describe refresh mutation anchor missing' }
@@ -87,6 +92,12 @@ if($OldDescribeIdentity){
     $anchor='(D3DDDI_ROTATION)Bc250RotationValue(Bc250RotationAngle((ULONG)device->Rotation, TRUE));'
     if (!$describe.Contains($anchor)) { throw 'Describe rotation mutation anchor missing' }
     $describe=$describe.Replace($anchor, 'D3DDDI_ROTATION_IDENTITY;')
+}
+if($OldDescribeSurfaceOnly){
+    # The answer before cross-adapter tier 1: every allocation is described as the primary.
+    $anchor='if (WddmDescribeCrossAdapter(hAdapter, object, pDescribeAllocation, &status)) return status;'
+    if (!$describe.Contains($anchor)) { throw 'Describe cross-adapter mutation anchor missing' }
+    $describe=$describe.Replace($anchor, '')
 }
 [IO.File]::WriteAllText((Join-Path $Out 'describe_timing_actual.inc'),$describe)
 $test=Get-Content (Join-Path $PSScriptRoot 'display_timing_test.c') -Raw

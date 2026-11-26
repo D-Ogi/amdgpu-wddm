@@ -198,11 +198,48 @@ HRESULT convert_engine_resource(const D3D11DDIARG_CREATERESOURCE &input,EngineRe
     if (!Bc250SharedResourceWhyOk(*why)) return E_NOTIMPL;
     out=d; return S_OK;
 }
+bool multisampled_present_buffer(const D3D11DDIARG_CREATERESOURCE &s) {
+    if (s.ResourceDimension!=D3D10DDIRESOURCE_TEXTURE2D || !(s.BindFlags&D3D10_DDI_BIND_PRESENT) ||
+        s.SampleDesc.Count<2 ||
+        (s.MiscFlags&(D3D10_DDI_RESOURCE_MISC_SHARED|D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE))) return false;
+    return !s.pPrimaryDesc || (s.pPrimaryDesc->Flags&DXGI_DDI_PRIMARY_OPTIONAL);
+}
+HRESULT convert_multisampled_present_buffer(const D3D11DDIARG_CREATERESOURCE &input,ResourceDescription &out) {
+    if (!multisampled_present_buffer(input)) return E_INVALIDARG;
+    const auto *row=runtime_surface_format(input.Format);
+    if (!row || row->dxgi==AMDGPU_WDDM_DXGI_A8_UNORM) return E_NOTIMPL;
+    // The present flags are the runtime's; the engine gets an ordinary multisampled texture.
+    auto ordinary=input; ordinary.pPrimaryDesc=nullptr;
+    ordinary.BindFlags&=~UINT(D3D10_DDI_BIND_PRESENT);
+    ordinary.MiscFlags&=~UINT(D3D10_DDI_RESOURCE_MISC_DISCARD_ON_PRESENT);
+    ResourceDescription d;
+    HRESULT hr=convert_resource(ordinary,d);
+    if (FAILED(hr)) return hr;
+    // Every resolve samples the buffer (the engine's Blt draws from a multisampled source). Without the bind the engine
+    // adds the usage at the first resolve by moving that one image to new storage, and the next
+    // RotateResourceIdentities then refuses buffers whose usage differs.
+    d.texture2d.BindFlags|=D3D11_BIND_SHADER_RESOURCE;
+    out=std::move(d); return S_OK;
+}
+bool opt_out_multisampled_scanout(const D3D11DDIARG_CREATERESOURCE &s) {
+    if (!s.pPrimaryDesc || s.SampleDesc.Count<2) return false;
+    s.pPrimaryDesc->DriverFlags|=DXGI_DDI_PRIMARY_DRIVER_FLAG_NO_SCANOUT;
+    return true;
+}
 bool engine_layout_open(const D3D10DDIARG_OPENRESOURCE &args) {
     UINT magic=0;
     if (!args.pPrivateDriverData || args.PrivateDriverDataSize<sizeof(magic)) return false;
     std::memcpy(&magic,args.pPrivateDriverData,sizeof(magic));
     return magic==BC250_SHARED_RESOURCE_MAGIC;
+}
+// Which creates hand their E26R record to the contract's writer, and which keep this shell's own write.
+// A shared, primary or displayable create is one an opener can reach: the record leaves this process through
+// the open-resource DDI, to the other shell or to the compositor, so it must satisfy the contract's rules and
+// not only this shell's. Every other create is private, its record never leaves the process, and this shell
+// writes it, because D3D11 admits more here than a shared linear surface may carry: a tiled texture2d is the
+// case that matters, since this driver reports tiled resources tier 3 (BD-419).
+bool record_may_be_opened(const RuntimeSurfaceRequest &request) {
+    return request.shared || request.primary || request.displayable;
 }
 HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE runtimeHandle,
     RuntimeSurfaceRequest &request,D3D11_TEXTURE2D_DESC1 &desc,const ScanoutSource *scanout) {
@@ -249,9 +286,10 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
     // both planes of its retained image before filling the exact LB7A v2 record.
     D3D11_TEXTURE2D_DESC1 result{d.Width,d.Height,d.MipLevels,d.ArraySize,d.Format,d.SampleDesc,
         d.Usage,d.BindFlags,d.CPUAccessFlags,d.MiscFlags,D3D11_TEXTURE_LAYOUT_UNDEFINED};
-    r.texture={BC250_SURFACE_RESOURCE_MAGIC,BC250_SURFACE_RESOURCE_TEXTURE_VERSION,UINT(r.shared),r.primary ? 1u : 0u,
-        result.Width,result.Height,result.MipLevels,result.ArraySize,UINT(result.Format),result.SampleDesc.Count,
-        result.SampleDesc.Quality,UINT(result.Usage),result.BindFlags,result.CPUAccessFlags,result.MiscFlags,UINT(result.TextureLayout)};
+    // The access word is complete before the record is written. The contract's writer checks the record as a
+    // whole, the kernel driver's own parser included, and a bit added to Access after that write would never
+    // be checked by anything.
+    UINT access=r.primary ? 1u : 0u;
     // M15.14 increment 3: a swap-chain buffer asks for scan-out when every clause of scanout-primary.h holds.
     // The LB7A description does not change: its pitch is already the scan-out pitch for a 4-byte row
     // (runtime_surface_pitch rounds a row up to 256 bytes, as bc250_scanout_primary_pitch does), and the
@@ -265,9 +303,19 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
         // admitted one gets SCANOUT | DISPLAYABLE and keeps Access without PRIMARY.
         const ScanoutPrimaryDecision decision=scanout_primary_decide(scanout,r.primary,r.vidpn_source,
             UINT(d.Format),d.Width,d.Height,pitch,mode_width,mode_height,r.displayable);
-        if (decision.admitted) { r.scanout=true; r.texture.Access|=UINT(scanout_primary_record_access(decision)); }
+        if (decision.admitted) { r.scanout=true; access|=UINT(scanout_primary_record_access(decision)); }
         scanout_primary_note(decision,scanout,r.displayable,r.vidpn_source,UINT(d.Format),d.Width,d.Height,pitch,
                              mode_width,mode_height);
+    }
+    if (record_may_be_opened(r)) {
+        if (Bc250SharedSurfaceResourceEncode(UINT(result.Format),result.Width,result.Height,result.BindFlags,
+            result.MiscFlags,r.shared ? 1ul : 0ul,access,&r.texture)!=BC250_SHARED_SURFACE_OK) return E_INVALIDARG;
+    } else {
+        // The same fields the contract fixes, from a description that already holds one subresource, one
+        // sample, the default usage and no CPU access (the create refuses anything else above).
+        r.texture={BC250_SURFACE_RESOURCE_MAGIC,BC250_SURFACE_RESOURCE_TEXTURE_VERSION,UINT(r.shared),access,
+            result.Width,result.Height,result.MipLevels,result.ArraySize,UINT(result.Format),result.SampleDesc.Count,
+            result.SampleDesc.Quality,UINT(result.Usage),result.BindFlags,result.CPUAccessFlags,result.MiscFlags,UINT(result.TextureLayout)};
     }
     request=r; desc=result; return S_OK;
 }
@@ -473,6 +521,30 @@ void open_engine_layout(DeviceOwner &owner,const D3D10DDIARG_OPENRESOURCE &args,
     s.dimension=record.Dimension==BC250_SHARED_RESOURCE_BUFFER ? D3D11DDIRESOURCE_BUFFEREX : D3D10DDIRESOURCE_TEXTURE2D;
     if (auto *log=etw::process_allocation_log()) (void)log->map(runtime_surface_mapping(s));
 }
+// BD-407: a multisampled blt-model buffer is an engine texture. The shell keeps no allocation for it; each Present
+// resolves it into a shadow (ddi-present.cpp). An optional primary descriptor gets NO_SCANOUT, so that DXGI does
+// not flip the buffer. A refusal reports through create_refusal, as every other CreateResource does.
+void create_multisampled_present_buffer(DeviceOwner &owner,const D3D11DDIARG_CREATERESOURCE &desc,DdiResource &s) {
+    ResourceDescription d;
+    HRESULT hr=convert_multisampled_present_buffer(desc,d);
+    ID3D11Texture2D *texture=nullptr;
+    if (SUCCEEDED(hr)) hr=owner.device()->CreateTexture2D(&d.texture2d,d.initial.empty() ? nullptr : d.initial.data(),&texture);
+    if (FAILED(hr) || !texture) {
+        if (texture) texture->Release();
+        static std::atomic_uint notes{8};
+        const auto *m=desc.pMipInfoList;
+        device_life_note(notes,"BC250 BD-407: multisampled present buffer refused: hr=%08X primary=%u format=%u "
+            "samples=%u quality=%u %ux%u bind=%08X misc=%08X thread=%lu\n",unsigned(hr),desc.pPrimaryDesc ? 1u : 0u,
+            unsigned(desc.Format),desc.SampleDesc.Count,desc.SampleDesc.Quality,m ? m->TexelWidth : 0u,
+            m ? m->TexelHeight : 0u,desc.BindFlags,desc.MiscFlags,(unsigned long)GetCurrentThreadId());
+        report_ddi_error(owner,FAILED(hr) ? create_refusal(desc,hr) : D3DDDIERR_DEVICEREMOVED,DdiErrorClass::unsupported);
+        return;
+    }
+    (void)opt_out_multisampled_scanout(desc);
+    s.object=texture; s.dimension=D3D10DDIRESOURCE_TEXTURE2D;
+    s.blt_model_buffer=true; s.resolve_on_present=true;
+    track_engine_memory(owner,s,true);
+}
 SIZE_T APIENTRY size(D3D10DDI_HDEVICE,const D3D11DDIARG_CREATERESOURCE *) { return sizeof(DdiResource); }
 void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
     D3D10DDI_HRESOURCE handle,D3D10DDI_HRTRESOURCE runtimeHandle) {
@@ -484,6 +556,7 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
         if (engine_layout_resource(*desc)) {
             create_engine_layout(owner,*desc,reinterpret_cast<HANDLE>(runtimeHandle.handle),*s); return;
         }
+        if (multisampled_present_buffer(*desc)) { create_multisampled_present_buffer(owner,*desc,*s); return; }
         if (desc->pPrimaryDesc || (desc->BindFlags&D3D10_DDI_BIND_PRESENT) ||
             (desc->MiscFlags&(D3D10_DDI_RESOURCE_MISC_SHARED|D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE))) {
             RuntimeSurfaceRequest request{}; D3D11_TEXTURE2D_DESC1 texture{};
@@ -505,6 +578,8 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
                     OutputDebugStringA(text);
                     amdgpu_wddm_log::print("%s",text);   // BD-253: also in the game log
                 }
+                // BD-407: a multisampled front buffer or proxy opts out of scan-out with its DXGI_DDI_ERR_UNSUPPORTED.
+                (void)opt_out_multisampled_scanout(*desc);
                 report_ddi_error(owner,create_refusal(*desc,hr),DdiErrorClass::unsupported); return;
             }
             RuntimeSurface *surface=nullptr;

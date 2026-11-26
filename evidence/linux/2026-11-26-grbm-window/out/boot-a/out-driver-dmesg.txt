@@ -1,0 +1,45 @@
+[    0.318137] ACPI: bus type drm_connector registered
+[    0.577146] [drm] Initialized simpledrm 1.0.0 for simple-framebuffer.0 on minor 0
+[    0.587001] simple-framebuffer simple-framebuffer.0: [drm] fb0: simpledrmdrmfb frame buffer device
+[   41.389597] amdgpu: Virtual CRAT table created for CPU
+[   41.389625] amdgpu: Topology: Add CPU node
+[   41.389777] amdgpu 0000:01:00.0: amdgpu: initializing kernel modesetting (CYAN_SKILLFISH 0x1002:0x13FE 0x1022:0x0000 0x00).
+[   41.389794] amdgpu 0000:01:00.0: amdgpu: register mmio base: 0xFE800000
+[   41.389796] amdgpu 0000:01:00.0: amdgpu: register mmio size: 524288
+[   41.402691] amdgpu 0000:01:00.0: amdgpu: detected ip block number 0 <common_v1_0_0> (nv_common)
+[   41.402701] amdgpu 0000:01:00.0: amdgpu: detected ip block number 1 <gmc_v10_0_0> (gmc_v10_0)
+[   41.402705] amdgpu 0000:01:00.0: amdgpu: detected ip block number 2 <ih_v5_0_0> (navi10_ih)
+[   41.402709] amdgpu 0000:01:00.0: amdgpu: detected ip block number 3 <psp_v11_0_8> (psp)
+[   41.402713] amdgpu 0000:01:00.0: amdgpu: detected ip block number 4 <smu_v11_0_0> (smu)
+[   41.402717] amdgpu 0000:01:00.0: amdgpu: detected ip block number 5 <dce_v1_0_0> (dm)
+[   41.402721] amdgpu 0000:01:00.0: amdgpu: detected ip block number 6 <gfx_v10_0_0> (gfx_v10_0)
+[   41.402725] amdgpu 0000:01:00.0: amdgpu: detected ip block number 7 <sdma_v5_0_0> (sdma_v5_0)
+[   41.402747] amdgpu 0000:01:00.0: amdgpu: Fetched VBIOS from VFCT
+[   41.402752] amdgpu: ATOM BIOS: 113-AMDRBN-003
+[   41.419664] amdgpu 0000:01:00.0: vgaarb: deactivate vga console
+[   41.419670] amdgpu 0000:01:00.0: amdgpu: Trusted Memory Zone (TMZ) feature disabled as experimental (default)
+[   41.419714] amdgpu 0000:01:00.0: amdgpu: vm size is 262144 GB, 4 levels, block size is 9-bit, fragment size is 9-bit
+[   41.419725] amdgpu 0000:01:00.0: amdgpu: GART: 512M 0x0000000000000000 - 0x000000001FFFFFFF
+[   41.419739] [drm] Detected VRAM RAM=8192M, BAR=8192M
+[   41.419741] [drm] RAM width 1024bits UNKNOWN
+[   41.420068] amdgpu 0000:01:00.0: amdgpu: amdgpu: 8192M of VRAM memory ready
+[   41.420071] amdgpu 0000:01:00.0: amdgpu: amdgpu: 3834M of GTT memory ready.
+[   41.420104] [drm] GART: num cpu pages 131072, num gpu pages 131072
+[   41.420262] [drm] PCIE GART of 512M enabled (table at 0x000000F5FFE00000).
+[   41.442175] amdgpu 0000:01:00.0: amdgpu: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+[   41.442630] amdgpu 0000:01:00.0: amdgpu: failed to load ucode SDMA0(0x1) 
+[   41.442637] amdgpu 0000:01:00.0: amdgpu: psp gfx command LOAD_IP_FW(0x6) failed and response status is (0xFFFF0008)
+[   41.442863] amdgpu 0000:01:00.0: amdgpu: failed to load ucode SDMA1(0x2) 
+[   41.442869] amdgpu 0000:01:00.0: amdgpu: psp gfx command LOAD_IP_FW(0x6) failed and response status is (0xFFFF0008)
+[   41.443094] amdgpu 0000:01:00.0: amdgpu: failed to load ucode CP_CE(0xC) 
+[   41.443100] amdgpu 0000:01:00.0: amdgpu: psp gfx command LOAD_IP_FW(0x6) failed and response status is (0xFFFF0008)
+[   41.443324] amdgpu 0000:01:00.0: amdgpu: failed to load ucode CP_PFP(0xD) 
+[   41.443330] amdgpu 0000:01:00.0: amdgpu: psp gfx command LOAD_IP_FW(0x6) failed and response status is (0xFFFF0008)
+[   41.443557] amdgpu 0000:01:00.0: amdgpu: failed to load ucode CP_ME(0xE) 
+[   41.443563] amdgpu 0000:01:00.0: amdgpu: psp gfx command LOAD_IP_FW(0x6) failed and response status is (0xFFFF0008)
+[   41.443788] amdgpu 0000:01:00.0: amdgpu: failed to load ucode CP_MEC1(0x1A) 
+[   41.443794] amdgpu 0000:01:00.0: amdgpu: psp gfx command LOAD_IP_FW(0x6) failed and response status is (0xFFFF0008)
+[   41.444130] amdgpu 0000:01:00.0: amdgpu: failed to load ucode CP_MEC2(0x1C) 
+[   41.444136] amdgpu 0000:01:00.0: amdgpu: psp gfx command LOAD_IP_FW(0x6) failed and response status is (0xFFFF0008)
+[   41.444472] amdgpu 0000:01:00.0: amdgpu: failed to load ucode RLC_G(0x30) 
+[   41.444478] amdgpu 0000:01:00.0: amdgpu: psp gfx command LOAD_IP_FW(0x6) failed and response status is (0xFFFF0008)

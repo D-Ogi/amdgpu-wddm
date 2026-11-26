@@ -23,11 +23,16 @@ struct VideoFormatRow {
 // the two planes. P010 uses 16-bit plane views; YUY2 uses an RGBA8 packed-pair image.
 // This table is a policy ceiling, intersected with the engine's directional query.
 // AYUV, Y210, Y410 and P016 are not in the table: no host or lab check of them exists.
+// B8G8R8X8_UNORM (BD-409): the HLK workload dxvp.exe asks CheckVideoProcessorFormat for its OUTPUT bit before it
+// creates the processor, and stops with no GPU work when the bit is clear. The engine stores it as the BGRA8 image
+// with the alpha channel read as one, so a blit into it is the B8G8R8A8 blit; the engine's own directional query
+// still decides each direction.
 inline constexpr VideoFormatRow kVideoFormats[]={
     {DXGI_FORMAT_NV12,true,true,true},
     {DXGI_FORMAT_P010,true,true,true},
     {DXGI_FORMAT_YUY2,true,true,true},
     {DXGI_FORMAT_B8G8R8A8_UNORM,true,true,false},
+    {DXGI_FORMAT_B8G8R8X8_UNORM,true,true,false},
     {DXGI_FORMAT_R8G8B8A8_UNORM,true,true,false},
     {DXGI_FORMAT_R10G10B10A2_UNORM,true,true,false},
 };

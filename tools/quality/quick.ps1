@@ -244,6 +244,10 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  Check 'repack-notes' { & pwsh -NoProfile -File "$repo\tools\release\test-repack-notes.ps1" -Out (New-Item -ItemType Directory -Force "$Out\repack-notes").FullName }
  # The release gates read the commit that the package names: a dirty tree, or one that changes during a run, stops build-release.ps1 (BD-263).
  Check 'tree-state' { & pwsh -NoProfile -File "$repo\tools\release\test-tree-state.ps1" -Out (New-Item -ItemType Directory -Force "$Out\tree-state").FullName }
+ # The rules of the function that gives a build of one row the user-mode tree of its release set. With its git
+ # fixtures it takes 2.14 s alone and 15.05 s in the full uncached suite of a kmd-rel build (2026-11-26), which is
+ # 8.4 per cent of the 180 s of the manifest, so it needs no deadline of its own.
+ Check 'umd-gate' { & pwsh -NoProfile -File "$repo\tools\release\test-umd-gate.ps1" -Root $Workspace -Out (New-Item -ItemType Directory -Force "$Out\umd-gate").FullName }
  # Its deadline is 1200 s in gate-inputs.json (BD-316). 42 tests: 494 s in a quick Full of 2026-11-05 19:07Z, and two
  # stops at the old 600 s in the full uncached gates of build-release.ps1 the same evening (19:50Z and 20:46Z),
  # with the suite not finished. 1200 s is 2.4x the quick Full run.
@@ -602,6 +606,11 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # Its deadline is 900 s in gate-inputs.json: 144 s in the tester.39 rc1 package, 80 per cent of the old 180 s, and
  # a stop at 180 s in the release flavour of the rc2 package, which ran beside the lab flavour (BD-382).
  Check 'overlay-group-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group-controls" -Mutation all }
+ # It runs the overlay runner three times in one output directory, so a refusal of a directory that the runner
+ # made itself cannot come back. 8.72 s for the three runs alone and 27.03 s in the full uncached suite of a
+ # kmd-rel build (2026-11-26), which is 15 per cent of the 180 s of the manifest, so it needs no deadline of its
+ # own in gate-inputs.json.
+ Check 'overlay-group-rerun' { & pwsh -NoProfile -File "$repo\driver\kmd\test\test_run_dcn_overlay.ps1" -Root $Workspace -Out "$Out\overlay-group-rerun" }
  Check 'dc-types' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dc_types.ps1" -Root $Workspace -Out "$Out\dc-types" }
  # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest (BD-357). In the full uncached suite of
  # the tester.39 package run of 2026-11-24 09:15Z, beside other work on the development PC, it took 94.41 s, 52 per cent of 180 s.
@@ -619,9 +628,16 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # an independent pixel oracle, plus the shipped asset's own self-check and its size budget.
  Check 'boot-logo' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_boot_logo.ps1" -Root $Workspace -Out "$Out\boot-logo" -Kits "$Kits" }
  Check 'gpu-clock' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gpu_clock.ps1" -Root $Workspace -Out "$Out\gpu-clock" -Kits "$Kits" }
+ # BD-404: the performance data of QueryAdapterInfo (perf_data.h): the input words, the units, the main fan, the names.
+ Check 'perf-data' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_perf_data.ps1" -Root $Workspace -Out "$Out\perf-data" -Kits "$Kits" }
  # The installer owns version mapping; KMD must not rewrite OS device properties.
  Check 'driver-version' { & powershell -NoProfile -File "$repo\tools\release\test-version-identity.ps1" }
  Check 'umd-app-settings' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-app-settings.ps1" -OutputDir "$Out\umd-app-settings" }
+ # G1 (2026-11-25): host runners of tools\build that nothing ran. They need no DXVK source and take 5-22 s each.
+ Check 'shared-resource-contract-x64' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-shared-resource-contract.ps1" -OutputDir "$Out\shared-resource-contract-x64" -Arch x64; if($LASTEXITCODE){throw "exit $LASTEXITCODE"} }
+ Check 'shared-resource-contract-x86' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-shared-resource-contract.ps1" -OutputDir "$Out\shared-resource-contract-x86" -Arch x86; if($LASTEXITCODE){throw "exit $LASTEXITCODE"} }
+ Check 'umd-domain' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-domain.ps1" -OutputDir "$Out\umd-domain"; if($LASTEXITCODE){throw "exit $LASTEXITCODE"} }
+ Check 'umd-runtime-bridge' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-runtime-bridge.ps1" -OutputDir "$Out\umd-runtime-bridge"; if($LASTEXITCODE){throw "exit $LASTEXITCODE"} }
  # The encoder MFT's source-against-sweep checks: every deblocking schedule the source admits still has a case
  # in tests\sweep.ps1 that holds it to the inbox decoder. The sweep itself needs a GPU and is not in this list;
  # this gate needs nothing but the files, and it is what catches a shape that loses its case when the default moves.
@@ -691,6 +707,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
  Check 'ddi-error-policy' { & python "$repo\tools\quality\ddi_error_policy.py" --sources "$repo\driver\umd\dxvk" --reference "$Workspace\ref\ddi-display\d3d10umddi.md" }
  Check 'ddi-error-policy-mutants' { & python "$repo\tools\quality\ddi_error_policy_mutants.py" --sources "$repo\driver\umd\dxvk" --reference "$Workspace\ref\ddi-display\d3d10umddi.md" }
  Check 'ddi-table-versions' { & python "$repo\tools\quality\ddi_table_versions.py" --sources "$repo\driver\umd\dxvk" --kits "$Kits" }
+ # The record pair registry (driver/contract/record-pairs.json): every RULE text of the record pair test is still in
+ # its file, every function that writes a record magic is a listed producer site, every producer and consumer pair
+ # has its rows, its test or its reason. The self-test plants each defect and must see it fail.
+ Check 'record-pairs' { & python -B "$repo\tools\quality\record_pairs.py" --self-test; if($LASTEXITCODE){throw 'record_pairs self-test failed'}; & python -B "$repo\tools\quality\record_pairs.py" --root $repo }
  Check 'flip-rule-names' { & python "$repo\tools\quality\flip_rule_names.py" --router "$repo\driver\umd\router\front-direct-flip.h" --log "$repo\driver\umd\router\front-flip-log.h" --document "$repo\docs\design\direct-flip-handshake.md" }
  Check 'gfx-copy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gfx_copy.ps1" -Root $Workspace -Out "$Out\gfx-copy" -Kits "$Kits" }
  Check 'gfx-blt' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gfx_blt.ps1" -Root $Workspace -Out "$Out\gfx-blt" -Kits "$Kits" }
@@ -821,6 +841,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='flip-state';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   # Its deadline is 600 s in gate-inputs.json: 22 s to 92.3 s on 2026-10-28, half of the old 180 s under load.
   @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
+  # The same machine as a command-sequence property (RapidCheck): a model of the facts a caller can observe and
+  # the real decision functions, driven by one sequence of generated events, with the invariants checked after
+  # every command. run_flip_state.ps1 above covers each edge once; this covers the orders between them.
+  @{n='flip-state-properties';s='driver\kmd\test\run_flip_state_property.ps1';a=@('-Root',$Workspace)}
   # BD-307: the PresentId of plane 0 for the MPO3 flip DDI and the plane rule of its Check, with 13 controls.
   @{n='mpo3-track';s='driver\kmd\test\run_mpo3_track.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='mpo3-track-controls';s='driver\kmd\test\run_mpo3_track.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
@@ -835,6 +859,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='display-timing';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace)}
   @{n='display-timing-old-describe';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldDescribe60');Fails=$true}
   @{n='display-timing-old-describe-rotation';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldDescribeIdentity');Fails=$true}
+  @{n='display-timing-old-describe-surface-only';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldDescribeSurfaceOnly');Fails=$true}
   @{n='display-timing-phase-hz';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-AssumePhaseHz');Fails=$true}
   @{n='display-timing-old-power-return';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldPowerReturn');Fails=$true}
   @{n='gart-retained';s='driver\kmd\test\run_gart_retained.ps1';a=@('-Root',$Workspace)}
@@ -933,6 +958,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
 @{n='start-health-no-output-releases-requests';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoOutputReleasesRequests');Fails=$true}
   @{n='gfx-pipeline';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly')}
   @{n='vmid-pool';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace)}
+  # BD-410: the OPM answers and the DxgkDdiQueryInterface log rule; each control must fail by a FAIL line.
+  @{n='opm-policy';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace)}
   @{n='keep-prune';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace)}
   @{n='keep-prune-ignore-order';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace,'-IgnoreOrder');Fails=$true}
   @{n='log-rate';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace)}
@@ -949,6 +976,14 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='wddm-level';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace)}
   @{n='wddm-level-no-clamp';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace,'-NoClamp');Fails=$true}
   @{n='wddm-level-with-2-3';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace,'-WithLevel23');Fails=$true}
+  # BD-403: SupportContextlessPresent from 2.4, and a DxgkDdiPresent call without a context (present_contextless.h).
+  @{n='present-contextless';s='driver\kmd\test\run_present_contextless.ps1';a=@('-Root',$Workspace)}
+  @{n='present-contextless-every-level';s='driver\kmd\test\run_present_contextless.ps1';a=@('-Root',$Workspace,'-EveryLevel');Fails=$true}
+  @{n='present-contextless-serve';s='driver\kmd\test\run_present_contextless.ps1';a=@('-Root',$Workspace,'-ServeWithoutContext');Fails=$true}
+  # Cross-adapter tier 1: CrossAdapterResource from 2.4, and the DescribeAllocation answer of a buffer (cross_adapter.h).
+  @{n='cross-adapter';s='driver\kmd\test\run_cross_adapter.ps1';a=@('-Root',$Workspace)}
+  @{n='cross-adapter-every-level';s='driver\kmd\test\run_cross_adapter.ps1';a=@('-Root',$Workspace,'-EveryLevel');Fails=$true}
+  @{n='cross-adapter-truncate';s='driver\kmd\test\run_cross_adapter.ps1';a=@('-Root',$Workspace,'-Truncate');Fails=$true}
   @{n='hang-recovery';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace)}
   @{n='hang-recovery-no-fence-guard';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreFenceGuard');Fails=$true}
   @{n='hang-recovery-any-vmid';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreVmidGuard');Fails=$true}
@@ -1015,6 +1050,12 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='submit-watchdog-rearm-outside-lock';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-RearmOutsideLock');Fails=$true;Step='source checks'}
   @{n='vmid-pool-ignore-retirement';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreRetirement');Fails=$true}
   @{n='vmid-pool-ignore-compute-ring';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreComputeRing');Fails=$true}
+  @{n='opm-policy-any-guid';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','any-guid');Fails=$true}
+  @{n='opm-policy-any-version';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','any-version');Fails=$true}
+  @{n='opm-policy-any-size';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','any-size');Fails=$true}
+  @{n='opm-policy-stale-handle';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','stale-handle');Fails=$true}
+  @{n='opm-policy-refuse-success';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','refuse-success');Fails=$true}
+  @{n='opm-policy-log-every';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','log-every');Fails=$true}
   # The gfx-pipeline controls check their own pinned CHECK failure counts (run_gfx_pipeline.ps1) and exit 0 when the
   # control failed as required; a crash, a deadline or a build error fails them.
   @{n='gfx-pipeline-idle-only';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-IdleOnlyPresent')}
@@ -1074,6 +1115,14 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='hwmon-debt-settle-gated';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','debt-settle-gated');Fails=$true}
   @{n='smu-metrics';s='driver\shim\test\run_smu_metrics.ps1';a=@('-Kits',$Kits)}
   @{n='contract-caps';s='driver\contract\test\run.ps1';a=@('-Kits',$Kits,'-Mesa',"$Workspace\ref\mesa")}
+  # The record pair test: every producer of a shared-surface record against every consumer, both architectures.
+  @{n='record-pairs-x64';s='driver\contract\test\run_record_pairs.ps1';a=@('-Root',$Workspace,'-Arch','x64')}
+  @{n='record-pairs-x86';s='driver\contract\test\run_record_pairs.ps1';a=@('-Root',$Workspace,'-Arch','x86')}
+  # The generative gate of the same records (RapidCheck): the rules of the record layout as properties over
+  # generated surfaces. The matrix above finds what the author of the matrix listed; a property finds the case
+  # nobody listed, and shrinks it. The seed is fixed in the runner, so a failure in this log is reproducible.
+  @{n='record-properties-x64';s='driver\contract\test\run_record_properties.ps1';a=@('-Root',$Workspace,'-Arch','x64')}
+  @{n='record-properties-x86';s='driver\contract\test\run_record_properties.ps1';a=@('-Root',$Workspace,'-Arch','x86')}
  )
  # Every runner is in this file, and every runner tests the tree it lives in: one that took its sources from
  # -Root\bc250-win tested the main checkout from any worktree, which is how three suites rotted unseen (BD-053).
@@ -1085,7 +1134,25 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   $foreign=@($runners | Where-Object { (Get-Content -LiteralPath (Join-Path $tree $_) -Raw) -match 'bc250-win' })
   if($missing){throw "not in tools\quality\quick.ps1: $($missing -join ', ')"}
   if($foreign){throw "take their sources from -Root\bc250-win instead of their own tree: $($foreign -join ', ')"}
-  "$($runners.Count) runners, all gated, all self-located"
+  # The host test runners of tools\build (G1, 2026-11-25: twelve of them were referenced by nothing). Each one is named
+  # by this file, by another tools\build script or by a release manifest, or it is in tools\quality\host-runner-allow.json
+  # with an owner and a reason. An entry for a runner that is referenced, or that is gone, is stale and fails too.
+  $builds=@(Get-ChildItem "$tree\tools\build\*.ps1")
+  $buildText=@{}; foreach($b in $builds){ $buildText[$b.Name]=Get-Content -LiteralPath $b.FullName -Raw }
+  $manifests=(@(Get-ChildItem "$tree\tools\release\*.json") | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
+  $allow=@((Get-Content -LiteralPath "$tree\tools\quality\host-runner-allow.json" -Raw | ConvertFrom-Json).runners)
+  $bad=@($allow | Where-Object { !$_.runner -or !$_.owner -or !$_.reason -or !(Test-Path -LiteralPath "$tree\tools\build\$($_.runner)") } | ForEach-Object { "$($_.runner)" })
+  $orphans=@(); $stale=@()
+  foreach($r in @($builds | Where-Object { $_.Name -like 'test-*.ps1' })) {
+   $used=$self.Contains($r.Name) -or $manifests.Contains($r.BaseName) -or
+     [bool]@($builds | Where-Object { $_.Name -ne $r.Name -and $buildText[$_.Name].Contains($r.BaseName) }).Count
+   $listed=[bool]@($allow | Where-Object { $_.runner -eq $r.Name }).Count
+   if(!$used -and !$listed){$orphans+=$r.Name}
+   if($used -and $listed){$stale+=$r.Name}
+  }
+  if($orphans){throw "tools\build runners that nothing runs (gate them, or list them in host-runner-allow.json with an owner): $($orphans -join ', ')"}
+  if($stale -or $bad){throw "host-runner-allow.json entries that are referenced, gone or without an owner and a reason: $(($stale+$bad) -join ', ')"}
+  "$($runners.Count) runners, all gated, all self-located; $(@($builds | Where-Object { $_.Name -like 'test-*.ps1' }).Count) tools\build runners, $($allow.Count) allowed unreferenced"
  }
  foreach($suite in $suites) {
   $gateJobs+=@{name=$suite.n;runner=$suite.s;arguments=@($suite.a);fails=[bool]$suite.Fails;step=$suite.Step}

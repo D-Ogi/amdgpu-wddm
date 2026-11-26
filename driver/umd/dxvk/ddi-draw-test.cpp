@@ -290,7 +290,9 @@ void test_wddm2_2_ddi();
 void test_wddm2_6_ddi();
 void test_present_batches();
 void test_video_ddi();
+void test_record_golden();
 int main() {
+    test_record_golden();
     test_video_ddi();
     test_wddm2_0_ddi();
     test_wddm2_2_ddi();
@@ -1387,6 +1389,67 @@ int main() {
     }
     runtimeDesc.SampleDesc.Count=4;
     if (convert_runtime_resource(runtimeDesc,&rotateIdentity[0],request,importedDesc)!=E_NOTIMPL) fail(__LINE__);
+    // BD-407 (HLK DXGI FSPresentMS, tester.39 rc3): CreateSwapChain of a DISCARD chain with 2 or 8 samples failed with
+    // E_OUTOFMEMORY in all 16 cases. Its back buffer (PRESENT, no primary descriptor, not shared) took the LINEAR
+    // SURFACE path, which holds one sample, and create_refusal reported the refusal as E_OUTOFMEMORY. Such a buffer is
+    // an engine texture with the same samples, and a sampled one, because every Present resolves it.
+    {
+        D3D10DDI_MIPINFO msMip{}; msMip.TexelWidth=1280; msMip.TexelHeight=720; msMip.TexelDepth=1;
+        D3D11DDIARG_CREATERESOURCE ms{}; ms.pMipInfoList=&msMip; ms.MipLevels=ms.ArraySize=1;
+        ms.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D; ms.Usage=D3D10_DDI_USAGE_DEFAULT;
+        ms.BindFlags=D3D10_DDI_BIND_PRESENT|D3D10_DDI_BIND_RENDER_TARGET;
+        ms.MiscFlags=D3D10_DDI_RESOURCE_MISC_DISCARD_ON_PRESENT;
+        for (const DXGI_FORMAT f:{DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,DXGI_FORMAT_R10G10B10A2_UNORM,
+                                  DXGI_FORMAT_R16G16B16A16_FLOAT})
+            for (const UINT samples:{2u,8u}) {
+                ms.Format=f; ms.SampleDesc={samples,0};
+                ResourceDescription msOut;
+                if (!multisampled_present_buffer(ms) || engine_layout_resource(ms) ||
+                    convert_multisampled_present_buffer(ms,msOut)!=S_OK || msOut.dimension!=D3D10DDIRESOURCE_TEXTURE2D ||
+                    msOut.texture2d.Width!=1280 || msOut.texture2d.Height!=720 || msOut.texture2d.Format!=f ||
+                    msOut.texture2d.SampleDesc.Count!=samples || msOut.texture2d.SampleDesc.Quality ||
+                    msOut.texture2d.Usage!=D3D11_USAGE_DEFAULT || msOut.texture2d.MiscFlags ||
+                    msOut.texture2d.BindFlags!=(D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE)) fail(__LINE__);
+                // No primary descriptor: nothing to opt out of.
+                if (opt_out_multisampled_scanout(ms)) fail(__LINE__);
+            }
+        // The full-screen back buffer: an optional primary. It is the same engine texture, and it opts out of scan-out,
+        // so DXGI presents it with Blt and never flips it.
+        DXGI_DDI_PRIMARY_DESC optional{}; optional.Flags=DXGI_DDI_PRIMARY_OPTIONAL; optional.VidPnSourceId=0;
+        ms.pPrimaryDesc=&optional; ms.Format=DXGI_FORMAT_R8G8B8A8_UNORM; ms.SampleDesc={8,0};
+        ResourceDescription msOut;
+        if (!multisampled_present_buffer(ms) || convert_multisampled_present_buffer(ms,msOut)!=S_OK ||
+            msOut.texture2d.SampleDesc.Count!=8 || optional.DriverFlags) fail(__LINE__);
+        if (!opt_out_multisampled_scanout(ms) || optional.DriverFlags!=DXGI_DDI_PRIMARY_DRIVER_FLAG_NO_SCANOUT) fail(__LINE__);
+        // A front buffer or proxy (a primary that is not optional) stays a refused primary: DXGI_DDI_ERR_UNSUPPORTED with
+        // NO_SCANOUT, after which DXGI makes a single-sample proxy.
+        DXGI_DDI_PRIMARY_DESC front{}; ms.pPrimaryDesc=&front;
+        if (multisampled_present_buffer(ms) ||
+            convert_runtime_resource(ms,&rotateIdentity[0],request,importedDesc)!=E_NOTIMPL ||
+            create_refusal(ms,E_NOTIMPL)!=DXGI_DDI_ERR_UNSUPPORTED) fail(__LINE__);
+        if (!opt_out_multisampled_scanout(ms) || front.DriverFlags!=DXGI_DDI_PRIMARY_DRIVER_FLAG_NO_SCANOUT) fail(__LINE__);
+        // A single-sample primary keeps its flags; a single-sample buffer keeps the LINEAR SURFACE path.
+        DXGI_DDI_PRIMARY_DESC single{}; ms.pPrimaryDesc=&single; ms.SampleDesc={1,0};
+        if (multisampled_present_buffer(ms) || opt_out_multisampled_scanout(ms) || single.DriverFlags) fail(__LINE__);
+        ms.pPrimaryDesc=nullptr;
+        if (multisampled_present_buffer(ms)) fail(__LINE__);
+        // Shared or displayable multisampled buffers (flip-model) are not blt-model buffers; neither is a texture
+        // without PRESENT.
+        ms.SampleDesc={4,0};
+        for (const UINT misc:{UINT(D3D10_DDI_RESOURCE_MISC_SHARED),UINT(D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE)}) {
+            ms.MiscFlags=misc;
+            if (multisampled_present_buffer(ms)) fail(__LINE__);
+        }
+        ms.MiscFlags=0; ms.BindFlags=D3D10_DDI_BIND_RENDER_TARGET;
+        if (multisampled_present_buffer(ms)) fail(__LINE__);
+        // A format that no resolve shadow can hold is refused with the status that keeps the device.
+        ms.BindFlags=D3D10_DDI_BIND_PRESENT|D3D10_DDI_BIND_RENDER_TARGET;
+        for (const DXGI_FORMAT f:{DXGI_FORMAT_A8_UNORM,DXGI_FORMAT_R32G32B32A32_FLOAT}) {
+            ms.Format=f;
+            const HRESULT hr=convert_multisampled_present_buffer(ms,msOut);
+            if (hr!=E_NOTIMPL || create_refusal(ms,hr)!=E_OUTOFMEMORY) fail(__LINE__);
+        }
+    }
     runtimeDesc.SampleDesc.Count=1; runtimeDesc.Format=DXGI_FORMAT_R16_FLOAT;
     if (convert_runtime_resource(runtimeDesc,&rotateIdentity[0],request,importedDesc)!=E_NOTIMPL) fail(__LINE__);
     runtimeDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM; runtimeMip.TexelWidth=UINT32_MAX;

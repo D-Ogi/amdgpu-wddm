@@ -661,6 +661,23 @@
         "host"
       ]
     },
+    "record-pairs": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "record-pairs-x64": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "record-pairs-x86": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
     "open-allocation": {
       "inputs": [
         "host"
@@ -743,6 +760,11 @@
       ]
     },
     "gpu-clock": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "perf-data": {
       "inputs": [
         "host"
       ]
@@ -1028,6 +1050,11 @@
         "host"
       ]
     },
+    "display-timing-old-describe-surface-only": {
+      "inputs": [
+        "host"
+      ]
+    },
     "display-timing-phase-hz": {
       "inputs": [
         "host"
@@ -1256,6 +1283,48 @@
         "host"
       ]
     },
+    "opm-policy": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-any-guid": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-any-version": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-any-size": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-stale-handle": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-refuse-success": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-log-every": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
     "keep-prune": {
       "inputs": [
         "host"
@@ -1312,6 +1381,36 @@
       ]
     },
     "wddm-level-with-2-3": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "present-contextless": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "present-contextless-every-level": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "present-contextless-serve": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "cross-adapter": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "cross-adapter-every-level": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "cross-adapter-truncate": {
       "inputs": [
         "host"
       ]
@@ -1776,6 +1875,16 @@
     },
     "overlay-group-controls": {
       "timeout": 900
+    },
+    "overlay-group-rerun": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "umd-gate": {
+      "inputs": [
+        "host"
+      ]
     },
     "umd-adl": {
       "timeout": 900
