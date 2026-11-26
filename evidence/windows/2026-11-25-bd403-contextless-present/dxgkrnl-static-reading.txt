@@ -1,0 +1,73 @@
+dxgkrnl.sys 10.0.22621.6197, SHA-256 BA9D33ED39F7EE369F40B4CC23B267D3CB853468A1635BF5FE400F76C704F43C, PDB RSDS 907FD0B67E572F54163D06DFD05487A7 age 1
+dxgmms2.sys 10.0.22621.6337, SHA-256 8BBA40B6EDDA6EFBA332886A07BA108317F403D3CDC485B60E4926039D1DC6D5, PDB RSDS 420211DE7E2C9DA06866001E6AB467F5 age 1
+Tool: llvm-objdump 23.1.4 -d --no-show-raw-insn -M intel. Function names from llvm-pdbutil dump -publics of the matching public PDBs.
+The <...+0x...> labels that llvm-objdump prints are the nearest export, not the function; the function is named in each header line.
+
+==== DXGADAPTER::Initialize (public at 0x1c01fcc74), the MiscCaps read, VA 0x1c01fdafe-0x1c01fdb70
+1c01fdafe:     	cmp	dword ptr [rsi + 0xb04], 0x960
+1c01fdb08:     	jl	0x1c01fdb5a <NtGdiDdDDICheckMonitorPowerState+0xbe1a>
+1c01fdb0a:     	cmp	dword ptr [rsi + 0xae8], 0x80
+1c01fdb14:     	jb	0x1c01fdb4c <NtGdiDdDDICheckMonitorPowerState+0xbe0c>
+1c01fdb16:     	mov	ebx, 0x1cf4
+1c01fdb1b:     	mov	ecx, r14d
+1c01fdb1e:     	mov	edx, ebx
+1c01fdb20:     	call	qword ptr [rip - 0x9c9a7] # 0x1c0161180
+1c01fdb27:     	nop	dword ptr [rax + rax]
+1c01fdb2c:     	mov	qword ptr [rsp + 0x40], r12
+1c01fdb31:     	lea	r9, [rip - 0x167f48]    # 0x1c0095bf0 <DxgCoreInterface+0x8510>
+1c01fdb38:     	mov	qword ptr [rsp + 0x38], r12
+1c01fdb3d:     	mov	qword ptr [rsp + 0x30], r12
+1c01fdb42:     	mov	qword ptr [rsp + 0x28], r12
+1c01fdb47:     	jmp	0x1c01fd24e <NtGdiDdDDICheckMonitorPowerState+0xb50e>
+1c01fdb4c:     	mov	al, byte ptr [rsi + 0xae8]
+1c01fdb52:     	and	al, 0x1
+1c01fdb54:     	mov	byte ptr [rsi + 0xb3a], al
+1c01fdb5a:     	mov	eax, dword ptr [rsi + 0xae8]
+1c01fdb60:     	test	al, 0x10
+1c01fdb62:     	je	0x1c01fdba3 <NtGdiDdDDICheckMonitorPowerState+0xbe63>
+1c01fdb64:     	cmp	qword ptr [rsi + 0x570], r12
+1c01fdb6b:     	jne	0x1c01fdba3 <NtGdiDdDDICheckMonitorPowerState+0xbe63>
+1c01fdb6d:     	mov	ebx, 0x1cff
+
+==== PrepareIndependentFlipToken (public at 0x1c01bea58), the guard: rbx is the DXGCONTEXT argument (NULL for a token without a context), VA 0x1c01bebfb-0x1c01bec0d
+1c01bebfb:     	test	rbx, rbx
+1c01bebfe:     	jne	0x1c01bec0d <DxgkUnreferenceDxgAllocation+0x261d>
+1c01bec00:     	cmp	byte ptr [rdi + 0xb3a], r14b
+1c01bec07:     	je	0x1c01bf2ca <DxgkUnreferenceDxgAllocation+0x2cda>
+
+==== PrepareIndependentFlipToken, the call of ADAPTER_RENDER::DdiPresent (public at 0x1c0169f80): rdx is hContext, VA 0x1c01c0b00-0x1c01c0b5e
+1c01c0b00:     	mov	eax, dword ptr [rsp + 0x31c]
+1c01c0b07:     	xor	ecx, eax
+1c01c0b09:     	and	ecx, 0x1700
+1c01c0b0f:     	xor	eax, ecx
+1c01c0b11:     	mov	dword ptr [rsp + 0x31c], eax
+1c01c0b18:     	mov	dword ptr [rsp + 0x340], edi
+1c01c0b1f:     	mov	rax, qword ptr [rsp + 0xb0]
+1c01c0b27:     	cmp	byte ptr [rax + 0xb3a], r14b
+1c01c0b2e:     	mov	rdx, r14
+1c01c0b31:     	jne	0x1c01c0b3a <DxgkUnreferenceDxgAllocation+0x454a>
+1c01c0b33:     	mov	rdx, qword ptr [rbx + 0xb8]
+1c01c0b3a:     	lea	r8, [rsp + 0x2b0]
+1c01c0b42:     	mov	rcx, r13
+1c01c0b45:     	call	0x1c0169f80 <PAGE+0x2f80>
+1c01c0b4a:     	mov	edi, eax
+1c01c0b4c:     	mov	rcx, qword ptr [rsp + 0x3b0]
+1c01c0b54:     	test	eax, eax
+1c01c0b56:     	lea	rax, [rsp + 0x3b8]
+
+==== dxgmms2 VidSchSubmitCommandContextless (public 0001:260544, VA 0x1c00409c0), entry checks
+1c00409c0:     	mov	qword ptr [rsp + 0x8], rbx
+1c00409c5:     	mov	qword ptr [rsp + 0x10], rsi
+1c00409ca:     	push	rdi
+1c00409cb:     	sub	rsp, 0x50
+1c00409cf:     	mov	rdi, r8
+1c00409d2:     	mov	rbx, rcx
+1c00409d5:     	test	r8, r8
+1c00409d8:     	je	0x1c0040a17 <DriverUnload+0x13b97>
+1c00409da:     	test	rdx, rdx
+1c00409dd:     	je	0x1c0040a17 <DriverUnload+0x13b97>
+1c00409df:     	test	rcx, rcx
+1c00409e2:     	je	0x1c0040a17 <DriverUnload+0x13b97>
+1c00409e4:     	mov	rax, qword ptr [rcx]
+1c00409e7:     	mov	rsi, qword ptr [r8 + 0x8]
+1c00409eb:     	mov	qword ptr [rsp + 0x70], rax

@@ -455,6 +455,11 @@
         "host"
       ]
     },
+    "tpm-crb": {
+      "inputs": [
+        "host"
+      ]
+    },
     "dpm": {
       "inputs": [
         "host"
@@ -742,6 +747,11 @@
         "host"
       ]
     },
+    "perf-data": {
+      "inputs": [
+        "host"
+      ]
+    },
     "driver-version": {
       "inputs": [
         "host"
@@ -1023,6 +1033,11 @@
         "host"
       ]
     },
+    "display-timing-old-describe-surface-only": {
+      "inputs": [
+        "host"
+      ]
+    },
     "display-timing-phase-hz": {
       "inputs": [
         "host"
@@ -1219,6 +1234,48 @@
         "host"
       ]
     },
+    "opm-policy": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-any-guid": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-any-version": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-any-size": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-stale-handle": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-refuse-success": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "opm-policy-log-every": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
     "keep-prune": {
       "inputs": [
         "host"
@@ -1275,6 +1332,36 @@
       ]
     },
     "wddm-level-with-2-3": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "present-contextless": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "present-contextless-every-level": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "present-contextless-serve": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "cross-adapter": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "cross-adapter-every-level": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "cross-adapter-truncate": {
       "inputs": [
         "host"
       ]

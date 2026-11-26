@@ -26,6 +26,8 @@ struct Shape {
     D3D12DDI_CPU_PAGE_PROPERTY cpu = D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
     D3D12DDI_MEMORY_POOL pool = D3D12DDI_MEMORY_POOL_L1;
     UINT16 slices = 1;
+    const DXGI_FORMAT* castable = nullptr;
+    UINT castables = 0;
 };
 
 D3D12DDIARG_CREATERESOURCE_0088 description(const Shape& s) {
@@ -40,6 +42,8 @@ D3D12DDIARG_CREATERESOURCE_0088 description(const Shape& s) {
     res.Layout = D3D12DDI_TL_UNDEFINED;
     res.Flags = static_cast<D3D12DDI_RESOURCE_FLAGS_0003>(s.flags);
     res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_COMMON;
+    res.NumCastableFormats = s.castables;
+    res.pCastableFormats = s.castable;
     return res;
 }
 
@@ -73,7 +77,8 @@ HRESULT create_shared(Env& env, Device& device, const Shape& s, Buffer& out) {
 constexpr UINT align_up(UINT value, UINT to) { return (value + to - 1) / to * to; }
 
 UINT texel_bytes(DXGI_FORMAT format) {
-    const AMDGPU_WDDM_SURFACE_FORMAT* row = Bc250SharedSurfaceFormat(static_cast<unsigned long>(format));
+    // The record row (BD-408): an X view has the bytes a pixel of its storage row.
+    const AMDGPU_WDDM_SURFACE_FORMAT* row = Bc250SharedSurfaceRecordFormat(static_cast<unsigned long>(format));
     return row ? row->bytes_per_pixel : 0;
 }
 
@@ -81,7 +86,7 @@ UINT texel_bytes(DXGI_FORMAT format) {
 // with the word the clear writes to memory. The surface is linear, so this also says that the engine placed the
 // image the record's pitch describes.
 void round_trip(Env& env, Device& device, engine_ddi::EngineQueue* queue, const Shape& s, const Buffer& target,
-                const FLOAT colour[4], UINT64 expected) {
+                const FLOAT colour[4], UINT64 expected, UINT64 mask = ~UINT64{0}) {
     const UINT bpp = texel_bytes(s.format);
     const UINT pitch = align_up(s.width * bpp, 256);
     Buffer readback;
@@ -138,7 +143,7 @@ void round_trip(Env& env, Device& device, engine_ddi::EngineQueue* queue, const 
                 for (UINT x = 0; x < s.width; ++x) {
                     UINT64 texel = 0;
                     std::memcpy(&texel, row + UINT64{bpp} * x, bpp);
-                    bad += texel != expected ? 1u : 0u;
+                    bad += (texel & mask) != (expected & mask) ? 1u : 0u;
                 }
             }
             checkf(bad == 0, "shared create %ux%u: every texel reads %0*llx (%u of %u differ)", s.width, s.height,
@@ -209,6 +214,7 @@ void test_shared_create(Env& env) {
         Shape shape;
         FLOAT colour[4];
         UINT64 expected;
+        UINT64 mask = ~UINT64{0};               // the bytes the format defines; an X byte is undefined
     };
     // B8G8R8A8 in memory is blue first, R8G8B8A8 red first: the same word for both clears.
     // The sRGB rows are here because the wire has always admitted them and this module used to refuse them, so an
@@ -221,6 +227,12 @@ void test_shared_create(Env& env) {
         {Shape{200, 120, DXGI_FORMAT_R10G10B10A2_UNORM}, {0.2f, 0.4f, 0.6f, 1.0f}, 0xe66664cdu},
         {Shape{64, 48, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB}, {1.0f, 0.0f, 0.0f, 1.0f}, 0xffff0000u},
         {Shape{96, 32, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB}, {0.0f, 1.0f, 0.0f, 1.0f}, 0xff00ff00u},
+        // BD-408: the HLK FlipQueue writer's shared texture, a D3D9 X8R8G8B8 texture that D3D9On12 creates as
+        // B8G8R8X8_UNORM, at the lab's 624x441. It must be inside the envelope and get a linear image of the
+        // engine; outside it, the create took an ordinary allocation with no record and its open was refused.
+        // The fourth byte of an X format is undefined, so only the three colour bytes are compared.
+        {Shape{624, 441, DXGI_FORMAT_B8G8R8X8_UNORM}, {0.2f, 0.4f, 0.6f, 1.0f}, 0x00336699u, 0x00ffffffu},
+        {Shape{64, 48, DXGI_FORMAT_B8G8R8X8_UNORM_SRGB}, {1.0f, 0.0f, 0.0f, 1.0f}, 0x00ff0000u, 0x00ffffffu},
     };
     // Every retry of this section, counted two ways: the always-on counter and the always-on line each retry
     // writes. The named risk of the whole design is a retry on an ordinary committed texture, and a trial or a game
@@ -259,7 +271,7 @@ void test_shared_create(Env& env) {
         checkf(placed == E_OUTOFMEMORY,
                "shared create %ux%u: a buffer placed on the shared surface's memory is refused (hr %08lx)", s.width,
                s.height, static_cast<unsigned long>(placed));
-        round_trip(env, device, queue, s, target, c.colour, c.expected);
+        round_trip(env, device, queue, s, target, c.colour, c.expected, c.mask);
         destroy_buffer(env, device, target);
     }
     {
@@ -295,6 +307,34 @@ void test_shared_create(Env& env) {
         Shape system{256, 256, DXGI_FORMAT_B8G8R8A8_UNORM};
         system.pool = D3D12DDI_MEMORY_POOL_L0;
         outside(env, device, m, system, "the L0 pool");
+        // BD-408: the X views have exactly one record form. A typeless format names no encoding, and a cast from
+        // an X view to an A view would read the undefined fourth byte as alpha.
+        outside(env, device, m, Shape{256, 256, DXGI_FORMAT_B8G8R8X8_TYPELESS}, "B8G8R8X8_TYPELESS");
+        static const DXGI_FORMAT to_alpha[] = {DXGI_FORMAT_B8G8R8A8_UNORM};
+        Shape cast{256, 256, DXGI_FORMAT_B8G8R8X8_UNORM};
+        cast.castable = to_alpha;
+        cast.castables = 1;
+        outside(env, device, m, cast, "B8G8R8X8_UNORM castable to B8G8R8A8_UNORM");
+        // BD-408: a texture with simultaneous access, the translation layer's mark of a shared resource, that is
+        // outside the envelope names itself once at its create. One without the flag, and one inside the envelope
+        // with it, write no such line.
+        const char* const hint = "shared surface: a texture with simultaneous access is outside";
+        const size_t hints = refusal_lines(hint).size();
+        Shape marked{256, 256, DXGI_FORMAT_B8G8R8X8_TYPELESS};
+        marked.flags |= D3D12DDI_RESOURCE_FLAG_0003_SIMULTANEOUS_ACCESS;
+        outside(env, device, m, marked, "a typeless texture with simultaneous access");
+        const std::vector<std::string> after = refusal_lines(hint);
+        checkf(after.size() == hints + 1 && after.back().find("format 92, 256x256") != std::string::npos,
+               "shared create: a simultaneous-access texture outside the envelope writes one hint line (%zu lines, %s)",
+               after.size() - hints, after.size() > hints ? after.back().c_str() : "none");
+        Shape inside{64, 64, DXGI_FORMAT_B8G8R8A8_UNORM};
+        inside.flags |= D3D12DDI_RESOURCE_FLAG_0003_SIMULTANEOUS_ACCESS;
+        Buffer in_envelope;
+        hr = create_shared(env, device, inside, in_envelope);
+        if (hr == S_OK) destroy_buffer(env, device, in_envelope);
+        checkf(hr == S_OK && refusal_lines(hint).size() == hints + 1,
+               "shared create: inside the envelope, simultaneous access writes no hint line (hr %08lx)",
+               static_cast<unsigned long>(hr));
     }
 
     // A heap alone never asks to share: there is no resource to describe and nothing to place in it yet.

@@ -1,0 +1,7 @@
+{
+  "utc": "2026-11-17T15:15:17.563472+00:00",
+  "source_sha256": "1a8a6bf237912cc58a0553bfaa09e617cca577509760479a5c7692f304275d8f",
+  "exit": 0,
+  "stdout": "{\"source_pins\": {\"dma_process_C099.py\": \"f419ae59fb8d2177fecef5c52549873487572c1a56db04bf418df929ba5c1d2d\", \"dma-process-test-C099.py\": \"79768890e0a0ebedac95f246b7cfd4ea9551ebf36d026fef011c0d324591aeb3\"}, \"exit\": 0, \"stdout\": \"{\\\"passed\\\": true, \\\"no_hardware\\\": true, \\\"checks\\\": [\\\"invalid sensor (False, -1)\\\", \\\"invalid sensor (False, 97000)\\\", \\\"invalid sensor (False, 'invalid')\\\", \\\"invalid sensor (True, -1)\\\", \\\"invalid sensor (True, 97000)\\\", \\\"invalid sensor (True, 'invalid')\\\", \\\"87C start\\\", \\\"92C held10s\\\", \\\"92C timer reset\\\", \\\"whole90s bound\\\", \\\"STOP forbids valid launch; marker absent\\\", \\\"term stops worker and grandchild\\\", \\\"hup stops worker and grandchild\\\", \\\"kill stops worker and grandchild\\\", \\\"leader-exit stops worker and grandchild\\\", \\\"deadline stops worker and grandchild\\\", \\\"parent identity mismatch takes exit125 branch\\\"]}\\n\", \"stderr\": \"\", \"no_hardware\": true, \"module_present\": false}\n",
+  "stderr": ""
+}

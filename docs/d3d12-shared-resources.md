@@ -13,7 +13,8 @@ and a local fence look the same at the DDI, so the driver needs no code for the 
 Shared resources work for one shape: a 2D texture of one mip level, one array slice and one sample, on a
 GPU-only heap, in a format that has a COMPOSED row in `driver/contract/amdgpu_wddm_surface_format.h`, or in the
 sRGB view that shares that row's storage. That is the shape a second driver can read, because both sides compute
-the same addresses from the same table.
+the same addresses from the same table. Since BD-408 the shape also includes the X views of the `B8G8R8A8` storage
+row (see "The X views of a storage row" below).
 
 One lookup answers "is this format a shared surface's" for the whole stack: `Bc250SharedSurfaceFormat` in
 `driver/contract/bc250_shared_surface.h`, which the wire's encoder, the D3D11 shell's `runtime_surface_format`
@@ -31,6 +32,33 @@ admitted by `engine-ddi`, and was then refused by the shell with `shared surface
 reported to the application as `E_OUTOFMEMORY` from `CreateCommittedResource`. The gate now uses
 `Bc250SharedSurfaceFormat` for a shared surface. A primary keeps the storage column, because no `D3DDDIFORMAT`
 expresses an sRGB view and the `SCANOUT_PRIMARY` `X8` row has no DXGI format at all.
+
+### The X views of a storage row
+
+BD-408, the HLK test "WDDM FlipQueue". Its writer process creates a D3D9 `X8R8G8B8` texture with a shared handle.
+D3D9On12 creates it in D3D12 as `B8G8R8X8_UNORM` (88), with no castable formats (`9on12Resource.cpp`, the
+fully typed form, because the runtime reports `CastingFullyTypedFormatSupported`). D3D9On12 then opens it at once
+in the same process to get its kernel handle (`pfnCreateKMTHandle`, `SharedResourceHelpers::CreateKMTHandle`,
+`OpenSharedHandle`). The format 88 had no row, so the create was outside the envelope. It got an ordinary BC2A
+allocation with no record, and the open was refused at `bare allocation length`.
+
+The record lookup is `Bc250SharedSurfaceRecordFormat` in `driver/contract/bc250_shared_surface.h`. It is
+`Bc250SharedSurfaceFormat` plus one rule: an X format is a view of the A format with the same channel order and
+the same encoding. `B8G8R8X8_UNORM` (88) is a view of `B8G8R8A8_UNORM` (87), and `B8G8R8X8_UNORM_SRGB` (93) is a
+view of `B8G8R8A8_UNORM_SRGB` (91). The typeless forms stay outside. The records of an X view are:
+
+- the allocation record, LB7A `A8R8G8B8`, the COMPOSED row of the storage. The kernel driver reads only this
+  record, so it places the surface as every `A8R8G8B8` type-0 surface. The `X8` row and the scan-out rule do not
+  change.
+- the resource record, E26R v3 with the X format. The opener creates its resource in the X format and never in
+  the A format, so no view can read the undefined fourth byte as alpha.
+
+The encoder, both decoders, the D3D12 create (`shared_surface_shape`, `prepare_shared_surface`, the shell's
+admission gate) and the D3D12 open use the record lookup. A castable format of an X view must also be an X view
+of the same row. `Bc250SharedSurfaceFormat` itself does not change, so composition, the Present copy (BD-133) and
+scan-out do not see the X views. The D3D11 shell decodes such a record through the same decoder, but its own
+format lookup (`runtime_surface_format`) does not have the rule yet, so a D3D11 open of an X view is still
+refused.
 
 | Call | Slot | What happens |
 |---|---|---|
@@ -337,6 +365,29 @@ are a contract: the lab kit matches them, so they are not renamed silently.
 | `record format` | no COMPOSED row for the record's DXGI format (reported `E_NOTIMPL`, not malformed) |
 | `allocation format` | the LB7A `Format` is not the row the record's DXGI format names |
 | `allocation geometry` | the pitch does not hold a row of pixels, or the size does not hold the rows |
+| `bare allocation length` | an open with no resource record, whose allocation blob is not 48 bytes (LB7A and GDI1) or 32 bytes (LB7A only) |
+| `bare allocation type` | an open with no resource record, whose 48-byte blob is not a GDI texture. The cause is another GDI1 type, a GDI1 flag, a reserved word, or no GDI1 magic |
+
+### An open with no resource record
+
+The runtime gives an opener no resource record when the creator of the allocation gave none. Then the LB7A blob
+is the only description (BD-408, measured on unit A on 2026-11-25). A D3D9On12 windowed Present opens a standard
+GDI surface in the D3D12 shell: the kernel driver describes it in `GetStandardAllocationDriverData` with 48 bytes,
+LB7A v1 and the GDI1 trailer, and with no resource record. Before BD-408 this open declined at `record length`, and
+the D3D9Ex windowed Present failed. The D3D11 shell opens the same blob since BD-253.
+
+`open_shared_surface` uses `Bc250SharedSurfaceDecodeBareWhy` when the resource record is empty, and the strict
+decode in all other cases. The bare decode admits a GDI texture (GDI1 type 1) and the 32-byte LB7A of the
+compositor's hosted surfaces. The description that it gives is the storage format of the COMPOSED row of the LB7A
+format, one mip, one slice, and shader resource and render target binding. The other checks are those of the
+strict decode, with the same names.
+
+The layout agreement of such an open compares the image with the allocation size, not with the record size. The
+kernel driver writes the record size of a GDI texture as the pitch times the height rounded up to four rows
+(`DcnSharedTextureLayout`). It then creates the allocation with that size rounded up to a page (`CreateAllocation`,
+`ROUND_TO_PAGES`). The engine image needs the page-rounded size, so a comparison with the record size refuses every
+GDI texture whose four-row blocks do not fill a whole page. A record with a resource record keeps the comparison with
+the record size.
 
 The two routes a D3D11 producer may run on are not interchangeable to this opener, and that is measured, not
 assumed. The GPU route's shell (`driver/umd/dxvk/ddi-resource.cpp`) writes the full v3 record for every runtime
@@ -380,8 +431,8 @@ The arithmetic of what the reported tier 2 promises and what the driver now hold
 is eight formats: `R8G8B8A8_UNORM` and its sRGB form, `B8G8R8A8_UNORM` and its sRGB form, `B8G8R8X8_UNORM` and
 its sRGB form, `R10G10B10A2_UNORM` and `R16G16B16A16_FLOAT`. Tier 1 adds nine typeless formats, tier 2 adds
 `NV12`, tier 3 adds `R11G11B10_FLOAT`. The five COMPOSED rows of the surface format table, with the sRGB view of
-each 8-bit row, cover six of tier 0's eight - the two `B8G8R8X8` forms have no DXGI entry in our table - and none
-of tier 1's or tier 2's. `A8_UNORM` is one row that the driver shares and that no tier asks for. Buffers are not part of the
+each 8-bit row, cover six of tier 0's eight. Since BD-408 the D3D12 shell also shares the two `B8G8R8X8` forms as
+X views of the `B8G8R8A8` row, so D3D12 covers all eight. No row of the table covers tier 1 or tier 2. `A8_UNORM` is one row that the driver shares and that no tier asks for. Buffers are not part of the
 tiers. A D3D12 shared buffer opens in D3D12 through the ENGINE LAYOUT record (BD-373,
 `driver/umd/d3d12/shared-buffer-record.h`), and the D3D11 runtime refuses its open with `E_INVALIDARG`. Four of the eight, not six, until the sRGB gap above was closed: this arithmetic became true on 2026-10-06
 and was wrong before it.
@@ -418,11 +469,11 @@ hold is told that the driver cannot do it, in a code the runtime survives.
 
 | Test | What it pins |
 |---|---|
-| `driver/contract/test/shared-surface-test.cpp` | the two records as byte literals. It holds named checks over the encoder, both decoders, the kernel driver's parser and every single-field refusal. The last of these covers all 5 COMPOSED rows and their 7 format round trips. Since round 2 it also pins the name every refusal reports, one check per `BC250_SHARED_SURFACE_WHY_*` constant. That makes a log line a contract and not a courtesy. The runner prints its own total ("67 checks, 0 failures"). Three documents had counted that total by hand, and disagreed |
+| `driver/contract/test/shared-surface-test.cpp` | the two records as byte literals. It holds named checks over the encoder, both decoders, the kernel driver's parser and every single-field refusal. The last of these covers all 5 COMPOSED rows and their 7 format round trips. Since round 2 it also pins the name every refusal reports, one check per `BC250_SHARED_SURFACE_WHY_*` constant. That makes a log line a contract and not a courtesy. Since BD-408 it also holds the bare form, with the measured 48-byte GDI texture blob as a byte literal. It also holds the X views: their records, the lookups and the table rows. It also holds the kernel driver's admission of the same bytes, which must not change. The runner prints its own total ("106 checks, 0 failures"). Three documents had counted that total by hand, and disagreed |
 | `driver/umd/d3d12/allocation-request-test.cpp` | what the create publishes, field by field, and that `prepare_surface` still writes the primary's v1 record |
 | `driver/umd/d3d12/heap-import-test.cpp` | the shell half: the shareable envelope, `kShareRequired` only from the runtime's refusal, the shared surface's records and refusals, and the borrowed lifetime of an adopted allocation |
-| `engine-ddi/tests/test-shared-create.cpp` | round trip 8 on the GPU: the retry, and the geometry the engine measured. A texel-exact render and read-back of the created surface, in five formats. Both sRGB views are two of the five. Each retry raises the counter once and writes its line once |
-| `engine-ddi/tests/test-shared-open.cpp` | round trip 9 on the GPU: one adopt, and a texel-exact clear and read-back of the opened surface. Also both sRGB views, the same handle opened twice, and 12 malformed records. Also an open of two allocations and an open that names a protected resource session. Also the two Present questions, and the two shells that serve no adopt |
+| `engine-ddi/tests/test-shared-create.cpp` | round trip 8 on the GPU: the retry, and the geometry the engine measured. A texel-exact render and read-back of the created surface, in seven formats. Both sRGB views are two of the seven. The two X views are two more: the FlipQueue shape (624x441 `B8G8R8X8_UNORM`) and its sRGB view. Their read-back compares the three colour bytes. Each retry raises the counter once and writes its line once |
+| `engine-ddi/tests/test-shared-open.cpp` | round trip 9 on the GPU: one adopt, and a texel-exact clear and read-back of the opened surface. Also both sRGB views, the same handle opened twice, and 12 malformed records. Also an open of two allocations and an open that names a protected resource session. Also the two Present questions, and the two shells that serve no adopt. Also the open of the records of a 624x441 `B8G8R8X8_UNORM` shared create, with the engine's linear image of that format |
 | `engine-ddi/engine-ddi-header-test.cpp` | boundary revision 5, the `AdoptRequest` layout, and `kShareRequired` clamped to `E_OUTOFMEMORY` |
 | `tools/win/capture-share/host-validate.ps1` | the real client on a working driver: 35 cells. Among them the two sRGB cells `s12to11-srgb` and `s11to12-srgb`, the keyed handover discriminator `km12to11-finish`, and the four injected negative controls. It proves the oracles before the lab sees them. The route blocker and the opened-format refusal cannot fire on this host, because it has one working driver and no CPU D3D11 UMD. The blocker is a case of `capshare --self-test` instead |
 | `scratch/train/b19-bd075/lab-bd075-classify-test.ps1` (local) | the trial's own scoring. It has 24 classification cases, 8 restore cases, 11 route-arm cases, 6 allowlist-restore cases, 15 trace cases on written trace files and 6 refusal-text cases. Among the trace cases are the control that shows a retry and the double counting the first rule did. They also include the 64-byte ICD winsys allocations the first rule counted as shared creates |

@@ -205,5 +205,26 @@ int main(void)
     fixture("P3.00","12/09/2021");allocFails=1;capture_check(&d,0);
     fixture("P3.00","12/09/2021");irql=2;capture_check(&d,0);CHECK(pciCalls==0);
     fixture("P3.00","12/09/2021");d.Dxgk.DxgkCbReadDeviceSpace=NULL;capture_check(&d,0);CHECK(pciCalls==0);
+    /* The SMBIOS-only entry: it must agree with BoardIdentitySelect on the firmware half and ignore the PCI half,
+     * because a TPM filter has no PCI configuration access. The fixture fields are the ones fixture() writes. */
+    {unsigned reason=0,reasonFull=0;
+     fixture("P3.00","12/09/2021");
+     CHECK(BoardIdentitySelectSmbios(firmwareImage,firmwareSize,&reason)==1);
+     CHECK(BoardIdentitySelect(pciImage,pciCount,firmwareImage,firmwareSize,&reasonFull)==1);
+     CHECK(reason==reasonFull);
+     /* A foreign PCI identity must not change the SMBIOS answer. */
+     fixture("P3.00","12/09/2021");pciImage[0]=0x00;pciImage[1]=0x00;
+     reason=0;CHECK(BoardIdentitySelectSmbios(firmwareImage,firmwareSize,&reason)==1);
+     reasonFull=0;CHECK(BoardIdentitySelect(pciImage,pciCount,firmwareImage,firmwareSize,&reasonFull)==0);
+     /* An unknown BIOS version is a no on both entries. */
+     fixture("P9.00","12/09/2021");
+     reason=0;CHECK(BoardIdentitySelectSmbios(firmwareImage,firmwareSize,&reason)==0);
+     reasonFull=0;CHECK(BoardIdentitySelect(pciImage,pciCount,firmwareImage,firmwareSize,&reasonFull)==0);
+     /* A baseboard string that is not the BC-250 is a no on both entries. */
+     fixture("P3.00","12/09/2021");
+     for(i=0;i+10<firmwareSize;++i){if(!memcmp(firmwareImage+i,"AMD BC-250",10)){firmwareImage[i+4]='X';break;}}
+     reason=0;CHECK(BoardIdentitySelectSmbios(firmwareImage,firmwareSize,&reason)==0);
+     reasonFull=0;CHECK(BoardIdentitySelect(pciImage,pciCount,firmwareImage,firmwareSize,&reasonFull)==0);
+    }
     printf("Board provider: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

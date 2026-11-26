@@ -86,6 +86,7 @@
 #include "board_memory_service.h"
 #include "gpu_capabilities.h"
 #include "blit_map_cache.h"     // BD-289: the CPU present blit's kept source and destination mappings
+#include "opm.h"                // BD-410: the OPM interface and the DxgkDdiQueryInterface log
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
 
@@ -236,6 +237,10 @@ typedef struct _BC250_DEVICE {
     ULONG PciId;
     ULONG PowerWitness;                 // BC250_POWER_WITNESS_*, from the per-IP data of PciId
     BOOLEAN PowerWitnessArmed;          // the last way down wrote the pattern and read it back
+    // BD-404: the VBIOS part number of this start (hwinfo.c), terminated, empty when the image has none. Written once
+    // in StartDevice before dxgkrnl's DXGKQAITYPE_GPUVERSION query, which reads it (perf_data.c). 32 is
+    // DXGK_MAX_GPUVERSION_NAME_LENGTH (perf_data.c asserts it).
+    WCHAR VbiosPartNumber[32];
     PDEVICE_OBJECT PhysicalDeviceObject;
     DXGKRNL_INTERFACE Dxgk;
     DXGK_START_INFO StartInfo;
@@ -527,6 +532,10 @@ typedef struct _BC250_DEVICE {
     volatile LONG DesktopCompositorChanges;  // accepted changes of that word in this start
     volatile LONG DesktopCompositorRefused;  // refused escapes of this kind in this start
     volatile LONG GdiCpuCompositorPlaced;    // standard GDI textures placed with a CPU view in this start
+    // BD-410: the OPM protected outputs (opm.c) and the log of DxgkDdiQueryInterface (query_interface.c). In the
+    // device, not in a start: dxgkrnl may query and hold an interface across a stop and a start.
+    BC250_OPM Opm;
+    BC250_QUERY_LOG QueryLog;
 } BC250_DEVICE;
 
 // The committed source size (modeset.c): the size of the surface the plane reads. Post's until a commit changes it;
@@ -604,6 +613,9 @@ NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 // BD-343: the curve half of a confirmation by the rule without output; clears only a curve a display start confirmed.
 NTSTATUS DpmConfirmKnownCurve(BC250_DEVICE* Device, _In_z_ const char* Why);
 void DpmLogSummary(BC250_DEVICE* Device);
+// A copy of the governor's published snapshot, as the last tick left it (zero before the first). Software state only,
+// no SMU traffic. Any IRQL up to DISPATCH_LEVEL.
+void DpmReadSnapshot(BC250_DEVICE* Device, BC250_DPM_SNAP* Snapshot);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 void DpmTuneRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_TUNE* Data, ULONG Size, BOOLEAN Admin,
                     ULONG EscapeFlags);
@@ -655,6 +667,9 @@ void HwmonStop(BC250_HWMON_OWNER* Owner);
 void HwmonSample(BC250_DEVICE* Device);                 // the governor thread, PASSIVE_LEVEL, once a second
 void HwmonLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 void HwmonRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_HWMON* Data, ULONG EscapeFlags);
+// A copy of the published sample. TRUE only when it is a reading: VALID and at most BC250_HWMON_FRESH_MS old, the
+// rule of HwmonRequest's FRESH flag. No port access. Any IRQL up to DISPATCH_LEVEL.
+BOOLEAN HwmonReadFresh(BC250_DEVICE* Device, BC250_HWMON_SNAP* Snapshot);
 
 // fan.c
 struct _BC250_ESCAPE_FAN;
@@ -669,6 +684,11 @@ void FanDriverUnload(void);
 void FanStep(BC250_DEVICE* Device, LONG TctlMc, BOOLEAN TctlValid, const BC250_FAN_LOAD* Load);
 void FanLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 void FanRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_FAN* Data, BOOLEAN Admin, ULONG EscapeFlags);
+
+// perf_data.c (BD-404): DXGKQAITYPE_NODEPERFDATA, ADAPTERPERFDATA, ADAPTERPERFDATA_CAPS and GPUVERSION. NodeCount is
+// this start's node count, GfxNodeMask the nodes on the GFX clock (bit n: node ordinal n). Copies published snapshots
+// only: no SMU message, no port access. PASSIVE_LEVEL.
+NTSTATUS PerfDataQuery(BC250_DEVICE* Device, const DXGKARG_QUERYADAPTERINFO* Query, ULONG NodeCount, ULONG GfxNodeMask);
 
 // smu_metrics.c: the SMU metrics table (0.7.215, docs/design/dpm.md "Power reading")
 void SmuMetricsInitialize(BC250_DEVICE* Device);        // AddDevice
@@ -1072,6 +1092,8 @@ NTSTATUS DcnWriterBridge(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Gener
 NTSTATUS DcnWriterBridgeRetire(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Generation,
     ULONG ExpectedGeneration, _In_ const BC250_DCN_WRITER_BRIDGE* Bridge);
 int DcnOtgRunning(_In_ const BC250_DEVICE* Device);
+// BD-407: HUBP0_DCHUBP_CNTL.HUBP_BLANK_EN, 1 or 0, and -1 when the read failed. No wait, no log line, any IRQL.
+int DcnPlaneBlanked(_In_ const BC250_DEVICE* Device);
 NTSTATUS DcnFaultBlank(_Inout_ BC250_DEVICE* Device);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-170 r6, the lab flavour's witnesses (docs/design/vidpn-flip.md section 7.2), never in the release flavour. For an
@@ -1559,6 +1581,14 @@ DXGKDDI_GET_CHILD_CONTAINER_ID Bc250GetChildContainerId;
 DXGKDDI_SET_POWER_STATE Bc250SetPowerState;
 DXGKDDI_UNLOAD Bc250Unload;
 DXGKDDI_STOP_DEVICE_AND_RELEASE_POST_DISPLAY_OWNERSHIP Bc250StopDeviceAndReleasePostDisplayOwnership;
+
+// query_interface.c (BD-410): DxgkDdiQueryInterface of the full table, and its log. opm.c: the OPM interface.
+DXGKDDI_QUERY_INTERFACE Bc250QueryInterface;
+void QueryInterfaceInitialize(BC250_DEVICE* Device);                     // AddDevice
+void OpmInitialize(BC250_DEVICE* Device);                                // AddDevice
+// STATUS_SUCCESS with the DXGK_OPM_INTERFACE filled for GUID_DEVINTERFACE_OPM version 1, else STATUS_NOT_SUPPORTED
+// and nothing written. PASSIVE_LEVEL.
+NTSTATUS OpmQueryInterface(BC250_DEVICE* Device, PQUERY_INTERFACE QueryInterface);
 
 // paging_journal.c: the ring of VidMm's paging operations (paging_journal.h, record kinds in bc250kmd_escape.h)
 struct _BC250_PAGING_JOURNAL_RECORD;

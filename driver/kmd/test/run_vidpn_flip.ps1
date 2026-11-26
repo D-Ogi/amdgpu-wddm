@@ -22,7 +22,8 @@ param(
                  'unproven-success', 'program-fault-success',
                  'refused-keeps-new-record', 'deposit-not-owed', 'resume-not-marked',
                  'end-ignores-otg', 'end-in-faulting', 'end-unlocked-fallback', 'invalidate-over-program',
-                 'invalidate-gate-closed', 'flush-keeps-owed', 'owed-not-reported', 'fault-no-dpc', 'fault-no-reset',
+                 'invalidate-gate-closed', 'flush-keeps-owed', 'owed-not-reported',
+                 'end-drops-owed', 'unshown-blank-ignored', 'retire-reported-twice', 'flush-keeps-retire', 'fault-no-dpc', 'fault-no-reset',
                  'fault-no-blank', 'fault-notify-twice', 'node-unbounded', 'destroy-preflight-ignored',
                  'section-result-ignored', 'begin-without-bridge', 'begin-ignores-bridge-failure',
                  'begin-refusal-faults', 'retirement-failure-ignored', 'retirement-ready-too-soon', 'destroy-before-retirement',
@@ -96,9 +97,19 @@ $mutations = [ordered]@{
         why = 'End invalidates a Desired owed to the software timer' }
     'flush-keeps-owed' = @{ find = 'w->Wddm->DesiredOwed = FALSE;'; with = ''
         why = 'the D3 flush leaves a success owed, and the D3 writers program it' }
-    'owed-not-reported' = @{ find = 'InterlockedIncrement(&wddm->OwedReported);'
-        with = 'InterlockedIncrement(&wddm->OwedReported); wddm->DesiredOwed = TRUE;'
+    'owed-not-reported' = @{ find = "            wddm->DesiredOwed = FALSE;`n            InterlockedIncrement(&wddm->OwedReported);"
+        with = "            wddm->DesiredOwed = FALSE;`n            InterlockedIncrement(&wddm->OwedReported); wddm->DesiredOwed = TRUE;"
         why = 'the report that carries Desired does not complete the owed success' }
+    'end-drops-owed' = @{ find = '                wddm->RetireOwed = TRUE;'; with = ''
+        why = 'End drops the owed flip that it could not program, and no report ever carries it (BD-407)' }
+    'unshown-blank-ignored' = @{ find = 'else if (Wddm->DesiredOwed && DcnPlaneBlanked(Device) == 1)'
+        with = 'else if (Wddm->DesiredOwed && DcnPlaneBlanked(Device) == 2)'
+        why = 'an owed flip on a blanked plane waits for a latch that never comes (BD-407)' }
+    'retire-reported-twice' = @{ find = "            wddm->RetireOwed = FALSE;`n            InterlockedIncrement(&wddm->OwedReported);"
+        with = '            InterlockedIncrement(&wddm->OwedReported);'
+        why = 'the software report does not clear the debt, so every vblank reports the retired address again (BD-407)' }
+    'flush-keeps-retire' = @{ find = '    w->Wddm->RetireOwed = FALSE;'; with = ''
+        why = 'the D3 flush leaves the unprogrammed debt, and a later vblank reports a flip the OS flushed (BD-407)' }
     'fault-no-dpc' = @{ find = "InterlockedExchange(&Wddm->FaultNotify, 1);`n    if (Device->Dxgk.DxgkCbQueueDpc != NULL) Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);"
         with = "InterlockedExchange(&Wddm->FaultNotify, 1);`n    if (Device->Dxgk.DxgkCbQueueDpc != NULL) (void)Device->Dxgk.DeviceHandle;"
         why = 'E5 asks for no DPC, so the OS is never told' }

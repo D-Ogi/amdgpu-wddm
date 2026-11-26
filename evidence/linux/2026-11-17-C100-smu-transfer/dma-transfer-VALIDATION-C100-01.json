@@ -1,0 +1,27 @@
+{
+  "passed": true,
+  "receipt_sha256": "043dc0b9cca76d3cf3bd2c813da001eb1815906d4dbf40ba72cadf2b738ba77b",
+  "known_words": [
+    {
+      "expected": 5768704,
+      "kind": "known-word",
+      "observed": 5768704,
+      "page_sha256": "947c92f709f0d85caede0fc80f4a651a30a127b46fd9cf31d320de2b29d933ab",
+      "slot": 0,
+      "source": 0,
+      "unchanged_tail": true
+    },
+    {
+      "expected": 2902475062,
+      "kind": "known-word",
+      "observed": 2902475062,
+      "page_sha256": "68edfe9442d99052148f74aae8a72810151dcbe0f87d9bae9a6dd92d1d13f9aa",
+      "slot": 1,
+      "source": 3772,
+      "unchanged_tail": true
+    }
+  ],
+  "raw_event_count": 2885,
+  "refcount": 1,
+  "scope": "Two known-word data observations only; LOAD refusals retained, no VCN activation"
+}

@@ -81,12 +81,12 @@ HRESULT APIENTRY rotate(DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *args) {
     return result;
 }
 // BD-065: the shadow for this present, written by the engine from the buffer. A slot is written again only
-// after the Present that read it has retired; a slot of another size or format is replaced.
+// after the Present that read it has retired; a slot of another size or format is replaced. desc is the buffer's
+// texture description. A multisampled buffer (BD-407) is resolved by the same Blt.
 HRESULT write_present_shadow(DeviceOwner &owner,const DdiResource &source,UINT subresource,
-    DXGI_FORMAT format,PresentShadowSlot *&out) {
+    const D3D11_TEXTURE2D_DESC &desc,DXGI_FORMAT format,PresentShadowSlot *&out) {
     auto &shadows=owner.present_shadows();
     auto &slot=shadows.slots[shadows.next%2];
-    const auto &desc=source.runtime_surface->desc;
     HRESULT hr=S_OK;
     if (slot.surface && (slot.surface->desc.Width!=desc.Width || slot.surface->desc.Height!=desc.Height ||
         slot.surface->desc.Format!=format)) {
@@ -123,7 +123,8 @@ HRESULT write_present_shadow(DeviceOwner &owner,const DdiResource &source,UINT s
     blt.Destination=slot.surface->texture.texture; blt.DestinationSubresource=0;
     blt.DestinationRect={0,0,LONG(desc.Width),LONG(desc.Height)};
     blt.Source=source.object; blt.SourceSubresource=subresource;
-    blt.Flags=BC250_DXVK_BLT_CONVERT; blt.Rotation=DXGI_DDI_MODE_ROTATION_IDENTITY;
+    blt.Flags=BC250_DXVK_BLT_CONVERT|(desc.SampleDesc.Count>1 ? BC250_DXVK_BLT_RESOLVE : 0u);
+    blt.Rotation=DXGI_DDI_MODE_ROTATION_IDENTITY;
     hr=owner.engine()->Blt(&blt);
     if (FAILED(hr)) return hr;
     out=&slot; return S_OK;
@@ -142,8 +143,10 @@ HRESULT present_work(DXGI_DDI_ARG_PRESENT *args,PresentOutcome &outcome) {
         auto *source=reinterpret_cast<DdiResource *>(args->hSurfaceToPresent);
         auto *destination=reinterpret_cast<DdiResource *>(args->hDstResource);
         // Only an importer may establish the allocation/subresource identity.
-        // Ordinary engine-owned resources cannot be presented via this callback.
-        if (!source || !source->object || !source->present_allocation ||
+        // Ordinary engine-owned resources cannot be presented via this callback. The one exception is a
+        // multisampled blt-model buffer (BD-407): it has no allocation, and its Present resolves into a shadow.
+        const bool resolve=source && source->resolve_on_present;
+        if (!source || !source->object || (!resolve && !source->present_allocation) ||
             source->present_subresource!=args->SrcSubResourceIndex) {
             outcome.refusal=!source ? "no-source" : !source->object ? "source-without-object" :
                 !source->present_allocation ? "source-not-a-runtime-surface" : "source-subresource";
@@ -160,15 +163,29 @@ HRESULT present_work(DXGI_DDI_ARG_PRESENT *args,PresentOutcome &outcome) {
         PresentShadowSlot *shadow=nullptr;
         const DXGI_FORMAT destinationFormat=destination && destination->runtime_surface ?
             destination->runtime_surface->desc.Format : DXGI_FORMAT_UNKNOWN;
-        const DXGI_FORMAT shadowFormat=source->runtime_surface ?
-            present_shadow_format(args->Flags,destination!=nullptr,destinationFormat,source->blt_model_buffer,
-                source->runtime_surface->desc.Format) : DXGI_FORMAT_UNKNOWN;
+        D3D11_TEXTURE2D_DESC buffer{};
+        DXGI_FORMAT shadowFormat=DXGI_FORMAT_UNKNOWN;
+        if (resolve) {
+            static_cast<ID3D11Texture2D *>(source->object)->GetDesc(&buffer);
+            shadowFormat=present_resolve_format(args->Flags,destination!=nullptr,destinationFormat,buffer.Format);
+            if (shadowFormat==DXGI_FORMAT_UNKNOWN) { outcome.refusal="multisampled-source"; return E_INVALIDARG; }
+        } else if (source->runtime_surface) {
+            const auto &d=source->runtime_surface->desc;
+            buffer={d.Width,d.Height,d.MipLevels,d.ArraySize,d.Format,d.SampleDesc,d.Usage,d.BindFlags,d.CPUAccessFlags,
+                d.MiscFlags};
+            shadowFormat=present_shadow_format(args->Flags,destination!=nullptr,destinationFormat,
+                source->blt_model_buffer,d.Format);
+        }
         if (shadowFormat!=DXGI_FORMAT_UNKNOWN) {
-            HRESULT hr=write_present_shadow(owner,*source,args->SrcSubResourceIndex,shadowFormat,shadow);
+            HRESULT hr=write_present_shadow(owner,*source,args->SrcSubResourceIndex,buffer,shadowFormat,shadow);
             if (ddi_device_status(hr)==D3DDDIERR_DEVICEREMOVED) return D3DDDIERR_DEVICEREMOVED;
             if (SUCCEEDED(hr)) {
                 presented=shadow->surface->allocation.allocation;
                 submission.resource=shadow->surface->texture.texture; submission.subresource=0;
+            } else if (resolve) {
+                // A multisampled buffer has no allocation to present in place of the shadow.
+                outcome.refusal="resolve-shadow";
+                return hr;
             } else {
                 // The buffer is presented as before (the kernel driver drops it); the game keeps running.
                 static std::atomic_uint reports{0};

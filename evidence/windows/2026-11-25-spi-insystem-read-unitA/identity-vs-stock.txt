@@ -1,0 +1,10 @@
+# image_identity.py <image of the start> <stock image P3.00 of the workspace>
+scratch\t39\p6-flash\lab\m1\bc250-flash.dump: 16777216 bytes
+  sha256 f44cabeafe04f86f7159ab02d54bafd59f86e77e64f303c17db5ae7320c1fd08
+  base   0817b85481ef1aa3e8d1971e1d6a33152bf637867f8619e5a01ae5c5a276a28e
+  store  d19472e7e34eaa1a4d3973980278f1045f041e14d9075fc9e5ae536bd5085058
+firmware\bios\P3.00-stock\BC250_3.00.ROM: 16777216 bytes
+  sha256 07595ca3aecf8a4caa28a397b5298f3946a1b769f87b16f67adc369c3f69045c
+  base   62411d5279aa0eade3bb03761aac8a783b69ec1d29ddbbf5097978b8ce7f10ad
+  store  472da2c742d34ef07ec6d65bbd6e697877c35225696d1934b323fa28724839e7
+  against the first image: 1449125 bytes differ outside the store, 79566 inside it, lengths equal

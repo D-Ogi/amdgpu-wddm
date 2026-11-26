@@ -99,6 +99,9 @@ static void ConnectorInitialize(BC250_DEVICE* device) {
  CHECK(!device->ConnectorInitialized && device->PhysicalDeviceObject && device->StopDone);
  device->ConnectorInitialized=1; touch();
 }
+/* opm.c and query_interface.c (BD-410): the locks of a new device, after the admission like the connector's. */
+static void OpmInitialize(BC250_DEVICE* device) { CHECK(device->PhysicalDeviceObject); touch(); }
+static void QueryInterfaceInitialize(BC250_DEVICE* device) { CHECK(device->PhysicalDeviceObject); touch(); }
 static NTSTATUS ConnectorStop(BC250_DEVICE* device) {
  CHECK(device->ConnectorInitialized && !device->ConnectorDestroyed);
  CHECK(!device->StartVisibilityPending);

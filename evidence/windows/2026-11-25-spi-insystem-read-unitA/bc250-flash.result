@@ -1,0 +1,14 @@
+format 1
+job read
+volume store bytes 131072 used 0x20000
+stream store absent
+volume outer bytes 3276800 used 0xC23647
+stream outer first 0xAE00B5 compressed 1324434 plain 4354064
+volume pei bytes 2097152 used 0x1000000
+stream pei absent
+sha256 f44cabeafe04f86f7159ab02d54bafd59f86e77e64f303c17db5ae7320c1fd08
+base 0817b85481ef1aa3e8d1971e1d6a33152bf637867f8619e5a01ae5c5a276a28e
+store d19472e7e34eaa1a4d3973980278f1045f041e14d9075fc9e5ae536bd5085058
+image-bytes 16777216
+dump yes
+status ok

@@ -28,6 +28,7 @@ body='\n'.join([
     *(function(x) for x in (
         'static BOOLEAN WddmReadCompletedPrimary(',
         'static void WddmVSyncControlNote(',
+        'static BOOLEAN WddmOwedUnshown(',
         'void WddmDcnVsync(',
         'static ULONG WddmImmediateRecordCopy(',
         'static NTSTATUS WddmPresentDmaFlip(')),

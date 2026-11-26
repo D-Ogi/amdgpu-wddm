@@ -1,0 +1,37 @@
+{
+  "receipt_sha256": "7bbf73827f41932f29f5ac8fe52e7138c06008c2f663d98df816aa58bf734ec6",
+  "validated": true,
+  "trial_passed": false,
+  "observed": "first q3/2A response FD after fresh response clear and command submission",
+  "command_writes": [
+    [
+      0,
+      2
+    ],
+    [
+      0,
+      1
+    ],
+    [
+      3,
+      42
+    ]
+  ],
+  "events": 609,
+  "q3_last_read": {
+    "address": 61934208,
+    "kind": "smn-io",
+    "monotonic": 1581.326943721,
+    "name": "response",
+    "operation": "read",
+    "phase": "after",
+    "queue": 3,
+    "value": 253
+  },
+  "mapping_test_reached": false,
+  "no_second_challenge": true,
+  "no_unlock": true,
+  "no_dma": true,
+  "no_vcn": true,
+  "interpretation": "Permission refusal is source-correlated with P3 dispatcher; no target data observation occurred."
+}

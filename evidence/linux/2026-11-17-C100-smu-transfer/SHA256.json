@@ -1,0 +1,34 @@
+{
+  "files": {
+    "dma-transfer-execute-C100-01.json": "043dc0b9cca76d3cf3bd2c813da001eb1815906d4dbf40ba72cadf2b738ba77b",
+    "dma-transfer-VALIDATION-C100-01.json": "1f17d1d8256da9901fdfc7a9bfed8ed3664b993561338da2efe8ec25bba6f961",
+    "dma-lifecycle-execute-C099-01.json": "d24ef09daf04308d86b1550eb03ba6248a81cf83e0825622caef30f00db5fec8",
+    "dma-lifecycle-VALIDATION-C099-01.json": "a6f336b49864075a15e6daf6a86f265300da7f651a066cc396996d666270406d",
+    "dma-process-test-C099-02.json": "824ec9582ff5fc8907ce1f4090f9b51e2d568734a992e9ada76cd622d5642fef",
+    "dma-reset-restore-C100-01.json": "74eb38d7d4afcd693584925f906a210b1e82bab0fea318ca855e18b7d6432460",
+    "dma-reset-postboot-C100-01.json": "401409c533c591502ce9b5f0c3b2aa52790785ca881c7ed4892740ed2cdd2b4c",
+    "dma-controller-C100.py": "c06ac8cf86461c84038ede1844cbec1f117b75e69744e498d0d11b01ba29f65c",
+    "postcopy-C100.py": "07b8cb5c1050c15e370bc960f9d44c48315f207e05f20c1d761bd9252a1b9703",
+    "postcopy-core-C100.py": "eca11ee63e6758fd9713bdadb450f150859069f8aa0b3946a7a296c9d3c69fca",
+    "postcopy-buffers-C100.py": "b1be71d2f26325c42246e6ad3f9523f5f0b7085cba8bcf3514b3b98129994154",
+    "dma_process_C099.py": "f419ae59fb8d2177fecef5c52549873487572c1a56db04bf418df929ba5c1d2d",
+    "dma-provider-C096.c": "04a37b454e6fc75a3dbdd987099af79f6c16be2b06841591acfdf9afd8fddf0c",
+    "dma-provider-C096.h": "0a737b7478b1d059b157ce88cc5e3341e714090211259019d8915e359ceaed25",
+    "dma-client-C099.py": "14783f98876720f103e5a6b471aaf0760842c03e165ebb7f97d231187315934d",
+    "dma-lifecycle-C099.py": "e1f2481b62e9e74fc1d3ea146ef085b2ee3277ba2787f5cb3307ecfbd09cf301",
+    "dma-process-test-C099.py": "79768890e0a0ebedac95f246b7cfd4ea9551ebf36d026fef011c0d324591aeb3",
+    "test-postcopy-C100.py": "edd7e1c277959c90405dab23e8552e945e298c96371d2bc3ad509232ae316735",
+    "q5-gpu-transport-C085.py": "ac1d51389462c5c4bc57a04b218a2c55a27262074a0464b16b84dc65f0c03e48",
+    "q5-gpu-offsets-C085.json": "5545b3380af531ebbc2ce1ce3e6bcf9a7913fb9328f04925e4689103fdc41e87",
+    "setup-registers-C092.json": "ea82a7da832efb9f1de82c4e7fa3a5f41c3f56634a8688f4853afc8b6d5e9896",
+    "setup-descriptor-core-C092.py": "6ccb049edbdab3bace940a685b3aeb5d68f4fd09786e2aa697197f11a732a8fd",
+    "dpm-preflight.py": "8f689f3faa3af782fa861166d7c11d1fc6f681b12b4f636222ca75c398a5b7ce"
+  },
+  "omitted_module": {
+    "name": "dma-provider-C096-r4.ko",
+    "sha256": "c105d26517bb3a29f12efe8c2d154d7cb5da9d4b3fe53acf27883848a4f55bbf"
+  },
+  "runtime_manifest_sha256": "8747930f1aa36e4ed2e5cd189c74d146a66a11a95aed3726abf7ae4d72a9b927",
+  "scope": "Archived evidence and source excerpts. Not a standalone deployment kit. Firmware and kernel module binaries are not included.",
+  "redactions": "None. All copied files except two have the same bytes as the retained originals. Two excerpts have a changed kit directory prefix (see RESULT.md)."
+}

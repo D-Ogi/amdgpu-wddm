@@ -213,7 +213,7 @@ Check 'dev-swap' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Ou
 # build writes from the quad the release builder maps; this compiles the resource with the kit's own rc.exe, reads
 # the numbers back out of the compiled bytes and holds the refusal of a resource built without them. Two seconds.
 Check 'kmd-version-rc' { & python "$repo\tools\build\test_kmd_version_rc.py" --kits "$Kits" --out "$Out\kmd-version-rc" }
-Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|shim)/' --out "$Out\kmd-contract" }
+Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|common/board|shim)/' --out "$Out\kmd-contract" }
  Check 'guardlog-width' { & python "$repo\tools\quality\guardlog_width.py" --kmd "$repo\driver\kmd" --baseline "$repo\tools\quality\guardlog_width_baseline.txt" --out "$Out\guardlog-width" }
  # The failure statuses a KMD DDI can return, against its return table: SubmitCommandVirtual may fail with
  # STATUS_INVALID_PARAMETER only, any other failure is a bugcheck. --self-test also holds two mutants to a failure.
@@ -513,6 +513,8 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'uma-policy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma.ps1" -Root $Workspace -Out "$Out\uma-policy" }
  Check 'uma-request' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma_request.ps1" -Root $Workspace -Out "$Out\uma-request" }
  Check 'uma-probe' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_uma_probe.ps1" -Root $Workspace -Out "$Out\uma-probe" }
+ # The CRB state machine of the TPM filter driver, with the address and undefined-behaviour sanitizers of the workspace clang.
+ Check 'tpm-crb' { & pwsh -NoProfile -File "$repo\driver\tpm\test\run.ps1" -Out "$Out\tpm-crb" }
  Check 'board-memory-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_identity.ps1" -Root $Workspace -Out "$Out\board-memory-identity" }
  Check 'board-memory-identity-qualification' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_identity_qualification.ps1" -Root $Workspace -Out "$Out\board-memory-identity-qualification" }
  Check 'board-memory-detect' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_detect.ps1" -Root $Workspace -Out "$Out\board-memory-detect" }
@@ -626,6 +628,8 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # an independent pixel oracle, plus the shipped asset's own self-check and its size budget.
  Check 'boot-logo' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_boot_logo.ps1" -Root $Workspace -Out "$Out\boot-logo" -Kits "$Kits" }
  Check 'gpu-clock' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gpu_clock.ps1" -Root $Workspace -Out "$Out\gpu-clock" -Kits "$Kits" }
+ # BD-404: the performance data of QueryAdapterInfo (perf_data.h): the input words, the units, the main fan, the names.
+ Check 'perf-data' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_perf_data.ps1" -Root $Workspace -Out "$Out\perf-data" -Kits "$Kits" }
  # The installer owns version mapping; KMD must not rewrite OS device properties.
  Check 'driver-version' { & powershell -NoProfile -File "$repo\tools\release\test-version-identity.ps1" }
  Check 'umd-app-settings' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-app-settings.ps1" -OutputDir "$Out\umd-app-settings" }
@@ -842,6 +846,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='display-timing';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace)}
   @{n='display-timing-old-describe';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldDescribe60');Fails=$true}
   @{n='display-timing-old-describe-rotation';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldDescribeIdentity');Fails=$true}
+  @{n='display-timing-old-describe-surface-only';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldDescribeSurfaceOnly');Fails=$true}
   @{n='display-timing-phase-hz';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-AssumePhaseHz');Fails=$true}
   @{n='display-timing-old-power-return';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldPowerReturn');Fails=$true}
   @{n='gart-retained';s='driver\kmd\test\run_gart_retained.ps1';a=@('-Root',$Workspace)}
@@ -926,6 +931,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
 @{n='start-health-no-output-releases-requests';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoOutputReleasesRequests');Fails=$true}
   @{n='gfx-pipeline';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly')}
   @{n='vmid-pool';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace)}
+  # BD-410: the OPM answers and the DxgkDdiQueryInterface log rule; each control must fail by a FAIL line.
+  @{n='opm-policy';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace)}
   @{n='keep-prune';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace)}
   @{n='keep-prune-ignore-order';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace,'-IgnoreOrder');Fails=$true}
   @{n='log-rate';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace)}
@@ -942,6 +949,14 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='wddm-level';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace)}
   @{n='wddm-level-no-clamp';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace,'-NoClamp');Fails=$true}
   @{n='wddm-level-with-2-3';s='driver\kmd\test\run_wddm_level.ps1';a=@('-Root',$Workspace,'-WithLevel23');Fails=$true}
+  # BD-403: SupportContextlessPresent from 2.4, and a DxgkDdiPresent call without a context (present_contextless.h).
+  @{n='present-contextless';s='driver\kmd\test\run_present_contextless.ps1';a=@('-Root',$Workspace)}
+  @{n='present-contextless-every-level';s='driver\kmd\test\run_present_contextless.ps1';a=@('-Root',$Workspace,'-EveryLevel');Fails=$true}
+  @{n='present-contextless-serve';s='driver\kmd\test\run_present_contextless.ps1';a=@('-Root',$Workspace,'-ServeWithoutContext');Fails=$true}
+  # Cross-adapter tier 1: CrossAdapterResource from 2.4, and the DescribeAllocation answer of a buffer (cross_adapter.h).
+  @{n='cross-adapter';s='driver\kmd\test\run_cross_adapter.ps1';a=@('-Root',$Workspace)}
+  @{n='cross-adapter-every-level';s='driver\kmd\test\run_cross_adapter.ps1';a=@('-Root',$Workspace,'-EveryLevel');Fails=$true}
+  @{n='cross-adapter-truncate';s='driver\kmd\test\run_cross_adapter.ps1';a=@('-Root',$Workspace,'-Truncate');Fails=$true}
   @{n='hang-recovery';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace)}
   @{n='hang-recovery-no-fence-guard';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreFenceGuard');Fails=$true}
   @{n='hang-recovery-any-vmid';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-IgnoreVmidGuard');Fails=$true}
@@ -1008,6 +1023,12 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='submit-watchdog-rearm-outside-lock';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-RearmOutsideLock');Fails=$true;Step='source checks'}
   @{n='vmid-pool-ignore-retirement';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreRetirement');Fails=$true}
   @{n='vmid-pool-ignore-compute-ring';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreComputeRing');Fails=$true}
+  @{n='opm-policy-any-guid';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','any-guid');Fails=$true}
+  @{n='opm-policy-any-version';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','any-version');Fails=$true}
+  @{n='opm-policy-any-size';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','any-size');Fails=$true}
+  @{n='opm-policy-stale-handle';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','stale-handle');Fails=$true}
+  @{n='opm-policy-refuse-success';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','refuse-success');Fails=$true}
+  @{n='opm-policy-log-every';s='driver\kmd\test\run_opm_policy.ps1';a=@('-Root',$Workspace,'-Mutation','log-every');Fails=$true}
   # The gfx-pipeline controls check their own pinned CHECK failure counts (run_gfx_pipeline.ps1) and exit 0 when the
   # control failed as required; a crash, a deadline or a build error fails them.
   @{n='gfx-pipeline-idle-only';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-IdleOnlyPresent')}
